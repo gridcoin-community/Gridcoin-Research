@@ -29,42 +29,105 @@ extern Upgrader upgrader;
 extern Checker checker;
 #endif
 
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
+void GetTxStakeBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
 {
-    CTransaction tx;
-    uint256 hashBlock = 0;
-    std::string error_code = "";
+    assert(mtx.IsCoinStake() || mtx.IsCoinBase());
 
+    res["blockhash"]=mtx.hashBlock.GetHex();
 
-    if (!GetTransaction(hash, tx, hashBlock))
-    {
-        return "";
-    }
-    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
-    ssTx << tx;
-    string strHex = HexStr(ssTx.begin(), ssTx.end());
-    CBlockIndex* pindexPrev = NULL;
+    // Fetch BlockIndex for tx block
+    CBlockIndex* pindex = NULL;
     CBlock block;
-    map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
-    if (mi == mapBlockIndex.end())
     {
-            return ""; //not found
+        map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(mtx.hashBlock);
+        if (mi == mapBlockIndex.end())
+        {
+            res["error"] = "block_not_in_index";
+            return;
+        }
+        pindex = (*mi).second;
+        if (!block.ReadFromDisk(pindex))
+        {
+            res["error"] = "block_read_failed";
+            return;
+        }
     }
-    pindexPrev = (*mi).second;
-    if (!block.ReadFromDisk(pindexPrev))
-    {
-            return ""; //failed to read
-    }
-    out_blocktype = block.nVersion;
-    out_blocknumber = pindexPrev->nHeight;
-    //Deserialize
 
+    //Deserialize
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
 
-    out_rac = bb.rac;
-    return bb.projectname;
+    res["height"]=pindex->nHeight;
+    res["version"]=block.nVersion;
+
+    res["cpid"]=bb.cpid;
+    res["Magnitude"]=bb.Magnitude;
+    res["Interest"]=bb.InterestSubsidy;
+    res["BoincReward"]=bb.ResearchSubsidy;
+    res["Difficulty"]=GetBlockDifficulty(block.nBits);
+
+
+    if(fDebug)
+    {
+        res["xbbBoincPublicKey"]=bb.BoincPublicKey;
+
+        res["xbbOrganization"]=bb.Organization;
+        res["xbbClientVersion"]=bb.clientversion;
+
+        res["xbbNeuralHash"]=bb.NeuralHash;
+        res["xbbCurrentNeuralHash"]=bb.CurrentNeuralHash;
+        res["xbbNeuralContractSize"]=bb.superblock.length();
+    }
+    else
+    {
+        if(bb.superblock.length()>=20)
+        {
+            res["IsSuperBlock"]=true;
+        }
+    }
 
 }
+
+void GetTxNormalBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
+{
+    assert(!mtx.IsCoinStake() && !mtx.IsCoinBase());
+    res["blockhash"]=mtx.hashBlock.GetHex();
+    const std::string &hashBoinc = mtx.hashBoinc;
+    const std::string &msg = mtx.hashBoinc;
+
+    /* Possible formats:
+        * transaction <MESSAGE>
+        * a message <MT>
+          * cpid beacon
+          * vote
+          * poll
+        * unknown / text
+    */
+
+    res["bhLenght"]=msg.length();
+
+    std::string sMessageType = ExtractXML(msg,"<MT>","</MT>");
+    std::string sTrxMessage = ExtractXML(msg,"<MESSAGE>","</MESSAGE>");
+
+    if(sMessageType.length())
+    {
+        res["bhType"]="message";
+        res["msgType"]=sMessageType;
+    }
+    else if(sTrxMessage.length())
+    {
+        res["bhType"]="TrxWithNote";
+    }
+    else if(msg.length())
+    {
+        res["bhType"]="Unknown";
+    }
+    else
+    {
+        res["bhType"]="None";
+    }
+
+}
+
 
 Value downloadblocks(const Array& params, bool fHelp)
 {

@@ -23,7 +23,6 @@ using namespace std;
 volatile unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
-double GetBlockDifficulty(unsigned int nBits);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double CoinToDouble(double surrogate);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);

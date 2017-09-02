@@ -15,9 +15,11 @@
 #include <QMessageBox>
 #include <string>
 
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
-extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+#include "json/json_spirit_writer_template.h"
+#include "json/json_spirit_utils.h"
+
+void GetTxStakeBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx);
+void GetTxNormalBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx);
 
 QString ToQString(std::string s)
 {
@@ -108,9 +110,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     //
     // From
     //
-    if (wtx.IsCoinBase() || wtx.IsCoinStake())
+    if (wtx.IsCoinBase())
     {
-        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated") + "<br>";
+        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated in CoinBase") + "<br>";
+    }
+    else if (wtx.IsCoinBase() || wtx.IsCoinStake())
+    {
+        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated PoS") + "<br>";
     }
     else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
     {
@@ -262,15 +268,22 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += "<br><b>" + tr("Comment") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.mapValue["comment"], true) + "<br>";
 
     strHTML += "<b>" + tr("Transaction ID") + ":</b> " + wtx.GetHash().ToString().c_str() + "<br>";
+
     if (wtx.IsCoinBase() || wtx.IsCoinStake())
     {
-        int out_blocknumber=0;
-        int out_blocktype = 0;
-        double out_rac = 0;
-        GetTxProject(wtx.GetHash(),out_blocknumber, out_blocktype, out_rac);
-        strHTML += "<br>" + tr("Block Type") + ":</b> " + ToString(out_blocktype).c_str() +
-                "<br>" + tr("Block Number") + ":</b> " + ToString(out_blocknumber).c_str() +
+
+        json_spirit::mObject out;
+        GetTxStakeBoincHashInfo(out, wtx);
+        strHTML += "<br>" + GUIUtil::HtmlEscape(json_spirit::write_string(json_spirit::mValue(out),true), true) +
                 "<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
+    }
+    else
+    {
+
+        json_spirit::mObject out;
+        GetTxNormalBoincHashInfo(out, wtx);
+        strHTML += "<br>" + GUIUtil::HtmlEscape(json_spirit::write_string(json_spirit::mValue(out),true), true) +
+                "<br>";
     }
 
     //

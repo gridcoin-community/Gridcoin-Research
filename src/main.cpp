@@ -185,7 +185,6 @@ std::string DefaultOrg();
 std::string DefaultOrgKey(int key_length);
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-extern double GetBlockDifficulty(unsigned int nBits);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(const std::string& data, const std::string& instring);
 
@@ -323,7 +322,6 @@ extern bool IsCPIDValidv2(MiningCPID& mc, int height);
 extern std::string getfilecontents(std::string filename);
 extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
-extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
 
