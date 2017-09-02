@@ -611,17 +611,18 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     return false;
 }
 
-bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
+bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
 {
     //Append beacon signature to coinbase
     std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
     if (!PublicKey.empty())
     {
-        std::string BoincSignature = SignBlockWithCPID(
+        BoincData.BoincSignature = SignBlockWithCPID(
             GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
-        if(fDebug3) printf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\r\n",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.lastblockhash.c_str(),BoincSignature.c_str());
-        block.vtx[0].hashBoinc += BoincSignature;
+        if(fDebug2) printf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\r\n",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.lastblockhash.c_str(),BoincData.BoincSignature.c_str());
     }
+    block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
+    //if (fDebug2)  printf("SignStakeBlock: %s\r\n",SerializedBoincData.c_str());
 
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -647,7 +648,60 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pindexPrev)
+int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
+{
+    const std::string sb_contract;
+
+    if(OutOfSyncByAge())
+        return printf("AddNeuralContractOrVote: Out Of Sync\n");
+
+    /* Retrive the neural Contract */
+    #if defined(WIN32) && defined(QT_GUI)
+        const std::string sb_contract = qtGetNeuralContract("");
+    #endif
+
+    const std::string sb_hash = GetQuorumHash(sb_contract);
+
+    /* To save network bandwidth, start posting the neural hashes in the
+       CurrentNeuralHash field, so that out of sync neural network nodes can
+       request neural data from those that are already synced and agree with the
+       supermajority over the last 24 hrs
+       Note: CurrentNeuralHash is not actually used for sb validity
+    */
+    bb.CurrentNeuralHash = sb_hash;
+
+    if(sb_contract.empty())
+        return printf("AddNeuralContractOrVote: Local Contract Empty\n");
+
+    if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
+        return printf("AddNeuralContractOrVote: Not Participating\n");
+
+    if(!NeedASuperblock())
+        return printf("AddNeuralContractOrVote: not Needed\n");
+
+    int pending_height = cdbl(ReadCache("neuralsecurity","pending"),0);
+
+    /* Add our Neural Vote */
+    bb.NeuralHash = sb_hash;
+    printf("AddNeuralContractOrVote: Added our Neural Vote %s\n",sb_hash.c_str());
+
+    if (pending_height>=(pindexBest->nHeight-200))
+        return printf("AddNeuralContractOrVote: already Pending\n");
+
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+
+    if (consensus_hash!=sb_hash)
+        return printf("AddNeuralContractOrVote: not in Consensus\n");
+
+    /* We have consensus, Add our neural contract */
+    bb.superblock = PackBinarySuperblock(sb_contract);
+    printf("AddNeuralContractOrVote: Added our Superblock (size %lu)\n",bb.superblock.length());
+
+    return 0;
+}
+
+bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev)
 {
     //remove fees from coinbase
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
@@ -670,7 +724,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
     
-    MiningCPID miningcpid = GlobalCPUMiningCPID;
+    miningcpid = GlobalCPUMiningCPID;
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
 
@@ -700,13 +754,14 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     miningcpid.encboincpublickey = "";
     miningcpid.encaes = "";
     miningcpid.BoincSignature = "";
+    miningcpid.CurrentNeuralHash = "";
+    miningcpid.NeuralHash = "";
+    miningcpid.superblock = "";
+    miningcpid.GRCAddress = DefaultWalletAddress();
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
-    std::string SerializedBoincData = SerializeBoincBlock(miningcpid,blocknew.nVersion);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
 
-    if (fDebug)  printf("CreateGridcoinReward: %s\r\n",SerializedBoincData.c_str());
-        
     double mint = CoinToDouble(nReward);
     double PORDiff = GetBlockDifficulty(blocknew.nBits);
     double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
@@ -725,7 +780,6 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
 
     //fill in reward and boinc
     blocknew.vtx[1].vout[1].nValue += nReward;
-    blocknew.vtx[0].hashBoinc= SerializedBoincData;
     LOCK(MinerStatus.lock);
     MinerStatus.Message+="Added Reward "+RoundToString(mint,3)
         +"("+RoundToString(CoinToDouble(nFees),4)+" "
@@ -800,6 +854,7 @@ void StakeMiner(CWallet *pwallet)
 
         CBlockIndex* pindexPrev = pindexBest;
         CBlock StakeBlock;
+        MiningCPID BoincData;
         { LOCK(MinerStatus.lock);
             //clear miner messages
             MinerStatus.Message="";
@@ -844,12 +899,14 @@ void StakeMiner(CWallet *pwallet)
         printf("StakeMiner: created rest of the block\n");
 
         // * add gridcoin reward to coinstake
-        if( !CreateGridcoinReward(StakeBlock,StakeCoinAge,pindexPrev) )
+        if( !CreateGridcoinReward(StakeBlock,BoincData,StakeCoinAge,pindexPrev) )
             continue;
         printf("StakeMiner: added gridcoin reward to coinstake\n");
 
+        AddNeuralContractOrVote(StakeBlock, BoincData);
+
         // * sign boinchash, coinstake, wholeblock
-        if( !SignStakeBlock(StakeBlock,BlockKey,StakeInputs,pwallet) )
+        if( !SignStakeBlock(StakeBlock,BlockKey,StakeInputs,pwallet,BoincData) )
             continue;
         printf("StakeMiner: signed boinchash, coinstake, wholeblock\n");
 
