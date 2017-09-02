@@ -50,14 +50,12 @@ Value getmininginfo(const Array& params, bool fHelp)
     double nNetworkWeight = GetPoSKernelPS();
     obj.push_back(Pair("blocks",        (int)nBestHeight));
     diff.push_back(Pair("proof-of-work",        GetDifficulty()));
-    diff.push_back(Pair("proof-of-research",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
     diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
 
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
         uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / MinerStatus.ValueSum) : 0;
-        diff.push_back(Pair("search-interval",      (int)nMinerSleep));
         diff.push_back(Pair("last-search-interval", (int)MinerStatus.nLastCoinStakeSearchInterval));
         weight.push_back(Pair("minimum",    MinerStatus.WeightMin));
         weight.push_back(Pair("maximum",    MinerStatus.WeightMax));
@@ -82,24 +80,23 @@ Value getmininginfo(const Array& params, bool fHelp)
     }
 
     obj.push_back(Pair("difficulty",    diff));
-    obj.push_back(Pair("blockvalue",    (uint64_t)GetProofOfWorkReward(0,  GetAdjustedTime(),1)));
+    obj.push_back(Pair("pow_reward",    GetProofOfWorkReward(0,  GetAdjustedTime(),1)/(double)COIN));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
-    obj.push_back(Pair("stakeinterest",    (uint64_t)GetCoinYearReward( GetAdjustedTime())));
+    obj.push_back(Pair("stakeinterest", GetCoinYearReward( GetAdjustedTime())/(double)COIN));
     obj.push_back(Pair("testnet",       fTestNet));
     double neural_popularity = 0;
     std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
     obj.push_back(Pair("PopularNeuralHash", neural_hash));
+    obj.push_back(Pair("NeuralPopularity", neural_popularity));
     //9-19-2015 - CM
     #if defined(WIN32) && defined(QT_GUI)
     obj.push_back(Pair("MyNeuralHash", qtGetNeuralHash("")));
     #endif
 
-    obj.push_back(Pair("NeuralPopularity", neural_popularity));
     obj.push_back(Pair("CPID",msPrimaryCPID));
-    obj.push_back(Pair("RSAWeight",(double)GetRSAWeightByCPID(msPrimaryCPID)));
-    StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetwork);
+    obj.push_back(Pair("RSAWeight",GetRSAWeightByCPID(msPrimaryCPID)));
 
     {
         double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
