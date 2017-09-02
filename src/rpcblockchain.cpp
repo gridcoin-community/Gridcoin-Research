@@ -3701,7 +3701,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
         if (boost::algorithm::starts_with(key_name, datatype))
         {
             // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
-            // appended. Skip all keys with more than two fields.
+            // appended. Skip all keys containing those fields.
             if(boost::iends_with(key_name, ";burnamount") ||
                boost::iends_with(key_name, ";recipient"))
                continue;
