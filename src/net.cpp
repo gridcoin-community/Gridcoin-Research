@@ -32,7 +32,6 @@ extern void DoTallyResearchAverages(void* parg);
 extern void ExecGridcoinServices(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
-std::string GetNeuralVersion();
 
 #ifndef QT_GUI
  boost::thread_group threadGroup;
@@ -734,7 +733,6 @@ void CNode::PushVersion()
     std::string mycpid = GlobalCPUMiningCPID.cpidv2;
     std::string acid = GetCommandNonce("aries");
     std::string sGRCAddress = DefaultWalletAddress();
-    std::string sNeuralVersion = GetNeuralVersion();
 
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
                 mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
@@ -743,9 +741,6 @@ void CNode::PushVersion()
 
 
 }
-
-
-
 
 std::map<CNetAddr, int64_t> CNode::setBanned;
 CCriticalSection CNode::cs_setBanned;
@@ -810,7 +805,6 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-    X(sNeuralNetwork);
     X(NeuralHash);
     X(sGRCAddress);
     X(nTrust);

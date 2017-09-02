@@ -49,6 +49,7 @@
 #include "init.h"
 #include "block.h"
 #include "miner.h"
+#include "main.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"

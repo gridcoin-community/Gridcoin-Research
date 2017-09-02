@@ -268,38 +268,6 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
-double GetPoSKernelPS()
-{
-    int nPoSInterval = 72;
-    double dStakeKernelsTriedAvg = 0;
-    int nStakesHandled = 0, nStakesTime = 0;
-
-    CBlockIndex* pindex = pindexBest;;
-    CBlockIndex* pindexPrevStake = NULL;
-
-    while (pindex && nStakesHandled < nPoSInterval)
-    {
-        if (pindex->IsProofOfStake())
-        {
-            dStakeKernelsTriedAvg += GetDifficulty(pindex) * 4294967296.0;
-            nStakesTime += pindexPrevStake ? (pindexPrevStake->nTime - pindex->nTime) : 0;
-            pindexPrevStake = pindex;
-            nStakesHandled++;
-        }
-
-        pindex = pindex->pprev;
-    }
-
-    double result = 0;
-
-    if (nStakesTime)
-        result = dStakeKernelsTriedAvg / nStakesTime;
-
-    if (IsProtocolV2(nBestHeight))
-        result *= STAKE_TIMESTAMP_MASK + 1;
-
-    return result/100;
-}
 Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     Object result;
@@ -3700,6 +3668,12 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 
         if (boost::algorithm::starts_with(key_name, datatype))
         {
+            // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
+            // appended. Skip all keys containing those fields.
+            if(boost::iends_with(key_name, ";burnamount") ||
+               boost::iends_with(key_name, ";recipient"))
+               continue;
+
             std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
             std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
             std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
@@ -3707,6 +3681,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
             std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
             std::string sURL = ExtractXML(contract,"<URL>","</URL>");
             boost::to_lower(Title);
+
+            // TODO: Pass contract instead of title to PollExpired
             if (!PollExpired(Title) || IncludeExpired)
             {
                 if (QueryByTitle.empty() || QueryByTitle == Title)
