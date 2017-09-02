@@ -309,13 +309,17 @@ Value getpeerinfo(const Array& params, bool fHelp)
         obj.push_back(Pair("subver", stats.strSubVer));
         obj.push_back(Pair("inbound", stats.fInbound));
         obj.push_back(Pair("startingheight", stats.nStartingHeight));
-        obj.push_back(Pair("sNeuralNetworkVersion",stats.sNeuralNetwork));
-        obj.push_back(Pair("nTrust",stats.nTrust));
+        obj.push_back(Pair("nTrust", stats.nTrust));
         obj.push_back(Pair("banscore", stats.nMisbehavior));
         bool bNeural = false;
-        bNeural = Contains(stats.strSubVer,"1999");
+        bNeural = Contains(stats.strSubVer, "1999");
         obj.push_back(Pair("Neural Network", bNeural));
-        obj.push_back(Pair("Neural Hash",stats.NeuralHash));
+        if (bNeural)
+        {
+            obj.push_back(Pair("Neural Hash", stats.NeuralHash));
+            obj.push_back(Pair("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime())));
+
+        }
         ret.push_back(obj);
     }
 
