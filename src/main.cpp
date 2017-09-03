@@ -2700,7 +2700,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 
-    StructCPID stCPID = GetLifetimeCPID(pindex->GetCPID(),"DisconnectBlock()");
     // We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
     if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
     return true;
@@ -3511,6 +3510,12 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         BOOST_REVERSE_FOREACH(const CTransaction& tx, block.vtx)
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
                 vResurrect.push_front(tx);
+    }
+
+    // Re-read researchers history after all blocks disconnected
+    BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
+    {
+        StructCPID stCPID = GetLifetimeCPID(pindex->GetCPID(),"DisconnectBlock()");
     }
 
     // Connect longer branch
