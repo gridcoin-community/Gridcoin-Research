@@ -254,6 +254,8 @@ bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
 bool WriteKey(std::string sKey, std::string sValue);
+double GetBlockDifficulty(unsigned int nBits);
+std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
