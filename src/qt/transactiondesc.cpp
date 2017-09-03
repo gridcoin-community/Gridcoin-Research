@@ -114,9 +114,9 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     {
         strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated in CoinBase") + "<br>";
     }
-    else if (wtx.IsCoinBase() || wtx.IsCoinStake())
+    else if (wtx.IsCoinStake())
     {
-        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated PoS") + "<br>";
+        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated, PoS") + "<br>";
     }
     else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
     {
