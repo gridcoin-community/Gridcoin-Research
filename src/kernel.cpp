@@ -848,11 +848,24 @@ bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
 {
     nStakeModifier = 0;
     const CBlockIndex* pindex = pindexPrev;
+    const uint256 ModifGlitch_hash("12bcc37789ef00809d1287f4af3c46106181e7c60654c7d3f0677aefa8a78774");
+    const uint64_t ModifGlitch_correct=0xdf209a3032807577;
 
     while (1)
     {
         if(!pindex)
             return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
+
+        if (pindex->GetBlockHash()==ModifGlitch_hash)
+        {
+            if(pindex->nStakeModifier!=ModifGlitch_correct)
+                printf("WARNING: Correcting Stake Modifier Glitch, wrong= %016"
+                    PRIx64 ", correct %016" PRIx64 "\n",
+                    pindex->nStakeModifier, ModifGlitch_correct);
+
+            nStakeModifier = ModifGlitch_correct;
+            return true;
+        }
 
         if (pindex->GeneratedStakeModifier())
         {
