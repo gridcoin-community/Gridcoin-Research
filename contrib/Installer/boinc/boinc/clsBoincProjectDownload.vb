@@ -60,7 +60,7 @@ Public Class clsBoincProjectDownload
             Return 1
         Else
             Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
-            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
+            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGzipURL)
             If bStatus Then
                 Return 2
             Else
@@ -69,50 +69,6 @@ Public Class clsBoincProjectDownload
         End If
     End Function
 
-    Private Function AnalyzeProjectHeaderRetired(ByVal sGzipURL As String, ByRef sEtag As String, ByRef sEtagFilePath As String, ByVal sProjectName As String) As Integer
-        'Output
-        '1 = We already have the official etag version downloaded
-        '2 = We downloaded a new version
-        '3 = Download failed
-        Dim dictHeads As Dictionary(Of String, String) = GetHttpResponseHeaders(sGzipURL)
-        sEtag = dictHeads("ETag")
-        Dim sTimestamp As String
-        sTimestamp = dictHeads("Last-Modified")
-        sEtag = Replace(sEtag, Chr(34), "")
-        sEtag = Replace(sEtag, "W", "")
-        Dim dStatus As Double = 0
-        Dim sGridcoinBaseUrl As String = "https://download.gridcoin.us/download/harvest/"
-        Dim sGridcoinURL As String = sGridcoinBaseUrl + sEtag + ".gz"
-        Dim dictHeadsGRC As Dictionary(Of String, String) = GetHttpResponseHeaders(sGridcoinURL)
-        Dim dLength1 As Double = dictHeads("Content-Length")
-        Dim dLength2 As Double = dictHeadsGRC("Content-Length")
-        ' If Etag matches GRC's cache, and the filesize is the same use the GRCCache version to prevent DDosing the boinc servers (Gridcoin Foundation copies the files from the project sites to the Gridcoin.US web site once every 4 hours to help avoid stressing the project servers from the massive hit by our network)
-        Dim bCacheSiteHasSameFile As Boolean = (dLength2 > 0)
-        Dim sEtagOnFile As String = GetDataValue("etag", "tbetags", sGzipURL).DataColumn1
-        sEtagFilePath = ConstructTargetFileName(sEtag)
-        Dim lAgeInMins As Long = GetFileAge(sEtagFilePath)
-        If sEtagOnFile = sEtag And lAgeInMins < SYNC_THRESHOLD Then
-            'We already have this file
-            Return 1
-        Else
-            'We do not have this file
-            'Step 1, see if it exists in our cache before attempting to download from the project site
-            Dim sCacheFileName As String = RetrieveCacheProjectFilename(sGzipURL)
-            Dim bStatus As Boolean = ResilientDownload(sGridcoinBaseUrl + sCacheFileName, sEtagFilePath, sGridcoinBaseUrl + sCacheFileName)
-            If Not bStatus Then
-                'This is the step where we download from the boinc project server if the cache either returns 404 or the bytes dont match the etag or filesize:
-                Dim sSourceURL As String = IIf(bCacheSiteHasSameFile, sGridcoinURL, sGzipURL)
-                bStatus = ResilientDownload(sSourceURL, sEtagFilePath, sGzipURL)
-            End If
-            'If all bytes downloaded then store the etag in the local table
-            'Only update Stored Value after we retrieve the file
-            If bStatus Then
-                Return 2
-            Else
-                Return 3
-            End If
-        End If
-    End Function
     Public Function DownloadFile(iAttemptNo As Integer, sSourceURL As String, sOutputPath As String) As Boolean
         Try
             Dim w As New MyWebClient2

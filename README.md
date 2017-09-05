@@ -80,3 +80,9 @@ Gridcoin is released under the terms of the MIT license. See [COPYING](COPYING) 
 information or see https://opensource.org/licenses/MIT.
 
 
+Build Status
+=============
+
+| Development                                                                                                                            | Staging                                                                                                                            | Master                                                                                                                            |
+|----------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| [![Build Status](https://travis-ci.org/gridcoin/Gridcoin-Research.svg?branch=development)](https://travis-ci.org/gridcoin/Gridcoin-Research) | [![Build Status](https://travis-ci.org/gridcoin/Gridcoin-Research.svg?branch=staging)](https://travis-ci.org/gridcoin/Gridcoin-Research) | [![Build Status](https://travis-ci.org/gridcoin/Gridcoin-Research.svg?branch=master)](https://travis-ci.org/gridcoin/Gridcoin-Research) |
