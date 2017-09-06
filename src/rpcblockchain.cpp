@@ -274,7 +274,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("hash", block.GetHash().GetHex()));
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
-    result.push_back(Pair("confirmations", (int)txGen.GetDepthInMainChain()));
+    result.push_back(Pair("confirmations", txGen.GetDepthInMainChain()));
     result.push_back(Pair("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION)));
     result.push_back(Pair("height", blockindex->nHeight));
     result.push_back(Pair("version", block.nVersion));
@@ -282,8 +282,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     double mint = CoinToDouble(blockindex->nMint);
     result.push_back(Pair("mint", mint));
     result.push_back(Pair("MoneySupply", blockindex->nMoneySupply));
-    result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
-    result.push_back(Pair("nonce", (uint64_t)block.nNonce));
+    result.push_back(Pair("time", block.GetBlockTime()));
+    result.push_back(Pair("nonce", (int)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
     result.push_back(Pair("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0')));
@@ -3904,9 +3904,9 @@ Array GetJSONNeuralNetworkReport()
           int iNextNeuralSync = iLastNeuralSync + iRoot;
           int iLastQuorum = nBestHeight - iQuorumModifier;
           int iNextQuorum = iLastQuorum + 10;
-          entry.push_back(Pair("Last Sync", (double)iLastNeuralSync));
-          entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
-          entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
+          entry.push_back(Pair("Last Sync", iLastNeuralSync));
+          entry.push_back(Pair("Next Sync", iNextNeuralSync));
+          entry.push_back(Pair("Next Quorum", iNextQuorum));
       }
       results.push_back(entry);
       return results;
@@ -3957,9 +3957,9 @@ Array GetJSONCurrentNeuralNetworkReport()
           int iNextNeuralSync = iLastNeuralSync + iRoot;
           int iLastQuorum = nBestHeight - iQuorumModifier;
           int iNextQuorum = iLastQuorum + 10;
-          entry.push_back(Pair("Last Sync", (double)iLastNeuralSync));
-          entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
-          entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
+          entry.push_back(Pair("Last Sync", iLastNeuralSync));
+          entry.push_back(Pair("Next Sync", iNextNeuralSync));
+          entry.push_back(Pair("Next Quorum", iNextQuorum));
       }
       results.push_back(entry);
       return results;
