@@ -2698,7 +2698,6 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     BOOST_FOREACH(CTransaction& tx, vtx)
         SyncWithWallets(tx, this, false, false);
 
-    StructCPID stCPID = GetLifetimeCPID(pindex->GetCPID(),"DisconnectBlock()");
     // We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
     if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
     return true;
@@ -3495,7 +3494,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     // Disconnect shorter branch
     list<CTransaction> vResurrect;
-    BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
+    set<string> vRereadCPIDs;
+    for( CBlockIndex* pindex : vDisconnect )
     {
         CBlock block;
         if (!block.ReadFromDisk(pindex))
@@ -3509,6 +3509,16 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         BOOST_REVERSE_FOREACH(const CTransaction& tx, block.vtx)
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
                 vResurrect.push_front(tx);
+
+        // remeber the cpid to re-read later
+        vRereadCPIDs.insert(pindex->GetCPID());
+    }
+
+    // Re-read researchers history after all blocks disconnected
+    for( const string& sRereadCPID : vRereadCPIDs )
+    {
+        StructCPID stCPID = GetLifetimeCPID(sRereadCPID,"DisconnectBlock()");
+        (void)stCPID;
     }
 
     // Connect longer branch
@@ -3526,7 +3536,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         }
 
         // Queue memory transactions to delete
-        BOOST_FOREACH(const CTransaction& tx, block.vtx)
+        for( const CTransaction& tx : block.vtx )
             vDelete.push_back(tx);
 
         if (!IsResearchAgeEnabled(pindex->nHeight))
@@ -3545,25 +3555,25 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         return error("Reorganize() : TxnCommit failed");
 
     // Disconnect shorter branch
-    BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
+    for( CBlockIndex* pindex : vDisconnect)
     {
         if (pindex->pprev)
             pindex->pprev->pnext = NULL;
     }
 
     // Connect longer branch
-    BOOST_FOREACH(CBlockIndex* pindex, vConnect)
+    for( CBlockIndex* pindex : vConnect)
     {
         if (pindex->pprev)
             pindex->pprev->pnext = pindex;
     }
 
     // Resurrect memory transactions that were in the disconnected branch
-    BOOST_FOREACH(CTransaction& tx, vResurrect)
+    for( CTransaction& tx : vResurrect)
         AcceptToMemoryPool(mempool, tx, NULL);
 
     // Delete redundant memory transactions that are in the connected branch
-    BOOST_FOREACH(CTransaction& tx, vDelete)
+    for( CTransaction& tx : vDelete)
     {
         mempool.remove(tx);
         mempool.removeConflicts(tx);
