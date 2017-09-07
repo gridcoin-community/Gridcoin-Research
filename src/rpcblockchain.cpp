@@ -2678,7 +2678,7 @@ Value execute(const Array& params, bool fHelp)
     {
         entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
         entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
-        entry.push_back(Pair("execute askforoutstandingblock", "Asks nodes for outstanding blocks"));
+        entry.push_back(Pair("execute askforoutstandingblocks", "Asks nodes for outstanding blocks"));
         entry.push_back(Pair("execute backupwallet", "Backup wallet"));
         entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
         entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
