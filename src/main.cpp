@@ -4439,11 +4439,11 @@ void GridcoinServices()
     if (fDebug) printf(" {SVC} ");
 
     //Backup the wallet once per 900 blocks or as specified in config:
-    int dWBI = GetArg("-walletbackupinterval", 900);
-    if (dWBI == 0)
-        dWBI = 900;
+    int iWBI = GetArg("-walletbackupinterval", 900);
+    if (iWBI == 0)
+        iWBI = 900;
 
-   if (TimerMain("backupwallet", dWBI))
+   if (TimerMain("backupwallet", iWBI))
     {
         std::string backup_results = BackupGridcoinWallet();
         printf("Daily backup results: %s\r\n",backup_results.c_str());
