@@ -316,7 +316,7 @@ VotingProxyModel::VotingProxyModel(QObject *parent)
 
 void VotingProxyModel::setFilterTQAU(const QString &str)
 {
-    filterTQAU_ = (str.size() >= 2)? str: "";
+    filterTQAU_ = str;
     invalidateFilter();
 }
 
