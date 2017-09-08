@@ -556,9 +556,6 @@ void fileopen_and_copy(std::string src, std::string dest)
     fclose(outfile);
 }
 
-
-
-    
 std::string BackupGridcoinWallet()
 {
     printf("Starting Wallet Backup\r\n");
@@ -576,45 +573,49 @@ std::string BackupGridcoinWallet()
     boost::filesystem::path dest_path_std = GetDataDir() / "walletbackups" / filename_backup;
     boost::filesystem::create_directories(path.parent_path());
     std::string errors = "";
+    std::string BackupWalletResult;
+    std::string BackupConfigResult;
     //Copy the standard wallet first:  (1-30-2015)
-    BackupWallet(*pwalletMain, target_path_standard.string().c_str());
-    BackupConfigFile(sTargetPathConfig.string().c_str());
-
+    bool bBackupWallet;
+    bool bBackupConfig;
+    bBackupWallet = BackupWallet(*pwalletMain, target_path_standard.string().c_str());
+    bBackupConfig = BackupConfigFile(sTargetPathConfig.string().c_str());
+    BackupWalletResult = bBackupWallet ? "success" : "fail";
+    BackupConfigResult = bBackupConfig ? "success" : "fail";
+    errors = "Wallet: " + BackupWalletResult + " Config: " + BackupConfigResult;
     //Per Forum, do not dump the keys and abort:
     if (true)
     {
-            printf("User does not want private keys backed up. Exiting.");
-            return "";
+        printf("User does not want private keys backed up. Exiting.\r\n");
+        return errors;
     }
-                    
     //Dump all private keys into the Level 2 backup
     ofstream myBackup;
     myBackup.open (path.string().c_str());
     string strAccount;
     BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
     {
-         const CBitcoinAddress& address = item.first;
-         //const std::string& strName = item.second;
-         bool fMine = IsMine(*pwalletMain, address.Get());
-         if (fMine) 
-         {
+        const CBitcoinAddress& address = item.first;
+        //const std::string& strName = item.second;
+        bool fMine = IsMine(*pwalletMain, address.Get());
+        if (fMine)
+        {
             std::string strAddress=CBitcoinAddress(address).ToString();
-
             CKeyID keyID;
-            if (!address.GetKeyID(keyID))   
+            if (!address.GetKeyID(keyID))
             {
                 errors = errors + "During wallet backup, Address does not refer to a key"+ "\r\n";
             }
             else
             {
-                 bool IsCompressed;
-                 CKey vchSecret;
-                 if (!pwalletMain->GetKey(keyID, vchSecret))
-                 {
+                bool IsCompressed;
+                CKey vchSecret;
+                if (!pwalletMain->GetKey(keyID, vchSecret))
+                {
                     errors = errors + "During Wallet Backup, Private key for address is not known\r\n";
-                 }
-                 else
-                 {
+                }
+                else
+                {
                     CSecret secret = vchSecret.GetSecret(IsCompressed);
                     std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
                     //Append to file
@@ -623,21 +624,14 @@ std::string BackupGridcoinWallet()
                     myBackup << record;
                 }
             }
-
-         }
+        }
     }
-
     std::string reserve_keys = pwalletMain->GetAllGridcoinKeys();
     myBackup << reserve_keys;
     myBackup.close();
     fileopen_and_copy(path.string().c_str(),dest_path_std.string().c_str());
     return errors;
-
 }
-
-
-
-
 
 std::string RestoreGridcoinBackupWallet()
 {
