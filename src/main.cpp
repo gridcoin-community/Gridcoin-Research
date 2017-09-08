@@ -4582,16 +4582,20 @@ void GridcoinServices()
 
     if (TimerMain("send_beacon",180))
     {
-        std::string sOutPubKey = "";
-        std::string sOutPrivKey = "";
-        std::string sError = "";
-        std::string sMessage = "";
-        bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
-        if (!fResult)
+        std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
+        if (tBeaconPublicKey.empty())
         {
-            printf("BEACON ERROR!  Unable to send beacon %s \r\n",sError.c_str());
-            printf("BEACON ERROR!  Unable to send beacon %s \r\n",sMessage.c_str());
-            msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
+            std::string sOutPubKey = "";
+            std::string sOutPrivKey = "";
+            std::string sError = "";
+            std::string sMessage = "";
+            bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
+            if (!fResult)
+            {
+                printf("BEACON ERROR!  Unable to send beacon %s, %s\r\n",sError.c_str(), sMessage.c_str());
+                LOCK(MinerStatus.lock);
+                msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
+            }
         }
     }
 
