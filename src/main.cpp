@@ -290,17 +290,17 @@ BlockFinder blockFinder;
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
-volatile bool bNetAveragesLoaded = false;
-volatile bool bTallyStarted      = false;
-volatile bool bForceUpdate = false;
-volatile bool bCheckedForUpgrade = false;
-volatile bool bCheckedForUpgradeLive = false;
-volatile bool bGlobalcomInitialized = false;
-volatile bool bStakeMinerOutOfSyncWithNetwork = false;
-volatile bool bDoTally = false;
-volatile bool bExecuteGridcoinServices = false;
-volatile bool bTallyFinished = false;
-volatile bool bGridcoinGUILoaded = false;
+bool bNetAveragesLoaded = false;
+bool bTallyStarted      = false;
+bool bForceUpdate = false;
+bool bCheckedForUpgrade = false;
+bool bCheckedForUpgradeLive = false;
+bool bGlobalcomInitialized = false;
+bool bStakeMinerOutOfSyncWithNetwork = false;
+bool bDoTally = false;
+bool bExecuteGridcoinServices = false;
+bool bTallyFinished = false;
+bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern double cdbl(std::string s, int place);

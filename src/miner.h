@@ -33,6 +33,6 @@ struct CMinerStatus
 };
 
 extern CMinerStatus MinerStatus;
-extern volatile unsigned int nMinerSleep;
+extern unsigned int nMinerSleep;
 
 #endif // NOVACOIN_MINER_H

@@ -20,7 +20,7 @@ using namespace std;
 // Gridcoin Miner
 //
 
-volatile unsigned int nMinerSleep;
+unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
