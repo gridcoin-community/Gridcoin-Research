@@ -763,11 +763,9 @@ bool BackupPrivateKeys(CWallet* pBackupWallet)
     BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pBackupWallet->mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;
-        //const std::string& strName = item.second;
         bool fMine = IsMine(*pBackupWallet, address.Get());
         if (fMine)
         {
-            //std::string strAddress=CBitcoinAddress(address).ToString();
             CKeyID keyID;
             if (!address.GetKeyID(keyID))
             {
@@ -787,8 +785,8 @@ bool BackupPrivateKeys(CWallet* pBackupWallet)
                     std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
                     //Append to file
                     std::string strAddr = CBitcoinAddress(keyID).ToString();
-                    std::string record = private_key + "<|>" + strAddr + "<KEY>";
-                    myBackup << record;
+                    std::string record = strAddr + ":" + private_key;
+                    myBackup << record << endl;
                 }
             }
         }

@@ -2541,24 +2541,24 @@ std::string CWallet::GetAllGridcoinKeys()
         }
         else
         {
-     
-                bool IsCompressed;
-                CKey vchSecret;
-                //CSecret vchSecret;
-                if (!GetKey(keyID, vchSecret))
-                {
-                    errors = errors + "During Wallet Backup, Private key for address is not known\r\n";
-                }
-                else
-                {
-                     CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
+
+            bool IsCompressed;
+            CKey vchSecret;
+            //CSecret vchSecret;
+            if (!GetKey(keyID, vchSecret))
+            {
+                errors = errors + "GetAllGridcoinKeys: During Wallet Backup, Private key for address is not known\r\n";
+            }
+            else
+            {
+                CSecret secret = vchSecret.GetSecret(IsCompressed);
+                std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
                 
-                    //Append to file
-                    std::string strAddr = CBitcoinAddress(keyID).ToString();
-                    std::string record = private_key + "<|>" + strAddr + "<KEY>";
-                    backup=backup+record;
-                }
+                //Append to file
+                std::string strAddr = CBitcoinAddress(keyID).ToString();
+                std::string record = strAddr + ":" + private_key + "\n";
+                backup=backup+record;
+            }
         }
     }
     return backup;
