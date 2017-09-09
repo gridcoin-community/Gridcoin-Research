@@ -558,92 +558,6 @@ void fileopen_and_copy(std::string src, std::string dest)
     fclose(outfile);
 }
 
-std::string RestoreGridcoinBackupWallet()
-{
-    //AdvancedBackup-AdvancedSalvage
-    
-    boost::filesystem::path path = GetDataDir() / "walletbackups" / "backup.dat";
-    std::string errors = "";
-    std::string sWallet = getfilecontents(path.string().c_str());
-    if (sWallet == "-1") return "Unable to open backup file.";
-        
-    string strSecret = "from file";
-    string strLabel = "Restored";
-
-    std::vector<std::string> vWallet = split(sWallet.c_str(),"<KEY>");
-    if (vWallet.size() > 1)
-    {
-        for (unsigned int i = 0; i < vWallet.size(); i++)
-        {
-            std::string sKey = vWallet[i];
-            if (sKey.length() > 2)
-            {
-                    printf("Restoring private key %s",sKey.substr(0,5).c_str());
-                    //Key is delimited by <|>
-                    std::vector<std::string> vKey = split(sKey.c_str(),"<|>");
-                    if (vKey.size() > 1)
-                    {
-                            std::string sSecret = vKey[0];
-                            std::string sPublic = vKey[1];
-
-                            bool IsCompressed;
-                            CBitcoinSecret vchSecret;
-                            bool fGood = vchSecret.SetString(sSecret);
-                            if (!fGood)
-                            {
-                                errors = errors + "Invalid private key : " + sSecret + "\r\n";
-                            }
-                            else
-                            {
-                                 CKey key;
-                                 CSecret secret = vchSecret.GetSecret(IsCompressed);
-                                 key.SetSecret(secret,IsCompressed);
-                                 //                              key = vchSecret.GetKey();
-                                 CPubKey pubkey = key.GetPubKey();
-                                
-                                 CKeyID vchAddress = pubkey.GetID();
-                                 {
-                                     LOCK2(cs_main, pwalletMain->cs_wallet);
-                                     //                            if (!pwalletMain->AddKey(key)) {            fGood = false;
-         
-                                     if (!pwalletMain->AddKey(key)) 
-                                     {
-                                         errors = errors + "Error adding key to wallet: " + sKey + "\r\n";
-                                     }
-
-                                     if (i==0)
-                                     {
-                                        pwalletMain->SetDefaultKey(pubkey);
-                                        pwalletMain->SetAddressBookName(vchAddress, strLabel);
-                                     }
-                                     pwalletMain->MarkDirty();
-                            
-      
-                                 }
-                            }
-                    }
-            }
-
-        }
-
-    }
-
-
-    //Rescan
-    {
-           LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (true) {
-                pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, true);
-                pwalletMain->ReacceptWalletTransactions();
-            }
-     
-    }
-
-    printf("Rebuilding wallet, results: %s",errors.c_str());
-    return errors;
-
-}
-
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 {
      CKey key;
@@ -2518,12 +2432,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("Backup config success", bConfigBackupResults));
         results.push_back(entry);
     }
-    else if (sItem == "restorewallet")
-    {
-            std::string result = RestoreGridcoinBackupWallet();
-            entry.push_back(Pair("Restore Wallet Result", result));
-            results.push_back(entry);
-    }
     else if (sItem == "resendwallettx")
     {
             ResendWalletTransactions(true);
@@ -2643,7 +2551,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute restart", "Restarts wallet"));
         entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
         #endif
-        entry.push_back(Pair("execute restorewallet", "Restore wallet from backup made by 'backupwallet'"));
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
         entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
