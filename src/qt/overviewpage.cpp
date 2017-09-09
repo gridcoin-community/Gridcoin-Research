@@ -203,7 +203,7 @@ void OverviewPage::UpdateBoincUtilization()
     ui->labelBlocks->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
     ui->labelDifficulty->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
     ui->labelNetWeight->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
-    ui->labelDporWeight->setText(QString::fromUtf8(GlobalStatusStruct.dporWeight.c_str()));
+    ui->labelCoinWeight->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
     ui->labelMagnitude->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
     ui->labelProject->setText(QString::fromUtf8(GlobalStatusStruct.project.c_str()));
     ui->labelCpid->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));

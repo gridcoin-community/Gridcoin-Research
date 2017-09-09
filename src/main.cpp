@@ -549,7 +549,7 @@ void GetGlobalStatus()
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
         nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
-        double weight = nWeight/COIN+boincmagnitude;
+        double weight = nWeight/COIN;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
 
@@ -565,7 +565,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
         GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS(),2);
         //todo: use the real weight from miner status (requires scaling)
-        GlobalStatusStruct.dporWeight = sWeight;
+        GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
