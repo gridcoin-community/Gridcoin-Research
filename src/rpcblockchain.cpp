@@ -24,6 +24,8 @@ using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 bool BackupConfigFile(const string& strDest);
+bool BackupWallet(const CWallet& wallet, const string& strDest);
+bool BackupPrivateKeys(CWallet* pBackupWallet);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
@@ -554,83 +556,6 @@ void fileopen_and_copy(std::string src, std::string dest)
 
     fclose(infile);
     fclose(outfile);
-}
-
-std::string BackupGridcoinWallet()
-{
-    printf("Starting Wallet Backup\r\n");
-    std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
-    std::string filename_backup = "backup.dat";
-    // std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
-    // std::string sConfig_FileName = "gridcoinresearch_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".conf";
-    std::string standard_filename = GetBackupFilename("wallet.dat");
-    std::string sConfig_FileName = GetBackupFilename("gridcoinresearch.conf");
-    std::string source_filename   = "wallet.dat";
-    boost::filesystem::path path = GetDataDir() / "walletbackups" / filename;
-    boost::filesystem::path target_path_standard = GetDataDir() / "walletbackups" / standard_filename;
-    boost::filesystem::path sTargetPathConfig = GetDataDir() / "walletbackups" / sConfig_FileName;
-    boost::filesystem::path source_path_standard = GetDataDir() / source_filename;
-    boost::filesystem::path dest_path_std = GetDataDir() / "walletbackups" / filename_backup;
-    boost::filesystem::create_directories(path.parent_path());
-    std::string errors = "";
-    std::string BackupWalletResult;
-    std::string BackupConfigResult;
-    //Copy the standard wallet first:  (1-30-2015)
-    bool bBackupWallet;
-    bool bBackupConfig;
-    bBackupWallet = BackupWallet(*pwalletMain, target_path_standard.string().c_str());
-    bBackupConfig = BackupConfigFile(sTargetPathConfig.string().c_str());
-    BackupWalletResult = bBackupWallet ? "success" : "fail";
-    BackupConfigResult = bBackupConfig ? "success" : "fail";
-    errors = "Wallet: " + BackupWalletResult + " Config: " + BackupConfigResult;
-    //Per Forum, do not dump the keys and abort:
-    if (true)
-    {
-        printf("User does not want private keys backed up. Exiting.\r\n");
-        return errors;
-    }
-    //Dump all private keys into the Level 2 backup
-    ofstream myBackup;
-    myBackup.open (path.string().c_str());
-    string strAccount;
-    BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
-    {
-        const CBitcoinAddress& address = item.first;
-        //const std::string& strName = item.second;
-        bool fMine = IsMine(*pwalletMain, address.Get());
-        if (fMine)
-        {
-            std::string strAddress=CBitcoinAddress(address).ToString();
-            CKeyID keyID;
-            if (!address.GetKeyID(keyID))
-            {
-                errors = errors + "During wallet backup, Address does not refer to a key"+ "\r\n";
-            }
-            else
-            {
-                bool IsCompressed;
-                CKey vchSecret;
-                if (!pwalletMain->GetKey(keyID, vchSecret))
-                {
-                    errors = errors + "During Wallet Backup, Private key for address is not known\r\n";
-                }
-                else
-                {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
-                    //Append to file
-                    std::string strAddr = CBitcoinAddress(keyID).ToString();
-                    std::string record = private_key + "<|>" + strAddr + "<KEY>";
-                    myBackup << record;
-                }
-            }
-        }
-    }
-    std::string reserve_keys = pwalletMain->GetAllGridcoinKeys();
-    myBackup << reserve_keys;
-    myBackup.close();
-    fileopen_and_copy(path.string().c_str(),dest_path_std.string().c_str());
-    return errors;
 }
 
 std::string RestoreGridcoinBackupWallet()
@@ -1181,7 +1106,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 // Backup config with new keys with beacon suffix
                 std::string sBeaconBackupNewConfigFilename = GetBackupFilename("gridcoinresearch.conf", "beacon");
                 boost::filesystem::path sBeaconBackupNewConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupNewConfigFilename;
-                BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
+                 BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
                 // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
                 ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 return true;
@@ -2587,9 +2512,11 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "backupwallet")
     {
-            std::string result = BackupGridcoinWallet();
-            entry.push_back(Pair("Backup Wallet Result", result));
-            results.push_back(entry);
+        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+        entry.push_back(Pair("Backup wallet success", bWalletBackupResults));
+        entry.push_back(Pair("Backup config success", bConfigBackupResults));
+        results.push_back(entry);
     }
     else if (sItem == "restorewallet")
     {
@@ -2674,6 +2601,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
         entry.push_back(Pair("execute askforoutstandingblocks", "Asks nodes for outstanding blocks"));
         entry.push_back(Pair("execute backupwallet", "Backup wallet"));
+        entry.push_back(Pair("execute backupprivatekeys", "Backup private keys (Wallet must be fully unlocked"));
         entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
         entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
         entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
@@ -2745,6 +2673,14 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute sendblock <hash>", "Send a block to network"));
         entry.push_back(Pair("execute testnewcontract", "Test current neural contract"));
         entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
+        results.push_back(entry);
+    }
+    else if (sItem == "backupprivatekeys")
+    {
+        bool bBackupPrivateKeys = BackupPrivateKeys(pwalletMain);
+        if (!bBackupPrivateKeys)
+            entry.push_back(Pair("error", "Wallet must be fully unlocked to backup private keys"));
+        entry.push_back(Pair("result", bBackupPrivateKeys));
         results.push_back(entry);
     }
     else

@@ -125,7 +125,6 @@ extern int64_t IsNeural();
 
 double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
-std::string BackupGridcoinWallet();
 int nRegVersion;
 
 extern int CreateRestorePoint();
