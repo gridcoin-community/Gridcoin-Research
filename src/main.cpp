@@ -544,7 +544,6 @@ void GetGlobalStatus()
 
     try
     {
-        std::string status = "";
         double boincmagnitude = CalculatedMagnitude(GetAdjustedTime(),false);
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
