@@ -4646,14 +4646,19 @@ bool AskForOutstandingBlocks(uint256 hashStart)
 }
 
 
-
+void clearOrphanBlocks() {
+    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++) {
+        delete it->second;
+    }
+    mapOrphanBlocks.clear();
+}
 
 
 void CheckForLatestBlocks()
 {
     if (WalletOutOfSync())
     {
-            mapOrphanBlocks.clear();
+            clearOrphanBlocks();
             setStakeSeen.clear();
             setStakeSeenOrphan.clear();
             AskForOutstandingBlocks(uint256(0));
@@ -4720,7 +4725,7 @@ void CheckForFutileSync()
             {
                 mapAlreadyAskedFor.clear();
                 printf("\r\nClearing mapAlreadyAskedFor.\r\n");
-                mapOrphanBlocks.clear(); 
+                clearOrphanBlocks();
                 setStakeSeen.clear();  
                 setStakeSeenOrphan.clear();
                 AskForOutstandingBlocks(uint256(0));
