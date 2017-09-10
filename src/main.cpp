@@ -213,8 +213,6 @@ std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0
 
 std::string BackupGridcoinWallet();
 
-extern bool OutOfSyncByAgeWithChanceOfMining();
-
 int RebootClient();
 
 std::string YesNo(bool bin);
@@ -2489,44 +2487,6 @@ bool KeyEnabled(std::string key)
     }
     return false;
 }
-
-
-bool OutOfSyncByAgeWithChanceOfMining()
-{
-    // If the client is out of sync, we dont want it to mine orphan blocks on its own fork, so we return OOS when that is the case 95% of the time:
-    // If the client is in sync, this function returns false and the client mines.
-    // The reason we allow mining 5% of the time, is if all nodes leave Gridcoin, we want someone to be able to jump start the coin in that extremely rare circumstance (IE End of Life, or Network Outage across the country, etc).
-    try
-    {
-            if (fTestNet) return false;
-            if (KeyEnabled("overrideoutofsyncrule")) return false;
-            bool oosbyage = OutOfSyncByAge();
-            //Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
-            if (oosbyage) if (LessVerbose(900)) return true;
-            // Rule 2 : Dont mine on Fork Rule:
-            //If the diff is < .00015 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
-            double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-            if (!fTestNet && PORDiff < .00010)
-            {
-                printf("Most likely you are mining on a fork! Diff %f",PORDiff);
-                if (LessVerbose(950)) return true;
-            }
-            return false;
-    }
-    catch (std::exception &e)
-    {
-                printf("Error while assessing Sync Condition\r\n");
-                return true;
-    }
-    catch(...)
-    {
-                printf("Error while assessing Sync Condition[2].\r\n");
-                return true;
-    }
-    return true;
-
-}
-
 
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
 {

@@ -29,7 +29,6 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
 
-bool OutOfSyncByAgeWithChanceOfMining();
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
@@ -759,26 +758,6 @@ bool IsMiningAllowed(CWallet *pwallet)
         MinerStatus.ReasonNotStaking+="Offline; ";
         status=false;
     }
-
-    /*
-    //Verify we are still on the main chain
-    if (IsLockTimeWithinMinutes(nLastBlockSolved,3))
-    {
-        if (fDebug10) printf("=");
-        LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+="We are not on the main chain; ";
-        status=false;
-    }
-
-    if (OutOfSyncByAgeWithChanceOfMining())
-    {
-        LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+="Out of Sync; "
-        msMiningErrors7="Out of Sync";
-        if(fDebug) printf("Wallet out of sync - unable to stake.\n");
-        status=false;
-    }
-    */
 
     return status;
 }
