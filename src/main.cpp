@@ -46,7 +46,6 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
 double qtPushGridcoinDiagnosticData(std::string data);
-int RestartClient();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
@@ -211,8 +210,6 @@ std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);
-
-int RebootClient();
 
 std::string YesNo(bool bin);
 
@@ -4412,17 +4409,6 @@ void GridcoinServices()
     {
         bTallyStarted = false;
     }
-    
-    if (TimerMain("OutOfSyncDaily",900))
-    {
-        if (WalletOutOfSync())
-        {
-            printf("Restarting Gridcoin...");
-            #if defined(WIN32) && defined(QT_GUI)
-                int iResult = RestartClient();
-            #endif
-        }
-    }
 
     if (false && TimerMain("FixSpentCoins",60))
     {
@@ -4708,42 +4694,6 @@ bool WalletOutOfSyncByMoreThan2000Blocks()
     return false;
 }
 
-
-
-void CheckForFutileSync()
-{
-    // If we stay out of sync for more than 8 iterations of 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
-    // We reset these counters every time a block is accepted successfully in AcceptBlock().
-    // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
-    // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
-    if (WalletOutOfSync())
-    {
-        if (TimerMain("CheckForFutileSync", 25))
-        {
-            if (TimerMain("OrphansAndNotRecovering",8))                                 
-            {
-                printf("\r\nGridcoin has not recovered after clearing orphans; Restarting node...\r\n");
-                #if defined(WIN32) && defined(QT_GUI)
-                    int iResult = RestartClient();
-                #endif
-            }
-            else
-            {
-                mapAlreadyAskedFor.clear();
-                printf("\r\nClearing mapAlreadyAskedFor.\r\n");
-                ClearOrphanBlocks();
-                setStakeSeen.clear();  
-                setStakeSeenOrphan.clear();
-                AskForOutstandingBlocks(uint256(0));
-            }
-        }
-        else
-        {
-            ResetTimerMain("OrphansAndNotRecovering");
-        }
-    }
-}
-
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
     AssertLockHeld(cs_main);
@@ -4791,19 +4741,32 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
         // *****      This area covers Gridcoin Orphan Handling      ***** 
-        if (true)
+        if (WalletOutOfSync())
         {
-            if (WalletOutOfSync())
+            if (TimerMain("OrphanBarrage",100))
             {
-                if (TimerMain("OrphanBarrage",100))
+                // If we stay out of sync for more than 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
+                // We reset these counters every time a block is accepted successfully in AcceptBlock().
+                // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
+                // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
+                if (TimerMain("CheckForFutileSync", 25))
                 {
-                    mapAlreadyAskedFor.clear();
-                    printf("\r\nClearing mapAlreadyAskedFor.\r\n");
-                    AskForOutstandingBlocks(uint256(0));
-                    CheckForFutileSync();
+                    ClearOrphanBlocks();
+                    setStakeSeen.clear();
+                    setStakeSeenOrphan.clear();
                 }
+
+                printf("\r\nClearing mapAlreadyAskedFor.\r\n");
+                mapAlreadyAskedFor.clear();
+                AskForOutstandingBlocks(uint256(0));
             }
         }
+        else
+        {
+            // If we successfully synced we can reset the futile state.
+            ResetTimerMain("CheckForFutileSync");
+        }
+
 
         CBlock* pblock2 = new CBlock(*pblock);
         if (WalletOutOfSyncByMoreThan2000Blocks() || fTestNet)
@@ -6064,7 +6027,6 @@ string GetWarnings(string strFor)
     // if detected invalid checkpoint enter safe mode
     if (Checkpoints::hashInvalidCheckpoint != 0)
     {
-
         if (CHECKPOINT_DISTRIBUTED_MODE==1)
         {
             //10-18-2014-Halford- If invalid checkpoint found, reboot the node:
@@ -6073,26 +6035,10 @@ string GetWarnings(string strFor)
         }
         else
         {
-            #if defined(WIN32) && defined(QT_GUI)
-                int nResult = 0;
-                std::string rebootme = "";
-                if (mapArgs.count("-reboot"))
-                {
-                    rebootme = GetArg("-reboot", "false");
-                }
-                if (rebootme == "true")
-                {
-                    nResult = RebootClient();
-                    printf("Rebooting %u",nResult);
-                }
-            #endif
-
             nPriority = 3000;
             strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
             printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
         }
-
-
     }
 
     // Alerts
