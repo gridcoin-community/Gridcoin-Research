@@ -162,6 +162,8 @@ void HarvestCPIDs(bool cleardata);
 void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
+int nLastBeaconAdvertised = 0;
+
 double GetNetworkAvgByProject(std::string projectname)
 {
         projectname = strReplace(projectname,"_"," ");
@@ -1144,7 +1146,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
             // Prevent users from advertising multiple times in succession by setting a limit of one advertisement per 5 blocks.
             // Realistically 1 should be enough however just to be sure we deny advertisements for 5 blocks.
-            int nLastBeaconAdvertised = GetArg("LastBeaconAdvertised", 0);
             if ((nBestHeight - nLastBeaconAdvertised) < 5)
             {
                 sError = "A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.";
@@ -1199,7 +1200,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
                 ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 // Since everything was successful add LastAdvertisedBeacon block height to memory.
-                ForceSetArg("LastAdvertisedBeacon", ToString(nBestHeight));
+                nLastBeaconAdvertised = nBestHeight;
                 return true;
             }
             catch(Object& objError)
