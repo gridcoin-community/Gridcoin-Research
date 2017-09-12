@@ -4652,10 +4652,6 @@ void ClearOrphanBlocks() {
         delete it->second;
     }
     mapOrphanBlocks.clear();
-
-    for(auto it = mapOrphanBlocksByPrev.begin(); it != mapOrphanBlocks.end(); it++) {
-        delete it->second;
-    }
     mapOrphanBlocksByPrev.clear();
 
 }
