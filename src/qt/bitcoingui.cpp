@@ -24,6 +24,7 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
+#include "diagnosticsdialog.h"
 #include "upgradedialog.h"
 #include "upgrader.h"
 #include "sendcoinsdialog.h"
@@ -869,6 +870,8 @@ void BitcoinGUI::createMenuBar()
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
     help->addSeparator();
+    help->addAction(diagnosticsAction);
+    help->addSeparator();
     help->addAction(aboutAction);
 #ifdef WIN32
     help->addSeparator();
@@ -1459,12 +1462,14 @@ void BitcoinGUI::configClicked()
 
 void BitcoinGUI::diagnosticsClicked()
 {
-#ifdef WIN32
-	if (!bGlobalcomInitialized) return;
-	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-	bool result = PushGridcoinDiagnostics();
-    globalcom->dynamicCall("ShowDiagnostics()");
-#endif
+//#ifdef WIN32
+//	if (!bGlobalcomInitialized) return;
+//	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
+//	bool result = PushGridcoinDiagnostics();
+//    globalcom->dynamicCall("ShowDiagnostics()");
+//#endif
+    DiagnosticsDialog diag;
+    diag.exec();
 }
 
 void BitcoinGUI::foundationClicked()
