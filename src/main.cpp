@@ -4851,7 +4851,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             CBlock* pblockOrphan = mi->second;
             if (pblockOrphan->AcceptBlock(generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash());
-            delete mapOrphanBlocks.at(pblockOrphan->GetHash());
             mapOrphanBlocks.erase(pblockOrphan->GetHash());
             setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
             delete pblockOrphan;
