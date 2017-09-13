@@ -4,10 +4,6 @@ QMainWindow {
     font-family:'Open Sans';
 }
 
-QMenuBar {
-    border-bottom : 0.125em solid rgb(160,175,5);
-}
-
 /* Main Window*/
 
 #toolbar {
@@ -19,14 +15,14 @@ QMenuBar {
 #toolbar2 {
     border:none;
     width:1.625em;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
     min-width:1.625em;
     max-width:1.625em;
 }
 
 #toolbar3 {
     border:none;
-    border-bottom : 0.125em solid rgb(160,175,5);
+    background-color:rgb(65,0,127);
     min-height:3.25em;
     max-height:3.25em;
 }
@@ -61,11 +57,27 @@ QToolBar#toolbar3 QLabel{
 }
 
 #boincLogo{
-    image:url(:/images/boinc);
+    image:url(:/images/boinc_w);
     min-width:5.38em;
     max-width:5.38em;
     min-height:2.25em;
     max-height:2.25em;
+}
+
+#gridcoinLogoHorizontal{
+    image:url(:/images/logo_hz);
+    min-width:9.225em;
+    max-width:9.225em;
+    min-height:2.25em;
+    max-height:2.25em;
+}
+
+#aboutLogoLabel{
+    image:url(:/images/about_light);
+    min-width:2.25em;
+    max-width:2.25em;
+    min-height:9.225em;
+    max-height:9.225em;
 }
 
 /* overview page */
