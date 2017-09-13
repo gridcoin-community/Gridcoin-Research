@@ -151,6 +151,8 @@ private:
     void createTrayIcon();
     /** Create system tray menu (or setup the dock menu) */
     void createTrayIconMenu();
+    /** Set Icons */
+    void setIcons(QString sSheet);
 
 
 public slots:

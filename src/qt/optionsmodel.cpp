@@ -47,7 +47,7 @@ void OptionsModel::Init()
     nTransactionFee = settings.value("nTransactionFee").toLongLong();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
-    walletStylesheet = settings.value("walletStylesheet", "native").toString();
+    walletStylesheet = settings.value("walletStylesheet", "light").toString();
 
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
@@ -110,7 +110,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case Language:
             return settings.value("language", "");
         case WalletStylesheet:
-            return settings.value("walletStylesheet", "native");
+            return settings.value("walletStylesheet", "light");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         default:

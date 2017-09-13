@@ -48,6 +48,7 @@ private slots:
 	void on_btnAddAttachment_clicked();
     void on_pasteButton_clicked();
     void updateDisplayUnit();
+    void updateIcons();
     
 private:
     Ui::SendCoinsEntry *ui;

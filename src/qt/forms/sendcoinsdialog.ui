@@ -696,10 +696,6 @@
        <property name="text">
         <string>S&amp;end</string>
        </property>
-       <property name="icon">
-        <iconset resource="../bitcoin.qrc">
-         <normaloff>:/icons/send</normaloff>:/icons/send</iconset>
-       </property>
        <property name="default">
         <bool>true</bool>
        </property>
