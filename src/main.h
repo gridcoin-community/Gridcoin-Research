@@ -102,6 +102,14 @@ inline uint32_t IsV8Enabled(int nHeight)
             : nHeight > 1010000;
 }
 
+inline uint32_t IsV9Enabled(int nHeight)
+{
+    // Start creating V9 blocks after these heights.
+    return fTestNet
+            ? nHeight > 35000
+            : nHeight > 1100000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
@@ -984,7 +992,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 8;
+    static const int CURRENT_VERSION = 9;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;

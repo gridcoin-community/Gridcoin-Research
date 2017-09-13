@@ -4052,8 +4052,12 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
              ||(!IsV8Enabled(nHeight) && nVersion >= 8)
+             ||(!IsV9Enabled(nHeight) && nVersion >= 9)
              )
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
+
+    if( nVersion < pindexPrev->nVersion )
+        return DoS(20, error("AcceptBlock(): reject nVersion = %d less than previous",nVersion));
 
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
