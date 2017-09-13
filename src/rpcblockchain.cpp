@@ -4393,7 +4393,7 @@ Value listitem(const Array& params, bool fHelp)
 		Object entry;
 	    entry.push_back(Pair("byte1",v[1]));
         entry.push_back(Pair("bytes",(double)v.size()));
-		for (int i = 0; i < v.size(); i++)
+        for (unsigned int i = 0; i < v.size(); i++)
 		{
 			entry.push_back(Pair("bytes",v[i]));
 		}
