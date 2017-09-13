@@ -1028,8 +1028,6 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
     return nEvicted;
 }
 
-
-
 std::string DefaultWalletAddress()
 {
     static std::string sDefaultWalletAddress;
@@ -1039,23 +1037,9 @@ std::string DefaultWalletAddress()
     try
     {
         //Gridcoin - Find the default public GRC address (since a user may have many receiving addresses):
-        BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
+        for (auto const& item : pwalletMain->mapAddressBook)
         {
             const CBitcoinAddress& address = item.first;
-            const std::string& strName = item.second;
-            bool fMine = IsMine(*pwalletMain, address.Get());
-            if (fMine && strName == "Default") 
-            {
-                sDefaultWalletAddress=CBitcoinAddress(address).ToString();
-                return sDefaultWalletAddress;
-            }
-        }
-        
-        //Cant Find        
-        BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
-        {
-            const CBitcoinAddress& address = item.first;
-            //const std::string& strName = item.second;
             bool fMine = IsMine(*pwalletMain, address.Get());
             if (fMine)
             {
@@ -1070,11 +1054,6 @@ std::string DefaultWalletAddress()
     }
     return "NA";
 }
-
-
-
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
