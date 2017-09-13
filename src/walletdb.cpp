@@ -698,22 +698,22 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
                 bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
                 // Copy wallet.dat - Leave strDest support for WalletModel
-                boost::filesystem::path WalletTarget = GetDataDir() / "walletbackups" / strDest;
-                boost::filesystem::create_directories(WalletTarget.parent_path());
-                boost::filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
-                if (boost::filesystem::is_directory(WalletTarget))
+                filesystem::path WalletTarget = GetDataDir() / "walletbackups" / strDest;
+                filesystem::create_directories(WalletTarget.parent_path());
+                filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
+                if (filesystem::is_directory(WalletTarget))
                     WalletTarget /= wallet.strWalletFile;
                 try
                 {
                     #if BOOST_VERSION >= 104000
-                        boost::filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
+                        filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
                     #else
-                        boost::filesystem::copy_file(WalletSource, WalletTarget);
+                        filesystem::copy_file(WalletSource, WalletTarget);
                     #endif
                     printf("BackupWallet: Copied wallet.dat to %s\r\n", WalletTarget.string().c_str());
                     return true;
                 }
-                catch(const boost::filesystem::filesystem_error &e) {
+                catch(const filesystem::filesystem_error &e) {
                     printf("BackupWallet: Error copying wallet.dat to %s - %s\r\n", WalletTarget.string().c_str(), e.what());
                     return false;
                 }
@@ -731,8 +731,8 @@ bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string
         sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
         return false;
     }
-    boost::filesystem::path PrivateKeysTarget = GetDataDir() / "walletbackups" / GetBackupFilename("keys.dat");
-    boost::filesystem::create_directories(PrivateKeysTarget.parent_path());
+    filesystem::path PrivateKeysTarget = GetDataDir() / "walletbackups" / GetBackupFilename("keys.dat");
+    filesystem::create_directories(PrivateKeysTarget.parent_path());
     sTarget = PrivateKeysTarget.string();
     std::ofstream myBackup;
     myBackup.open (PrivateKeysTarget.string().c_str());

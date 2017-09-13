@@ -2546,7 +2546,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 else
                 {
                     CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    //CBitcoinAddress address(keyID);
                     CBitcoinSecret privateKey(secret, IsCompressed);
                     res.push_back(std::make_pair(address, privateKey));
                 }

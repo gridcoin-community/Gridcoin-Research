@@ -9236,20 +9236,20 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
 // Todo: Make and move to config.cpp/h (ravon)
 bool BackupConfigFile(const std::string& strDest)
 {
-    boost::filesystem::path ConfigTarget = GetDataDir() / "walletbackups" / strDest;
-    boost::filesystem::create_directories(ConfigTarget.parent_path());
-    boost::filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
+    filesystem::path ConfigTarget = GetDataDir() / "walletbackups" / strDest;
+    filesystem::create_directories(ConfigTarget.parent_path());
+    filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
     try
     {
         #if BOOST_VERSION >= 104000
-            boost::filesystem::copy_file(ConfigSource, ConfigTarget, boost::filesystem::copy_option::overwrite_if_exists);
+            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
         #else
-            boost::filesystem::copy_file(ConfigSource, ConfigTarget);
+            filesystem::copy_file(ConfigSource, ConfigTarget);
         #endif
         printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
         return true;
     }
-    catch(const boost::filesystem::filesystem_error &e)
+    catch(const filesystem::filesystem_error &e)
     {
         printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
         return false;
