@@ -1787,7 +1787,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     int64_t nCurrentTime = GetAdjustedTime();
     CTxDB txdb("r");
     //Retrieve CPID RSA_WEIGHT
-    int64_t RSA_WEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+    int64_t RSA_WEIGHT = IsV8Enabled(nBestHeight+1) ? 0 : GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
     ////////////////////////////////////////////////////////////////////////////////
     
     LOCK2(cs_main, cs_wallet);

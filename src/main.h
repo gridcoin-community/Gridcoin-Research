@@ -223,7 +223,7 @@ struct globalStatusType
     std::string blocks;
     std::string difficulty;
     std::string netWeight;
-    std::string dporWeight;
+    std::string coinWeight;
     std::string magnitude;
     std::string project;
     std::string cpid;
