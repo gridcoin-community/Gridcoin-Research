@@ -8,15 +8,15 @@
 #include "init.h"
 #include <boost/version.hpp>
 #include <boost/filesystem.hpp>
+#include <fstream>
 
 using namespace std;
 using namespace boost;
 
 static uint64_t nAccountingEntryNumber = 0;
 extern bool fWalletUnlockStakingOnly;
-extern bool BackupConfigFile(const string& strDest);
-extern bool BackupPrivateKeys(CWallet* pBackupWallet);
-extern bool BackupWallet(const CWallet& wallet, const string& strDest);
+extern bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string& sErrors);
+extern bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 
 //
 // CWalletDB
@@ -682,30 +682,7 @@ void ThreadFlushWalletDB(void* parg)
     }
 }
 
-bool BackupConfigFile(const string& strDest)
-{
-    filesystem::path ConfigTarget = GetDataDir() / "walletbackups" / strDest;
-    filesystem::create_directories(ConfigTarget.parent_path());
-    filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
-    try
-    {
-        #if BOOST_VERSION >= 104000
-            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
-        #else
-            filesystem::copy_file(ConfigSource, ConfigTarget);
-        #endif
-        printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
-        return true;
-    }
-    catch(const filesystem::filesystem_error &e)
-    {
-        printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
-        return false;
-    }
-    return false;
-}
-
-bool BackupWallet(const CWallet& wallet, const string& strDest)
+bool BackupWallet(const CWallet& wallet, const std::string& strDest)
 {
     if (!wallet.fFileBacked)
         return false;
@@ -721,22 +698,22 @@ bool BackupWallet(const CWallet& wallet, const string& strDest)
                 bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
                 // Copy wallet.dat - Leave strDest support for WalletModel
-                filesystem::path WalletTarget = GetDataDir() / "walletbackups" / strDest;
-                filesystem::create_directories(WalletTarget.parent_path());
-                filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
-                if (filesystem::is_directory(WalletTarget))
+                boost::filesystem::path WalletTarget = GetDataDir() / "walletbackups" / strDest;
+                boost::filesystem::create_directories(WalletTarget.parent_path());
+                boost::filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
+                if (boost::filesystem::is_directory(WalletTarget))
                     WalletTarget /= wallet.strWalletFile;
                 try
                 {
                     #if BOOST_VERSION >= 104000
-                        filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
+                        boost::filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
                     #else
-                        filesystem::copy_file(WalletSource, WalletTarget);
+                        boost::filesystem::copy_file(WalletSource, WalletTarget);
                     #endif
                     printf("BackupWallet: Copied wallet.dat to %s\r\n", WalletTarget.string().c_str());
                     return true;
                 }
-                catch(const filesystem::filesystem_error &e) {
+                catch(const boost::filesystem::filesystem_error &e) {
                     printf("BackupWallet: Error copying wallet.dat to %s - %s\r\n", WalletTarget.string().c_str(), e.what());
                     return false;
                 }
@@ -747,52 +724,28 @@ bool BackupWallet(const CWallet& wallet, const string& strDest)
     return false;
 }
 
-bool BackupPrivateKeys(CWallet* pBackupWallet)
+bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string& sErrors)
 {
     if (pBackupWallet->IsLocked() || fWalletUnlockStakingOnly)
     {
-        printf("BackupPrivateKeys: Wallet needs to be fully unlocked to backup private keys");
+        sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
         return false;
     }
-    filesystem::path PrivateKeysTarget = GetDataDir() / "walletbackups" / GetBackupFilename("keys.dat");
-    filesystem::create_directories(PrivateKeysTarget.parent_path());
-
-    ofstream myBackup;
+    boost::filesystem::path PrivateKeysTarget = GetDataDir() / "walletbackups" / GetBackupFilename("keys.dat");
+    boost::filesystem::create_directories(PrivateKeysTarget.parent_path());
+    sTarget = PrivateKeysTarget.string();
+    std::ofstream myBackup;
     myBackup.open (PrivateKeysTarget.string().c_str());
-    //string strAccount;
-    BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pBackupWallet->mapAddressBook)
+    std::string sError;
+    for(const auto& keyPair : pBackupWallet->GetAllPrivateKeys(pBackupWallet, sError))
     {
-        const CBitcoinAddress& address = item.first;
-        bool fMine = IsMine(*pBackupWallet, address.Get());
-        if (fMine)
+        if (!sError.empty())
         {
-            CKeyID keyID;
-            if (!address.GetKeyID(keyID))
-            {
-                printf("BackupPrivateKeys: During wallet backup, Address does not refer to a key\r\n");
-            }
-            else
-            {
-                bool IsCompressed;
-                CKey vchSecret;
-                if (!pBackupWallet->GetKey(keyID, vchSecret))
-                {
-                    printf("BackupPrivateKeys: During Wallet Backup, Private key for address is not known\r\n");
-                }
-                else
-                {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
-                    //Append to file
-                    std::string strAddr = CBitcoinAddress(keyID).ToString();
-                    std::string record = strAddr + ":" + private_key;
-                    myBackup << record << endl;
-                }
-            }
+            sErrors = sError;
+            return false;
         }
+        myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
     }
-    std::string reserve_keys = pBackupWallet->GetAllGridcoinKeys();
-    myBackup << reserve_keys;
     printf("BackupPrivateKeys: Backup made to %s\r\n", PrivateKeysTarget.string().c_str());
     myBackup.close();
     return true;

@@ -17,6 +17,8 @@
 #include "block.h"
 #include "bitcoinrpc.h"
 #include "util.h"
+#include <boost/variant/apply_visitor.hpp>
+#include <script.h>
 
 using namespace std;
 
@@ -2514,58 +2516,79 @@ void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress) const
     }
 }
 
-
-
-
-std::string CWallet::GetAllGridcoinKeys()
+std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKeys(CWallet* pBackupWallet, std::string& sError)
 {
-    //<CKeyID>& setAddress;
-    //setAddress.clear();
-    std::string backup = "";
     CWalletDB walletdb(strWalletFile);
 
     LOCK2(cs_main, cs_wallet);
-    std::string errors = "";
 
-    BOOST_FOREACH(const int64_t& id, setKeyPool)
+    std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> res;
+    // Get Privaty Keys from mapAddressBook
+    for (auto const& item : mapAddressBook)
+    {
+        const CBitcoinAddress& address = item.first;
+        bool fMine = ::IsMine(*pBackupWallet, address.Get());
+        if (fMine)
+        {
+            CKeyID keyID;
+            if (!address.GetKeyID(keyID))
+            {
+                printf("GetAllPrivateKeys: During private key backup, Address %s does not refer to a key\r\n", address.ToString().c_str());
+            }
+            else
+            {
+                bool IsCompressed;
+                CKey vchSecret;
+                if (!pBackupWallet->GetKey(keyID, vchSecret))
+                {
+                    printf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\r\n", address.ToString().c_str());
+                }
+                else
+                {
+                    CSecret secret = vchSecret.GetSecret(IsCompressed);
+                    //CBitcoinAddress address(keyID);
+                    CBitcoinSecret privateKey(secret, IsCompressed);
+                    res.push_back(std::make_pair(address, privateKey));
+                }
+            }
+        }
+    }
+    // Get Private Keys from KeyPool
+    for (auto const& id : setKeyPool)
     {
         CKeyPool keypool;
         if (!walletdb.ReadPool(id, keypool))
-            throw runtime_error("GetAllReserveKeyHashes() : read failed");
+        {
+            // Important to know.
+            sError = "GetAllPrivateKeys: Failed to read pool";
+        }
         assert(keypool.vchPubKey.IsValid());
         CKeyID keyID = keypool.vchPubKey.GetID();
 
         if (!HaveKey(keyID))  
         {
-                //throw runtime_error("GetAllReserveKeyHashes() : unknown key in key pool");
+            printf("GetAllPrivateKeys: Unknown key in key pool\r\n");
         }
         else
         {
-
             bool IsCompressed;
             CKey vchSecret;
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
             {
-                errors = errors + "GetAllGridcoinKeys: During Wallet Backup, Private key for address is not known\r\n";
+                printf("GetAllPrivateKeys: During Private Key Backup, Private key for address %s is not known\r\n", keyID.ToString().c_str());
             }
             else
             {
                 CSecret secret = vchSecret.GetSecret(IsCompressed);
-                std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
-                
-                //Append to file
-                std::string strAddr = CBitcoinAddress(keyID).ToString();
-                std::string record = strAddr + ":" + private_key + "\n";
-                backup=backup+record;
+                CBitcoinAddress address(keyID);
+                CBitcoinSecret privateKey(secret, IsCompressed);
+                res.push_back(std::make_pair(address, privateKey));
             }
         }
     }
-    return backup;
+    return res;
 }
-
-
-
 
 void CWallet::UpdatedTransaction(const uint256 &hashTx)
 {

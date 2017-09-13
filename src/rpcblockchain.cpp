@@ -23,9 +23,8 @@
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
-bool BackupConfigFile(const string& strDest);
-bool BackupWallet(const CWallet& wallet, const string& strDest);
-bool BackupPrivateKeys(CWallet* pBackupWallet);
+bool BackupWallet(const CWallet& wallet, const std::string& strDest);
+bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string& sErrors);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
@@ -1020,7 +1019,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 // Backup config with new keys with beacon suffix
                 std::string sBeaconBackupNewConfigFilename = GetBackupFilename("gridcoinresearch.conf", "beacon");
                 boost::filesystem::path sBeaconBackupNewConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupNewConfigFilename;
-                 BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
+                BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
                 // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
                 ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 return true;
@@ -2584,9 +2583,13 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "backupprivatekeys")
     {
-        bool bBackupPrivateKeys = BackupPrivateKeys(pwalletMain);
+        string sErrors;
+        string sTarget;
+        bool bBackupPrivateKeys = BackupPrivateKeys(pwalletMain, sTarget, sErrors);
         if (!bBackupPrivateKeys)
-            entry.push_back(Pair("error", "Wallet must be fully unlocked to backup private keys"));
+            entry.push_back(Pair("error", sErrors));
+        else
+            entry.push_back(Pair("location", sTarget));
         entry.push_back(Pair("result", bBackupPrivateKeys));
         results.push_back(entry);
     }

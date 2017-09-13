@@ -206,7 +206,7 @@ public:
     bool GetKeyFromPool(CPubKey &key, bool fAllowReuse=true);
     int64_t GetOldestKeyPoolTime();
     void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
-	std::string GetAllGridcoinKeys();
+    std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> GetAllPrivateKeys(CWallet* pBackupWallet, std::string& sError);
 
 
     std::set< std::set<CTxDestination> > GetAddressGroupings();
