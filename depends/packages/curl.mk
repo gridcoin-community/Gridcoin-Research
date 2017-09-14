@@ -6,6 +6,7 @@ $(package)_sha256_hash=dae1b1be34f5983e8d46917f2bdbb2335aecd0e57f777f4c32213da6a
 
 define $(package)_set_vars
   $(package)_config_opts=--disable-shared
+  $(package)_config_opts+= --enable-static
   $(package)_config_opts_release+=--disable-debug-mode
   $(package)_config_opts_linux+=--with-pic
 endef
