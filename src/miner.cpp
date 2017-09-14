@@ -650,14 +650,14 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 
 int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 {
-    const std::string sb_contract;
+    std::string sb_contract;
 
     if(OutOfSyncByAge())
         return printf("AddNeuralContractOrVote: Out Of Sync\n");
 
     /* Retrive the neural Contract */
     #if defined(WIN32) && defined(QT_GUI)
-        const std::string sb_contract = qtGetNeuralContract("");
+        sb_contract = qtGetNeuralContract("");
     #endif
 
     const std::string sb_hash = GetQuorumHash(sb_contract);
