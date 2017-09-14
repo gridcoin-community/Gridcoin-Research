@@ -698,7 +698,10 @@ public:
     {
         return (GetDebit(filter) > 0);
     }
-
+    bool IsConfirmed() const
+    {
+        return GetDepthInMainChain() >= 10;
+    }
     bool IsTrusted() const
     {
 		int nMinConfirmsRequiredToSendGRC = 3;
