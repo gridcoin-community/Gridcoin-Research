@@ -568,7 +568,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
         GlobalStatusStruct.status = msMiningErrors;
         GlobalStatusStruct.poll = msPoll;
-        GlobalStatusStruct.errors =  MinerStatus.ReasonNotStaking + MinerStatus.Message + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
+        GlobalStatusStruct.errors =  MinerStatus.ReasonNotStaking + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
         GlobalStatusStruct.rsaOverview =  msRSAOverview; // not displayed on overview page anymore.
         }
         return;
