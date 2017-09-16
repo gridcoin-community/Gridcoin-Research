@@ -4855,11 +4855,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             setStakeSeenOrphan.erase(pblockOrphan->GetProofOfStake());
             delete pblockOrphan;
         }
-
-        auto it = mapOrphanBlocksByPrev.begin();
-        while((it = mapOrphanBlocksByPrev.find(hashPrev)) != mapOrphanBlocksByPrev.end()) {
-            delete it->second;
-        }
         mapOrphanBlocksByPrev.erase(hashPrev);
 
     }
