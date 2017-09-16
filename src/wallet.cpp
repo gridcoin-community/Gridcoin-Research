@@ -2516,7 +2516,7 @@ void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress) const
     }
 }
 
-std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKeys(CWallet* pBackupWallet, std::string& sError)
+std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKeys(std::string& sError)
 {
     CWalletDB walletdb(strWalletFile);
 
@@ -2527,7 +2527,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
     for (auto const& item : mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;
-        bool fMine = ::IsMine(*pBackupWallet, address.Get());
+        bool fMine = ::IsMine(*this, address.Get());
         if (fMine)
         {
             CKeyID keyID;
@@ -2539,7 +2539,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             {
                 bool IsCompressed;
                 CKey vchSecret;
-                if (!pBackupWallet->GetKey(keyID, vchSecret))
+                if (!GetKey(keyID, vchSecret))
                 {
                     printf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\r\n", address.ToString().c_str());
                 }

@@ -737,7 +737,7 @@ bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string
     std::ofstream myBackup;
     myBackup.open (PrivateKeysTarget.string().c_str());
     std::string sError;
-    for(const auto& keyPair : pBackupWallet->GetAllPrivateKeys(pBackupWallet, sError))
+    for(const auto& keyPair : pBackupWallet->GetAllPrivateKeys(sError))
     {
         if (!sError.empty())
         {
