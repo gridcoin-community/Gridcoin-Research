@@ -210,7 +210,7 @@ std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a6
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
-std::string BackupGridcoinWallet();
+bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 
 int RebootClient();
 
@@ -4396,13 +4396,16 @@ void GridcoinServices()
     if (OutOfSyncByAge()) return;
     if (fDebug) printf(" {SVC} ");
 
-    //Backup the wallet once per 900 blocks:
-    double dWBI = cdbl(GetArgument("walletbackupinterval", "900"),0);
-    
-    if (TimerMain("backupwallet", dWBI))
+    //Backup the wallet once per 900 blocks or as specified in config:
+    int nWBI = GetArg("-walletbackupinterval", 900);
+    if (nWBI == 0)
+        nWBI = 900;
+
+   if (TimerMain("backupwallet", nWBI))
     {
-        std::string backup_results = BackupGridcoinWallet();
-        printf("Daily backup results: %s\r\n",backup_results.c_str());
+        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+        printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
     if (TimerMain("ResetVars",30))
@@ -9190,4 +9193,28 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     return suffix.empty()
         ? basename + "-" + std::string(boTime)
         : basename + "-" + std::string(boTime) + "-" + suffix;
+}
+
+// Todo: Make and move to config.cpp/h (ravon)
+bool BackupConfigFile(const std::string& strDest)
+{
+    filesystem::path ConfigTarget = GetDataDir() / "walletbackups" / strDest;
+    filesystem::create_directories(ConfigTarget.parent_path());
+    filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
+    try
+    {
+        #if BOOST_VERSION >= 104000
+            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
+        #else
+            filesystem::copy_file(ConfigSource, ConfigTarget);
+        #endif
+        printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
+        return true;
+    }
+    catch(const filesystem::filesystem_error &e)
+    {
+        printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
+        return false;
+    }
+    return false;
 }
