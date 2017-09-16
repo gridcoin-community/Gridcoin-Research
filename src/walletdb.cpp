@@ -15,7 +15,7 @@ using namespace boost;
 
 static uint64_t nAccountingEntryNumber = 0;
 extern bool fWalletUnlockStakingOnly;
-extern bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string& sErrors);
+extern bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 extern bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 
 //
@@ -724,9 +724,9 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
     return false;
 }
 
-bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string& sErrors)
+bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors)
 {
-    if (pBackupWallet->IsLocked() || fWalletUnlockStakingOnly)
+    if (wallet.IsLocked() || fWalletUnlockStakingOnly)
     {
         sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
         return false;
@@ -737,7 +737,7 @@ bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string
     std::ofstream myBackup;
     myBackup.open (PrivateKeysTarget.string().c_str());
     std::string sError;
-    for(const auto& keyPair : pBackupWallet->GetAllPrivateKeys(sError))
+    for(const auto& keyPair : wallet.GetAllPrivateKeys(sError))
     {
         if (!sError.empty())
         {

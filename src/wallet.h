@@ -206,7 +206,7 @@ public:
     bool GetKeyFromPool(CPubKey &key, bool fAllowReuse=true);
     int64_t GetOldestKeyPoolTime();
     void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
-    std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> GetAllPrivateKeys(std::string& sError);
+    std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> GetAllPrivateKeys(std::string& sError) const;
 
 
     std::set< std::set<CTxDestination> > GetAddressGroupings();

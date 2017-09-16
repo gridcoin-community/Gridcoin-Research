@@ -2516,7 +2516,7 @@ void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress) const
     }
 }
 
-std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKeys(std::string& sError)
+std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKeys(std::string& sError) const
 {
     CWalletDB walletdb(strWalletFile);
 

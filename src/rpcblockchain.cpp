@@ -24,7 +24,7 @@ using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);
-bool BackupPrivateKeys(CWallet* pBackupWallet, std::string& sTarget, std::string& sErrors);
+bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
@@ -2585,7 +2585,7 @@ Value execute(const Array& params, bool fHelp)
     {
         string sErrors;
         string sTarget;
-        bool bBackupPrivateKeys = BackupPrivateKeys(pwalletMain, sTarget, sErrors);
+        bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
         if (!bBackupPrivateKeys)
             entry.push_back(Pair("error", sErrors));
         else
