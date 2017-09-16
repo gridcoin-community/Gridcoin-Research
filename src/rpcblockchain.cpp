@@ -162,8 +162,6 @@ void HarvestCPIDs(bool cleardata);
 void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
-int nLastBeaconAdvertised = 0;
-
 double GetNetworkAvgByProject(std::string projectname)
 {
         projectname = strReplace(projectname,"_"," ");
@@ -1146,9 +1144,10 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
             // Prevent users from advertising multiple times in succession by setting a limit of one advertisement per 5 blocks.
             // Realistically 1 should be enough however just to be sure we deny advertisements for 5 blocks.
-            if ((nBestHeight - nLastBeaconAdvertised) < 5)
+            static int nLastBeaconAdvertised = 0;
+	    if ((nBestHeight - nLastBeaconAdvertised) < 5)
             {
-                sError = "A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.";
+                sError = _("A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.");
                 return false;
             }
             uint256 hashRand = GetRandHash();
