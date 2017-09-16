@@ -4646,14 +4646,16 @@ bool AskForOutstandingBlocks(uint256 hashStart)
 }
 
 
-void ClearOrphanBlocks() {
+void ClearOrphanBlocks()
+{
     LOCK(cs_main);
-    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++) {
+    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++)
+    {
         delete it->second;
     }
+    
     mapOrphanBlocks.clear();
     mapOrphanBlocksByPrev.clear();
-
 }
 
 
