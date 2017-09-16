@@ -1889,26 +1889,26 @@ std::string SQLQuery()
 
 void BitcoinGUI::timerfire()
 {
-
 	try
 	{
-
-		if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-		{
-			ReinstantiateGlobalcom();
-			nRegVersion=9999;
-			if (!bNewUserWizardNotified)
-			{
-				bNewUserWizardNotified=true;
-				NewUserWizard();
-			}
-			#ifdef WIN32
-				if (!bGlobalcomInitialized) return;
-
-				nRegVersion = globalcom->dynamicCall("Version()").toInt();
-				sRegVer = boost::lexical_cast<std::string>(nRegVersion);
-			#endif
-		}
+        if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
+        {
+            ReinstantiateGlobalcom();
+            nRegVersion=9999;
+            
+            static bool bNewUserWizardNotified = false;
+            if (!bNewUserWizardNotified)
+            {
+                bNewUserWizardNotified=true;
+                NewUserWizard();
+            }
+#ifdef WIN32
+            if (!bGlobalcomInitialized) return;
+            
+            nRegVersion = globalcom->dynamicCall("Version()").toInt();
+            sRegVer = boost::lexical_cast<std::string>(nRegVersion);
+#endif
+        }
 
 
 		if (bGlobalcomInitialized)

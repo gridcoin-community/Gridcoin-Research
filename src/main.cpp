@@ -199,7 +199,6 @@ extern void SetAdvisory();
 extern bool InAdvisory();
 json_spirit::Array MagnitudeReportCSV(bool detail);
 
-bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
 
