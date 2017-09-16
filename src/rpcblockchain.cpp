@@ -1145,7 +1145,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             // Prevent users from advertising multiple times in succession by setting a limit of one advertisement per 5 blocks.
             // Realistically 1 should be enough however just to be sure we deny advertisements for 5 blocks.
             static int nLastBeaconAdvertised = 0;
-	    if ((nBestHeight - nLastBeaconAdvertised) < 5)
+	        if ((nBestHeight - nLastBeaconAdvertised) < 5)
             {
                 sError = _("A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.");
                 return false;
@@ -1166,7 +1166,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 return false;
             }
         
-            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);  
             if (sOutPrivKey.empty() || sOutPubKey.empty())
             {
                 sError = "Keypair is empty.";
