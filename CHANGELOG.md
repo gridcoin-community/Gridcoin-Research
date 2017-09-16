@@ -4,7 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [3.6.1.0] 09-11-2017
+### Fixed
+ - Fix problems forging superblock due to rounding differences, #608 (@denravonska).
+ - Fetch data from project servers if missing on scraper #564 (@denravonska).
+
+## [3.6.0.2] 08-26-2017
 ### Fixed
  - Fix incorrect V8 height trigger check. Many thanks to @barton2526 for discovering this.
  - Fix invalid superblock height formatting, #532 (@denravonska).

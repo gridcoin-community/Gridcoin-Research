@@ -14,7 +14,7 @@ Public Class Utilization
     Private mlSpeakMagnitude As Double
     Public ReadOnly Property Version As Double
         Get
-            Return 423
+            Return 424
         End Get
     End Property
 
