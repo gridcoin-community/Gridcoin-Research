@@ -2433,19 +2433,6 @@ double PreviousBlockAge()
         return nActualTimespan;
 }
 
-
-
-bool ClientOutOfSync()
-{
-    //This function will return True if the client is downloading blocks, reindexing, or out of sync by more than 30 blocks as compared to its peers, or if its best block is over 30 mins old
-    double lastblockage = PreviousBlockAge();
-    if (lastblockage > (30*60)) return true;
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
-    return false;
-}
-
-
-
 bool OutOfSyncByMoreThan(double dMinutes)
 {
     double lastblockage = PreviousBlockAge();
