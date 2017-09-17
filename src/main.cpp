@@ -4647,14 +4647,24 @@ bool AskForOutstandingBlocks(uint256 hashStart)
 }
 
 
-
+void ClearOrphanBlocks()
+{
+    LOCK(cs_main);
+    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++)
+    {
+        delete it->second;
+    }
+    
+    mapOrphanBlocks.clear();
+    mapOrphanBlocksByPrev.clear();
+}
 
 
 void CheckForLatestBlocks()
 {
     if (WalletOutOfSync())
     {
-            mapOrphanBlocks.clear();
+            ClearOrphanBlocks();
             setStakeSeen.clear();
             setStakeSeenOrphan.clear();
             AskForOutstandingBlocks(uint256(0));
@@ -4667,7 +4677,7 @@ void CleanInboundConnections(bool bClearAll)
         if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
-        BOOST_FOREACH(CNode* pNode, vNodes) 
+        for(CNode* pNode : vNodes)
         {
                 pNode->ClearBanned();
                 if (pNode->nStartingHeight < (nBestHeight-1000) || bClearAll)
@@ -4721,7 +4731,7 @@ void CheckForFutileSync()
             {
                 mapAlreadyAskedFor.clear();
                 printf("\r\nClearing mapAlreadyAskedFor.\r\n");
-                mapOrphanBlocks.clear(); 
+                ClearOrphanBlocks();
                 setStakeSeen.clear();  
                 setStakeSeenOrphan.clear();
                 AskForOutstandingBlocks(uint256(0));
@@ -4841,7 +4851,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
              mi != mapOrphanBlocksByPrev.upper_bound(hashPrev);
              ++mi)
         {
-            CBlock* pblockOrphan = (*mi).second;
+            CBlock* pblockOrphan = mi->second;
             if (pblockOrphan->AcceptBlock(generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash());
             mapOrphanBlocks.erase(pblockOrphan->GetHash());
@@ -4849,6 +4859,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             delete pblockOrphan;
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
+
     }
 
    
