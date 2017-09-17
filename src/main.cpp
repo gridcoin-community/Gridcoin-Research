@@ -4500,24 +4500,6 @@ void GridcoinServices()
 
     }
 
-    // Keep Local Neural Network in Sync once every 1/2 day
-    if (TimerMain("SyncNeuralNetwork", 500))
-    {
-        // New rules to prevent a race condition with timer syncing while being a neural node participant during consensus time.
-        // a) If wallet is not atleast unlocked for staking there is no reason to do the sync and will reduce traffic to harvester/boinc servers.
-        // b) If we need a superblock and client is not a neural node participant we sync every 500 blocks
-        // c) If we don't need a superblock then everyone will sync every 500 blocks.
-        if (
-               (!pwalletMain->IsLocked() || fWalletUnlockStakingOnly)
-            && (
-                   (NeedASuperblock() && !IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
-                || (!NeedASuperblock())
-               )
-           )
-            FullSyncWithDPORNodes();
-    }
-
-
     // Every N blocks as a Synchronized TEAM:
     if ((nBestHeight % 30) == 0)
     {
