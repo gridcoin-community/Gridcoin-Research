@@ -4474,13 +4474,6 @@ void GridcoinServices()
 
     }
 
-    // Keep Local Neural Network in Sync once every 1/2 day
-    if (TimerMain("SyncNeuralNetwork",500))
-    {
-        FullSyncWithDPORNodes();
-    }
-
-
     // Every N blocks as a Synchronized TEAM:
     if ((nBestHeight % 30) == 0)
     {
