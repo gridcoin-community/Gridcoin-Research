@@ -1615,8 +1615,7 @@ Value execute(const Array& params, bool fHelp)
         std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
         entry.push_back(Pair("Superblock Timestamp",timestamp));
         entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
-        int height = std::stoi(ReadCache("neuralsecurity","pending"));
-        entry.push_back(Pair("Pending Superblock Height",height));
+        entry.push_back(Pair("Pending Superblock Height",ReadCache("neuralsecurity","pending")));
         results.push_back(entry);
     }
     else if (sItem == "unusual")
