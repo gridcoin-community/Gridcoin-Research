@@ -55,7 +55,7 @@ public:
     {
         printf("COrphan(hash=%s, dPriority=%.1f, dFeePerKb=%.1f)\n",
                ptx->GetHash().ToString().substr(0,10).c_str(), dPriority, dFeePerKb);
-        BOOST_FOREACH(uint256 hash, setDependsOn)
+        for (auto const& hash : setDependsOn)
             printf("   setDependsOn %s\n", hash.ToString().substr(0,10).c_str());
     }
 };
@@ -200,7 +200,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             double dPriority = 0;
             int64_t nTotalIn = 0;
             bool fMissingInputs = false;
-            BOOST_FOREACH(const CTxIn& txin, tx.vin)
+            for (auto const& txin : tx.vin)
             {
                 // Read prev transaction
                 CTransaction txPrev;
@@ -392,7 +392,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             uint256 hash = tx.GetHash();
             if (mapDependers.count(hash))
             {
-                BOOST_FOREACH(COrphan* porphan, mapDependers[hash])
+                for (auto const& porphan : mapDependers[hash])
                 {
                     if (!porphan->setDependsOn.empty())
                     {
@@ -624,7 +624,7 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 
     //Sign the coinstake transaction
     unsigned nIn = 0;
-    BOOST_FOREACH(const CWalletTx* pcoin, StakeInputs)
+    for (auto const& pcoin : StakeInputs)
     {
         if (!SignSignature(*pwallet, *pcoin, block.vtx[1], nIn++)) 
         {

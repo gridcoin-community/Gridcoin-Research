@@ -34,7 +34,7 @@ std::string NeuralRequest(std::string MyNeuralRequest)
 {
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    for (auto const& pNode : vNodes)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
@@ -52,7 +52,7 @@ void GatherNeuralHashes()
 {
     // Find a Neural Network Node that is free
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    for (auto const& pNode : vNodes)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
@@ -72,7 +72,7 @@ bool RequestSupermajorityNeuralData()
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
     std::string reqid = DefaultWalletAddress();
             
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    for (auto const& pNode : vNodes)
     {
         if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
         {
@@ -142,14 +142,14 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
     if (params.size() == 1)
     {
         LOCK(cs_vAddedNodes);
-        BOOST_FOREACH(string& strAddNode, vAddedNodes)
+        for (auto const& strAddNode : vAddedNodes)
             laddedNodes.push_back(strAddNode);
     }
     else
     {
         string strNode = params[1].get_str();
         LOCK(cs_vAddedNodes);
-        BOOST_FOREACH(string& strAddNode, vAddedNodes)
+        for (auto const& strAddNode : vAddedNodes)
             if (strAddNode == strNode)
             {
                 laddedNodes.push_back(strAddNode);
@@ -162,7 +162,7 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
     if (!fDns)
     {
         Object ret;
-        BOOST_FOREACH(string& strAddNode, laddedNodes)
+        for (auto const& strAddNode : laddedNodes)
             ret.push_back(Pair("addednode", strAddNode));
         return ret;
     }
@@ -170,7 +170,7 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
     Array ret;
 
     list<pair<string, vector<CService> > > laddedAddreses(0);
-    BOOST_FOREACH(string& strAddNode, laddedNodes)
+    for (auto const& strAddNode : laddedNodes)
     {
         vector<CService> vservNode(0);
         if(Lookup(strAddNode.c_str(), vservNode, GetDefaultPort(), fNameLookup, 0))
@@ -193,12 +193,12 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
 
         Array addresses;
         bool fConnected = false;
-        BOOST_FOREACH(CService& addrNode, it->second)
+        for (auto const& addrNode : it->second)
         {
             bool fFound = false;
             Object node;
             node.push_back(Pair("address", addrNode.ToString()));
-            BOOST_FOREACH(CNode* pnode, vNodes)
+            for (auto const& pnode : vNodes)
                 if (pnode->addr == addrNode)
                 {
                     fFound = true;
@@ -225,7 +225,7 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
     LOCK(cs_vNodes);
     int iContactCount = 0;
     msNeuralResponse="";
-    BOOST_FOREACH(CNode* pNode, vNodes) 
+    for (auto const& pNode : vNodes)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
@@ -257,7 +257,7 @@ Value ping(const Array& params, bool fHelp)
 
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pNode, vNodes) {
+    for (auto const& pNode : vNodes) {
         pNode->fPingQueued = true;
     }
 
@@ -270,7 +270,7 @@ static void CopyNodeStats(std::vector<CNodeStats>& vstats)
 
     LOCK(cs_vNodes);
     vstats.reserve(vNodes.size());
-    BOOST_FOREACH(CNode* pnode, vNodes) {
+    for (auto const& pnode : vNodes) {
         CNodeStats stats;
         pnode->copyStats(stats);
         vstats.push_back(stats);
@@ -290,7 +290,7 @@ Value getpeerinfo(const Array& params, bool fHelp)
     Array ret;
     GatherNeuralHashes();
     
-    BOOST_FOREACH(const CNodeStats& stats, vstats) {
+    for (auto const& stats : vstats) {
         Object obj;
 
         obj.push_back(Pair("addr", stats.addrName));
@@ -392,7 +392,7 @@ Value sendalert(const Array& params, bool fHelp)
     // Relay alert
     {
         LOCK(cs_vNodes);
-        BOOST_FOREACH(CNode* pnode, vNodes)
+        for (auto const& pnode : vNodes)
             alert.RelayTo(pnode);
     }
 

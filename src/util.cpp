@@ -28,7 +28,6 @@ namespace boost {
 #include <boost/program_options/parsers.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
-#include <boost/foreach.hpp>
 #include <boost/thread.hpp>
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
@@ -489,7 +488,7 @@ static const signed char phexdigit[256] =
 
 bool IsHex(const string& str)
 {
-    BOOST_FOREACH(unsigned char c, str)
+    for (unsigned char c : str)
     {
         if (phexdigit[c] < 0)
             return false;
@@ -565,7 +564,7 @@ void ParseParameters(int argc, const char* const argv[])
     }
 
     // New 0.6 features:
-    BOOST_FOREACH(const PAIRTYPE(string,string)& entry, mapArgs)
+    for (auto const& entry : mapArgs)
     {
         string name = entry.first;
 
@@ -1382,7 +1381,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
             {
                 // If nobody has a time different than ours but within 5 minutes of ours, give a warning
                 bool fMatch = false;
-                BOOST_FOREACH(int64_t nOffset, vSorted)
+                for (auto const& nOffset : vSorted)
                     if (nOffset != 0 && abs64(nOffset) < 5 * 60)
                         fMatch = true;
 
@@ -1397,7 +1396,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
             }
         }
         if (fDebug10) {
-            BOOST_FOREACH(int64_t n, vSorted)
+            for (auto const& n : vSorted)
                 printf("%+" PRId64 "  ", n);
             printf("|  ");
         }
