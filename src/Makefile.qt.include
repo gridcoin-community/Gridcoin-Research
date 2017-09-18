@@ -138,7 +138,7 @@ QT_QRC = qt/bitcoin.qrc
 QT_QRC_LOCALE_CPP = qt/qrc_bitcoin_locale.cpp
 QT_QRC_LOCALE = qt/bitcoin_locale.qrc
 
-GRIDCOINRESEARCH_H = \
+GRIDCOINRESEARCH_QT_H = \
   qt/aboutdialog.h \
   qt/addressbookpage.h \
   qt/addresstablemodel.h \
@@ -241,7 +241,7 @@ RES_ICONS = \
   qt/res/icons/www.png \
   qt/res/icons/wwww.png
 
-GRIDCOINRESEARCH_CPP = \
+GRIDCOINRESEARCH_QT_CPP = \
   qt/aboutdialog.cpp \
   qt/addressbookpage.cpp \
   qt/addresstablemodel.cpp \
@@ -286,8 +286,8 @@ RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 GRIDCOIN_RC = qt/res/bitcoin-qt.rc
 
 if USE_QRCODE
-GRIDCOINRESEARCH_CPP += qt/qrcodedialog.cpp
-GRIDCOINRESEARCH_H += qt/qrcodedialog.h
+GRIDCOINRESEARCH_QT_CPP += qt/qrcodedialog.cpp
+GRIDCOINRESEARCH_QT_H += qt/qrcodedialog.h
 QT_FORMS_UI += qt/forms/qrcodedialog.ui
 endif
 
@@ -299,7 +299,7 @@ qt_libgridcoinqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) $(GRIDCOIN_QT_
   $(QT_INCLUDES) $(QT_DBUS_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)
 qt_libgridcoinqt_a_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
-qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_CPP) $(GRIDCOINRESEARCH_H) $(QT_FORMS_UI) \
+qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_QT_CPP) $(GRIDCOINRESEARCH_QT_H) $(QT_FORMS_UI) \
   $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(PROTOBUF_PROTO) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES)
 
 nodist_qt_libgridcoinqt_a_SOURCES = $(QT_MOC_CPP) $(QT_MOC) $(PROTOBUF_CC) \
