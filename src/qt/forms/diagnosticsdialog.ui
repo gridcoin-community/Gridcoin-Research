@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>542</width>
-    <height>507</height>
+    <height>717</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,7 +19,7 @@
      <x>0</x>
      <y>0</y>
      <width>542</width>
-     <height>507</height>
+     <height>717</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -42,7 +42,7 @@
      <number>20</number>
     </property>
     <item>
-     <layout class="QGridLayout" name="gridLayout" rowminimumheight="30,30,30,30,30,30,30,30,30,30,0">
+     <layout class="QGridLayout" name="gridLayout" rowminimumheight="50,50,50,50,50,50,50,50,50,50,50">
       <property name="sizeConstraint">
        <enum>QLayout::SetMinimumSize</enum>
       </property>
@@ -323,7 +323,7 @@
       <item row="9" column="0">
        <widget class="QLabel" name="label_11">
         <property name="text">
-         <string>Varift TCP port 32749</string>
+         <string>Varify TCP port 32749</string>
         </property>
        </widget>
       </item>
@@ -346,6 +346,32 @@
         </property>
         <property name="wordWrap">
          <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Check client version</string>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="1">
+       <widget class="QLabel" name="checkClientVersionResultLbl">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>200</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
         </property>
        </widget>
       </item>

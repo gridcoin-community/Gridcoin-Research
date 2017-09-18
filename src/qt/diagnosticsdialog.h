@@ -6,6 +6,7 @@
 #include <QtConcurrent>
 
 #include "main.h"
+#include "util.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -48,14 +49,15 @@ private:
     int VarifyAddNode();
     int VarifyIsCPIDValid();
     int FindCPID();
-    static int VarifyClock(DiagnosticsDialog *dialog);
-    static int VarifyTCPPort(DiagnosticsDialog *dialog);
+    void VarifyClock();
+    void VarifyTCPPort();
     double GetTotalCPIDRAC(std::string cpid);
     double GetUserRAC(std::string cpid, int *projects);
     std::string KeyValue(std::string key);
 
-    QFutureWatcher<int> watcherClk;
-    QFutureWatcher<int> watcherTCP;
+    QUdpSocket *udpSocket;
+    QTcpSocket *tcpSocket;
+    QNetworkAccessManager *networkManager;
     std::string testnet_flag;
     std::string syncData;
 
@@ -63,6 +65,8 @@ private slots:
     void on_testBtn_clicked();
     void clkFinished();
     void TCPFinished();
+    void TCPFailed(QAbstractSocket::SocketError socketError);
+    void getGithubVersionFinished(QNetworkReply *reply);
 };
 
 #endif // DIAGNOSTICSDIALOG_H
