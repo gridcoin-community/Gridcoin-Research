@@ -45,7 +45,8 @@ extern uint256 muGlobalCheckpointHashRelayed;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern bool bNewUserWizardNotified;
+
+void ClearOrphanBlocks();
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -168,10 +169,6 @@ extern int64_t nLastTallied;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
-extern int64_t nLastCalculatedMedianTimePast;
-extern double nLastBlockAge;
-extern int64_t nLastCalculatedMedianPeerCount;
-extern int nLastMedianPeerCount;
 extern int64_t nLastTalliedNeural;
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
@@ -223,7 +220,7 @@ struct globalStatusType
     std::string blocks;
     std::string difficulty;
     std::string netWeight;
-    std::string dporWeight;
+    std::string coinWeight;
     std::string magnitude;
     std::string project;
     std::string cpid;
@@ -268,6 +265,13 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
+bool OutOfSyncByAge();
+bool NeedASuperblock();
+std::string GetQuorumHash(const std::string& data);
+std::string ReadCache(std::string section, std::string key);
+double cdbl(std::string s, int place);
+std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+std::string PackBinarySuperblock(std::string sBlock);
 
 double GetPoSKernelPS();
 
@@ -291,6 +295,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 
 std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "");
+bool BackupConfigFile(const std::string& strDest);
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);

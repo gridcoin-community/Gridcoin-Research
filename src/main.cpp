@@ -46,13 +46,11 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
 double qtPushGridcoinDiagnosticData(std::string data);
-int RestartClient();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 extern std::string UnpackBinarySuperblock(std::string sBlock);
-extern std::string PackBinarySuperblock(std::string sBlock);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
@@ -65,7 +63,6 @@ extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
-extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
@@ -90,7 +87,6 @@ extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
        
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
@@ -99,14 +95,12 @@ extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseL
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
-extern std::string GetQuorumHash(const std::string& data);
 extern bool FullSyncWithDPORNodes();
 
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 
 bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
-extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
@@ -166,10 +160,6 @@ int64_t nLastPing = 0;
 int64_t nLastPeek = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
-int64_t nLastCalculatedMedianTimePast = 0;
-double nLastBlockAge = 0;
-int64_t nLastCalculatedMedianPeerCount = 0;
-int nLastMedianPeerCount = 0;
 int64_t nLastTallyBusyWait = 0;
 
 int64_t nLastTalliedNeural = 0;
@@ -189,7 +179,7 @@ double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(const std::string& data, const std::string& instring);
 
 extern double CoinToDouble(double surrogate);
-extern double PreviousBlockAge();
+extern int64_t PreviousBlockAge();
 void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
@@ -199,7 +189,6 @@ extern void SetAdvisory();
 extern bool InAdvisory();
 json_spirit::Array MagnitudeReportCSV(bool detail);
 
-bool bNewUserWizardNotified = false;
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
 
@@ -211,11 +200,7 @@ std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a6
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
-std::string BackupGridcoinWallet();
-
-extern bool OutOfSyncByAgeWithChanceOfMining();
-
-int RebootClient();
+bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 
 std::string YesNo(bool bin);
 
@@ -290,20 +275,19 @@ BlockFinder blockFinder;
 extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
-volatile bool bNetAveragesLoaded = false;
-volatile bool bTallyStarted      = false;
-volatile bool bForceUpdate = false;
-volatile bool bCheckedForUpgrade = false;
-volatile bool bCheckedForUpgradeLive = false;
-volatile bool bGlobalcomInitialized = false;
-volatile bool bStakeMinerOutOfSyncWithNetwork = false;
-volatile bool bDoTally = false;
-volatile bool bExecuteGridcoinServices = false;
-volatile bool bTallyFinished = false;
-volatile bool bGridcoinGUILoaded = false;
+bool bNetAveragesLoaded = false;
+bool bTallyStarted      = false;
+bool bForceUpdate = false;
+bool bCheckedForUpgrade = false;
+bool bCheckedForUpgradeLive = false;
+bool bGlobalcomInitialized = false;
+bool bStakeMinerOutOfSyncWithNetwork = false;
+bool bDoTally = false;
+bool bExecuteGridcoinServices = false;
+bool bTallyFinished = false;
+bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
-extern double cdbl(std::string s, int place);
 
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
@@ -312,7 +296,6 @@ extern void LoadCPIDsInBackground();
 extern void ThreadCPIDs();
 extern void GetGlobalStatus();
 
-extern bool OutOfSyncByAge();
 extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
 
@@ -544,12 +527,11 @@ void GetGlobalStatus()
 
     try
     {
-        std::string status = "";
         double boincmagnitude = CalculatedMagnitude(GetAdjustedTime(),false);
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
         nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
-        double weight = nWeight/COIN+boincmagnitude;
+        double weight = nWeight/COIN;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
 
@@ -565,7 +547,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
         GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS(),2);
         //todo: use the real weight from miner status (requires scaling)
-        GlobalStatusStruct.dporWeight = sWeight;
+        GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
@@ -2212,13 +2194,8 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
 // Return maximum amount of blocks that other nodes claim to have
 int GetNumBlocksOfPeers()
 {
-    if (IsLockTimeWithinMinutes(nLastCalculatedMedianPeerCount,1))
-    {
-        return nLastMedianPeerCount;
-    }
-    nLastCalculatedMedianPeerCount = GetAdjustedTime();
-    nLastMedianPeerCount = std::max(cPeerBlockCounts.median(), Checkpoints::GetTotalBlocksEstimate());
-    return nLastMedianPeerCount;
+    LOCK(cs_main);
+    return std::max(cPeerBlockCounts.median(), Checkpoints::GetTotalBlocksEstimate());
 }
 
 bool IsInitialBlockDownload()
@@ -2425,49 +2402,25 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 }
 
 
-double PreviousBlockAge()
+int64_t PreviousBlockAge()
 {
-        if (nBestHeight < 10) return 99999;
-        if (IsLockTimeWithinMinutes(nLastCalculatedMedianTimePast,1))
-        {
-            return nLastBlockAge;
-        }
-        nLastCalculatedMedianTimePast = GetAdjustedTime();
-        // Returns the time in seconds since the last block:
-        double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
-        double nActualTimespan = nTime - pindexBest->pprev->GetBlockTime();
-        nLastBlockAge = nActualTimespan;
-        return nActualTimespan;
+    LOCK(cs_main);
+    
+    int64_t blockTime = pindexBest && pindexBest->pprev
+            ? pindexBest->pprev->GetBlockTime()
+            : 0;
+
+    return GetAdjustedTime() - blockTime;
 }
-
-
-
-bool ClientOutOfSync()
-{
-    //This function will return True if the client is downloading blocks, reindexing, or out of sync by more than 30 blocks as compared to its peers, or if its best block is over 30 mins old
-    double lastblockage = PreviousBlockAge();
-    if (lastblockage > (30*60)) return true;
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
-    return false;
-}
-
-
-
-bool OutOfSyncByMoreThan(double dMinutes)
-{
-    double lastblockage = PreviousBlockAge();
-    if (lastblockage > (60*dMinutes)) return true;
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
-    return false;
-}
-
 
 
 bool OutOfSyncByAge()
-{
-    double lastblockage = PreviousBlockAge();
-    if (lastblockage > (60*30)) return true;
-    return false;
+{    
+    // Assume we are out of sync if the current block age is 10
+    // times older than the target spacing. This is the same
+    // rules at Bitcoin uses.    
+    const int64_t maxAge = GetTargetSpacing(nBestHeight) * 10;
+    return PreviousBlockAge() >= maxAge;
 }
 
 
@@ -2489,44 +2442,6 @@ bool KeyEnabled(std::string key)
     }
     return false;
 }
-
-
-bool OutOfSyncByAgeWithChanceOfMining()
-{
-    // If the client is out of sync, we dont want it to mine orphan blocks on its own fork, so we return OOS when that is the case 95% of the time:
-    // If the client is in sync, this function returns false and the client mines.
-    // The reason we allow mining 5% of the time, is if all nodes leave Gridcoin, we want someone to be able to jump start the coin in that extremely rare circumstance (IE End of Life, or Network Outage across the country, etc).
-    try
-    {
-            if (fTestNet) return false;
-            if (KeyEnabled("overrideoutofsyncrule")) return false;
-            bool oosbyage = OutOfSyncByAge();
-            //Rule 1: If  Last Block Out of sync by Age - Return Out of Sync 95% of the time:
-            if (oosbyage) if (LessVerbose(900)) return true;
-            // Rule 2 : Dont mine on Fork Rule:
-            //If the diff is < .00015 in Prod, Most likely the client is mining on a fork: (Make it exceedingly hard):
-            double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-            if (!fTestNet && PORDiff < .00010)
-            {
-                printf("Most likely you are mining on a fork! Diff %f",PORDiff);
-                if (LessVerbose(950)) return true;
-            }
-            return false;
-    }
-    catch (std::exception &e)
-    {
-                printf("Error while assessing Sync Condition\r\n");
-                return true;
-    }
-    catch(...)
-    {
-                printf("Error while assessing Sync Condition[2].\r\n");
-                return true;
-    }
-    return true;
-
-}
-
 
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
 {
@@ -4438,29 +4353,21 @@ void GridcoinServices()
     if (OutOfSyncByAge()) return;
     if (fDebug) printf(" {SVC} ");
 
-    //Backup the wallet once per 900 blocks:
-    double dWBI = cdbl(GetArgument("walletbackupinterval", "900"),0);
-    
-    if (TimerMain("backupwallet", dWBI))
+    //Backup the wallet once per 900 blocks or as specified in config:
+    int nWBI = GetArg("-walletbackupinterval", 900);
+    if (nWBI == 0)
+        nWBI = 900;
+
+   if (TimerMain("backupwallet", nWBI))
     {
-        std::string backup_results = BackupGridcoinWallet();
-        printf("Daily backup results: %s\r\n",backup_results.c_str());
+        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+        printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
     if (TimerMain("ResetVars",30))
     {
         bTallyStarted = false;
-    }
-    
-    if (TimerMain("OutOfSyncDaily",900))
-    {
-        if (WalletOutOfSync())
-        {
-            printf("Restarting Gridcoin...");
-            #if defined(WIN32) && defined(QT_GUI)
-                int iResult = RestartClient();
-            #endif
-        }
     }
 
     if (false && TimerMain("FixSpentCoins",60))
@@ -4539,13 +4446,6 @@ void GridcoinServices()
         }
 
     }
-
-    // Keep Local Neural Network in Sync once every 1/2 day
-    if (TimerMain("SyncNeuralNetwork",500))
-    {
-        FullSyncWithDPORNodes();
-    }
-
 
     // Every N blocks as a Synchronized TEAM:
     if ((nBestHeight % 30) == 0)
@@ -4686,14 +4586,24 @@ bool AskForOutstandingBlocks(uint256 hashStart)
 }
 
 
-
+void ClearOrphanBlocks()
+{
+    LOCK(cs_main);
+    for(auto it = mapOrphanBlocks.begin(); it != mapOrphanBlocks.end(); it++)
+    {
+        delete it->second;
+    }
+    
+    mapOrphanBlocks.clear();
+    mapOrphanBlocksByPrev.clear();
+}
 
 
 void CheckForLatestBlocks()
 {
     if (WalletOutOfSync())
     {
-            mapOrphanBlocks.clear();
+            ClearOrphanBlocks();
             setStakeSeen.clear();
             setStakeSeenOrphan.clear();
             AskForOutstandingBlocks(uint256(0));
@@ -4706,7 +4616,7 @@ void CleanInboundConnections(bool bClearAll)
         if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
-        BOOST_FOREACH(CNode* pNode, vNodes) 
+        for(CNode* pNode : vNodes)
         {
                 pNode->ClearBanned();
                 if (pNode->nStartingHeight < (nBestHeight-1000) || bClearAll)
@@ -4720,57 +4630,11 @@ void CleanInboundConnections(bool bClearAll)
 
 bool WalletOutOfSync()
 {
+    LOCK(cs_main);
+    
     // Only trigger an out of sync condition if the node has synced near the best block prior to going out of sync.
-    bool fOut = OutOfSyncByMoreThan(30);
-    double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-    bool fGhostChain = (!fTestNet && PORDiff < .75);
-    int iPeerBlocks = GetNumBlocksOfPeers();
-    bool bSyncedCloseToTop = nBestHeight > iPeerBlocks-1000;
-    if ((fOut || fGhostChain) && bSyncedCloseToTop) return true;
-    return false;
-}
-
-
-bool WalletOutOfSyncByMoreThan2000Blocks()
-{
-    if (nBestHeight < GetNumBlocksOfPeers()-2000) return true;
-    return false;
-}
-
-
-
-void CheckForFutileSync()
-{
-    // If we stay out of sync for more than 8 iterations of 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
-    // We reset these counters every time a block is accepted successfully in AcceptBlock().
-    // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
-    // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
-    if (WalletOutOfSync())
-    {
-        if (TimerMain("CheckForFutileSync", 25))
-        {
-            if (TimerMain("OrphansAndNotRecovering",8))                                 
-            {
-                printf("\r\nGridcoin has not recovered after clearing orphans; Restarting node...\r\n");
-                #if defined(WIN32) && defined(QT_GUI)
-                    int iResult = RestartClient();
-                #endif
-            }
-            else
-            {
-                mapAlreadyAskedFor.clear();
-                printf("\r\nClearing mapAlreadyAskedFor.\r\n");
-                mapOrphanBlocks.clear(); 
-                setStakeSeen.clear();  
-                setStakeSeenOrphan.clear();
-                AskForOutstandingBlocks(uint256(0));
-            }
-        }
-        else
-        {
-            ResetTimerMain("OrphansAndNotRecovering");
-        }
-    }
+    bool bSyncedCloseToTop = nBestHeight > GetNumBlocksOfPeers() - 1000;
+    return OutOfSyncByAge() && bSyncedCloseToTop;
 }
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
@@ -4820,37 +4684,52 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
         // *****      This area covers Gridcoin Orphan Handling      ***** 
-        if (true)
+        if (WalletOutOfSync())
         {
-            if (WalletOutOfSync())
+            if (TimerMain("OrphanBarrage",100))
             {
-                if (TimerMain("OrphanBarrage",100))
+                // If we stay out of sync for more than 25 orphans and never recover without accepting a block - attempt to recover the node- if we recover, reset the counters.
+                // We reset these counters every time a block is accepted successfully in AcceptBlock().
+                // Note: This code will never actually be exercised unless the wallet stays out of sync for a very long time - approx. 24 hours - the wallet normally recovers on its own without this code.
+                // I'm leaving this in for people who may be on vacation for a long time - it may keep an external node running when everything else fails.
+                if (TimerMain("CheckForFutileSync", 25))
                 {
-                    mapAlreadyAskedFor.clear();
-                    printf("\r\nClearing mapAlreadyAskedFor.\r\n");
-                    AskForOutstandingBlocks(uint256(0));
-                    CheckForFutileSync();
+                    ClearOrphanBlocks();
+                    setStakeSeen.clear();
+                    setStakeSeenOrphan.clear();
                 }
+
+                printf("\r\nClearing mapAlreadyAskedFor.\r\n");
+                mapAlreadyAskedFor.clear();
+                AskForOutstandingBlocks(uint256(0));
             }
+        }
+        else
+        {
+            // If we successfully synced we can reset the futile state.
+            ResetTimerMain("CheckForFutileSync");
         }
 
-        CBlock* pblock2 = new CBlock(*pblock);
-        if (WalletOutOfSyncByMoreThan2000Blocks() || fTestNet)
+        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
+        // ppcoin: check proof-of-stake
+        if (pblock->IsProofOfStake())
         {
-            printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
-            // ppcoin: check proof-of-stake
-            if (pblock->IsProofOfStake())
-            {
-                    // Limited duplicity on stake: prevents block flood attack
-                    // Duplicate stake allowed only when there is orphan child block
-                    if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
-                            return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
-                        else
-                            setStakeSeenOrphan.insert(pblock->GetProofOfStake());
-            }
-            mapOrphanBlocks.insert(make_pair(hash, pblock2));
-            mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
+            // Limited duplicity on stake: prevents block flood attack
+            // Duplicate stake allowed only when there is orphan child block
+            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) &&
+                !mapOrphanBlocksByPrev.count(hash) &&
+                !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s",
+                             pblock->GetProofOfStake().first.ToString().c_str(),
+                             pblock->GetProofOfStake().second,
+                             hash.ToString().c_str());
+            else
+                setStakeSeenOrphan.insert(pblock->GetProofOfStake());
         }
+        
+        CBlock* pblock2 = new CBlock(*pblock);            
+        mapOrphanBlocks.insert(make_pair(hash, pblock));
+        mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
         if (pfrom)
@@ -4880,7 +4759,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
              mi != mapOrphanBlocksByPrev.upper_bound(hashPrev);
              ++mi)
         {
-            CBlock* pblockOrphan = (*mi).second;
+            CBlock* pblockOrphan = mi->second;
             if (pblockOrphan->AcceptBlock(generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash());
             mapOrphanBlocks.erase(pblockOrphan->GetHash());
@@ -4888,6 +4767,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             delete pblockOrphan;
         }
         mapOrphanBlocksByPrev.erase(hashPrev);
+
     }
 
    
@@ -5483,7 +5363,7 @@ bool BlockNeedsChecked(int64_t BlockTime)
     if (IsLockTimeWithin14days(BlockTime))
     {
         if (fColdBoot) return false;
-        bool fOut = OutOfSyncByMoreThan(30);
+        bool fOut = OutOfSyncByAge();
         return !fOut;
     }
     else
@@ -6092,7 +5972,6 @@ string GetWarnings(string strFor)
     // if detected invalid checkpoint enter safe mode
     if (Checkpoints::hashInvalidCheckpoint != 0)
     {
-
         if (CHECKPOINT_DISTRIBUTED_MODE==1)
         {
             //10-18-2014-Halford- If invalid checkpoint found, reboot the node:
@@ -6101,26 +5980,10 @@ string GetWarnings(string strFor)
         }
         else
         {
-            #if defined(WIN32) && defined(QT_GUI)
-                int nResult = 0;
-                std::string rebootme = "";
-                if (mapArgs.count("-reboot"))
-                {
-                    rebootme = GetArg("-reboot", "false");
-                }
-                if (rebootme == "true")
-                {
-                    nResult = RebootClient();
-                    printf("Rebooting %u",nResult);
-                }
-            #endif
-
             nPriority = 3000;
             strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
             printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
         }
-
-
     }
 
     // Alerts
@@ -7492,47 +7355,6 @@ double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
     return out_mag;
 }
 
-double PendingSuperblockHeight()
-{
-    double height = cdbl(ReadCache("neuralsecurity","pending"),0);
-    if (height < (double)(pindexBest->nHeight-200)) height = 0;
-    return height;
-}
-
-std::string GetNeuralNetworkSuperBlock()
-{
-    //Only try to stake a superblock if the contract expired And the superblock is the highest popularity block And we do not have a pending superblock
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    if (IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()) && NeedASuperblock() && PendingSuperblockHeight()==0)
-    {
-        std::string myNeuralHash = "";
-        #if defined(WIN32) && defined(QT_GUI)
-               myNeuralHash = qtGetNeuralHash("");
-        #endif
-        double popularity = 0;
-        std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-        if (fDebug2 && LessVerbose(5)) printf("SB Age %f, MyHash %s, ConsensusHash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
-        if (consensus_hash==myNeuralHash)
-        {
-            //Stake the contract
-            std::string contract = "";
-            #if defined(WIN32) && defined(QT_GUI)
-                contract = qtGetNeuralContract("");
-                if (fDebug2 && LessVerbose(5)) printf("Appending SuperBlock %f\r\n",(double)contract.length());
-                if (AreBinarySuperblocksEnabled(nBestHeight))
-                {
-                    // 12-21-2015 : Stake a binary superblock
-                    contract = PackBinarySuperblock(contract);
-                }
-            #endif
-            return contract;
-        }
-
-    }
-    return "";
-
-}
-
 std::string GetLastPORBlockHash(std::string cpid)
 {
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
@@ -7544,7 +7366,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     std::string delim = "<|>";
     std::string version = FormatFullVersion();
     int subsidy_places= BlockVersion<8 ? 2 : 8;
-    mcpid.GRCAddress = DefaultWalletAddress();
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
         mcpid.Organization = DefaultOrg();
@@ -7557,24 +7378,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
         mcpid.NetworkRAC = 0;
     }
 
-    std::string sNeuralHash = "";
-    // To save network bandwidth, start posting the neural hashes in the CurrentNeuralHash field, so that out of sync neural network nodes can request neural data from those that are already synced and agree with the supermajority over the last 24 hrs
-    if (!OutOfSyncByAge())
-    {
-        #if defined(WIN32) && defined(QT_GUI)
-            sNeuralHash = qtGetNeuralHash("");
-            mcpid.CurrentNeuralHash = sNeuralHash;
-        #endif
-    }
-
-    //Add the neural hash only if necessary
-    if (!OutOfSyncByAge() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()) && NeedASuperblock())
-    {
-        #if defined(WIN32) && defined(QT_GUI)
-            mcpid.NeuralHash = sNeuralHash;
-            mcpid.superblock = GetNeuralNetworkSuperBlock();
-        #endif
-    }
 
     mcpid.LastPORBlockHash = GetLastPORBlockHash(mcpid.cpid);
 
@@ -9232,4 +9035,28 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     return suffix.empty()
         ? basename + "-" + std::string(boTime)
         : basename + "-" + std::string(boTime) + "-" + suffix;
+}
+
+// Todo: Make and move to config.cpp/h (ravon)
+bool BackupConfigFile(const std::string& strDest)
+{
+    filesystem::path ConfigTarget = GetDataDir() / "walletbackups" / strDest;
+    filesystem::create_directories(ConfigTarget.parent_path());
+    filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
+    try
+    {
+        #if BOOST_VERSION >= 104000
+            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
+        #else
+            filesystem::copy_file(ConfigSource, ConfigTarget);
+        #endif
+        printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
+        return true;
+    }
+    catch(const filesystem::filesystem_error &e)
+    {
+        printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
+        return false;
+    }
+    return false;
 }

@@ -36,7 +36,7 @@
                 If UBound(vRow) > 0 Then
                     If Len(vRow(0)) > 5 Then
                         Dim sCPID As String = vRow(0)
-                        Dim dMag = Math.Round(Val(vRow(1)), 0)
+                        Dim dMag = Math.Round(Val(vRow(1)), 0, MidpointRounding.AwayFromZero)
                         Dim sRow = sCPID + "," + Trim(dMag)
                         If KeyValue("DEBUG_QHA") = "TRUE" Then Log(sRow)
                         sHashIn += CPIDHash(dMag, sCPID) + "<COL>"
@@ -53,11 +53,11 @@
         Return sHash
     End Function
     Private Function CPIDHash(dMagIn As Double, sCPID As String) As String
-        Dim sMag As String = Trim(Math.Round(dMagIn, 0))
+        Dim sMag As String = Trim(Math.Round(dMagIn, 0, MidpointRounding.AwayFromZero))
         Dim dMagLength As Double = Len(sMag)
         Dim dExponent As Double = Math.Pow(dMagLength, 5)
-        Dim sMagComponent1 As String = Trim(Math.Round(dMagIn / (dExponent + 0.01), 0))
-        Dim sSuffix = Trim(Math.Round(dMagLength * dExponent, 0))
+        Dim sMagComponent1 As String = Trim(Math.Round(dMagIn / (dExponent + 0.01), 0, MidpointRounding.AwayFromZero))
+        Dim sSuffix = Trim(Math.Round(dMagLength * dExponent, 0, MidpointRounding.AwayFromZero))
         Dim sHash As String = sCPID + sMagComponent1 + sSuffix
         Return sHash
     End Function
