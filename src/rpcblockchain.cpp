@@ -186,9 +186,9 @@ double GetNetworkTotalByProject(std::string projectname)
 std::string FileManifest()            
 {
    boost::filesystem::path dir_path = GetDataDir() / "nn2";
-   boost::filesystem::directory_iterator it(dir_path), eod;
-   std::string sMyManifest = "";
-   BOOST_FOREACH(boost::filesystem::path const &p, std::make_pair(it, eod))   
+   boost::filesystem::directory_iterator it(dir_path);
+   std::string sMyManifest;
+   for (boost::filesystem::path const &p : it)
    { 
       if(boost::filesystem::is_regular_file(p))
       {

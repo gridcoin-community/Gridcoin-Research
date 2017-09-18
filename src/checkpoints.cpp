@@ -3,7 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <boost/assign/list_of.hpp> // for 'map_list_of()'
-#include <boost/foreach.hpp>
+#include <boost/range/adaptor/reversed.hpp>
 #include "checkpoints.h"
 #include "txdb.h"
 #include "main.h"
@@ -83,7 +83,7 @@ namespace Checkpoints
     {
         MapCheckpoints& checkpoints = (fTestNet ? mapCheckpointsTestnet : mapCheckpoints);
 
-        BOOST_REVERSE_FOREACH(const MapCheckpoints::value_type& i, checkpoints)
+        for (auto const& i : boost::adaptors::reverse(checkpoints))
         {
             const uint256& hash = i.second;
             std::map<uint256, CBlockIndex*>::const_iterator t = mapBlockIndex.find(hash);
@@ -298,7 +298,7 @@ namespace Checkpoints
             printf("ResetSyncCheckpoint: pending for sync-checkpoint %s\n", hashPendingCheckpoint.ToString().c_str());
         }
 
-        BOOST_REVERSE_FOREACH(const MapCheckpoints::value_type& i, mapCheckpoints)
+        for (auto const& i : boost::adaptors::reverse(mapCheckpoints))
         {
             const uint256& hash = i.second;
             if (mapBlockIndex.count(hash) && mapBlockIndex[hash]->IsInMainChain())

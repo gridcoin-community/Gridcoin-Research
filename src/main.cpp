@@ -31,7 +31,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
-
+#include <boost/range/adaptor/reversed.hpp>
 #include <openssl/md5.h>
 #include <ctime>
 #include <math.h>
@@ -3449,7 +3449,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         // Queue memory transactions to resurrect.
         // We only do this for blocks after the last checkpoint (reorganisation before that
         // point should only happen with -reindex/-loadblock, or a misbehaving peer.
-        BOOST_REVERSE_FOREACH(const CTransaction& tx, block.vtx)
+        for (auto const& tx : boost::adaptors::reverse(block.vtx))
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
                 vResurrect.push_front(tx);
 
@@ -3664,7 +3664,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         REORGANIZE_FAILED=0;
 
         // Connect further blocks
-        BOOST_REVERSE_FOREACH(CBlockIndex *pindex, vpindexSecondary)
+        for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
         {
             CBlock block;
             if (!block.ReadFromDisk(pindex))

@@ -8,7 +8,6 @@
 #include <deque>
 #include <array>
 #include <atomic>
-#include <boost/foreach.hpp>
 #include <openssl/rand.h>
 
 
