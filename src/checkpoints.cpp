@@ -213,7 +213,7 @@ namespace Checkpoints
             if (!checkpointMessage.IsNull())
             {
                 LOCK(cs_vNodes);
-                BOOST_FOREACH(CNode* pnode, vNodes)
+                for (auto const& pnode : vNodes)
                     checkpointMessage.RelayTo(pnode);
             }
             return true;
@@ -368,7 +368,7 @@ namespace Checkpoints
         // Relay checkpoint
         {
             LOCK(cs_vNodes);
-            BOOST_FOREACH(CNode* pnode, vNodes)
+            for (auto const& pnode : vNodes)
                 checkpoint.RelayTo(pnode);
         }
         return true;
@@ -390,7 +390,7 @@ namespace Checkpoints
         // Relay checkpoint
         {
             LOCK(cs_vNodes);
-            BOOST_FOREACH(CNode* pnode, vNodes)
+            for (auto const& pnode : vNodes)
                 checkpoint.RelayTo(pnode);
         }
         printf("Global Sync checkpoint broadcast successfully %s\r\n",checkpoint.hashCheckpointGlobal.GetHex().c_str());
@@ -429,7 +429,7 @@ namespace Checkpoints
         // Relay checkpoint
         {
             LOCK(cs_vNodes);
-            BOOST_FOREACH(CNode* pnode, vNodes)
+            for (auto const& pnode : vNodes)
                 checkpoint.RelayTo(pnode);
         }
         return true;
