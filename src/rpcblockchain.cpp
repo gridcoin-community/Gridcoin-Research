@@ -185,17 +185,17 @@ double GetNetworkTotalByProject(std::string projectname)
 
 std::string FileManifest()            
 {
-   boost::filesystem::path dir_path = GetDataDir() / "nn2";
-   boost::filesystem::directory_iterator it(dir_path);
-   std::string sMyManifest;
-   for (boost::filesystem::path const &p : it)
-   { 
-      if(boost::filesystem::is_regular_file(p))
-      {
-        sMyManifest += p.string();
-      } 
-   }
-   return sMyManifest;
+    using namespace boost::filesystem;
+    path dir_path = GetDataDir() / "nn2";
+    std::string sMyManifest;
+    for(directory_iterator it(dir_path); it != directory_iterator(); ++it)
+    { 
+       if(boost::filesystem::is_regular_file(it->path()))
+       {
+           sMyManifest += it->path().string();
+       } 
+    }
+    return sMyManifest;
 }
 
 std::vector<unsigned char> readFileToVector(std::string filename)
