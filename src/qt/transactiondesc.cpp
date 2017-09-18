@@ -129,7 +129,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         if (nNet > 0)
         {
             // Credit
-            for (auto txout : wtx.vout)
+            for (auto const& txout : wtx.vout)
             {
                 if (wallet->IsMine(txout))
                 {

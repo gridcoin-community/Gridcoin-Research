@@ -50,7 +50,7 @@ void CUnsignedAlert::SetNull()
 std::string CUnsignedAlert::ToString() const
 {
     std::string strSetCancel;
-    for (auto n : setCancel)
+    for (auto &n : setCancel)
         strSetCancel += strprintf("%d ", n);
     std::string strSetSubVer;
     for (auto const& str : setSubVer)

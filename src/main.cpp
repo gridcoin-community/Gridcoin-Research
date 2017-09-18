@@ -864,7 +864,7 @@ MiningCPID GetNextProject(bool bForce)
 // check whether the passed transaction is from us
 bool static IsFromMe(CTransaction& tx)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         if (pwallet->IsFromMe(tx))
             return true;
     return false;
@@ -882,7 +882,7 @@ bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
 // erases transaction with the given hash from all wallets
 void static EraseFromWallets(uint256 hash)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->EraseFromWallet(hash);
 }
 
@@ -894,49 +894,49 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
         // ppcoin: wallets need to refund inputs when disconnecting coinstake
         if (tx.IsCoinStake())
         {
-            for (auto pwallet : setpwalletRegistered)
+            for (auto const& pwallet : setpwalletRegistered)
                 if (pwallet->IsFromMe(tx))
                     pwallet->DisableTransaction(tx);
         }
         return;
     }
 
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->AddToWalletIfInvolvingMe(tx, pblock, fUpdate);
 }
 
 // notify wallets about a new best chain
 void static SetBestChain(const CBlockLocator& loc)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->SetBestChain(loc);
 }
 
 // notify wallets about an updated transaction
 void static UpdatedTransaction(const uint256& hashTx)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->UpdatedTransaction(hashTx);
 }
 
 // dump all wallets
 void static PrintWallets(const CBlock& block)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->PrintWallet(block);
 }
 
 // notify wallets about an incoming inventory (for request counts)
 void static Inventory(const uint256& hash)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->Inventory(hash);
 }
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
 {
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
         pwallet->ResendWalletTransactions(fForce);
 }
 
@@ -951,7 +951,7 @@ double CoinToDouble(double surrogate)
 double GetTotalBalance()
 {
     double total = 0;
-    for (auto pwallet : setpwalletRegistered)
+    for (auto const& pwallet : setpwalletRegistered)
     {
         total = total + pwallet->GetBalance();
         total = total + pwallet->GetStake();
@@ -1621,7 +1621,7 @@ bool CTxMemPool::removeConflicts(const CTransaction &tx)
 {
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
-    for (auto const&txin : tx.vin)
+    for (auto const &txin : tx.vin)
     {
         std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(txin.prevout);
         if (it != mapNextTx.end()) {
@@ -2919,7 +2919,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     bool bIsDPOR = false;
 
 
-    for (auto tx : vtx)
+    for (auto &tx : vtx)
     {
         uint256 hashTx = tx.GetHash();
 
@@ -6522,7 +6522,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vector<CAddress> vAddrOk;
         int64_t nNow = GetAdjustedTime();
         int64_t nSince = nNow - 10 * 60;
-        for (auto addr : vAddr)
+        for (auto &addr : vAddr)
         {
             if (fShutdown)
                 return true;
@@ -6855,7 +6855,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
             }
 
-            for (auto hash : vEraseQueue)
+            for (auto const& hash : vEraseQueue)
                 EraseOrphanTx(hash);
         }
         else if (fMissingInputs)
@@ -8663,7 +8663,7 @@ bool UnusualActivityReport()
                     bool bIsDPOR = false;
                     std::string MainRecipient = "";
                     double max_subsidy = GetMaximumBoincSubsidy(block.nTime)+50; //allow for
-                    for (auto tx : block.vtx)
+                    for (auto &tx : block.vtx)
                     {
 
                             MapPrevTx mapInputs;
@@ -8909,7 +8909,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
             CBlock block;
             if (!block.ReadFromDisk(pindex)) continue;
             int iPos = 0;
-            for (auto const&tx : block.vtx)
+            for (auto const &tx : block.vtx)
             {
                   if (iPos > 0)
                   {

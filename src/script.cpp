@@ -1656,7 +1656,7 @@ public:
         std::vector<CTxDestination> vDest;
         int nRequired;
         if (ExtractDestinations(script, type, vDest, nRequired)) {
-            for (auto const&dest : vDest)
+            for (auto const &dest : vDest)
                 boost::apply_visitor(*this, dest);
         }
     }

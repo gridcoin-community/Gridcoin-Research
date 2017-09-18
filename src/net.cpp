@@ -2432,7 +2432,7 @@ public:
         for (auto const& pnode : vNodes)
             if (pnode->hSocket != INVALID_SOCKET)
                 closesocket(pnode->hSocket);
-        for (auto hListenSocket : vhListenSocket)
+        for (auto &hListenSocket : vhListenSocket)
             if (hListenSocket != INVALID_SOCKET)
                 if (closesocket(hListenSocket) == SOCKET_ERROR)
                     printf("closesocket(hListenSocket) died with error %d\n", WSAGetLastError());

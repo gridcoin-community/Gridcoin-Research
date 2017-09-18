@@ -195,7 +195,7 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
         CCrypter crypter;
         CKeyingMaterial vMasterKey;
-        for (auto pMasterKey : mapMasterKeys)
+        for (auto &pMasterKey : mapMasterKeys)
         {
             if(!crypter.SetKeyFromPassphrase(strOldWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
                 return false;
@@ -386,7 +386,7 @@ CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries,
     }
     acentries.clear();
     walletdb.ListAccountCreditDebit(strAccount, acentries);
-    for (auto entry : acentries)
+    for (auto &entry : acentries)
     {
         txOrdered.insert(make_pair(entry.nOrderPos, TxPair((CWalletTx*)0, &entry)));
     }
@@ -443,7 +443,7 @@ void CWallet::MarkDirty()
 {
     {
         LOCK(cs_wallet);
-        for (auto item : mapWallet)
+        for (auto &item : mapWallet)
             item.second.MarkDirty();
     }
 }
@@ -1095,7 +1095,7 @@ void CWallet::ReacceptWalletTransactions()
         LOCK2(cs_main, cs_wallet);
         fRepeat = false;
         vector<CDiskTxPos> vMissingTx;
-        for (auto item : mapWallet)
+        for (auto &item : mapWallet)
         {
             CWalletTx& wtx = item.second;
             if ((wtx.IsCoinBase() && wtx.IsSpent(0)) || (wtx.IsCoinStake() && wtx.IsSpent(1)))
@@ -1207,7 +1207,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
         LOCK(cs_wallet);
         // Sort them in chronological order
         multimap<unsigned int, CWalletTx*> mapSorted;
-        for (auto item : mapWallet)
+        for (auto &item : mapWallet)
         {
             CWalletTx& wtx = item.second;
             // Don't rebroadcast until it's had plenty of time that
@@ -1215,7 +1215,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
             if (fForce || nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
                 mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
         }
-        for (auto item : mapSorted)
+        for (auto const &item : mapSorted)
         {
             CWalletTx& wtx = *item.second;
             if (wtx.CheckTransaction())
