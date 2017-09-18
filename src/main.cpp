@@ -4224,7 +4224,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (hashBestChain == hash)
     {
         LOCK(cs_vNodes);
-        for (auto pnode : vNodes)
+        for (auto const& pnode : vNodes)
             if (nBestHeight > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
@@ -4584,7 +4584,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
         
     int iAsked = 0;
     LOCK(cs_vNodes);
-    for (auto pNode : vNodes)
+    for (auto const& pNode : vNodes)
     {
                 pNode->ClearBanned();
                 if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
