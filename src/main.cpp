@@ -4667,13 +4667,6 @@ bool WalletOutOfSync()
     return false;
 }
 
-
-bool WalletOutOfSyncByMoreThan2000Blocks()
-{
-    if (nBestHeight < GetNumBlocksOfPeers()-2000) return true;
-    return false;
-}
-
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 {
     AssertLockHeld(cs_main);
@@ -4747,24 +4740,26 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             ResetTimerMain("CheckForFutileSync");
         }
 
-
-        CBlock* pblock2 = new CBlock(*pblock);
-        if (WalletOutOfSyncByMoreThan2000Blocks() || fTestNet)
+        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
+        // ppcoin: check proof-of-stake
+        if (pblock->IsProofOfStake())
         {
-            printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
-            // ppcoin: check proof-of-stake
-            if (pblock->IsProofOfStake())
-            {
-                    // Limited duplicity on stake: prevents block flood attack
-                    // Duplicate stake allowed only when there is orphan child block
-                    if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
-                            return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s", pblock->GetProofOfStake().first.ToString().c_str(), pblock->GetProofOfStake().second, hash.ToString().c_str());
-                        else
-                            setStakeSeenOrphan.insert(pblock->GetProofOfStake());
-            }
-            mapOrphanBlocks.insert(make_pair(hash, pblock2));
-            mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
+            // Limited duplicity on stake: prevents block flood attack
+            // Duplicate stake allowed only when there is orphan child block
+            if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) &&
+                !mapOrphanBlocksByPrev.count(hash) &&
+                !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+                return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s",
+                             pblock->GetProofOfStake().first.ToString().c_str(),
+                             pblock->GetProofOfStake().second,
+                             hash.ToString().c_str());
+            else
+                setStakeSeenOrphan.insert(pblock->GetProofOfStake());
         }
+        
+        CBlock* pblock2 = new CBlock(*pblock);            
+        mapOrphanBlocks.insert(make_pair(hash, pblock));
+        mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
         if (pfrom)
