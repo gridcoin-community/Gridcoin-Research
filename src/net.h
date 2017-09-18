@@ -8,7 +8,6 @@
 #include <deque>
 #include <array>
 #include <atomic>
-#include <boost/foreach.hpp>
 #include <openssl/rand.h>
 
 
@@ -22,6 +21,25 @@
 #include "addrman.h"
 
 #include "gridcoin.h"
+
+
+// BOOST_FOREACH placeholders
+// Code taken from https://stackoverflow.com/questions/8542591
+// Should be replaced by range-based for loops !
+namespace std {
+    template<class T> T begin(std::pair<T, T> p){return p.first;}
+    template<class T> T end(std::pair<T, T> p){return p.second;}
+}
+template<class Iterator> std::reverse_iterator<Iterator> make_reverse_iterator(Iterator it)
+{return std::reverse_iterator<Iterator>(it);}
+template<class Range> std::pair<std::reverse_iterator<decltype(begin(std::declval<Range>()))>,
+                      std::reverse_iterator<decltype(begin(std::declval<Range>()))>> make_reverse_range(Range&& r)
+{return std::make_pair(make_reverse_iterator(begin(r)), make_reverse_iterator(end(r)));}
+#define BOOST_FOREACH(a,b)  for(a:b)
+#define BOOST_REVERSE_FOREACH(a,b) for(a:make_reverse_range(b))
+
+
+
 class CRequestTracker;
 class CNode;
 class CBlockIndex;
@@ -378,7 +396,7 @@ public:
     unsigned int GetTotalRecvSize()
     {
         unsigned int total = 0;
-        BOOST_FOREACH(const CNetMessage &msg, vRecvMsg) 
+        BOOST_FOREACH(const CNetMessage &msg, vRecvMsg)
             total += msg.vRecv.size() + 24;
         return total;
     }
