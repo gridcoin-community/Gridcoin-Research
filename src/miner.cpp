@@ -746,16 +746,22 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid.ResearchAge = dAccrualAge;
     miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
     miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
-
     miningcpid.InterestSubsidy = out_interest;
-    miningcpid.enccpid = "";
-    miningcpid.encboincpublickey = "";
-    miningcpid.encaes = "";
     miningcpid.BoincSignature = "";
     miningcpid.CurrentNeuralHash = "";
     miningcpid.NeuralHash = "";
     miningcpid.superblock = "";
     miningcpid.GRCAddress = DefaultWalletAddress();
+
+    // Make sure this deprecated fields are empty
+    miningcpid.cpidv2.clear();
+    miningcpid.email.clear();
+    miningcpid.boincruntimepublickey.clear();
+    miningcpid.aesskein.clear();
+    miningcpid.enccpid.clear();
+    miningcpid.encboincpublickey.clear();
+    miningcpid.encaes.clear();
+
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
