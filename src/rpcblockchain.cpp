@@ -185,17 +185,17 @@ double GetNetworkTotalByProject(std::string projectname)
 
 std::string FileManifest()            
 {
-   boost::filesystem::path dir_path = GetDataDir() / "nn2";
-   boost::filesystem::directory_iterator it(dir_path), eod;
-   std::string sMyManifest = "";
-   BOOST_FOREACH(boost::filesystem::path const &p, std::make_pair(it, eod))   
-   { 
-      if(boost::filesystem::is_regular_file(p))
-      {
-        sMyManifest += p.string();
-      } 
-   }
-   return sMyManifest;
+    using namespace boost::filesystem;
+    path dir_path = GetDataDir() / "nn2";
+    std::string sMyManifest;
+    for(directory_iterator it(dir_path); it != directory_iterator(); ++it)
+    { 
+       if(boost::filesystem::is_regular_file(it->path()))
+       {
+           sMyManifest += it->path().string();
+       } 
+    }
+    return sMyManifest;
 }
 
 std::vector<unsigned char> readFileToVector(std::string filename)
@@ -307,7 +307,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier)));
     result.push_back(Pair("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum)));
     Array txinfo;
-    BOOST_FOREACH (const CTransaction& tx, block.vtx)
+    for (auto const& tx : block.vtx)
     {
         if (fPrintTransactionDetail)
         {
@@ -462,7 +462,7 @@ Value getrawmempool(const Array& params, bool fHelp)
     mempool.queryHashes(vtxid);
 
     Array a;
-    BOOST_FOREACH(const uint256& hash, vtxid)
+    for (auto const& hash : vtxid)
         a.push_back(hash.ToString());
 
     return a;
@@ -3089,7 +3089,7 @@ std::string GetProvableVotingWeightXML()
 	double dItemBloatThreshhold = 50;
 	// Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
 	sXML += "<PROVABLEBALANCE>";
-    BOOST_FOREACH(const COutput& out, vecOutputs)
+    for (auto const& out : vecOutputs)
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
@@ -3303,7 +3303,7 @@ Array GetJsonUnspentReport()
 	double dCurrentItemCount = 0;
 	double dItemBloatThreshhold = 50;
 	// Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
-    BOOST_FOREACH(const COutput& out, vecOutputs)
+    for (auto const& out : vecOutputs)
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
@@ -4682,7 +4682,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_version.begin(), c_version.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
-        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        for (auto const& item : list)
         {
             result.push_back(Pair(item.first, item.second/(double)blockcount));
         }
@@ -4694,7 +4694,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
         int limit=64;
-        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        for (auto const& item : list)
         {
             if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));
@@ -4707,7 +4707,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
         int limit=64;
-        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        for (auto const& item : list)
         {
             if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));

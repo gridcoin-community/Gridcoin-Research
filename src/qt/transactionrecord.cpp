@@ -32,7 +32,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
     {
         int64_t nValueOut = 0;
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        for (auto const& txout : wtx.vout)
         {
 	       if (wallet->IsMine(txout))
 		   {
@@ -61,7 +61,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
         //
         // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1
         //
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        for (auto const& txout : wtx.vout)
         {
             if(wallet->IsMine(txout))
             {
@@ -124,11 +124,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     else
     {
         bool fAllFromMe = true;
-        BOOST_FOREACH(const CTxIn& txin, wtx.vin)
+        for (auto const& txin : wtx.vin)
             fAllFromMe = fAllFromMe && wallet->IsMine(txin);
 
         bool fAllToMe = true;
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        for (auto const& txout : wtx.vout)
             fAllToMe = fAllToMe && wallet->IsMine(txout);
 
         if (fAllFromMe && fAllToMe)
