@@ -489,7 +489,7 @@ static const signed char phexdigit[256] =
 
 bool IsHex(const string& str)
 {
-    BOOST_FOREACH(unsigned char c, str)
+    for (unsigned char c : str)
     {
         if (phexdigit[c] < 0)
             return false;
