@@ -51,7 +51,6 @@ extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 extern std::string UnpackBinarySuperblock(std::string sBlock);
-extern std::string PackBinarySuperblock(std::string sBlock);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
@@ -64,7 +63,6 @@ extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
-extern bool NeedASuperblock();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
 void BusyWaitForTally();
@@ -89,7 +87,6 @@ extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
        
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
@@ -98,14 +95,12 @@ extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseL
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 double qtExecuteGenericFunction(std::string function,std::string data);
-extern std::string GetQuorumHash(const std::string& data);
 extern bool FullSyncWithDPORNodes();
 
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 
 bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
-extern std::string ReadCache(std::string section, std::string key);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
@@ -293,7 +288,6 @@ bool bTallyFinished = false;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
-extern double cdbl(std::string s, int place);
 
 extern void WriteAppCache(std::string key, std::string value);
 extern std::string AppCache(std::string key);
@@ -302,7 +296,6 @@ extern void LoadCPIDsInBackground();
 extern void ThreadCPIDs();
 extern void GetGlobalStatus();
 
-extern bool OutOfSyncByAge();
 extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
 
@@ -7362,47 +7355,6 @@ double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
     return out_mag;
 }
 
-double PendingSuperblockHeight()
-{
-    double height = cdbl(ReadCache("neuralsecurity","pending"),0);
-    if (height < (double)(pindexBest->nHeight-200)) height = 0;
-    return height;
-}
-
-std::string GetNeuralNetworkSuperBlock()
-{
-    //Only try to stake a superblock if the contract expired And the superblock is the highest popularity block And we do not have a pending superblock
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    if (IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()) && NeedASuperblock() && PendingSuperblockHeight()==0)
-    {
-        std::string myNeuralHash = "";
-        #if defined(WIN32) && defined(QT_GUI)
-               myNeuralHash = qtGetNeuralHash("");
-        #endif
-        double popularity = 0;
-        std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-        if (fDebug2 && LessVerbose(5)) printf("SB Age %f, MyHash %s, ConsensusHash %s",(double)superblock_age,myNeuralHash.c_str(),consensus_hash.c_str());
-        if (consensus_hash==myNeuralHash)
-        {
-            //Stake the contract
-            std::string contract = "";
-            #if defined(WIN32) && defined(QT_GUI)
-                contract = qtGetNeuralContract("");
-                if (fDebug2 && LessVerbose(5)) printf("Appending SuperBlock %f\r\n",(double)contract.length());
-                if (AreBinarySuperblocksEnabled(nBestHeight))
-                {
-                    // 12-21-2015 : Stake a binary superblock
-                    contract = PackBinarySuperblock(contract);
-                }
-            #endif
-            return contract;
-        }
-
-    }
-    return "";
-
-}
-
 std::string GetLastPORBlockHash(std::string cpid)
 {
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
@@ -7414,7 +7366,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     std::string delim = "<|>";
     std::string version = FormatFullVersion();
     int subsidy_places= BlockVersion<8 ? 2 : 8;
-    mcpid.GRCAddress = DefaultWalletAddress();
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
         mcpid.Organization = DefaultOrg();
@@ -7427,24 +7378,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
         mcpid.NetworkRAC = 0;
     }
 
-    std::string sNeuralHash = "";
-    // To save network bandwidth, start posting the neural hashes in the CurrentNeuralHash field, so that out of sync neural network nodes can request neural data from those that are already synced and agree with the supermajority over the last 24 hrs
-    if (!OutOfSyncByAge())
-    {
-        #if defined(WIN32) && defined(QT_GUI)
-            sNeuralHash = qtGetNeuralHash("");
-            mcpid.CurrentNeuralHash = sNeuralHash;
-        #endif
-    }
-
-    //Add the neural hash only if necessary
-    if (!OutOfSyncByAge() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()) && NeedASuperblock())
-    {
-        #if defined(WIN32) && defined(QT_GUI)
-            mcpid.NeuralHash = sNeuralHash;
-            mcpid.superblock = GetNeuralNetworkSuperBlock();
-        #endif
-    }
 
     mcpid.LastPORBlockHash = GetLastPORBlockHash(mcpid.cpid);
 

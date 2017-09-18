@@ -265,6 +265,13 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
+bool OutOfSyncByAge();
+bool NeedASuperblock();
+std::string GetQuorumHash(const std::string& data);
+std::string ReadCache(std::string section, std::string key);
+double cdbl(std::string s, int place);
+std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+std::string PackBinarySuperblock(std::string sBlock);
 
 double GetPoSKernelPS();
 
