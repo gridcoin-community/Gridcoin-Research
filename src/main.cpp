@@ -165,10 +165,6 @@ int64_t nLastPing = 0;
 int64_t nLastPeek = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
-int64_t nLastCalculatedMedianTimePast = 0;
-double nLastBlockAge = 0;
-int64_t nLastCalculatedMedianPeerCount = 0;
-int nLastMedianPeerCount = 0;
 int64_t nLastTallyBusyWait = 0;
 
 int64_t nLastTalliedNeural = 0;
@@ -188,7 +184,7 @@ double GetLastPaymentTimeByCPID(std::string cpid);
 extern bool Contains(const std::string& data, const std::string& instring);
 
 extern double CoinToDouble(double surrogate);
-extern double PreviousBlockAge();
+extern int64_t PreviousBlockAge();
 void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
@@ -2205,13 +2201,8 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
 // Return maximum amount of blocks that other nodes claim to have
 int GetNumBlocksOfPeers()
 {
-    if (IsLockTimeWithinMinutes(nLastCalculatedMedianPeerCount,1))
-    {
-        return nLastMedianPeerCount;
-    }
-    nLastCalculatedMedianPeerCount = GetAdjustedTime();
-    nLastMedianPeerCount = std::max(cPeerBlockCounts.median(), Checkpoints::GetTotalBlocksEstimate());
-    return nLastMedianPeerCount;
+    LOCK(cs_main);
+    return std::max(cPeerBlockCounts.median(), Checkpoints::GetTotalBlocksEstimate());
 }
 
 bool IsInitialBlockDownload()
@@ -2418,36 +2409,25 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 }
 
 
-double PreviousBlockAge()
+int64_t PreviousBlockAge()
 {
-        if (nBestHeight < 10) return 99999;
-        if (IsLockTimeWithinMinutes(nLastCalculatedMedianTimePast,1))
-        {
-            return nLastBlockAge;
-        }
-        nLastCalculatedMedianTimePast = GetAdjustedTime();
-        // Returns the time in seconds since the last block:
-        double nTime = max(pindexBest->GetMedianTimePast()+1, GetAdjustedTime());
-        double nActualTimespan = nTime - pindexBest->pprev->GetBlockTime();
-        nLastBlockAge = nActualTimespan;
-        return nActualTimespan;
-}
+    LOCK(cs_main);
+    
+    int64_t blockTime = pindexBest && pindexBest->pprev
+            ? pindexBest->pprev->GetBlockTime()
+            : 0;
 
-bool OutOfSyncByMoreThan(double dMinutes)
-{
-    double lastblockage = PreviousBlockAge();
-    if (lastblockage > (60*dMinutes)) return true;
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()-30) return true;
-    return false;
+    return GetAdjustedTime() - blockTime;
 }
-
 
 
 bool OutOfSyncByAge()
-{
-    double lastblockage = PreviousBlockAge();
-    if (lastblockage > (60*30)) return true;
-    return false;
+{    
+    // Assume we are out of sync if the current block age is 10
+    // times older than the target spacing. This is the same
+    // rules at Bitcoin uses.    
+    const int64_t maxAge = GetTargetSpacing(nBestHeight) * 10;
+    return PreviousBlockAge() >= maxAge;
 }
 
 
@@ -4657,14 +4637,11 @@ void CleanInboundConnections(bool bClearAll)
 
 bool WalletOutOfSync()
 {
+    LOCK(cs_main);
+    
     // Only trigger an out of sync condition if the node has synced near the best block prior to going out of sync.
-    bool fOut = OutOfSyncByMoreThan(30);
-    double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-    bool fGhostChain = (!fTestNet && PORDiff < .75);
-    int iPeerBlocks = GetNumBlocksOfPeers();
-    bool bSyncedCloseToTop = nBestHeight > iPeerBlocks-1000;
-    if ((fOut || fGhostChain) && bSyncedCloseToTop) return true;
-    return false;
+    bool bSyncedCloseToTop = nBestHeight > GetNumBlocksOfPeers() - 1000;
+    return OutOfSyncByAge() && bSyncedCloseToTop;
 }
 
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
@@ -5393,7 +5370,7 @@ bool BlockNeedsChecked(int64_t BlockTime)
     if (IsLockTimeWithin14days(BlockTime))
     {
         if (fColdBoot) return false;
-        bool fOut = OutOfSyncByMoreThan(30);
+        bool fOut = OutOfSyncByAge();
         return !fOut;
     }
     else
