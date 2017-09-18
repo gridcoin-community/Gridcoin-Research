@@ -378,7 +378,7 @@ public:
     unsigned int GetTotalRecvSize()
     {
         unsigned int total = 0;
-        BOOST_FOREACH(const CNetMessage &msg, vRecvMsg) 
+        for (auto const& msg : vRecvMsg)
             total += msg.vRecv.size() + 24;
         return total;
     }
@@ -390,7 +390,7 @@ public:
     void SetRecvVersion(int nVersionIn)
     {
         nRecvVersion = nVersionIn;
-        BOOST_FOREACH(CNetMessage &msg, vRecvMsg)
+        for (auto &msg : vRecvMsg)
             msg.SetVersion(nVersionIn);
     }
 
@@ -648,7 +648,7 @@ inline void RelayInventory(const CInv& inv)
     // Put on lists to offer to the other nodes
     {
         LOCK(cs_vNodes);
-        BOOST_FOREACH(CNode* pnode, vNodes)
+        for (auto const& pnode : vNodes)
             pnode->PushInventory(inv);
     }
 }
