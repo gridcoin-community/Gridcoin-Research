@@ -145,7 +145,7 @@ libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS
-libgridcoin_util_a_CXXFLAGS += -DWIN32 -DUNICODE
+libgridcoin_util_a_CXXFLAGS += -DWIN32 -DUNICODE -fPIC
 endif
 
 if GLIBC_BACK_COMPAT
@@ -168,6 +168,7 @@ gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) 
 
 if TARGET_WINDOWS
 gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
+gridcoinresearchd_CPPFLAGS += -DWIN32 -DUNICODE -fPIC
 endif
 
 CLEANFILES = $(EXTRA_LIBRARIES)
