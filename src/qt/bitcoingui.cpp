@@ -915,7 +915,7 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
             if(trayIcon)
             {
                 trayIcon->setToolTip(tr("Gridcoin client") + QString(" ") + tr("[testnet]"));
-                trayIcon->setIcon(QIcon(":/images/gridcoin"));
+                trayIcon->setIcon(QPixmap(":/images/gridcoin"));
                 toggleHideAction->setIcon(QIcon(":/images/gridcoin"));
             }
 
@@ -980,7 +980,7 @@ void BitcoinGUI::createTrayIcon()
 #ifndef Q_OS_MAC
     trayIcon = new QSystemTrayIcon(this);
     trayIcon->setToolTip(tr("Gridcoin client"));
-    trayIcon->setIcon(QIcon(":/images/gridcoin"));
+    trayIcon->setIcon(QPixmap(":/images/gridcoin"));
     trayIcon->show();
 #endif
 
