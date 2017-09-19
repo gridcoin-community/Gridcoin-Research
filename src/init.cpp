@@ -1082,11 +1082,7 @@ bool AppInit2()
 
     InitializeBoincProjects();
     printf("Done loading boinc projects");
-    uiInterface.InitMessage(_("Loading Network Averages..."));
-    if (fDebug3) printf("Loading network averages");
-    BusyWaitForTally();
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
-
     ComputeNeuralNetworkSupermajorityHashes();
 
     printf("Starting CPID thread...");
@@ -1110,8 +1106,11 @@ bool AppInit2()
     }
 
 
+    uiInterface.InitMessage(_("Loading Network Averages..."));
+    if (fDebug3) printf("Loading network averages");
     if (!NewThread(StartNode, NULL))
         InitError(_("Error: could not start node"));
+    BusyWaitForTally();
 
     if (fServer)
         NewThread(ThreadRPCServer, NULL);
