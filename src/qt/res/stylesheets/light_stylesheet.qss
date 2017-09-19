@@ -23,7 +23,7 @@ QToolButton:hover {
 }
 
 QToolButton:checked {
-    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(150,150,150), stop: 1 rgb(150,150,150));
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1.0, y2: 1.0,stop: 0 rgb(200,200,200), stop: 1 rgb(200,200,200));
     border:none;
 }
 
@@ -76,8 +76,8 @@ QScrollBar:horizontal {
 }
 
 QScrollBar::handle:horizontal {
-    background: rgb(150,150,150);
-    border: 0.065em rgb(150,150,150);
+    background: rgb(180,180,180);
+    border: 0.065em rgb(180,180,180);
     border-radius: 0.19em;
     min-width: 1.25wm;
 }
@@ -112,8 +112,8 @@ QScrollBar:vertical {
 }
 
 QScrollBar::handle:vertical {
-    background: rgb(150,150,150);
-    border: 0.065em rgb(150,150,150);
+    background: rgb(180,180,180);
+    border: 0.065em rgb(180,180,180);
     border-radius: 0.19em;
     min-height: 1.25em;
 }
@@ -367,7 +367,7 @@ QListWidget{
 #toolbar2 {
     border:none;
     width:1.625em;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(195,195,195), stop: 1 rgb(195,195,195));
     min-width:1.625em;
     max-width:1.625em;
 }
