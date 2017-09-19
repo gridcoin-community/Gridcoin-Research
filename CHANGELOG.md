@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Add more transaction details to the UI, #573 (@tomasbrod).
 
 ### Fixed
+ - Reduce startup time by 15 seconds, #626 (@Foggyx420).
  - Prevent email being leaked in CPIDv2 block field, #621 (@tomasbrod).
  - Fixed memory leaks when receiving orphans while in sync, #622 (@denravonska).
  - Unconfirmed balance was not shown in UI, #615, (@Foggyx420).
