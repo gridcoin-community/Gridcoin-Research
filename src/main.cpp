@@ -4595,19 +4595,6 @@ void ClearOrphanBlocks()
     mapOrphanBlocksByPrev.clear();
 }
 
-
-void CheckForLatestBlocks()
-{
-    if (WalletOutOfSync())
-    {
-            ClearOrphanBlocks();
-            setStakeSeen.clear();
-            setStakeSeenOrphan.clear();
-            AskForOutstandingBlocks(uint256(0));
-            printf("\r\n ** Clearing Orphan Blocks... ** \r\n");
-    }  
-}
-
 void CleanInboundConnections(bool bClearAll)
 {
         if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
@@ -4623,7 +4610,6 @@ void CleanInboundConnections(bool bClearAll)
         }
         printf("\r\n Cleaning inbound connections \r\n");
 }
-
 
 bool WalletOutOfSync()
 {
