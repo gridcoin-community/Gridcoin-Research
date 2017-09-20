@@ -4711,7 +4711,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         }
         
         CBlock* pblock2 = new CBlock(*pblock);            
-        mapOrphanBlocks.insert(make_pair(hash, pblock));
+        mapOrphanBlocks.insert(make_pair(hash, pblock2));
         mapOrphanBlocksByPrev.insert(make_pair(pblock->hashPrevBlock, pblock2));
 
         // Ask this guy to fill in what we're missing
