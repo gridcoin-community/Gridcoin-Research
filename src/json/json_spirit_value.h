@@ -45,6 +45,7 @@ namespace json_spirit
         Value_impl( const Array&       value );
         Value_impl( bool               value );
         Value_impl( int                value );
+        Value_impl( unsigned int       value );
         Value_impl( int64_t     value );
         Value_impl( uint64_t    value );
         Value_impl( double             value );
@@ -260,6 +261,14 @@ namespace json_spirit
     :   type_( int_type )
     ,   v_( static_cast< int64_t >( value ) )
     ,   is_uint64_( false )
+    {
+    }
+
+    template< class Config >
+    Value_impl< Config >::Value_impl( unsigned int value )
+    :   type_( int_type )
+    ,   v_( static_cast< int64_t >( value ) )
+    ,   is_uint64_( true )
     {
     }
 

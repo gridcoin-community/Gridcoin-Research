@@ -50,7 +50,6 @@ bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
-extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
@@ -59,7 +58,6 @@ int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
-extern bool IsSuperBlock(CBlockIndex* pIndex);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void AddPeek(std::string data);
 extern void GridcoinServices();
@@ -106,8 +104,6 @@ extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
 extern void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex);
-extern bool LoadSuperblock(std::string data, int64_t nTime, double height);
-
 
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
@@ -2649,7 +2645,7 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
     return address;
 }
 
-bool LoadSuperblock(std::string data, int64_t nTime, double height)
+bool LoadSuperblock(std::string data, int64_t nTime, int height)
 {
         WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
         WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
@@ -3256,7 +3252,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             if (VerifySuperblock(superblock, pindex))
                             {
                                         LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
-                                        if (fDebug3) printf("ConnectBlock(): Superblock Loaded %f \r\n",(double)pindex->nHeight);
+                                        if (fDebug3) printf("ConnectBlock(): Superblock Loaded %d \r\n", pindex->nHeight);
                                         /*  Reserved for future use:
                                             bNetAveragesLoaded=false;
                                             nLastTallied = 0;
@@ -3269,7 +3265,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             }
                             else
                             {
-                                if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %f\r\n",(double)pindex->nHeight);
+                                if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %d\r\n", pindex->nHeight);
                             }
                     }
             }
@@ -4407,12 +4403,12 @@ void GridcoinServices()
     }
 
     int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    bool bNeedSuperblock = ((double)superblock_age > (double)(GetSuperblockAgeSpacing(nBestHeight)));
+    bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
     if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
     if (fDebug10) 
     {
-            printf (" MRSA %f, BH %f ",(double)superblock_age,(double)nBestHeight);
+            printf (" MRSA %" PRId64 ", BH %d", superblock_age, nBestHeight);
     }
 
     if (bNeedSuperblock)
@@ -4599,19 +4595,6 @@ void ClearOrphanBlocks()
     mapOrphanBlocksByPrev.clear();
 }
 
-
-void CheckForLatestBlocks()
-{
-    if (WalletOutOfSync())
-    {
-            ClearOrphanBlocks();
-            setStakeSeen.clear();
-            setStakeSeenOrphan.clear();
-            AskForOutstandingBlocks(uint256(0));
-            printf("\r\n ** Clearing Orphan Blocks... ** \r\n");
-    }  
-}
-
 void CleanInboundConnections(bool bClearAll)
 {
         if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
@@ -4627,7 +4610,6 @@ void CleanInboundConnections(bool bClearAll)
         }
         printf("\r\n Cleaning inbound connections \r\n");
 }
-
 
 bool WalletOutOfSync()
 {
