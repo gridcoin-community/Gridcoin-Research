@@ -648,12 +648,17 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 
 int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 {
-    std::string sb_contract;
-
     if(OutOfSyncByAge())
         return printf("AddNeuralContractOrVote: Out Of Sync\n");
 
+    if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
+        return printf("AddNeuralContractOrVote: Not Participating\n");
+
+    if(!NeedASuperblock())
+        return printf("AddNeuralContractOrVote: not Needed\n");
+    
     /* Retrive the neural Contract */
+    std::string sb_contract;
     #if defined(WIN32) && defined(QT_GUI)
         sb_contract = qtGetNeuralContract("");
     #endif
@@ -670,12 +675,6 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     if(sb_contract.empty())
         return printf("AddNeuralContractOrVote: Local Contract Empty\n");
-
-    if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
-        return printf("AddNeuralContractOrVote: Not Participating\n");
-
-    if(!NeedASuperblock())
-        return printf("AddNeuralContractOrVote: not Needed\n");
 
     int pending_height = cdbl(ReadCache("neuralsecurity","pending"),0);
 
