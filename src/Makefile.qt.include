@@ -179,6 +179,44 @@ GRIDCOINRESEARCH_QT_H = \
   qt/votingdialog.h \
   qt/walletmodel.h
 
+GRIDCOINRESEARCH_QT_CPP = \
+  qt/aboutdialog.cpp \
+  qt/addressbookpage.cpp \
+  qt/addresstablemodel.cpp \
+  qt/askpassphrasedialog.cpp \
+  qt/bitcoinaddressvalidator.cpp \
+  qt/bitcoinamountfield.cpp \
+  qt/bitcoingui.cpp \
+  qt/bitcoinunits.cpp \
+  qt/clientmodel.cpp \
+  qt/coincontroldialog.cpp \
+  qt/coincontroltreewidget.cpp \
+  qt/csvmodelwriter.cpp \
+  qt/editaddressdialog.cpp \
+  qt/guiutil.cpp \
+  qt/monitoreddatamapper.cpp \
+  qt/notificator.cpp \
+  qt/optionsdialog.cpp \
+  qt/optionsmodel.cpp \
+  qt/overviewpage.cpp \
+  qt/qtipcserver.cpp \
+  qt/qvalidatedlineedit.cpp \
+  qt/qvaluecombobox.cpp \
+  qt/rpcconsole.cpp \
+  qt/sendcoinsdialog.cpp \
+  qt/sendcoinsentry.cpp \
+  qt/signverifymessagedialog.cpp \
+  qt/trafficgraphwidget.cpp \
+  qt/transactiondesc.cpp \
+  qt/transactiondescdialog.cpp \
+  qt/transactionfilterproxy.cpp \
+  qt/transactionrecord.cpp \
+  qt/transactiontablemodel.cpp \
+  qt/transactionview.cpp \
+  qt/upgradedialog.cpp \
+  qt/votingdialog.cpp \
+  qt/walletmodel.cpp
+
 RES_ICONS = \
   qt/res/icons/add.png \
   qt/res/icons/address-book.png \
@@ -241,44 +279,6 @@ RES_ICONS = \
   qt/res/icons/www.png \
   qt/res/icons/wwww.png
 
-GRIDCOINRESEARCH_QT_CPP = \
-  qt/aboutdialog.cpp \
-  qt/addressbookpage.cpp \
-  qt/addresstablemodel.cpp \
-  qt/askpassphrasedialog.cpp \
-  qt/bitcoinaddressvalidator.cpp \
-  qt/bitcoinamountfield.cpp \
-  qt/bitcoingui.cpp \
-  qt/bitcoinunits.cpp \
-  qt/clientmodel.cpp \
-  qt/coincontroldialog.cpp \
-  qt/coincontroltreewidget.cpp \
-  qt/csvmodelwriter.cpp \
-  qt/editaddressdialog.cpp \
-  qt/guiutil.cpp \
-  qt/monitoreddatamapper.cpp \
-  qt/notificator.cpp \
-  qt/optionsdialog.cpp \
-  qt/optionsmodel.cpp \
-  qt/overviewpage.cpp \
-  qt/qtipcserver.cpp \
-  qt/qvalidatedlineedit.cpp \
-  qt/qvaluecombobox.cpp \
-  qt/rpcconsole.cpp \
-  qt/sendcoinsdialog.cpp \
-  qt/sendcoinsentry.cpp \
-  qt/signverifymessagedialog.cpp \
-  qt/trafficgraphwidget.cpp \
-  qt/transactiondesc.cpp \
-  qt/transactiondescdialog.cpp \
-  qt/transactionfilterproxy.cpp \
-  qt/transactionrecord.cpp \
-  qt/transactiontablemodel.cpp \
-  qt/transactionview.cpp \
-  qt/upgradedialog.cpp \
-  qt/votingdialog.cpp \
-  qt/walletmodel.cpp
-
 RES_IMAGES = 
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
@@ -301,6 +301,11 @@ qt_libgridcoinqt_a_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
 qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_QT_CPP) $(GRIDCOINRESEARCH_QT_H) $(QT_FORMS_UI) \
   $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(PROTOBUF_PROTO) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES)
+
+if TARGET_WINDOWS
+qt_libgridcoinqt_a_SOURCES += $(GRIDOIN_CORE_H) $(GRIDCOIN_CORE_CPP) grcrestarter.cpp neuralnet.cpp
+qt_libgridcoinqt_a_CXXFLAGS += -DWIN32 -DUNICODE -fPIC
+endif
 
 nodist_qt_libgridcoinqt_a_SOURCES = $(QT_MOC_CPP) $(QT_MOC) $(PROTOBUF_CC) \
   $(PROTOBUF_H) $(QT_QRC_CPP) $(QT_QRC_LOCALE_CPP)
@@ -325,15 +330,19 @@ qt_gridcoinresearch_SOURCES = qt/bitcoin.cpp
 if TARGET_DARWIN
   qt_gridcoinresearch_SOURCES += $(GRIDCOIN_MM)
 endif
-if TARGET_WINDOWS
-  qt_gridcoinresearch_SOURCES += $(GRIDCOIN_RC)
-endif
 qt_gridcoinresearch_LDADD = qt/libgridcoinqt.a
-qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
-  $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBSECP256K1) $(CURL_LIBS) $(LIBZIP_LIBS)\
+qt_gridcoinresearch_LDADD += $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
+  $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)\
   $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 qt_gridcoinresearch_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 qt_gridcoinresearch_LIBTOOLFLAGS = --tag CXX
+
+if TARGET_WINDOWS
+  qt_gridcoinresearch_SOURCES += $(GRIDCOIN_RC)
+else
+  qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL)
+endif
+
 #locale/foo.ts -> locale/foo.qm
 QT_QM=$(QT_TS:.ts=.qm)
 
