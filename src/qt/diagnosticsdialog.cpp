@@ -1,5 +1,6 @@
 #include <QtConcurrent>
 
+#include <fstream>
 #include "main.h"
 #include "util.h"
 #include "boinc.h"

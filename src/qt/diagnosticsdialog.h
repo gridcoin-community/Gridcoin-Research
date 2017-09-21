@@ -4,6 +4,8 @@
 #include <QDialog>
 #include <QtNetwork>
 
+#include <string>
+
 namespace Ui {
 class DiagnosticsDialog;
 }
