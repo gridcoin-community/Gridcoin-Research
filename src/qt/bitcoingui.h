@@ -25,6 +25,7 @@ class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
 class UpgradeDialog;
+class DiagnosticsDialog;
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -137,6 +138,7 @@ private:
     TransactionView *transactionView;
     RPCConsole *rpcConsole;
 	UpgradeDialog *upgrader;
+    DiagnosticsDialog *diagnosticsDialog;
 
     QMovie *syncIconMovie;
 

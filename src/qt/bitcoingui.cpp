@@ -246,6 +246,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
 
+     diagnosticsDialog = new DiagnosticsDialog(this);
+
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
@@ -1461,10 +1463,9 @@ void BitcoinGUI::configClicked()
 
 void BitcoinGUI::diagnosticsClicked()
 {
-    DiagnosticsDialog *diag = new DiagnosticsDialog(this);
-    diag->show();
-    diag->raise();
-    diag->activateWindow();
+    diagnosticsDialog->show();
+    diagnosticsDialog->raise();
+    diagnosticsDialog->activateWindow();
 }
 
 void BitcoinGUI::foundationClicked()
