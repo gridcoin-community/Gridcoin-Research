@@ -3,29 +3,6 @@
 
 #include <QDialog>
 #include <QtNetwork>
-#include <QtConcurrent>
-
-#include "main.h"
-#include "util.h"
-#include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-
-extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern std::string GetListOf(std::string datatype);
-extern int64_t GetAdjustedTime();
-extern std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-template<typename T>
-extern std::string ToString(const T& val);
-extern std::string TimestampToHRDate(double dtm);
-extern double PreviousBlockAge();
-extern double GetDifficulty(const CBlockIndex* blockindex);
-extern const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake);
-//extern std::string CBlockIndex::GetCPID();
-extern std::string RoundToString(double d, int place);
-extern std::string GetBoincDataDir();
-
-extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 
 namespace Ui {
 class DiagnosticsDialog;

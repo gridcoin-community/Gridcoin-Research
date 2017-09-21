@@ -1,5 +1,17 @@
+#include <QtConcurrent>
+
+#include "main.h"
+#include "util.h"
+#include "boinc.h"
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
+
+extern std::string GetListOf(std::string datatype);
+extern double PreviousBlockAge();
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
@@ -24,13 +36,11 @@ void DiagnosticsDialog::GetData() {
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
     std::string sBlock = mvApplicationCache["superblock;block_number"];
-    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
     printf("Pushing diagnostic data...");
     double lastblockage = PreviousBlockAge();
-    double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
     syncData = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + KeyValue("cpid") + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
+        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER>"
+        + "<PRIMARYCPID>" + KeyValue("cpid") + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE>" + "</QUORUMDATA>";
     testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 }
 
