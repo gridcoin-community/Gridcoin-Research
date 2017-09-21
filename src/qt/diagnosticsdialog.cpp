@@ -64,10 +64,10 @@ int DiagnosticsDialog::VarifyIsCPIDValid() {
     if(clientStatePath.empty())
         return 0;
 
-    boost::filesystem::ifstream clientStateStream;
+    std::ifstream clientStateStream;
     std::string clientState;
 
-    clientStateStream.open(clientStatePath);
+    clientStateStream.open(clientStatePath.string());
     clientState.assign((std::istreambuf_iterator<char>(clientStateStream)), std::istreambuf_iterator<char>());
     clientStateStream.close();
 
@@ -121,12 +121,12 @@ int DiagnosticsDialog::VarifyCPIDHasRAC() {
     if(clientStatePath.empty())
         return 0;
 
-    boost::filesystem::ifstream clientStateStream;
+    std::ifstream clientStateStream;
     std::string clientState;
     std::vector<std::string> racStrings;
     std::vector<int> racValues;
 
-    clientStateStream.open(clientStatePath);
+    clientStateStream.open(clientStatePath.string());
     clientState.assign((std::istreambuf_iterator<char>(clientStateStream)), std::istreambuf_iterator<char>());
     clientStateStream.close();
 
@@ -193,9 +193,9 @@ void DiagnosticsDialog::VarifyTCPPort() {
 std::string DiagnosticsDialog::KeyValue(std::string key) {
     boost::filesystem::path confFile = GetDataDir(true) / "gridcoinresearch.conf";
     std::vector<std::string> confKeys;
-    boost::filesystem::ifstream configStream;
+    std::ifstream configStream;
 
-    configStream.open(confFile);
+    configStream.open(confFile.string());
     for(std::string line; std::getline(configStream, line);) {
         boost::algorithm::split(confKeys, line, boost::is_any_of("="));
         if(boost::to_lower_copy(confKeys.at(0)) == boost::to_lower_copy(key)) {
@@ -205,6 +205,8 @@ std::string DiagnosticsDialog::KeyValue(std::string key) {
             return value;
         }
     }
+
+    configStream.close();
     return "";
 }
 
