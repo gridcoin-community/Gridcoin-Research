@@ -1461,14 +1461,10 @@ void BitcoinGUI::configClicked()
 
 void BitcoinGUI::diagnosticsClicked()
 {
-//#ifdef WIN32
-//	if (!bGlobalcomInitialized) return;
-//	qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-//	bool result = PushGridcoinDiagnostics();
-//    globalcom->dynamicCall("ShowDiagnostics()");
-//#endif
-    DiagnosticsDialog diag;
-    diag.exec();
+    DiagnosticsDialog *diag = new DiagnosticsDialog(this);
+    diag->show();
+    diag->raise();
+    diag->activateWindow();
 }
 
 void BitcoinGUI::foundationClicked()

@@ -175,7 +175,7 @@ void DiagnosticsDialog::VarifyClock() {
 
     char sendPkt[] = {010, 0, 0, 0, 0, 0, 0, 0,0};
     QByteArray sendBuffer(sendPkt);
-    int res = udpSocket->writeDatagram(sendBuffer, info.addresses().first(), 123);
+    udpSocket->writeDatagram(sendBuffer, info.addresses().first(), 123);
 }
 
 
