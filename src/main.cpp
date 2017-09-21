@@ -3184,10 +3184,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (bb.superblock.length() > 20)
     {
+        std::string superblock = UnpackBinarySuperblock(bb.superblock);        
         if (pindex->nHeight > nGrandfather && !fReorganizing)
         {
             // 12-20-2015 : Add support for Binary Superblocks
-            std::string superblock = UnpackBinarySuperblock(bb.superblock);
             std::string neural_hash = GetQuorumHash(superblock);
             std::string legacy_neural_hash = RetrieveMd5(superblock);
             double popularity = 0;
@@ -3220,14 +3220,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 if (!VerifySuperblock(superblock, pindex))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
-                                        neural_hash.c_str(), consensus_hash.c_str());
+                                 neural_hash.c_str(), consensus_hash.c_str());
                 }
                 if (!IsResearchAgeEnabled(pindex->nHeight))
                 {
                     if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                        neural_hash.c_str(), consensus_hash.c_str());
+                                     neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
                 else
@@ -3235,43 +3235,35 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     if (consensus_hash != neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                        neural_hash.c_str(), consensus_hash.c_str());
+                                     neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
-
+                
             }
         }
-
-
-            //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
-            if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
+        
+        
+        //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
+        if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
+        {
+            if (VerifySuperblock(superblock, pindex))
             {
-                    if (bb.superblock.length() > 20)
-                    {
-                            std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                            if (VerifySuperblock(superblock, pindex))
-                            {
-                                        LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
-                                        if (fDebug3) printf("ConnectBlock(): Superblock Loaded %d \r\n", pindex->nHeight);
-                                        /*  Reserved for future use:
-                                            bNetAveragesLoaded=false;
-                                            nLastTallied = 0;
-                                            BsyWaitForTally();
-                                        */
-                                        if (!fColdBoot)
-                                        {
-                                            bDoTally = true;
-                                        }
-                            }
-                            else
-                            {
-                                if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %d\r\n", pindex->nHeight);
-                            }
-                    }
+                LOCK(cs_main);
+                LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
+                if (fDebug3) printf("ConnectBlock(): Superblock Loaded %d \r\n", pindex->nHeight);
+                if (!fColdBoot)
+                {
+                    bDoTally = true;
+                }
+                
+                // Clear local superblock data.
             }
-
-
-
+            else
+            {
+                if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %d\r\n", pindex->nHeight);
+            }
+        }
+        
         /*
             -- Normal Superblocks are loaded 15 blocks later
         */
@@ -8990,8 +8982,6 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
         uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
     uint256 uADH = uint256("0x" + address_day_hash);
-    //printf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
-    //printf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());
     return (uADH < uRef);
 }
 
