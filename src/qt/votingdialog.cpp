@@ -315,7 +315,7 @@ VotingProxyModel::VotingProxyModel(QObject *parent)
 
 void VotingProxyModel::setFilterTQAU(const QString &str)
 {
-    filterTQAU_ = (str.size() >= 2)? str: "";
+    filterTQAU_ = str;
     invalidateFilter();
 }
 
@@ -423,7 +423,6 @@ VotingDialog::VotingDialog(QWidget *parent)
     watcher.setProperty("running", false);
     connect(&watcher, SIGNAL(finished()), this, SLOT(onLoadingFinished()));
     loadingIndicator = new QLabel(this);
-    loadingIndicator->setText(tr("...loading data!"));
     loadingIndicator->move(50,170);
 
     chartDialog_ = new VotingChartDialog(this);
@@ -436,6 +435,7 @@ void VotingDialog::loadPolls(bool history)
     bool isRunning = watcher.property("running").toBool();
     if (tableModel_&& !isRunning)
     {
+        loadingIndicator->setText(tr("...loading data!"));
         loadingIndicator->show();
         QFuture<void> future = QtConcurrent::run(tableModel_, &VotingTableModel::resetData, history);
         watcher.setProperty("running", true);
@@ -456,7 +456,13 @@ void VotingDialog::loadHistory(void)
 void VotingDialog::onLoadingFinished(void)
 {
     watcher.setProperty("running", false);
-    loadingIndicator->hide();
+
+    int rowsCount = tableView_->verticalHeader()->count();
+    if (rowsCount > 0) {
+        loadingIndicator->hide();
+    } else {
+        loadingIndicator->setText(tr("No polls !"));
+    }
 }
 
 void VotingDialog::tableColResize(void)

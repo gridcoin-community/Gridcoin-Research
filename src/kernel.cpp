@@ -15,7 +15,6 @@ extern int64_t GetRSAWeightByCPID(std::string cpid);
 extern int DetermineCPIDType(std::string cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-double GetBlockDifficulty(unsigned int nBits);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
@@ -75,7 +74,7 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
     bool fSelected = false;
     uint256 hashBest = 0;
     *pindexSelected = (const CBlockIndex*) 0;
-    BOOST_FOREACH(const PAIRTYPE(int64_t, uint256)& item, vSortedByTimestamp)
+    for (auto const& item : vSortedByTimestamp)
     {
         if (!mapBlockIndex.count(item.second))
             return error("SelectBlockFromCandidates: failed to find block index for candidate block %s", item.second.ToString().c_str());
@@ -193,7 +192,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
                 strSelectionMap.replace(pindex->nHeight - nHeightFirstCandidate, 1, "=");
             pindex = pindex->pprev;
         }
-        BOOST_FOREACH(const PAIRTYPE(uint256, const CBlockIndex*)& item, mapSelectedBlocks)
+        for (auto const& item : mapSelectedBlocks)
         {
             // 'S' indicates selected proof-of-stake blocks
             // 'W' indicates selected proof-of-work blocks
@@ -848,11 +847,24 @@ bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
 {
     nStakeModifier = 0;
     const CBlockIndex* pindex = pindexPrev;
+    const uint256 ModifGlitch_hash("12bcc37789ef00809d1287f4af3c46106181e7c60654c7d3f0677aefa8a78774");
+    const uint64_t ModifGlitch_correct=0xdf209a3032807577;
 
     while (1)
     {
         if(!pindex)
             return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
+
+        if (pindex->GetBlockHash()==ModifGlitch_hash)
+        {
+            if(pindex->nStakeModifier!=ModifGlitch_correct)
+                printf("WARNING: Correcting Stake Modifier Glitch, wrong= %016"
+                    PRIx64 ", correct %016" PRIx64 "\n",
+                    pindex->nStakeModifier, ModifGlitch_correct);
+
+            nStakeModifier = ModifGlitch_correct;
+            return true;
+        }
 
         if (pindex->GeneratedStakeModifier())
         {

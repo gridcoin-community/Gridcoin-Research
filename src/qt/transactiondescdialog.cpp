@@ -7,7 +7,6 @@
 #include <QModelIndex>
 
 void ExecuteCode();
-extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 QString ToQString(std::string s);
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 

@@ -15,9 +15,11 @@
 #include <QMessageBox>
 #include <string>
 
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
-extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+#include "json/json_spirit_writer_template.h"
+#include "json/json_spirit_utils.h"
+
+void GetTxStakeBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx);
+void GetTxNormalBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx);
 
 QString ToQString(std::string s)
 {
@@ -66,8 +68,8 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
     }
 
 	std::string grcaddress = "";
-    BOOST_FOREACH(const CTxDestination& addr, addresses)
-	{
+    for (auto const& addr : addresses)
+    {
 		grcaddress = CBitcoinAddress(addr).ToString();
 	}
 	return grcaddress;
@@ -108,9 +110,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     //
     // From
     //
-    if (wtx.IsCoinBase() || wtx.IsCoinStake())
+    if (wtx.IsCoinBase())
     {
-        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated") + "<br>";
+        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated in CoinBase") + "<br>";
+    }
+    else if (wtx.IsCoinStake())
+    {
+        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated, PoS") + "<br>";
     }
     else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
     {
@@ -123,7 +129,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         if (nNet > 0)
         {
             // Credit
-            BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+            for (auto const& txout : wtx.vout)
             {
                 if (wallet->IsMine(txout))
                 {
@@ -171,7 +177,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         // Coinbase
         //
         int64_t nUnmatured = 0;
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        for (auto const& txout : wtx.vout)
             nUnmatured += wallet->GetCredit(txout);
         strHTML += "<b>" + tr("Credit") + ":</b> ";
         if (wtx.IsInMainChain())
@@ -190,11 +196,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     else
     {
         bool fAllFromMe = true;
-        BOOST_FOREACH(const CTxIn& txin, wtx.vin)
+        for (auto const& txin : wtx.vin)
             fAllFromMe = fAllFromMe && wallet->IsMine(txin);
 
         bool fAllToMe = true;
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        for (auto const& txout : wtx.vout)
             fAllToMe = fAllToMe && wallet->IsMine(txout);
 
         if (fAllFromMe)
@@ -202,7 +208,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
             //
             // Debit
             //
-            BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+            for (auto const& txout : wtx.vout)
             {
                 if (wallet->IsMine(txout))
                     continue;
@@ -242,10 +248,10 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
             //
             // Mixed debit transaction
             //
-            BOOST_FOREACH(const CTxIn& txin, wtx.vin)
+            for (auto const& txin : wtx.vin)
                 if (wallet->IsMine(txin))
                     strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -wallet->GetDebit(txin)) + "<br>";
-            BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+            for (auto const& txout : wtx.vout)
                 if (wallet->IsMine(txout))
                     strHTML += "<b>" + tr("Credit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, wallet->GetCredit(txout)) + "<br>";
         }
@@ -262,15 +268,22 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += "<br><b>" + tr("Comment") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.mapValue["comment"], true) + "<br>";
 
     strHTML += "<b>" + tr("Transaction ID") + ":</b> " + wtx.GetHash().ToString().c_str() + "<br>";
+
     if (wtx.IsCoinBase() || wtx.IsCoinStake())
     {
-        int out_blocknumber=0;
-        int out_blocktype = 0;
-        double out_rac = 0;
-        GetTxProject(wtx.GetHash(),out_blocknumber, out_blocktype, out_rac);
-        strHTML += "<br>" + tr("Block Type") + ":</b> " + ToString(out_blocktype).c_str() +
-                "<br>" + tr("Block Number") + ":</b> " + ToString(out_blocknumber).c_str() +
+
+        json_spirit::mObject out;
+        GetTxStakeBoincHashInfo(out, wtx);
+        strHTML += "<br>" + GUIUtil::HtmlEscape(json_spirit::write_string(json_spirit::mValue(out),true), true) +
                 "<br><br>" + tr("Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.") + "<br>";
+    }
+    else
+    {
+
+        json_spirit::mObject out;
+        GetTxNormalBoincHashInfo(out, wtx);
+        strHTML += "<br>" + GUIUtil::HtmlEscape(json_spirit::write_string(json_spirit::mValue(out),true), true) +
+                "<br>";
     }
 
     //
@@ -285,10 +298,10 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     if (fDebug || true)
     {
         strHTML += "<hr><br><color=blue><bold><span color=blue>" + tr("Information") + "</span></bold><br><br><color=green>";
-        BOOST_FOREACH(const CTxIn& txin, wtx.vin)
+        for (auto const& txin : wtx.vin)
             if(wallet->IsMine(txin))
                 strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -wallet->GetDebit(txin)) + "<br>";
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+        for (auto const& txout : wtx.vout)
             if(wallet->IsMine(txout))
                 strHTML += "<b>" + tr("Credit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, wallet->GetCredit(txout)) + "<br>";
 
@@ -322,7 +335,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += "<ul>";
 
 
-        BOOST_FOREACH(const CTxIn& txin, wtx.vin)
+        for (auto const& txin : wtx.vin)
         {
             COutPoint prevout = txin.prevout;
 

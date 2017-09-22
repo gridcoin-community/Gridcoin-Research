@@ -23,12 +23,11 @@
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
-bool BackupConfigFile(const string& strDest);
+bool BackupWallet(const CWallet& wallet, const std::string& strDest);
+bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
-std::string UnpackBinarySuperblock(std::string sBlock);
-std::string PackBinarySuperblock(std::string sBlock);
 extern std::string GetProvableVotingWeightXML();
 extern double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 extern double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade);
@@ -52,11 +51,9 @@ bool StrLessThanReferenceHash(std::string rh);
 extern std::string AddMessage(bool bAdd, std::string sType, std::string sKey, std::string sValue, std::string sSig, int64_t MinimumBalance, double dFees, std::string sPublicKey);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern Array SuperblockReport(std::string cpid);
-bool IsSuperBlock(CBlockIndex* pIndex);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
-bool NeedASuperblock();
 double ExtractMagnitudeFromExplainMagnitude();
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
@@ -75,7 +72,7 @@ double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 std::string NeuralRequest(std::string MyNeuralRequest);
-extern bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 
 double Round(double d, int place);
 bool UnusualActivityReport();
@@ -85,7 +82,6 @@ extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 bool FullSyncWithDPORNodes();
-bool LoadSuperblock(std::string data, int64_t nTime, double height);
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -184,17 +180,17 @@ double GetNetworkTotalByProject(std::string projectname)
 
 std::string FileManifest()            
 {
-   boost::filesystem::path dir_path = GetDataDir() / "nn2";
-   boost::filesystem::directory_iterator it(dir_path), eod;
-   std::string sMyManifest = "";
-   BOOST_FOREACH(boost::filesystem::path const &p, std::make_pair(it, eod))   
-   { 
-      if(boost::filesystem::is_regular_file(p))
-      {
-        sMyManifest += p.string();
-      } 
-   }
-   return sMyManifest;
+    using namespace boost::filesystem;
+    path dir_path = GetDataDir() / "nn2";
+    std::string sMyManifest;
+    for(directory_iterator it(dir_path); it != directory_iterator(); ++it)
+    { 
+       if(boost::filesystem::is_regular_file(it->path()))
+       {
+           sMyManifest += it->path().string();
+       } 
+    }
+    return sMyManifest;
 }
 
 std::vector<unsigned char> readFileToVector(std::string filename)
@@ -268,45 +264,13 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
-double GetPoSKernelPS()
-{
-    int nPoSInterval = 72;
-    double dStakeKernelsTriedAvg = 0;
-    int nStakesHandled = 0, nStakesTime = 0;
-
-    CBlockIndex* pindex = pindexBest;;
-    CBlockIndex* pindexPrevStake = NULL;
-
-    while (pindex && nStakesHandled < nPoSInterval)
-    {
-        if (pindex->IsProofOfStake())
-        {
-            dStakeKernelsTriedAvg += GetDifficulty(pindex) * 4294967296.0;
-            nStakesTime += pindexPrevStake ? (pindexPrevStake->nTime - pindex->nTime) : 0;
-            pindexPrevStake = pindex;
-            nStakesHandled++;
-        }
-
-        pindex = pindex->pprev;
-    }
-
-    double result = 0;
-
-    if (nStakesTime)
-        result = dStakeKernelsTriedAvg / nStakesTime;
-
-    if (IsProtocolV2(nBestHeight))
-        result *= STAKE_TIMESTAMP_MASK + 1;
-
-    return result/100;
-}
 Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     Object result;
     result.push_back(Pair("hash", block.GetHash().GetHex()));
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
-    result.push_back(Pair("confirmations", (int)txGen.GetDepthInMainChain()));
+    result.push_back(Pair("confirmations", txGen.GetDepthInMainChain()));
     result.push_back(Pair("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION)));
     result.push_back(Pair("height", blockindex->nHeight));
     result.push_back(Pair("version", block.nVersion));
@@ -314,8 +278,8 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     double mint = CoinToDouble(blockindex->nMint);
     result.push_back(Pair("mint", mint));
     result.push_back(Pair("MoneySupply", blockindex->nMoneySupply));
-    result.push_back(Pair("time", (int64_t)block.GetBlockTime()));
-    result.push_back(Pair("nonce", (uint64_t)block.nNonce));
+    result.push_back(Pair("time", block.GetBlockTime()));
+    result.push_back(Pair("nonce", (int)block.nNonce));
     result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
     result.push_back(Pair("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0')));
@@ -338,7 +302,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     result.push_back(Pair("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier)));
     result.push_back(Pair("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum)));
     Array txinfo;
-    BOOST_FOREACH (const CTransaction& tx, block.vtx)
+    for (auto const& tx : block.vtx)
     {
         if (fPrintTransactionDetail)
         {
@@ -493,7 +457,7 @@ Value getrawmempool(const Array& params, bool fHelp)
     mempool.queryHashes(vtxid);
 
     Array a;
-    BOOST_FOREACH(const uint256& hash, vtxid)
+    for (auto const& hash : vtxid)
         a.push_back(hash.ToString());
 
     return a;
@@ -586,175 +550,6 @@ void fileopen_and_copy(std::string src, std::string dest)
 
     fclose(infile);
     fclose(outfile);
-}
-
-
-
-    
-std::string BackupGridcoinWallet()
-{
-    printf("Starting Wallet Backup\r\n");
-    std::string filename = "grc_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
-    std::string filename_backup = "backup.dat";
-    // std::string standard_filename = "wallet_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".dat";
-    // std::string sConfig_FileName = "gridcoinresearch_" + DateTimeStrFormat("%m-%d-%Y",  GetAdjustedTime()) + ".conf";
-    std::string standard_filename = GetBackupFilename("wallet.dat");
-    std::string sConfig_FileName = GetBackupFilename("gridcoinresearch.conf");
-    std::string source_filename   = "wallet.dat";
-    boost::filesystem::path path = GetDataDir() / "walletbackups" / filename;
-    boost::filesystem::path target_path_standard = GetDataDir() / "walletbackups" / standard_filename;
-    boost::filesystem::path sTargetPathConfig = GetDataDir() / "walletbackups" / sConfig_FileName;
-    boost::filesystem::path source_path_standard = GetDataDir() / source_filename;
-    boost::filesystem::path dest_path_std = GetDataDir() / "walletbackups" / filename_backup;
-    boost::filesystem::create_directories(path.parent_path());
-    std::string errors = "";
-    //Copy the standard wallet first:  (1-30-2015)
-    BackupWallet(*pwalletMain, target_path_standard.string().c_str());
-    BackupConfigFile(sTargetPathConfig.string().c_str());
-
-    //Per Forum, do not dump the keys and abort:
-    if (true)
-    {
-            printf("User does not want private keys backed up. Exiting.");
-            return "";
-    }
-                    
-    //Dump all private keys into the Level 2 backup
-    ofstream myBackup;
-    myBackup.open (path.string().c_str());
-    string strAccount;
-    BOOST_FOREACH(const PAIRTYPE(CTxDestination, string)& item, pwalletMain->mapAddressBook)
-    {
-         const CBitcoinAddress& address = item.first;
-         //const std::string& strName = item.second;
-         bool fMine = IsMine(*pwalletMain, address.Get());
-         if (fMine) 
-         {
-            std::string strAddress=CBitcoinAddress(address).ToString();
-
-            CKeyID keyID;
-            if (!address.GetKeyID(keyID))   
-            {
-                errors = errors + "During wallet backup, Address does not refer to a key"+ "\r\n";
-            }
-            else
-            {
-                 bool IsCompressed;
-                 CKey vchSecret;
-                 if (!pwalletMain->GetKey(keyID, vchSecret))
-                 {
-                    errors = errors + "During Wallet Backup, Private key for address is not known\r\n";
-                 }
-                 else
-                 {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    std::string private_key = CBitcoinSecret(secret,IsCompressed).ToString();
-                    //Append to file
-                    std::string strAddr = CBitcoinAddress(keyID).ToString();
-                    std::string record = private_key + "<|>" + strAddr + "<KEY>";
-                    myBackup << record;
-                }
-            }
-
-         }
-    }
-
-    std::string reserve_keys = pwalletMain->GetAllGridcoinKeys();
-    myBackup << reserve_keys;
-    myBackup.close();
-    fileopen_and_copy(path.string().c_str(),dest_path_std.string().c_str());
-    return errors;
-
-}
-
-
-
-
-
-std::string RestoreGridcoinBackupWallet()
-{
-    //AdvancedBackup-AdvancedSalvage
-    
-    boost::filesystem::path path = GetDataDir() / "walletbackups" / "backup.dat";
-    std::string errors = "";
-    std::string sWallet = getfilecontents(path.string().c_str());
-    if (sWallet == "-1") return "Unable to open backup file.";
-        
-    string strSecret = "from file";
-    string strLabel = "Restored";
-
-    std::vector<std::string> vWallet = split(sWallet.c_str(),"<KEY>");
-    if (vWallet.size() > 1)
-    {
-        for (unsigned int i = 0; i < vWallet.size(); i++)
-        {
-            std::string sKey = vWallet[i];
-            if (sKey.length() > 2)
-            {
-                    printf("Restoring private key %s",sKey.substr(0,5).c_str());
-                    //Key is delimited by <|>
-                    std::vector<std::string> vKey = split(sKey.c_str(),"<|>");
-                    if (vKey.size() > 1)
-                    {
-                            std::string sSecret = vKey[0];
-                            std::string sPublic = vKey[1];
-
-                            bool IsCompressed;
-                            CBitcoinSecret vchSecret;
-                            bool fGood = vchSecret.SetString(sSecret);
-                            if (!fGood)
-                            {
-                                errors = errors + "Invalid private key : " + sSecret + "\r\n";
-                            }
-                            else
-                            {
-                                 CKey key;
-                                 CSecret secret = vchSecret.GetSecret(IsCompressed);
-                                 key.SetSecret(secret,IsCompressed);
-                                 //                              key = vchSecret.GetKey();
-                                 CPubKey pubkey = key.GetPubKey();
-                                
-                                 CKeyID vchAddress = pubkey.GetID();
-                                 {
-                                     LOCK2(cs_main, pwalletMain->cs_wallet);
-                                     //                            if (!pwalletMain->AddKey(key)) {            fGood = false;
-         
-                                     if (!pwalletMain->AddKey(key)) 
-                                     {
-                                         errors = errors + "Error adding key to wallet: " + sKey + "\r\n";
-                                     }
-
-                                     if (i==0)
-                                     {
-                                        pwalletMain->SetDefaultKey(pubkey);
-                                        pwalletMain->SetAddressBookName(vchAddress, strLabel);
-                                     }
-                                     pwalletMain->MarkDirty();
-                            
-      
-                                 }
-                            }
-                    }
-            }
-
-        }
-
-    }
-
-
-    //Rescan
-    {
-           LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (true) {
-                pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, true);
-                pwalletMain->ReacceptWalletTransactions();
-            }
-     
-    }
-
-    printf("Rebuilding wallet, results: %s",errors.c_str());
-    return errors;
-
 }
 
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
@@ -1153,7 +948,7 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 }
         
 
-bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
+bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {	
      LOCK(cs_main);
      {
@@ -1161,19 +956,27 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
             if (GlobalCPUMiningCPID.cpid=="INVESTOR")
             {
                 sError = "INVESTORS_CANNOT_SEND_BEACONS";
-                return bFromService ? true : false;
+                return false;
             }
 
             //If beacon is already in the chain, exit early
-            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,bFromService);
+            std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
             if (!sBeaconPublicKey.empty()) 
             {
                 // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
                 // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)		
                 sError = "ALREADY_IN_CHAIN";
-                return bFromService ? true : false;
+                return false;
             }
-            
+
+            // Prevent users from advertising multiple times in succession by setting a limit of one advertisement per 5 blocks.
+            // Realistically 1 should be enough however just to be sure we deny advertisements for 5 blocks.
+            static int nLastBeaconAdvertised = 0;
+            if ((nBestHeight - nLastBeaconAdvertised) < 5)
+            {
+                sError = _("A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.");
+                return false;
+            }
             uint256 hashRand = GetRandHash();
             std::string email = GetArgument("email", "NA");
             boost::to_lower(email);
@@ -1190,7 +993,7 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 return false;
             }
         
-            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);  
             if (sOutPrivKey.empty() || sOutPubKey.empty())
             {
                 sError = "Keypair is empty.";
@@ -1222,6 +1025,8 @@ bool AdvertiseBeacon(bool bFromService, std::string &sOutPrivKey, std::string &s
                 BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
                 // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
                 ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+                // Since everything was successful add LastAdvertisedBeacon block height to memory.
+                nLastBeaconAdvertised = nBestHeight;
                 return true;
             }
             catch(Object& objError)
@@ -1722,7 +1527,7 @@ Value execute(const Array& params, bool fHelp)
                 std::string sError = "";
                 std::string sMessage = "";
 
-                bool fResult = AdvertiseBeacon(false,sOutPrivKey,sOutPubKey,sError,sMessage);
+                bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
                 entry.push_back(Pair("Result",SuccessFail(fResult)));
                 entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
                 entry.push_back(Pair("Message",sMessage.c_str()));
@@ -1810,8 +1615,7 @@ Value execute(const Array& params, bool fHelp)
         std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
         entry.push_back(Pair("Superblock Timestamp",timestamp));
         entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
-        double height = cdbl(ReadCache("neuralsecurity","pending"),0);
-        entry.push_back(Pair("Pending Superblock Height",height));
+        entry.push_back(Pair("Pending Superblock Height",ReadCache("neuralsecurity","pending")));
         results.push_back(entry);
     }
     else if (sItem == "unusual")
@@ -2227,12 +2031,12 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("Contract Test",contract));
         // Convert to Binary
         std::string sBin = PackBinarySuperblock(contract);
-        entry.push_back(Pair("Contract Length",(double)contract.length()));
-        entry.push_back(Pair("Binary Length",(double)sBin.length()));
+        entry.push_back(Pair("Contract Length",(int)contract.length()));
+        entry.push_back(Pair("Binary Length",(int)sBin.length()));
         //entry.push_back(Pair("Binary",sBin.c_str()));
         // Hash of current superblock
         std::string sUnpacked = UnpackBinarySuperblock(sBin);
-        entry.push_back(Pair("Unpacked length",(double)sUnpacked.length()));
+        entry.push_back(Pair("Unpacked length",(int)sUnpacked.length()));
 
         entry.push_back(Pair("Unpacked",sUnpacked.c_str()));
         std::string neural_hash = GetQuorumHash(contract);
@@ -2625,15 +2429,11 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "backupwallet")
     {
-            std::string result = BackupGridcoinWallet();
-            entry.push_back(Pair("Backup Wallet Result", result));
-            results.push_back(entry);
-    }
-    else if (sItem == "restorewallet")
-    {
-            std::string result = RestoreGridcoinBackupWallet();
-            entry.push_back(Pair("Restore Wallet Result", result));
-            results.push_back(entry);
+        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+        entry.push_back(Pair("Backup wallet success", bWalletBackupResults));
+        entry.push_back(Pair("Backup config success", bConfigBackupResults));
+        results.push_back(entry);
     }
     else if (sItem == "resendwallettx")
     {
@@ -2710,8 +2510,9 @@ Value execute(const Array& params, bool fHelp)
     {
         entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
         entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
-        entry.push_back(Pair("execute askforoutstandingblock", "Asks nodes for outstanding blocks"));
+        entry.push_back(Pair("execute askforoutstandingblocks", "Asks nodes for outstanding blocks"));
         entry.push_back(Pair("execute backupwallet", "Backup wallet"));
+        entry.push_back(Pair("execute backupprivatekeys", "Backup private keys (Wallet must be fully unlocked"));
         entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
         entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
         entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
@@ -2753,7 +2554,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute restart", "Restarts wallet"));
         entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
         #endif
-        entry.push_back(Pair("execute restorewallet", "Restore wallet from backup made by 'backupwallet'"));
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
         entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
@@ -2783,6 +2583,18 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute sendblock <hash>", "Send a block to network"));
         entry.push_back(Pair("execute testnewcontract", "Test current neural contract"));
         entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
+        results.push_back(entry);
+    }
+    else if (sItem == "backupprivatekeys")
+    {
+        string sErrors;
+        string sTarget;
+        bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
+        if (!bBackupPrivateKeys)
+            entry.push_back(Pair("error", sErrors));
+        else
+            entry.push_back(Pair("location", sTarget));
+        entry.push_back(Pair("result", bBackupPrivateKeys));
         results.push_back(entry);
     }
     else
@@ -3271,7 +3083,7 @@ std::string GetProvableVotingWeightXML()
 	double dItemBloatThreshhold = 50;
 	// Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
 	sXML += "<PROVABLEBALANCE>";
-    BOOST_FOREACH(const COutput& out, vecOutputs)
+    for (auto const& out : vecOutputs)
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
@@ -3485,7 +3297,7 @@ Array GetJsonUnspentReport()
 	double dCurrentItemCount = 0;
 	double dItemBloatThreshhold = 50;
 	// Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
-    BOOST_FOREACH(const COutput& out, vecOutputs)
+    for (auto const& out : vecOutputs)
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
@@ -3700,6 +3512,12 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 
         if (boost::algorithm::starts_with(key_name, datatype))
         {
+            // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
+            // appended. Skip all keys containing those fields.
+            if(boost::iends_with(key_name, ";burnamount") ||
+               boost::iends_with(key_name, ";recipient"))
+               continue;
+
             std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
             std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
             std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
@@ -3707,6 +3525,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
             std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
             std::string sURL = ExtractXML(contract,"<URL>","</URL>");
             boost::to_lower(Title);
+
+            // TODO: Pass contract instead of title to PollExpired
             if (!PollExpired(Title) || IncludeExpired)
             {
                 if (QueryByTitle.empty() || QueryByTitle == Title)
@@ -3928,9 +3748,9 @@ Array GetJSONNeuralNetworkReport()
           int iNextNeuralSync = iLastNeuralSync + iRoot;
           int iLastQuorum = nBestHeight - iQuorumModifier;
           int iNextQuorum = iLastQuorum + 10;
-          entry.push_back(Pair("Last Sync", (double)iLastNeuralSync));
-          entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
-          entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
+          entry.push_back(Pair("Last Sync", iLastNeuralSync));
+          entry.push_back(Pair("Next Sync", iNextNeuralSync));
+          entry.push_back(Pair("Next Quorum", iNextQuorum));
       }
       results.push_back(entry);
       return results;
@@ -3981,9 +3801,9 @@ Array GetJSONCurrentNeuralNetworkReport()
           int iNextNeuralSync = iLastNeuralSync + iRoot;
           int iLastQuorum = nBestHeight - iQuorumModifier;
           int iNextQuorum = iLastQuorum + 10;
-          entry.push_back(Pair("Last Sync", (double)iLastNeuralSync));
-          entry.push_back(Pair("Next Sync", (double)iNextNeuralSync));
-          entry.push_back(Pair("Next Quorum", (double)iNextQuorum));
+          entry.push_back(Pair("Last Sync", iLastNeuralSync));
+          entry.push_back(Pair("Next Sync", iNextNeuralSync));
+          entry.push_back(Pair("Next Quorum", iNextQuorum));
       }
       results.push_back(entry);
       return results;
@@ -4417,7 +4237,7 @@ Value listitem(const Array& params, bool fHelp)
 		Object entry;
 	    entry.push_back(Pair("byte1",v[1]));
         entry.push_back(Pair("bytes",(double)v.size()));
-		for (int i = 0; i < v.size(); i++)
+        for (unsigned int i = 0; i < v.size(); i++)
 		{
 			entry.push_back(Pair("bytes",v[i]));
 		}
@@ -4856,7 +4676,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_version.begin(), c_version.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
-        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        for (auto const& item : list)
         {
             result.push_back(Pair(item.first, item.second/(double)blockcount));
         }
@@ -4868,7 +4688,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
         int limit=64;
-        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        for (auto const& item : list)
         {
             if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));
@@ -4881,7 +4701,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
         int limit=64;
-        BOOST_FOREACH(const PAIRTYPE(std::string, long)& item, list)
+        for (auto const& item : list)
         {
             if(!(limit--)) break;
             result.push_back(Pair(item.first, item.second/(double)blockcount));

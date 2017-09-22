@@ -45,7 +45,8 @@ extern uint256 muGlobalCheckpointHashRelayed;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-extern bool bNewUserWizardNotified;
+
+void ClearOrphanBlocks();
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -94,8 +95,10 @@ inline bool IsResearchAgeEnabled(int nHeight)
 // Do not put the code in the headers!
 inline uint32_t IsV8Enabled(int nHeight)
 {
+    // Start creating V8 blocks after these heights.
+    // In testnet the first V8 block was created on block height 320000.
     return fTestNet
-            ? nHeight > 312000
+            ? nHeight > 311999
             : nHeight > 1010000;
 }
 
@@ -166,10 +169,6 @@ extern int64_t nLastTallied;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
-extern int64_t nLastCalculatedMedianTimePast;
-extern double nLastBlockAge;
-extern int64_t nLastCalculatedMedianPeerCount;
-extern int nLastMedianPeerCount;
 extern int64_t nLastTalliedNeural;
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
@@ -221,7 +220,7 @@ struct globalStatusType
     std::string blocks;
     std::string difficulty;
     std::string netWeight;
-    std::string dporWeight;
+    std::string coinWeight;
     std::string magnitude;
     std::string project;
     std::string cpid;
@@ -252,6 +251,8 @@ bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
 bool WriteKey(std::string sKey, std::string sValue);
+double GetBlockDifficulty(unsigned int nBits);
+std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
@@ -264,7 +265,18 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
+bool OutOfSyncByAge();
+bool NeedASuperblock();
+std::string GetQuorumHash(const std::string& data);
+std::string ReadCache(std::string section, std::string key);
+double cdbl(std::string s, int place);
+std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
+std::string PackBinarySuperblock(std::string sBlock);
+std::string UnpackBinarySuperblock(std::string sBlock);
+bool IsSuperBlock(CBlockIndex* pIndex);
+bool LoadSuperblock(std::string data, int64_t nTime, int height);
 
+double GetPoSKernelPS();
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
@@ -286,6 +298,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 
 std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "");
+bool BackupConfigFile(const std::string& strDest);
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
@@ -699,7 +712,7 @@ public:
     int64_t GetValueOut() const
     {
         int64_t nValueOut = 0;
-        BOOST_FOREACH(const CTxOut& txout, vout)
+        for (auto const& txout : vout)
         {
             nValueOut += txout.nValue;
             if (!MoneyRange(txout.nValue) || !MoneyRange(nValueOut))
@@ -1119,7 +1132,7 @@ public:
     int64_t GetMaxTransactionTime() const
     {
         int64_t maxTransactionTime = 0;
-        BOOST_FOREACH(const CTransaction& tx, vtx)
+        for (auto const& tx : vtx)
             maxTransactionTime = std::max(maxTransactionTime, (int64_t)tx.nTime);
         return maxTransactionTime;
     }
@@ -1127,7 +1140,7 @@ public:
     uint256 BuildMerkleTree() const
     {
         vMerkleTree.clear();
-        BOOST_FOREACH(const CTransaction& tx, vtx)
+        for (auto const& tx : vtx)
             vMerkleTree.push_back(tx.GetHash());
         int j = 0;
         for (int nSize = vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
@@ -1163,7 +1176,7 @@ public:
     {
         if (nIndex == -1)
             return 0;
-        BOOST_FOREACH(const uint256& otherside, vMerkleBranch)
+        for (auto const& otherside : vMerkleBranch)
         {
             if (nIndex & 1)
                 hash = Hash(BEGIN(otherside), END(otherside), BEGIN(hash), END(hash));
@@ -1734,7 +1747,7 @@ public:
         // Retrace how far back it was in the sender's branch
         int nDistance = 0;
         int nStep = 1;
-        BOOST_FOREACH(const uint256& hash, vHave)
+        for (auto const& hash : vHave)
         {
             std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
@@ -1753,7 +1766,7 @@ public:
     CBlockIndex* GetBlockIndex()
     {
         // Find the first block the caller has in the main chain
-        BOOST_FOREACH(const uint256& hash, vHave)
+        for (auto const& hash : vHave)
         {
             std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
@@ -1769,7 +1782,7 @@ public:
     uint256 GetBlockHash()
     {
         // Find the first block the caller has in the main chain
-        BOOST_FOREACH(const uint256& hash, vHave)
+        for (auto const& hash : vHave)
         {
             std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())

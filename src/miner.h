@@ -14,7 +14,7 @@ struct CMinerStatus
     CCriticalSection lock;
     std::string ReasonNotStaking;
     std::string Message;
-    double WeightSum,WeightMin,WeightMax;
+    uint64_t WeightSum,WeightMin,WeightMax;
     double ValueSum;
     double CoinAgeSum;
     int Version;
@@ -33,6 +33,6 @@ struct CMinerStatus
 };
 
 extern CMinerStatus MinerStatus;
-extern volatile unsigned int nMinerSleep;
+extern unsigned int nMinerSleep;
 
 #endif // NOVACOIN_MINER_H

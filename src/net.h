@@ -8,7 +8,6 @@
 #include <deque>
 #include <array>
 #include <atomic>
-#include <boost/foreach.hpp>
 #include <openssl/rand.h>
 
 
@@ -159,7 +158,6 @@ public:
     double dPingTime;
     double dPingWait;
 	std::string addrLocal;
-	std::string sNeuralNetwork;
 	std::string NeuralHash;
 	int nTrust;
 	std::string sGRCAddress;
@@ -241,7 +239,6 @@ public:
 	//12-10-2014 CPID Support
 	std::string cpid;
 	std::string enccpid;
-	std::string sNeuralNetwork;
 	std::string NeuralHash;
 	std::string sGRCAddress;
 	int nTrust;
@@ -333,7 +330,6 @@ public:
 		nLastOrphan=0;
 		nOrphanCount=0;
 		nOrphanCountViolations=0;
-		sNeuralNetwork="";
 		NeuralHash = "";
 		sGRCAddress = "";
 		nTrust = 0;
@@ -381,7 +377,7 @@ public:
     unsigned int GetTotalRecvSize()
     {
         unsigned int total = 0;
-        BOOST_FOREACH(const CNetMessage &msg, vRecvMsg) 
+        for (auto const& msg : vRecvMsg)
             total += msg.vRecv.size() + 24;
         return total;
     }
@@ -393,7 +389,7 @@ public:
     void SetRecvVersion(int nVersionIn)
     {
         nRecvVersion = nVersionIn;
-        BOOST_FOREACH(CNetMessage &msg, vRecvMsg)
+        for (auto &msg : vRecvMsg)
             msg.SetVersion(nVersionIn);
     }
 
@@ -651,7 +647,7 @@ inline void RelayInventory(const CInv& inv)
     // Put on lists to offer to the other nodes
     {
         LOCK(cs_vNodes);
-        BOOST_FOREACH(CNode* pnode, vNodes)
+        for (auto const& pnode : vNodes)
             pnode->PushInventory(inv);
     }
 }

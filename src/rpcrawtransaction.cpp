@@ -29,42 +29,105 @@ extern Upgrader upgrader;
 extern Checker checker;
 #endif
 
-std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac)
+void GetTxStakeBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
 {
-    CTransaction tx;
-    uint256 hashBlock = 0;
-    std::string error_code = "";
+    assert(mtx.IsCoinStake() || mtx.IsCoinBase());
 
+    res["blockhash"]=mtx.hashBlock.GetHex();
 
-    if (!GetTransaction(hash, tx, hashBlock))
-    {
-        return "";
-    }
-    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
-    ssTx << tx;
-    string strHex = HexStr(ssTx.begin(), ssTx.end());
-    CBlockIndex* pindexPrev = NULL;
+    // Fetch BlockIndex for tx block
+    CBlockIndex* pindex = NULL;
     CBlock block;
-    map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
-    if (mi == mapBlockIndex.end())
     {
-            return ""; //not found
+        map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(mtx.hashBlock);
+        if (mi == mapBlockIndex.end())
+        {
+            res["error"] = "block_not_in_index";
+            return;
+        }
+        pindex = (*mi).second;
+        if (!block.ReadFromDisk(pindex))
+        {
+            res["error"] = "block_read_failed";
+            return;
+        }
     }
-    pindexPrev = (*mi).second;
-    if (!block.ReadFromDisk(pindexPrev))
-    {
-            return ""; //failed to read
-    }
-    out_blocktype = block.nVersion;
-    out_blocknumber = pindexPrev->nHeight;
-    //Deserialize
 
+    //Deserialize
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
 
-    out_rac = bb.rac;
-    return bb.projectname;
+    res["height"]=pindex->nHeight;
+    res["version"]=block.nVersion;
+
+    res["cpid"]=bb.cpid;
+    res["Magnitude"]=bb.Magnitude;
+    res["Interest"]=bb.InterestSubsidy;
+    res["BoincReward"]=bb.ResearchSubsidy;
+    res["Difficulty"]=GetBlockDifficulty(block.nBits);
+
+
+    if(fDebug)
+    {
+        res["xbbBoincPublicKey"]=bb.BoincPublicKey;
+
+        res["xbbOrganization"]=bb.Organization;
+        res["xbbClientVersion"]=bb.clientversion;
+
+        res["xbbNeuralHash"]=bb.NeuralHash;
+        res["xbbCurrentNeuralHash"]=bb.CurrentNeuralHash;
+        res["xbbNeuralContractSize"]=bb.superblock.length();
+    }
+    else
+    {
+        if(bb.superblock.length()>=20)
+        {
+            res["IsSuperBlock"]=true;
+        }
+    }
 
 }
+
+void GetTxNormalBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
+{
+    assert(!mtx.IsCoinStake() && !mtx.IsCoinBase());
+    res["blockhash"]=mtx.hashBlock.GetHex();
+    const std::string &hashBoinc = mtx.hashBoinc;
+    const std::string &msg = mtx.hashBoinc;
+
+    /* Possible formats:
+        * transaction <MESSAGE>
+        * a message <MT>
+          * cpid beacon
+          * vote
+          * poll
+        * unknown / text
+    */
+
+    res["bhLenght"]=msg.length();
+
+    std::string sMessageType = ExtractXML(msg,"<MT>","</MT>");
+    std::string sTrxMessage = ExtractXML(msg,"<MESSAGE>","</MESSAGE>");
+
+    if(sMessageType.length())
+    {
+        res["bhType"]="message";
+        res["msgType"]=sMessageType;
+    }
+    else if(sTrxMessage.length())
+    {
+        res["bhType"]="TrxWithNote";
+    }
+    else if(msg.length())
+    {
+        res["bhType"]="Unknown";
+    }
+    else
+    {
+        res["bhType"]="None";
+    }
+
+}
+
 
 Value downloadblocks(const Array& params, bool fHelp)
 {
@@ -214,7 +277,7 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out, bool fIncludeH
     out.push_back(Pair("type", GetTxnOutputType(type)));
 
     Array a;
-    BOOST_FOREACH(const CTxDestination& addr, addresses)
+    for (auto const& addr : addresses)
         a.push_back(CBitcoinAddress(addr).ToString());
     out.push_back(Pair("addresses", a));
 }
@@ -223,8 +286,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
 {
     entry.push_back(Pair("txid", tx.GetHash().GetHex()));
     entry.push_back(Pair("version", tx.nVersion));
-    entry.push_back(Pair("time", (int64_t)tx.nTime));
-    entry.push_back(Pair("locktime", (int64_t)tx.nLockTime));
+    entry.push_back(Pair("time", (int)tx.nTime));
+    entry.push_back(Pair("locktime", (int)tx.nLockTime));
     entry.push_back(Pair("hashboinc", tx.hashBoinc));
     /*
         if (tx.hashBoinc=="code")
@@ -235,7 +298,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
     */
 
     Array vin;
-    BOOST_FOREACH(const CTxIn& txin, tx.vin)
+    for (auto const& txin : tx.vin)
     {
         Object in;
 
@@ -246,13 +309,13 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
         {
             in.push_back(Pair("txid", txin.prevout.hash.GetHex()));
 
-            in.push_back(Pair("vout", (int64_t)txin.prevout.n));
+            in.push_back(Pair("vout", (int)txin.prevout.n));
             Object o;
             o.push_back(Pair("asm", txin.scriptSig.ToString()));
             o.push_back(Pair("hex", HexStr(txin.scriptSig.begin(), txin.scriptSig.end())));
             in.push_back(Pair("scriptSig", o));
         }
-        in.push_back(Pair("sequence", (int64_t)txin.nSequence));
+        in.push_back(Pair("sequence", (int)txin.nSequence));
         vin.push_back(in);
     }
     entry.push_back(Pair("vin", vin));
@@ -262,7 +325,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
         const CTxOut& txout = tx.vout[i];
         Object out;
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        out.push_back(Pair("n", (int64_t)i));
+        out.push_back(Pair("n", (int)i));
         Object o;
         ScriptPubKeyToJSON(txout.scriptPubKey, o, true);
         out.push_back(Pair("scriptPubKey", o));
@@ -280,8 +343,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
             if (pindex->IsInMainChain())
             {
                 entry.push_back(Pair("confirmations", 1 + nBestHeight - pindex->nHeight));
-                entry.push_back(Pair("time", (int64_t)pindex->nTime));
-                entry.push_back(Pair("blocktime", (int64_t)pindex->nTime));
+                entry.push_back(Pair("time", (int)pindex->nTime));
+                entry.push_back(Pair("blocktime", (int)pindex->nTime));
             }
             else
                 entry.push_back(Pair("confirmations", 0));
@@ -349,7 +412,7 @@ Value listunspent(const Array& params, bool fHelp)
     if (params.size() > 2)
     {
         Array inputs = params[2].get_array();
-        BOOST_FOREACH(Value& input, inputs)
+        for (auto const& input : inputs)
         {
             CBitcoinAddress address(input.get_str());
             if (!address.IsValid())
@@ -363,7 +426,7 @@ Value listunspent(const Array& params, bool fHelp)
     Array results;
     vector<COutput> vecOutputs;
     pwalletMain->AvailableCoins(vecOutputs, false,NULL,false);
-    BOOST_FOREACH(const COutput& out, vecOutputs)
+    for (auto const& out : vecOutputs)
     {
         if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
             continue;
@@ -443,7 +506,7 @@ Value createrawtransaction(const Array& params, bool fHelp)
 
     CTransaction rawTx;
 
-    BOOST_FOREACH(Value& input, inputs)
+    for (auto const& input : inputs)
     {
         const Object& o = input.get_obj();
 
@@ -466,7 +529,7 @@ Value createrawtransaction(const Array& params, bool fHelp)
     }
 
     set<CBitcoinAddress> setAddress;
-    BOOST_FOREACH(const Pair& s, sendTo)
+    for (auto const& s : sendTo)
     {
          if (s.name_ == "data") 
          {
@@ -604,7 +667,7 @@ Value signrawtransaction(const Array& params, bool fHelp)
         tempTx.FetchInputs(txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
-        BOOST_FOREACH(const CTxIn& txin, tempTx.vin)
+        for (auto const& txin : tempTx.vin)
         {
             const uint256& prevHash = txin.prevout.hash;
             if (mapPrevTx.count(prevHash) && mapPrevTx[prevHash].second.vout.size()>txin.prevout.n)
@@ -616,7 +679,7 @@ Value signrawtransaction(const Array& params, bool fHelp)
     if (params.size() > 1 && params[1].type() != null_type)
     {
         Array prevTxs = params[1].get_array();
-        BOOST_FOREACH(Value& p, prevTxs)
+        for (auto const& p : prevTxs)
         {
             if (p.type() != obj_type)
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "expected object with {\"txid'\",\"vout\",\"scriptPubKey\"}");
@@ -664,7 +727,7 @@ Value signrawtransaction(const Array& params, bool fHelp)
     {
         fGivenKeys = true;
         Array keys = params[2].get_array();
-        BOOST_FOREACH(Value k, keys)
+        for (auto const& k : keys)
         {
             CBitcoinSecret vchSecret;
             bool fGood = vchSecret.SetString(k.get_str());
@@ -720,7 +783,7 @@ Value signrawtransaction(const Array& params, bool fHelp)
             SignSignature(keystore, prevPubKey, mergedTx, i, nHashType);
 
         // ... and merge in other signatures:
-        BOOST_FOREACH(const CTransaction& txv, txVariants)
+        for (auto const& txv : txVariants)
         {
             txin.scriptSig = CombineSignatures(prevPubKey, mergedTx, i, txin.scriptSig, txv.vin[i].scriptSig);
         }

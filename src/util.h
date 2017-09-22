@@ -12,6 +12,8 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#else
+#include <windows.h> // For LARGE_INTEGER
 #endif
 
 #include <map>

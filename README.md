@@ -43,8 +43,9 @@ labeled 'stale'.
 Branching strategy
 ==================
 
-Gridcoin uses three branches to ensure stability without slowing down
-the pace of the daily development activities; development, staging and master.
+Gridcoin uses four branches to ensure stability without slowing down
+the pace of the daily development activities; development, staging, master
+and hotfix.
 
 The *development* branch is used for day-to-day activities. It is the most
 active branch and is where pull requests go by default. This branch may contain
@@ -61,6 +62,12 @@ Once the staging branch is stable and runs smoothly it is merged to *master*
 and a release is made available to the public. At this point the code is
 considered mature and ready for production.
 
+When a bug is found in a production version and an update is needed to be
+released quickly the changes go into the *hotfix* branch for test before
+being merged to *master* for release. This shows the intent of the change
+and allows for production updates without having to merge straight to
+master if the staging branch is busy.
+
 Community
 ============
 
@@ -73,3 +80,9 @@ Gridcoin is released under the terms of the MIT license. See [COPYING](COPYING) 
 information or see https://opensource.org/licenses/MIT.
 
 
+Build Status
+=============
+
+| Development                                                                                                                            | Staging                                                                                                                            | Master                                                                                                                            |
+|----------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| [![Build Status](https://travis-ci.org/gridcoin/Gridcoin-Research.svg?branch=development)](https://travis-ci.org/gridcoin/Gridcoin-Research) | [![Build Status](https://travis-ci.org/gridcoin/Gridcoin-Research.svg?branch=staging)](https://travis-ci.org/gridcoin/Gridcoin-Research) | [![Build Status](https://travis-ci.org/gridcoin/Gridcoin-Research.svg?branch=master)](https://travis-ci.org/gridcoin/Gridcoin-Research) |
