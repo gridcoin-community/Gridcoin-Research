@@ -1505,7 +1505,7 @@ std::string GetNeuralVersion()
 {
     std::string neural_v = "0";
     int64_t neural_id = NN::IsNeuralNet();
-    neural_v = ToString(MINOR_VERSION) + "." + ToString(neural_id);
+    neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
     return neural_v;
 }
 
