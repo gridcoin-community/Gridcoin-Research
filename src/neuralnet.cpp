@@ -12,6 +12,7 @@
 #include <map>
 #include <array>
 #include <cstdio>
+#include <string>
 
 // Old VB based NeuralNet.
 extern std::string qtGetNeuralHash(std::string data);
@@ -36,7 +37,7 @@ namespace NN
     std::string GetNeuralVersion()
     {
         int neural_id = static_cast<int>(IsNeural());
-        return = std::to_string(MINOR_VERSION) + "." + std::to_string(neural_id());
+        return std::to_string(CLIENT_VERSION_MINOR) + "." + std::to_string(neural_id);
     }
 
     std::string GetNeuralHash()
@@ -62,7 +63,7 @@ namespace NN
 
     std::string ExecuteDotNetStringFunction(std::string function, std::string data)
     {
-        qtExecuteDotNetStringFunction(std::string function, std::string data);
+        qtExecuteDotNetStringFunction(function, data);
     }
 
     void ExecuteVBCode()

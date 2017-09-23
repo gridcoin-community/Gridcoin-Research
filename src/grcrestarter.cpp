@@ -8,15 +8,17 @@ int RestartClient();
 int RebootClient();
 void CheckForUpgrade();
 int DownloadBlocks();
+int ReindexWallet();
+int CreateRestorePoint();
 // While transitioning to dotnet the NeuralNet implementation has been split
 // into 3 implementations; Win32 with Qt, Win32 without Qt and the rest.
 // After the transition both Win32 implementations can be removed.
 namespace Restarter
 {
     // Win32 with Qt enabled.
-    double PushGridcoinDiagnosticData(std::string)
+    double PushGridcoinDiagnosticData(std::string data)
     {
-        return qtPushGridcoinDiagnosticData(std::string)
+        return qtPushGridcoinDiagnosticData(data);
     }
 
     int RestartGridcoin()
@@ -26,32 +28,32 @@ namespace Restarter
 
     int RebootGridcoin()
     {
-        return int RebootClient();
+        return RebootClient();
     }
 
     void CheckUpgrade()
     {
-        return void CheckForUpgrade();
+        return CheckForUpgrade();
     }
 
     int DownloadGridcoinBlocks()
     {
-        return int DownloadBlocks();
+        return DownloadBlocks();
     }
 
     int ReindexGridcoinWallet()
     {
-        return int ReindexWallet();
+        return ReindexWallet();
     }
 
     int CreateGRidcoinRestorePoint()
     {
-        return int CreateRestorePoint();
+        return CreateRestorePoint();
     }
 
     void UpdateConfirm(std::string txid)
     {
-        qtUpdateConfirm(std::string txid);
+        qtUpdateConfirm(txid);
     }
 
 }
