@@ -4480,7 +4480,7 @@ void GridcoinServices()
     if (TimerMain("send_beacon",180))
     {
         std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-        if (tBeaconPublicKey.empty())
+        if (tBeaconPublicKey.empty() && !GlobalCPUMiningCPID.cpid.empty())
         {
             std::string sOutPubKey = "";
             std::string sOutPrivKey = "";
