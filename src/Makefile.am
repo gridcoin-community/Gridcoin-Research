@@ -6,7 +6,7 @@ DIST_SUBDIRS =
 
 AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
-AM_CPPFLAGS = $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB -DZIP_STATIC -DNN_STATIC_LIB
+AM_CPPFLAGS = $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB
 EXTRA_LIBRARIES =
 
 GRIDCOIN_CONFIG_INCLUDES=-I$(builddir)/config
@@ -82,7 +82,6 @@ GRIDCOIN_CORE_H = \
 	txdb-leveldb.h \
 	ui_interface.h \
 	uint256.h \
-	upgrader.h \
 	util.h \
 	version.h \
 	walletdb.h \
@@ -121,7 +120,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	scrypt.cpp \
 	sync.cpp \
 	txdb-leveldb.cpp \
-	upgrader.cpp \
 	util.cpp \
 	version.cpp \
 	wallet.cpp \

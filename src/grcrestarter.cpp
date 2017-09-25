@@ -46,7 +46,7 @@ namespace Restarter
         return ReindexWallet();
     }
 
-    int CreateGRidcoinRestorePoint()
+    int CreateGridcoinRestorePoint()
     {
         return CreateRestorePoint();
     }

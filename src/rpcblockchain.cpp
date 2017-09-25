@@ -2331,12 +2331,12 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Reindex Chain",r));
             results.push_back(entry);
     }
-    else if (sItem == "downloadblocks")
+    /*else if (sItem == "downloadblocks")
     {
             int r=Restarter::DownloadGridcoinBlocks();
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
-    }
+    }*/
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
@@ -2442,7 +2442,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
         entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
-        entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
+        //entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));

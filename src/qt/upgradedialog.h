@@ -3,7 +3,7 @@
 
 #include <QDialog>
 #ifndef Q_MOC_RUN
-#include "../upgrader.h"
+// #include "../upgrader.h"
 #endif
 
 namespace Ui {

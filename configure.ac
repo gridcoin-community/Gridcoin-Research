@@ -863,7 +863,6 @@ if test x$use_pkgconfig = xyes; then
     [
       PKG_CHECK_MODULES([SSL], [libssl],, [AC_MSG_ERROR(openssl  not found.)])
       PKG_CHECK_MODULES([CRYPTO], [libcrypto],,[AC_MSG_ERROR(libcrypto  not found.)])
-      PKG_CHECK_MODULES([LIBZIP], [libzip],,[AC_MSG_ERROR(libzip  not found.)])
       PKG_CHECK_MODULES([CURL], [libcurl],,[AC_MSG_ERROR(libcurl  not found.)])
       BITCOIN_QT_CHECK([PKG_CHECK_MODULES([QR], [libqrencode], [have_qrencode=yes], [have_qrencode=no])])
     ]
@@ -874,9 +873,6 @@ else
 
   AC_CHECK_HEADER([openssl/ssl.h],, AC_MSG_ERROR(libssl headers missing),)
   AC_CHECK_LIB([ssl], [main],SSL_LIBS=-lssl, AC_MSG_ERROR(libssl missing))
-
-  AC_CHECK_HEADER([zipconf.h],,AC_MSG_ERROR(libzip headers missing))
-  AC_CHECK_LIB([zip], [main],LIBZIP_LIBS=-lzip, AC_MSG_ERROR(libzip missing))
 
   AC_CHECK_HEADER([curl/curl.h],, AC_MSG_ERROR(libcurl headers missing),)
   AC_CHECK_LIB([curl], [main],CURL_LIBS=-lcurl, AC_MSG_ERROR(libcurl missing))

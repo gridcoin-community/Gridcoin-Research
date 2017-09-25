@@ -83,8 +83,9 @@ QT_FORMS_UI = \
   qt/forms/sendcoinsdialog.ui \
   qt/forms/transactiondescdialog.ui \
   qt/forms/askpassphrasedialog.ui \
-  qt/forms/sendcoinsentry.ui \
-  qt/forms/upgradedialog.ui
+  qt/forms/sendcoinsentry.ui
+  
+#qt/forms/upgradedialog.ui
 
 
 QT_MOC_CPP = \
@@ -120,9 +121,10 @@ QT_MOC_CPP = \
   qt/moc_transactionfilterproxy.cpp \
   qt/moc_transactiontablemodel.cpp \
   qt/moc_transactionview.cpp \
-  qt/moc_upgradedialog.cpp \
   qt/moc_votingdialog.cpp \
   qt/moc_walletmodel.cpp
+
+#qt/moc_upgradedialog.cpp
 
 GRIDOIN_MM = \
   qt/macdockiconhandler.mm \
@@ -175,9 +177,10 @@ GRIDCOINRESEARCH_QT_H = \
   qt/transactionrecord.h \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
-  qt/upgradedialog.h \
   qt/votingdialog.h \
   qt/walletmodel.h
+
+#qt/upgradedialog.h
 
 GRIDCOINRESEARCH_QT_CPP = \
   qt/aboutdialog.cpp \
@@ -213,9 +216,11 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/transactionrecord.cpp \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
-  qt/upgradedialog.cpp \
   qt/votingdialog.cpp \
   qt/walletmodel.cpp
+
+#qt/upgradedialog.cpp
+
 
 RES_ICONS = \
   qt/res/icons/add.png \
