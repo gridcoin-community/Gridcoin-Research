@@ -12,6 +12,8 @@
 #include <ActiveQt/qaxobject.h>
 #endif
 
+// exit code used to trigger a restart of the wallet
+#define EXIT_CODE_REBOOT 42
 
 class TransactionTableModel;
 class ClientModel;
@@ -106,6 +108,7 @@ private:
 	QAction *rebuildAction;
 	QAction *upgradeAction;
 	QAction *downloadAction;
+    QAction *rebootAction;
 
 	QAction *configAction;
 	QAction *leaderboardAction;
@@ -224,6 +227,8 @@ private slots:
     void diagnosticsClicked();
 	
 	void newUserWizardClicked();
+
+    void rebootClicked();
 
 
 #ifndef Q_OS_MAC

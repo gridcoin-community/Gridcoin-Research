@@ -29,7 +29,6 @@ extern boost::thread_group threadGroup;
 StructCPID GetStructCPID();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
-extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
@@ -161,7 +160,7 @@ void InitializeBoincProjects()
 }
 
 
-void Shutdown(void* parg)
+void Shutdown(void* parg,boost::shared_ptr<ThreadHandler> threads)
 {
     static CCriticalSection cs_Shutdown;
     static bool fTaken;
@@ -192,7 +191,7 @@ void Shutdown(void* parg)
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
-        NewThread(ExitTimeout, NULL);
+        threads->createThread(ExitTimeout, NULL, "Exit Timeout Thread");
         MilliSleep(50);
         printf("Gridcoin exited\n\n");
         fExit = true;
@@ -446,13 +445,13 @@ bool InitSanityCheck(void)
 
 
 
-void ThreadAppInit2(void* parg)
+void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
     bGridcoinGUILoaded=false;
     printf("Initializing GUI...");
-    AppInit2();
+    AppInit2(th);
     printf("GUI Loaded...");
     bGridcoinGUILoaded = true;
 }
@@ -464,7 +463,7 @@ void ThreadAppInit2(void* parg)
 /** Initialize Gridcoin.
  *  @pre Parameters should be parsed and config file should be read.
  */
-bool AppInit2()
+bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
 {
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER
@@ -1108,12 +1107,13 @@ bool AppInit2()
 
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
-    if (!NewThread(StartNode, NULL))
+    if (!threads->createThread(StartNode, NULL, "Start Thread"))
+
         InitError(_("Error: could not start node"));
     BusyWaitForTally();
 
     if (fServer)
-        NewThread(ThreadRPCServer, NULL);
+        threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");
 
     // ********************************************************* Step 12: finished
 
