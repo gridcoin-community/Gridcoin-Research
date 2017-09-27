@@ -11,8 +11,8 @@
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
 
-extern std::string GetListOf(std::string datatype);
-extern double PreviousBlockAge();
+std::string GetListOf(std::string datatype);
+double PreviousBlockAge();
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
@@ -41,23 +41,25 @@ void DiagnosticsDialog::GetData() {
     double lastblockage = PreviousBlockAge();
     syncData = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
         + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER>"
-        + "<PRIMARYCPID>" + KeyValue("cpid") + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE>" + "</QUORUMDATA>";
+        + "<PRIMARYCPID>" + GetArgument("cpid", "") + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE>" + "</QUORUMDATA>";
     testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
 }
 
 int DiagnosticsDialog::VarifyBoincPath() {
     boost::filesystem::path boincPath = (boost::filesystem::path) GetBoincDataDir();
     if(boincPath.empty())
-        boincPath = KeyValue("boincdatadir");
+        boincPath = (boost::filesystem::path) GetArgument("boincdatadir", "");
 
-    if(boost::filesystem::is_directory(boincPath))
+    boincPath = boincPath / "client_state.xml";
+
+    if(boost::filesystem::exists(boincPath))
         return 1;
     else
         return 0;
 }
 
 int DiagnosticsDialog::FindCPID() {
-    std::string cpid = KeyValue("cpid");
+    std::string cpid = GetArgument("cpid", "");
 
     if(cpid.length() != 0)
         return 1;
@@ -70,7 +72,7 @@ int DiagnosticsDialog::VarifyIsCPIDValid() {
     if(!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
     else
-        clientStatePath = KeyValue("boincdatadir");
+        clientStatePath = (boost::filesystem::path) GetArgument("boincdatadir", "") / "client_state.xml";
 
     if(clientStatePath.empty())
         return 0;
@@ -90,7 +92,7 @@ int DiagnosticsDialog::VarifyIsCPIDValid() {
         cpid.erase(pos, cpid.length());
     }
 
-    if(KeyValue("cpid") == cpid)
+    if(GetArgument("cpid", "") == cpid)
         return 1;
     else
         return 0;
@@ -102,7 +104,8 @@ int DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork() {
 
     if(beacons.length() < 100)
         return -1;
-    std::string cpid = KeyValue("cpid");
+
+    std::string cpid = GetArgument("cpid", "");
     if(cpid != "" && beacons.find(cpid) != std::string::npos)
         return 1;
     else
@@ -127,7 +130,7 @@ int DiagnosticsDialog::VarifyCPIDHasRAC() {
     if(!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
     else
-        clientStatePath = KeyValue("boincdatadir");
+        clientStatePath = (boost::filesystem::path) GetArgument("boincdatadir", "") / "client_state.xml";
 
     if(clientStatePath.empty())
         return 0;
@@ -162,7 +165,7 @@ int DiagnosticsDialog::VarifyCPIDHasRAC() {
 
 int DiagnosticsDialog::VarifyAddNode() {
     long int peersLength = boost::filesystem::file_size(GetDataDir(true) / "peers.dat");
-    std::string addNode = DiagnosticsDialog::KeyValue("addnode");
+    std::string addNode = GetArgument("addnode", "");
 
     if(addNode.length() == 0 && peersLength > 100)
         return 2;
@@ -201,26 +204,6 @@ void DiagnosticsDialog::VarifyTCPPort() {
 
 }
 
-std::string DiagnosticsDialog::KeyValue(std::string key) {
-    boost::filesystem::path confFile = GetDataDir(true) / "gridcoinresearch.conf";
-    std::vector<std::string> confKeys;
-    std::ifstream configStream;
-
-    configStream.open(confFile.string());
-    for(std::string line; std::getline(configStream, line);) {
-        boost::algorithm::split(confKeys, line, boost::is_any_of("="));
-        if(boost::to_lower_copy(confKeys.at(0)) == boost::to_lower_copy(key)) {
-            std::string value = confKeys.at(1);
-            if(value.back() == '\r')
-                value.pop_back();
-            return value;
-        }
-    }
-
-    configStream.close();
-    return "";
-}
-
 void DiagnosticsDialog::on_testBtn_clicked() {
     int result = 0;
     DiagnosticsDialog::GetData();
@@ -237,7 +220,7 @@ void DiagnosticsDialog::on_testBtn_clicked() {
     this->repaint();
     result = DiagnosticsDialog::FindCPID();
     if(result == 1)
-        ui->findCPIDReaultLbl->setText(QString::fromStdString("Passed CPID: " + DiagnosticsDialog::KeyValue("cpid")));
+        ui->findCPIDReaultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("cpid", "")));
     else
         ui->findCPIDReaultLbl->setText("Failed (Is CPID in gridcoinresearch.conf?)");
     //cpid valid
