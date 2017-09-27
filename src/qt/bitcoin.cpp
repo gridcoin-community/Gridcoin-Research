@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
     // use exit codes to trigger restart of the wallet
     if(currentExitCode == EXIT_CODE_REBOOT)
     {
-        sleep(180);
+        printf("Restarting wallet...\r\n");
         QStringList args = QApplication::arguments();
         args.removeFirst();
         QProcess::startDetached(QApplication::applicationFilePath(), args);

@@ -1617,11 +1617,23 @@ int ThreadHandler::numThreads()
     return threadGroup.size();
 }
 
-void ThreadHandler::removeByName(const std::string tName)
+bool ThreadHandler::threadExists(const string tname)
 {
-    threadGroup.remove_thread(threadMap[tName]);
-    threadMap[tName]->join();
-    threadMap.erase(tName);
+    if(threadMap.count(tname) > 0)
+        return true;
+    else
+        return false;
+}
+
+void ThreadHandler::interruptAll(){
+    threadGroup.interrupt_all();
+}
+
+void ThreadHandler::removeByName(const std::string tname)
+{
+    threadGroup.remove_thread(threadMap[tname]);
+    threadMap[tname]->join();
+    threadMap.erase(tname);
 }
 
 void ThreadHandler::removeAll()

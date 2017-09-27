@@ -630,8 +630,10 @@ public:
     bool createThread(void(*pfn)(boost::shared_ptr<ThreadHandler>), boost::shared_ptr<ThreadHandler> parg, const std::string tname);
     bool createThread(void(*pfn)(void*), void* parg, const std::string tname);
     int numThreads();
+    bool threadExists(const std::string tname);
+    void interruptAll();
     void removeAll();
-    void removeByName(const std::string tName);
+    void removeByName(const std::string tname);
 private:
     boost::thread_group threadGroup;
     std::map<std::string,boost::thread*> threadMap;
