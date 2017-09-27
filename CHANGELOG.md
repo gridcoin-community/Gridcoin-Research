@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix for loss of PoR rewards due to reorganize, #578 (@tomasbrod).
  - Fix upgrader compile error on Linux, #541 (@theMarix).
  - Fix duplicate poll entries, #539 (@denravonska).
+ - Importing private keys will no longer require a restart for the addresses
+   to show up, #634 (@Foggyx420).
 
 ### Changed
  - Code cleanup (@Foggyx420, @tomasbrod, @denravonska).
