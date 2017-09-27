@@ -2206,7 +2206,10 @@ bool BindListenPort(const CService &addrBind, string& strError)
 #ifndef WIN32
     // Allow binding if the port is still in TIME_WAIT state after
     // the program was closed and restarted.  Not an issue on windows.
-    setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int));
+    if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int)) < 0)
+        if (fDebug10) printf("setsockopt(SO_REUSEADDR) failed");
+    if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEPORT, (void*)&nOne, sizeof(int)) < 0)
+        if (fDebug10) printf("setsockopt(SO_SO_REUSEPORT) failed");
 #endif
 
 
