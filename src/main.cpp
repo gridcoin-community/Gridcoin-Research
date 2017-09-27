@@ -9014,7 +9014,7 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     time (&biTime);
     blTime = localtime(&biTime);
     char boTime[200];
-    strftime(boTime, sizeof(boTime), "%FT%H-%M-%S", blTime);
+    strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
     return suffix.empty()
         ? basename + "-" + std::string(boTime)
         : basename + "-" + std::string(boTime) + "-" + suffix;

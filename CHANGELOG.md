@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix duplicate poll entries, #539 (@denravonska).
  - Importing private keys will no longer require a restart for the addresses
    to show up, #634 (@Foggyx420).
+ - Fix invalid backup filenames on Windows, #569 (@denravonska).
 
 ### Changed
  - Code cleanup (@Foggyx420, @tomasbrod, @denravonska).
