@@ -302,6 +302,7 @@ bool BackupConfigFile(const std::string& strDest);
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
+bool IsResearcher(const std::string& cpid);
 
 /** Position on disk for a particular transaction. */
 class CDiskTxPos
