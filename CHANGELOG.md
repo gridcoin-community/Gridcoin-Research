@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.6.2.0] ??-??-2017
+## [3.6.2.0] 09-28-2017
 ### Added
  - Add "backupprivatekeys" RPC command, #593 (@Foggyx420).
  - Add more transaction details to the UI, #573 (@tomasbrod).

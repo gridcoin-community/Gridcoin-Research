@@ -336,7 +336,7 @@ std::string    msNeuralResponse;
 std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
-int nGrandfather = 860000;
+int nGrandfather = 1034700;
 int nNewIndex = 271625;
 int nNewIndex2 = 364500;
 
