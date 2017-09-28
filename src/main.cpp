@@ -8651,6 +8651,11 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
+    // Pre-v8 the magnitude unit was always 0 which caused users to always
+    // stake their newbie block as 1 GRC regardless of what they were owed.
+    // V8 corrects this so the user is properly paid.
+    if (IsV8Enabled(pindexLast->nHeight))
+        dMagnitudeUnit = GRCMagnitudeUnit(nTime);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
     if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
     {
@@ -8699,7 +8704,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
     dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
     if (dAccrualAge < 0) dAccrualAge=0;
-    dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+    if (!IsV8Enabled(pindexLast->nHeight))
+        dMagnitudeUnit = GRCMagnitudeUnit(nTime);
 
     int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
     // Double check researcher lifetime paid
