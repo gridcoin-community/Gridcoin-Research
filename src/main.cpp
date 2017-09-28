@@ -5492,7 +5492,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     if (cpid.empty() || cpid=="INVESTOR")
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
     
-    if (fDebug10) printf(" {GLC %s} ",sCalledFrom.c_str());
+    if (fDebug10) printf("GetLifetimeCPID.BEGIN: %s %s",sCalledFrom.c_str(),cpid.c_str());
 
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
@@ -5502,6 +5502,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
         const uint256& uHash = *it;
+        if (fDebug10) printf("GetLifetimeCPID: trying %s\n",uHash.GetHex().c_str());
 
         // Ensure that we have this block.
         if (mapBlockIndex.count(uHash) == 0)
@@ -5515,10 +5516,14 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
             continue;
 
         // Block located and verified.
+        if (fDebug10)
+            printf("GetLifetimeCPID: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f\n",
+            uHash.GetHex().c_str(),pblockindex->nHeight,(int)stCPID.LastBlock,pblockindex->nResearchSubsidy);
         if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
         {
             stCPID.LastBlock = pblockindex->nHeight;
             stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+            if (fDebug10) printf("GetLifetimeCPID: using it\n");
         }
         stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
         stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
@@ -5534,6 +5539,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     }
 
     // Save updated CPID data holder.
+    if (fDebug10) printf("GetLifetimeCPID.END: %s set {%s %d}\n",cpid.c_str(),stCPID.BlockHash.c_str(),(int)stCPID.LastBlock);
     mvResearchAge[cpid] = stCPID;
     return stCPID;
 }
