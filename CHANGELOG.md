@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
  - Add "backupprivatekeys" RPC command, #593 (@Foggyx420).
  - Add more transaction details to the UI, #573 (@tomasbrod).
+ - Add Additional logging to diagnose PoR reward loss (@tomasbrod)
 
 ### Fixed
  - Reduce startup time by 15 seconds, #626 (@tomasbrod, @Foggyx420).
