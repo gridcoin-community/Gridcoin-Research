@@ -8651,12 +8651,18 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
+    if(fDebug && !bVerifyingBlock) printf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)\n",cpid.c_str(),pindexLast->GetBlockHash().GetHex().c_str(),pindexLast->nHeight,pindexBest->nHeight);
+    if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
+    if(fDebug && !bVerifyingBlock) printf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f\n",pHistorical->GetBlockHash().GetHex().c_str(),pHistorical->nHeight,!!pHistorical->pnext,pHistorical->nMagnitude);
     if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
     {
         //No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
+        if(fDebug && !bVerifyingBlock) printf("CRE: No prior block exists...\n");
         if (!AreBinarySuperblocksEnabled(pindexLast->nHeight))
         {
+                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, Binary SB not enabled, "
+                    "dCurrentMagnitude= %.1f\n", dCurrentMagnitude);
                 return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
         }
         else
@@ -8670,14 +8676,18 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
                 if ((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit) > 500)
                 {
-                    printf("Newbie special stake too high, reward=500GRC");
+                    printf("ComputeResearchAccrual: Newbie special stake too high, reward=500GRC");
                     return (500*COIN);
                 }
-                if (fDebug3) printf("\r\n Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
+                if (fDebug3) printf("\r\n ComputeResearchAccrual: Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
+                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, "
+                    "dNewbieAccrualAge= %f dCurrentMagnitude= %.1f dMagnitudeUnit= %f Accrual= %f\n",
+                    dNewbieAccrualAge, dCurrentMagnitude, dMagnitudeUnit, iAccrual/(double)COIN);
                 return iAccrual;
             }
             else
             {
+                if(fDebug && !bVerifyingBlock) printf("CRE: Using 0.01 age bootstrap\n");
                 return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
             }
         }
@@ -8686,6 +8696,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
     double dAvgMag = stCPID.ResearchAverageMagnitude;
+    if(fDebug && !bVerifyingBlock) printf("CRE: iRABlockSpan= %d  ResearchAverageMagnitude= %.1f\n",iRABlockSpan,dAvgMag);
     // ResearchAge: If the accrual age is > 20 days, add in the midpoint lifetime average magnitude to ensure the overall avg magnitude accurate:
     if (iRABlockSpan > (int)(BLOCKS_PER_DAY*20))
     {
@@ -8696,19 +8707,26 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
     }
     if (AvgMagnitude > 20000) AvgMagnitude = 20000;
+    if(fDebug && !bVerifyingBlock) printf("CRE: AvgMagnitude= %.3f\n",AvgMagnitude);
 
     dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
     if (dAccrualAge < 0) dAccrualAge=0;
+    if(fDebug && !bVerifyingBlock) printf("CRE: dAccrualAge= %.8f\n",dAccrualAge);
     dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+    if(fDebug && !bVerifyingBlock) printf("CRE: new.dMagnitudeUnit= %f\n",dMagnitudeUnit);
 
     int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
+    if(fDebug && !bVerifyingBlock) printf("CRE: Accrual= %f\n",Accrual/(double)COIN);
     // Double check researcher lifetime paid
     double days = (nTime - stCPID.LowLockTime) / 86400.0;
     double PPD = stCPID.ResearchSubsidy/(days+.01);
     double ReferencePPD = dMagnitudeUnit*dAvgMag;
+    if(fDebug && !bVerifyingBlock) printf("CRE: RSA$ "
+        "LowLockTime= %u days= %f stCPID.ResearchSubsidy= %f PPD= %f ReferencePPD= %f\n",
+        stCPID.LowLockTime,days,   stCPID.ResearchSubsidy,    PPD,    ReferencePPD );
     if ((PPD > ReferencePPD*5))
     {
-            printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
+            printf("ComputeResearchAccrual: Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
                    PPD,ReferencePPD,cpid.c_str(),dAvgMag,days, dMagnitudeUnit);
             Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
@@ -8719,6 +8737,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     if ((fDebug && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
         operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,
         (double)pHistorical->nHeight,   dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
+    if(fDebug && !bVerifyingBlock) printf("CRE.End: Accrual= %f\n",Accrual/(double)COIN);
     return Accrual;
 }
 
@@ -8739,10 +8758,14 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
         uint256 hash(stCPID.BlockHash);
         if (mapBlockIndex.count(hash) == 0) return pindexGenesisBlock;
         CBlockIndex* pblockindex = mapBlockIndex[hash];
+        if(!pblockindex->pnext)
+            printf("GetHistoricalMagnitude: WARNING index {%s %d} for cpid %s, "
+            "has no next pointer (not n main chain)\n",pblockindex->GetBlockHash().GetHex().c_str(),
+            pblockindex->nHeight,cpid.c_str());
         if (pblockindex->nHeight < nMinIndex)
         {
             // In this case, the last staked block was Found, but it is over 6 months old....
-            printf("Last staked block found at height %f, but cannot verify magnitude older than 6 months! \r\n",(double)pblockindex->nHeight);
+            printf("GetHistoricalMagnitude: Last staked block found at height %d, but cannot verify magnitude older than 6 months (min %d)!\n",pblockindex->nHeight,nMinIndex);
             return pindexGenesisBlock;
         }
 
