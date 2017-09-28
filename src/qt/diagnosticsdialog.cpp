@@ -29,22 +29,6 @@ DiagnosticsDialog::~DiagnosticsDialog()
     delete ui;
 }
 
-void DiagnosticsDialog::GetData() {
-    std::string cpiddata = GetListOf("beacon");
-    std::string sWhitelist = GetListOf("project");
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = mvApplicationCache["superblock;block_number"];
-    printf("Pushing diagnostic data...");
-    double lastblockage = PreviousBlockAge();
-    syncData = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER>"
-        + "<PRIMARYCPID>" + GetArgument("cpid", "") + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE>" + "</QUORUMDATA>";
-    testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-}
-
 int DiagnosticsDialog::VarifyBoincPath() {
     boost::filesystem::path boincPath = (boost::filesystem::path) GetBoincDataDir();
     if(boincPath.empty())
@@ -99,7 +83,7 @@ int DiagnosticsDialog::VarifyIsCPIDValid() {
 }
 
 int DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork() {
-    std::string beacons = ExtractXML(syncData, "<CPIDDATA>", "</CPIDDATA>");
+    std::string beacons = GetListOf("beacon");
     boost::algorithm::to_lower(beacons);
 
     if(beacons.length() < 100)
@@ -113,7 +97,7 @@ int DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork() {
 }
 
 int DiagnosticsDialog::VarifyWalletIsSynced() {
-    std::string walletAgeString = ExtractXML(syncData, "<LASTBLOCKAGE>", "</LASTBLOCKAGE>");
+    std::string walletAgeString = ToString(PreviousBlockAge());
     long int walletAge = std::stoi(walletAgeString,nullptr,10);
 
     if(walletAgeString.length() == 0)
@@ -206,7 +190,6 @@ void DiagnosticsDialog::VarifyTCPPort() {
 
 void DiagnosticsDialog::on_testBtn_clicked() {
     int result = 0;
-    DiagnosticsDialog::GetData();
     //boinc path
     ui->boincPathResultLbl->setText("Testing...");
     this->repaint();
