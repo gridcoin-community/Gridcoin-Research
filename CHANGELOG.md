@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    (@MagixInTheAir).
  - Change poll min search length from 2 to 1, #595 (@MagixInTheAir).
  - Return the results of "backupwallet" RPC command, #593 (@Foggyx420).
+ - Changing the community links #654 (@grctest)
 
 ## [3.6.1.0] 09-11-2017
 ### Fixed

@@ -1521,8 +1521,7 @@ void BitcoinGUI::bxClicked()
 
 void BitcoinGUI::chatClicked()
 {
-    //QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin"));
-    QDesktopServices::openUrl(QUrl("https://kiwiirc.com/client/irc.freenode.net:6697/#gridcoin-help"));
+    QDesktopServices::openUrl(QUrl("https://gridcoin.us/contact.htm#GridcoinWallet"));
 }
 
 void BitcoinGUI::boincClicked()
@@ -1532,12 +1531,12 @@ void BitcoinGUI::boincClicked()
 
 void BitcoinGUI::websiteClicked()
 {
-    QDesktopServices::openUrl(QUrl("https://www.gridcoin.us"));
+    QDesktopServices::openUrl(QUrl("https://www.gridcoin.us#GridcoinWallet"));
 }
 
 void BitcoinGUI::exchangeClicked()
 {
-    QDesktopServices::openUrl(QUrl("https://c-cex.com/?p=grc-btc"));
+    QDesktopServices::openUrl(QUrl("https://gridcoin.us/exchange.htm#GridcoinWallet"));
 }
 
 void BitcoinGUI::gotoOverviewPage()
