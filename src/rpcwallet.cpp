@@ -1753,16 +1753,17 @@ Value gettransaction(const Array& params, bool fHelp)
 
 Value backupwallet(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || params.size() >= 1)
         throw runtime_error(
-            "backupwallet <destination>\n"
-            "Safely copies wallet.dat to destination, which can be a directory or a path with filename.");
+            "backupwallet\n"
+            "Backup your wallet and config files.");
 
-    string strDest = params[0].get_str();
-    if (!BackupWallet(*pwalletMain, strDest))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Wallet backup failed!");
-
-    return Value::null;
+    bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+    bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+    Object ret;
+    ret.push_back(Pair("Backup wallet success", bWalletBackupResults));
+    ret.push_back(Pair("Backup config success", bConfigBackupResults));
+    return ret;
 }
 
 
