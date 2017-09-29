@@ -255,6 +255,11 @@ double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
+// Validate researcher rewards.
+bool CheckProofOfResearch(
+    const CBlockIndex* pindexPrev, //previous block in chain index
+    const CBlock &block);    //block to check
+
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 
