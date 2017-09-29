@@ -27,7 +27,7 @@ extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
 bool ComputeNeuralNetworkSupermajorityHashes();
-void BusyWaitForTally();
+void TallyNetworkAverages();
 extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
@@ -1105,11 +1105,12 @@ bool AppInit2()
     }
 
 
-    uiInterface.InitMessage(_("Loading Network Averages..."));
+    uiInterface.InitMessage(_("Loading Network Averages..."));    
     if (fDebug3) printf("Loading network averages");
+    TallyNetworkAverages();
+
     if (!NewThread(StartNode, NULL))
-        InitError(_("Error: could not start node"));
-    BusyWaitForTally();
+        InitError(_("Error: could not start node"));    
 
     if (fServer)
         NewThread(ThreadRPCServer, NULL);

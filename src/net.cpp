@@ -27,8 +27,6 @@
 #endif
 
 using namespace std;
-bool TallyNetworkAverages(bool ColdBoot);
-extern void DoTallyResearchAverages(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
@@ -1570,80 +1568,6 @@ void DumpAddresses()
 
 }
 
-void ThreadTallyResearchAverages(void* parg)
-{
-    // Make this thread recognisable
-    RenameThread("grc-tallyresearchaverages");
-
-begin:
-    try
-    {
-        DoTallyResearchAverages(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadTallyNetworkAverages()");
-    }
-    catch(...)
-    {
-        printf("Error in ThreadTallyResearchAverages... Recovering ");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-
-}
-
-void BusyWaitForTally()
-{
-    if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
-    bTallyFinished=false;
-    bDoTally=true;
-    int iTimeout = 0;
-
-    int64_t deadline = GetAdjustedTime() + 15000;
-    while(!bTallyFinished)
-    {
-        MilliSleep(10);
-        if(GetAdjustedTime() >= deadline)
-            break;
-        iTimeout+=1;
-    }
-}
-
-
-void DoTallyResearchAverages(void* parg)
-{
-    vnThreadsRunning[THREAD_TALLY]++;
-    printf("\r\nStarting dedicated Tally thread...\r\n");
-
-    while (!fShutdown)
-    {
-        MilliSleep(100);
-        if (bDoTally)
-        {
-            bTallyFinished = false;
-            bDoTally=false;
-            printf("\r\n[DoTallyRA_START] ");
-            try
-            {
-                TallyNetworkAverages(false);
-            }
-            catch (std::exception& e)
-            {
-                PrintException(&e, "ThreadTallyNetworkAverages()");
-            }
-            catch(...)
-            {
-                printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
-            }
-            printf(" [DoTallyRA_END] \r\n");
-            bTallyFinished = true;
-        }
-    }
-    vnThreadsRunning[THREAD_TALLY]--;
-}
-
 void ThreadDumpAddress2(void* parg)
 {
     vnThreadsRunning[THREAD_DUMPADDRESS]++;
@@ -2308,10 +2232,6 @@ void StartNode(void* parg)
     // Dump network addresses
     if (!NewThread(ThreadDumpAddress, NULL))
         printf("Error; NewThread(ThreadDumpAddress) failed\n");
-
-    // Tally network averages
-    if (!NewThread(ThreadTallyResearchAverages, NULL))
-        printf("Error; NewThread(ThreadTally) failed\n");
     
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
@@ -2352,7 +2272,6 @@ bool StopNode()
     if (vnThreadsRunning[THREAD_DNSSEED] > 0)          printf("ThreadDNSAddressSeed still running\n");
     if (vnThreadsRunning[THREAD_ADDEDCONNECTIONS] > 0) printf("ThreadOpenAddedConnections still running\n");
     if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0)      printf("ThreadDumpAddresses still running\n");
-    if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
     if (vnThreadsRunning[THREAD_STAKE_MINER] > 0)      printf("ThreadStakeMiner still running\n");
     while (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0 || vnThreadsRunning[THREAD_RPCHANDLER] > 0)
         MilliSleep(20);
