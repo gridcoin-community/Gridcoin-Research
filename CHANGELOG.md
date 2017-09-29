@@ -4,10 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.6.2.0] ??-??-2017
+## [3.6.2.0] 09-28-2017
 ### Added
  - Add "backupprivatekeys" RPC command, #593 (@Foggyx420).
  - Add more transaction details to the UI, #573 (@tomasbrod).
+ - Add Additional logging to diagnose PoR reward loss (@tomasbrod)
 
 ### Fixed
  - Reduce startup time by 15 seconds, #626 (@tomasbrod, @Foggyx420).
@@ -38,6 +39,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    (@MagixInTheAir).
  - Change poll min search length from 2 to 1, #595 (@MagixInTheAir).
  - Return the results of "backupwallet" RPC command, #593 (@Foggyx420).
+ - Changing the community links #654 (@grctest)
 
 ## [3.6.1.0] 09-11-2017
 ### Fixed
