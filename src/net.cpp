@@ -1596,21 +1596,19 @@ begin:
 
 void BusyWaitForTally()
 {
-    if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
-    {
-        return;
-    }
     if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
     bTallyFinished=false;
     bDoTally=true;
     int iTimeout = 0;
+
+    int64_t deadline = GetAdjustedTime() + 15000;
     while(!bTallyFinished)
     {
-        MilliSleep(1);
+        MilliSleep(10);
+        if(GetAdjustedTime() >= deadline)
+            break;
         iTimeout+=1;
-        if (iTimeout > 15000) break;
     }
-    nLastTallyBusyWait = GetAdjustedTime();
 }
 
 
