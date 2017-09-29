@@ -9,6 +9,7 @@
 #include "walletdb.h" // for BackupWallet
 #include "base58.h"
 #include "util.h"
+#include "backup.h"
 
 #include <QSet>
 #include <QTimer>
