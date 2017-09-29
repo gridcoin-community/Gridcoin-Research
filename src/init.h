@@ -13,7 +13,7 @@ void StartShutdown();
 
 bool ShutdownRequested();
 
-void Shutdown(void* parg, boost::shared_ptr<ThreadHandler> threads);
+void Shutdown(void* parg);
 bool AppInit2(boost::shared_ptr<ThreadHandler> threads);
 void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th);
 

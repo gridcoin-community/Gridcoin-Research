@@ -5,7 +5,6 @@
 
 #include <QApplication>
 #include <QTimer>
-#include <boost/thread.hpp>
 
 #include "bitcoingui.h"
 #include "clientmodel.h"
@@ -39,8 +38,6 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
-
-boost::thread_group threadGroup;
 
 //Global reference to globalcom
 
@@ -324,7 +321,7 @@ int main(int argc, char *argv[])
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
 			printf("\r\nbitcoin.cpp:main calling Shutdown...\r\n");
-            Shutdown(NULL,threads);
+            Shutdown(NULL);
         }
 
     }
