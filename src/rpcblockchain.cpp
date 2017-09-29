@@ -12,6 +12,7 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
+#include "backup.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
@@ -23,8 +24,6 @@
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
-bool BackupWallet(const CWallet& wallet, const std::string& strDest);
-bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);

@@ -10,6 +10,7 @@
 #include "init.h"
 #include "base58.h"
 #include "util.h"
+#include "backup.h"
 
 using namespace json_spirit;
 using namespace std;
