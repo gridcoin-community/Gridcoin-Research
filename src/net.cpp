@@ -26,8 +26,6 @@
 #endif
 
 using namespace std;
-bool TallyNetworkAverages(bool ColdBoot);
-extern void DoTallyResearchAverages(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
@@ -1573,84 +1571,6 @@ void DumpAddresses()
 
 }
 
-void ThreadTallyResearchAverages(void* parg)
-{
-    // Make this thread recognisable
-    RenameThread("grc-tallyresearchaverages");
-
-begin:
-    try
-    {
-        DoTallyResearchAverages(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadTallyNetworkAverages()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        printf("ThreadTallyResearchAverages exited (interrupt)\r\n");
-        return;
-    }
-    catch(...)
-    {
-        printf("Error in ThreadTallyResearchAverages... Recovering \r\n");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-    printf("ThreadTallyResearchAverages exited \r\n");
-}
-
-
-void BusyWaitForTally()
-{
-    if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
-    bTallyFinished=false;
-    bDoTally=true;
-    int iTimeout = 0;
-
-    int64_t deadline = GetAdjustedTime() + 15000;
-    while(!bTallyFinished)
-    {
-        MilliSleep(10);
-        if(GetAdjustedTime() >= deadline)
-            break;
-        iTimeout+=1;
-    }
-}
-
-
-void DoTallyResearchAverages(void* parg)
-{
-    printf("\r\nStarting dedicated Tally thread...\r\n");
-
-    while (!fShutdown)
-    {
-        MilliSleep(100);
-        if (bDoTally)
-        {
-            bTallyFinished = false;
-            bDoTally=false;
-            printf("\r\n[DoTallyRA_START] ");
-            try
-            {
-                TallyNetworkAverages(false);
-            }
-            catch (std::exception& e)
-            {
-                PrintException(&e, "ThreadTallyNetworkAverages()");
-            }
-            catch(...)
-            {
-                printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
-            }
-            printf(" [DoTallyRA_END] \r\n");
-            bTallyFinished = true;
-        }
-    }
-}
-
 void ThreadDumpAddress2(void* parg)
 {
     while (!fShutdown)
@@ -2320,10 +2240,6 @@ void StartNode(void* parg)
     // Dump network addresses
     if (!netThreads->createThread(ThreadDumpAddress,NULL,"ThreadDumpAddress"))
         printf("Error: createThread(ThreadDumpAddress) failed\r\n");
-
-    // Tally network averages
-    if (!NewThread(ThreadTallyResearchAverages, NULL))
-        printf("Error; NewThread(ThreadTally) failed\n");
     
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))

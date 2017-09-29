@@ -42,7 +42,6 @@ extern Array MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
-bool TallyResearchAverages(bool Forcefully);
 int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
@@ -2042,13 +2041,6 @@ Value execute(const Array& params, bool fHelp)
     {
             AsyncNeuralRequest("quorum","gridcoin",10);
             entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
-            results.push_back(entry);
-    }
-    else if (sItem == "tally")
-    {
-            bNetAveragesLoaded = false;
-            TallyResearchAverages(true);
-            entry.push_back(Pair("Tally Network Averages",1));
             results.push_back(entry);
     }
     else if (sItem == "encrypt")
