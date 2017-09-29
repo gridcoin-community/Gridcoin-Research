@@ -2147,6 +2147,63 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
     return true;
 }
 
+bool CheckProofOfResearch(
+        const CBlockIndex* pindexPrev, //previous block in chain index
+        const CBlock &block)     //block to check
+{    
+    if(block.vtx.size() == 0 ||
+       !block.IsProofOfStake() ||
+       pindexPrev->nHeight <= nGrandfather ||
+       !IsResearchAgeEnabled(pindexPrev->nHeight))
+        return true;
+
+    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+    if(!IsResearcher(bb.cpid))
+        return true;
+
+    //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
+    double OUT_POR = 0;
+    double OUT_INTEREST = 0;
+    double dAccrualAge = 0;
+    double dMagnitudeUnit = 0;
+    double dAvgMagnitude = 0;
+    int64_t nCoinAge = 0;
+    int64_t nFees = 0;
+
+    // 6-4-2017 - Verify researchers stored block magnitude
+    double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, block.nTime, false);
+    if (bb.Magnitude > 0 &&
+        bb.Magnitude > (dNeuralNetworkMagnitude*1.25) &&
+        (fTestNet || (!fTestNet && pindexPrev->nHeight > 947000)))
+    {
+        return error("CheckProofOfResearch: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                     bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str());
+    }
+
+    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, block.nTime,
+                                                        pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+
+    // TODO: Remove this tally?
+    if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
+    {
+        BusyWaitForTally();
+        StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+        nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
+                                                    pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+
+        if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
+        {
+            if (fDebug3) printf("CheckProofOfResearch: Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                bb.InterestSubsidy, bb.ResearchSubsidy, CoinToDouble(nCalculatedResearch), OUT_POR, OUT_INTEREST, bb.cpid.c_str());
+
+            return block.DoS(10,error("CheckProofOfResearch: Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                bb.InterestSubsidy, bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch), OUT_POR, OUT_INTEREST, bb.cpid.c_str()));
+        }
+    }
+
+    return true;
+}
+
 // Return maximum amount of blocks that other nodes claim to have
 int GetNumBlocksOfPeers()
 {
@@ -3818,104 +3875,68 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
     if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
     {
-		    // 6-4-2017 - Verify researchers stored block magnitude
-		    double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
-			if (bb.Magnitude > 0 && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) && (fTestNet || (!fTestNet && height1 > 947000)))
-			{
-				return error("CheckBlock[ResearchAge] : Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
-					(double)bb.Magnitude,(double)dNeuralNetworkMagnitude,bb.cpid.c_str());
-			}
-		    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                pindexBest, sCaller + "_checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-
-			
-            if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
-            {
-                BusyWaitForTally();
-                StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckBlock()");
-                nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                    pindexBest, sCaller + "_checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-
-                if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
-                {
-
-                            if (fDebug3) printf("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
+        double blockVersion = BlockVersion(bb.clientversion);
+        double cvn = ClientVersionNew();
+        if (fDebug10) printf("BV %f, CV %f   ",blockVersion,cvn);
+        // Enforce Beacon Age
+        if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
+            return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+    }
     
-                            return DoS(10,error("CheckBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch),(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                            // Reserved for future use.
-                }
-            }
-    
+    //Orphan Flood Attack
+    if (height1 > nGrandfather)
+    {
+        double bv = BlockVersion(bb.clientversion);
+        double cvn = ClientVersionNew();
+        if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
+        // Enforce Beacon Age
+        if (bv < 3588 && height1 > 860500 && !fTestNet)
+            return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
     }
 
-
-    //ProofOfResearch
-    if (vtx.size() > 0)
+    if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
     {
-    //Orphan Flood Attack
-            if (height1 > nGrandfather)
-            {
-                    double bv = BlockVersion(bb.clientversion);
-                    double cvn = ClientVersionNew();
-                    if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
-                    // if (bv+10 < cvn) return error("ConnectBlock[]: Old client version after mandatory upgrade - block rejected\r\n");
-                    // Enforce Beacon Age
-                    if (bv < 3588 && height1 > 860500 && !fTestNet) return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-                    //if (bv < 3580 && fTestNet) return DoS(25, error("CheckBlock[]:  Old testnet client spamming new blocks after mandatory upgrade \r\n"));
-            }
+        if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))
+            return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 
-            if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
-            {
-                if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))   return DoS(1,error("CheckBlock::PoR Project Name invalid"));
-                if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
-                {
-                        std::string sOut2 = "";
-                        LoadAdminMessages(false,sOut2);
-                        if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
-                        {
-                            return error("Bad CPID or Block Signature : height %f, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s",(double)height1,
-                                bb.cpid.c_str(), bb.cpidv2.c_str(),
-                                bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
-                        }
-                }
-
-            }
-
-            // Gridcoin: check proof-of-stake block signature
-            if (IsProofOfStake() && height1 > nGrandfather)
-            {
-                //Mint limiter checks 1-20-2015
-                double PORDiff = GetBlockDifficulty(nBits);
-                double mint1 = CoinToDouble(Mint);
-                double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
-                double limiter = MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime());
-                if (fDebug10) printf("CheckBlock[]: TotalSubsidy %f, Height %f, %s, %f, Res %f, Interest %f, hb: %s \r\n",
-                        (double)total_subsidy,(double)height1, bb.cpid.c_str(),
-                        (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                if (total_subsidy < limiter)
-                {
-                    if (fDebug3) printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",bb.cpid.c_str(),
-                        (double)mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                    //1-21-2015 - Prevent Hackers from spamming the network with small blocks
-                    return error("****CheckBlock[]: Total Mint too Small %f < %f Research %f Interest %f BOINC %s",
-                            total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-                }
-
-                if (fCheckSig && !CheckBlockSignature())
-                    return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
-            }
-
-
-        }
-        else
+        if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
         {
-            return false;
+            std::string sOut2;
+            LoadAdminMessages(false,sOut2);
+            if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+            {
+                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s", height1,
+                             bb.cpid.c_str(), bb.cpidv2.c_str(),
+                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
+            }
         }
+    }
+
+    // Gridcoin: check proof-of-stake block signature
+    if (IsProofOfStake() && height1 > nGrandfather)
+    {
+        //Mint limiter checks 1-20-2015
+        double PORDiff = GetBlockDifficulty(nBits);
+        double mint1 = CoinToDouble(Mint);
+        double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
+        double limiter = MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime());
+        if (fDebug10) printf("CheckBlock[]: TotalSubsidy %f, Height %i, %s, %f, Res %f, Interest %f, hb: %s \r\n",
+                             total_subsidy, height1, bb.cpid.c_str(),
+                             mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
+        if (total_subsidy < limiter)
+        {
+            if (fDebug3) printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",bb.cpid.c_str(),
+                                mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
+            //1-21-2015 - Prevent Hackers from spamming the network with small blocks
+            return error("****CheckBlock[]: Total Mint too Small %f < %f Research %f Interest %f BOINC %s",
+                         total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
+        }
+
+        if (fCheckSig && !CheckBlockSignature())
+            return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
+    }
 
     // End of Proof Of Research
-
     if (IsProofOfStake())
     {
         // Coinbase output should be empty if proof-of-stake block
@@ -3934,7 +3955,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
                 return DoS(100, error("CheckBlock[] : more than one coinstake"));
             }
         }
-
     }
 
     // Check transactions
@@ -4062,6 +4082,12 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         }
     }
 
+    // Verify proof of research.
+    if(!CheckProofOfResearch(pindexPrev, *this))
+    {
+        return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+    }
+    
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
     {
