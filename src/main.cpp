@@ -147,11 +147,9 @@ CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
 unsigned int WHITELISTED_PROJECTS = 0;
-int64_t nLastTallied = 0;
 int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
-int64_t nLastTallyBusyWait = 0;
 
 int64_t nLastTalliedNeural = 0;
 int64_t nLastLoadAdminMessages = 0;
@@ -3251,7 +3249,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                         if (fDebug3) printf("ConnectBlock(): Superblock Loaded %d \r\n", pindex->nHeight);
                                         /*  Reserved for future use:
                                             bNetAveragesLoaded=false;
-                                            nLastTallied = 0;
                                             BsyWaitForTally();
                                         */
                                         if (!fColdBoot)
@@ -5494,20 +5491,10 @@ bool TallyResearchAverages(bool Forcefully)
         return true;
     }
 
-    //if (Forcefully) nLastTallied = 0;
-    int timespan = fTestNet ? 2 : 6;
-    if (IsLockTimeWithinMinutes(nLastTallied,timespan))
-    {
-        bNetAveragesLoaded=true;
-        return true;
-    }
-
     //8-27-2016
-     int64_t nStart = GetTimeMillis();
-
+    int64_t nStart = GetTimeMillis();
 
     if (fDebug) printf("Tallying Research Averages (begin) ");
-    nLastTallied = GetAdjustedTime();
     bNetAveragesLoaded = false;
     bool superblockloaded = false;
     double NetworkPayments = 0;
@@ -5538,7 +5525,7 @@ bool TallyResearchAverages(bool Forcefully)
                         if (fDebug3) printf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
                         nStart=GetTimeMillis();
 
-   
+
                         // Headless critical section ()
         try
         {
@@ -5600,17 +5587,15 @@ bool TallyResearchAverages(bool Forcefully)
         {
             printf("Bad Alloc while tallying network averages. [1]\r\n");
             bNetAveragesLoaded=true;
-            nLastTallied = 0;
         }
         catch(...)
         {
             printf("Error while tallying network averages. [1]\r\n");
             bNetAveragesLoaded=true;
-            nLastTallied = 0;
         }
 
         if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
-                        
+
         bNetAveragesLoaded=true;
         return false;
 }

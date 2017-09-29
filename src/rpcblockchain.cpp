@@ -2047,7 +2047,6 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "tally")
     {
             bNetAveragesLoaded = false;
-            nLastTallied = 0;
             TallyResearchAverages(true);
             entry.push_back(Pair("Tally Network Averages",1));
             results.push_back(entry);
