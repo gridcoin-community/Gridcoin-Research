@@ -339,7 +339,6 @@ int main(int argc, char *argv[])
 
     // delete thread handler
     threads->removeAll();
-    printf("Amount of threads left: %d",threads->numThreads());
     threads.reset();
 
     // use exit codes to trigger restart of the wallet

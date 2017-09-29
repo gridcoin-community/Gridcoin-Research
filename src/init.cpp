@@ -184,13 +184,14 @@ void Shutdown(void* parg,boost::shared_ptr<ThreadHandler> threads)
 
         fShutdown = true;
         nTransactionsUpdated++;
-        //        CTxDB().Close();
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
+        // close transaction database to prevent lock issue on restart
+        CTxDB().Close();
         threads->createThread(ExitTimeout, NULL, "Exit Timeout Thread");
         MilliSleep(50);
         printf("Gridcoin exited\n\n");
