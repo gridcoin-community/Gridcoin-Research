@@ -2011,7 +2011,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
             results.push_back(entry);
         #endif
-        LoadSuperblock(contract,GetAdjustedTime(),280000);
         entry.push_back(Pair("Contract Test",contract));
         // Convert to Binary
         std::string sBin = PackBinarySuperblock(contract);
