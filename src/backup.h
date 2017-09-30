@@ -4,6 +4,8 @@
 // Backup related functions
 #include <string>
 
+class CWallet;
+
 std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "");
 bool BackupConfigFile(const std::string& strDest);
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);

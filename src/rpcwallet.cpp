@@ -1753,7 +1753,7 @@ Value gettransaction(const Array& params, bool fHelp)
 
 Value backupwallet(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() >= 1)
+    if (fHelp || params.size() > 0)
         throw runtime_error(
             "backupwallet\n"
             "Backup your wallet and config files.");
