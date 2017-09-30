@@ -21,7 +21,7 @@ boost::filesystem::path GetBackupPath()
     return GetArg("-backupdir", defaultDir.string());
 }
 
-std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
+std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "")
 {
     time_t biTime;
     struct tm * blTime;
@@ -112,7 +112,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
         sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
         return false;
     }
-    filesystem::path PrivateKeysTarget = GetDataDir() / "walletbackups" / GetBackupFilename("keys.dat");
+    filesystem::path PrivateKeysTarget = GetBackupFilename("keys.dat");
     filesystem::create_directories(PrivateKeysTarget.parent_path());
     sTarget = PrivateKeysTarget.string();
     std::ofstream myBackup;
