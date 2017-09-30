@@ -3,7 +3,6 @@
 
 #include "walletdb.h"
 #include "wallet.h"
-#include "backup.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>
@@ -12,7 +11,15 @@
 #include <fstream>
 #include <string>
 
+boost::filesystem::path GetBackupPath();
+
 using namespace boost;
+
+boost::filesystem::path GetBackupPath()
+{
+    filesystem::path defaultDir = GetDataDir() / "walletbackups";
+    return GetArg("-backupdir", defaultDir.string());
+}
 
 std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
 {
@@ -27,7 +34,7 @@ std::string GetBackupFilename(const std::string& basename, const std::string& su
     sBackupFilename = basename + "-" + std::string(boTime);
     if (!suffix.empty())
         sBackupFilename = sBackupFilename + "-" + suffix;
-    rpath = GetDataDir() / "walletbackups" / sBackupFilename;
+    rpath = GetBackupPath() / sBackupFilename;
     return rpath.string();
 }
 
