@@ -287,8 +287,8 @@ void VotingTableModel::resetData(bool history)
             item->question_ = QString::fromStdString(sQuestion);
             item->answers_ = QString::fromStdString(sAnswers);
             item->arrayOfAnswers_ = QString::fromStdString(sArrayOfAnswers);
-            item->totalParticipants_ = QString::fromStdString(sTotalParticipants);
-            item->totalShares_ = QString::fromStdString(sTotalShares);
+            item->totalParticipants_ = std::stoul(sTotalParticipants);
+            item->totalShares_ = std::stoul(sTotalShares);
             item->url_ = QString::fromStdString(sUrl);
             item->bestAnswer_ = QString::fromStdString(sBestAnswer);
             items.push_back(item);

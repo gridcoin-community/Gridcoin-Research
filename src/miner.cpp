@@ -35,6 +35,7 @@ bool LessVerbose(int iMax1000);
 double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+std::string qtGetNeuralContract(std::string data);
 
 // Some explaining would be appreciated
 class COrphan
@@ -694,7 +695,7 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     /* We have consensus, Add our neural contract */
     bb.superblock = PackBinarySuperblock(sb_contract);
-    printf("AddNeuralContractOrVote: Added our Superblock (size %lu)\n",bb.superblock.length());
+    printf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")\n",bb.superblock.length());
 
     return 0;
 }
