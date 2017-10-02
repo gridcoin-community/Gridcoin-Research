@@ -1876,14 +1876,13 @@ QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
 
 void BitcoinGUI::updateStakingIcon()
 {
-
     uint64_t nWeight, nLastInterval;
     std::string ReasonNotStaking;
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         nWeight = MinerStatus.ValueSum;
         nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
-    ReasonNotStaking = MinerStatus.ReasonNotStaking;
+        ReasonNotStaking = MinerStatus.ReasonNotStaking;
     }
 
     uint64_t nNetworkWeight = GetPoSKernelPS();
@@ -1894,62 +1893,15 @@ void BitcoinGUI::updateStakingIcon()
     {
         if (fDebug10) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
-    /*
-        //Halford - 1-9-2015 - Calculate time for POR Block:
-        unsigned int nPOREstimate = (unsigned int)GetPOREstimatedTime(GlobalCPUMiningCPID.RSAWeight);
-        QString PORText = "Estimated time to earn POR Reward: " + GetEstimatedTime(nPOREstimate);
-        if (nPOREstimate == 0) PORText="";
-    */
-    labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")
-        .arg(nWeight).arg(nNetworkWeight).arg(text));
-    /*
-        msMiningErrors5 = "Interest: " + FromQString(text);
-        if (nPOREstimate > 0 && !(msPrimaryCPID=="INVESTOR" || msMiningCPID.empty())) msMiningErrors6 = "POR: " + FromQString(GetEstimatedTime(nPOREstimate));
-    */
+                                     .arg(nWeight).arg(nNetworkWeight).arg(text));
+
     }
     else
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-    /*
-        if (pwalletMain && pwalletMain->IsLocked())
-        {
-            labelStakingIcon->setToolTip(tr("Not staking because wallet is locked"));
-            //msMiningErrors6="Wallet Locked";
-        }
-        else if (vNodes.empty())
-        {
-            labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
-        }
-        else if (IsInitialBlockDownload())
-        {
-            labelStakingIcon->setToolTip(tr("Not staking because wallet is syncing"));
-            msMiningErrors6 = "Syncing";
-        }
-        else if (!nLastCoinStakeSearchInterval && !nWeight)
-        {
-            labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins and stake weight is too low."));
-            msMiningErrors6 = "No Mature Coins; Stakeweight too low";
-        }
-        else if (!nWeight)
-        {
-            labelStakingIcon->setToolTip(tr("Not staking because you don't have mature coins"));
-            msMiningErrors6 = "No mature coins";
-        }
-        else if (!nLastCoinStakeSearchInterval)
-        {
-            labelStakingIcon->setToolTip(tr("Searching for mature coins... Please wait"));
-            msMiningErrors6 = "Searching for coins";
-        }
-        else
-        {
-            labelStakingIcon->setToolTip(tr("Not staking"));
-            msMiningErrors6 = "Not staking yet";
-        }
-    */
-
-    //Part of this string wont be translated :(
-    labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
+        //Part of this string wont be translated :(
+        labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
     }
 }
