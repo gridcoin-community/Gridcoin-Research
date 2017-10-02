@@ -133,9 +133,6 @@ extern int UpgradeClient();
 extern void CheckForUpgrade();
 
 bool IsConfigFileEmpty();
-
-extern void ExecuteCode();
-
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
 extern int ReindexWallet();
@@ -1748,22 +1745,6 @@ void ReinstantiateGlobalcom()
 
     bGlobalcomInitialized = true;
 #endif
-}
-
-
-
-void ExecuteCode()
-{
-    if (!bGlobalcomInitialized) return;
-    std::string q = "\"";
-    std::string sCode = "For x = 1 to 5:sOut=sOut + " + q + "COUNTING: " + q + "+ trim(x):Next x:MsgBox(" + q + "Hello: "
-        + q + " + sOut,MsgBoxStyle.Critical," + q + "Message Title" + q + ")";
-
-    QString qsCode = QString::fromUtf8(sCode.c_str());
-    #ifdef WIN32
-        globalcom->dynamicCall("ExecuteCode(Qstring)", qsCode);
-    #endif
-
 }
 
 void BitcoinGUI::timerfire()

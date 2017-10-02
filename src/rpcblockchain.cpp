@@ -2402,15 +2402,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
     }
-    else if (sItem == "executecode")
-    {
-            printf("Executing .net code\r\n");
-            #if defined(WIN32) && defined(QT_GUI)
-        
-            ExecuteCode();
-            #endif
-
-    }
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
