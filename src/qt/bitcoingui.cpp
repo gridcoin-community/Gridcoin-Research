@@ -136,6 +136,7 @@ bool IsConfigFileEmpty();
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
 extern int ReindexWallet();
+void ReinstantiateGlobalcom();
 
 #ifdef WIN32
 QAxObject *globalcom = NULL;
@@ -1213,7 +1214,7 @@ bool CreateNewConfigFile(std::string boinc_email)
     boost::filesystem::path path = GetDataDir() / filename;
     std::ofstream myConfig;
     myConfig.open (path.string().c_str());
-    row = "email=" + boinc_email + "\r\n";
+    std::string row = "email=" + boinc_email + "\r\n";
     myConfig << row;
     row = "addnode=node.gridcoin.us \r\n";
     myConfig << row;
@@ -1752,7 +1753,7 @@ void BitcoinGUI::timerfire()
     try
     {
         if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-        {
+        {            
             ReinstantiateGlobalcom();
             nRegVersion=9999;
 
