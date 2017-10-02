@@ -296,27 +296,24 @@ int CreateRestorePoint()
 
 int DownloadBlocks()
 {
-            printf("executing grcrestarter downloadblocks");
-            if (!bGlobalcomInitialized) return 0;
+    printf("Download blocks.");
 
-            QString sFilename = "GRCRestarter.exe";
-            QString sArgument = "";
-            QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-            QProcess p;
+    // Instantiate globalcom if not created.
+    if (!bGlobalcomInitialized)
+        ReinstantiateGlobalcom();
 
-            #ifdef WIN32
-                if (!globalcom)
-                {
-                    globalcom = new QAxObject("BoincStake.Utilization");
-                }
-                std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+    // If it still isn't created then there's nothing we can do.
+    if (!bGlobalcomInitialized)
+        return 0;
 
-                globalcom->dynamicCall("DownloadBlocks()");
-                StartShutdown();
-            #endif
+#ifdef WIN32
+    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
+    globalcom->dynamicCall("DownloadBlocks()");
+    StartShutdown();
+#endif
 
-            return 1;
+    return 1;
 }
 
 
@@ -1732,32 +1729,24 @@ std::string getMacAddress()
 void ReinstantiateGlobalcom()
 {
 #ifdef WIN32
+    if (bGlobalcomInitialized)
+        return;
 
-            if (bGlobalcomInitialized) return;
+    // Note, on Windows, if the performance counters are corrupted, rebuild them
+    // by going to an elevated command prompt and issue the command: lodctr /r
+    // (to rebuild the performance counters in the registry)
+    printf("Instantiating globalcom for Windows %f",(double)0);
+    try
+    {
+        globalcom = new QAxObject("BoincStake.Utilization");
+        printf("Instantiated globalcom for Windows");
+    }
+    catch(...)
+    {
+        printf("Failed to instantiate globalcom.");
+    }
 
-            //Note, on Windows, if the performance counters are corrupted, rebuild them by going to an elevated command prompt and
-            //issue the command: lodctr /r (to rebuild the performance counters in the registry)
-            std::string os = GetArg("-os", "windows");
-            if (os == "linux" || os == "mac")
-            {
-                printf("Instantiating globalcom for Linux");
-                globalcom = new QAxObject("Boinc.LinuxUtilization");
-            }
-            else
-            {
-                    printf("Instantiating globalcom for Windows %f",(double)0);
-                    try
-                    {
-                        globalcom = new QAxObject("BoincStake.Utilization");
-                    }
-                    catch(...)
-                    {
-                        printf("Failed to instantiate globalcom.");
-                    }
-                    printf("Instantiated globalcom for Windows %f",(double)1);
-
-            }
-            bGlobalcomInitialized = true;
+    bGlobalcomInitialized = true;
 #endif
 }
 
