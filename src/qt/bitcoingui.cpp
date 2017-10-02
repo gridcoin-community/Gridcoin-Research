@@ -99,8 +99,6 @@ extern CWallet* pwalletMain;
 int ReindexWallet();
 extern int RebootClient();
 extern QString ToQstring(std::string s);
-extern void qtUpdateConfirm(std::string txid);
-extern void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
@@ -334,39 +332,6 @@ int RestartClient()
 
     StartShutdown();
     return 1;
-}
-
-void qtUpdateConfirm(std::string txid)
-{
-    if (!bGlobalcomInitialized)
-        return;
-
-	#if defined(WIN32) && defined(QT_GUI)
-		QString qsTxid = ToQstring(txid);
-		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
-	#endif
-}
-
-
-void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid)
-{
-	if (!bGlobalcomInitialized) return;
-
-	#if defined(WIN32) && defined(QT_GUI)
-	try
-	{
-		int result = 0;
-	 	std::string Confirm = RoundToString(dAmt,4) + "<COL>" + sFrom + "<COL>" + sTo + "<COL>" + txid;
-		QString qsConfirm = ToQstring(Confirm);
-		result = globalcom->dynamicCall("InsertConfirm(Qstring)",qsConfirm).toInt();
-		printf("Inserting confirm %s %f",Confirm.c_str(),(double)result);
-
-	}
-	catch(...)
-	{
-
-	}
-	#endif
 }
 
 double qtPushGridcoinDiagnosticData(std::string data)
