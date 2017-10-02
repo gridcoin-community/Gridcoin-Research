@@ -269,58 +269,32 @@ BitcoinGUI::~BitcoinGUI()
 
 int ReindexWallet()
 {
-			if (!bGlobalcomInitialized) return 0;
-			QString sFilename = "GRCRestarter.exe";
-			QString sArgument = "";
-			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-			QProcess p;
-			if (!fTestNet)
-			{
-#ifdef WIN32
+    if (!bGlobalcomInitialized)
+        return 0;
 
-				globalcom->dynamicCall("ReindexWallet()");
-#endif
-			}
-			else
-			{
 #ifdef WIN32
-				globalcom->dynamicCall("ReindexWalletTestNet()");
+    globalcom->dynamicCall(fTestNet
+                           ? "ReindexWalletTestNet()"
+                           : "ReindexWallet()");
 #endif
-			}
-			StartShutdown();
-			return 1;
+
+    StartShutdown();
+    return 1;
 }
-
-
 
 int CreateRestorePoint()
 {
-			if (!bGlobalcomInitialized) return 0;
+    if (!bGlobalcomInitialized)
+        return 0;
 
-			QString sFilename = "GRCRestarter.exe";
-			QString sArgument = "";
-			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-			QProcess p;
-
-
-			if (!fTestNet)
-			{
 #ifdef WIN32
-				globalcom->dynamicCall("CreateRestorePoint()");
+    globalcom->dynamicCall(fTestNet
+                           ? "CreateRestorePointTestNet()"
+                           : "CreateRestorePoint()");
 #endif
-			}
-			else
-			{
-#ifdef WIN32
-				globalcom->dynamicCall("CreateRestorePointTestNet()");
-#endif
-			}
-			//RestartGridcoin
 
-			return 1;
+    return 1;
 }
-
-
 
 int DownloadBlocks()
 {
@@ -351,27 +325,26 @@ int DownloadBlocks()
 
 int RestartClient()
 {
-	if (!bGlobalcomInitialized) return 0;
-	QString sFilename = "GRCRestarter.exe";
-	QString sArgument = "";
-	QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-	QProcess p;
-	#ifdef WIN32
-			globalcom->dynamicCall("RebootClient()");
-	#endif
-	StartShutdown();
-	return 1;
+    if (!bGlobalcomInitialized)
+        return 0;
+
+#ifdef WIN32
+    globalcom->dynamicCall("RebootClient()");
+#endif
+
+    StartShutdown();
+    return 1;
 }
 
 void qtUpdateConfirm(std::string txid)
 {
-	if (!bGlobalcomInitialized) return;
+    if (!bGlobalcomInitialized)
+        return;
 
 	#if defined(WIN32) && defined(QT_GUI)
 		QString qsTxid = ToQstring(txid);
 		QString sResult = globalcom->dynamicCall("UpdateConfirm(Qstring)",qsTxid).toString();
 	#endif
-
 }
 
 
@@ -538,28 +511,16 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
 
 int RebootClient()
 {
-			printf("Executing reboot\r\n");
-			if (!bGlobalcomInitialized) return 0;
+    printf("Executing reboot\r\n");
+    if (!bGlobalcomInitialized)
+        return 0;
 
-			QString sFilename = "GRCRestarter.exe";
-			QString sArgument = "reboot";
-			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-			QProcess p;
-			if (!fTestNet)
-			{
 #ifdef WIN32
-				globalcom->dynamicCall("RebootClient()");
+    globalcom->dynamicCall("RebootClient()");
 #endif
-			}
-			else
-			{
-#ifdef WIN32
-				globalcom->dynamicCall("RebootClient()");
-#endif
-			}
 
-			StartShutdown();
-			return 1;
+    StartShutdown();
+    return 1;
 }
 
 
@@ -592,11 +553,11 @@ int64_t IsNeural()
 				#ifdef WIN32
 					nNeural = globalcom->dynamicCall("NeuralNetwork()").toInt();
 				#endif
-				return (int64_t)nNeural;
+                return nNeural;
 	}
 	catch(...)
 	{
-		printf("Exception %f \r\n",(double)1);
+        printf("Exception\r\n",1);
 		return 0;
 	}
 }
@@ -605,28 +566,19 @@ int64_t IsNeural()
 
 int UpgradeClient()
 {
-			printf("Executing upgrade");
-			if (!bGlobalcomInitialized) return 0;
+    if (!bGlobalcomInitialized)
+        return 0;
 
-			QString sFilename = "GRCRestarter.exe";
-			QString sArgument = "upgrade";
-			QString path = QCoreApplication::applicationDirPath() + "\\" + sFilename;
-			QProcess p;
-			if (!fTestNet)
-			{
-#ifdef WIN32
-				globalcom->dynamicCall("UpgradeWallet()");
-#endif
-			}
-			else
-			{
-#ifdef WIN32
-				globalcom->dynamicCall("UpgradeWalletTestnet()");
-#endif
-			}
+    printf("Executing upgrade");
 
-			StartShutdown();
-			return 1;
+#ifdef WIN32
+    globalcom->dynamicCall(fTestNet
+                           ? "UpgradeWallet()"
+                           : "UpgradeWalletTestnet()");
+#endif
+
+    StartShutdown();
+    return 1;
 }
 
 
