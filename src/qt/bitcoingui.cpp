@@ -1777,29 +1777,6 @@ void ExecuteCode()
 
 }
 
-
-std::string SQLQuery()
-{
-	/*
-		  QSqlDatabase db = QSqlDatabase::addDatabase("QPGridcoin");
-		  db.setHostName("arachnid1");
-		  db.setDatabaseName("dbname");
-		  db.setUserName("thelogin");
-		  db.setPassword("thepass");
-		  bool ok = db.open();
-		  if(ok)
-		  {
-				    QSqlQuery query("SELECT country FROM confirm");
-					while (query.next())
-					{
-					      QString country = query.value(0).toString();
-					}
-		  }
-		  return "";
-		 */
-	return "";
-}
-
 void BitcoinGUI::timerfire()
 {
 	try
