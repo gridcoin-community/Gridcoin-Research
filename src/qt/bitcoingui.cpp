@@ -1219,8 +1219,6 @@ bool CreateNewConfigFile(std::string boinc_email)
 	boost::filesystem::path path = GetDataDir() / filename;
 	std::ofstream myConfig;
 	myConfig.open (path.string().c_str());
-	std::string row = "cpumining=true\r\n";
-	myConfig << row;
 	row = "email=" + boinc_email + "\r\n";
 	myConfig << row;
 	row = "addnode=node.gridcoin.us \r\n";
