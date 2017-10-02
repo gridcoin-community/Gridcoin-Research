@@ -44,10 +44,6 @@ class BitcoinGUI : public QMainWindow
 {
     Q_OBJECT
 public:
-	QString toqstring(int o);
-
-
-
     explicit BitcoinGUI(QWidget *parent = 0);
 
     ~BitcoinGUI();

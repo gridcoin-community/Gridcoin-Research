@@ -1838,16 +1838,6 @@ void BitcoinGUI::timerfire()
 
 }
 
-
-
-QString BitcoinGUI::toqstring(int o)
-{
-    std::string pre="";
-    pre=strprintf("%d",o);
-    QString str1 = QString::fromUtf8(pre.c_str());
-    return str1;
-}
-
 double GetPOREstimatedTime(double RSAWeight)
 {
     if (RSAWeight == 0) return 0;
