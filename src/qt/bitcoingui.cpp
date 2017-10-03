@@ -97,7 +97,6 @@
 
 extern CWallet* pwalletMain;
 int ReindexWallet();
-extern int RebootClient();
 extern QString ToQstring(std::string s);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
@@ -468,23 +467,6 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
         printf("rs%f",(double)result);
     #endif
 }
-
-int RebootClient()
-{
-    printf("Executing reboot\r\n");
-    if (!bGlobalcomInitialized)
-        return 0;
-
-#ifdef WIN32
-    globalcom->dynamicCall("RebootClient()");
-#endif
-
-    StartShutdown();
-    return 1;
-}
-
-
-
 
 void CheckForUpgrade()
 {
