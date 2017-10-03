@@ -103,7 +103,7 @@ void GetTxNormalBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
         * unknown / text
     */
 
-    res["bhLenght"]=msg.length();
+    res["bhLength"]=msg.length();
 
     std::string sMessageType = ExtractXML(msg,"<MT>","</MT>");
     std::string sTrxMessage = ExtractXML(msg,"<MESSAGE>","</MESSAGE>");
