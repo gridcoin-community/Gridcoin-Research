@@ -139,7 +139,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 extern enum Checkpoints::CPMode CheckpointsMode;
-int RebootClient();
 int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
@@ -1187,25 +1186,15 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Restore Point",r));
             results.push_back(entry);
     }
-    else if (sItem == "reboot")
+    else if (sItem == "restart")
     {
-            int r=1;
-            #if defined(WIN32) && defined(QT_GUI)
-            RebootClient();
-            #endif 
-            entry.push_back(Pair("RebootClient",r));
-            results.push_back(entry);
-    
-    }
-    else if (sItem == "restartclient")
-    {
-            printf("Restarting Gridcoin...");
-            int iResult = 0;
-            #if defined(WIN32) && defined(QT_GUI)
-                iResult = RestartClient();
-            #endif
-            entry.push_back(Pair("Restarting",(double)iResult));
-            results.push_back(entry);
+        printf("Restarting Gridcoin...");
+        int iResult = 0;
+#if defined(WIN32) && defined(QT_GUI)
+        iResult = RestartClient();
+#endif
+        entry.push_back(Pair("result", iResult));
+        results.push_back(entry);
     }
     else if (sItem == "sendblock")
     {
@@ -2389,15 +2378,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
     }
-    else if (sItem == "executecode")
-    {
-            printf("Executing .net code\r\n");
-            #if defined(WIN32) && defined(QT_GUI)
-        
-            ExecuteCode();
-            #endif
-
-    }
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
@@ -2523,7 +2503,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
         entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
         #if defined(WIN32) && defined(QT_GUI)
-        entry.push_back(Pair("execute reboot", "Reboots wallet"));
         entry.push_back(Pair("execute reindex", "Reindex blockchain"));
         #endif
         entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
