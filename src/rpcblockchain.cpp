@@ -12,6 +12,7 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
+#include "appcache.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
@@ -876,21 +877,18 @@ double GetCountOf(std::string datatype)
 std::string GetListOf(std::string datatype)
 {
     std::string rows;
-    for(const auto& item : mvApplicationCache)
+    for(const auto& item : AppCacheIterator(datatype))
     {
         const std::string& key_name = item.first;
-        if (boost::algorithm::starts_with(key_name, datatype))
-        {
-            const std::string& key_value = item.second;
-            const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-            std::string row = subkey + "<COL>" + key_value;
+        const std::string& key_value = item.second;
+        const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+        std::string row = subkey + "<COL>" + key_value;
 
-            if (datatype=="beacon" && Contains(row,"INVESTOR"))
-                continue;
+        if (datatype=="beacon" && Contains(row,"INVESTOR"))
+            continue;
 
-            if (!row.empty())
-                rows += row + "<ROW>";
-        }
+        if (!row.empty())
+            rows += row + "<ROW>";
     }
 
     return rows;
@@ -2316,19 +2314,9 @@ Value execute(const Array& params, bool fHelp)
         {
             std::string sType = params[1].get_str();
             entry.push_back(Pair("Key Type",sType));
-            for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-            {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                entry.push_back(Pair(key_name,key_value));
-                    }
-               
-                }
-           }
+            for(const auto& item : AppCacheIterator(sType))
+                entry.push_back(Pair(item.first, item.second));
+
            results.push_back(entry);
         }
 
@@ -2864,16 +2852,12 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
 {
-    for(const auto& item : mvApplicationCache)
+    for(const auto& item : AppCacheIterator(objecttype))
     {
-        const std::string& key_name = item.first;
         const std::string& contract = item.second;
-        if (boost::algorithm::starts_with(key_name, objecttype))
-        {
-            const std::string& PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
-            if(boost::iequals(PollTitle, title))
-                return contract;
-        }
+        const std::string& PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
+        if(boost::iequals(PollTitle, title))
+            return contract;
     }
 
     return std::string();
@@ -2964,28 +2948,22 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
 {
     double total_shares = 0;
     out_participants = 0;
-    std::string objecttype="vote";
     
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
-    for(const auto& item : mvApplicationCache)
+    for(const auto& item : AppCacheIterator("vote"))
     {
-        const std::string& key_name = item.first;
         const std::string& contract = item.second;
-
-        if (boost::algorithm::starts_with(key_name, objecttype))
+        const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+        const std::string& VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
+        const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
+        for (const std::string& voterAnswers : vVoterAnswers)
         {
-            const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
-            const std::string& VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
-            const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
-            for (const std::string& voterAnswers : vVoterAnswers)
+            if (boost::iequals(pollname, Title) && boost::iequals(answer, voterAnswers))
             {
-                if (boost::iequals(pollname, Title) && boost::iequals(answer, voterAnswers))
-                {
-                    double shares = PollCalculateShares(contract, sharetype, MoneySupplyFactor, vVoterAnswers.size());
-                    total_shares += shares;
-                    out_participants += 1.0 / vVoterAnswers.size();
-                }
+                double shares = PollCalculateShares(contract, sharetype, MoneySupplyFactor, vVoterAnswers.size());
+                total_shares += shares;
+                out_participants += 1.0 / vVoterAnswers.size();
             }
         }
     }
@@ -3438,7 +3416,6 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     double participants = 0;
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
-    std::string objecttype="vote";
     Array results;
     Object entry;
     entry.push_back(Pair("Votes","Votes Report " + pollname));
@@ -3448,36 +3425,32 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
 
     boost::to_lower(pollname);
-    for(const auto& item : mvApplicationCache)
+    for(const auto& item : AppCacheIterator("vote"))
     {
-        const std::string& key_name = item.first;
         const std::string& contract = item.second;
-        if (boost::algorithm::starts_with(key_name, objecttype))
+        const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
+        if(boost::iequals(pollname, Title))
         {
-            const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
-            if(boost::iequals(pollname, Title))
+            const std::string& OriginalContract = GetPollContractByTitle("poll",Title);
+            const std::string& Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
+            const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
+            const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
+
+            double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+            std::string sShareType= GetShareType(dShareType);
+            std::string sURL = ExtractXML(contract,"<URL>","</URL>");
+
+            std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
+
+            const std::string& VoterAnswer = boost::to_lower_copy(ExtractXML(contract,"<ANSWER>","</ANSWER>"));
+            const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
+            for (const auto& answer : vVoterAnswers)
             {
-                const std::string& OriginalContract = GetPollContractByTitle("poll",Title);
-                const std::string& Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
-                const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
-                const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
-
-                double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
-                std::string sShareType= GetShareType(dShareType);
-                std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-
-                std::string Balance = ExtractXML(contract,"<BALANCE>","</BALANCE>");
-
-                const std::string& VoterAnswer = boost::to_lower_copy(ExtractXML(contract,"<ANSWER>","</ANSWER>"));
-                const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
-                for (const auto& answer : vVoterAnswers)
-                {
-                    double shares = PollCalculateShares(contract, dShareType, MoneySupplyFactor, vVoterAnswers.size());
-                    total_shares += shares;
-                    participants += 1.0 / vVoterAnswers.size();
-                    const std::string& voter = GRCAddress + "," + CPID + "," + Question + "," + answer + "," + sShareType + "," + sURL;
-                    entry.push_back(Pair(voter,RoundToString(shares,0)));
-                }
+                double shares = PollCalculateShares(contract, dShareType, MoneySupplyFactor, vVoterAnswers.size());
+                total_shares += shares;
+                participants += 1.0 / vVoterAnswers.size();
+                const std::string& voter = GRCAddress + "," + CPID + "," + Question + "," + answer + "," + sShareType + "," + sURL;
+                entry.push_back(Pair(voter,RoundToString(shares,0)));
             }
         }
     }
@@ -3505,82 +3478,77 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
     std::string sExportRow;
     out_export.clear();
 
-    for(const auto& item : mvApplicationCache)
+    for(const auto& item : AppCacheIterator(datatype))
     {
         const std::string& key_name = item.first;
         const std::string& contract = item.second;
 
-        if (boost::algorithm::starts_with(key_name, datatype))
+        // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
+        // appended. Skip all keys containing those fields.
+        if(boost::iends_with(key_name, ";burnamount") ||
+           boost::iends_with(key_name, ";recipient"))
+           continue;
+
+        std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+        std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
+        std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
+        std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
+        std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
+        std::string sURL = ExtractXML(contract,"<URL>","</URL>");
+        boost::to_lower(Title);
+        if (!PollExpired(Title) || IncludeExpired)
         {
-            // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
-            // appended. Skip all keys containing those fields.
-            if(boost::iends_with(key_name, ";burnamount") ||
-               boost::iends_with(key_name, ";recipient"))
-               continue;
-
-            std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-            std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
-            std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
-            std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
-            std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
-            std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-            boost::to_lower(Title);
-
-            // TODO: Pass contract instead of title to PollExpired
-            if (!PollExpired(Title) || IncludeExpired)
+            if (QueryByTitle.empty() || QueryByTitle == Title)
             {
-                if (QueryByTitle.empty() || QueryByTitle == Title)
+                iPollNumber++;
+                total_participants = 0;
+                total_shares=0;
+                std::string BestAnswer;
+                double highest_share = 0;
+                std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
+                std::string sShareType = GetShareType(cdbl(ShareType,0));
+                std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
+                                        + " (" + ExpirationDate + " ) - " + sShareType;
+
+                entry.push_back(Pair(TitleNarr,Title));
+                sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
+
+                if (bDetail)
                 {
-                    iPollNumber++;
-                    total_participants = 0;
-                    total_shares=0;
-                    std::string BestAnswer;
-                    double highest_share = 0;
-                    std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
-                    std::string sShareType = GetShareType(cdbl(ShareType,0));
-                    std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
-                                            + " (" + ExpirationDate + " ) - " + sShareType;
-
-                    entry.push_back(Pair(TitleNarr,Title));
-                    sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
-
-                    if (bDetail)
+                    entry.push_back(Pair("Question",Question));
+                    const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
+                    sExportRow += "<ARRAYANSWERS>";
+                    size_t i = 0;
+                    for (const std::string& answer : vAnswers)
                     {
-                        entry.push_back(Pair("Question",Question));
-                        const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
-                        sExportRow += "<ARRAYANSWERS>";
-                        size_t i = 0;
-                        for (const std::string& answer : vAnswers)
+                        double participants=0;
+                        double dShares = VotesCount(Title, answer, cdbl(ShareType,0),participants);
+                        if (dShares > highest_share)
                         {
-                            double participants=0;
-                            double dShares = VotesCount(Title, answer, cdbl(ShareType,0),participants);
-                            if (dShares > highest_share)
-                            {
-                                highest_share = dShares;
-                                BestAnswer = answer;
-                            }
-
-                            entry.push_back(Pair("#" + ToString(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
-                            total_participants += participants;
-                            total_shares += dShares;
-                            sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + answer + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
+                            highest_share = dShares;
+                            BestAnswer = answer;
                         }
-                        sExportRow += "</ARRAYANSWERS>";
 
-                        //Totals:
-                        entry.push_back(Pair("Participants",total_participants));
-                        entry.push_back(Pair("Total Shares",total_shares));
-                        if (total_participants < 3) BestAnswer = "";
-
-                        entry.push_back(Pair("Best Answer",BestAnswer));
-                        sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
-                                      + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
-                                      + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
-
+                        entry.push_back(Pair("#" + ToString(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
+                        total_participants += participants;
+                        total_shares += dShares;
+                        sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + answer + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
                     }
-                    sExportRow += "</POLL>";
-                    sExport += sExportRow;
+                    sExportRow += "</ARRAYANSWERS>";
+
+                    //Totals:
+                    entry.push_back(Pair("Participants",total_participants));
+                    entry.push_back(Pair("Total Shares",total_shares));
+                    if (total_participants < 3) BestAnswer = "";
+
+                    entry.push_back(Pair("Best Answer",BestAnswer));
+                    sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
+                                  + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
+                                  + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
+
                 }
+                sExportRow += "</POLL>";
+                sExport += sExportRow;
             }
         }
     }
@@ -3596,38 +3564,33 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 
 Array GetUpgradedBeaconReport()
 {
-        Array results;
-        Object entry;
-        entry.push_back(Pair("Report","Upgraded Beacon Report 1.0"));
-        std::string datatype="beacon";
-        std::string rows = "";
-        std::string row = "";
-        int iBeaconCount = 0;
-        int iUpgradedBeaconCount = 0;
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-        {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > datatype.length())
-                {
-                    if (key_name.substr(0,datatype.length())==datatype)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-                                std::string contract = DecodeBase64(key_value);
-                                std::string cpidv2 = ExtractValue(contract,";",0);
-                                std::string grcaddress = ExtractValue(contract,";",2);
-                                std::string sPublicKey = ExtractValue(contract,";",3);
-                                if (!sPublicKey.empty()) iUpgradedBeaconCount++;
-                                iBeaconCount++;
-                    }
-                }
-      }
-      entry.push_back(Pair("Total Beacons",(double)iBeaconCount));
-      entry.push_back(Pair("Upgraded Beacon Count",(double)iUpgradedBeaconCount));
-      double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
-      entry.push_back(Pair("Pct Of Upgraded Beacons",RoundToString(dPct*100,3)));
-      results.push_back(entry);
-      return results;
+    Array results;
+    Object entry;
+    entry.push_back(Pair("Report","Upgraded Beacon Report 1.0"));
+    std::string datatype="beacon";
+    std::string rows = "";
+    std::string row = "";
+    int iBeaconCount = 0;
+    int iUpgradedBeaconCount = 0;
+    for(const auto& item : AppCacheIterator(datatype))
+    {
+        const std::string& key_name  = item.first;
+        const std::string& key_value = item.second;
+        std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+        std::string contract = DecodeBase64(key_value);
+        std::string cpidv2 = ExtractValue(contract,";",0);
+        std::string grcaddress = ExtractValue(contract,";",2);
+        std::string sPublicKey = ExtractValue(contract,";",3);
+        if (!sPublicKey.empty()) iUpgradedBeaconCount++;
+        iBeaconCount++;
+    }
+
+    entry.push_back(Pair("Total Beacons",(double)iBeaconCount));
+    entry.push_back(Pair("Upgraded Beacon Count",(double)iUpgradedBeaconCount));
+    double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
+    entry.push_back(Pair("Pct Of Upgraded Beacons",RoundToString(dPct*100,3)));
+    results.push_back(entry);
+    return results;
 }
 
 
@@ -3636,33 +3599,26 @@ Array GetUpgradedBeaconReport()
 
 Array GetJSONBeaconReport()
 {
-        Array results;
-        Object entry;
-        entry.push_back(Pair("CPID","GRCAddress"));
-        std::string datatype="beacon";
-        std::string row = "";
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-        {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > datatype.length())
-                {
-                    if (key_name.substr(0,datatype.length())==datatype)
-                    {
-                                std::string key_value = mvApplicationCache[(*ii).first];
-                                std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-                                row = subkey + "<COL>" + key_value;
-                                //                              std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
-                                std::string contract = DecodeBase64(key_value);
-                                std::string cpid = subkey;
-                                std::string cpidv2 = ExtractValue(contract,";",0);
-                                std::string grcaddress = ExtractValue(contract,";",2);
-                                entry.push_back(Pair(cpid,grcaddress));
-                    }
-                }
-       }
-    
-      results.push_back(entry);
-      return results;
+    Array results;
+    Object entry;
+    entry.push_back(Pair("CPID","GRCAddress"));
+    std::string datatype="beacon";
+    std::string row;
+    for(const auto& item : AppCacheIterator(datatype))
+    {
+        const std::string& key_name  = item.first;
+        const std::string& key_value = item.second;
+        std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+        row = subkey + "<COL>" + key_value;
+        //                              std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
+        std::string contract = DecodeBase64(key_value);
+        std::string cpid = subkey;
+        std::string grcaddress = ExtractValue(contract,";",2);
+        entry.push_back(Pair(cpid,grcaddress));
+    }
+
+    results.push_back(entry);
+    return results;
 }
 
 
