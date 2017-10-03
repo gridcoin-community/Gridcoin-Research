@@ -12,6 +12,7 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
+#include "backup.h"
 #include "appcache.h"
 
 #include <boost/filesystem.hpp>
@@ -24,8 +25,6 @@
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
-bool BackupWallet(const CWallet& wallet, const std::string& strDest);
-bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 extern double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
@@ -2415,14 +2414,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Reset",1));
             results.push_back(entry);
     }
-    else if (sItem == "backupwallet")
-    {
-        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
-        entry.push_back(Pair("Backup wallet success", bWalletBackupResults));
-        entry.push_back(Pair("Backup config success", bConfigBackupResults));
-        results.push_back(entry);
-    }
     else if (sItem == "resendwallettx")
     {
             ResendWalletTransactions(true);
@@ -2499,7 +2490,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
         entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
         entry.push_back(Pair("execute askforoutstandingblocks", "Asks nodes for outstanding blocks"));
-        entry.push_back(Pair("execute backupwallet", "Backup wallet"));
         entry.push_back(Pair("execute backupprivatekeys", "Backup private keys (Wallet must be fully unlocked"));
         entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
         entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
