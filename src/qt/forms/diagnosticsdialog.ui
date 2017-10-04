@@ -79,7 +79,7 @@
          </size>
         </property>
         <property name="text">
-         <string>Varify CPID is in Neural Network</string>
+         <string>Verify CPID is in Neural Network</string>
         </property>
        </widget>
       </item>
@@ -137,7 +137,7 @@
       <item row="4" column="0">
        <widget class="QLabel" name="label_6">
         <property name="text">
-         <string>Varify CPID has RAC</string>
+         <string>Verify CPID has RAC</string>
         </property>
        </widget>
       </item>
@@ -166,7 +166,7 @@
       <item row="6" column="0">
        <widget class="QLabel" name="label_8">
         <property name="text">
-         <string>Varify wallet is synced</string>
+         <string>Verify wallet is synced</string>
         </property>
        </widget>
       </item>
@@ -265,7 +265,7 @@
       <item row="7" column="0">
        <widget class="QLabel" name="label_9">
         <property name="text">
-         <string>Varify clock</string>
+         <string>Verify clock</string>
         </property>
        </widget>
       </item>
@@ -294,7 +294,7 @@
       <item row="8" column="0">
        <widget class="QLabel" name="label_10">
         <property name="text">
-         <string>Varify addnode</string>
+         <string>Verify addnode</string>
         </property>
        </widget>
       </item>
@@ -323,7 +323,7 @@
       <item row="9" column="0">
        <widget class="QLabel" name="label_11">
         <property name="text">
-         <string>Varify TCP port 32749</string>
+         <string>Verify TCP port 32749</string>
         </property>
        </widget>
       </item>

@@ -347,6 +347,7 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
         iCurrent = std::stoi(currentVersionList.at(i), nullptr, 10);
         if(iNew > iCurrent) {
             ui->checkClientVersionResultLbl->setText("Faild (An Update is available, please update)");
+            ui->checkClientVersionResultLbl->setText("Failed (An update is available, please update)");
             return;
         } else
             ui->checkClientVersionResultLbl->setText("Up to date");
