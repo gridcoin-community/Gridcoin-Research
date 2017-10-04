@@ -167,12 +167,14 @@ void DiagnosticsDialog::VarifyClock() {
     QHostInfo info = QHostInfo::fromName("pool.ntp.org");
     udpSocket = new QUdpSocket(this);
 
-    udpSocket->bind(123);
-
     connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
 
-    char sendPkt[] = {010, 0, 0, 0, 0, 0, 0, 0,0};
-    QByteArray sendBuffer(sendPkt);
+    udpSocket->bind(QHostAddress::LocalHost, 123);
+
+    QByteArray sendBuffer = QByteArray(47, 0);
+    sendBuffer.insert(0, 35);
+
+    connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
     udpSocket->writeDatagram(sendBuffer, info.addresses().first(), 123);
 }
 
@@ -273,11 +275,12 @@ void DiagnosticsDialog::on_testBtn_clicked() {
 void DiagnosticsDialog::clkFinished() {
     time_t ntpTime;
 
-    while(udpSocket->hasPendingDatagrams()) {
-        QByteArray recvBuffer = udpSocket->readAll();
-        if(recvBuffer.size() == 48){
+    while(udpSocket->pendingDatagramSize() != -1) {
+        char recvBuffer[udpSocket->pendingDatagramSize()];
+        udpSocket->readDatagram(&recvBuffer[0], 48, nullptr, nullptr);
+        if(sizeof(recvBuffer) == 48){
             int count= 40;
-            unsigned long DateTimeIn= uchar(recvBuffer.at(count))+ (uchar(recvBuffer.at(count+ 1)) << 8)+ (uchar(recvBuffer.at(count+ 2)) << 16)+ (uchar(recvBuffer.at(count+ 3)) << 24);
+            unsigned long DateTimeIn= uchar(recvBuffer[count])+ (uchar(recvBuffer[count+ 1]) << 8)+ (uchar(recvBuffer[count+ 2]) << 16)+ (uchar(recvBuffer[count+ 3]) << 24);
             ntpTime = ntohl((time_t)DateTimeIn);
             ntpTime -= 2208988800U;
         }
@@ -346,7 +349,6 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
         iNew = std::stoi(newVersionList.at(i), nullptr, 10);
         iCurrent = std::stoi(currentVersionList.at(i), nullptr, 10);
         if(iNew > iCurrent) {
-            ui->checkClientVersionResultLbl->setText("Faild (An Update is available, please update)");
             ui->checkClientVersionResultLbl->setText("Failed (An update is available, please update)");
             return;
         } else
