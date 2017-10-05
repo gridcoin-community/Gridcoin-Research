@@ -1481,6 +1481,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 
     // Append final value
     elems.push_back(s.substr(pos, end - pos));
+    return elems;
 }
 
 std::string GetNeuralVersion()
