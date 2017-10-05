@@ -145,7 +145,6 @@ std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
 double cdbl(std::string s, int place);
-std::vector<std::string> split(std::string s, std::string delim);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);

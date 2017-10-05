@@ -291,7 +291,6 @@ extern void LoadCPIDsInBackground();
 extern void ThreadCPIDs();
 extern void GetGlobalStatus();
 
-extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
 
 double GetNetworkAvgByProject(std::string projectname);
@@ -2362,26 +2361,6 @@ const CTxOut& CTransaction::GetOutputFor(const CTxIn& input, const MapPrevTx& in
 
     return txPrev.vout[input.prevout.n];
 }
-
-
-std::vector<std::string> split(std::string s, std::string delim)
-{
-    //Split a std::string by a std::string delimiter into a vector of strings:
-    size_t pos = 0;
-    std::string token;
-    std::vector<std::string> elems;
-    while ((pos = s.find(delim)) != std::string::npos)
-    {
-        token = s.substr(0, pos);
-        elems.push_back(token);
-        s.erase(0, pos + delim.length());
-    }
-    elems.push_back(s);
-    return elems;
-
-}
-
-
 
 int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 {
