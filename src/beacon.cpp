@@ -4,7 +4,6 @@
 #include "key.h"
 #include "main.h"
 
-std::vector<std::string> split(std::string s, std::string delim);
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);

@@ -22,7 +22,6 @@
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include "global_objects_noui.hpp"
 
-std::vector<std::string> split(std::string s, std::string delim);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
