@@ -278,7 +278,6 @@ bool bCheckedForUpgradeLive = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
 bool bDoTally = false;
-bool bExecuteGridcoinServices = false;
 bool bTallyFinished = false;
 bool bGridcoinGUILoaded = false;
 

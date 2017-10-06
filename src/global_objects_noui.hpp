@@ -22,7 +22,6 @@ extern bool bAllowBackToBack;
 extern bool CreatingCPUBlock;
 extern bool bStakeMinerOutOfSyncWithNetwork;
 extern bool bDoTally;
-extern bool bExecuteGridcoinServices;
 extern bool bTallyFinished;
 extern bool bGridcoinGUILoaded;
 

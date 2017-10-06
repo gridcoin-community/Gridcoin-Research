@@ -29,7 +29,6 @@
 using namespace std;
 bool TallyNetworkAverages(bool ColdBoot);
 extern void DoTallyResearchAverages(void* parg);
-extern void ExecGridcoinServices(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
@@ -1595,37 +1594,6 @@ begin:
 
 }
 
-
-
-
-void ThreadExecuteGridcoinServices(void* parg)
-{
-    RenameThread("grc-services");
-
-begin:
-    try
-    {
-        ExecGridcoinServices(parg);
-    }
-    catch (bad_alloc ba)
-    {
-        printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadExecuteGridcoinServices()");
-    }
-    catch(...)
-    {
-        printf("Error in ThreadExecuteGridcoinServices... Recovering ");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Services Exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-}
-
-
-
 void BusyWaitForTally()
 {
     if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
@@ -1677,26 +1645,6 @@ void DoTallyResearchAverages(void* parg)
     }
     vnThreadsRunning[THREAD_TALLY]--;
 }
-
-
-void ExecGridcoinServices(void* parg)
-{
-    vnThreadsRunning[THREAD_SERVICES]++;
-    printf("\r\nStarting dedicated Gridcoin Services thread...\r\n");
-
-    while (!fShutdown)
-    {
-        MilliSleep(5000);
-        if (bExecuteGridcoinServices)
-        {
-                bExecuteGridcoinServices=false;
-        }
-    }
-    vnThreadsRunning[THREAD_SERVICES]--;
-}
-
-
-
 
 void ThreadDumpAddress2(void* parg)
 {
@@ -2366,11 +2314,7 @@ void StartNode(void* parg)
     // Tally network averages
     if (!NewThread(ThreadTallyResearchAverages, NULL))
         printf("Error; NewThread(ThreadTally) failed\n");
-
-    // Services
-    if (!NewThread(ThreadExecuteGridcoinServices, NULL))
-       printf("Error; NewThread(ThreadExecuteGridcoinServices) failed\r\n");
-
+    
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
         printf("Staking disabled\n");
@@ -2411,7 +2355,6 @@ bool StopNode()
     if (vnThreadsRunning[THREAD_ADDEDCONNECTIONS] > 0) printf("ThreadOpenAddedConnections still running\n");
     if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0)      printf("ThreadDumpAddresses still running\n");
     if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
-    if (vnThreadsRunning[THREAD_SERVICES] > 0)         printf("ThreadServices still running\n");
     if (vnThreadsRunning[THREAD_STAKE_MINER] > 0)      printf("ThreadStakeMiner still running\n");
     while (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0 || vnThreadsRunning[THREAD_RPCHANDLER] > 0)
         MilliSleep(20);
