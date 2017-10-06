@@ -1905,7 +1905,7 @@ double GetMagnitudeMultiplier(int64_t nTime)
 }
 
 
-int64_t GetProofOfStakeMaxReward(int64_t nCoinAge, int64_t nFees, int64_t locktime)
+int64_t GetProofOfStakeMaxReward(uint64_t nCoinAge, int64_t nFees, int64_t locktime)
 {
     int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
     nInterest += 10*COIN;
@@ -1952,7 +1952,7 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 // miner's coin stake reward based on coin age spent (coin-days)
 
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
+int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
     bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
     double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
@@ -1965,7 +1965,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
             int64_t nSubsidy  = nInterest + nBoinc;
             if (fDebug10 || GetBoolArg("-printcreation"))
             {
-                printf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRId64 " nBoinc=%" PRId64 "   \n",
+                printf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   \n",
                 FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
             }
             int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
@@ -2005,7 +2005,7 @@ int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
 
             if (fDebug10 || GetBoolArg("-printcreation"))
             {
-                printf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRId64 " nBoinc=%" PRId64 "   \n",
+                printf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   \n",
                 FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
             }
 
@@ -3866,8 +3866,13 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     double dAccrualAge = 0;
     double dMagnitudeUnit = 0;
     double dAvgMagnitude = 0;
-    int64_t nCoinAge = 0;
+    uint64_t nCoinAge = 0;
     int64_t nFees = 0;
+
+    // Check CoinAge - Bug fix
+    CTxDB txdb;
+    if (!vtx[1].GetCoinAge(txdb, nCoinAge))
+        return error("CheckBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
     if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
     {
