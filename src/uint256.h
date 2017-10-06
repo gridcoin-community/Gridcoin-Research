@@ -260,10 +260,7 @@ public:
 
     friend inline bool operator==(const base_uint& a, const base_uint& b)
     {
-        for (int i = 0; i < base_uint::WIDTH; i++)
-            if (a.pn[i] != b.pn[i])
-                return false;
-        return true;
+        return memcmp(a.pn, b.pn, sizeof(a.pn)) == 0;
     }
 
     friend inline bool operator==(const base_uint& a, uint64_t b)

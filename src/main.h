@@ -13,6 +13,7 @@
 #include "global_objects_noui.hpp"
 
 #include <map>
+#include <unordered_map>
 #include <set>
 
 class CWallet;
@@ -142,10 +143,16 @@ extern std::map<std::string, MiningCPID> mvBlockIndex;
 typedef std::set<uint256> HashSet;
 extern std::map<std::string, HashSet> mvCPIDBlockHashes;
 
+struct BlockHasher
+{
+    size_t operator()(const uint256& hash) const { return hash.Get64(); }
+};
+
+typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
-extern std::map<uint256, CBlockIndex*> mapBlockIndex;
+extern BlockMap mapBlockIndex;
 extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
 extern CBlockIndex* pindexGenesisBlock;
 extern unsigned int nStakeMinAge;
@@ -1698,7 +1705,7 @@ public:
 
     explicit CBlockLocator(uint256 hashBlock)
     {
-        std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi != mapBlockIndex.end())
             Set((*mi).second);
     }
@@ -1749,7 +1756,7 @@ public:
         int nStep = 1;
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
@@ -1768,7 +1775,7 @@ public:
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
@@ -1784,7 +1791,7 @@ public:
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
