@@ -1105,12 +1105,12 @@ bool AppInit2()
     }
 
 
-    uiInterface.InitMessage(_("Loading Network Averages..."));    
+    uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
     TallyNetworkAverages();
 
     if (!NewThread(StartNode, NULL))
-        InitError(_("Error: could not start node"));    
+        InitError(_("Error: could not start node"));
 
     if (fServer)
         NewThread(ThreadRPCServer, NULL);

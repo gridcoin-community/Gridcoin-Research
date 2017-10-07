@@ -5614,7 +5614,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 
 
 bool TallyResearchAverages()
-{    
+{
     //Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15)
     {
