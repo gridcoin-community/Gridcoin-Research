@@ -2,11 +2,30 @@
 
 #include <string>
 #include <map>
+#include <boost/algorithm/string.hpp>
+#include <boost/iterator/filter_iterator.hpp>
 
 //!
 //! \brief Application cache type.
 //!
 typedef std::map<std::string, std::string> AppCache;
+
+// Predicate
+struct AppCacheMatches
+{
+    AppCacheMatches(const std::string& needle)
+        : needle(needle)
+    {}
+
+    bool operator()(const AppCache::value_type& t)
+    {
+        return boost::algorithm::starts_with(t.first, needle);
+    };
+
+    std::string needle;
+};
+
+typedef boost::filter_iterator<AppCacheMatches, AppCache::iterator> filter_iterator;
 
 //!
 //! \brief Application cache data key iterator.
@@ -16,37 +35,17 @@ typedef std::map<std::string, std::string> AppCache;
 //! all the cached polls:
 //!
 //! \code
-//! for(const auto& item : AppCacheIterator("poll")
+//! for(const auto& item : AppCacheFilter("poll")
 //! {
 //!    const std::string& poll_name = item.second;
 //! }
 //! \endcode
 //!
-class AppCacheIterator
+boost::iterator_range<filter_iterator> AppCacheFilter(const std::string& needle)
 {
-public:
-    //!
-    //! \brief Constructor.
-    //! \param key Key to search for. For legacy code compatibility reasons
-    //! \p key is matched to the start of the cached key, so \a poll will
-    //! iterate over items with the key \a polls as well.
-    //!
-    AppCacheIterator(const std::string& key);
+    auto pred = AppCacheMatches(needle);
+    auto begin = boost::make_filter_iterator(pred, mvApplicationCache.begin(), mvApplicationCache.end());
+    auto end = boost::make_filter_iterator(pred, mvApplicationCache.end(), mvApplicationCache.end());
+    return boost::make_iterator_range(begin, end);
+}
 
-    //!
-    //! \brief Get iterator to first matching element.
-    //! \return Iterator pointing to the first matching element, or end()
-    //! if none is found.
-    //!
-    AppCache::iterator begin();
-
-    //!
-    //! \brief Get iterator to the element after the last element.
-    //! \return End iterator element.
-    //!
-    AppCache::iterator end();
-
-private:
-    AppCache::iterator _begin;
-    AppCache::iterator _end;
-};

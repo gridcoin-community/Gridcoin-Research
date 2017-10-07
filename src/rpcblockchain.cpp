@@ -874,7 +874,7 @@ double GetCountOf(std::string datatype)
 std::string GetListOf(std::string datatype)
 {
     std::string rows;
-    for(const auto& item : AppCacheIterator(datatype))
+    for(const auto& item : AppCacheFilter(datatype))
     {
         const std::string& key_name = item.first;
         const std::string& key_value = item.second;
@@ -2301,7 +2301,7 @@ Value execute(const Array& params, bool fHelp)
         {
             std::string sType = params[1].get_str();
             entry.push_back(Pair("Key Type",sType));
-            for(const auto& item : AppCacheIterator(sType))
+            for(const auto& item : AppCacheFilter(sType))
                 entry.push_back(Pair(item.first, item.second));
 
            results.push_back(entry);
@@ -2820,7 +2820,7 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
 {
-    for(const auto& item : AppCacheIterator(objecttype))
+    for(const auto& item : AppCacheFilter(objecttype))
     {
         const std::string& contract = item.second;
         const std::string& PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
@@ -2919,7 +2919,7 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
     
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
-    for(const auto& item : AppCacheIterator("vote"))
+    for(const auto& item : AppCacheFilter("vote"))
     {
         const std::string& contract = item.second;
         const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
@@ -3393,7 +3393,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
 
     boost::to_lower(pollname);
-    for(const auto& item : AppCacheIterator("vote"))
+    for(const auto& item : AppCacheFilter("vote"))
     {
         const std::string& contract = item.second;
         const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
@@ -3446,7 +3446,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
     std::string sExportRow;
     out_export.clear();
 
-    for(const auto& item : AppCacheIterator(datatype))
+    for(const auto& item : AppCacheFilter(datatype))
     {
         const std::string& key_name = item.first;
         const std::string& contract = item.second;
@@ -3540,7 +3540,7 @@ Array GetUpgradedBeaconReport()
     std::string row = "";
     int iBeaconCount = 0;
     int iUpgradedBeaconCount = 0;
-    for(const auto& item : AppCacheIterator(datatype))
+    for(const auto& item : AppCacheFilter(datatype))
     {
         const std::string& key_name  = item.first;
         const std::string& key_value = item.second;
@@ -3572,7 +3572,7 @@ Array GetJSONBeaconReport()
     entry.push_back(Pair("CPID","GRCAddress"));
     std::string datatype="beacon";
     std::string row;
-    for(const auto& item : AppCacheIterator(datatype))
+    for(const auto& item : AppCacheFilter(datatype))
     {
         const std::string& key_name  = item.first;
         const std::string& key_value = item.second;

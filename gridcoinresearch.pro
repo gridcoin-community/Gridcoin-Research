@@ -352,8 +352,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/upgrader.cpp \
     src/boinc.cpp \
     src/allocators.cpp \
-    src/backup.cpp \
-    src/appcache.cpp
+    src/backup.cpp
 
 ##
 #RC_FILE  = qaxserver.rc
