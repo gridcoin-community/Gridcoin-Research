@@ -254,7 +254,6 @@ extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 bool bNetAveragesLoaded = false;
-bool bTallyStarted      = false;
 bool bForceUpdate = false;
 bool bCheckedForUpgrade = false;
 bool bCheckedForUpgradeLive = false;
@@ -4235,11 +4234,6 @@ void GridcoinServices()
         printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
-    if (TimerMain("ResetVars",30))
-    {
-        bTallyStarted = false;
-    }
-
     if (false && TimerMain("FixSpentCoins",60))
     {
             int nMismatchSpent;
@@ -5464,11 +5458,10 @@ bool TallyResearchAverages()
     if (nMinDepth < 2)              nMinDepth = 2;
     mvMagnitudesCopy.clear();
     int iRow = 0;
-    //CBlock block;
+
     CBlockIndex* pblockindex = pindexBest;
     if (!pblockindex)
     {
-        bTallyStarted = false;
         bNetAveragesLoaded = true;
         return true;
     }
@@ -5535,7 +5528,6 @@ bool TallyResearchAverages()
         mvDPOR = mvDPORCopy;
         mvMagnitudes = mvMagnitudesCopy;
         mvNetwork = mvNetworkCopy;
-        bTallyStarted = false;
         bNetAveragesLoaded = true;
         return true;
     }
