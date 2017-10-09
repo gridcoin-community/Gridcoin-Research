@@ -17,7 +17,6 @@
 
 #include <boost/filesystem.hpp>
 #include <iostream>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
 #include <fstream>
