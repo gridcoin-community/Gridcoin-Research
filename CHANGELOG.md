@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.6.2.0] 09-28-2017
+## [3.6.3.0] 2017-10-09
+### Fixed
+ - Fix problems sending beacons on Windows, #684 (@tomasbrod).
+
+## [3.6.2.0] 2017-09-28
 ### Added
  - Add "backupprivatekeys" RPC command, #593 (@Foggyx420).
  - Add more transaction details to the UI, #573 (@tomasbrod).
@@ -41,18 +45,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Return the results of "backupwallet" RPC command, #593 (@Foggyx420).
  - Changing the community links #654 (@grctest)
 
-## [3.6.1.0] 09-11-2017
+## [3.6.1.0] 2017-09-11
 ### Fixed
  - Fix problems forging superblock due to rounding differences, #608 (@denravonska).
  - Fetch data from project servers if missing on scraper #564 (@denravonska).
 
-## [3.6.0.2] 08-26-2017
+## [3.6.0.2] 2017-08-26
 ### Fixed
  - Fix incorrect V8 height trigger check. Many thanks to @barton2526 for discovering this.
  - Fix invalid superblock height formatting, #532 (@denravonska).
  - Fix several spelling mistakes, 533 (@Erkan-Yilmaz).
 
-## [3.6.0.1] 08-22-2017
+## [3.6.0.1] 2017-08-22
 ### Added
  - Added [V8 stake engine](https://github.com/gridcoin/Gridcoin-Research/wiki/Stake-V8)
    set to start producing V8 blocks at block 1010000. This fixes several security issues,
