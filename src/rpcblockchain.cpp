@@ -1019,14 +1019,14 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
                 if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
                 {
-                    sError = "Failed to backup new configuration file. Beacon not sent. And your config file is probably corrupted now.";
+                    sError = "Failed to back up configuration file. Beacon not sent, please manually roll back to previous configuration.";
                     return false;
                 }
 
-                // This prevents repeated beacons
-                nLastBeaconAdvertised = nBestHeight;
                 // Send the beacon transaction
                 sMessage = AddContract(sType,sName,sBase);
+                // This prevents repeated beacons
+                nLastBeaconAdvertised = nBestHeight;
                 // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
                 ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
 
@@ -1040,11 +1040,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             catch (std::exception &e) 
             {
                 sError = "Error: Unable to send beacon;:"+std::string(e.what());
-                return false;
-            }
-            catch(...)
-            {
-                sError = "Error: Unable to send beacon::Unknown Exception.";
                 return false;
             }
      }
