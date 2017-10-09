@@ -1467,6 +1467,23 @@ bool Contains(const std::string& data, const std::string& instring)
     return data.find(instring) != std::string::npos;
 }
 
+std::vector<std::string> split(const std::string& s, const std::string& delim)
+{
+    size_t pos = 0;
+    size_t end = 0;
+    std::vector<std::string> elems;
+
+    while((end = s.find(delim, pos)) != std::string::npos)
+    {
+        elems.push_back(s.substr(pos, end - pos));
+        pos = end + delim.size();
+    }
+
+    // Append final value
+    elems.push_back(s.substr(pos, end - pos));
+    return elems;
+}
+
 std::string GetNeuralVersion()
 {
 

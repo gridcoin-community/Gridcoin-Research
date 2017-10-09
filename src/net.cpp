@@ -29,7 +29,6 @@
 using namespace std;
 bool TallyNetworkAverages(bool ColdBoot);
 extern void DoTallyResearchAverages(void* parg);
-extern void ExecGridcoinServices(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
@@ -1606,41 +1605,6 @@ begin:
 }
 
 
-
-
-void ThreadExecuteGridcoinServices(void* parg)
-{
-    RenameThread("grc-services");
-
-begin:
-    try
-    {
-        ExecGridcoinServices(parg);
-    }
-    catch (bad_alloc ba)
-    {
-        printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadExecuteGridcoinServices()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        printf("ThreadExecuteGridcoinServices exited (interrupt)\r\n");
-        return;
-    }
-    catch(...)
-    {
-        printf("Error in ThreadExecuteGridcoinServices... Recovering ");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Services Exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-}
-
-
-
 void BusyWaitForTally()
 {
     if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
@@ -1690,24 +1654,6 @@ void DoTallyResearchAverages(void* parg)
         }
     }
 }
-
-
-void ExecGridcoinServices(void* parg)
-{
-    printf("\r\nStarting dedicated Gridcoin Services thread...\r\n");
-
-    while (!fShutdown)
-    {
-        MilliSleep(5000);
-        if (bExecuteGridcoinServices)
-        {
-                bExecuteGridcoinServices=false;
-        }
-    }
-}
-
-
-
 
 void ThreadDumpAddress2(void* parg)
 {
@@ -2384,13 +2330,9 @@ void StartNode(void* parg)
         printf("Error: createThread(ThreadDumpAddress) failed\r\n");
 
     // Tally network averages
-    if (!netThreads->createThread(ThreadTallyResearchAverages,NULL,"ThreadTallyResearchAverages"))
-        printf("Error: createThread(ThreadTally) failed\r\n");
-
-    // Services
-    if (!netThreads->createThread(ThreadExecuteGridcoinServices,NULL,"ThreadExecuteGridcoinServices"))
-       printf("Error: createThread(ThreadExecuteGridcoinServices) failed\r\n");
-
+    if (!NewThread(ThreadTallyResearchAverages, NULL))
+        printf("Error; NewThread(ThreadTally) failed\n");
+    
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
         printf("Staking disabled\r\n");
@@ -2407,6 +2349,7 @@ bool StopNode()
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
+
     netThreads->interruptAll();
     netThreads->removeAll();
     MilliSleep(50);

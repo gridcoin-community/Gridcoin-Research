@@ -144,6 +144,15 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     if (nModifierTime / nModifierInterval >= pindexPrev->GetBlockTime() / nModifierInterval)
         return true;
 
+    const uint256 ModifGlitch_hash("439b96fd59c3d585a6b93ee63b6e1d78361d7eb9b299657dee6a2c5400ccba29");
+    const uint64_t ModifGlitch_correct=0xdf209a3032807577;
+    if(pindexPrev->GetBlockHash()==ModifGlitch_hash)
+    {
+        nStakeModifier = ModifGlitch_correct;
+        fGeneratedStakeModifier = true;
+        return true;
+    }
+
     // Sort candidate blocks by timestamp
     vector<pair<int64_t, uint256> > vSortedByTimestamp;
     vSortedByTimestamp.reserve(64 * nModifierInterval / GetTargetSpacing(pindexPrev->nHeight));
@@ -745,7 +754,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     printf("-");
     //if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
 
-    if (pindexPrev->nHeight > nGrandfather)
+    if (pindexPrev->nHeight > nGrandfather || pindexPrev->nHeight >= 999000)
     {
         if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake,
             targetProofOfStake, hashBoinc, fDebug, checking_local, por_nonce))
@@ -847,24 +856,11 @@ bool FindStakeModifierRev(uint64_t& nStakeModifier,CBlockIndex* pindexPrev)
 {
     nStakeModifier = 0;
     const CBlockIndex* pindex = pindexPrev;
-    const uint256 ModifGlitch_hash("12bcc37789ef00809d1287f4af3c46106181e7c60654c7d3f0677aefa8a78774");
-    const uint64_t ModifGlitch_correct=0xdf209a3032807577;
 
     while (1)
     {
         if(!pindex)
             return error("FindStakeModifierRev: no previous block from %d",pindexPrev->nHeight);
-
-        if (pindex->GetBlockHash()==ModifGlitch_hash)
-        {
-            if(pindex->nStakeModifier!=ModifGlitch_correct)
-                printf("WARNING: Correcting Stake Modifier Glitch, wrong= %016"
-                    PRIx64 ", correct %016" PRIx64 "\n",
-                    pindex->nStakeModifier, ModifGlitch_correct);
-
-            nStakeModifier = ModifGlitch_correct;
-            return true;
-        }
 
         if (pindex->GeneratedStakeModifier())
         {

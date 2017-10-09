@@ -32,10 +32,10 @@
 
 #include "json/json_spirit.h"
 #include "votingdialog.h"
+#include "util.h"
 
 
 extern json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
-extern std::vector<std::string> split(std::string s, std::string delim);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
@@ -288,8 +288,8 @@ void VotingTableModel::resetData(bool history)
             item->question_ = QString::fromStdString(sQuestion);
             item->answers_ = QString::fromStdString(sAnswers);
             item->arrayOfAnswers_ = QString::fromStdString(sArrayOfAnswers);
-            item->totalParticipants_ = QString::fromStdString(sTotalParticipants);
-            item->totalShares_ = QString::fromStdString(sTotalShares);
+            item->totalParticipants_ = std::stoul(sTotalParticipants);
+            item->totalShares_ = std::stoul(sTotalShares);
             item->url_ = QString::fromStdString(sUrl);
             item->bestAnswer_ = QString::fromStdString(sBestAnswer);
             items.push_back(item);

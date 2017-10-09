@@ -21,6 +21,7 @@
 #include "boinc.h"
 #include "beacon.h"
 #include "miner.h"
+#include "backup.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -196,8 +197,6 @@ std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a6
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
-bool BackupWallet(const CWallet& wallet, const std::string& strDest);
-
 std::string YesNo(bool bin);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -279,7 +278,6 @@ bool bCheckedForUpgradeLive = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
 bool bDoTally = false;
-bool bExecuteGridcoinServices = false;
 bool bTallyFinished = false;
 bool bGridcoinGUILoaded = false;
 
@@ -292,7 +290,6 @@ extern void LoadCPIDsInBackground();
 extern void ThreadCPIDs();
 extern void GetGlobalStatus();
 
-extern std::vector<std::string> split(std::string s, std::string delim);
 extern bool ProjectIsValid(std::string project);
 
 double GetNetworkAvgByProject(std::string projectname);
@@ -336,7 +333,7 @@ std::string    msNeuralResponse;
 std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
-int nGrandfather = 860000;
+int nGrandfather = 1034700;
 int nNewIndex = 271625;
 int nNewIndex2 = 364500;
 
@@ -2364,26 +2361,6 @@ const CTxOut& CTransaction::GetOutputFor(const CTxIn& input, const MapPrevTx& in
     return txPrev.vout[input.prevout.n];
 }
 
-
-std::vector<std::string> split(std::string s, std::string delim)
-{
-    //Split a std::string by a std::string delimiter into a vector of strings:
-    size_t pos = 0;
-    std::string token;
-    std::vector<std::string> elems;
-    while ((pos = s.find(delim)) != std::string::npos)
-    {
-        token = s.substr(0, pos);
-        elems.push_back(token);
-        s.erase(0, pos + delim.length());
-    }
-    elems.push_back(s);
-    return elems;
-
-}
-
-
-
 int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
 {
     if (IsCoinBase())
@@ -4081,7 +4058,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
-    if (nHeight > nGrandfather)
+    if (nHeight > nGrandfather || nHeight >= 999000)
     {
             // Check coinbase timestamp
             if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
@@ -4109,12 +4086,12 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     uint256 hashProof;
 
     // Verify hash target and signature of coinstake tx
-    if (nHeight > nGrandfather && nVersion <= 7)
+    if ((nHeight > nGrandfather || nHeight >= 999000) && nVersion <= 7)
     {
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && IsLockTimeWithinMinutes(GetBlockTime(),600))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(),600) || nHeight >= 999000))
                     {
                         return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
                     }
@@ -4480,7 +4457,7 @@ void GridcoinServices()
     if (TimerMain("send_beacon",180))
     {
         std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-        if (tBeaconPublicKey.empty())
+        if (tBeaconPublicKey.empty() && IsResearcher(GlobalCPUMiningCPID.cpid))
         {
             std::string sOutPubKey = "";
             std::string sOutPrivKey = "";
@@ -5492,7 +5469,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     if (cpid.empty() || cpid=="INVESTOR")
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
     
-    if (fDebug10) printf(" {GLC %s} ",sCalledFrom.c_str());
+    if (fDebug10) printf("GetLifetimeCPID.BEGIN: %s %s",sCalledFrom.c_str(),cpid.c_str());
 
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
@@ -5502,6 +5479,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
         const uint256& uHash = *it;
+        if (fDebug10) printf("GetLifetimeCPID: trying %s\n",uHash.GetHex().c_str());
 
         // Ensure that we have this block.
         if (mapBlockIndex.count(uHash) == 0)
@@ -5515,10 +5493,14 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
             continue;
 
         // Block located and verified.
+        if (fDebug10)
+            printf("GetLifetimeCPID: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f\n",
+            uHash.GetHex().c_str(),pblockindex->nHeight,(int)stCPID.LastBlock,pblockindex->nResearchSubsidy);
         if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
         {
             stCPID.LastBlock = pblockindex->nHeight;
             stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+            if (fDebug10) printf("GetLifetimeCPID: using it\n");
         }
         stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
         stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
@@ -5534,6 +5516,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     }
 
     // Save updated CPID data holder.
+    if (fDebug10) printf("GetLifetimeCPID.END: %s set {%s %d}\n",cpid.c_str(),stCPID.BlockHash.c_str(),(int)stCPID.LastBlock);
     mvResearchAge[cpid] = stCPID;
     return stCPID;
 }
@@ -6611,11 +6594,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
                     {
-                        // ppcoin: send latest proof-of-work block to allow the
-                        // download node to accept as orphan (proof-of-stake
-                        // block might be rejected by stake connection check)
+                        // Bypass PushInventory, this must send even if redundant,
+                        // and we want it right after the last block so they don't
+                        // wait for other stuff first.
                         vector<CInv> vInv;
-                        vInv.push_back(CInv(MSG_BLOCK, GetLastBlockIndex(pindexBest, false)->GetBlockHash()));
+                        vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
                         pfrom->PushMessage("inv", vInv);
                         pfrom->hashContinue = 0;
                     }
@@ -6661,7 +6644,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Send the rest of the chain
         if (pindex)
             pindex = pindex->pnext;
-        int nLimit = 1000;
+        int nLimit = 500;
 
         if (fDebug3) printf("\r\ngetblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
         for (; pindex; pindex = pindex->pnext)
@@ -8651,12 +8634,18 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
+    if(fDebug && !bVerifyingBlock) printf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)\n",cpid.c_str(),pindexLast->GetBlockHash().GetHex().c_str(),pindexLast->nHeight,pindexBest->nHeight);
+    if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
+    if(fDebug && !bVerifyingBlock) printf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f\n",pHistorical->GetBlockHash().GetHex().c_str(),pHistorical->nHeight,!!pHistorical->pnext,pHistorical->nMagnitude);
     if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
     {
         //No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
+        if(fDebug && !bVerifyingBlock) printf("CRE: No prior block exists...\n");
         if (!AreBinarySuperblocksEnabled(pindexLast->nHeight))
         {
+                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, Binary SB not enabled, "
+                    "dCurrentMagnitude= %.1f\n", dCurrentMagnitude);
                 return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
         }
         else
@@ -8670,14 +8659,18 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
                 if ((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit) > 500)
                 {
-                    printf("Newbie special stake too high, reward=500GRC");
+                    printf("ComputeResearchAccrual: Newbie special stake too high, reward=500GRC");
                     return (500*COIN);
                 }
-                if (fDebug3) printf("\r\n Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
+                if (fDebug3) printf("\r\n ComputeResearchAccrual: Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
+                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, "
+                    "dNewbieAccrualAge= %f dCurrentMagnitude= %.1f dMagnitudeUnit= %f Accrual= %f\n",
+                    dNewbieAccrualAge, dCurrentMagnitude, dMagnitudeUnit, iAccrual/(double)COIN);
                 return iAccrual;
             }
             else
             {
+                if(fDebug && !bVerifyingBlock) printf("CRE: Using 0.01 age bootstrap\n");
                 return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
             }
         }
@@ -8686,6 +8679,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
     double dAvgMag = stCPID.ResearchAverageMagnitude;
+    if(fDebug && !bVerifyingBlock) printf("CRE: iRABlockSpan= %d  ResearchAverageMagnitude= %.1f\n",iRABlockSpan,dAvgMag);
     // ResearchAge: If the accrual age is > 20 days, add in the midpoint lifetime average magnitude to ensure the overall avg magnitude accurate:
     if (iRABlockSpan > (int)(BLOCKS_PER_DAY*20))
     {
@@ -8696,19 +8690,26 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
     }
     if (AvgMagnitude > 20000) AvgMagnitude = 20000;
+    if(fDebug && !bVerifyingBlock) printf("CRE: AvgMagnitude= %.3f\n",AvgMagnitude);
 
     dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
     if (dAccrualAge < 0) dAccrualAge=0;
+    if(fDebug && !bVerifyingBlock) printf("CRE: dAccrualAge= %.8f\n",dAccrualAge);
     dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+    if(fDebug && !bVerifyingBlock) printf("CRE: new.dMagnitudeUnit= %f\n",dMagnitudeUnit);
 
     int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
+    if(fDebug && !bVerifyingBlock) printf("CRE: Accrual= %f\n",Accrual/(double)COIN);
     // Double check researcher lifetime paid
     double days = (nTime - stCPID.LowLockTime) / 86400.0;
     double PPD = stCPID.ResearchSubsidy/(days+.01);
     double ReferencePPD = dMagnitudeUnit*dAvgMag;
+    if(fDebug && !bVerifyingBlock) printf("CRE: RSA$ "
+        "LowLockTime= %u days= %f stCPID.ResearchSubsidy= %f PPD= %f ReferencePPD= %f\n",
+        stCPID.LowLockTime,days,   stCPID.ResearchSubsidy,    PPD,    ReferencePPD );
     if ((PPD > ReferencePPD*5))
     {
-            printf("Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
+            printf("ComputeResearchAccrual: Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
                    PPD,ReferencePPD,cpid.c_str(),dAvgMag,days, dMagnitudeUnit);
             Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
@@ -8719,6 +8720,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     if ((fDebug && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
         operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,
         (double)pHistorical->nHeight,   dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
+    if(fDebug && !bVerifyingBlock) printf("CRE.End: Accrual= %f\n",Accrual/(double)COIN);
     return Accrual;
 }
 
@@ -8739,10 +8741,14 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
         uint256 hash(stCPID.BlockHash);
         if (mapBlockIndex.count(hash) == 0) return pindexGenesisBlock;
         CBlockIndex* pblockindex = mapBlockIndex[hash];
+        if(!pblockindex->pnext)
+            printf("GetHistoricalMagnitude: WARNING index {%s %d} for cpid %s, "
+            "has no next pointer (not n main chain)\n",pblockindex->GetBlockHash().GetHex().c_str(),
+            pblockindex->nHeight,cpid.c_str());
         if (pblockindex->nHeight < nMinIndex)
         {
             // In this case, the last staked block was Found, but it is over 6 months old....
-            printf("Last staked block found at height %f, but cannot verify magnitude older than 6 months! \r\n",(double)pblockindex->nHeight);
+            printf("GetHistoricalMagnitude: Last staked block found at height %d, but cannot verify magnitude older than 6 months (min %d)!\n",pblockindex->nHeight,nMinIndex);
             return pindexGenesisBlock;
         }
 
@@ -9006,40 +9012,7 @@ bool StrLessThanReferenceHash(std::string rh)
     return (uADH < uRef);
 }
 
-// Generate backup filenames with local date and time with suffix support
-std::string GetBackupFilename(const std::string& basename, const std::string& suffix)
+bool IsResearcher(const std::string& cpid)
 {
-    time_t biTime;
-    struct tm * blTime;
-    time (&biTime);
-    blTime = localtime(&biTime);
-    char boTime[200];
-    strftime(boTime, sizeof(boTime), "%FT%H-%M-%S", blTime);
-    return suffix.empty()
-        ? basename + "-" + std::string(boTime)
-        : basename + "-" + std::string(boTime) + "-" + suffix;
-}
-
-// Todo: Make and move to config.cpp/h (ravon)
-bool BackupConfigFile(const std::string& strDest)
-{
-    filesystem::path ConfigTarget = GetDataDir() / "walletbackups" / strDest;
-    filesystem::create_directories(ConfigTarget.parent_path());
-    filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
-    try
-    {
-        #if BOOST_VERSION >= 104000
-            filesystem::copy_file(ConfigSource, ConfigTarget, filesystem::copy_option::overwrite_if_exists);
-        #else
-            filesystem::copy_file(ConfigSource, ConfigTarget);
-        #endif
-        printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
-        return true;
-    }
-    catch(const filesystem::filesystem_error &e)
-    {
-        printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
-        return false;
-    }
-    return false;
+    return cpid.length() == 32;
 }
