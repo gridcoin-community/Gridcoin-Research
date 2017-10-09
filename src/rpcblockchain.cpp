@@ -142,7 +142,6 @@ extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
-double cdbl(std::string s, int place);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);

@@ -22,7 +22,6 @@
 
 using namespace std;
 
-double cdbl(std::string s, int place);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
