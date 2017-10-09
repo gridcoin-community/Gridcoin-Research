@@ -29,12 +29,6 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
-#ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
-    ui->addButton->setIcon(QIcon());
-    ui->clearButton->setIcon(QIcon());
-    ui->sendButton->setIcon(QIcon());
-#endif
-
 #if QT_VERSION >= 0x040700
     /* Do not move this to the XML file, Qt before 4.7 will choke on it */
     ui->lineEditCoinControlChange->setPlaceholderText(tr("Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)"));
@@ -98,12 +92,18 @@ void SendCoinsDialog::setModel(WalletModel *model)
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
 
+        // Update icons according to the stylesheet
+        connect(model->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons()));
+
         // Coin Control
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
         connect(model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
         connect(model->getOptionsModel(), SIGNAL(transactionFeeChanged(qint64)), this, SLOT(coinControlUpdateLabels()));
         ui->frameCoinControl->setVisible(model->getOptionsModel()->getCoinControlFeatures());
         coinControlUpdateLabels();
+
+        // set the icons according to the style options
+        updateIcons();
     }
 }
 
@@ -523,4 +523,18 @@ void SendCoinsDialog::coinControlUpdateLabels()
         ui->widgetCoinControl->hide();
         ui->labelCoinControlInsuffFunds->hide();
     }
+}
+
+void SendCoinsDialog::updateIcons()
+{
+#ifdef Q_OS_MAC // Icons on push buttons are very uncommon on Mac
+    ui->addButton->setIcon(QIcon());
+    ui->clearButton->setIcon(QIcon());
+    ui->sendButton->setIcon(QIcon());
+#else
+    if(model && model->getOptionsModel())
+    {
+        ui->sendButton->setIcon(QIcon(":/icons/send_"+model->getOptionsModel()->getCurrentStyle()));
+    }
+#endif
 }

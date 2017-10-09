@@ -175,8 +175,7 @@ QString ClientModel::formatBoostVersion()  const
 		s << "Using Boost "     
           << BOOST_VERSION / 100000     << "."  // major version
           << BOOST_VERSION / 100 % 1000 << "."  // minior version
-          << BOOST_VERSION % 100                // patch level
-          << "\r\n";
+          << BOOST_VERSION % 100;                // patch level
 		return QString::fromStdString(s.str());
 }
 

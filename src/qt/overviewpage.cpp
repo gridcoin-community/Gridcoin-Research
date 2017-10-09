@@ -128,6 +128,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
+    connect(ui->labelPoll, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
+
     // init "out of sync" warning labels
     ui->labelWalletStatus->setText("(" + tr("out of sync") + ")");
     ui->labelTransactionsStatus->setText("(" + tr("out of sync") + ")");
@@ -143,6 +145,12 @@ void OverviewPage::handleTransactionClicked(const QModelIndex &index)
     if(filter)
         emit transactionClicked(filter->mapToSource(index));
 }
+
+void OverviewPage::handlePollLabelClicked()
+{
+    emit pollLabelClicked();
+}
+
 
 void OverviewPage::resizeEvent(QResizeEvent *event)
 {

@@ -87,8 +87,12 @@ void SendCoinsEntry::setModel(WalletModel *model)
     this->model = model;
 
     if(model && model->getOptionsModel())
+    {
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-
+        connect(model->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons()));
+        // set the icons according to the style options
+        updateIcons();
+    }
     connect(ui->payAmount, SIGNAL(textChanged()), this, SIGNAL(payAmountChanged()));
 
     clear();
@@ -188,5 +192,13 @@ void SendCoinsEntry::updateDisplayUnit()
     {
         // Update payAmount with the current unit
         ui->payAmount->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
+    }
+}
+
+void SendCoinsEntry::updateIcons()
+{
+    if(model && model->getOptionsModel())
+    {
+        ui->addressBookButton->setIcon(QIcon(":/icons/send_"+model->getOptionsModel()->getCurrentStyle()));
     }
 }

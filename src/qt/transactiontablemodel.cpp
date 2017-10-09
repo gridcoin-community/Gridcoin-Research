@@ -421,22 +421,14 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	switch(wtx->type)
     {
     case TransactionRecord::Generated:
-		    if (false && wtx->RemoteFlag==1)
-			{
-				return QIcon(":/icons/cpumined_blue");
-			}
-			else if (reward >= max*.90)
-			{
-					return QIcon(":/icons/gold_cpumined");
-			}
-         	else if (is_por)
-			{
-					return QIcon(":/icons/tx_cpumined");
-			}
-	   		else
-	   		{
-	   			return QIcon(":/icons/tx_mined");
-	   		}
+        if (is_por)
+        {
+            return QIcon(":/icons/tx_cpumined");
+        }
+        else
+        {
+            return QIcon(":/icons/tx_mined");
+        }
 
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:
