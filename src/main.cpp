@@ -4081,7 +4081,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
-    if (nHeight > nGrandfather)
+    if (nHeight > nGrandfather || nHeight >= 999000)
     {
             // Check coinbase timestamp
             if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
@@ -4109,12 +4109,12 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     uint256 hashProof;
 
     // Verify hash target and signature of coinstake tx
-    if (nHeight > nGrandfather && nVersion <= 7)
+    if ((nHeight > nGrandfather || nHeight >= 999000) && nVersion <= 7)
     {
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && IsLockTimeWithinMinutes(GetBlockTime(),600))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(),600) || nHeight >= 999000))
                     {
                         return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
                     }
