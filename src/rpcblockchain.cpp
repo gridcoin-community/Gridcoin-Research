@@ -1007,36 +1007,39 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             std::string sName = GlobalCPUMiningCPID.cpid;
             try
             {
-                // Store the key 
-                sMessage = AddContract(sType,sName,sBase);
+
                 // Backup config with old keys like a normal backup
-                std::string sBeaconBackupOldConfigFilename = GetBackupFilename("gridcoinresearch.conf");
-                boost::filesystem::path sBeaconBackupOldConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupOldConfigFilename;
-                BackupConfigFile(sBeaconBackupOldConfigTarget.string().c_str());
-                StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+                if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf")))
+                {
+                    sError = "Failed to backup old configuration file. Beacon not sent.";
+                    return false;
+                }
+
                 // Backup config with new keys with beacon suffix
-                std::string sBeaconBackupNewConfigFilename = GetBackupFilename("gridcoinresearch.conf", "beacon");
-                boost::filesystem::path sBeaconBackupNewConfigTarget = GetDataDir() / "walletbackups" / sBeaconBackupNewConfigFilename;
-                BackupConfigFile(sBeaconBackupNewConfigTarget.string().c_str());
+                StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+                if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
+                {
+                    sError = "Failed to back up configuration file. Beacon not sent, please manually roll back to previous configuration.";
+                    return false;
+                }
+
+                // Send the beacon transaction
+                sMessage = AddContract(sType,sName,sBase);
+                // This prevents repeated beacons
+                nLastBeaconAdvertised = nBestHeight;
                 // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
                 ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
-                // Since everything was successful add LastAdvertisedBeacon block height to memory.
-                nLastBeaconAdvertised = nBestHeight;
+
                 return true;
             }
             catch(Object& objError)
             {
-                sError = "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+                sError = "Error: Unable to send beacon::"+json_spirit::write_string(json_spirit::Value(objError),true);
                 return false;
             }
             catch (std::exception &e) 
             {
-                sError = "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
-                return false;
-            }
-            catch(...)
-            {
-                sError = "Error: Unable to send beacon::Wallet Locked::Please enter the wallet passphrase with walletpassphrase first.";
+                sError = "Error: Unable to send beacon;:"+std::string(e.what());
                 return false;
             }
      }
