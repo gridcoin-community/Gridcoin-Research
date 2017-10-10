@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [3.6.3.0] 2017-10-09
 ### Fixed
  - Fix problems sending beacons on Windows, #684 (@tomasbrod).
+ - Fix clients getting stuck at V8 blocks when syncing, #686 (@tomasbrod).
 
 ## [3.6.2.0] 2017-09-28
 ### Added
