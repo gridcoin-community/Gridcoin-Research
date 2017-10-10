@@ -15,7 +15,6 @@
 #include <QtConcurrentRun>
 #include <QClipboard>
 #include <QEvent>
-#include <QFont>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
@@ -408,7 +407,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableView_->verticalHeader()->hide();
 
     tableView_->setModel(proxyModel_);
-    tableView_->setFont(QFont("Arial", 8));
+
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
 #else
@@ -630,21 +629,50 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     ,answerTable_(NULL)
 {
     setWindowTitle(tr("Poll Results"));
-    resize(800, 320);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
+    QGridLayout *glayout = new QGridLayout();
+    glayout->setHorizontalSpacing(0);
+    glayout->setVerticalSpacing(0);
+    glayout->setColumnStretch(0, 1);
+    glayout->setColumnStretch(1, 3);
+    glayout->setColumnStretch(2, 5);
+
+    vlayout->addLayout(glayout);
+
+    QLabel *question = new QLabel(tr("Q: "));
+    question->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    question->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(question, 0, 0);
+
     question_ = new QLabel();
     question_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    question_->setText(tr("Q: "));
     question_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    vlayout->addWidget(question_);
+    glayout->addWidget(question_, 0, 1);
+
+    QLabel *discussionLabel = new QLabel(tr("Discussion URL: "));
+    discussionLabel->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    discussionLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(discussionLabel, 1, 0);
 
     url_ = new QLabel();
     url_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    url_->setText(tr("Discussion URL: "));
-    url_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    vlayout->addWidget(url_);
+    url_->setTextFormat(Qt::RichText);
+    url_->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    url_->setOpenExternalLinks(true);
+    glayout->addWidget(url_, 1, 1);
+
+    QLabel *bestAnswer = new QLabel(tr("Best Answer: "));
+    bestAnswer->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    bestAnswer->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(bestAnswer, 3, 0);
+
+    answer_ = new QLabel();
+    answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+    answer_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    glayout->addWidget(answer_, 3, 1);
 
     QTabWidget *resTabWidget = new QTabWidget;
 
@@ -670,12 +698,6 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
     vlayout->addWidget(resTabWidget);
-
-    answer_ = new QLabel();
-    answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    answer_->setText(tr("Best Answer: "));
-    answer_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    vlayout->addWidget(answer_);
 }
 
 void VotingChartDialog::resetData(const VotingItem *item)
@@ -696,9 +718,9 @@ void VotingChartDialog::resetData(const VotingItem *item)
     QtCharts::QPieSeries *series = new QtCharts::QPieSeries();
 #endif
 
-    question_->setText(QString(tr("Q: ")) + item->question_);
-    url_->setText(QString(tr("Discussion URL: ")) + item->url_);
-    answer_->setText(QString(tr("Best Answer: ")) + item->bestAnswer_);
+    question_->setText(item->question_);
+    url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
+    answer_->setText(item->bestAnswer_);
 
     std::string arrayOfAnswers = item->arrayOfAnswers_.toUtf8().constData();
     std::vector<std::string> vAnswers = split(arrayOfAnswers, "<RESERVED>"); // the first entry is empty
@@ -743,7 +765,7 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("PlaceVote"));
-    resize(800, 320);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
@@ -773,7 +795,9 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
 
     url_ = new QLabel();
     url_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    url_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    url_->setTextFormat(Qt::RichText);
+    url_->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    url_->setOpenExternalLinks(true);
     glayout->addWidget(url_, 1, 1);
 
     QLabel *bestAnswer = new QLabel(tr("Best Answer: "));
@@ -813,7 +837,7 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     answerList_->clear();
     voteNote_->clear();
     question_->setText(item->question_);
-    url_->setText(item->url_);
+    url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     answer_->setText(item->bestAnswer_);
     sVoteTitle=item->title_;
     std::string listOfAnswers = item->answers_.toUtf8().constData();
@@ -864,7 +888,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("Create Poll"));
-    resize(800, 320);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.4);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
 
