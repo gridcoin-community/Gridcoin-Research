@@ -5585,8 +5585,12 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
 
     //Clear the votes
+    // Previously ClearCache was doing nothing. It was fixed, so we must
+    // emulate the old behaviour by not calling it until v9.
+    if(IsV9Enabled(nBestHeight)
+        ClearCache("neuralsecurity");
+
     WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
-    ClearCache("neuralsecurity");
     try
     {
         int nMaxDepth = nBestHeight;
@@ -8212,18 +8216,13 @@ void ClearCache(std::string section)
 {
        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
        {
-                std::string key_section = mvApplicationCache[(*ii).first];
-                if (key_section.length() > section.length())
+                const std::string& key_section = (*ii).first;
+                if (boost::algorithm::starts_with(key_section, section))
                 {
-                    if (key_section.substr(0,section.length())==section)
-                    {
-                        printf("\r\nClearing the cache....of value %s \r\n",mvApplicationCache[key_section].c_str());
                         mvApplicationCache[key_section]="";
                         mvApplicationCacheTimestamp[key_section]=1;
-                    }
                 }
        }
-
 }
 
 
