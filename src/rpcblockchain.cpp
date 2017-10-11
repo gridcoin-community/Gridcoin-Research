@@ -75,7 +75,6 @@ std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 
 double Round(double d, int place);
-bool UnusualActivityReport();
 double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
@@ -1608,15 +1607,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
         entry.push_back(Pair("Pending Superblock Height",ReadCache("neuralsecurity","pending")));
         results.push_back(entry);
-    }
-    else if (sItem == "unusual")
-    {
-        
-            UnusualActivityReport();
-            entry.push_back(Pair("UAR",1));
-            results.push_back(entry);
-
-
     }
     else if (sItem == "neuralhash")
     {

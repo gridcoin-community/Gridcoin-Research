@@ -82,7 +82,6 @@ int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
        
@@ -8333,110 +8332,6 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
    return fMessageLoaded;
 }
 
-
-
-
-
-
-
-bool UnusualActivityReport()
-{
-
-    map<uint256, CTxIndex> mapQueuedChanges;
-    CTxDB txdb("r");
-    int nMaxDepth = nBestHeight;
-    CBlock block;
-    int nMinDepth = fTestNet ? 1 : 1;
-    if (nMaxDepth < nMinDepth || nMaxDepth < 10) return false;
-    nMinDepth = 50000;
-    nMaxDepth = nBestHeight;
-    int ii = 0;
-            for (ii = nMinDepth; ii <= nMaxDepth; ii++)
-            {
-                CBlockIndex* pblockindex = blockFinder.FindByHeight(ii);
-                if (block.ReadFromDisk(pblockindex))
-                {
-                    int64_t nFees = 0;
-                    int64_t nValueIn = 0;
-                    int64_t nValueOut = 0;
-                    int64_t nStakeReward = 0;
-                    //unsigned int nSigOps = 0;
-                    double DPOR_Paid = 0;
-                    bool bIsDPOR = false;
-                    std::string MainRecipient = "";
-                    double max_subsidy = GetMaximumBoincSubsidy(block.nTime)+50; //allow for
-                    for (auto &tx : block.vtx)
-                    {
-
-                            MapPrevTx mapInputs;
-                            if (tx.IsCoinBase())
-                                    nValueOut += tx.GetValueOut();
-                            else
-                            {
-                                     bool fInvalid;
-                                     bool TxOK = tx.FetchInputs(txdb, mapQueuedChanges, true, false, mapInputs, fInvalid);
-                                     if (!TxOK) continue;
-                                     int64_t nTxValueIn = tx.GetValueIn(mapInputs);
-                                     int64_t nTxValueOut = tx.GetValueOut();
-                                     nValueIn += nTxValueIn;
-                                     nValueOut += nTxValueOut;
-                                     if (!tx.IsCoinStake())             nFees += nTxValueIn - nTxValueOut;
-                                     if (tx.IsCoinStake())
-                                     {
-                                            nStakeReward = nTxValueOut - nTxValueIn;
-                                            if (tx.vout.size() > 2) bIsDPOR = true;
-                                            //DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
-                                            if (tx.vout.size() > 2)
-                                            {
-                                                MainRecipient = PubKeyToAddress(tx.vout[2].scriptPubKey);
-                                            }
-                                            int iStart = 3;
-                                            if (ii > 267500) iStart=2;
-                                            if (bIsDPOR)
-                                            {
-                                                    for (unsigned int i = iStart; i < tx.vout.size(); i++)
-                                                    {
-                                                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-                                                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                                                        if (Amount > GetMaximumBoincSubsidy(GetAdjustedTime()))
-                                                        {
-                                                        }
-
-                                                        if (Amount > max_subsidy)
-                                                        {
-                                                            printf("Block #%f:%f, Recipient %s, Paid %f\r\n",(double)ii,(double)i,Recipient.c_str(),Amount);
-                                                        }
-                                                        DPOR_Paid += Amount;
-
-                                                    }
-
-                                           }
-                                     }
-
-                                //if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))                return false;
-                            }
-
-                    }
-
-                    int64_t TotalMint = nValueOut - nValueIn + nFees;
-                    double subsidy = CoinToDouble(TotalMint);
-                    if (subsidy > max_subsidy)
-                    {
-                        std::string hb = block.vtx[0].hashBoinc;
-                        MiningCPID bb = DeserializeBoincBlock(hb,block.nVersion);
-                        if (bb.cpid != "INVESTOR")
-                        {
-                                printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0,
-                                    bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy,(double)nStakeReward);
-                        }
-                }
-
-            }
-        }
-
-
-    return true;
-}
 
 
 double GRCMagnitudeUnit(int64_t locktime)
