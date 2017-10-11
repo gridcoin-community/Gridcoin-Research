@@ -631,9 +631,13 @@ void BitcoinGUI::createActions()
     upgradeAction->setStatusTip(tr("Upgrade Client"));
     upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
-   aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
-   aboutAction->setToolTip(tr("Show information about Gridcoin"));
-   aboutAction->setMenuRole(QAction::AboutRole);
+    rebootAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Reboot Client"), this);
+    rebootAction->setStatusTip(tr("Reboote Client"));
+    rebootAction->setMenuRole(QAction::TextHeuristicRole);
+
+    aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About Gridcoin"), this);
+    aboutAction->setToolTip(tr("Show information about Gridcoin"));
+    aboutAction->setMenuRole(QAction::AboutRole);
 
     miningAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Neural Network"), this);
     miningAction->setStatusTip(tr("Neural Network"));
@@ -1337,6 +1341,11 @@ void BitcoinGUI::upgradeClicked()
 void BitcoinGUI::downloadClicked()
 {
     DownloadBlocks();
+}
+
+void BitcoinGUI::rebootClicked()
+{
+    qApp->exit(EXIT_CODE_REBOOT);
 }
 
 void BitcoinGUI::configClicked()

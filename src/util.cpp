@@ -1600,3 +1600,66 @@ std::string MakeSafeMessage(const std::string& messagestring)
     }
     return safemessage;
 }
+
+bool ThreadHandler::createThread(void(*pfn)(boost::shared_ptr<ThreadHandler>), boost::shared_ptr<ThreadHandler> parg, const std::string tname)
+{
+    try
+    {
+        boost::thread *newThread = new boost::thread(pfn, parg);
+        threadGroup.add_thread(newThread);
+        threadMap[tname] = newThread;
+    } catch(boost::thread_resource_error &e) {
+        printf("Error creating thread: %s\n", e.what());
+        return false;
+    }
+    return true;
+}
+
+bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::string tname)
+{
+    try
+    {
+        boost::thread *newThread = new boost::thread(pfn, parg);
+        threadGroup.add_thread(newThread);
+        threadMap[tname] = newThread;
+    } catch(boost::thread_resource_error &e) {
+        printf("Error creating thread: %s\n", e.what());
+        return false;
+    }
+    return true;
+}
+
+int ThreadHandler::numThreads()
+{
+    return threadGroup.size();
+}
+
+bool ThreadHandler::threadExists(const string tname)
+{
+    if(threadMap.count(tname) > 0)
+        return true;
+    else
+        return false;
+}
+
+void ThreadHandler::interruptAll(){
+    threadGroup.interrupt_all();
+}
+
+void ThreadHandler::removeByName(const std::string tname)
+{
+    threadGroup.remove_thread(threadMap[tname]);
+    threadMap[tname]->join();
+    threadMap.erase(tname);
+}
+
+void ThreadHandler::removeAll()
+{
+    printf("Wait for %d threads to join.\n",numThreads());
+    threadGroup.join_all();
+    for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
+    {
+        threadGroup.remove_thread(it->second);
+    }
+    threadMap.clear();
+}

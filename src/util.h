@@ -26,6 +26,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/date_time/gregorian/gregorian_types.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/thread.hpp>
 
 #include <openssl/sha.h>
 #include <openssl/ripemd.h>
@@ -621,6 +622,23 @@ public:
 
 bool NewThread(void(*pfn)(void*), void* parg);
 void RenameThread(const char* name);
+
+class ThreadHandler
+{
+public:
+    ThreadHandler(){};
+    ~ThreadHandler(){};
+    bool createThread(void(*pfn)(boost::shared_ptr<ThreadHandler>), boost::shared_ptr<ThreadHandler> parg, const std::string tname);
+    bool createThread(void(*pfn)(void*), void* parg, const std::string tname);
+    int numThreads();
+    bool threadExists(const std::string tname);
+    void interruptAll();
+    void removeAll();
+    void removeByName(const std::string tname);
+private:
+    boost::thread_group threadGroup;
+    std::map<std::string,boost::thread*> threadMap;
+};
 
 #endif
 

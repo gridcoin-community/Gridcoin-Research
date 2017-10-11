@@ -195,12 +195,20 @@ void ThreadIRCSeed(void* parg)
     {
         ThreadIRCSeed2(parg);
     }
-    catch (std::exception& e) {
+    catch (std::exception& e)
+    {
         PrintExceptionContinue(&e, "ThreadIRCSeed()");
-    } catch (...) {
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadIRCSeed exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         PrintExceptionContinue(NULL, "ThreadIRCSeed()");
     }
-    if (fDebug) printf("ThreadIRCSeed exited\n");
+    printf("ThreadIRCSeed exited\r\n");
 }
 
 void ThreadIRCSeed2(void* parg)

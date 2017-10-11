@@ -15,7 +15,6 @@
 #include <boost/filesystem/convenience.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/thread.hpp>
 #include <openssl/crypto.h>
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -23,12 +22,10 @@
 #include "global_objects_noui.hpp"
 
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
 bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally();
-extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
@@ -58,23 +55,9 @@ void InitializeBoincProjects();
 // Shutdown
 //
 
-
-
-
-
-
 bool ShutdownRequested()
 {
     return fRequestShutdown;
-}
-
-
-void ExitTimeout(void* parg)
-{
-#ifdef WIN32
-    MilliSleep(5000);
-    ExitProcess(0);
-#endif
 }
 
 void StartShutdown()
@@ -86,27 +69,10 @@ void StartShutdown()
     // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
     uiInterface.QueueShutdown();
 #else
-    // Without UI, Shutdown() can simply be started in a new thread
-    NewThread(Shutdown, NULL);
+    // Without UI, shutdown is initiated and shutdown() is called in AppInit
+    fRequestShutdown = true;
 #endif
 }
-
-
-
-void DetectShutdownThread(boost::thread_group* threadGroup)
-{
-    // Tell the main threads to shutdown.
-    while (!fRequestShutdown)
-    {
-        MilliSleep(200);
-        if (fRequestShutdown)
-        {
-            printf("Shutting down forcefully...");
-        }
-    }
-    printf("Shutdown thread ended.");
-}
-
 
 void InitializeBoincProjects()
 {
@@ -184,21 +150,17 @@ void Shutdown(void* parg)
 
         fShutdown = true;
         nTransactionsUpdated++;
-        //        CTxDB().Close();
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
-        NewThread(ExitTimeout, NULL);
+        // close transaction database to prevent lock issue on restart
+        CTxDB().Close();
         MilliSleep(50);
         printf("Gridcoin exited\n\n");
         fExit = true;
-#ifndef QT_GUI
-        // ensure non-UI client gets exited here, but let Bitcoin-Qt reach 'return 0;' in bitcoin.cpp
-        exit(0);
-#endif
     }
     else
     {
@@ -230,6 +192,8 @@ bool AppInit(int argc, char* argv[])
 {
 
     bool fRet = false;
+
+    boost::shared_ptr<ThreadHandler> threads(new ThreadHandler);
 
     try
     {
@@ -272,9 +236,8 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-        new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 
-        fRet = AppInit2();
+        fRet = AppInit2(threads);
     }
     catch (std::exception& e) {
         printf("AppInit()Exception1");
@@ -285,8 +248,17 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(NULL, "AppInit()");
     }
-    if (!fRet)
-        Shutdown(NULL);
+    if (fRet)
+    {   // succesfully initialized, wait for shutdown
+        while (!ShutdownRequested())
+            MilliSleep(500);
+    }
+    Shutdown(NULL);
+
+    // delete thread handler
+    threads->removeAll();
+    threads.reset();
+
     return fRet;
 }
 
@@ -445,13 +417,13 @@ bool InitSanityCheck(void)
 
 
 
-void ThreadAppInit2(void* parg)
+void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
     bGridcoinGUILoaded=false;
     printf("Initializing GUI...");
-    AppInit2();
+    AppInit2(th);
     printf("GUI Loaded...");
     bGridcoinGUILoaded = true;
 }
@@ -463,7 +435,7 @@ void ThreadAppInit2(void* parg)
 /** Initialize Gridcoin.
  *  @pre Parameters should be parsed and config file should be read.
  */
-bool AppInit2()
+bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
 {
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER
@@ -1107,12 +1079,13 @@ bool AppInit2()
 
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
-    if (!NewThread(StartNode, NULL))
+    if (!threads->createThread(StartNode, NULL, "Start Thread"))
+
         InitError(_("Error: could not start node"));
     BusyWaitForTally();
 
     if (fServer)
-        NewThread(ThreadRPCServer, NULL);
+        threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");
 
     // ********************************************************* Step 12: finished
 
@@ -1125,12 +1098,6 @@ bool AppInit2()
      // Add wallet transactions that aren't already in a block to mapTransactions
     pwalletMain->ReacceptWalletTransactions();
 
-#if !defined(QT_GUI)
-    // Loop until process is exit()ed from shutdown() function,
-    // called from ThreadRPCServer thread when a "stop" command is received.
-    while (1)
-        MilliSleep(5000);
-#endif
     printf("\r\nExiting AppInit2\r\n");
     return true;
 }
