@@ -3888,7 +3888,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc, nVersion);
-    if (height1 > nGrandfather)
+    if (height1 > nGrandfather && !IsV9Enabled(height1))
     {
         double blockVersion = BlockVersion(bb.clientversion);
         double cvn = ClientVersionNew();
@@ -3899,7 +3899,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     }
     
     //Orphan Flood Attack
-    if (height1 > nGrandfather)
+    if (height1 > nGrandfather && !IsV9Enabled(height1))
     {
         double bv = BlockVersion(bb.clientversion);
         double cvn = ClientVersionNew();
