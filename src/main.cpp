@@ -1347,7 +1347,6 @@ bool CTransaction::CheckTransaction() const
         if (!MoneyRange(nValueOut))
             return DoS(100, error("CTransaction::CheckTransaction() : txout total out of range"));
     }
-
     // Check for duplicate inputs
     set<COutPoint> vInOutPoints;
     for (auto const& txin : vin)
@@ -1368,7 +1367,6 @@ bool CTransaction::CheckTransaction() const
             if (txin.prevout.IsNull())
                 return DoS(10, error("CTransaction::CheckTransaction() : prevout is null"));
     }
-
     return true;
 }
 
@@ -1410,6 +1408,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     if (!tx.CheckTransaction())
         return error("AcceptToMemoryPool : CheckTransaction failed");
+
+    // Verify beacon contract in tx if found
+    if (!VerifyBeaconContractTx(tx.hashBoinc))
+        return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx; rejected"));
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -3856,7 +3858,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     for (unsigned int i = 1; i < vtx.size(); i++)
         if (vtx[i].IsCoinBase())
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
-
     //Research Age
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
@@ -3998,6 +3999,10 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
+
+        // Verify beacon contract if a transaction contains a beacon contract
+        if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx contained within block; rejected"));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
