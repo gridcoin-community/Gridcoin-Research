@@ -2894,6 +2894,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         if (nSigOps > MAX_BLOCK_SIGOPS)
             return DoS(100, error("ConnectBlock[] : too many sigops"));
 
+        // Verify beacon contract if a transaction contains a beacon contract
+        if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fReorganizing)
+            return DoS(25, error("ConnectBlock[] : bad beacon contract in block"));
+
         CDiskTxPos posThisTx(pindex->nFile, pindex->nBlockPos, nTxPos);
         if (!fJustCheck)
             nTxPos += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
@@ -3999,10 +4003,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
-
-        // Verify beacon contract if a transaction contains a beacon contract
-        if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx contained within block; rejected"));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
