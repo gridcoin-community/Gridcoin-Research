@@ -23,7 +23,6 @@
 #include "miner.h"
 #include "backup.h"
 
-#include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -4973,22 +4972,9 @@ std::string RetrieveMd5(std::string s1)
     }
 }
 
-
 double cdbl(std::string s, int place)
 {
-    if (s=="") s="0";
-    s = strReplace(s,"\r","");
-    s = strReplace(s,"\n","");
-    s = strReplace(s,"a","");
-    s = strReplace(s,"a","");
-    s = strReplace(s,"b","");
-    s = strReplace(s,"c","");
-    s = strReplace(s,"d","");
-    s = strReplace(s,"e","");
-    s = strReplace(s,"f","");
-    double r = lexical_cast<double>(s);
-    double d = Round(r,place);
-    return d;
+    return Round(atof(s.c_str()), place);
 }
 
 
