@@ -1325,7 +1325,7 @@ bool CTransaction::CheckTransaction() const
     for (unsigned int i = 0; i < vout.size(); i++)
     {
         const CTxOut& txout = vout[i];
-        if (txout.IsEmpty() && !IsCoinBase() && !IsCoinStake())
+        if (txout.IsEmpty() && IsUser())
             return DoS(100, error("CTransaction::CheckTransaction() : txout empty for user transaction"));
         if (txout.nValue < 0)
             return DoS(100, error("CTransaction::CheckTransaction() : txout.nValue negative"));
@@ -1348,6 +1348,17 @@ bool CTransaction::CheckTransaction() const
     {
         if (vin[0].scriptSig.size() < 2 || vin[0].scriptSig.size() > 100)
             return DoS(100, error("CTransaction::CheckTransaction() : coinbase script size is invalid"));
+    }
+    else if (IsCoinBaseStake())
+    {
+        if (vin[0].scriptSig.size() < 2 || vin[0].scriptSig.size() > 100)
+            return DoS(100, error("CTransaction::CheckTransaction() : coinbase script size is invalid"));
+
+        for (unsigned int i = 1; i < vin.size(); i++)
+        {
+            if(vin[i].prevout.IsNull())
+                return DoS(10, error("CTransaction::CheckTransaction() : another prevout of coinbase is null"));
+        }
     }
     else
     {
@@ -1402,12 +1413,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx; rejected"));
 
     // Coinbase is only valid in a block, not as a loose transaction
-    if (tx.IsCoinBase())
-        return tx.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
-
-    // ppcoin: coinstake is also only valid in a block, not as a loose transaction
-    if (tx.IsCoinStake())
-        return tx.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
+    if (tx.IsUser())
+        return tx.DoS(100, error("AcceptToMemoryPool : coinbase or coinstake as individual tx"));
 
     // Rather not work on nonstandard transactions (unless -testnet)
     if (!fTestNet && !IsStandardTx(tx))
@@ -1664,7 +1671,7 @@ int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
-    if (!(IsCoinBase() || IsCoinStake()))
+    if (IsUser())
         return 0;
     return max(0, (nCoinbaseMaturity+10) - GetDepthInMainChain());
 }
@@ -1684,7 +1691,7 @@ bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb)
         // Add previous supporting transactions first
         for (auto tx : vtxPrev)
         {
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()))
+            if (tx.IsUser())
             {
                 uint256 hash = tx.GetHash();
                 if (!mempool.exists(hash) && !txdb.ContainsTx(hash))
@@ -2237,6 +2244,10 @@ bool CTransaction::DisconnectInputs(CTxDB& txdb)
         for (auto const& txin : vin)
         {
             COutPoint prevout = txin.prevout;
+
+            if(prevout.IsNull())
+                continue;
+
             // Get prev txindex from disk
             CTxIndex txindex;
             if (!txdb.ReadTxIndex(prevout.hash, txindex))
@@ -2279,6 +2290,9 @@ bool CTransaction::FetchInputs(CTxDB& txdb, const map<uint256, CTxIndex>& mapTes
     for (unsigned int i = 0; i < vin.size(); i++)
     {
         COutPoint prevout = vin[i].prevout;
+
+        if(prevout.IsNull())
+            continue;
         if (inputsRet.count(prevout.hash))
             continue; // Got it already
 
@@ -2359,6 +2373,8 @@ int64_t CTransaction::GetValueIn(const MapPrevTx& inputs) const
     int64_t nResult = 0;
     for (unsigned int i = 0; i < vin.size(); i++)
     {
+        if(vin[i].prevout.IsNull())
+            continue;
         nResult += GetOutputFor(vin[i], inputs).nValue;
     }
     return nResult;
@@ -2416,6 +2432,8 @@ unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
     for (unsigned int i = 0; i < vin.size(); i++)
     {
         const CTxOut& prevout = GetOutputFor(vin[i], inputs);
+        if(prevout.IsNull())
+            continue;
         if (prevout.scriptPubKey.IsPayToScriptHash())
             nSigOps += prevout.scriptPubKey.GetSigOpCount(vin[i].scriptSig);
     }
@@ -2436,6 +2454,10 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
         for (unsigned int i = 0; i < vin.size(); i++)
         {
             COutPoint prevout = vin[i].prevout;
+
+            if(IsCoinBaseStake() && i==0)
+                continue;
+
             assert(inputs.count(prevout.hash) > 0);
             CTxIndex& txindex = inputs[prevout.hash].first;
             CTransaction& txPrev = inputs[prevout.hash].second;
@@ -2465,6 +2487,10 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
         for (unsigned int i = 0; i < vin.size(); i++)
         {
             COutPoint prevout = vin[i].prevout;
+
+            if(IsCoinBaseStake() && i==0)
+                continue;
+
             assert(inputs.count(prevout.hash) > 0);
             CTxIndex& txindex = inputs[prevout.hash].first;
             CTransaction& txPrev = inputs[prevout.hash].second;
@@ -2524,7 +2550,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
             }
         }
 
-        if (!IsCoinStake())
+        if (!IsCoinStake() && !IsCoinBaseStake())
         {
             if (nValueIn < GetValueOut())
             {
@@ -2908,9 +2934,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             int64_t nTxValueOut = tx.GetValueOut();
             nValueIn += nTxValueIn;
             nValueOut += nTxValueOut;
-            if (!tx.IsCoinStake())
+            if (tx.IsUser())
+            {
                 nFees += nTxValueIn - nTxValueOut;
-            if (tx.IsCoinStake())
+            }
+            else
             {
                 nStakeReward = nTxValueOut - nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
@@ -2927,7 +2955,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 }
 
                 // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-                if (bIsDPOR && pindex->nHeight > nGrandfather)
+                if (nVersion<10 && bIsDPOR && pindex->nHeight > nGrandfather)
                 {
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
@@ -3386,7 +3414,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         // We only do this for blocks after the last checkpoint (reorganisation before that
         // point should only happen with -reindex/-loadblock, or a misbehaving peer.
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
+            if (tx.IsUser() && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
                 vResurrect.push_front(tx);
 
         // remeber the cpid to re-read later
@@ -3682,6 +3710,8 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
 
     for (auto const& txin : vin)
     {
+        if(txin.prevout.IsNull())
+            continue;
         // First try finding the previous transaction in database
         CTransaction txPrev;
         CTxIndex txindex;
@@ -3828,11 +3858,14 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     }
 
     // First transaction must be coinbase, the rest must not be
-    if (vtx.empty() || !vtx[0].IsCoinBase())
+    if (vtx.empty())
         return DoS(100, error("CheckBlock[] : first tx is not coinbase"));
-    for (unsigned int i = 1; i < vtx.size(); i++)
-        if (vtx[i].IsCoinBase())
-            return DoS(100, error("CheckBlock[] : more than one coinbase"));
+    for (unsigned int i = 0; i < vtx.size(); i++)
+    {
+        bool cbase=(vtx[i].IsCoinBase() || vtx[i].IsCoinBaseStake());
+        if ( cbase != (i==0) )
+            return DoS(100, error("CheckBlock[] : coinbase is not first transaction (%u)",i));
+    }
     //Research Age
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
@@ -3944,8 +3977,9 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
     // End of Proof Of Research
 
-    if (IsProofOfStake())
+    if (nVersion<10 && IsProofOfStake())
     {
+        // for merged base+stake there is no separate stake tx
         // Coinbase output should be empty if proof-of-stake block
         if (vtx[0].vout.size() != 1 || !vtx[0].vout[0].IsEmpty())
             return DoS(100, error("CheckBlock[] : coinbase output not empty for proof-of-stake block"));
@@ -4028,7 +4062,8 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // The block height at which point we start rejecting v7 blocks and
     // start accepting v8 blocks.
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
-              || (IsV8Enabled(nHeight) && nVersion < 8))
+              || (IsV8Enabled(nHeight) && nVersion < 8)
+              )
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
              ||(!IsV8Enabled(nHeight) && nVersion >= 8)
