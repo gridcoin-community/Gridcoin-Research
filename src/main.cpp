@@ -8639,6 +8639,13 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
     if(fDebug && !bVerifyingBlock) printf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)\n",cpid.c_str(),pindexLast->GetBlockHash().GetHex().c_str(),pindexLast->nHeight,pindexBest->nHeight);
+
+    // Pre-v8 the magnitude unit was always 0 which caused users to always
+    // stake their newbie block as 1 GRC regardless of what they were owed.
+    // V9 corrects this so the user is properly paid.
+    if (IsV9Enabled(pindexLast->nHeight))
+        dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+
     if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
     if(fDebug && !bVerifyingBlock) printf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f\n",pHistorical->GetBlockHash().GetHex().c_str(),pHistorical->nHeight,!!pHistorical->pnext,pHistorical->nMagnitude);
