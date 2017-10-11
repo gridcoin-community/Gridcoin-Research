@@ -5564,7 +5564,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     //Clear the votes
     // Previously ClearCache was doing nothing. It was fixed, so we must
     // emulate the old behaviour by not calling it until v9.
-    if(IsV9Enabled(nBestHeight)
+    if(IsV9Enabled(nBestHeight))
         ClearCache("neuralsecurity");
 
     WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
