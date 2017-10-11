@@ -4387,19 +4387,18 @@ void GridcoinServices()
     }
     else
     {
-        // When superblock is not old, Tally every N mins:
-        int nTallyGranularity = fTestNet ? 60 : 20;
-        if ((nBestHeight % nTallyGranularity) == 0)
-        {
-            TallyNetworkAverages();
-            ComputeNeuralNetworkSupermajorityHashes();
-        }
-
         if ((nBestHeight % 5)==0)
         {
                 UpdateNeuralNetworkQuorumData();
         }
 
+    }
+
+    // Tally every BLOCK_GRANULARITY blocks
+    if (((nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY) == 0)
+    {
+        TallyNetworkAverages();
+        ComputeNeuralNetworkSupermajorityHashes();
     }
 
     // Every N blocks as a Synchronized TEAM:
