@@ -2078,16 +2078,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Tally Network Averages",1));
             results.push_back(entry);
     }
-    else if (sItem == "peek")
-    {
-            std::vector<std::string> s = split(msPeek,"<CR>");
-            
-            for (int i = 0; i < ((int)(s.size()-1)); i++)
-            {
-                entry.push_back(Pair(s[i],i + 1));
-            }
-            results.push_back(entry);
-    }
     else if (sItem == "encrypt")
     {
         //Encrypt a phrase

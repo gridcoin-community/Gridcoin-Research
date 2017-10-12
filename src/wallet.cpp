@@ -26,7 +26,6 @@ double cdbl(std::string s, int place);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
-void AddPeek(std::string data);
 
 MiningCPID DeserializeBoincBlock(std::string block);
 
@@ -1117,10 +1116,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             uint256 hash = tx.GetHash();
             if (!txdb.ContainsTx(hash))
-            {
                 RelayTransaction((CTransaction)tx, hash);
-                AddPeek("Relaying wallet transaction " + tx.GetHash().ToString());
-            }
         }
     }
     if (!(IsCoinBase() || IsCoinStake()))
@@ -1130,8 +1126,6 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             if (fDebug10) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
             RelayTransaction((CTransaction)*this, hash);
-            AddPeek("Relaying wallet transaction " + hash.ToString());
-
         }
     }
 }

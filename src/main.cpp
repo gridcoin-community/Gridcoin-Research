@@ -60,7 +60,6 @@ extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::strin
 std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
 extern double ExtractMagnitudeFromExplainMagnitude();
-extern void AddPeek(std::string data);
 extern void GridcoinServices();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
@@ -152,7 +151,6 @@ unsigned int REORGANIZE_FAILED = 0;
 unsigned int WHITELISTED_PROJECTS = 0;
 int64_t nLastTallied = 0;
 int64_t nLastPing = 0;
-int64_t nLastPeek = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
 int64_t nLastTallyBusyWait = 0;
@@ -318,8 +316,6 @@ std::string    msMiningErrors5;
 std::string    msMiningErrors6;
 std::string    msMiningErrors7;
 std::string    msMiningErrors8;
-std::string    msPeek;
-std::string    msLastCommand;
 std::string    msAttachmentGuid;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
@@ -360,9 +356,6 @@ std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CP
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
 // End of Gridcoin Global vars
-
-bool bDebugMode = false;
-bool bBoincSubsidyEligible = false;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -7006,21 +6999,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     return true;
 }
 
-
-void AddPeek(std::string data)
-{
-    return;
-    std::string buffer = ToString(GetAdjustedTime()) + ":" + data + "<CR>";
-    msPeek += buffer;
-    if (msPeek.length() > 60000) msPeek = "";
-    if ((GetAdjustedTime() - nLastPeek) > 60)
-    {
-        if (fDebug) printf("\r\nLong Duration : %s\r\n",buffer.c_str());
-    }
-    nLastPeek = GetAdjustedTime();
-}
-
-
 // requires LOCK(cs_vRecvMsg)
 bool ProcessMessages(CNode* pfrom)
 {
@@ -7074,37 +7052,6 @@ bool ProcessMessages(CNode* pfrom)
 
         // Message size
         unsigned int nMessageSize = hdr.nMessageSize;
-
-        // Have a peek into what this node is doing
-        if (false && LessVerbose(100))
-        {
-            std::string Peek = strCommand + ":" + RoundToString((double)nMessageSize,0) + " [" + NodeAddress(pfrom) + "]";
-            AddPeek(Peek);
-            std::string sCurrentCommand = RoundToString((double)GetAdjustedTime(),0) + Peek;
-            std::string msLastNodeCommand = ReadCache("node_command",NodeAddress(pfrom));
-            WriteCache("node_command",NodeAddress(pfrom),sCurrentCommand,GetAdjustedTime());
-            if (msLastCommand == sCurrentCommand || (msLastNodeCommand == sCurrentCommand && !sCurrentCommand.empty()))
-            {
-                  //Node Duplicates
-                  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) + 1;
-                  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-                  if ((node_duplicates > 350 && !OutOfSyncByAge()))
-                  {
-                        printf(" Dupe (misbehaving) %s %s ",NodeAddress(pfrom).c_str(),Peek.c_str());
-                        pfrom->fDisconnect = true;
-                        WriteCache("duplicates",NodeAddress(pfrom),"0",GetAdjustedTime());
-                        return false;
-                  }
-            }
-            else
-            {
-                  double node_duplicates = cdbl(ReadCache("duplicates",NodeAddress(pfrom)),0) - 15;
-                  if (node_duplicates < 1) node_duplicates = 0;
-                  WriteCache("duplicates",NodeAddress(pfrom),RoundToString(node_duplicates,0),GetAdjustedTime());
-            }
-            msLastCommand = sCurrentCommand;
-        }
-
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
@@ -7956,28 +7903,11 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 // returns true if wasn't already contained in the set
                 if (pto->setInventoryKnown.insert(inv).second)
                 {
-                     vInv.push_back(inv);
-                     if (vInv.size() >= 1000)
-                     {
-                            if (false)
-                            {
-                                AddPeek("PushInv-Large " + RoundToString((double)vInv.size(),0));
-                                // If node has not been misbehaving (1-30-2016) then push it: (pto->nMisbehavior) && pto->NodeAddress().->addr.IsRoutable()
-                                pto->PushMessage("inv", vInv);
-                                AddPeek("Pushed Inv-Large " + RoundToString((double)vInv.size(),0));
-                                if (fDebug10) printf(" *PIL* ");
-                                vInv.clear();
-                                if (TimerMain("PushInventoryLarge",50)) CleanInboundConnections(true);
-                                // Eventually ban the node if they keep asking for inventory
-                                TrackRequests(pto,"Inv-Large");
-                                AddPeek("Done with Inv-Large " + RoundToString((double)vInv.size(),0));
-                            }
-                            else
-                            {
-                                pto->PushMessage("inv", vInv);
-                                vInv.clear();
-                            }
-       
+                    vInv.push_back(inv);
+                    if (vInv.size() >= 1000)
+                    {
+                        pto->PushMessage("inv", vInv);
+                        vInv.clear();
                     }
                 }
             }
@@ -7999,7 +7929,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             if (!AlreadyHave(txdb, inv))
             {
                 if (fDebugNet)        printf("sending getdata: %s\n", inv.ToString().c_str());
-                //AddPeek("Getdata " + inv.ToString());
                 vGetData.push_back(inv);
                 if (vGetData.size() >= 1000)
                 {
@@ -8011,11 +7940,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             pto->mapAskFor.erase(pto->mapAskFor.begin());
         }
         if (!vGetData.empty())
-        {
             pto->PushMessage("getdata", vGetData);
-            //AddPeek("GetData");
-        }
-
     }
     return true;
 }
