@@ -16,7 +16,7 @@ extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::string ConvertHexToBin(std::string a);
 extern std::string ConvertBinToHex(std::string a);
 extern bool fTestNet;
-double cdbl(std::string s, int place);
+double RoundFromString(std::string s, int place);
 
 namespace
 {
@@ -127,11 +127,6 @@ BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock312000InTestnet)
     BOOST_CHECK(IsV8Enabled(311999) == false);
     BOOST_CHECK(IsV8Enabled(312000) == true);
     fTestNet = was_testnet;
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_cdblShouldRoundToDouble)
-{
-    BOOST_CHECK_EQUAL(3.14, cdbl("3.1415", 2));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
