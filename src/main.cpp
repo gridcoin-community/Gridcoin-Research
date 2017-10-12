@@ -552,6 +552,9 @@ void GetGlobalStatus()
         if(!Alerts.empty())
             GlobalStatusStruct.errors += "Alert: " + Alerts + "; ";
 
+        if (PORDiff < 0.1)
+            GlobalStatusStruct.errors +=  "Low difficulty!; ";
+
         if(!MinerStatus.ReasonNotStaking.empty())
             GlobalStatusStruct.errors +=  "Miner: " + MinerStatus.ReasonNotStaking + "; ";
 
