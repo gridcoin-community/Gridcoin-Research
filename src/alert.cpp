@@ -250,8 +250,8 @@ bool CAlert::ProcessAlert(bool fThread)
                 // the whole string before passing it to the shell:
                 std::string singleQuote("'");
                 // safeChars chosen to allow simple messages/URLs/email addresses, but avoid anything
-                // even possibly remotely dangerous like & or >
-                std::string safeChars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890 .,;_/:?@");
+                // even possibly remotely dangerous like & ; $ or >
+                std::string safeChars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890 .,_/:?@");
                 std::string safeStatus;
                 for (std::string::size_type i = 0; i < strStatusBar.size(); i++)
                 {

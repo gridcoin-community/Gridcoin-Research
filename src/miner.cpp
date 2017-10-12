@@ -453,7 +453,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         || !wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn) )
     {
         LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+="No coins to stake; ";
+        MinerStatus.ReasonNotStaking+="No coins";
         if (fDebug) printf("CreateCoinStake: %s",MinerStatus.ReasonNotStaking.c_str());
         return false;
     }
@@ -788,14 +788,14 @@ bool IsMiningAllowed(CWallet *pwallet)
     if(pwallet->IsLocked())
     {
         LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+="Wallet locked; ";
+        MinerStatus.ReasonNotStaking+="Wallet locked";
         status=false;
     }
 
     if (!bNetAveragesLoaded)
     {
         LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+="Net averages not yet loaded; ";
+        MinerStatus.ReasonNotStaking+="Net averages not yet loaded";
         if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
@@ -805,7 +805,7 @@ bool IsMiningAllowed(CWallet *pwallet)
         )
     {
         LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+="Offline; ";
+        MinerStatus.ReasonNotStaking+="Offline";
         status=false;
     }
 

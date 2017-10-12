@@ -539,10 +539,33 @@ void GetGlobalStatus()
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        GlobalStatusStruct.status = msMiningErrors;
         GlobalStatusStruct.poll = msPoll;
-        GlobalStatusStruct.errors =  MinerStatus.ReasonNotStaking + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
         GlobalStatusStruct.rsaOverview =  msRSAOverview; // not displayed on overview page anymore.
+
+        GlobalStatusStruct.status.clear();
+
+        if(MinerStatus.WeightSum)
+            GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
+
+        GlobalStatusStruct.errors.clear();
+        std::string Alerts = GetWarnings("statusbar");
+        if(!Alerts.empty())
+            GlobalStatusStruct.errors += "Alert: " + Alerts + "; ";
+
+        if(!MinerStatus.ReasonNotStaking.empty())
+            GlobalStatusStruct.errors +=  "Miner: " + MinerStatus.ReasonNotStaking + "; ";
+
+        unsigned long stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
+        if(stk_dropped)
+            GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+
+        if(!msMiningErrors6.empty())
+            GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
+        if(!msMiningErrors7.empty())
+            GlobalStatusStruct.errors += msMiningErrors7 + "; ";
+        if(!msMiningErrors8.empty())
+            GlobalStatusStruct.errors += msMiningErrors8 + "; ";
+
         }
         return;
     }
@@ -551,11 +574,6 @@ void GetGlobalStatus()
         msMiningErrors = _("Error obtaining status.");
 
         printf("Error obtaining status\r\n");
-        return;
-    }
-    catch(...)
-    {
-        msMiningErrors = _("Error obtaining status (08-18-2014).");
         return;
     }
 }
