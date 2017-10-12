@@ -191,7 +191,7 @@ bool AppInit(int argc, char* argv[])
 
     bool fRet = false;
 
-    boost::shared_ptr<ThreadHandler> threads(new ThreadHandler);
+    ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
 
     try
     {
@@ -414,7 +414,7 @@ bool InitSanityCheck(void)
 
 
 
-void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th)
+void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
@@ -432,7 +432,7 @@ void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th)
 /** Initialize Gridcoin.
  *  @pre Parameters should be parsed and config file should be read.
  */
-bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
+bool AppInit2(ThreadHandlerPtr threads)
 {
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER

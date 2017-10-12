@@ -7,6 +7,7 @@
 #define BITCOIN_UTIL_H
 
 #include "uint256.h"
+#include "fwd.h"
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -627,8 +628,7 @@ class ThreadHandler
 {
 public:
     ThreadHandler(){};
-    ~ThreadHandler(){};
-    bool createThread(void(*pfn)(boost::shared_ptr<ThreadHandler>), boost::shared_ptr<ThreadHandler> parg, const std::string tname);
+    bool createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname);
     bool createThread(void(*pfn)(void*), void* parg, const std::string tname);
     int numThreads();
     bool threadExists(const std::string tname);

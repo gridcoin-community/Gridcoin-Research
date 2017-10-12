@@ -1601,7 +1601,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
     return safemessage;
 }
 
-bool ThreadHandler::createThread(void(*pfn)(boost::shared_ptr<ThreadHandler>), boost::shared_ptr<ThreadHandler> parg, const std::string tname)
+bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname)
 {
     try
     {
