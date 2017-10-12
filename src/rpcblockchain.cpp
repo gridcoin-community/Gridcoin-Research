@@ -138,7 +138,6 @@ double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
-extern enum Checkpoints::CPMode CheckpointsMode;
 int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
@@ -4383,25 +4382,12 @@ Value getcheckpoint(const Array& params, bool fHelp)
             "Show info of synchronized checkpoint.\n");
 
     Object result;
-    CBlockIndex* pindexCheckpoint;
+    const CBlockIndex* pindexCheckpoint = Checkpoints::AutoSelectSyncCheckpoint();
 
-    result.push_back(Pair("synccheckpoint", Checkpoints::hashSyncCheckpoint.ToString().c_str()));
-    pindexCheckpoint = mapBlockIndex[Checkpoints::hashSyncCheckpoint];
+    result.push_back(Pair("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str()));
     result.push_back(Pair("height", pindexCheckpoint->nHeight));
     result.push_back(Pair("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str()));
-
-    // Check that the block satisfies synchronized checkpoint
-    if (CheckpointsMode == Checkpoints::STRICT)
-        result.push_back(Pair("policy", "strict"));
-
-    if (CheckpointsMode == Checkpoints::ADVISORY)
-        result.push_back(Pair("policy", "advisory"));
-
-    if (CheckpointsMode == Checkpoints::PERMISSIVE)
-        result.push_back(Pair("policy", "permissive"));
-
-    if (mapArgs.count("-checkpointkey"))
-        result.push_back(Pair("checkpointmaster", true));
+    result.push_back(Pair("policy", "rolling"));
 
     return result;
 }
