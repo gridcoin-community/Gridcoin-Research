@@ -629,8 +629,6 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     {
         if (!SignSignature(*pwallet, *pcoin, block.vtx[1], nIn++)) 
         {
-            LOCK(MinerStatus.lock);
-            MinerStatus.Message+="Failed to sign coinstake; ";
             return error("SignStakeBlock: failed to sign coinstake");
         }
     }
@@ -639,8 +637,6 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     block.hashMerkleRoot = block.BuildMerkleTree();
     if( !key.Sign(block.GetHash(), block.vchBlockSig) )
     {
-        LOCK(MinerStatus.lock);
-        MinerStatus.Message+="Failed to sign block; ";
         return error("SignStakeBlock: failed to sign block");
     }
 
@@ -778,18 +774,11 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     if(blocknew.nVersion < 8) mintlimit = std::max(mintlimit, 0.0051);
     if (nReward == 0 || mint < mintlimit)
     {
-            LOCK(MinerStatus.lock);
-            MinerStatus.Message+="Mint "+RoundToString(mint,6)+" too small (min "+RoundToString(mintlimit,6)+"); ";
             return error("CreateGridcoinReward: Mint %f of %f too small",(double)mint,(double)mintlimit);
     }
 
     //fill in reward and boinc
     blocknew.vtx[1].vout[1].nValue += nReward;
-    LOCK(MinerStatus.lock);
-    MinerStatus.Message+="Added Reward "+RoundToString(mint,3)
-        +"("+RoundToString(CoinToDouble(nFees),4)+" "
-        +RoundToString(out_interest,2)+" "
-        +RoundToString(OUT_POR,2)+"); ";
     return true;
 }
 
@@ -842,7 +831,6 @@ void StakeMiner(CWallet *pwallet)
         MiningCPID BoincData;
         { LOCK(MinerStatus.lock);
             //clear miner messages
-            MinerStatus.Message="";
             MinerStatus.ReasonNotStaking="";
 
             //New version
@@ -903,9 +891,6 @@ void StakeMiner(CWallet *pwallet)
         LOCK(cs_main);
         if (!ProcessBlock(NULL, &StakeBlock, true))
         {
-            { LOCK(MinerStatus.lock);
-                MinerStatus.Message+="Block vehemently rejected; ";
-            }
             error("StakeMiner: Block vehemently rejected");
             continue;
         }
