@@ -3888,7 +3888,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc, nVersion);
-    if (height1 > nGrandfather && !IsV9Enabled(height1))
+    if (height1 > nGrandfather && nVersion<9)
     {
         double blockVersion = BlockVersion(bb.clientversion);
         double cvn = ClientVersionNew();
@@ -3899,7 +3899,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     }
     
     //Orphan Flood Attack
-    if (height1 > nGrandfather && !IsV9Enabled(height1))
+    if (height1 > nGrandfather && nVersion<9)
     {
         double bv = BlockVersion(bb.clientversion);
         double cvn = ClientVersionNew();
@@ -8604,7 +8604,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     // Pre-v8 the magnitude unit was always 0 which caused users to always
     // stake their newbie block as 1 GRC regardless of what they were owed.
     // V9 corrects this so the user is properly paid.
-    if (IsV9Enabled(pindexLast->nHeight))
+    if (pindexLast->nVersion>=9)
         dMagnitudeUnit = GRCMagnitudeUnit(nTime);
 
     if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
