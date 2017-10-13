@@ -2216,6 +2216,29 @@ Value execute(const Array& params, bool fHelp)
             results.push_back(entry);
         }
     }
+    else if (sItem == "sendrawcontract")
+    {
+        if (params.size() != 2)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "You must specify raw contract.");
+        if (pwalletMain->IsLocked())
+            throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+        std::string sAddress = GetBurnAddress();
+        CBitcoinAddress address(sAddress);
+        if (!address.IsValid())
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+        std::string sContract = params[1].get_str();
+        entry.push_back(Pair("Contract",sContract));
+        entry.push_back(Pair("Recipient",sAddress));
+        int64_t nAmount = CENT;
+        // Wallet comments
+        CWalletTx wtx;
+        wtx.hashBoinc = sContract;
+        string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, false);
+        if (!strError.empty())
+            throw JSONRPCError(RPC_WALLET_ERROR, strError);
+        entry.push_back(Pair("TrxID",wtx.GetHash().GetHex()));
+        results.push_back(entry);
+    }
     else if (sItem == "memorizekeys")
     {
         std::string sOut = "";

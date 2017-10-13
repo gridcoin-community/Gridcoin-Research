@@ -8251,8 +8251,10 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
 
 
 
-bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string sRecipient)
+bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
 {
+    const std::string &msg = tx.hashBoinc;
+    const int64_t &nTime = tx.nTime;
           if (msg.empty()) return false;
           bool fMessageLoaded = false;
 
@@ -8355,6 +8357,8 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                             //Reserved
                             fMessageLoaded = true;
                         }
+
+                        WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
 
                   }
 
@@ -8677,7 +8681,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
                             sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
                             dAmount += CoinToDouble(tx.vout[i].nValue);
                       }
-                      MemorizeMessage(tx.hashBoinc,tx.nTime,dAmount,sRecipient);
+                      MemorizeMessage(tx,dAmount,sRecipient);
                   }
                   iPos++;
             }
