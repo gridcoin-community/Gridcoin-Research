@@ -9,7 +9,6 @@
 #include "init.h"
 #include "util.h"
 #include "ui_interface.h"
-#include "checkpoints.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
@@ -47,7 +46,6 @@ extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
-extern enum Checkpoints::CPMode CheckpointsMode;
 void InitializeBoincProjects();
 
 
@@ -336,7 +334,6 @@ std::string HelpMessage()
         "  -bind=<addr>           " + _("Bind to given address. Use [host]:port notation for IPv6") + "\n" +
         "  -dnsseed               " + _("Find peers using DNS lookup (default: 1)") + "\n" +
         "  -synctime              " + _("Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)") + "\n" +
-        "  -cppolicy              " + _("Sync checkpoints policy (default: strict)") + "\n" +
         "  -banscore=<n>          " + _("Threshold for disconnecting misbehaving peers (default: 100)") + "\n" +
         "  -bantime=<n>           " + _("Number of seconds to keep misbehaving peers from reconnecting (default: 86400)") + "\n" +
         "  -maxreceivebuffer=<n>  " + _("Maximum per-connection receive buffer, <n>*1000 bytes (default: 5000)") + "\n" +
@@ -507,21 +504,6 @@ bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
-
-    CheckpointsMode = Checkpoints::STRICT;
-    //CheckpointsMode = Checkpoints::ADVISORY;
-
-    std::string strCpMode = GetArg("-cppolicy", "strict");
-
-    if(strCpMode == "strict")
-        CheckpointsMode = Checkpoints::STRICT;
-
-    if(strCpMode == "advisory")
-        CheckpointsMode = Checkpoints::ADVISORY;
-
-    if(strCpMode == "permissive")
-        CheckpointsMode = Checkpoints::PERMISSIVE;
-
     nDerivationMethodIndex = 0;
 
     fTestNet = GetBoolArg("-testnet");
@@ -844,12 +826,6 @@ bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
             InitError(_("Invalid amount for -reservebalance=<amount>"));
             return false;
         }
-    }
-
-    if (mapArgs.count("-checkpointkey")) // ppcoin: checkpoint master priv key
-    {
-        if (!Checkpoints::SetCheckpointPrivKey(GetArg("-checkpointkey", "")))
-            InitError(_("Unable to sign checkpoint, wrong checkpointkey?\n"));
     }
 
     for (auto const& strDest : mapMultiArgs["-seednode"])

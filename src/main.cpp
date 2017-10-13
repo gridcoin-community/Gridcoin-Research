@@ -148,9 +148,7 @@ extern std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
-
 unsigned int WHITELISTED_PROJECTS = 0;
-unsigned int CHECKPOINT_VIOLATIONS = 0;
 int64_t nLastPing = 0;
 int64_t nLastPeek = 0;
 int64_t nLastAskedForBlocks = 0;
@@ -186,8 +184,6 @@ json_spirit::Array MagnitudeReportCSV(bool detail);
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
 
-uint256 muGlobalCheckpointHash = 0;
-uint256 muGlobalCheckpointHashRelayed = 0;
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
@@ -259,7 +255,6 @@ std::map<std::string, StructCPID> mvDPORCopy;
 std::map<std::string, StructCPID> mvResearchAge;
 std::map<std::string, HashSet> mvCPIDBlockHashes;
 
-enum Checkpoints::CPMode CheckpointsMode;
 BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
@@ -3536,19 +3531,6 @@ bool ForceReorganizeToHash(uint256 NewHash)
     return true;
 }
 
-
-
-void SetAdvisory()
-{
-    CheckpointsMode = Checkpoints::ADVISORY;
-
-}
-
-bool InAdvisory()
-{
-    return (CheckpointsMode == Checkpoints::ADVISORY);
-}
-
 // Called from inside SetBestChain: attaches a block to the new best chain being built
 bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing)
 {
@@ -4112,39 +4094,14 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     //Grandfather
     if (nHeight > nGrandfather)
     {
-         bool cpSatisfies = Checkpoints::CheckSync(hash, pindexPrev);
-         // Check that the block satisfies synchronized checkpoint
-         if (CheckpointsMode == Checkpoints::STRICT && !cpSatisfies)
-         {
-            if (CHECKPOINT_DISTRIBUTED_MODE==1)
-            {
-                CHECKPOINT_VIOLATIONS++;
-                if (CHECKPOINT_VIOLATIONS > 3)
-                {
-                    //For stability, move the client into ADVISORY MODE:
-                    printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
-                    CheckpointsMode = Checkpoints::ADVISORY;
-                }
-            }
-            return error("AcceptBlock() : rejected by synchronized checkpoint");
-         }
-
-        if (CheckpointsMode == Checkpoints::ADVISORY && !cpSatisfies)
-            strMiscWarning = _("WARNING: synchronized checkpoint violation detected, but skipped!");
-
-        if (CheckpointsMode == Checkpoints::ADVISORY && cpSatisfies && CHECKPOINT_DISTRIBUTED_MODE==1)
-        {
-            ///Move the client back into STRICT mode
-            CHECKPOINT_VIOLATIONS = 0;
-            printf("Moving Gridcoin into Checkpoint STRICT mode.\r\n");
-            strMiscWarning = "";
-            CheckpointsMode = Checkpoints::STRICT;
-        }
+        // Check that the block chain matches the known block chain up to a checkpoint
+        if (!Checkpoints::CheckHardened(nHeight, hash))
+            return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
 
         // Enforce rule that the coinbase starts with serialized block height
         CScript expect = CScript() << nHeight;
         if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
-            !std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
+                !std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
             return DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
     }
 
@@ -4168,8 +4125,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    // ppcoin: check pending sync-checkpoint
-    Checkpoints::AcceptPendingSyncCheckpoint();
     if (fDebug) printf("{ACC}");
     nLastAskedForBlocks=GetAdjustedTime();
     ResetTimerMain("OrphanBarrage");
@@ -4591,34 +4546,27 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     // ppcoin: check proof-of-stake
     // Limited duplicity on stake: prevents block flood attack
     // Duplicate stake allowed only when there is orphan child block
-    if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash) && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+    if (pblock->IsProofOfStake() && setStakeSeen.count(pblock->GetProofOfStake()) && !mapOrphanBlocksByPrev.count(hash))
         return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for block %s", pblock->GetProofOfStake().first.ToString().c_str(),
         pblock->GetProofOfStake().second, 
         hash.ToString().c_str());
 
-    CBlockIndex* pcheckpoint = Checkpoints::GetLastSyncCheckpoint();
-    if (pcheckpoint && pblock->hashPrevBlock != hashBestChain && !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+    if (pblock->hashPrevBlock != hashBestChain)
     {
         // Extra checks to prevent "fill up memory by spamming with bogus blocks"
+        const CBlockIndex* pcheckpoint = Checkpoints::AutoSelectSyncCheckpoint();
         int64_t deltaTime = pblock->GetBlockTime() - pcheckpoint->nTime;
-        if (deltaTime < -10*60)
+        if (deltaTime < 0)
         {
             if (pfrom)
                 pfrom->Misbehaving(1);
             return error("ProcessBlock() : block with timestamp before last checkpoint");
         }
-
-
     }
 
     // Preliminary checks
     if (!pblock->CheckBlock("ProcessBlock", pindexBest->nHeight, 100*COIN))
         return error("ProcessBlock() : CheckBlock FAILED");
-
-    // ppcoin: ask for pending sync-checkpoint if any
-    if (!IsInitialBlockDownload())
-        Checkpoints::AskForPendingSyncCheckpoint(pfrom);
-
 
     // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
@@ -4657,8 +4605,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             // Limited duplicity on stake: prevents block flood attack
             // Duplicate stake allowed only when there is orphan child block
             if (setStakeSeenOrphan.count(pblock->GetProofOfStake()) &&
-                !mapOrphanBlocksByPrev.count(hash) &&
-                !Checkpoints::WantedByPendingSyncCheckpoint(hash))
+                !mapOrphanBlocksByPrev.count(hash))
                 return error("ProcessBlock() : duplicate proof-of-stake (%s, %d) for orphan block %s",
                              pblock->GetProofOfStake().first.ToString().c_str(),
                              pblock->GetProofOfStake().second,
@@ -4710,9 +4657,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
     }
 
-   
-    // if responsible for sync-checkpoint send it
-    if (false && pfrom && !CSyncCheckpoint::strMasterPrivKey.empty())        Checkpoints::SendSyncCheckpoint(Checkpoints::AutoSelectSyncCheckpoint());
     printf("{PB}: ACC; \r\n");
     GridcoinServices();
     return true;
@@ -4939,25 +4883,6 @@ bool LoadBlockIndex(bool fAllowNew)
             return error("LoadBlockIndex() : writing genesis block to disk failed");
         if (!block.AddToBlockIndex(nFile, nBlockPos, hashGenesisBlock))
             return error("LoadBlockIndex() : genesis block not accepted");
-
-        // ppcoin: initialize synchronized checkpoint
-        if (!Checkpoints::WriteSyncCheckpoint((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)))
-            return error("LoadBlockIndex() : failed to init sync checkpoint");
-    }
-
-    string strPubKey = "";
-
-    // if checkpoint master key changed must reset sync-checkpoint
-    if (!txdb.ReadCheckpointPubKey(strPubKey) || strPubKey != CSyncCheckpoint::strMasterPubKey)
-    {
-        // write checkpoint master key to db
-        txdb.TxnBegin();
-        if (!txdb.WriteCheckpointPubKey(CSyncCheckpoint::strMasterPubKey))
-            return error("LoadBlockIndex() : failed to write new checkpoint master key to db");
-        if (!txdb.TxnCommit())
-            return error("LoadBlockIndex() : failed to commit new checkpoint master key to db");
-        if ((!fTestNet) && !Checkpoints::ResetSyncCheckpoint())
-            return error("LoadBlockIndex() : failed to reset sync-checkpoint");
     }
 
     return true;
@@ -5905,23 +5830,6 @@ string GetWarnings(string strFor)
         strStatusBar = strMiscWarning;
     }
 
-    // if detected invalid checkpoint enter safe mode
-    if (Checkpoints::hashInvalidCheckpoint != 0)
-    {
-        if (CHECKPOINT_DISTRIBUTED_MODE==1)
-        {
-            //10-18-2014-Halford- If invalid checkpoint found, reboot the node:
-            printf("Moving Gridcoin into Checkpoint ADVISORY mode.\r\n");
-            CheckpointsMode = Checkpoints::ADVISORY;
-        }
-        else
-        {
-            nPriority = 3000;
-            strStatusBar = strRPC = _("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
-            printf("WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.");
-        }
-    }
-
     // Alerts
     {
         LOCK(cs_mapAlerts);
@@ -6370,23 +6278,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 item.second.RelayTo(pfrom);
         }
 
-        // Relay sync-checkpoint
-        {
-            LOCK(Checkpoints::cs_hashSyncCheckpoint);
-            if (!Checkpoints::checkpointMessage.IsNull())
-                Checkpoints::checkpointMessage.RelayTo(pfrom);
-        }
-
         pfrom->fSuccessfullyConnected = true;
 
         if (fDebug10) printf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", pfrom->nVersion,
             pfrom->nStartingHeight, addrMe.ToString().c_str(), addrFrom.ToString().c_str(), pfrom->addr.ToString().c_str());
 
         cPeerBlockCounts.input(pfrom->nStartingHeight);
-
-        // ppcoin: ask for pending sync-checkpoint if any
-        if (!IsInitialBlockDownload())
-            Checkpoints::AskForPendingSyncCheckpoint(pfrom);
     }
     else if (pfrom->nVersion == 0)
     {
@@ -6639,40 +6536,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
     }
-    else if (strCommand == "checkpoint")
-    {
-        CSyncCheckpoint checkpoint;
-        vRecv >> checkpoint;
-        //Checkpoint received from node with more than 1 Million GRC:
-        if (CHECKPOINT_DISTRIBUTED_MODE==0 || CHECKPOINT_DISTRIBUTED_MODE==1)
-        {
-            if (checkpoint.ProcessSyncCheckpoint(pfrom))
-            {
-                // Relay
-                pfrom->hashCheckpointKnown = checkpoint.hashCheckpoint;
-                LOCK(cs_vNodes);
-                for (auto const& pnode : vNodes)
-                    checkpoint.RelayTo(pnode);
-            }
-        }
-        else if (CHECKPOINT_DISTRIBUTED_MODE == 2)
-        {
-            // R HALFORD: One of our global GRC nodes solved a PoR block, store the last blockhash in memory
-            muGlobalCheckpointHash = checkpoint.hashCheckpointGlobal;
-            // Relay
-            pfrom->hashCheckpointKnown = checkpoint.hashCheckpointGlobal;
-            //Prevent broadcast storm: If not broadcast yet, relay the checkpoint globally:
-            if (muGlobalCheckpointHashRelayed != checkpoint.hashCheckpointGlobal && checkpoint.hashCheckpointGlobal != 0)
-            {
-                LOCK(cs_vNodes);
-                for (auto const& pnode : vNodes)
-                {
-                    checkpoint.RelayTo(pnode);
-                }
-            }
-        }
-    }
-
     else if (strCommand == "getheaders")
     {
         CBlockLocator locator;
@@ -8353,8 +8216,10 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
 
 
 
-bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string sRecipient)
+bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
 {
+    const std::string &msg = tx.hashBoinc;
+    const int64_t &nTime = tx.nTime;
           if (msg.empty()) return false;
           bool fMessageLoaded = false;
 
@@ -8457,6 +8322,8 @@ bool MemorizeMessage(std::string msg, int64_t nTime, double dAmount, std::string
                             //Reserved
                             fMessageLoaded = true;
                         }
+
+                        WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
 
                   }
 
@@ -8786,7 +8653,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
                             sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
                             dAmount += CoinToDouble(tx.vout[i].nValue);
                       }
-                      MemorizeMessage(tx.hashBoinc,tx.nTime,dAmount,sRecipient);
+                      MemorizeMessage(tx,dAmount,sRecipient);
                   }
                   iPos++;
             }

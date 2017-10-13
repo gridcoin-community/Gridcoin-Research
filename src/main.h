@@ -29,10 +29,6 @@ class CTxMemPool;
 static const int LAST_POW_BLOCK = 2050;
 extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
-extern unsigned int CHECKPOINT_VIOLATIONS;
-static const int MAX_NEWBIE_BLOCKS = 200;
-static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
-static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;   //Consensus block divisor 
 
@@ -41,7 +37,6 @@ static const double NeuralNetworkMultiplier = 115000;
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
 
-extern uint256 muGlobalCheckpointHashRelayed;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
@@ -71,7 +66,6 @@ static const int64_t MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 /** Threshold for nLockTime: below this value it is interpreted as block number, otherwise as UNIX timestamp. */
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
-static const unsigned int MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE = 4000000;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

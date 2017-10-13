@@ -137,7 +137,6 @@ double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
-extern enum Checkpoints::CPMode CheckpointsMode;
 int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
@@ -2206,6 +2205,29 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Results",result));
             results.push_back(entry);
         }
+    }
+    else if (sItem == "sendrawcontract")
+    {
+        if (params.size() != 2)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "You must specify raw contract.");
+        if (pwalletMain->IsLocked())
+            throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+        std::string sAddress = GetBurnAddress();
+        CBitcoinAddress address(sAddress);
+        if (!address.IsValid())
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+        std::string sContract = params[1].get_str();
+        entry.push_back(Pair("Contract",sContract));
+        entry.push_back(Pair("Recipient",sAddress));
+        int64_t nAmount = CENT;
+        // Wallet comments
+        CWalletTx wtx;
+        wtx.hashBoinc = sContract;
+        string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, false);
+        if (!strError.empty())
+            throw JSONRPCError(RPC_WALLET_ERROR, strError);
+        entry.push_back(Pair("TrxID",wtx.GetHash().GetHex()));
+        results.push_back(entry);
     }
     else if (sItem == "memorizekeys")
     {
@@ -4373,25 +4395,12 @@ Value getcheckpoint(const Array& params, bool fHelp)
             "Show info of synchronized checkpoint.\n");
 
     Object result;
-    CBlockIndex* pindexCheckpoint;
+    const CBlockIndex* pindexCheckpoint = Checkpoints::AutoSelectSyncCheckpoint();
 
-    result.push_back(Pair("synccheckpoint", Checkpoints::hashSyncCheckpoint.ToString().c_str()));
-    pindexCheckpoint = mapBlockIndex[Checkpoints::hashSyncCheckpoint];
+    result.push_back(Pair("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str()));
     result.push_back(Pair("height", pindexCheckpoint->nHeight));
     result.push_back(Pair("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str()));
-
-    // Check that the block satisfies synchronized checkpoint
-    if (CheckpointsMode == Checkpoints::STRICT)
-        result.push_back(Pair("policy", "strict"));
-
-    if (CheckpointsMode == Checkpoints::ADVISORY)
-        result.push_back(Pair("policy", "advisory"));
-
-    if (CheckpointsMode == Checkpoints::PERMISSIVE)
-        result.push_back(Pair("policy", "permissive"));
-
-    if (mapArgs.count("-checkpointkey"))
-        result.push_back(Pair("checkpointmaster", true));
+    result.push_back(Pair("policy", "rolling"));
 
     return result;
 }
