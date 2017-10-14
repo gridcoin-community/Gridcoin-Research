@@ -96,6 +96,14 @@ inline uint32_t IsV8Enabled(int nHeight)
             : nHeight > 1010000;
 }
 
+inline uint32_t IsV9Enabled(int nHeight)
+{
+    // Start creating V9 blocks after these heights.
+    return fTestNet
+            ? nHeight > 35000
+            : nHeight > 1100000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
@@ -159,7 +167,6 @@ extern bool bOPReturnEnabled;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-extern int64_t nLastTallied;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
@@ -167,7 +174,6 @@ extern int64_t nLastTalliedNeural;
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
-extern int64_t nLastTallyBusyWait;
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -249,6 +255,11 @@ double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
+// Validate researcher rewards.
+bool CheckProofOfResearch(
+    const CBlockIndex* pindexPrev, //previous block in chain index
+    const CBlock &block);    //block to check
+
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 
@@ -978,7 +989,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 8;
+    static const int CURRENT_VERSION = 9;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;

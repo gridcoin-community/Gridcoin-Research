@@ -885,7 +885,7 @@ bool CheckProofOfStakeV8(
 
     CTransaction *p_coinstake;
 
-    if(Block.nVersion==8) {
+    if(Block.nVersion<=9) {
         if (!Block.IsProofOfStake())
             return error("CheckProofOfStakeV8() : called on non-coinstake block %s", Block.GetHash().ToString().c_str());
         p_coinstake = &Block.vtx[1];

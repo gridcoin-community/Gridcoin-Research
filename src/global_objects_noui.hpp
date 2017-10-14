@@ -21,8 +21,6 @@ extern bool bGlobalcomInitialized;
 extern bool bAllowBackToBack;
 extern bool CreatingCPUBlock;
 extern bool bStakeMinerOutOfSyncWithNetwork;
-extern bool bDoTally;
-extern bool bTallyFinished;
 extern bool bGridcoinGUILoaded;
 
 struct StructCPID
