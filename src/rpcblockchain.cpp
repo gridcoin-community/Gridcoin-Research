@@ -4391,16 +4391,17 @@ Value getcheckpoint(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getcheckpoint\n"
-            "Show info of synchronized checkpoint.\n");
+                "getcheckpoint\n"
+                "Show info of synchronized checkpoint.\n");
 
     Object result;
-    const CBlockIndex* pindexCheckpoint = Checkpoints::AutoSelectSyncCheckpoint();
-
-    result.push_back(Pair("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str()));
-    result.push_back(Pair("height", pindexCheckpoint->nHeight));
-    result.push_back(Pair("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str()));
-    result.push_back(Pair("policy", "rolling"));
+    const CBlockIndex* pindexCheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
+    if(pindexCheckpoint != NULL)
+    {
+        result.push_back(Pair("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str()));
+        result.push_back(Pair("height", pindexCheckpoint->nHeight));
+        result.push_back(Pair("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str()));
+    }
 
     return result;
 }
