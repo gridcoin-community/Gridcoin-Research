@@ -336,17 +336,17 @@ if TARGET_DARWIN
   qt_gridcoinresearch_SOURCES += $(GRIDCOIN_MM)
 endif
 qt_gridcoinresearch_LDADD = qt/libgridcoinqt.a
+if TARGET_WINDOWS
+  qt_gridcoinresearch_SOURCES += $(GRIDCOIN_RC)
+else
+  qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL)
+endif
 qt_gridcoinresearch_LDADD += $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
   $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)\
   $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 qt_gridcoinresearch_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 qt_gridcoinresearch_LIBTOOLFLAGS = --tag CXX
 
-if TARGET_WINDOWS
-  qt_gridcoinresearch_SOURCES += $(GRIDCOIN_RC)
-else
-  qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL)
-endif
 
 #locale/foo.ts -> locale/foo.qm
 QT_QM=$(QT_TS:.ts=.qm)
