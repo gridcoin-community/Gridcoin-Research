@@ -9,7 +9,7 @@ class ClickLabel:public QLabel
 {
     Q_OBJECT
 public:
-    explicit ClickLabel(QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags());
+    explicit ClickLabel(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags());
     ~ClickLabel();
 signals:
     void clicked();
