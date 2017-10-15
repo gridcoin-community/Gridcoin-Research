@@ -169,8 +169,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     setWindowTitle(tr("Gridcoin") + " " + tr("Wallet"));
 
 #ifndef Q_OS_MAC
-    qApp->setWindowIcon(QIcon(":/images/gridcoin"));
-    setWindowIcon(QIcon(":/images/gridcoin"));
+    qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
+    setWindowIcon(QPixmap(":/images/gridcoin"));
 #else
     setUnifiedTitleAndToolBarOnMac(true);
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
@@ -702,41 +702,41 @@ void BitcoinGUI::createActions()
 }
 
 void BitcoinGUI::setIcons(QString sSheet){
-    overviewAction->setIcon(QIcon(":/icons/overview_"+sSheet));
-    sendCoinsAction->setIcon(QIcon(":/icons/send_"+sSheet));
-    receiveCoinsAction->setIcon(QIcon(":/icons/receiving_addresses_"+sSheet));
-    historyAction->setIcon(QIcon(":/icons/history_"+sSheet));
-    addressBookAction->setIcon(QIcon(":/icons/address-book_"+sSheet));
-    votingAction->setIcon(QIcon(":/icons/voting_"+sSheet));
-    unlockWalletAction->setIcon(QIcon(":/icons/lock_open_"+sSheet));
-    lockWalletAction->setIcon(QIcon(":/icons/lock_closed_"+sSheet));
+    overviewAction->setIcon(QPixmap(":/icons/overview_"+sSheet));
+    sendCoinsAction->setIcon(QPixmap(":/icons/send_"+sSheet));
+    receiveCoinsAction->setIcon(QPixmap(":/icons/receiving_addresses_"+sSheet));
+    historyAction->setIcon(QPixmap(":/icons/history_"+sSheet));
+    addressBookAction->setIcon(QPixmap(":/icons/address-book_"+sSheet));
+    votingAction->setIcon(QPixmap(":/icons/voting_"+sSheet));
+    unlockWalletAction->setIcon(QPixmap(":/icons/lock_open_"+sSheet));
+    lockWalletAction->setIcon(QPixmap(":/icons/lock_closed_"+sSheet));
 
-    encryptWalletAction->setIcon(QIcon(":/icons/lock_closed_"+sSheet));
+    encryptWalletAction->setIcon(QPixmap(":/icons/lock_closed_"+sSheet));
 
-    bxAction->setIcon(QIcon(":/icons/block"));
-    exchangeAction->setIcon(QIcon(":/icons/ex"));
-    websiteAction->setIcon(QIcon(":/icons/www"));
-    chatAction->setIcon(QIcon(":/icons/chat"));
-    boincAction->setIcon(QIcon(":/images/boinc"));
-    quitAction->setIcon(QIcon(":/icons/quit"));
-    rebuildAction->setIcon(QIcon(":/images/gridcoin"));
-    downloadAction->setIcon(QIcon(":/images/gridcoin"));
-    upgradeAction->setIcon(QIcon(":/images/gridcoin"));
-    aboutAction->setIcon(QIcon(":/images/gridcoin"));
-    miningAction->setIcon(QIcon(":/images/gridcoin"));
-    configAction->setIcon(QIcon(":/images/gridcoin"));
-    newUserWizardAction->setIcon(QIcon(":/images/gridcoin"));
-    foundationAction->setIcon(QIcon(":/images/gridcoin"));
-    diagnosticsAction->setIcon(QIcon(":/images/gridcoin"));
-    faqAction->setIcon(QIcon(":/images/gridcoin"));
-    optionsAction->setIcon(QIcon(":/icons/options"));
-    toggleHideAction->setIcon(QIcon(":/images/gridcoin"));
-    backupWalletAction->setIcon(QIcon(":/icons/filesave"));
-    changePassphraseAction->setIcon(QIcon(":/icons/key"));
-    signMessageAction->setIcon(QIcon(":/icons/edit"));
-    verifyMessageAction->setIcon(QIcon(":/icons/transaction_0"));
-    exportAction->setIcon(QIcon(":/icons/export"));
-    openRPCConsoleAction->setIcon(QIcon(":/icons/debugwindow"));
+    bxAction->setIcon(QPixmap(":/icons/block"));
+    exchangeAction->setIcon(QPixmap(":/icons/ex"));
+    websiteAction->setIcon(QPixmap(":/icons/www"));
+    chatAction->setIcon(QPixmap(":/icons/chat"));
+    boincAction->setIcon(QPixmap(":/images/boinc"));
+    quitAction->setIcon(QPixmap(":/icons/quit"));
+    rebuildAction->setIcon(QPixmap(":/images/gridcoin"));
+    downloadAction->setIcon(QPixmap(":/images/gridcoin"));
+    upgradeAction->setIcon(QPixmap(":/images/gridcoin"));
+    aboutAction->setIcon(QPixmap(":/images/gridcoin"));
+    miningAction->setIcon(QPixmap(":/images/gridcoin"));
+    configAction->setIcon(QPixmap(":/images/gridcoin"));
+    newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
+    foundationAction->setIcon(QPixmap(":/images/gridcoin"));
+    diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
+    faqAction->setIcon(QPixmap(":/images/gridcoin"));
+    optionsAction->setIcon(QPixmap(":/icons/options"));
+    toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
+    backupWalletAction->setIcon(QPixmap(":/icons/filesave"));
+    changePassphraseAction->setIcon(QPixmap(":/icons/key"));
+    signMessageAction->setIcon(QPixmap(":/icons/edit"));
+    verifyMessageAction->setIcon(QPixmap(":/icons/transaction_0"));
+    exportAction->setIcon(QPixmap(":/icons/export"));
+    openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -907,19 +907,19 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         {
             setWindowTitle(windowTitle() + QString(" ") + tr("[testnet]"));
 #ifndef Q_OS_MAC
-            qApp->setWindowIcon(QIcon(":/images/gridcoin"));
-            setWindowIcon(QIcon(":/images/gridcoin"));
+            qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
+            setWindowIcon(QPixmap(":/images/gridcoin"));
 #else
-            MacDockIconHandler::instance()->setIcon(QIcon(":/images/gridcoin"));
+            MacDockIconHandler::instance()->setIcon(QPixmap(":/images/gridcoin"));
 #endif
             if(trayIcon)
             {
                 trayIcon->setToolTip(tr("Gridcoin client") + QString(" ") + tr("[testnet]"));
                 trayIcon->setIcon(QPixmap(":/images/gridcoin"));
-                toggleHideAction->setIcon(QIcon(":/images/gridcoin"));
+                toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
             }
 
-            aboutAction->setIcon(QIcon(":/images/gridcoin"));
+            aboutAction->setIcon(QPixmap(":/images/gridcoin"));
         }
 
         // Keep up to date with client
