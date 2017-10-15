@@ -12,7 +12,6 @@
 #include "main.h"
 #include "net.h"
 #include "wallet.h"
-//#include "univalue.h"
 #include "upgrader.h"
 
 using namespace std;
@@ -24,110 +23,279 @@ extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blo
 extern void Imker(void *kippel);
 extern Upgrader upgrader;
 
+extern std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx);
+extern std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
+std::string TimestampToHRDate(double dtm);
+std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
+std::string GetShareType(double dShareType);
+
 #ifdef QT_GUI
 #include "qt/upgradedialog.h"
 extern Checker checker;
 #endif
 
-void GetTxStakeBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
+std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
     assert(mtx.IsCoinStake() || mtx.IsCoinBase());
-
-    res["blockhash"]=mtx.hashBlock.GetHex();
+    std::vector<std::pair<std::string, std::string>> res;
 
     // Fetch BlockIndex for tx block
     CBlockIndex* pindex = NULL;
     CBlock block;
     {
         map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(mtx.hashBlock);
+
         if (mi == mapBlockIndex.end())
         {
-            res["error"] = "block_not_in_index";
-            return;
+            res.push_back(std::make_pair("ERROR", "Block not in index"));
+            return res;
         }
+
         pindex = (*mi).second;
+
         if (!block.ReadFromDisk(pindex))
         {
-            res["error"] = "block_read_failed";
-            return;
+            res.push_back(std::make_pair("ERROR", "Block read failed"));
+            return res;
         }
     }
 
     //Deserialize
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
 
-    res["height"]=pindex->nHeight;
-    res["version"]=block.nVersion;
+    res.push_back(std::make_pair("Height", ToString(pindex->nHeight)));
+    res.push_back(std::make_pair("Block Version", ToString(block.nVersion)));
+    res.push_back(std::make_pair("Difficulty", RoundToString(GetBlockDifficulty(block.nBits),8)));
+    res.push_back(std::make_pair("CPID", bb.cpid));
+    res.push_back(std::make_pair("Interest", RoundToString(bb.InterestSubsidy,8)));
 
-    res["cpid"]=bb.cpid;
-    res["Magnitude"]=bb.Magnitude;
-    res["Interest"]=bb.InterestSubsidy;
-    res["BoincReward"]=bb.ResearchSubsidy;
-    res["Difficulty"]=GetBlockDifficulty(block.nBits);
+    if (bb.Magnitude > 0)
+    {
+        res.push_back(std::make_pair("Magnitude", RoundToString(bb.Magnitude,8)));
+        res.push_back(std::make_pair("Boinc Reward", RoundToString(bb.ResearchSubsidy,8)));
+    }
 
+    res.push_back(std::make_pair("Is Superblock", (bb.superblock.length() >= 20 ? "true" : "false")));
 
     if(fDebug)
     {
-        res["xbbBoincPublicKey"]=bb.BoincPublicKey;
+        if (bb.superblock.length() >= 20)
+            res.push_back(std::make_pair("Neural Contract Binary Size", ToString(bb.superblock.length())));
 
-        res["xbbOrganization"]=bb.Organization;
-        res["xbbClientVersion"]=bb.clientversion;
-
-        res["xbbNeuralHash"]=bb.NeuralHash;
-        res["xbbCurrentNeuralHash"]=bb.CurrentNeuralHash;
-        res["xbbNeuralContractSize"]=bb.superblock.length();
-    }
-    else
-    {
-        if(bb.superblock.length()>=20)
-        {
-            res["IsSuperBlock"]=true;
-        }
+        res.push_back(std::make_pair("Organization", bb.Organization));
+        res.push_back(std::make_pair("Client Version", bb.clientversion));
+        res.push_back(std::make_pair("Neural Hash", bb.NeuralHash));
+        res.push_back(std::make_pair("CurrentNeuralHash", bb.CurrentNeuralHash));
+        res.push_back(std::make_pair("Boinc Public Key", bb.BoincPublicKey));
     }
 
+    return res;
 }
 
-void GetTxNormalBoincHashInfo(json_spirit::mObject& res, const CMerkleTx& mtx)
+std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx)
 {
     assert(!mtx.IsCoinStake() && !mtx.IsCoinBase());
-    res["blockhash"]=mtx.hashBlock.GetHex();
-    const std::string &hashBoinc = mtx.hashBoinc;
-    const std::string &msg = mtx.hashBoinc;
+    std::vector<std::pair<std::string, std::string>> res;
 
-    /* Possible formats:
-        * transaction <MESSAGE>
-        * a message <MT>
-          * cpid beacon
-          * vote
-          * poll
-        * unknown / text
-    */
-
-    res["bhLength"]=msg.length();
-
-    std::string sMessageType = ExtractXML(msg,"<MT>","</MT>");
-    std::string sTrxMessage = ExtractXML(msg,"<MESSAGE>","</MESSAGE>");
-
-    if(sMessageType.length())
+    try
     {
-        res["bhType"]="message";
-        res["msgType"]=sMessageType;
-    }
-    else if(sTrxMessage.length())
-    {
-        res["bhType"]="TrxWithNote";
-    }
-    else if(msg.length())
-    {
-        res["bhType"]="Unknown";
-    }
-    else
-    {
-        res["bhType"]="None";
+        const std::string &msg = mtx.hashBoinc;
+
+        res.push_back(std::make_pair("Network Time", TimestampToHRDate((double)mtx.nTime)));
+
+        if (fDebug)
+            res.push_back(std::make_pair("Message Length", ToString(msg.length())));
+
+        std::string sMessageType = ExtractXML(msg, "<MT>", "</MT>");
+        std::string sTxMessage = ExtractXML(msg, "<MESSAGE>", "</MESSAGE>");
+        std::string sRainMessage = ExtractXML(msg, "<NARR>", "</NARR>");
+
+        if (sMessageType.length())
+        {
+            res.push_back(std::make_pair("Message Type", "Contract"));
+
+            if (sMessageType == "beacon")
+            {
+                res.push_back(std::make_pair("Contract Type", "Beacon"));
+
+                std::string sBeaconCommit = ExtractXML(msg, "<MA>", "</MA>");
+
+                if (sBeaconCommit == "A")
+                {
+                    std::string sBeaconCPID = ExtractXML(msg, "<MK>", "</MK>");
+                    std::string sBeaconEncodedContract = ExtractXML(msg, "<MV>", "</MV>");
+
+                    if (sBeaconEncodedContract.length() < 256)
+                    {
+                        // If for whatever reason the contract is not a proper one and the average length does exceed this size; Without this a seg fault will occur on the DecodeBase64
+                        // Another example is if an admin accidently uses add instead of delete in addkey to remove a beacon the 1 in <MV>1</MV> would cause a seg fault as well
+                        res.push_back(std::make_pair("ERROR", "Contract length for beacon is less then 256 in length. Size: " + ToString(sBeaconEncodedContract.length())));
+
+                        if (fDebug)
+                            res.push_back(std::make_pair("Contract Data", sBeaconEncodedContract));
+
+                        return res;
+                    }
+
+                    std::string sBeaconDecodedContract = DecodeBase64(sBeaconEncodedContract);
+                    std::vector<std::string> vBeaconContract = split(sBeaconDecodedContract.c_str(), ";");
+                    std::string sBeaconAddress = vBeaconContract[2];
+                    std::string sBeaconPublicKey = vBeaconContract[3];
+
+                    res.push_back(std::make_pair("Beacon Commit", "Add"));
+                    res.push_back(std::make_pair("Beacon CPID", sBeaconCPID));
+                    res.push_back(std::make_pair("Beacon Address", sBeaconAddress));
+                    res.push_back(std::make_pair("Beacon Public Key", sBeaconPublicKey));
+                }
+
+                else if (sBeaconCommit == "D")
+                {
+                    std::string sBeaconCPID = ExtractXML(msg, "<MK>", "</MK>");
+
+                    res.push_back(std::make_pair("Beacon Commit", "Delete"));
+                    res.push_back(std::make_pair("Beacon CPID", sBeaconCPID));
+                }
+            }
+
+            else if (sMessageType == "poll")
+            {
+                std::string sPollType = ExtractXML(msg, "<MK>", "</MK>");
+
+                if (Contains(sPollType, "[Foundation"))
+                    res.push_back(std::make_pair("Contract Type", "Foundation Poll"));
+
+                else
+                    res.push_back(std::make_pair("Contract Type", "Poll"));
+
+                std::string sPollTitle = ExtractXML(msg, "<TITLE>", "</TITLE>");
+                std::replace(sPollTitle.begin(), sPollTitle.end(), '_', ' ');
+                std::string sPollDays = ExtractXML(msg, "<DAYS>", "</DAYS>");
+                std::string sPollQuestion = ExtractXML(msg, "<QUESTION>", "</QUESTION>");
+                std::string sPollAnswers = ExtractXML(msg, "<ANSWERS>", "</ANSWERS>");
+                std::string sPollShareType = ExtractXML(msg, "<SHARETYPE>", "</SHARETYPE>");
+                std::string sPollUrl = ExtractXML(msg, "<URL>", "</URL");
+                std::string sPollExpiration = ExtractXML(msg, "<EXPIRATION>", "</EXPIRATION>");
+                std::string sPollCommit = ExtractXML(msg, "<MA>", "</MA>");
+
+                if (sPollCommit == "A")
+                    res.push_back(std::make_pair("Poll Commit", "Add"));
+
+                else if (sPollCommit == "D")
+                    res.push_back(std::make_pair("Poll Commit", "Delete"));
+
+                else
+                    res.push_back(std::make_pair("Poll Commit", "Unknown"));
+
+                res.push_back(std::make_pair("Poll Title", sPollTitle));
+                res.push_back(std::make_pair("Poll Question", sPollQuestion));
+                std::replace(sPollAnswers.begin(), sPollAnswers.end(), ';', ',');
+                res.push_back(std::make_pair("Poll Answers", sPollAnswers));
+                sPollShareType = GetShareType(std::stod(sPollShareType));
+                res.push_back(std::make_pair("Poll Share Type", sPollShareType));
+                res.push_back(std::make_pair("Poll URL", sPollUrl));
+                res.push_back(std::make_pair("Poll Duration", sPollDays + " days"));
+                res.push_back(std::make_pair("Poll Expires", TimestampToHRDate(std::stod(sPollExpiration))));
+            }
+
+            else if (sMessageType == "vote")
+            {
+                res.push_back(std::make_pair("Contract Type", "Vote"));
+
+                std::string sVoteTitle = ExtractXML(msg, "<TITLE>", "</TITLE>");
+                std::string sVoteShareType = GetPollXMLElementByPollTitle(sVoteTitle, "<SHARETYPE>", "</SHARETYPE>");
+                sVoteShareType = GetShareType(std::stod(sVoteShareType));
+                std::replace(sVoteTitle.begin(), sVoteTitle.end(), '_', ' ');
+                std::string sVoteAnswer = ExtractXML(msg, "<ANSWER>", "</ANSWER>");
+                std::replace(sVoteAnswer.begin(), sVoteAnswer.end(), ';', ',');
+
+                res.push_back(std::make_pair("Poll Title", sVoteTitle));
+                res.push_back(std::make_pair("Poll Answer", sVoteAnswer));
+                res.push_back(std::make_pair("Poll Share Type", sVoteShareType));
+            }
+
+            else if (sMessageType == "project")
+            {
+                res.push_back(std::make_pair("Contract Type", "Project"));
+
+                std::string sProjectName = ExtractXML(msg, "<MK>", "</MK>");
+                std::string sProjectURL = ExtractXML(msg, "<MV>", "</MV>");
+                std::string sProjectCommit = ExtractXML(msg, "<MA>", "</MA>");
+
+                if (sProjectCommit == "A")
+                    res.push_back(std::make_pair("Project Commit", "Add"));
+
+                else if (sProjectCommit == "D")
+                    res.push_back(std::make_pair("Project Commit", "Delete"));
+
+                else
+                    res.push_back(std::make_pair("Project Commit", "Unknown"));
+
+                res.push_back(std::make_pair("Project Name", sProjectName));
+                res.push_back(std::make_pair("Project URL", sProjectURL));
+            }
+            else
+            {
+                res.push_back(std::make_pair("Contract Type", "Unknown"));
+
+                if (fDebug)
+                    res.push_back(std::make_pair("Contract Data", msg));
+            }
+        }
+
+        else if (sTxMessage.length())
+        {
+            res.push_back(std::make_pair("Message Type", "Transaction Message"));
+            res.push_back(std::make_pair("Message", sTxMessage));
+        }
+
+        else if (sRainMessage.length())
+        {
+            res.push_back(std::make_pair("Message Type", "Transaction Rain Message"));
+            res.push_back(std::make_pair("Message", sRainMessage));
+        }
+
+        else if (sMessageType.empty() && sTxMessage.empty() && sRainMessage.empty())
+            res.push_back(std::make_pair("Message Type", "No Attached Messages"));
+
+        else
+        {
+            // Should never really make it here but if we do!
+            res.push_back(std::make_pair("Message Type", "Unknown Message"));
+
+            if (fDebug)
+                res.push_back(std::make_pair("HashBoinc", msg));
+        }
+
+        return res;
     }
 
+    catch (const std::invalid_argument& e)
+    {
+        std::string sE(e.what()); // Pass through constructer to use as a string in error message
+        res.push_back(std::make_pair("ERROR", "Invalid argument exception while parsing Transaction Messages -> " + sE));
+        return res;
+    }
+
+    catch (const std::bad_alloc& e)
+    {
+        std::string sE(e.what());
+        res.push_back(std::make_pair("ERROR", "Bad allocation exception while parsing Transaction Messages -> " + sE));
+        return res;
+    }
+
+    catch (const std::out_of_range& e)
+    {
+        std::string sE(e.what());
+        res.push_back(std::make_pair("ERROR", "Out of rance exception while parsing Transaction Messages ->" + sE));
+        return res;
+    }
+
+    catch (...)
+    {
+        res.push_back(std::make_pair("ERROR", "Unknown exception while parsing Transaction Messages"));
+        return res;
+    }
 }
-
 
 Value downloadblocks(const Array& params, bool fHelp)
 {
