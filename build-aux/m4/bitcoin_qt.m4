@@ -408,7 +408,7 @@ AC_DEFUN([_BITCOIN_QT_FIND_LIBS_WITH_PKGCONFIG],[
         qt5_modules="$qt5_modules"
     fi
     if test x$TARGET_OS = xwindows; then
-        qt5_modules="$qt5_modules Qt5AxContainer Qt5AxServer"
+        qt5_modules="$qt5_modules Qt5AxContainer Qt5AxServer Qt5AxBase"
     fi
     qt4_modules="QtCore QtGui QtNetwork"
     BITCOIN_QT_CHECK([
@@ -484,9 +484,7 @@ AC_DEFUN([_BITCOIN_QT_FIND_LIBS_WITHOUT_PKGCONFIG],[
     fi
 
     if test x$TARGET_OS = xwindows; then
-      AC_CHECK_LIB([imm32],      [main],, BITCOIN_QT_FAIL(libimm32 not found))
-      BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}AxContainer],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXAxContainer not found)))
-      BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}AxServer],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXAxServer not found)))
+      AC_CHECK_LIB([imm32],      [main],, BITCOIN_QT_FAIL(libimm32 not found))   
     fi
   ])
 
@@ -501,6 +499,11 @@ AC_DEFUN([_BITCOIN_QT_FIND_LIBS_WITHOUT_PKGCONFIG],[
   if test x$bitcoin_qt_got_major_vers = x5; then
     BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}Widgets],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXWidgets not found)))
     BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}Concurrent],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXConcurrent not found)))
+  fi
+  if test x$TARGET_OS = xwindows; then
+    BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}AxBase],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXAxBase not found)))
+    BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}AxContainer],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXAxContainer not found)))
+    BITCOIN_QT_CHECK(AC_CHECK_LIB([${QT_LIB_PREFIX}AxServer],[main],,BITCOIN_QT_FAIL(lib$QT_LIB_PREFIXAxServer not found)))
   fi
   QT_LIBS="$LIBS"
   LIBS="$TEMP_LIBS"
