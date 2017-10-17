@@ -3,6 +3,8 @@
 // TODO: Remove this include when mvApplicationCache has moved to this file.
 #include "main.h"
 
+#include <boost/algorithm/string.hpp>
+
 // Predicate
 AppCacheMatches::AppCacheMatches(const std::string& needle)
     : needle(needle)

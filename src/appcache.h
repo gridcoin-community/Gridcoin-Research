@@ -2,7 +2,6 @@
 
 #include <string>
 #include <map>
-#include <boost/algorithm/string.hpp>
 #include <boost/iterator/filter_iterator.hpp>
 
 //!
