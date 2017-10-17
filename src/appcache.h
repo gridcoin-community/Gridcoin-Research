@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include <boost/iterator/filter_iterator.hpp>
+#include <boost/range/range_fwd.hpp>
 
 //!
 //! \brief Application cache type.
