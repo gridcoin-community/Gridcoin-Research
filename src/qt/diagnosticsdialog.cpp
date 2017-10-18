@@ -1,5 +1,3 @@
-#include <QtConcurrent>
-
 #include <fstream>
 #include "main.h"
 #include "util.h"
@@ -10,6 +8,8 @@
 
 #include "diagnosticsdialog.h"
 #include "ui_diagnosticsdialog.h"
+
+#include <numeric>
 
 std::string GetListOf(std::string datatype);
 double PreviousBlockAge();
@@ -273,7 +273,7 @@ void DiagnosticsDialog::on_testBtn_clicked() {
 }
 
 void DiagnosticsDialog::clkFinished() {
-    time_t ntpTime;
+    time_t ntpTime(0);
 
     while(udpSocket->pendingDatagramSize() != -1) {
         char recvBuffer[udpSocket->pendingDatagramSize()];
@@ -313,6 +313,11 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket) {
 }
 
 void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
+    // Qt didn't get JSON support until 5.x. Ignore version checks when using
+    // Qt4 an drop this condition once we drop Qt4 support.
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+    ui->checkClientVersionResultLbl->setText("N/A");
+#else
     QByteArray data;
     data = reply->readAll();
     std::string newVersionString;
@@ -354,4 +359,5 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
         } else
             ui->checkClientVersionResultLbl->setText("Up to date");
     }
+#endif
 }
