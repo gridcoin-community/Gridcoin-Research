@@ -28,6 +28,12 @@ extern std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo
 std::string TimestampToHRDate(double dtm);
 std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
 std::string GetShareType(double dShareType);
+//double GetSuperblockAvgMag(std::string data, double& out_beacon_count, double& out_participant_count, double& out_average, bool bIgnoreBeacons, int nHeight);
+bool PollCreatedAfterSecurityUpgrade(std::string pollname);
+double DoubleFromAmount(int64_t amount);
+//double GetAverageInList(std::string superblock,double& out_count);
+double PollCalculateShares(std::string contract, double sharetype, double MoneySupplyFactor, unsigned int VoteAnswerCount);
+Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
 
 #ifdef QT_GUI
 #include "qt/upgradedialog.h"
@@ -69,13 +75,14 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     res.push_back(std::make_pair("CPID", bb.cpid));
     res.push_back(std::make_pair("Interest", RoundToString(bb.InterestSubsidy,8)));
 
-    if (bb.Magnitude > 0)
+    if (bb.ResearchAverageMagnitude > 0)
     {
         res.push_back(std::make_pair("Magnitude", RoundToString(bb.Magnitude,8)));
+        res.push_back(std::make_pair("Average Magnitude", RoundToString(bb.ResearchAverageMagnitude, 8)));
         res.push_back(std::make_pair("Boinc Reward", RoundToString(bb.ResearchSubsidy,8)));
     }
 
-    res.push_back(std::make_pair("Is Superblock", (bb.superblock.length() >= 20 ? "true" : "false")));
+    res.push_back(std::make_pair("Is Superblock", (bb.superblock.length() >= 20 ? "Yes" : "No")));
 
     if(fDebug)
     {
@@ -201,15 +208,149 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
             {
                 res.push_back(std::make_pair("Contract Type", "Vote"));
 
-                std::string sVoteTitle = ExtractXML(msg, "<TITLE>", "</TITLE>");
-                std::string sVoteShareType = GetPollXMLElementByPollTitle(sVoteTitle, "<SHARETYPE>", "</SHARETYPE>");
-                sVoteShareType = GetShareType(std::stod(sVoteShareType));
+                std::string sVoteTitled = ExtractXML(msg, "<TITLE>", "</TITLE>");
+                std::string sVoteShareType = GetPollXMLElementByPollTitle(sVoteTitled, "<SHARETYPE>", "</SHARETYPE>");
+                //sVoteShareType = GetShareType(std::stod(sVoteShareType));
+                std::string sVoteTitle = sVoteTitled;
                 std::replace(sVoteTitle.begin(), sVoteTitle.end(), '_', ' ');
                 std::string sVoteAnswer = ExtractXML(msg, "<ANSWER>", "</ANSWER>");
                 std::replace(sVoteAnswer.begin(), sVoteAnswer.end(), ';', ',');
 
                 res.push_back(std::make_pair("Poll Title", sVoteTitle));
                 res.push_back(std::make_pair("Poll Answer", sVoteAnswer));
+
+                // Voting Weight
+                // Due to the fact the vote weight is done on the fly during a vote itself it takes some elaborate work to get the values from the time of the vote
+                // Search for superblock from this block and back till we find one (make sure we dont go back before there were no binary superblocks)
+                // But no more then 14 days back so we repesent correct data
+                // Search back from current block associated to tx till we reach a superblock within 14 days time span
+                res.push_back(std::make_pair("debug", sVoteShareType));
+
+                double dMoneySupplyFactor = 0;
+
+                if (sVoteShareType == "3" || sVoteShareType == "2")
+                {
+                    CBlockIndex* pblockindex = mapBlockIndex[mtx.hashBlock];
+                    CBlock block;
+
+                    int nStartHeight = pblockindex->nHeight;
+                    int nEndHeight = pblockindex->nHeight - (BLOCKS_PER_DAY*14);
+
+                    // Lets just go back as far as the start of binary superblocks
+                    if ((fTestNet && nStartHeight > 10000) || (!fTestNet && nStartHeight > 725000))
+                    {
+                        if (fTestNet && nEndHeight < 10000)
+                            nEndHeight = 10000;
+
+                        if (!fTestNet && nEndHeight < 725000)
+                            nEndHeight = 725000;
+
+                        if (nStartHeight > nEndHeight)
+                        {
+                            // Iterate back to find superblocks
+                            while (pblockindex->nHeight > nEndHeight && pblockindex->nIsSuperBlock == 0)
+                                pblockindex = pblockindex->pprev;
+                        }
+
+                        if (pblockindex->nIsSuperBlock == 1)
+                        {
+                            //MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
+                            block.ReadFromDisk(pblockindex);
+                            std::string sHashBoinc = block.vtx[0].hashBoinc;
+
+                            MiningCPID vbb = DeserializeBoincBlock(sHashBoinc, block.nVersion);
+
+                            std::string sUnpackedSuperblock = UnpackBinarySuperblock(vbb.superblock);
+                            std::string sMagnitudeContract = ExtractXML(sUnpackedSuperblock, "<MAGNITUDES>", "</MAGNITUDES>");
+
+                            // Since Superblockavg function gives avg for mags yes but total cpids, but we need the amount used for total mag/rows_above_zero for avg & rows_above_zero for Total Network Magnitude.
+                            std::vector<std::string> vMagnitudeContract = split(sMagnitudeContract, ";");
+                            double dRowsWithMag = 0;
+                            double dTotalMag = 0;
+
+                            for (auto const& sMag : vMagnitudeContract)
+                            {
+                                const std::vector<std::string>& vFields = split(sMag, ",");
+
+                                if (vFields.size() < 2)
+                                    continue;
+
+                                const std::string& sCPID = vFields[0];
+                                double dMAG = std::stoi(vFields[1].c_str());
+
+                                if (sCPID.length() > 10)
+                                {
+                                    dRowsWithMag++;
+                                    dTotalMag += dMAG;
+                                }
+                            }
+
+                            double dOutAverage = dTotalMag / (dRowsWithMag + .01);
+                            double dTotalNetworkMagnitude = dRowsWithMag * dOutAverage;
+                            double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
+                            dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
+
+                            if (fDebug)
+                            {
+                                res.push_back(std::make_pair("SB Participant Count With Mag", RoundToString(dRowsWithMag, 0)));
+                                res.push_back(std::make_pair("SB Average Magnitude", RoundToString(dOutAverage,8)));
+                                res.push_back(std::make_pair("SB Total Network Magnitude", RoundToString(dTotalNetworkMagnitude,8)));
+                                res.push_back(std::make_pair("Vote Money Supply", RoundToString(dMoneySupply,8)));
+                                res.push_back(std::make_pair("Vote Money Supply Factor", RoundToString(dMoneySupplyFactor,8)));
+                            }
+
+                            double dVoteMagnitude;
+                            double dVoteBalance;
+                            std::string sVoteMagnitude;
+                            std::string sVoteBalance;
+
+                            if (!PollCreatedAfterSecurityUpgrade(sVoteTitled))
+                            {
+                                sVoteMagnitude = ExtractXML(msg, "<MAGNITUDE>", "</MAGNITUDE>");
+                                sVoteBalance = ExtractXML(msg, "<BALANCE>", "</BALANCE>");
+                            }
+
+                            else
+                            {
+                                sVoteMagnitude = ExtractXML(msg, "<INNERMAGNITUDE>", "</INNERMAGNITUDE>");
+                                sVoteBalance = ExtractXML(msg, "<TOTALVOTEDBALANCE>", "</TOTALVOTEDBALANCE>");
+                            }
+
+                            dVoteMagnitude = cdbl(sVoteMagnitude,2);
+                            dVoteBalance = cdbl(sVoteBalance,2);
+
+                            res.push_back(std::make_pair("Vote Magnitude", RoundToString(dVoteMagnitude, 0)));
+                            res.push_back(std::make_pair("Vote Balance", RoundToString(dVoteBalance, 0)));
+                            res.push_back(std::make_pair("Mag Pull Type", sType));
+                            double xWeight = ((dMoneySupplyFactor/5.67) * std::stod(sVoteMagnitude)) + std::stod(sVoteBalance);
+                            res.push_back(std::make_pair("without votes", RoundToString(xWeight, 8)));
+
+                        }
+                    }
+
+
+                    //std::string sPollExport;
+                    //GetJSONPollsReport(true, sVoteTitled, sPollExport, true);
+
+                    for (auto const& mapVoters : mvApplicationCache)
+                    {
+                        if (mapVoters[])
+                    }
+
+                    std::string sVoteCount = ExtractXML(sPollExport, "<TOTALPARTICIPANTS>", "</TOTALPARTICIPANTS>");
+
+                    res.push_back(std::make_pair("Number of Voters", sVoteCount));
+
+                    double dVoteWeight = PollCalculateShares(msg, std::stod(sVoteShareType), dMoneySupplyFactor, std::stoul(sVoteCount));
+
+                    res.push_back(std::make_pair("Vote Weight", RoundToString(dVoteWeight,2)));
+
+
+
+                }
+
+                // do final calculations here
+
                 res.push_back(std::make_pair("Poll Share Type", sVoteShareType));
             }
 
@@ -276,23 +417,10 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
         return res;
     }
 
-    catch (const std::bad_alloc& e)
-    {
-        std::string sE(e.what());
-        res.push_back(std::make_pair("ERROR", "Bad allocation exception while parsing Transaction Messages -> " + sE));
-        return res;
-    }
-
     catch (const std::out_of_range& e)
     {
         std::string sE(e.what());
         res.push_back(std::make_pair("ERROR", "Out of rance exception while parsing Transaction Messages ->" + sE));
-        return res;
-    }
-
-    catch (...)
-    {
-        res.push_back(std::make_pair("ERROR", "Unknown exception while parsing Transaction Messages"));
         return res;
     }
 }
