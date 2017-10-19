@@ -13,7 +13,7 @@
 #include "net.h"
 #include "wallet.h"
 #include "upgrader.h"
-
+#include "ui_interface.h"
 using namespace std;
 using namespace boost;
 using namespace boost::assign;
@@ -28,12 +28,8 @@ extern std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo
 std::string TimestampToHRDate(double dtm);
 std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
 std::string GetShareType(double dShareType);
-//double GetSuperblockAvgMag(std::string data, double& out_beacon_count, double& out_participant_count, double& out_average, bool bIgnoreBeacons, int nHeight);
 bool PollCreatedAfterSecurityUpgrade(std::string pollname);
 double DoubleFromAmount(int64_t amount);
-//double GetAverageInList(std::string superblock,double& out_count);
-double PollCalculateShares(std::string contract, double sharetype, double MoneySupplyFactor, unsigned int VoteAnswerCount);
-Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
 
 #ifdef QT_GUI
 #include "qt/upgradedialog.h"
@@ -53,7 +49,8 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
 
         if (mi == mapBlockIndex.end())
         {
-            res.push_back(std::make_pair("ERROR", "Block not in index"));
+            res.push_back(std::make_pair(_("ERROR"), _("Block not in index")));
+
             return res;
         }
 
@@ -61,7 +58,8 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
 
         if (!block.ReadFromDisk(pindex))
         {
-            res.push_back(std::make_pair("ERROR", "Block read failed"));
+            res.push_back(std::make_pair(_("ERROR"), _("Block read failed")));
+
             return res;
         }
     }
@@ -69,31 +67,32 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     //Deserialize
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
 
-    res.push_back(std::make_pair("Height", ToString(pindex->nHeight)));
-    res.push_back(std::make_pair("Block Version", ToString(block.nVersion)));
-    res.push_back(std::make_pair("Difficulty", RoundToString(GetBlockDifficulty(block.nBits),8)));
-    res.push_back(std::make_pair("CPID", bb.cpid));
-    res.push_back(std::make_pair("Interest", RoundToString(bb.InterestSubsidy,8)));
+    res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
+    res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
+    res.push_back(std::make_pair(_("Difficulty"), RoundToString(GetBlockDifficulty(block.nBits),8)));
+    res.push_back(std::make_pair(_("CPID"), bb.cpid));
+    res.push_back(std::make_pair(_("Interest"), RoundToString(bb.InterestSubsidy,8)));
 
     if (bb.ResearchAverageMagnitude > 0)
     {
-        res.push_back(std::make_pair("Magnitude", RoundToString(bb.Magnitude,8)));
-        res.push_back(std::make_pair("Average Magnitude", RoundToString(bb.ResearchAverageMagnitude, 8)));
-        res.push_back(std::make_pair("Boinc Reward", RoundToString(bb.ResearchSubsidy,8)));
+        res.push_back(std::make_pair(_("Boinc Reward"), RoundToString(bb.ResearchSubsidy,8)));
+        res.push_back(std::make_pair(_("Magnitude"), RoundToString(bb.Magnitude,8)));
+        res.push_back(std::make_pair(_("Average Magnitude"), RoundToString(bb.ResearchAverageMagnitude, 8)));
+        res.push_back(std::make_pair(_("Research Age"), RoundToString(bb.ResearchAge, 8)));
     }
 
-    res.push_back(std::make_pair("Is Superblock", (bb.superblock.length() >= 20 ? "Yes" : "No")));
+    res.push_back(std::make_pair(_("Is Superblock"), (bb.superblock.length() >= 20 ? "Yes" : "No")));
 
     if(fDebug)
     {
         if (bb.superblock.length() >= 20)
-            res.push_back(std::make_pair("Neural Contract Binary Size", ToString(bb.superblock.length())));
+            res.push_back(std::make_pair(_("Neural Contract Binary Size"), ToString(bb.superblock.length())));
 
-        res.push_back(std::make_pair("Organization", bb.Organization));
-        res.push_back(std::make_pair("Client Version", bb.clientversion));
-        res.push_back(std::make_pair("Neural Hash", bb.NeuralHash));
-        res.push_back(std::make_pair("CurrentNeuralHash", bb.CurrentNeuralHash));
-        res.push_back(std::make_pair("Boinc Public Key", bb.BoincPublicKey));
+        res.push_back(std::make_pair(_("Neural Hash"), bb.NeuralHash));
+        res.push_back(std::make_pair(_("Current Neural Hash"), bb.CurrentNeuralHash));
+        res.push_back(std::make_pair(_("Client Version"), bb.clientversion));
+        res.push_back(std::make_pair(_("Organization"), bb.Organization));
+        res.push_back(std::make_pair(_("Boinc Public Key"), bb.BoincPublicKey));
     }
 
     return res;
@@ -108,10 +107,10 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
     {
         const std::string &msg = mtx.hashBoinc;
 
-        res.push_back(std::make_pair("Network Time", TimestampToHRDate((double)mtx.nTime)));
+        res.push_back(std::make_pair(_("Network Date"), TimestampToHRDate((double)mtx.nTime)));
 
         if (fDebug)
-            res.push_back(std::make_pair("Message Length", ToString(msg.length())));
+            res.push_back(std::make_pair(_("Message Length"), ToString(msg.length())));
 
         std::string sMessageType = ExtractXML(msg, "<MT>", "</MT>");
         std::string sTxMessage = ExtractXML(msg, "<MESSAGE>", "</MESSAGE>");
@@ -119,27 +118,25 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
 
         if (sMessageType.length())
         {
-            res.push_back(std::make_pair("Message Type", "Contract"));
-
             if (sMessageType == "beacon")
             {
-                res.push_back(std::make_pair("Contract Type", "Beacon"));
+                std::string sBeaconAction = ExtractXML(msg, "<MA>", "</MA>");
+                std::string sBeaconCPID = ExtractXML(msg, "<MK>", "</MK>");
 
-                std::string sBeaconCommit = ExtractXML(msg, "<MA>", "</MA>");
-
-                if (sBeaconCommit == "A")
+                if (sBeaconAction == "A")
                 {
-                    std::string sBeaconCPID = ExtractXML(msg, "<MK>", "</MK>");
+                    res.push_back(std::make_pair(_("Message Type"), _("Add Beacon Contract")));
+
                     std::string sBeaconEncodedContract = ExtractXML(msg, "<MV>", "</MV>");
 
                     if (sBeaconEncodedContract.length() < 256)
                     {
                         // If for whatever reason the contract is not a proper one and the average length does exceed this size; Without this a seg fault will occur on the DecodeBase64
                         // Another example is if an admin accidently uses add instead of delete in addkey to remove a beacon the 1 in <MV>1</MV> would cause a seg fault as well
-                        res.push_back(std::make_pair("ERROR", "Contract length for beacon is less then 256 in length. Size: " + ToString(sBeaconEncodedContract.length())));
+                        res.push_back(std::make_pair(_("ERROR"), _("Contract length for beacon is less then 256 in length. Size: ") + ToString(sBeaconEncodedContract.length())));
 
                         if (fDebug)
-                            res.push_back(std::make_pair("Contract Data", sBeaconEncodedContract));
+                            res.push_back(std::make_pair(_("Message Data"), sBeaconEncodedContract));
 
                         return res;
                     }
@@ -149,31 +146,21 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                     std::string sBeaconAddress = vBeaconContract[2];
                     std::string sBeaconPublicKey = vBeaconContract[3];
 
-                    res.push_back(std::make_pair("Beacon Commit", "Add"));
-                    res.push_back(std::make_pair("Beacon CPID", sBeaconCPID));
-                    res.push_back(std::make_pair("Beacon Address", sBeaconAddress));
-                    res.push_back(std::make_pair("Beacon Public Key", sBeaconPublicKey));
+                    res.push_back(std::make_pair(_("CPID"), sBeaconCPID));
+                    res.push_back(std::make_pair(_("Address"), sBeaconAddress));
+                    res.push_back(std::make_pair(_("Public Key"), sBeaconPublicKey));
                 }
 
-                else if (sBeaconCommit == "D")
+                else if (sBeaconAction == "D")
                 {
-                    std::string sBeaconCPID = ExtractXML(msg, "<MK>", "</MK>");
-
-                    res.push_back(std::make_pair("Beacon Commit", "Delete"));
-                    res.push_back(std::make_pair("Beacon CPID", sBeaconCPID));
+                    res.push_back(std::make_pair(_("Message Type"), _("Delete Beacon Contract")));
+                    res.push_back(std::make_pair(_("CPID"), sBeaconCPID));
                 }
             }
 
             else if (sMessageType == "poll")
             {
                 std::string sPollType = ExtractXML(msg, "<MK>", "</MK>");
-
-                if (Contains(sPollType, "[Foundation"))
-                    res.push_back(std::make_pair("Contract Type", "Foundation Poll"));
-
-                else
-                    res.push_back(std::make_pair("Contract Type", "Poll"));
-
                 std::string sPollTitle = ExtractXML(msg, "<TITLE>", "</TITLE>");
                 std::replace(sPollTitle.begin(), sPollTitle.end(), '_', ' ');
                 std::string sPollDays = ExtractXML(msg, "<DAYS>", "</DAYS>");
@@ -182,245 +169,224 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                 std::string sPollShareType = ExtractXML(msg, "<SHARETYPE>", "</SHARETYPE>");
                 std::string sPollUrl = ExtractXML(msg, "<URL>", "</URL");
                 std::string sPollExpiration = ExtractXML(msg, "<EXPIRATION>", "</EXPIRATION>");
-                std::string sPollCommit = ExtractXML(msg, "<MA>", "</MA>");
+                std::replace(sPollAnswers.begin(), sPollAnswers.end(), ';', ',');
+                sPollShareType = GetShareType(std::stod(sPollShareType));
 
-                if (sPollCommit == "A")
-                    res.push_back(std::make_pair("Poll Commit", "Add"));
-
-                else if (sPollCommit == "D")
-                    res.push_back(std::make_pair("Poll Commit", "Delete"));
+                if (Contains(sPollType, "[Foundation"))
+                    res.push_back(std::make_pair(_("Message Type"), _("Add Foundation Poll")));
 
                 else
-                    res.push_back(std::make_pair("Poll Commit", "Unknown"));
+                    res.push_back(std::make_pair(_("Message Type"), _("Add Poll")));
 
-                res.push_back(std::make_pair("Poll Title", sPollTitle));
-                res.push_back(std::make_pair("Poll Question", sPollQuestion));
-                std::replace(sPollAnswers.begin(), sPollAnswers.end(), ';', ',');
-                res.push_back(std::make_pair("Poll Answers", sPollAnswers));
-                sPollShareType = GetShareType(std::stod(sPollShareType));
-                res.push_back(std::make_pair("Poll Share Type", sPollShareType));
-                res.push_back(std::make_pair("Poll URL", sPollUrl));
-                res.push_back(std::make_pair("Poll Duration", sPollDays + " days"));
-                res.push_back(std::make_pair("Poll Expires", TimestampToHRDate(std::stod(sPollExpiration))));
+                res.push_back(std::make_pair(_("Title"), sPollTitle));
+                res.push_back(std::make_pair(_("Question"), sPollQuestion));
+                res.push_back(std::make_pair(_("Answers"), sPollAnswers));
+                res.push_back(std::make_pair(_("Share Type"), sPollShareType));
+                res.push_back(std::make_pair(_("URL"), sPollUrl));
+                res.push_back(std::make_pair(_("Duration"), sPollDays + _(" days")));
+                res.push_back(std::make_pair(_("Expires"), TimestampToHRDate(std::stod(sPollExpiration))));
             }
 
             else if (sMessageType == "vote")
             {
-                res.push_back(std::make_pair("Contract Type", "Vote"));
-
                 std::string sVoteTitled = ExtractXML(msg, "<TITLE>", "</TITLE>");
                 std::string sVoteShareType = GetPollXMLElementByPollTitle(sVoteTitled, "<SHARETYPE>", "</SHARETYPE>");
-                //sVoteShareType = GetShareType(std::stod(sVoteShareType));
                 std::string sVoteTitle = sVoteTitled;
                 std::replace(sVoteTitle.begin(), sVoteTitle.end(), '_', ' ');
                 std::string sVoteAnswer = ExtractXML(msg, "<ANSWER>", "</ANSWER>");
                 std::replace(sVoteAnswer.begin(), sVoteAnswer.end(), ';', ',');
 
-                res.push_back(std::make_pair("Poll Title", sVoteTitle));
-                res.push_back(std::make_pair("Poll Answer", sVoteAnswer));
+                res.push_back(std::make_pair(_("Message Type"), _("Vote")));
+                res.push_back(std::make_pair(_("Title"), sVoteTitle));
 
-                // Voting Weight
-                // Due to the fact the vote weight is done on the fly during a vote itself it takes some elaborate work to get the values from the time of the vote
-                // Search for superblock from this block and back till we find one (make sure we dont go back before there were no binary superblocks)
-                // But no more then 14 days back so we repesent correct data
-                // Search back from current block associated to tx till we reach a superblock within 14 days time span
-                res.push_back(std::make_pair("debug", sVoteShareType));
-
-                double dMoneySupplyFactor = 0;
-
-                if (sVoteShareType == "3" || sVoteShareType == "2")
+                if (sVoteShareType.empty())
                 {
+                    res.push_back(std::make_pair(_("Share Type"), _("Unable to extract Share Type. Vote likely > 6 months old")));
+                    res.push_back(std::make_pair(_("Answer"), sVoteAnswer));
+
+                    if (fDebug)
+                        res.push_back(std::make_pair(_("Share Type Debug"), sVoteShareType));
+
+                    return res;
+                }
+
+                else
+                    res.push_back(std::make_pair(_("Share Type"), GetShareType(std::stod(sVoteShareType))));
+
+                res.push_back(std::make_pair(_("Answer"), sVoteAnswer));
+
+                // Basic Variables for all poll types
+                double dVoteWeight = 0;
+                double dVoteMagnitude = 0;
+                double dVoteBalance = 0;
+                std::string sVoteMagnitude;
+                std::string sVoteBalance;
+
+                // Get voting magnitude and balance; These fields are always in vote contract
+                if (!PollCreatedAfterSecurityUpgrade(sVoteTitled))
+                {
+                    sVoteMagnitude = ExtractXML(msg, "<MAGNITUDE>", "</MAGNITUDE>");
+                    sVoteBalance = ExtractXML(msg, "<BALANCE>", "</BALANCE>");
+                }
+
+                else
+                {
+                    sVoteMagnitude = ExtractXML(msg, "<INNERMAGNITUDE>", "</INNERMAGNITUDE>");
+                    sVoteBalance = ExtractXML(msg, "<TOTALVOTEDBALANCE>", "</TOTALVOTEDBALANCE>");
+                }
+
+                if (sVoteShareType == "1")
+                    dVoteWeight = std::stod(sVoteMagnitude);
+
+                else if (sVoteShareType == "2")
+                    dVoteWeight = std::stod(sVoteBalance);
+
+                else if (sVoteShareType == "3")
+                {
+                    // For voting mag for mag + balance polls we need to calculate total network magnitude from superblock before vote to use the correct data in formula.
+                    // This gives us an accruate vote shares at that time. We like to keep wallet information as accruate as possible.
+                    // Note during boosted superblocks we get unusual calculations for total network magnitude.
                     CBlockIndex* pblockindex = mapBlockIndex[mtx.hashBlock];
                     CBlock block;
 
-                    int nStartHeight = pblockindex->nHeight;
                     int nEndHeight = pblockindex->nHeight - (BLOCKS_PER_DAY*14);
 
-                    // Lets just go back as far as the start of binary superblocks
-                    if ((fTestNet && nStartHeight > 10000) || (!fTestNet && nStartHeight > 725000))
+                    // Incase; Why throw.
+                    if (nEndHeight < 1)
+                        nEndHeight = 1;
+
+                    // Iterate back to find previous superblock
+                    while (pblockindex->nHeight > nEndHeight && pblockindex->nIsSuperBlock == 0)
+                        pblockindex = pblockindex->pprev;
+
+                    if (pblockindex->nIsSuperBlock == 1)
                     {
-                        if (fTestNet && nEndHeight < 10000)
-                            nEndHeight = 10000;
+                        block.ReadFromDisk(pblockindex);
 
-                        if (!fTestNet && nEndHeight < 725000)
-                            nEndHeight = 725000;
+                        std::string sHashBoinc = block.vtx[0].hashBoinc;
 
-                        if (nStartHeight > nEndHeight)
+                        MiningCPID vbb = DeserializeBoincBlock(sHashBoinc, block.nVersion);
+
+                        std::string sUnpackedSuperblock = UnpackBinarySuperblock(vbb.superblock);
+                        std::string sMagnitudeContract = ExtractXML(sUnpackedSuperblock, "<MAGNITUDES>", "</MAGNITUDES>");
+
+                        // Since Superblockavg function gives avg for mags yes but total cpids we cannot use this function
+                        // We need the rows_above_zero for Total Network Magnitude calculation with Money Supply Factor.
+                        std::vector<std::string> vMagnitudeContract = split(sMagnitudeContract, ";");
+                        int nRowsWithMag = 0;
+                        double dTotalMag = 0;
+
+                        for (auto const& sMag : vMagnitudeContract)
                         {
-                            // Iterate back to find superblocks
-                            while (pblockindex->nHeight > nEndHeight && pblockindex->nIsSuperBlock == 0)
-                                pblockindex = pblockindex->pprev;
+                            const std::vector<std::string>& vFields = split(sMag, ",");
+
+                            if (vFields.size() < 2)
+                                continue;
+
+                            const std::string& sCPID = vFields[0];
+                            double dMAG = std::stoi(vFields[1].c_str());
+
+                            if (sCPID.length() > 10)
+                            {
+                                nRowsWithMag++;
+                                dTotalMag += dMAG;
+                            }
                         }
 
-                        if (pblockindex->nIsSuperBlock == 1)
-                        {
-                            //MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
-                            block.ReadFromDisk(pblockindex);
-                            std::string sHashBoinc = block.vtx[0].hashBoinc;
+                        double dOutAverage = dTotalMag / ((double)nRowsWithMag + .01);
+                        double dTotalNetworkMagnitude = (double)nRowsWithMag * dOutAverage;
+                        double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
+                        double dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
 
-                            MiningCPID vbb = DeserializeBoincBlock(sHashBoinc, block.nVersion);
+                        dVoteMagnitude = cdbl(sVoteMagnitude,2);
+                        dVoteBalance = cdbl(sVoteBalance,2);
 
-                            std::string sUnpackedSuperblock = UnpackBinarySuperblock(vbb.superblock);
-                            std::string sMagnitudeContract = ExtractXML(sUnpackedSuperblock, "<MAGNITUDES>", "</MAGNITUDES>");
+                        if (dVoteMagnitude > 0)
+                            dVoteWeight = ((dMoneySupplyFactor/5.67) * dVoteMagnitude) + std::stod(sVoteBalance);
 
-                            // Since Superblockavg function gives avg for mags yes but total cpids, but we need the amount used for total mag/rows_above_zero for avg & rows_above_zero for Total Network Magnitude.
-                            std::vector<std::string> vMagnitudeContract = split(sMagnitudeContract, ";");
-                            double dRowsWithMag = 0;
-                            double dTotalMag = 0;
+                        else
+                            dVoteWeight = std::stod(sVoteBalance);
 
-                            for (auto const& sMag : vMagnitudeContract)
-                            {
-                                const std::vector<std::string>& vFields = split(sMag, ",");
-
-                                if (vFields.size() < 2)
-                                    continue;
-
-                                const std::string& sCPID = vFields[0];
-                                double dMAG = std::stoi(vFields[1].c_str());
-
-                                if (sCPID.length() > 10)
-                                {
-                                    dRowsWithMag++;
-                                    dTotalMag += dMAG;
-                                }
-                            }
-
-                            double dOutAverage = dTotalMag / (dRowsWithMag + .01);
-                            double dTotalNetworkMagnitude = dRowsWithMag * dOutAverage;
-                            double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
-                            dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
-
-                            if (fDebug)
-                            {
-                                res.push_back(std::make_pair("SB Participant Count With Mag", RoundToString(dRowsWithMag, 0)));
-                                res.push_back(std::make_pair("SB Average Magnitude", RoundToString(dOutAverage,8)));
-                                res.push_back(std::make_pair("SB Total Network Magnitude", RoundToString(dTotalNetworkMagnitude,8)));
-                                res.push_back(std::make_pair("Vote Money Supply", RoundToString(dMoneySupply,8)));
-                                res.push_back(std::make_pair("Vote Money Supply Factor", RoundToString(dMoneySupplyFactor,8)));
-                            }
-
-                            double dVoteMagnitude;
-                            double dVoteBalance;
-                            std::string sVoteMagnitude;
-                            std::string sVoteBalance;
-
-                            if (!PollCreatedAfterSecurityUpgrade(sVoteTitled))
-                            {
-                                sVoteMagnitude = ExtractXML(msg, "<MAGNITUDE>", "</MAGNITUDE>");
-                                sVoteBalance = ExtractXML(msg, "<BALANCE>", "</BALANCE>");
-                            }
-
-                            else
-                            {
-                                sVoteMagnitude = ExtractXML(msg, "<INNERMAGNITUDE>", "</INNERMAGNITUDE>");
-                                sVoteBalance = ExtractXML(msg, "<TOTALVOTEDBALANCE>", "</TOTALVOTEDBALANCE>");
-                            }
-
-                            dVoteMagnitude = cdbl(sVoteMagnitude,2);
-                            dVoteBalance = cdbl(sVoteBalance,2);
-
-                            res.push_back(std::make_pair("Vote Magnitude", RoundToString(dVoteMagnitude, 0)));
-                            res.push_back(std::make_pair("Vote Balance", RoundToString(dVoteBalance, 0)));
-                            res.push_back(std::make_pair("Mag Pull Type", sType));
-                            double xWeight = ((dMoneySupplyFactor/5.67) * std::stod(sVoteMagnitude)) + std::stod(sVoteBalance);
-                            res.push_back(std::make_pair("without votes", RoundToString(xWeight, 8)));
-
-                        }
+                        res.push_back(std::make_pair(_("Magnitude"), RoundToString(dVoteMagnitude, 2)));
+                        res.push_back(std::make_pair(_("Balance"), RoundToString(dVoteBalance, 2)));
                     }
 
-
-                    //std::string sPollExport;
-                    //GetJSONPollsReport(true, sVoteTitled, sPollExport, true);
-
-                    for (auto const& mapVoters : mvApplicationCache)
+                    else
                     {
-                        if (mapVoters[])
+                        res.push_back(std::make_pair(_("ERROR"), _("Unable to obtain superblock data before vote was made to calculate voting weight")));
+
+                        return res;
                     }
-
-                    std::string sVoteCount = ExtractXML(sPollExport, "<TOTALPARTICIPANTS>", "</TOTALPARTICIPANTS>");
-
-                    res.push_back(std::make_pair("Number of Voters", sVoteCount));
-
-                    double dVoteWeight = PollCalculateShares(msg, std::stod(sVoteShareType), dMoneySupplyFactor, std::stoul(sVoteCount));
-
-                    res.push_back(std::make_pair("Vote Weight", RoundToString(dVoteWeight,2)));
-
-
-
                 }
 
-                // do final calculations here
+                else if (sVoteShareType == "4" || sVoteShareType == "5")
+                    dVoteWeight = 1;
 
-                res.push_back(std::make_pair("Poll Share Type", sVoteShareType));
+                res.push_back(std::make_pair(_("Weight"), RoundToString(dVoteWeight, 0)));
             }
 
             else if (sMessageType == "project")
             {
-                res.push_back(std::make_pair("Contract Type", "Project"));
-
                 std::string sProjectName = ExtractXML(msg, "<MK>", "</MK>");
                 std::string sProjectURL = ExtractXML(msg, "<MV>", "</MV>");
-                std::string sProjectCommit = ExtractXML(msg, "<MA>", "</MA>");
+                std::string sProjectAction = ExtractXML(msg, "<MA>", "</MA>");
 
-                if (sProjectCommit == "A")
-                    res.push_back(std::make_pair("Project Commit", "Add"));
+                if (sProjectAction == "A")
+                    res.push_back(std::make_pair(_("Messate Type"), _("Add Project")));
 
-                else if (sProjectCommit == "D")
-                    res.push_back(std::make_pair("Project Commit", "Delete"));
+                else if (sProjectAction == "D")
+                    res.push_back(std::make_pair(_("Message Type"), _("Delete Project")));
 
-                else
-                    res.push_back(std::make_pair("Project Commit", "Unknown"));
+                res.push_back(std::make_pair(_("Name"), sProjectName));
 
-                res.push_back(std::make_pair("Project Name", sProjectName));
-                res.push_back(std::make_pair("Project URL", sProjectURL));
+                if (sProjectAction == "A")
+                    res.push_back(std::make_pair(_("URL"), sProjectURL));
             }
+
             else
             {
-                res.push_back(std::make_pair("Contract Type", "Unknown"));
+                res.push_back(std::make_pair(_("Message Type"), _("Unknown")));
 
                 if (fDebug)
-                    res.push_back(std::make_pair("Contract Data", msg));
+                    res.push_back(std::make_pair(_("Data"), msg));
+
+                return res;
             }
         }
 
         else if (sTxMessage.length())
         {
-            res.push_back(std::make_pair("Message Type", "Transaction Message"));
-            res.push_back(std::make_pair("Message", sTxMessage));
+            res.push_back(std::make_pair(_("Message Type"), _("Text Message")));
+            res.push_back(std::make_pair(_("Message"), sTxMessage));
         }
 
         else if (sRainMessage.length())
         {
-            res.push_back(std::make_pair("Message Type", "Transaction Rain Message"));
-            res.push_back(std::make_pair("Message", sRainMessage));
+            res.push_back(std::make_pair(_("Message Type"), _("Text Rain Message")));
+            res.push_back(std::make_pair(_("Message"), sRainMessage));
         }
 
         else if (sMessageType.empty() && sTxMessage.empty() && sRainMessage.empty())
-            res.push_back(std::make_pair("Message Type", "No Attached Messages"));
-
-        else
-        {
-            // Should never really make it here but if we do!
-            res.push_back(std::make_pair("Message Type", "Unknown Message"));
-
-            if (fDebug)
-                res.push_back(std::make_pair("HashBoinc", msg));
-        }
+            res.push_back(std::make_pair(_("Message Type"), _("No Attached Messages")));
 
         return res;
     }
 
     catch (const std::invalid_argument& e)
     {
-        std::string sE(e.what()); // Pass through constructer to use as a string in error message
-        res.push_back(std::make_pair("ERROR", "Invalid argument exception while parsing Transaction Messages -> " + sE));
+        std::string sE(e.what());
+
+        res.push_back(std::make_pair(_("ERROR"), _("Invalid argument exception while parsing Transaction Message -> ") + sE));
+
         return res;
     }
 
     catch (const std::out_of_range& e)
     {
         std::string sE(e.what());
-        res.push_back(std::make_pair("ERROR", "Out of rance exception while parsing Transaction Messages ->" + sE));
+
+        res.push_back(std::make_pair(_("ERROR"), _("Out of rance exception while parsing Transaction Message -> ") + sE));
+
         return res;
     }
 }
