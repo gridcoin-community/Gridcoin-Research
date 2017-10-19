@@ -44,6 +44,9 @@ qrc_*.cpp
 build
 
 !src/leveldb/Makefile
+!depends/Makefile
+!depends/patches/**/*
+!depends/packages/*
 
 # autoreconf
 Makefile.in
