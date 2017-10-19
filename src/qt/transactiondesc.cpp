@@ -24,9 +24,9 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
 QString ToQString(std::string s)
 {
 	QString str1 = QString::fromUtf8(s.c_str());
-	return str1;
-}
 
+    return str1;
+}
 
 QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
 {
@@ -36,25 +36,28 @@ QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
     {
         if (wtx.nLockTime < LOCKTIME_THRESHOLD)
             return tr("Open for %n more block(s)", "", wtx.nLockTime - nBestHeight);
+
         else
             return tr("Open until %1").arg(GUIUtil::dateTimeStr(wtx.nLockTime));
     }
+
     else
     {
         int nDepth = wtx.GetDepthInMainChain();
+
         if (nDepth < 0)
             return tr("conflicted");
+
         else if (GetAdjustedTime() - wtx.nTimeReceived > 2 * 60 && wtx.GetRequestCount() == 0)
             return tr("%1/offline").arg(nDepth);
+
         else if (nDepth < 10)
             return tr("%1/unconfirmed").arg(nDepth);
+
         else
             return tr("%1 confirmations").arg(nDepth);
     }
 }
-
-
-
 
 std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
 {
@@ -68,11 +71,11 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
     }
 
 	std::string grcaddress = "";
+
     for (auto const& addr : addresses)
-    {
 		grcaddress = CBitcoinAddress(addr).ToString();
-	}
-	return grcaddress;
+
+    return grcaddress;
 }
 
 QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
@@ -80,6 +83,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     QString strHTML;
 	
     LOCK2(cs_main, wallet->cs_wallet);
+
     strHTML.reserve(9250);
     strHTML += "<html><font face='verdana, arial, helvetica, sans-serif'>";
 
@@ -87,9 +91,9 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     int64_t nCredit = wtx.GetCredit();
     int64_t nDebit = wtx.GetDebit();
     int64_t nNet = nCredit - nDebit;
+    int nRequests = wtx.GetRequestCount();
 
     strHTML += "<b>" + tr("Status") + ":</b> " + FormatTxStatus(wtx);
-    int nRequests = wtx.GetRequestCount();
 
     if (nRequests != -1)
     {
@@ -128,7 +132,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 
                     if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
                     {
-
                         if (wallet->mapAddressBook.count(address))
                         {
                             strHTML += "<b>" + tr("From") + ":</b> " + tr("unknown") + "<br>";
@@ -156,7 +159,9 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
     {
         // Online transaction
         std::string strAddress = wtx.mapValue["to"];
+
         strHTML += "<b>" + tr("To") + ":</b> ";
+
         CTxDestination dest = CBitcoinAddress(strAddress).Get();
 
         if (wallet->mapAddressBook.count(dest) && !wallet->mapAddressBook[dest].empty())
@@ -236,11 +241,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
                 // Payment to self
                 int64_t nChange = wtx.GetChange();
                 int64_t nValue = nCredit - nChange;
+
                 strHTML += "<b>" + tr("Debit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -nValue) + "<br>";
                 strHTML += "<b>" + tr("Credit") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, nValue) + "<br>";
             }
 
             int64_t nTxFee = nDebit - wtx.GetValueOut();
+
             if (nTxFee > 0)
                 strHTML += "<b>" + tr("Transaction fee") + ":</b> " + BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, -nTxFee) + "<br>";
         }
@@ -360,7 +367,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
 
             if(txdb.ReadDiskTx(prevout.hash, prev))
             {
-
                 if (prevout.n < prev.vout.size())
                 {
                     strHTML += "<li>";
