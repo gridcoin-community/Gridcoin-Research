@@ -303,7 +303,7 @@ qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_QT_CPP) $(GRIDCOINRESEARCH_QT_H)
 
 if TARGET_WINDOWS
 qt_libgridcoinqt_a_SOURCES += $(GRIDOIN_CORE_H) $(GRIDCOIN_CORE_CPP) grcrestarter.cpp neuralnet.cpp
-qt_libgridcoinqt_a_CXXFLAGS += -DWIN32 -DUNICODE -fPIC
+qt_libgridcoinqt_a_CXXFLAGS += -DUNICODE
 endif
 
 nodist_qt_libgridcoinqt_a_SOURCES = $(QT_MOC_CPP) $(QT_MOC) $(PROTOBUF_CC) \
