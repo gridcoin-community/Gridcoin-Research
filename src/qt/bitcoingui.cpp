@@ -748,13 +748,10 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(faqAction);
     qmAdvanced->addAction(foundationAction);
 //	qmAdvanced->addAction(diagnosticsAction);
-
+     qmAdvanced->addAction(downloadAction);
 #endif /* defined(WIN32) */
     qmAdvanced->addSeparator();
     qmAdvanced->addAction(rebuildAction);
-#ifdef WIN32
-    qmAdvanced->addAction(downloadAction);
-#endif
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
@@ -1742,7 +1739,7 @@ void BitcoinGUI::timerfire()
     try
     {
         if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-        {            
+        {
             ReinstantiateGlobalcom();
             nRegVersion=9999;
 
