@@ -59,7 +59,7 @@
 //
 bool AppInit(int argc, char* argv[])
 {
-    boost::thread_group threadGroup;
+    ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
 
     try
@@ -103,9 +103,8 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-        boost::thread* detectShutdownThread = new boost::thread(boost::bind(&DetectShutdownThread, &threadGroup));
 
-        fRet = AppInit2();
+        fRet = AppInit2(threads);
     }
     catch (std::exception& e) {
         printf("AppInit()Exception1");

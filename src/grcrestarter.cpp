@@ -3,9 +3,7 @@
 
 // Old VB based NeuralNet.
 double qtPushGridcoinDiagnosticData(std::string data);
-void qtUpdateConfirm(std::string txid);
 int RestartClient();
-int RebootClient();
 void CheckForUpgrade();
 int DownloadBlocks();
 int ReindexWallet();
@@ -24,11 +22,6 @@ namespace Restarter
     int RestartGridcoin()
     {
         return RestartClient();
-    }
-
-    int RebootGridcoin()
-    {
-        return RebootClient();
     }
 
     void CheckUpgrade()
@@ -50,10 +43,4 @@ namespace Restarter
     {
         return CreateRestorePoint();
     }
-
-    void UpdateConfirm(std::string txid)
-    {
-        qtUpdateConfirm(txid);
-    }
-
 }

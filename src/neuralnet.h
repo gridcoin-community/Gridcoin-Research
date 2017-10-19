@@ -72,7 +72,5 @@ namespace NN
 
     std::string ExecuteDotNetStringFunction(std::string function, std::string data);
 
-    void ExecuteVBCode();
-
     int64_t IsNeuralNet();
 }

@@ -74,6 +74,7 @@ QT_TS = \
 QT_FORMS_UI = \
   qt/forms/aboutdialog.ui \
   qt/forms/coincontroldialog.ui \
+  qt/forms/diagnosticsdialog.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/rpcconsole.ui \
   qt/forms/signverifymessagedialog.ui \
@@ -100,6 +101,7 @@ QT_MOC_CPP = \
   qt/moc_coincontroldialog.cpp \
   qt/moc_coincontroltreewidget.cpp \
   qt/moc_csvmodelwriter.cpp \
+  qt/moc_diagnosticsdialog.cpp \
   qt/moc_editaddressdialog.cpp \
   qt/moc_guiutil.cpp \
   qt/moc_macdockiconhandler.cpp \
@@ -153,6 +155,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/coincontroldialog.h \
   qt/coincontroltreewidget.h \
   qt/csvmodelwriter.h \
+  qt/diagnosticsdialog.h \
   qt/editaddressdialog.h \
   qt/guiconstants.h \
   qt/guiutil.h \
@@ -195,6 +198,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/coincontroldialog.cpp \
   qt/coincontroltreewidget.cpp \
   qt/csvmodelwriter.cpp \
+  qt/diagnosticsdialog.cpp \
   qt/editaddressdialog.cpp \
   qt/guiutil.cpp \
   qt/monitoreddatamapper.cpp \

@@ -38,11 +38,6 @@ namespace NN
         return std::string();
     }
 
-    void ExecuteVBCode()
-    {
-        return;
-    }
-
     int64_t IsNeuralNet()
     {
         return 0;

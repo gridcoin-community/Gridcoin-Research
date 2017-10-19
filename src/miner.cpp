@@ -10,6 +10,7 @@
 #include "cpid.h"
 #include "util.h"
 #include "main.h"
+#include "neuralnet.h"
 
 #include <memory>
 
@@ -34,7 +35,7 @@ bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
-std::string qtGetNeuralContract(std::string data);
+
 
 // Some explaining would be appreciated
 class COrphan
@@ -646,18 +647,13 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 }
 
 int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
-{
-    std::string sb_contract;
-
+{    
     if(OutOfSyncByAge())
         return printf("AddNeuralContractOrVote: Out Of Sync\n");
 
     /* Retrive the neural Contract */
-    #if defined(WIN32) && defined(QT_GUI)
-        sb_contract = qtGetNeuralContract("");
-    #endif
-
-    const std::string sb_hash = GetQuorumHash(sb_contract);
+    const std::string& sb_contract = NN::GetNeuralContract();
+    const std::string& sb_hash = GetQuorumHash(sb_contract);
 
     /* To save network bandwidth, start posting the neural hashes in the
        CurrentNeuralHash field, so that out of sync neural network nodes can

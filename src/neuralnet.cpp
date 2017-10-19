@@ -20,7 +20,6 @@ extern std::string qtGetNeuralContract(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string qtExecuteDotNetStringFunction(std::string function,std::string data);
 extern void qtSyncWithDPORNodes(std::string data);
-void ExecuteCode();
 int64_t IsNeural();
 
 // While transitioning to dotnet the NeuralNet implementation has been split
@@ -64,11 +63,6 @@ namespace NN
     std::string ExecuteDotNetStringFunction(std::string function, std::string data)
     {
         qtExecuteDotNetStringFunction(function, data);
-    }
-
-    void ExecuteVBCode()
-    {
-       ExecuteCode();
     }
 
     int64_t IsNeuralNet()

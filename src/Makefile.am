@@ -35,6 +35,8 @@ GRIDCOIN_CORE_H = \
 	addrman.h \
 	alert.h \
 	allocators.h \
+	appcache.h \
+	backup.h \
 	base58.h \
 	beacon.h \
 	bignum.h \
@@ -57,7 +59,6 @@ GRIDCOIN_CORE_H = \
 	gridcoin.h \
 	grcrestarter.h \
 	init.h \
-	irc.h \
 	kernel.h \
 	key.h \
 	keystore.h \
@@ -90,6 +91,8 @@ GRIDCOIN_CORE_H = \
 GRIDCOIN_CORE_CPP = addrman.cpp \
 	alert.cpp \
 	allocators.cpp \
+	appcache.cpp \
+	backup.cpp \
 	beacon.cpp \
 	bitcoinrpc.cpp \
 	block.cpp \
@@ -99,7 +102,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	crypter.cpp \
 	db.cpp \
 	init.cpp \
-	irc.cpp \
 	kernel.cpp \
 	key.cpp \
 	keystore.cpp \

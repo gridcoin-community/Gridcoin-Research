@@ -8,8 +8,6 @@ namespace Restarter
 
     double PushGridcoinDiagnosticData(std::string);
 
-    int RebootGridcoin();
-
     void CheckUpgrade();
 
     int DownloadGridcoinBlocks();
@@ -17,7 +15,4 @@ namespace Restarter
     int ReindexGridcoinWallet();
 
     int CreateGridcoinRestorePoint();
-
-    void UpdateConfirm(std::string txid);
-
 }

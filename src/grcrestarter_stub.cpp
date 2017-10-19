@@ -13,11 +13,6 @@ namespace Restarter
         return 0;
     }
 
-    int RebootGridcoin()
-    {
-        return 1;
-    }
-
     void CheckUpgrade()
     {
         return;
@@ -37,10 +32,4 @@ namespace Restarter
     {
         return -1;
     }
-
-    void UpdateConfirm(std::string txid)
-    {
-        return;
-    }
-
 }

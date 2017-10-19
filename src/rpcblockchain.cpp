@@ -136,7 +136,6 @@ double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
-extern enum Checkpoints::CPMode CheckpointsMode;
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
@@ -1192,7 +1191,7 @@ Value execute(const Array& params, bool fHelp)
     {
         printf("Restarting Gridcoin...");
         int iResult = Restarter::RestartGridcoin();
-        entry.push_back(Pair("RebootClient",r));
+        entry.push_back(Pair("RebootClient", iResult));
         results.push_back(entry);
 
     }
