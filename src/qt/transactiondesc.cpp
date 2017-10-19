@@ -23,7 +23,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
 
 QString ToQString(std::string s)
 {
-	QString str1 = QString::fromUtf8(s.c_str());
+    QString str1 = QString::fromUtf8(s.c_str());
 
     return str1;
 }
@@ -70,10 +70,10 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
         return "";
     }
 
-	std::string grcaddress = "";
+    std::string grcaddress = "";
 
     for (auto const& addr : addresses)
-		grcaddress = CBitcoinAddress(addr).ToString();
+        grcaddress = CBitcoinAddress(addr).ToString();
 
     return grcaddress;
 }
