@@ -4,6 +4,8 @@ src/gridcoinresearchd
 src/test_gridcoin
 src/build.h
 src/obj
+src/qt/forms/*.h
+src/qt/moc_*.cpp
 
 contrib/deprecated
 contrib/deprecated/bin
