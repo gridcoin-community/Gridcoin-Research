@@ -194,7 +194,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/addressbookpage.h \
     src/qt/signverifymessagedialog.h \
     src/qt/aboutdialog.h \
-    src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
     src/alert.h \
@@ -269,11 +268,12 @@ HEADERS += src/qt/bitcoingui.h \
     src/clientversion.h \
     src/threadsafety.h \
     src/cpid.h \
-    src/upgrader.h \
     src/boinc.h \
     src/qt/diagnosticsdialog.h \
     src/backup.h \
-    src/appcache.h
+    src/appcache.h \
+    src/grcrestarter.h \
+    src/neuralnet.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -286,7 +286,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/addressbookpage.cpp \
     src/qt/signverifymessagedialog.cpp \
     src/qt/aboutdialog.cpp \
-    src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/qt/votingdialog.cpp \
@@ -350,11 +349,12 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
-    src/upgrader.cpp \
     src/boinc.cpp \
     src/allocators.cpp \
     src/backup.cpp \
-    src/appcache.cpp
+    src/appcache.cpp \
+    src/grcrestarter.cpp \
+    src/neuralnet.cpp
 
 ##
 #RC_FILE  = qaxserver.rc
@@ -369,7 +369,6 @@ FORMS += \
     src/qt/forms/addressbookpage.ui \
     src/qt/forms/signverifymessagedialog.ui \
     src/qt/forms/aboutdialog.ui \
-    src/qt/forms/upgradedialog.ui \
     src/qt/forms/editaddressdialog.ui \
     src/qt/forms/transactiondescdialog.ui \
     src/qt/forms/overviewpage.ui \
