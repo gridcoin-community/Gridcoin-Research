@@ -24,16 +24,14 @@ namespace
                block->nHeight = prev.nHeight + 1;
             }
             if(block != &blocks.back())
-               block->pnext = &next;      
+               block->pnext = &next;
          }
-         
          // Setup global variables.
          pindexBest = &blocks.back();
-         pindexGenesisBlock = &blocks.front();         
+         pindexGenesisBlock = &blocks.front();
          nBestHeight = blocks.back().nHeight;
       }
-      
-      std::array<CBlockIndex, Size> blocks;      
+      std::array<CBlockIndex, Size> blocks;
    };
 }
 
@@ -43,7 +41,6 @@ BOOST_AUTO_TEST_CASE(FindBlockInNormalChainShouldWork)
 {
    BlockChain<100> chain;
    BlockFinder finder;
-   
    for(auto& block : chain.blocks)
        BOOST_CHECK_EQUAL(&block, finder.FindByHeight(block.nHeight));
 }
@@ -52,16 +49,14 @@ BOOST_AUTO_TEST_CASE(FindBlockAboveHighestHeightShouldReturnHighestBlock)
 {
    BlockChain<100> chain;
    BlockFinder finder;
-   
    CBlockIndex& last = chain.blocks.back();
-   BOOST_CHECK_EQUAL(&last, finder.FindByHeight(101));   
+   BOOST_CHECK_EQUAL(&last, finder.FindByHeight(101));
 }
 
 BOOST_AUTO_TEST_CASE(FindBlockByHeightShouldWorkOnChainsWithJustOneBlock)
 {
    BlockChain<1> chain;
    BlockFinder finder;
-   
    BOOST_CHECK_EQUAL(&chain.blocks.front(), finder.FindByHeight(0));
    BOOST_CHECK_EQUAL(&chain.blocks.front(), finder.FindByHeight(1));
    BOOST_CHECK_EQUAL(&chain.blocks.front(), finder.FindByHeight(-1));
