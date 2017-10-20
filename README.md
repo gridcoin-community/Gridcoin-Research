@@ -20,8 +20,6 @@ These dependencies are required:
  libdb4.8    | Berkeley DB      | Wallet storage (only needed when wallet enabled)
  qt          | GUI              | GUI toolkit (only needed when GUI enabled)
  libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
- libzip       | Upgrader         | Unzip downloaded gridcoin binaries
- libcurl      | Upgrader         | Download gridcoin binaries
 
 To build run
 ```       ./autogen.sh && ./configure && make```.

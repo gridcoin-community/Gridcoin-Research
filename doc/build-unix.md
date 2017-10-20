@@ -54,9 +54,7 @@ These dependencies are required:
  libdb4.8    | Berkeley DB      | Wallet storage (only needed when wallet enabled)
  qt          | GUI              | GUI toolkit (only needed when GUI enabled)
  libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
- libzip       | Upgrader         | Unzip downloaded gridcoin binaries
- libcurl      | Upgrader         | Download gridcoin binaries
-
+ 
 For the versions used in the release, see [release-process.md](release-process.md) under *Fetch and build inputs*.
 
 Memory Requirements
@@ -86,11 +84,6 @@ install necessary parts of boost:
 2. If that doesn't work, you can install all boost development packages with:
 
         sudo apt-get install libboost-all-dev
-
-For the upgrader additional packages are needed:
-
-        sudo apt-get install libcurl3-dev libzip-dev
-
 
 BerkeleyDB is required for the wallet.
 
@@ -165,11 +158,6 @@ Tumbleweed:
 Leap:
 
         sudo zypper install boost_1_61-devel
-
-For the upgrader additional packages are needed:
-
-        sudo zypper install libcurl-devel libzip-devel
-
 
 BerkeleyDB is required for the wallet.
 
