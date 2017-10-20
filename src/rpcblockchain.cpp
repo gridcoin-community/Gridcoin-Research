@@ -978,7 +978,11 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
 
             bool IsCPIDValid2 = CPID_IsCPIDValid(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2, hashRand);
-            if (!IsCPIDValid2) return "Invalid CPID";
+            if (!IsCPIDValid2)
+            {
+                sError="Invalid CPID";
+                return false;
+            }
 
             double nBalance = GetTotalBalance();
             if (nBalance < 1.01)
