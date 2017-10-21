@@ -4269,41 +4269,17 @@ void GridcoinServices()
         }
     }
 
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
-    if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
-
-    if (fDebug10) 
+    // Update quorum data.
+    if ((nBestHeight % 3) == 0)
     {
-            printf (" MRSA %" PRId64 ", BH %d", superblock_age, nBestHeight);
+        ComputeNeuralNetworkSupermajorityHashes();
+        UpdateNeuralNetworkQuorumData();
     }
 
-    if (bNeedSuperblock)
-    {
-        if ((nBestHeight % 3) == 0)
-        {
-            if (fDebug10) printf("#CNNSH# ");
-            ComputeNeuralNetworkSupermajorityHashes();
-            UpdateNeuralNetworkQuorumData();
-        }
-    }
-    else
-    {
-        // When superblock is not old, Tally every N mins:
-        int nTallyGranularity = fTestNet ? 60 : 20;
-        if ((nBestHeight % nTallyGranularity) == 0)
-        {
-            TallyNetworkAverages();
-            ComputeNeuralNetworkSupermajorityHashes();
-        }
-
-        if ((nBestHeight % 5)==0)
-        {
-                UpdateNeuralNetworkQuorumData();
-        }
-
-    }
-
+    // Tally research averages.
+    if ((nBestHeight % TALLY_GRANULARITY) == 0)
+        TallyNetworkAverages();
+    
     // Every N blocks as a Synchronized TEAM:
     if ((nBestHeight % 30) == 0)
     {
