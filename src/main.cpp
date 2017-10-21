@@ -8114,17 +8114,24 @@ void IncrementVersionCount(const std::string& Version)
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
 {
     double highest_popularity = -1;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
+    std::string neural_hash;
+    
+    for(const auto& network_hash : mvNeuralNetworkHash)
     {
-                double popularity = mvNeuralNetworkHash[(*ii).first];
-                // d41d8 is the hash of an empty magnitude contract - don't count it
-                if ( ((*ii).first != "d41d8cd98f00b204e9800998ecf8427e") && popularity > 0 && popularity > highest_popularity && (*ii).first != "TOTAL_VOTES")
-                {
-                    highest_popularity = popularity;
-                    neural_hash = (*ii).first;
-                }
+        const std::string& hash = network_hash.first;
+        double popularity       = network_hash.second;
+        
+        // d41d8 is the hash of an empty magnitude contract - don't count it
+        if (popularity > 0 &&
+            popularity > highest_popularity &&
+            hash != "d41d8cd98f00b204e9800998ecf8427e" &&
+            hash != "TOTAL_VOTES")
+        {
+            highest_popularity = popularity;
+            neural_hash = hash;
+        }
     }
+    
     out_popularity = highest_popularity;
     return neural_hash;
 }
