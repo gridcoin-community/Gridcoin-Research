@@ -4235,9 +4235,23 @@ bool NeedASuperblock()
          GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
          */
     }
+
     int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
         bDireNeedOfSuperblock = true;
+
+    if(bDireNeedOfSuperblock && pindexBest && pindexBest->nVersion>=9)
+    {
+        // If all the checks indicate true and is v9, look 15 blocks back to
+        // prevent duplicate superblocks
+        for(CBlockIndex *pindex = pindexBest;
+            pindex && pindex->nHeight + 15 > nBestHeight;
+            pindex = pindex->pprev)
+        {
+            if(pindex->nIsSuperBlock)
+                return false;
+        }
+    }
 
     return bDireNeedOfSuperblock;
 }
