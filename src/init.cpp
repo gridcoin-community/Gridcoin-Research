@@ -29,8 +29,6 @@ void BusyWaitForTally();
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
 
-std::string ToOfficialName(std::string proj);
-
 #ifndef WIN32
 #include <signal.h>
 #endif
@@ -45,8 +43,6 @@ extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
-void InitializeBoincProjects();
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -71,58 +67,6 @@ void StartShutdown()
     fRequestShutdown = true;
 #endif
 }
-
-void InitializeBoincProjects()
-{
-       //Initialize GlobalCPUMiningCPID
-        GlobalCPUMiningCPID.initialized = true;
-        GlobalCPUMiningCPID.cpid="";
-        GlobalCPUMiningCPID.cpidv2 = "";
-        GlobalCPUMiningCPID.projectname ="";
-        GlobalCPUMiningCPID.rac=0;
-        GlobalCPUMiningCPID.encboincpublickey = "";
-        GlobalCPUMiningCPID.boincruntimepublickey = "";
-        GlobalCPUMiningCPID.pobdifficulty = 0;
-        GlobalCPUMiningCPID.diffbytes = 0;
-        GlobalCPUMiningCPID.email = "";
-        GlobalCPUMiningCPID.RSAWeight = 0;
-
-        //Loop through projects saved in the Gridcoin Persisted Data System
-        std::string sType = "project";
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-        {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                            std::string key_value = mvApplicationCache[(*ii).first];
-                            std::vector<std::string> vKey = split(key_name,";");
-                            if (vKey.size() > 0)
-                            {
-
-                                std::string project_name = vKey[1];
-                                printf("Proj %s ",project_name.c_str());
-                                std::string project_value = key_value;
-                                boost::to_lower(project_name);
-                                std::string mainProject = ToOfficialName(project_name);
-                                boost::to_lower(mainProject);
-                                StructCPID structcpid = GetStructCPID();
-                                mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
-                                structcpid = mvBoincProjects[mainProject];
-                                structcpid.initialized = true;
-                                structcpid.link = "http://";
-                                structcpid.projectname = mainProject;
-                                mvBoincProjects[mainProject] = structcpid;
-                                WHITELISTED_PROJECTS++;
-
-                            }
-                     }
-                }
-       }
-
-}
-
 
 void Shutdown(void* parg)
 {
@@ -1024,8 +968,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     LoadAdminMessages(true,sOut);
     printf("Done loading Admin messages");
 
-    InitializeBoincProjects();
-    printf("Done loading boinc projects");
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 

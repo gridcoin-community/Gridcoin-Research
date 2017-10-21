@@ -22,6 +22,7 @@
 #include "beacon.h"
 #include "miner.h"
 #include "backup.h"
+#include "appcache.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -277,7 +278,6 @@ bool bGridcoinGUILoaded = false;
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 
 extern void WriteAppCache(std::string key, std::string value);
-extern std::string AppCache(std::string key);
 extern void LoadCPIDsInBackground();
 
 extern void ThreadCPIDs();
@@ -349,7 +349,6 @@ std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project sta
 std::map<std::string, StructCPID> mvCreditNodeCPID;        // Contains verified CPID Magnitudes;
 std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
 std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
-std::map<std::string, StructCPID> mvBoincProjects; // Contains all of the allowed boinc projects;
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 
@@ -555,19 +554,19 @@ void GetGlobalStatus()
 
 
 
-std::string AppCache(std::string key)
-{
-
-    StructCPIDCache setting = mvAppCache["cache"+key];
-    if (!setting.initialized)
-    {
-        setting.initialized=true;
-        setting.xml = "";
-        mvAppCache.insert(map<string,StructCPIDCache>::value_type("cache"+key,setting));
-        mvAppCache["cache"+key]=setting;
-    }
-    return setting.xml;
-}
+//std::string AppCache(std::string key)
+//{
+//
+//    StructCPIDCache setting = mvAppCache["cache"+key];
+//    if (!setting.initialized)
+//    {
+//        setting.initialized=true;
+//        setting.xml = "";
+//        mvAppCache.insert(map<string,StructCPIDCache>::value_type("cache"+key,setting));
+//        mvAppCache["cache"+key]=setting;
+//    }
+//    return setting.xml;
+//}
 
 
 
@@ -7330,15 +7329,24 @@ void InitializeProjectStruct(StructCPID& project)
 
 }
 
-
-bool ProjectIsValid(std::string project)
+bool ProjectIsValid(std::string sProject)
 {
-    boost::to_lower(project);
+    if (sProject.empty())
+        return false;
 
-    StructCPID structcpid = GetInitializedStructCPID2(project,mvBoincProjects);
+    boost::to_lower(sProject);
 
-    return structcpid.initialized;
+    for (const auto& item : AppCacheFilter("project"))
+    {
+        std::string sProjectKey = item.first;
+        std::vector<std::string> vProjectKey = split(sProjectKey, ";");
+        std::string sProjectName = ToOfficialName(vProjectKey[1]);
 
+        if (sProjectName == sProject)
+            return true;
+    }
+
+    return false;
 }
 
 std::string ToOfficialName(std::string proj)
@@ -8288,7 +8296,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                             fMessageLoaded = true;
                         }
 
-                        WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
+                        //WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
 
                   }
 
