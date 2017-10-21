@@ -142,7 +142,7 @@ bool VerifyBeaconContractTx(const std::string& txhashBoinc)
     // Current bad contracts in chain would cause a fork on sync
     // Previous beacons in the past have 3 elements not 4 thus causing empty contract elements as coded in GetBeaconElements
     if (
-               (fTestNet && nBestHeight <= 300000)
+               (fTestNet && nBestHeight <= 378000)
             || (!fTestNet && nBestHeight <= 1070000)
        )
         return true; // allow sync from 0 till these blocks when this check comes into effect
