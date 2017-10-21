@@ -8438,10 +8438,21 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
     if(fDebug && !bVerifyingBlock) printf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)\n",cpid.c_str(),pindexLast->GetBlockHash().GetHex().c_str(),pindexLast->nHeight,pindexBest->nHeight);
+    if(pindexLast->nVersion>=9)
+    {
+        // Bugfix for newbie rewards always being around 1 GRC
+        dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+    }
     if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
     if(fDebug && !bVerifyingBlock) printf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f\n",pHistorical->GetBlockHash().GetHex().c_str(),pHistorical->nHeight,!!pHistorical->pnext,pHistorical->nMagnitude);
-    if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
+    bool bIsNewbie = (pHistorical->nHeight <= nNewIndex || pHistorical->nTime==0);
+    if(pindexLast->nVersion<9)
+    {
+        // Bugfix for zero mag stakes being mistaken for newbie stake
+        bIsNewbie |= pHistorical->nMagnitude==0;
+    }
+    if (bIsNewbie)
     {
         //No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
         if(fDebug && !bVerifyingBlock) printf("CRE: No prior block exists...\n");
@@ -8473,7 +8484,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             }
             else
             {
-                if(fDebug && !bVerifyingBlock) printf("CRE: Using 0.01 age bootstrap\n");
+                if(fDebug && !bVerifyingBlock) printf("CRE: Invalid Beacon, Using 0.01 age bootstrap\n");
                 return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
             }
         }
