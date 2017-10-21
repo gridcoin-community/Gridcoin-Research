@@ -5427,11 +5427,14 @@ bool TallyResearchAverages()
     double NetworkInterest = 0;
     
     //Consensus Start/End block:
-    int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+    int nMaxConensusDepth = nBestHeight - CONSENSUS_LOOKBACK;
+    int nMaxDepth = nMaxConensusDepth - (nMaxConensusDepth % TALLY_GRANULARITY);
     int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
-    int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-    if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
-    if (nMinDepth < 2)              nMinDepth = 2;
+    int nMinDepth = nMaxDepth - nLookback;
+    if (nMinDepth < 2)
+        nMinDepth = 2;
+    
+    if (fDebug3) printf("START BLOCK %i, END BLOCK %i", nMaxDepth, nMinDepth);
     mvMagnitudesCopy.clear();
     int iRow = 0;
 
