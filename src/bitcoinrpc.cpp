@@ -35,6 +35,9 @@ void ThreadRPCServer2(void* parg);
 
 static std::string strRPCUserColonPass;
 
+// These are created by StartRPCThreads, destroyed in StopRPCThreads
+static asio::io_service* rpc_io_service = NULL;
+
 const Object emptyobj;
 
 void ThreadRPCServer3(void* parg);
@@ -664,6 +667,16 @@ private:
     iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
 };
 
+void StopRPCThreads()
+{
+    if(!rpc_io_service)
+        return;
+    
+    rpc_io_service->stop();
+    delete rpc_io_service;
+    rpc_io_service = NULL;
+}
+
 void ThreadRPCServer(void* parg)
 {
     // Make this thread recognisable as the RPC listener
@@ -797,9 +810,10 @@ void ThreadRPCServer2(void* parg)
 
     const bool fUseSSL = GetBoolArg("-rpcssl");
 
-    asio::io_service io_service;
+    assert(rpc_io_service == NULL);
+    rpc_io_service = new asio::io_service();
 
-    ssl::context context(io_service, ssl::context::sslv23);
+    ssl::context context(*rpc_io_service, ssl::context::sslv23);
     if (fUseSSL)
     {
         context.set_options(ssl::context::no_sslv2);
@@ -823,7 +837,7 @@ void ThreadRPCServer2(void* parg)
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
     ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
-    boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(io_service));
+    boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
 
     boost::signals2::signal<void ()> StopRequests;
 
@@ -860,7 +874,7 @@ void ThreadRPCServer2(void* parg)
             bindAddress = loopback ? asio::ip::address_v4::loopback() : asio::ip::address_v4::any();
             endpoint.address(bindAddress);
 
-            acceptor.reset(new ip::tcp::acceptor(io_service));
+            acceptor.reset(new ip::tcp::acceptor(*rpc_io_service));
             acceptor->open(endpoint.protocol());
             acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
             acceptor->bind(endpoint);
@@ -887,7 +901,7 @@ void ThreadRPCServer2(void* parg)
     }
 
     while (!fShutdown)
-        io_service.run_one();
+        rpc_io_service->run_one();
     StopRequests();
 }
 

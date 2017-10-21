@@ -335,6 +335,7 @@ int main(int argc, char *argv[])
     }
 
     // delete thread handler
+    threads->interruptAll();
     threads->removeAll();
     threads.reset();
 

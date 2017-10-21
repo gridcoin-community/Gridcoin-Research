@@ -151,6 +151,7 @@ void Shutdown(void* parg)
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
+        StopRPCThreads();
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
@@ -254,6 +255,7 @@ bool AppInit(int argc, char* argv[])
     Shutdown(NULL);
 
     // delete thread handler
+    threads->interruptAll();
     threads->removeAll();
     threads.reset();
 
