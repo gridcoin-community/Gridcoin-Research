@@ -62,3 +62,5 @@ void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::s
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR);
 bool HasActiveBeacon(const std::string& cpid);
+
+bool VerifyBeaconContractTx(const std::string& txhashBoinc);
