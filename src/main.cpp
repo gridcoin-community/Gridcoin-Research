@@ -5502,7 +5502,12 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
 
     //Clear the votes
-    ClearCache("neuralsecurity");
+    /* ClearCache was no-op in previous version due to bug. Now it was fixed,
+        but we have to emulate the old behaviour to prevent early forks. */
+    if(pindexBest && pindexBest->nVersion>=9)
+    {
+        ClearCache("neuralsecurity");
+    }
     WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
     try
     {
