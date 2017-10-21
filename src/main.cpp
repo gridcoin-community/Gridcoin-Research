@@ -5266,45 +5266,40 @@ void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
 
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {
-    // Headless critical section
-    if (pIndex->nResearchSubsidy > 0)
+    if (pIndex->nResearchSubsidy <= 0)
+        return;
+    
+    try
     {
-        try
+        StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
+        stMag.cpid = pIndex->GetCPID();
+        stMag.GRCAddress = pIndex->sGRCAddress;
+        if (pIndex->nHeight > stMag.LastBlock)
         {
-            StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
-            stMag.cpid = pIndex->GetCPID();
-            stMag.GRCAddress = pIndex->sGRCAddress;
-            if (pIndex->nHeight > stMag.LastBlock)
-            {
-                stMag.LastBlock = pIndex->nHeight;
-            }
-            stMag.entries++;
-            stMag.payments += pIndex->nResearchSubsidy;
-            stMag.interestPayments += pIndex->nInterestSubsidy;
-
-            AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
-            // Track detailed payments made to each CPID
-            stMag.PaymentTimestamps         += ToString(pIndex->nTime) + ",";
-            stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
-            stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-            stMag.PaymentAmountsBlocks      += ToString(pIndex->nHeight) + ",";
-            stMag.Accuracy++;
-            stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
-            double total_owed = 0;
-            stMag.owed = GetOutstandingAmountOwed(stMag,
-                                                  pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
-
-            stMag.totalowed = total_owed;
-            mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
+            stMag.LastBlock = pIndex->nHeight;
         }
-        catch (const std::bad_alloc& ba)
-        {
-            printf("\r\nBad Allocation in AddResearchMagnitude() \r\n");
-        }
-        catch(...)
-        {
-            printf("Exception in AddResearchMagnitude() \r\n");
-        }
+        stMag.entries++;
+        stMag.payments += pIndex->nResearchSubsidy;
+        stMag.interestPayments += pIndex->nInterestSubsidy;
+        
+        AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
+        // Track detailed payments made to each CPID
+        stMag.PaymentTimestamps         += ToString(pIndex->nTime) + ",";
+        stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
+        stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
+        stMag.PaymentAmountsBlocks      += ToString(pIndex->nHeight) + ",";
+        stMag.Accuracy++;
+        stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
+        double total_owed = 0;
+        stMag.owed = GetOutstandingAmountOwed(stMag,
+                                              pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
+        
+        stMag.totalowed = total_owed;
+        mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
+    }
+    catch (const std::bad_alloc& ba)
+    {
+        printf("\r\nBad Allocation in AddResearchMagnitude() \r\n");
     }
 }
 
