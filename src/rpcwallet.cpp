@@ -23,8 +23,6 @@ extern void ThreadTopUpKeyPool(void* parg);
 double CoinToDouble(double surrogate);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
-extern Array StakingReport();
-
 extern void ThreadCleanWalletPassphrase(void* parg);
 
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
@@ -1251,68 +1249,6 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
             }
         }
     }
-}
-
-
-
-Array StakingReport()
-{
-
-    Array results;
-    Object c;
-    std::string Narr = ToString(GetAdjustedTime());
-    c.push_back(Pair("Staking Report",Narr));
-    results.push_back(c);
-    Object entry;
-    int64_t nCoinStakeTotal = 0;
-    int64_t nNonCoinStakeTotal = 0;
-    int64_t nStake = 0;
-    int64_t nImmature = 0;
-    int64_t nDepthImmature = 0;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (map<uint256, CWalletTx>::const_iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
-    {
-        const CWalletTx* pcoin = &(*it).second;
-        int64_t amt = pwalletMain->GetCredit(*pcoin);
-
-        if (pcoin->IsCoinStake())
-        {
-                 nCoinStakeTotal += amt;
-                 if (pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)
-                 {
-                     nStake += amt;
-                 }
-                 else
-                 {
-                     
-                     if (pcoin->GetBlocksToMaturity() < 1) 
-                     {
-                                nImmature+=amt;
-                     }
-                     else
-                     {
-                                if (pcoin->GetDepthInMainChain() < 1) nDepthImmature += amt;
-                     }
-                 }
-   
-        }
-        else
-        {
-                 //Sent Tx
-                 nNonCoinStakeTotal += amt;
-   
-        }
-    }
-    
-    entry.push_back(Pair("CoinStakeTotal",     CoinToDouble(nCoinStakeTotal)));
-    entry.push_back(Pair("Non-CoinStakeTotal", CoinToDouble(nNonCoinStakeTotal)));
-    entry.push_back(Pair("Blocks Immature",    CoinToDouble(nImmature)));
-    entry.push_back(Pair("Depth Immature",     CoinToDouble(nDepthImmature)));
-    entry.push_back(Pair("Total Immature",     CoinToDouble(nImmature+nDepthImmature)));
-    entry.push_back(Pair("Total Eligibile for Staking", CoinToDouble(nStake)));
-    results.push_back(entry);
-    return results;
-
 }
 
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, const isminefilter& filter=MINE_SPENDABLE)

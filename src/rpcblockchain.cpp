@@ -60,7 +60,6 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
-Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
@@ -4079,11 +4078,6 @@ Value listitem(const Array& params, bool fHelp)
         }
 
         results = LifetimeReport(cpid);
-        return results;
-    }
-    else if (sitem == "staking")
-    {
-        results = StakingReport();
         return results;
     }
     else if (sitem == "currenttime")
