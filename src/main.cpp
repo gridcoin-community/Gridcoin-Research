@@ -552,24 +552,6 @@ void GetGlobalStatus()
     }
 }
 
-
-
-//std::string AppCache(std::string key)
-//{
-//
-//    StructCPIDCache setting = mvAppCache["cache"+key];
-//    if (!setting.initialized)
-//    {
-//        setting.initialized=true;
-//        setting.xml = "";
-//        mvAppCache.insert(map<string,StructCPIDCache>::value_type("cache"+key,setting));
-//        mvAppCache["cache"+key]=setting;
-//    }
-//    return setting.xml;
-//}
-
-
-
 bool Timer_Main(std::string timer_name, int max_ms)
 {
     mvTimers[timer_name] = mvTimers[timer_name] + 1;
