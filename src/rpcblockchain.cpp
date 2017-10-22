@@ -4135,7 +4135,7 @@ Value listitem(const Array& params, bool fHelp)
     }
     else if (sitem == "projects") 
     {
-        for (const auto item : AppCacheFilter("project"))
+        for (const auto& item : AppCacheFilter("project"))
         {
             Object entry;
 
