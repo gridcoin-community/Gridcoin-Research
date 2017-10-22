@@ -138,14 +138,7 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
 
 bool VerifyBeaconContractTx(const std::string& txhashBoinc)
 {
-    // Mandatory block needed.
-    // Current bad contracts in chain would cause a fork on sync
-    // Previous beacons in the past have 3 elements not 4 thus causing empty contract elements as coded in GetBeaconElements
-    if (
-               (fTestNet && nBestHeight <= 378000)
-            || (!fTestNet && nBestHeight <= 1070000)
-       )
-        return true; // allow sync from 0 till these blocks when this check comes into effect
+    // Mandatory condition handled in CheckBlock
 
     // Check if tx contains beacon advertisement and evaluate for certain conditions
     std::string chkMessageType = ExtractXML(txhashBoinc, "<MT>", "</MT>");

@@ -3956,7 +3956,8 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
 
         // Verify beacon contract if a transaction contains a beacon contract
-        if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+        // Current bad contracts in chain would cause a fork on sync, skip them
+        if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
             return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
     }
 
