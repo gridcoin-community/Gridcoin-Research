@@ -4232,19 +4232,6 @@ Value listitem(const Array& params, bool fHelp)
         }
         return results;
     }
-    else if (sitem == "leder")
-    {
-        double subsidy = LederstrumpfMagnitude2(450, GetAdjustedTime());
-        Object entry;
-        entry.push_back(Pair("Mag Out For 450",subsidy));
-        if (args.length() > 1)
-        {
-            double myrac=RoundFromString(args,0);
-            subsidy = LederstrumpfMagnitude2(myrac, GetAdjustedTime());
-            entry.push_back(Pair("Mag Out",subsidy));
-        }
-        results.push_back(entry);
-    }
     else if (sitem == "network") 
     {
         for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii) 
