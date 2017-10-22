@@ -8296,7 +8296,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                             fMessageLoaded = true;
                         }
 
-                        //WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
+                        WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
 
                   }
 
