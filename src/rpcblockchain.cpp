@@ -2045,35 +2045,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
             results.push_back(entry);
     }
-    else if (sItem == "explainmagnitude2")
-    {
-        bool force = false;
-        if (params.size() == 2)
-        {
-            std::string optional = params[1].get_str();
-            boost::to_lower(optional);
-            if (optional == "force") force = true;
-        }
-
-        if (force) msNeuralResponse = "";
-        if (msNeuralResponse=="")
-        {
-            AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
-            entry.push_back(Pair("Requested Explain Magnitude For",GlobalCPUMiningCPID.cpid));
-        }
-
-        std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
-        for (unsigned int i = 0; i < vMag.size(); i++)
-        {
-                entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
-        }
-        if (msNeuralResponse=="") 
-        {
-                    entry.push_back(Pair("Response","No response."));
-        }
-
-        results.push_back(entry);
-    }
     else if (sItem == "tally")
     {
             bNetAveragesLoaded = false;
@@ -2507,7 +2478,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
-        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optional for force"));
         entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
         entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
         entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
@@ -4009,9 +3979,33 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
     }
     else if (sitem == "explainmagnitude")
-    {
-
+    {        
         Object entry;
+
+        bool bForce = false;
+
+        if (params.size() == 2)
+        {
+            std::string sOptional = params[1].get_str();
+
+            boost::to_lower(sOptional);
+
+            if (sOptional == "force")
+                bForce = true;
+        }
+
+        if (bForce)
+        {
+            if (msNeuralResponse.length() < 25)
+            {
+                entry.push_back(Pair("Neural Response", "Empty; Requesting a response.."));
+                entry.push_back(Pair("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses"));
+
+                msNeuralResponse = "";
+
+                AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
+            }
+        }
 
         if (msNeuralResponse.length() > 25)
         {
@@ -4024,11 +4018,7 @@ Value listitem(const Array& params, bool fHelp)
         }
 
         else
-        {
             entry.push_back(Pair("Neural Response", "false; Try again at a later time"));
-
-            AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
-        }
 
         results.push_back(entry);
     }
@@ -4279,7 +4269,7 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
         entry.push_back(Pair("list detailmagnitudecsv", "Records more detailed magnitude report into a csv file"));
         entry.push_back(Pair("list debugexplainmagnitude", "Displays more in detail your explainmagnitude from NN"));
-        entry.push_back(Pair("list explainmagnitude", "Displays information about your magnitude from NN"));
+        entry.push_back(Pair("list explainmagnitude <force>", "Displays information about your magnitude from NN; Optional force"));
         entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
         entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
         entry.push_back(Pair("list magnitudecsv", "Records magnitude report into a csv file"));
