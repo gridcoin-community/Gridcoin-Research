@@ -298,8 +298,8 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                         double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
                         double dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
 
-                        dVoteMagnitude = cdbl(sVoteMagnitude,2);
-                        dVoteBalance = cdbl(sVoteBalance,2);
+                        dVoteMagnitude = RoundFromString(sVoteMagnitude,2);
+                        dVoteBalance = RoundFromString(sVoteBalance,2);
 
                         if (dVoteMagnitude > 0)
                             dVoteWeight = ((dMoneySupplyFactor/5.67) * dVoteMagnitude) + std::stod(sVoteBalance);
