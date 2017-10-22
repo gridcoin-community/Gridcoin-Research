@@ -4133,16 +4133,6 @@ Value listitem(const Array& params, bool fHelp)
             results = MagnitudeReport(msPrimaryCPID);
             return results;
     }
-    else if (sitem=="newbieage")
-    {
-        double dBeaconDt = BeaconTimeStamp(args,false);
-        Object entry;
-        entry.push_back(Pair("Sent",dBeaconDt));
-        dBeaconDt = BeaconTimeStamp(args,true);
-        entry.push_back(Pair("Sent With ZeroOut Feature",dBeaconDt));
-        results.push_back(entry);
-        return results;
-    }
     else if (sitem == "projects") 
     {
         for (const auto item : AppCacheFilter("project"))
