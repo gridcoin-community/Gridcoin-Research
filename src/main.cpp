@@ -4297,11 +4297,14 @@ void GridcoinServices()
         bTallyStarted = false;
     }
 
-    if (false && TimerMain("FixSpentCoins",60))
+    if (TimerMain("FixSpentCoins",60))
     {
             int nMismatchSpent;
             int64_t nBalanceInQuestion;
             pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+
+            if (fDebug3 && nMismatchSpent > 0)
+                printf("FixSpentCoins : Mismatched coins %d; Amount affected by repair %f\n", nMismatchSpent, DoubleFromAmount(nBalanceInQuestion));
     }
 
     if (TimerMain("MyNeuralMagnitudeReport",30))
