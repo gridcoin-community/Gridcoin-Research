@@ -1462,6 +1462,11 @@ std::string RoundToString(double d, int place)
     return ss.str();
 }
 
+double RoundFromString(const std::string& s, int place)
+{
+    return Round(atof(s.c_str()), place);
+}
+
 bool Contains(const std::string& data, const std::string& instring)
 {
     return data.find(instring) != std::string::npos;

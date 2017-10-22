@@ -17,7 +17,6 @@
 
 #include <boost/filesystem.hpp>
 #include <iostream>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
 #include <fstream>
@@ -143,7 +142,6 @@ extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
-double cdbl(std::string s, int place);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
@@ -667,7 +665,7 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
             if (vSuperblock[i].length() > 1)
             {
                 std::string sTempCPID = ExtractValue(vSuperblock[i],",",0);
-                double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
+                double magnitude = RoundFromString(ExtractValue("0"+vSuperblock[i],",",1),0);
                 boost::to_lower(sTempCPID);
                 boost::to_lower(cpid);
                 // For each CPID in the contract
@@ -750,7 +748,7 @@ bool TallyMagnitudesInSuperblock()
             if (vSuperblock[i].length() > 1)
             {
                     std::string cpid = ExtractValue(vSuperblock[i],",",0);
-                    double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+                    double magnitude = RoundFromString(ExtractValue(vSuperblock[i],",",1),0);
                     if (cpid.length() > 10)
                     {
                         StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
@@ -803,7 +801,7 @@ bool TallyMagnitudesInSuperblock()
             if (vProjects[i].length() > 1)
             {
                     std::string project = ExtractValue(vProjects[i],",",0);
-                    double avg = cdbl(ExtractValue("0" + vProjects[i],",",1),0);
+                    double avg = RoundFromString(ExtractValue("0" + vProjects[i],",",1),0);
                     if (project.length() > 1)
                     {
                         StructCPID stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
@@ -811,7 +809,7 @@ bool TallyMagnitudesInSuperblock()
                         stProject.AverageRAC = avg;
                         //As of 7-16-2015, start pulling in Total RAC
                         totalRAC = 0;
-                        totalRAC = cdbl("0" + ExtractValue(vProjects[i],",",2),0);
+                        totalRAC = RoundFromString("0" + ExtractValue(vProjects[i],",",2),0);
                         stProject.rac = totalRAC;
                         mvNetworkCopy[project]=stProject;
                         TotalProjects++;
@@ -837,7 +835,7 @@ bool TallyMagnitudesInSuperblock()
             if (vQ[i].length() > 1)
             {
                     std::string symbol = ExtractValue(vQ[i],",",0);
-                    double price = cdbl(ExtractValue("0" + vQ[i],",",1),0);
+                    double price = RoundFromString(ExtractValue("0" + vQ[i],",",1),0);
                     
                     WriteCache("quotes",symbol,RoundToString(price,2),GetAdjustedTime());
                     if (fDebug3) printf("symbol %s price %f ",symbol.c_str(),price);
@@ -1242,7 +1240,7 @@ Value execute(const Array& params, bool fHelp)
                     return results;
                 }
 
-                double dAmount = cdbl(sAmount,6);
+                double dAmount = RoundFromString(sAmount,6);
 
                 if (dAmount == 0 || dAmount < 0)
                 {
@@ -1454,7 +1452,7 @@ Value execute(const Array& params, bool fHelp)
                     std::string sAmount = vReward[1];
                     if (sAddress.length() > 10 && sAmount.length() > 0)
                     {
-                        double dAmount = cdbl(sAmount,4);
+                        double dAmount = RoundFromString(sAmount,4);
                         if (dAmount > 0) 
                         {
                             CBitcoinAddress address(sAddress);
@@ -1791,7 +1789,7 @@ Value execute(const Array& params, bool fHelp)
                                 
                                 printf("CPIDAge %f,StakeAge %f,Poll Duration %f \r\n",cpid_age,stake_age,poll_duration);
 
-                                double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+                                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
                             
                                 // Share Type 1 == "Magnitude"
                                 // Share Type 2 == "Balance"
@@ -1855,12 +1853,12 @@ Value execute(const Array& params, bool fHelp)
         {
                 std::string Title = params[1].get_str();
                 std::string Days = params[2].get_str();
-                double days = cdbl(Days,0);
+                double days = RoundFromString(Days,0);
                 std::string Question = params[3].get_str();
                 std::string Answers = params[4].get_str();
                 std::string ShareType = params[5].get_str();
                 std::string sURL = params[6].get_str();
-                double sharetype = cdbl(ShareType,0);
+                double sharetype = RoundFromString(ShareType,0);
                 if (Title=="" || Question == "" || Answers == "") 
                 {
                         entry.push_back(Pair("Error","You must specify a Poll Title, Poll Question and Poll Answers."));
@@ -2859,7 +2857,7 @@ bool PollExists(std::string pollname)
 bool PollExpired(std::string pollname)
 {
     std::string contract = GetPollContractByTitle("poll",pollname);
-    double expiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+    double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
     return (expiration < (double)GetAdjustedTime()) ? true : false;
 }
 
@@ -2868,7 +2866,7 @@ bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 {
 	// If the expiration is after July 1 2017, use the new security features.
 	std::string contract = GetPollContractByTitle("poll",pollname);
-	double expiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+	double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
 	return (expiration > 1498867200) ? true : false;
 }
 
@@ -2876,7 +2874,7 @@ bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 double PollDuration(std::string pollname)
 {
     std::string contract = GetPollContractByTitle("poll",pollname);
-    double days = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),0);
+    double days = RoundFromString(ExtractXML(contract,"<DAYS>","</DAYS>"),0);
     return days;
 }
 
@@ -3108,8 +3106,8 @@ std::string GetProvableVotingWeightXML()
 double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade)
 {
 	std::string sPayload = ExtractXML(sXML,"<PROVABLEBALANCE>","</PROVABLEBALANCE>");
-	double dTotalVotedBalance = cdbl(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
-	double dLegacyBalance = cdbl(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
+	double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
+	double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
 
 	if (fDebug10) printf(" \r\n Total Voted Balance %f, Legacy Balance %f \r\n",(float)dTotalVotedBalance,(float)dLegacyBalance);
 
@@ -3128,7 +3126,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
 		std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
 		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
 		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
-		int32_t iPos = cdbl(sPos,0);
+		int32_t iPos = RoundFromString(sPos,0);
 		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
 		{
@@ -3172,7 +3170,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
 
 double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade)
 {
-	double dLegacyMagnitude  = cdbl(ExtractXML(sXML,"<MAGNITUDE>","</MAGNITUDE>"),2);
+	double dLegacyMagnitude  = RoundFromString(ExtractXML(sXML,"<MAGNITUDE>","</MAGNITUDE>"),2);
 	if (!bCreatedAfterSecurityUpgrade) return dLegacyMagnitude;
 
 	std::string sMagXML = ExtractXML(sXML,"<PROVABLEMAGNITUDE>","</PROVABLEMAGNITUDE>");
@@ -3186,7 +3184,7 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 		if (pblockindexMagnitude)
 		{
 				bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-				bool fAudited = (cdbl(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==cdbl(sMagnitude,0) && fResult);
+				bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
 				if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
 		}
 	}
@@ -3238,7 +3236,7 @@ Array GetJsonUnspentReport()
 						bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
 						entry.push_back(Pair("Historical Magnitude",pblockindexMagnitude->nMagnitude));
 						entry.push_back(Pair("Signature Valid",fResult));
-						bool fAudited = (cdbl(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==cdbl(sMagnitude,0) && fResult);
+						bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
 						entry.push_back(Pair("Magnitude Audited",fAudited));
 						results.push_back(entry);
 			
@@ -3333,7 +3331,7 @@ Array GetJsonUnspentReport()
 		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
 		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
 
-		int32_t iPos = cdbl(sPos,0);
+		int32_t iPos = RoundFromString(sPos,0);
 		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 	
 		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
@@ -3423,7 +3421,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
             const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
             const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
 
-            double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+            double dShareType = RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
             std::string sShareType= GetShareType(dShareType);
             std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 
@@ -3492,8 +3490,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 total_shares=0;
                 std::string BestAnswer;
                 double highest_share = 0;
-                std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
-                std::string sShareType = GetShareType(cdbl(ShareType,0));
+                std::string ExpirationDate = TimestampToHRDate(RoundFromString(Expiration,0));
+                std::string sShareType = GetShareType(RoundFromString(ShareType,0));
                 std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
                                         + " (" + ExpirationDate + " ) - " + sShareType;
 
@@ -3509,7 +3507,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                     for (const std::string& answer : vAnswers)
                     {
                         double participants=0;
-                        double dShares = VotesCount(Title, answer, cdbl(ShareType,0),participants);
+                        double dShares = VotesCount(Title, answer, RoundFromString(ShareType,0),participants);
                         if (dShares > highest_share)
                         {
                             highest_share = dShares;
@@ -3840,7 +3838,7 @@ Array MagnitudeReportCSV(bool detail)
                             
                             for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
                             {
-                                    double dTime = cdbl(vCPIDTimestamps[i],0);
+                                    double dTime = RoundFromString(vCPIDTimestamps[i],0);
                                     std::string sResearchAmount = vCPIDPayments[i];
                                     std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
                                     std::string sInterestAmount = vCPIDInterestPayments[i];
@@ -4241,7 +4239,7 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("Mag Out For 450",subsidy));
         if (args.length() > 1)
         {
-            double myrac=cdbl(args,0);
+            double myrac=RoundFromString(args,0);
             subsidy = LederstrumpfMagnitude2(myrac, GetAdjustedTime());
             entry.push_back(Pair("Mag Out",subsidy));
         }
@@ -4440,7 +4438,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         throw runtime_error(
             "getblockstats mode [startheight [endheight]]\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
-    long mode= cdbl(params[0].get_str(),0);
+    long mode= RoundFromString(params[0].get_str(),0);
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
@@ -4449,20 +4447,20 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     {
         if(params.size()>=2)
         {
-            lowheight= cdbl(params[1].get_str(),0);
+            lowheight= RoundFromString(params[1].get_str(),0);
             maxblocks= INT_MAX;
         }
         if(params.size()>=3)
-            highheight= cdbl(params[2].get_str(),0);
+            highheight= RoundFromString(params[2].get_str(),0);
     }
     else if(mode==1)
     {
         /* count highheight */
         maxblocks= 30000;
         if(params.size()>=2)
-            maxblocks= cdbl(params[1].get_str(),0);
+            maxblocks= RoundFromString(params[1].get_str(),0);
         if(params.size()>=3)
-            highheight= cdbl(params[2].get_str(),0);
+            highheight= RoundFromString(params[2].get_str(),0);
     }
     else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;

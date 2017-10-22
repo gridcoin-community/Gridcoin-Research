@@ -261,7 +261,6 @@ bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
 std::string ReadCache(std::string section, std::string key);
-double cdbl(std::string s, int place);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string PackBinarySuperblock(std::string sBlock);
 std::string UnpackBinarySuperblock(std::string sBlock);
