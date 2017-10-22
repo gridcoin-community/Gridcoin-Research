@@ -20,6 +20,7 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
 #include <fstream>
+#include <algorithm>
 
 using namespace json_spirit;
 using namespace std;
@@ -147,6 +148,8 @@ bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 
 std::string getfilecontents(std::string filename);
+
+std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -4009,94 +4012,26 @@ Value listitem(const Array& params, bool fHelp)
     else if (sitem == "explainmagnitude")
     {
 
+        Object entry;
+
         if (msNeuralResponse.length() > 25)
         {
-            Object entry;
+            entry.push_back(Pair("Neural Response", "true"));
+
             std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+
             for (unsigned int i = 0; i < vMag.size(); i++)
-            {
                 entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
-            }
-            results.push_back(entry);
         }
+
         else
         {
-    
-        double mytotalrac = 0;
-        double nettotalrac  = 0;
-        double projpct = 0;
-        double mytotalpct = 0;
-        double ParticipatingProjectCount = 0;
-        double TotalMagnitude = 0;
-        double Mag = 0;
-        Object entry;
-        std::string narr = "";
-        std::string narr_desc = "";
-        double TotalProjectRAC = 0;
-        double TotalUserVerifiedRAC = 0;
+            entry.push_back(Pair("Neural Response", "false; Try again at a later time"));
 
-        for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
-        {
-            StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
-            if (WhitelistedProject.initialized)
-            {
-                double ProjectRAC = GetNetworkTotalByProject(WhitelistedProject.projectname);
-                StructCPID structcpid = mvCPIDs[WhitelistedProject.projectname];
-                bool including = false;
-                narr = "";
-                narr_desc = "";
-                double UserVerifiedRAC = 0;
-                if (structcpid.initialized) 
-                { 
-                    if (structcpid.projectname.length() > 1)
-                    {
-                        including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.rac > 1);
-                        UserVerifiedRAC = structcpid.rac;
-                        narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " 
-                            + YesNo(structcpid.Iscpidvalid) + ", RAC: " +RoundToString(structcpid.rac,0);
-                    }
-                }
-                narr = including ? ("Participating " + narr_desc) : ("Enumerating " + narr_desc);
-                if (structcpid.projectname.length() > 1 && including)
-                {
-                        entry.push_back(Pair(narr + " Project",structcpid.projectname));
-                }
-
-                projpct = UserVerifiedRAC/(ProjectRAC+.01);
-                nettotalrac += ProjectRAC;
-                mytotalrac = mytotalrac + UserVerifiedRAC;
-                mytotalpct = mytotalpct + projpct;
-                
-                double project_magnitude = 
-                    ((UserVerifiedRAC / (ProjectRAC + 0.01)) / (WHITELISTED_PROJECTS + 0.01)) * NeuralNetworkMultiplier;
-
-                if (including)
-                {
-                        TotalMagnitude += project_magnitude;
-                        TotalUserVerifiedRAC += UserVerifiedRAC;
-                        TotalProjectRAC += ProjectRAC;
-                        ParticipatingProjectCount++;
-                        
-                        entry.push_back(Pair("User " + structcpid.projectname + " Verified RAC",UserVerifiedRAC));
-                        entry.push_back(Pair(structcpid.projectname + " Network RAC",ProjectRAC));
-                        entry.push_back(Pair("Your Project Magnitude",project_magnitude));
-                }
-                
-             }
+            AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
         }
-        entry.push_back(Pair("Whitelisted Project Count", ToString(WHITELISTED_PROJECTS)));
-        entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
-        entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
-        entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
-        entry.push_back(Pair("Grand-Total Whitelisted Projects",ToString(WHITELISTED_PROJECTS)));
-        entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
-        Mag = TotalMagnitude;
-        std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + ToString(WHITELISTED_PROJECTS) + "*" + ToString(NeuralNetworkMultiplier) + "=";
-        entry.push_back(Pair(babyNarr,Mag));
+
         results.push_back(entry);
-        return results;
-        }
-
     }
     else if (sitem == "superblocks")
     {
@@ -4216,21 +4151,30 @@ Value listitem(const Array& params, bool fHelp)
     }
     else if (sitem == "projects") 
     {
-        for(map<string,StructCPID>::iterator ii=mvBoincProjects.begin(); ii!=mvBoincProjects.end(); ++ii) 
+        for (const auto item : AppCacheFilter("project"))
         {
+            Object entry;
 
-            StructCPID structcpid = mvBoincProjects[(*ii).first];
+            std::string sProjectKey = item.first;
+            std::vector<std::string> vProjectKey = split(sProjectKey, ";");
+            std::string sProjectName = ToOfficialName(vProjectKey[1]);
+            std::string sProjectURL = item.second;
+            sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
 
-            if (structcpid.initialized) 
-            { 
-                Object entry;
-                entry.push_back(Pair("Project",structcpid.projectname));
-                entry.push_back(Pair("URL",structcpid.link));
-                results.push_back(entry);
+            if (sProjectName.empty())
+                continue;
 
+            // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
+            if (sProjectURL.find("stats/") != string::npos)
+            {
+                std::size_t tFound = sProjectURL.find("stats/");
+                sProjectURL.erase(tFound, sProjectURL.length());
             }
+
+            entry.push_back(Pair("Project", sProjectName));
+            entry.push_back(Pair("URL", sProjectURL));
+            results.push_back(entry);
         }
-        return results;
     }
     else if (sitem == "network") 
     {
