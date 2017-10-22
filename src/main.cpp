@@ -22,8 +22,8 @@
 #include "beacon.h"
 #include "miner.h"
 #include "backup.h"
+#include "appcache.h"
 
-#include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -277,7 +277,6 @@ bool bGridcoinGUILoaded = false;
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 
 extern void WriteAppCache(std::string key, std::string value);
-extern std::string AppCache(std::string key);
 extern void LoadCPIDsInBackground();
 
 extern void ThreadCPIDs();
@@ -349,7 +348,6 @@ std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project sta
 std::map<std::string, StructCPID> mvCreditNodeCPID;        // Contains verified CPID Magnitudes;
 std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
 std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
-std::map<std::string, StructCPID> mvBoincProjects; // Contains all of the allowed boinc projects;
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 
@@ -552,24 +550,6 @@ void GetGlobalStatus()
         return;
     }
 }
-
-
-
-std::string AppCache(std::string key)
-{
-
-    StructCPIDCache setting = mvAppCache["cache"+key];
-    if (!setting.initialized)
-    {
-        setting.initialized=true;
-        setting.xml = "";
-        mvAppCache.insert(map<string,StructCPIDCache>::value_type("cache"+key,setting));
-        mvAppCache["cache"+key]=setting;
-    }
-    return setting.xml;
-}
-
-
 
 bool Timer_Main(std::string timer_name, int max_ms)
 {
@@ -1399,7 +1379,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     // Verify beacon contract in tx if found
     if (!VerifyBeaconContractTx(tx.hashBoinc))
-        return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx; rejected"));
+        return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx %s; rejected", tx.GetHash().ToString().c_str()));
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -1968,7 +1948,7 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
                 if (sTotalSubsidy.length() > 7)
                 {
                     sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
+                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
                 }
             }
 
@@ -2005,7 +1985,7 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
                 if (sTotalSubsidy.length() > 7)
                 {
                     sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = cdbl(sTotalSubsidy,8)*COIN;
+                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
                 }
             }
 
@@ -2589,7 +2569,7 @@ double BlockVersion(std::string v)
     if (v.length() < 10) return 0;
     std::string vIn = v.substr(1,7);
     boost::replace_all(vIn, ".", "");
-    double ver1 = cdbl(vIn,0);
+    double ver1 = RoundFromString(vIn,0);
     return ver1;
 }
 
@@ -2702,7 +2682,7 @@ std::string UnpackBinarySuperblock(std::string sBlock)
     std::string sBinary = ExtractXML(sBlock,"<BINARY>","</BINARY>");
     if (sBinary.empty()) return sBlock;
     std::string sZero = ExtractXML(sBlock,"<ZERO>","</ZERO>");
-    double dZero = cdbl(sZero,0);
+    double dZero = RoundFromString(sZero,0);
     // Binary data support structure:
     // Each CPID consumes 16 bytes and 2 bytes for magnitude: (Except CPIDs with zero magnitude - the count of those is stored in XML node <ZERO> to save space)
     // 1234567890123456MM
@@ -2751,7 +2731,7 @@ std::string PackBinarySuperblock(std::string sBlock)
             {
                 std::string sPrefix = "00000000000000000000000000000000000" + ExtractValue(vSuperblock[i],",",0);
                 std::string sCPID = sPrefix.substr(sPrefix.length()-32,32);
-                double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
+                double magnitude = RoundFromString(ExtractValue("0"+vSuperblock[i],",",1),0);
                 if (magnitude < 0)     magnitude=0;
                 if (magnitude > 32767) magnitude = 32767;  // Ensure we do not blow out the binary space (technically we can handle 0-65535)
                 std::string sBinaryCPID   = ConvertHexToBin(sCPID);
@@ -3976,8 +3956,8 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
 
         // Verify beacon contract if a transaction contains a beacon contract
-        if ( nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx contained within block; rejected"));
+        if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -4995,25 +4975,6 @@ std::string RetrieveMd5(std::string s1)
     }
 }
 
-
-double cdbl(std::string s, int place)
-{
-    if (s=="") s="0";
-    s = strReplace(s,"\r","");
-    s = strReplace(s,"\n","");
-    s = strReplace(s,"a","");
-    s = strReplace(s,"a","");
-    s = strReplace(s,"b","");
-    s = strReplace(s,"c","");
-    s = strReplace(s,"d","");
-    s = strReplace(s,"e","");
-    s = strReplace(s,"f","");
-    double r = lexical_cast<double>(s);
-    double d = Round(r,place);
-    return d;
-}
-
-
 int GetFilesize(FILE* file)
 {
     int nSavePos = ftell(file);
@@ -5023,9 +4984,6 @@ int GetFilesize(FILE* file)
     fseek(file, nSavePos, SEEK_SET);
     return nFilesize;
 }
-
-
-
 
 bool WriteKey(std::string sKey, std::string sValue)
 {
@@ -6014,7 +5972,7 @@ double ExtractMagnitudeFromExplainMagnitude()
                     {
                         std::string sSubMag = vMyMag[1];
                         sSubMag = strReplace(sSubMag," ","");
-                        double dMag = cdbl("0"+sSubMag,0);
+                        double dMag = RoundFromString("0"+sSubMag,0);
                         return dMag;
                     }
                 }
@@ -6036,8 +5994,8 @@ bool VerifyExplainMagnitudeResponse()
             double dMag = ExtractMagnitudeFromExplainMagnitude();
             if (dMag==0)
             {
-                    WriteCache("maginvalid","invalid",RoundToString(cdbl("0"+ReadCache("maginvalid","invalid"),0),0),GetAdjustedTime());
-                    double failures = cdbl("0"+ReadCache("maginvalid","invalid"),0);
+                    WriteCache("maginvalid","invalid",RoundToString(RoundFromString("0"+ReadCache("maginvalid","invalid"),0),0),GetAdjustedTime());
+                    double failures = RoundFromString("0"+ReadCache("maginvalid","invalid"),0);
                     if (failures < 10)
                     {
                         msNeuralResponse = "";
@@ -6066,14 +6024,14 @@ bool SecurityTest(CNode* pfrom, bool acid_test)
 bool PreventCommandAbuse(std::string sNeuralRequestID, std::string sCommandName)
 {
                 bool bIgnore = false;
-                if (cdbl("0"+ReadCache(sCommandName,sNeuralRequestID),0) > 10)
+                if (RoundFromString("0"+ReadCache(sCommandName,sNeuralRequestID),0) > 10)
                 {
                     if (fDebug10) printf("Ignoring %s request for %s",sCommandName.c_str(),sNeuralRequestID.c_str());
                     bIgnore = true;
                 }
                 if (!bIgnore)
                 {
-                    WriteCache(sCommandName,sNeuralRequestID,RoundToString(cdbl("0"+ReadCache(sCommandName,sNeuralRequestID),0),0),GetAdjustedTime());
+                    WriteCache(sCommandName,sNeuralRequestID,RoundToString(RoundFromString("0"+ReadCache(sCommandName,sNeuralRequestID),0),0),GetAdjustedTime());
                 }
                 return bIgnore;
 }
@@ -6800,7 +6758,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
                 bool bIgnore = false;
-                if (cdbl("0"+ReadCache("explainmag",neural_request_id),0) > 10)
+                if (RoundFromString("0"+ReadCache("explainmag",neural_request_id),0) > 10)
                 {
                     if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
                     pfrom->Misbehaving(1);
@@ -6808,7 +6766,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
                 if (!bIgnore)
                 {
-                    WriteCache("explainmag",neural_request_id,RoundToString(cdbl("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
+                    WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
                     // 7/11/2015 - Allow linux/mac to make neural requests
                     #if defined(WIN32) && defined(QT_GUI)
                         neural_response = qtExecuteDotNetStringFunction("ExplainMag",neural_request_id);
@@ -7225,16 +7183,16 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         surrogate.projectname = s[1];
         boost::to_lower(surrogate.projectname);
         surrogate.aesskein = s[2];
-        surrogate.rac = cdbl(s[3],0);
-        surrogate.pobdifficulty = cdbl(s[4],6);
-        surrogate.diffbytes = (unsigned int)cdbl(s[5],0);
+        surrogate.rac = RoundFromString(s[3],0);
+        surrogate.pobdifficulty = RoundFromString(s[4],6);
+        surrogate.diffbytes = (unsigned int)RoundFromString(s[5],0);
         surrogate.enccpid = s[6];
         surrogate.encboincpublickey = s[6];
         surrogate.encaes = s[7];
-        surrogate.nonce = cdbl(s[8],0);
+        surrogate.nonce = RoundFromString(s[8],0);
         if (s.size() > 9)
         {
-            surrogate.NetworkRAC = cdbl(s[9],0);
+            surrogate.NetworkRAC = RoundFromString(s[9],0);
         }
         if (s.size() > 10)
         {
@@ -7242,15 +7200,15 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         }
         if (s.size() > 11)
         {
-            surrogate.ResearchSubsidy = cdbl(s[11],2);
+            surrogate.ResearchSubsidy = RoundFromString(s[11],2);
         }
         if (s.size() > 12)
         {
-            surrogate.LastPaymentTime = cdbl(s[12],0);
+            surrogate.LastPaymentTime = RoundFromString(s[12],0);
         }
         if (s.size() > 13)
         {
-            surrogate.RSAWeight = cdbl(s[13],0);
+            surrogate.RSAWeight = RoundFromString(s[13],0);
         }
         if (s.size() > 14)
         {
@@ -7258,7 +7216,7 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         }
         if (s.size() > 15)
         {
-            surrogate.Magnitude = cdbl(s[15],0);
+            surrogate.Magnitude = RoundFromString(s[15],0);
         }
         if (s.size() > 16)
         {
@@ -7270,7 +7228,7 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         }
         if (s.size() > 18)
         {
-            surrogate.InterestSubsidy = cdbl(s[18],subsidy_places);
+            surrogate.InterestSubsidy = RoundFromString(s[18],subsidy_places);
         }
         if (s.size() > 19)
         {
@@ -7290,19 +7248,19 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         }
         if (s.size() > 23)
         {
-            surrogate.ResearchSubsidy2 = cdbl(s[23],subsidy_places);
+            surrogate.ResearchSubsidy2 = RoundFromString(s[23],subsidy_places);
         }
         if (s.size() > 24)
         {
-            surrogate.ResearchAge = cdbl(s[24],6);
+            surrogate.ResearchAge = RoundFromString(s[24],6);
         }
         if (s.size() > 25)
         {
-            surrogate.ResearchMagnitudeUnit = cdbl(s[25],6);
+            surrogate.ResearchMagnitudeUnit = RoundFromString(s[25],6);
         }
         if (s.size() > 26)
         {
-            surrogate.ResearchAverageMagnitude = cdbl(s[26],2);
+            surrogate.ResearchAverageMagnitude = RoundFromString(s[26],2);
         }
         if (s.size() > 27)
         {
@@ -7352,15 +7310,24 @@ void InitializeProjectStruct(StructCPID& project)
 
 }
 
-
-bool ProjectIsValid(std::string project)
+bool ProjectIsValid(std::string sProject)
 {
-    boost::to_lower(project);
+    if (sProject.empty())
+        return false;
 
-    StructCPID structcpid = GetInitializedStructCPID2(project,mvBoincProjects);
+    boost::to_lower(sProject);
 
-    return structcpid.initialized;
+    for (const auto& item : AppCacheFilter("project"))
+    {
+        std::string sProjectKey = item.first;
+        std::vector<std::string> vProjectKey = split(sProjectKey, ";");
+        std::string sProjectName = ToOfficialName(vProjectKey[1]);
 
+        if (sProjectName == sProject)
+            return true;
+    }
+
+    return false;
 }
 
 std::string ToOfficialName(std::string proj)
@@ -7564,8 +7531,8 @@ void HarvestCPIDs(bool cleardata)
                         InitializeProjectStruct(structcpid);
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str(),(double)elapsed);
-                        structcpid.rac = cdbl(rac,0);
-                        structcpid.verifiedrac = cdbl(rac,0);
+                        structcpid.rac = RoundFromString(rac,0);
+                        structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
 
                         if (email_hash != sLocalClientEmailHash)
@@ -7580,8 +7547,8 @@ void HarvestCPIDs(bool cleardata)
                             structcpid.errors = "CPID calculation invalid.  Check e-mail address and try resetting the boinc project.";
                         }
 
-                        structcpid.utc = cdbl(utc,0);
-                        structcpid.rectime = cdbl(rectime,0);
+                        structcpid.utc = RoundFromString(utc,0);
+                        structcpid.rectime = RoundFromString(rectime,0);
                         double currenttime =  GetAdjustedTime();
                         double nActualTimespan = currenttime - structcpid.rectime;
                         structcpid.age = nActualTimespan;
@@ -7775,7 +7742,7 @@ MiningCPID GetMiningCPID()
 void TrackRequests(CNode* pfrom,std::string sRequestType)
 {
         std::string sKey = "request_type" + sRequestType;
-        double dReqCt = cdbl(ReadCache(sKey,NodeAddress(pfrom)),0) + 1;
+        double dReqCt = RoundFromString(ReadCache(sKey,NodeAddress(pfrom)),0) + 1;
         WriteCache(sKey,NodeAddress(pfrom),RoundToString(dReqCt,0),GetAdjustedTime());
         if ( (dReqCt > 20 && !OutOfSyncByAge()) )
         {
@@ -8706,7 +8673,7 @@ std::string GetQuorumHash(const std::string& data)
         if(sCPID.size() != 32)
             continue;
 
-        double dMag = cdbl(vRow[1],0);
+        double dMag = RoundFromString(vRow[1],0);
         sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
     }
 
@@ -8805,7 +8772,7 @@ bool IsSuperBlock(CBlockIndex* pIndex)
 double SnapToGrid(double d)
 {
     double dDither = .04;
-    double dOut = cdbl(RoundToString(d*dDither,3),3) / dDither;
+    double dOut = RoundFromString(RoundToString(d*dDither,3),3) / dDither;
     return dOut;
 }
 

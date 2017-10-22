@@ -122,7 +122,6 @@ json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, st
 
 extern int64_t IsNeural();
 
-double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
 int nRegVersion;
 

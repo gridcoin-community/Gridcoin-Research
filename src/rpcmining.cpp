@@ -26,16 +26,6 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 
-Value getsubsidy(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "getsubsidy [nTarget]\n"
-            "Returns proof-of-work subsidy value for the specified value of target.");
-
-    return (uint64_t)GetProofOfWorkReward(0, GetAdjustedTime(),0);
-}
-
 Value getmininginfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

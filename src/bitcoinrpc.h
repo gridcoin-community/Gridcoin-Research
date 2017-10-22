@@ -151,7 +151,6 @@ extern json_spirit::Value importprivkey(const json_spirit::Array& params, bool f
 extern json_spirit::Value getaddednodeinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value addnode(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value getsubsidy(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getmininginfo(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
