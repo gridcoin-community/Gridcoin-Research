@@ -4015,18 +4015,22 @@ Value listitem(const Array& params, bool fHelp)
     {
 
         Object entry;
+
         if (msNeuralResponse.length() > 25)
         {
+            entry.push_back(Pair("Neural Response", "true"));
+
             std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+
             for (unsigned int i = 0; i < vMag.size(); i++)
-            {
                 entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
-            }
         }
 
         else
         {
-            entry.push_back(Pair("ERROR", "No Neural Reponse; Try again later."));
+            entry.push_back(Pair("Neural Response", "false; Try again at a later time"));
+
+            AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
         }
 
         results.push_back(entry);
@@ -4161,6 +4165,13 @@ Value listitem(const Array& params, bool fHelp)
 
             if (sProjectName.empty())
                 continue;
+
+            // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
+            if (sProjectURL.find("stats/") != string::npos)
+            {
+                std::size_t tFound = sProjectURL.find("stats/");
+                sProjectURL.erase(tFound, sProjectURL.length());
+            }
 
             entry.push_back(Pair("Project", sProjectName));
             entry.push_back(Pair("URL", sProjectURL));

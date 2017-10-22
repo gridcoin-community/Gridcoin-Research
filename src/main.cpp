@@ -1397,8 +1397,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
     // Verify beacon contract in tx if found
-    if (!VerifyBeaconContractTx(tx.hashBoinc))
-        return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx; rejected"));
+    //if (!VerifyBeaconContractTx(tx.hashBoinc))
+    //    return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx; rejected"));
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
@@ -3975,8 +3975,8 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
 
         // Verify beacon contract if a transaction contains a beacon contract
-        if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx contained within block; rejected"));
+        //if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+        //    return DoS(25, error("CheckBlock[] : bad beacon contract found in tx contained within block; rejected"));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
