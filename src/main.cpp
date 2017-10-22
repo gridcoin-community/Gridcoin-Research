@@ -88,7 +88,7 @@ extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_populari
        
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-
+double DoubleFromAmount(int64_t amount);
 
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -4302,9 +4302,6 @@ void GridcoinServices()
             int nMismatchSpent;
             int64_t nBalanceInQuestion;
             pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
-
-            if (fDebug3 && nMismatchSpent > 0)
-                printf("FixSpentCoins : Mismatched coins %d; Amount affected by repair %f\n", nMismatchSpent, DoubleFromAmount(nBalanceInQuestion));
     }
 
     if (TimerMain("MyNeuralMagnitudeReport",30))
