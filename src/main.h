@@ -516,7 +516,7 @@ public:
         scriptPubKey.clear();
     }
 
-    bool IsNull()
+    bool IsNull() const
     {
         return (nValue == -1);
     }
@@ -673,6 +673,18 @@ public:
         return (vin.size() > 0 && (!vin[0].prevout.IsNull()) && vout.size() >= 2 && vout[0].IsEmpty());
     }
 
+    bool IsCoinBaseStake() const
+    {
+        //brod: In v10 we allow combined coinbase+stake,
+        // so we need one non-null input
+        return (vin.size() >= 2 && vin[0].prevout.IsNull() && !vin[0].prevout.IsNull() && vout.size() >= 1);
+    }
+
+    bool IsUser() const
+    {
+        return !IsCoinBase() && !IsCoinStake() && !IsCoinBaseStake();
+    }
+
     /** Check for standard transaction types
         @param[in] mapInputs	Map of previous transactions that have outputs we're spending
         @return True if all inputs (scriptSigs) use only standard transaction forms
@@ -766,21 +778,20 @@ public:
         return !(a == b);
     }
 
-    std::string ToStringShort() const
-    {
-        std::string str;
-        str += strprintf("%s %s", GetHash().ToString().c_str(), IsCoinBase()? "base" : (IsCoinStake()? "stake" : "user"));
-        return str;
-    }
-
     std::string ToString() const
     {
-        std::string str;
-        str += IsCoinBase()? "Coinbase" : (IsCoinStake()? "Coinstake" : "CTransaction");
-        str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%" PRIszu ", vout.size=%" PRIszu ", nLockTime=%d)\n",
+        std::string str = "CTransaction(";
+        if(IsCoinBaseStake())
+            str+= "type=coinbasestake ";
+        else if(IsCoinBase())
+            str+= "type=coinbase ";
+        else if(IsCoinStake())
+            str+= "type=coinstake ";
+        str += strprintf("hash=%s, nTime=%d, ver=%d, hashBoinc=%s, vin.size=%" PRIszu ", vout.size=%" PRIszu ", nLockTime=%d)\n",
             GetHash().ToString().substr(0,10).c_str(),
             nTime,
             nVersion,
+            hashBoinc.c_str(),
             vin.size(),
             vout.size(),
             nLockTime);
@@ -1103,7 +1114,8 @@ public:
     // ppcoin: two types of block: proof-of-work or proof-of-stake
     bool IsProofOfStake() const
     {
-        return (vtx.size() > 1 && vtx[1].IsCoinStake());
+        return ((vtx.size() > 1 && vtx[1].IsCoinStake()))
+        || (vtx.size() > 0 && vtx[1].IsCoinBaseStake());
     }
 
     bool IsProofOfWork() const

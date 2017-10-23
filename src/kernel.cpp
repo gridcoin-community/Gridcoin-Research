@@ -884,21 +884,28 @@ bool CheckProofOfStakeV8(
     //First input of coinstake is the kernel
 
     CTransaction *p_coinstake;
+    CTxIn *p_coinstakekernel;
 
-    if(Block.nVersion==8) {
+    if(Block.nVersion>=10)
+    {
+        if (!Block.IsProofOfStake())
+            return error("CheckProofOfStakeV8() : called on non-coinstake block %s", Block.GetHash().ToString().c_str());
+        p_coinstake = &Block.vtx[0];
+        if (!p_coinstake->IsCoinBaseStake())
+            return error("CheckProofOfStakeV8() : called on non-coinbasestake tx %s", Block.vtx[0].GetHash().ToString().c_str());
+        p_coinstakekernel = &p_coinstake->vin[1];
+    } else {
         if (!Block.IsProofOfStake())
             return error("CheckProofOfStakeV8() : called on non-coinstake block %s", Block.GetHash().ToString().c_str());
         p_coinstake = &Block.vtx[1];
+        if (!p_coinstake->IsCoinStake())
+            return error("CheckProofOfStakeV8() : called on non-coinstake tx %s", Block.vtx[1].GetHash().ToString().c_str());
+        p_coinstakekernel = &p_coinstake->vin[0];
     }
-    //for future coin:stake:base merging into one tx
-    else return false;
-
-    if (!p_coinstake->IsCoinStake())
-        return error("CheckProofOfStakeV8() : called on non-coinstake tx %s", Block.vtx[1].GetHash().ToString().c_str());
 
     // Kernel (input 0) must match the stake hash target per coin age (nBits)
     const CTransaction& tx = (*p_coinstake);
-    const CTxIn& txin = (*p_coinstake).vin[0];
+    const CTxIn& txin = (*p_coinstakekernel);
 
     // First try finding the previous transaction in database
     CTxDB txdb("r");

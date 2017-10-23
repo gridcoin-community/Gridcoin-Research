@@ -145,14 +145,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
     // Create coinbase tx
     CTransaction &CoinBase= block.vtx[0];
-    CoinBase.nTime=block.nTime;
-    CoinBase.vin.resize(1);
     CoinBase.vin[0].prevout.SetNull();
-    CoinBase.vout.resize(1);
     // Height first in coinbase required for block.version=2
-    CoinBase.vin[0].scriptSig = (CScript() << nHeight) + COINBASE_FLAGS;
+    CoinBase.vin[0].scriptSig = (CScript() << nHeight);
     assert(CoinBase.vin[0].scriptSig.size() <= 100);
-    CoinBase.vout[0].SetEmpty();
 
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
@@ -412,8 +408,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             printf("CreateNewBlock(): total size %" PRIu64 "\n", nBlockSize);
     }
 
-    //Add fees to coinbase
-    block.vtx[0].vout[0].nValue= nFees;
+    //Add fees to coinbase output 0
+    block.vtx[0].vout[0].nValue += nFees;
 
     // Fill in header  
     block.hashPrevBlock  = pindexPrev->GetBlockHash();
@@ -435,12 +431,22 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
     uint64_t StakeCoinAgeSum=0;
-    CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
+    CTransaction *txnew_ptr=NULL;
+    if (blocknew.nVersion>=10)
+    {
+        blocknew.vtx.resize(1);
+        // V10 puts kernel in coinbase
+        txnew_ptr = &blocknew.vtx[0];
+    }
+    else
+    {
+        blocknew.vtx.resize(2);
+        txnew_ptr = &blocknew.vtx[1];
+    }
 
     //initialize the transaction
+    CTransaction &txnew = *txnew_ptr;
     txnew.nTime = blocknew.nTime & (~STAKE_TIMESTAMP_MASK);
-    txnew.vin.clear();
-    txnew.vout.clear();
 
     // Choose coins to use
     set <pair <const CWalletTx*,unsigned int> > CoinsToStake;
@@ -580,15 +586,31 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                 break;  // only support pay to public key and pay to address
             }
 
+            if(blocknew.nVersion>=10)
+            {
+                // leave input 0 for coinbase-y things
+                // input 0 muts be IsNull
+                blocknew.vtx[0].vin.push_back(CTxIn());
+            }
+            else
+            {
+                // Prepare the coinbase
+                CTransaction &CoinBase= blocknew.vtx[0];
+                CoinBase.nTime = blocknew.nTime;
+                CoinBase.vin.resize(1);
+                CoinBase.vout.resize(1);
+                CoinBase.vout[0].SetEmpty();
+                // First output Must be empty
+                txnew.vout.push_back(CTxOut(0, CScript()));
+            }
+
             txnew.vin.push_back(CTxIn(CoinTx.GetHash(), CoinTxN));
             StakeInputs.push_back(pcoin.first);
             if (!txnew.GetCoinAge(txdb, CoinAge))
                 return error("CreateCoinStake: failed to calculate coin age");
             int64_t nCredit = CoinTx.vout[CoinTxN].nValue;
 
-            txnew.vout.push_back(CTxOut(0, CScript())); // First Must be empty
             txnew.vout.push_back(CTxOut(nCredit, scriptPubKeyOut));
-            //txnew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
             printf("CreateCoinStake: added kernel type=%d credit=%f\n", whichType,CoinToDouble(nCredit));
 
@@ -624,10 +646,13 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     //if (fDebug2)  printf("SignStakeBlock: %s\r\n",SerializedBoincData.c_str());
 
     //Sign the coinstake transaction
-    unsigned nIn = 0;
+    // in <10 the inputs start at 0 in transaction 1
+    // in 10+ the inputs start at 1 in transaction 0 
+    unsigned nIn = (block.nVersion<10)? 0 : 1;
+    const unsigned nTxToSign = (block.nVersion<10)? 1 : 0;
     for (auto const& pcoin : StakeInputs)
     {
-        if (!SignSignature(*pwallet, *pcoin, block.vtx[1], nIn++)) 
+        if (!SignSignature(*pwallet, *pcoin, block.vtx[nTxToSign], nIn++)) 
         {
             LOCK(MinerStatus.lock);
             MinerStatus.Message+="Failed to sign coinstake; ";
@@ -702,9 +727,8 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
 bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev)
 {
-    //remove fees from coinbase
-    int64_t nFees = blocknew.vtx[0].vout[0].nValue;
-    blocknew.vtx[0].vout[0].SetEmpty();
+    // We can't now distinguish from fees and input so we will use 0
+    // this can  sometimes prevent good block due to mint limiter
 
     double OUT_POR = 0;
     double out_interest = 0;
@@ -718,7 +742,7 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
 
 
     int64_t nReward = GetProofOfStakeReward(
-        nCoinAge, nFees, GlobalCPUMiningCPID.cpid, false, 0,
+        nCoinAge, 0, GlobalCPUMiningCPID.cpid, false, 0,
         pindexPrev->nTime, pindexPrev,"createcoinstake",
         OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
 
@@ -784,10 +808,22 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     }
 
     //fill in reward and boinc
-    blocknew.vtx[1].vout[1].nValue += nReward;
+    if(blocknew.nVersion>=10)
+    {
+        // add reward to existing (inp+fee) coinbase output
+        blocknew.vtx[0].vout[0].nValue += nReward;
+    }
+    else
+    {
+        // Output = input + fees + reward
+        blocknew.vtx[1].vout[1].nValue = blocknew.vtx[1].vout[1].nValue + blocknew.vtx[0].vout[0].nValue + nReward;
+        // no coinbase reward permitted
+        blocknew.vtx[0].vout[0].SetEmpty();
+    }
+
     LOCK(MinerStatus.lock);
     MinerStatus.Message+="Added Reward "+RoundToString(mint,3)
-        +"("+RoundToString(CoinToDouble(nFees),4)+" "
+        +"("
         +RoundToString(out_interest,2)+" "
         +RoundToString(OUT_POR,2)+"); ";
     return true;
@@ -866,9 +902,6 @@ void StakeMiner(CWallet *pwallet)
         StakeBlock.nTime= GetAdjustedTime();
         StakeBlock.nNonce= 0;
         StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
-        StakeBlock.vtx.resize(2);
-        //tx 0 is coin_base
-        CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
 
         // * Try to create a CoinStake transaction
         CKey BlockKey;
@@ -876,7 +909,6 @@ void StakeMiner(CWallet *pwallet)
         uint64_t StakeCoinAge;
         if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet, pindexPrev ) )
             continue;
-        StakeBlock.nTime= StakeTX.nTime;
 
         // * create rest of the block
         if( !CreateRestOfTheBlock(StakeBlock,pindexPrev) )
