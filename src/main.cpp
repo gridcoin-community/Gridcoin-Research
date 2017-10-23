@@ -168,17 +168,12 @@ std::string DefaultOrgKey(int key_length);
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
-extern bool Contains(const std::string& data, const std::string& instring);
-
 extern double CoinToDouble(double surrogate);
 extern int64_t PreviousBlockAge();
 void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
-
-extern void SetAdvisory();
-extern bool InAdvisory();
 json_spirit::Array MagnitudeReportCSV(bool detail);
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
