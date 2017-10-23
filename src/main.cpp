@@ -54,7 +54,6 @@ extern void ResetTimerMain(std::string timer_name);
 extern bool TallyResearchAverages(bool Forcefully);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
-int DownloadBlocks();
 int DetermineCPIDType(std::string cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 std::string GetListOfWithConsensus(std::string datatype);
@@ -300,7 +299,6 @@ std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
 double         mdLastPorNonce = 0;
 double         mdMachineTimerLast = 0;
-bool           mbBlocksDownloaded = false;
 // Mining status variables
 std::string    msHashBoinc;
 std::string    msMiningErrors;
@@ -4232,22 +4230,7 @@ void GridcoinServices()
        }
     #endif
     // Services thread activity
-    
-    //This is Gridcoins Service thread; called once per block
-    if (nBestHeight > 100 && nBestHeight < 200)
-    {
-        if (GetArg("-suppressdownloadblocks", "true") == "false")
-        {
-            std::string email = GetArgument("email", "NA");
-            if (email.length() > 5 && !mbBlocksDownloaded)
-            {
-                #if defined(WIN32) && defined(QT_GUI)
-                    mbBlocksDownloaded=true;
-                    DownloadBlocks();
-                #endif
-            }
-        }
-    }
+
     //Dont perform the following functions if out of sync
     if (pindexBest->nHeight < nGrandfather) return;
     
