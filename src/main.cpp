@@ -143,7 +143,6 @@ set<CWallet*> setpwalletRegistered;
 CCriticalSection cs_main;
 
 extern std::string NodeAddress(CNode* pfrom);
-extern std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
@@ -4905,39 +4904,6 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
     }
     return extraction;
 }
-
-std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end)
-{
-
-    std::string extraction = "";
-    string::size_type loc = HTMLdata.find( tagstartprefix, 0 );
-    if( loc != string::npos )
-    {
-        //Find the end of the start tag
-        string::size_type loc_EOStartTag = HTMLdata.find( tagstart_suffix, loc+tagstartprefix.length());
-        if (loc_EOStartTag != string::npos )
-        {
-
-            string::size_type loc_end = HTMLdata.find( tag_end, loc_EOStartTag+tagstart_suffix.length());
-            if (loc_end != string::npos )
-            {
-                extraction = HTMLdata.substr(loc_EOStartTag+(tagstart_suffix.length()), loc_end-loc_EOStartTag-(tagstart_suffix.length()));
-                extraction = strReplace(extraction,",","");
-                if (Contains(extraction,"\r\n"))
-                {
-                    std::vector<std::string> vExtract = split(extraction,"\r\n");
-                    if (vExtract.size() >= 2)
-                    {
-                        extraction = vExtract[2];
-                        return extraction;
-                    }
-                }
-            }
-        }
-    }
-    return extraction;
-}
-
 
 std::string RetrieveMd5(std::string s1)
 {
