@@ -14,8 +14,6 @@ extern bool bForceUpdate;
 extern bool bCheckedForUpgrade;
 extern bool bCheckedForUpgradeLive;
 extern bool bGlobalcomInitialized;
-extern bool bDoTally;
-extern bool bTallyFinished;
 extern bool bGridcoinGUILoaded;
 
 struct StructCPID
