@@ -32,7 +32,6 @@ void ThreadTopUpKeyPool(void* parg);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
-double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string qtGetNeuralContract(std::string data);
@@ -726,20 +725,6 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid = GlobalCPUMiningCPID;
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
-
-    /* This is should be already done in GetNextProject
-    miningcpid.cpidv2 = ComputeCPIDv2(
-        GlobalCPUMiningCPID.email,
-        GlobalCPUMiningCPID.boincruntimepublickey,
-        pbh );
-
-
-    miningcpid.Magnitude = CalculatedMagnitude2(
-        GlobalCPUMiningCPID.cpid, blocknew.nTime,
-        false );
-
-    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-    */
 
     miningcpid.lastblockhash = pbh.GetHex();
     miningcpid.ResearchSubsidy = OUT_POR;
