@@ -3436,14 +3436,15 @@ bool ForceReorganizeToHash(uint256 NewHash)
 {
     CTxDB txdb;
 
-    if(!mapBlockIndex.count(NewHash))
+    auto mapItem = mapBlockIndex.find(NewHash);
+    if(mapItem == mapBlockIndex.end())
         return error("ForceReorganizeToHash: failed to find requested block in block index");
 
     CBlockIndex* pindexCur = pindexBest;
-    CBlockIndex* pindexNew = mapBlockIndex[NewHash];
+    CBlockIndex* pindexNew = mapItem->second;
     printf("\r\n** Force Reorganize **\r\n");
-    printf(" Current best height %f hash %s\n",(double)pindexCur->nHeight,pindexCur->GetBlockHash().GetHex().c_str());
-    printf(" Target height %f hash %s\n",(double)pindexNew->nHeight,pindexNew->GetBlockHash().GetHex().c_str());
+    printf(" Current best height %i hash %s\n", pindexCur->nHeight,pindexCur->GetBlockHash().GetHex().c_str());
+    printf(" Target height %i hash %s\n", pindexNew->nHeight,pindexNew->GetBlockHash().GetHex().c_str());
 
     CBlock blockNew;
     if (!blockNew.ReadFromDisk(pindexNew))
@@ -5224,11 +5225,12 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         if (fDebug10) printf("GetLifetimeCPID: trying %s\n",uHash.GetHex().c_str());
 
         // Ensure that we have this block.
-        if (mapBlockIndex.count(uHash) == 0)
+        auto mapItem = mapBlockIndex.find(uHash);
+        if (mapItem == mapBlockIndex.end())
            continue;
         
         // Ensure that the block is valid
-        CBlockIndex* pblockindex = mapBlockIndex[uHash];
+        CBlockIndex* pblockindex = mapItem->second;
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
            pblockindex->GetCPID() != cpid)
@@ -8355,8 +8357,12 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
     if (!stCPID.BlockHash.empty())
     {
         uint256 hash(stCPID.BlockHash);
-        if (mapBlockIndex.count(hash) == 0) return pindexGenesisBlock;
-        CBlockIndex* pblockindex = mapBlockIndex[hash];
+
+        auto mapItem = mapBlockIndex.find(hash);
+        if (mapItem == mapBlockIndex.end())
+            return pindexGenesisBlock;
+
+        CBlockIndex* pblockindex = mapItem->second;
         if(!pblockindex->pnext)
             printf("GetHistoricalMagnitude: WARNING index {%s %d} for cpid %s, "
             "has no next pointer (not n main chain)\n",pblockindex->GetBlockHash().GetHex().c_str(),
