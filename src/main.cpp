@@ -143,7 +143,6 @@ CCriticalSection cs_main;
 extern std::string NodeAddress(CNode* pfrom);
 
 CTxMemPool mempool;
-unsigned int nTransactionsUpdated = 0;
 unsigned int REORGANIZE_FAILED = 0;
 unsigned int WHITELISTED_PROJECTS = 0;
 int64_t nLastPing = 0;
@@ -1525,7 +1524,6 @@ bool CTxMemPool::addUnchecked(const uint256& hash, CTransaction &tx)
         mapTx[hash] = tx;
         for (unsigned int i = 0; i < tx.vin.size(); i++)
             mapNextTx[tx.vin[i].prevout] = CInPoint(&mapTx[hash], i);
-        nTransactionsUpdated++;
     }
     return true;
 }
@@ -1549,7 +1547,6 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
             for (auto const& txin : tx.vin)
                 mapNextTx.erase(txin.prevout);
             mapTx.erase(hash);
-            nTransactionsUpdated++;
         }
     }
     return true;
@@ -1576,7 +1573,6 @@ void CTxMemPool::clear()
     LOCK(cs);
     mapTx.clear();
     mapNextTx.clear();
-    ++nTransactionsUpdated;
 }
 
 void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
@@ -3591,7 +3587,6 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexNew->nChainTrust;
     nTimeBestReceived =  GetAdjustedTime();
-    nTransactionsUpdated++;
 
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
 

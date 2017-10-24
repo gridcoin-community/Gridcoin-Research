@@ -92,7 +92,6 @@ void Shutdown(void* parg)
          printf("gridcoinresearch exiting...\r\n");
 
         fShutdown = true;
-        nTransactionsUpdated++;
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
