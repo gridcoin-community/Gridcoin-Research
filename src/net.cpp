@@ -1571,6 +1571,89 @@ void DumpAddresses()
 
 }
 
+void DoTallyResearchAverages_retired(void* parg);
+bool TallyNetworkAverages_retired(bool);
+extern volatile bool bTallyFinished_retired;
+extern volatile bool bDoTally_retired;
+
+void ThreadTallyResearchAverages_retired(void* parg)
+{
+    // Make this thread recognisable
+    RenameThread("grc-tallyresearchaverages");
+
+begin:
+    try
+    {
+        DoTallyResearchAverages_retired(parg);
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadTallyNetworkAverages_retired()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadTallyResearchAverages_retired exited (interrupt)\r\n");
+        return;
+    }
+    catch(...)
+    {
+        printf("Error in ThreadTallyResearchAverages_retired... Recovering \r\n");
+    }
+    MilliSleep(10000);
+    if (!fShutdown) printf("Thread TallyReasearchAverages_retired exited, Restarting.. \r\n");
+    if (!fShutdown) goto begin;
+    printf("ThreadTallyResearchAverages_retired exited \r\n");
+}
+
+
+void BusyWaitForTally_retired()
+{
+    if (fDebug10) printf("\r\n ** Busy Wait for Tally_retired ** \r\n");
+    bTallyFinished_retired=false;
+    bDoTally_retired=true;
+    int iTimeout = 0;
+
+    int64_t deadline = GetAdjustedTime() + 15000;
+    while(!bTallyFinished_retired)
+    {
+        MilliSleep(10);
+        if(GetAdjustedTime() >= deadline)
+            break;
+        iTimeout+=1;
+    }
+}
+
+
+void DoTallyResearchAverages_retired(void* parg)
+{
+    printf("\r\nStarting dedicated Tally_retired thread...\r\n");
+
+    while (!fShutdown)
+    {
+        MilliSleep(100);
+        if (bDoTally_retired)
+        {
+            bTallyFinished_retired = false;
+            bDoTally_retired=false;
+            printf("\r\n[DoTallyRA_START_retired] ");
+            try
+            {
+                TallyNetworkAverages_retired(false);
+            }
+            catch (std::exception& e)
+            {
+                PrintException(&e, "ThreadTallyNetworkAverages_retired()");
+            }
+            catch(...)
+            {
+                printf("\r\nError occurred in DoTallyResearchAverages_retired...Recovering\r\n");
+            }
+            printf(" [DoTallyRA_END_retired] \r\n");
+            bTallyFinished_retired = true;
+        }
+    }
+}
+
 void ThreadDumpAddress2(void* parg)
 {
     while (!fShutdown)
@@ -2240,7 +2323,11 @@ void StartNode(void* parg)
     // Dump network addresses
     if (!netThreads->createThread(ThreadDumpAddress,NULL,"ThreadDumpAddress"))
         printf("Error: createThread(ThreadDumpAddress) failed\r\n");
-    
+
+    // Tally network averages
+    if (!NewThread(ThreadTallyResearchAverages_retired, NULL))
+        printf("Error; NewThread(ThreadTally_retired) failed\n");
+
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
         printf("Staking disabled\r\n");

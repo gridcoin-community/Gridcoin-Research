@@ -113,6 +113,11 @@ inline bool AreBinarySuperblocksEnabled(int nHeight)
 	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
 }
 
+inline bool IsV9Enabled_Tally(int nHeight)
+{
+    // 3 hours after v9
+    return IsV9Enabled(nHeight-120);
+}
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }

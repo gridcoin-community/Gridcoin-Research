@@ -51,7 +51,8 @@ bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
-extern bool TallyResearchAverages();
+extern bool TallyResearchAverages_retired(bool Forcefully);
+extern bool TallyNetworkAverages_v9();
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 int DetermineCPIDType(std::string cpid);
@@ -62,6 +63,8 @@ extern double ExtractMagnitudeFromExplainMagnitude();
 extern void GridcoinServices();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
+void BusyWaitForTally_retired();
+extern bool TallyNetworkAverages_retired(bool Forcefully);
 extern bool TallyNetworkAverages();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
@@ -252,11 +255,14 @@ extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 bool bNetAveragesLoaded = false;
+bool bTallyStarted_retired      = false;
 bool bForceUpdate = false;
 bool bCheckedForUpgrade = false;
 bool bCheckedForUpgradeLive = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
+volatile bool bDoTally_retired = false;
+volatile bool bTallyFinished_retired = false;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -307,7 +313,7 @@ std::string    msNeuralResponse;
 std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
-int nGrandfather = 1035000;
+int nGrandfather = 1034700;
 int nNewIndex = 271625;
 int nNewIndex2 = 364500;
 
@@ -2172,14 +2178,27 @@ bool CheckProofOfResearch(
     int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, block.nTime,
                                                         pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
-    // TODO: Remove this tally?
+    if(!IsV9Enabled_Tally(pindexPrev->nHeight))
+    {
+        if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
+        {
+            if (fDebug) printf("CheckProofOfResearch: Researchers Reward Pays too much : Retallying : "
+                                "claimedand %f vs calculated StakeReward %f for CPID %s\n",
+                                bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() );
+
+            BusyWaitForTally_retired();
+            StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+            nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
+                                                        pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+        }
+    }
+    (void)nCalculatedResearch;
+
     if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
     {
-        if (fDebug3) printf("CheckProofOfResearch: Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                            bb.InterestSubsidy, bb.ResearchSubsidy, CoinToDouble(nCalculatedResearch), OUT_POR, OUT_INTEREST, bb.cpid.c_str());
-
-        return block.DoS(10,error("CheckProofOfResearch: Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                            bb.InterestSubsidy, bb.ResearchSubsidy,CoinToDouble(nCalculatedResearch), OUT_POR, OUT_INTEREST, bb.cpid.c_str()));
+        return block.DoS(10,error("CheckProofOfResearch: Researchers Reward Pays too much : "
+                            "claimed %f vs calculated %f for CPID %s",
+                            bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() ));
     }
 
     return true;
@@ -2983,7 +3002,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
-        // ppcoin: coin stake tx earns reward instead of paying fee
+            // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
@@ -3129,6 +3148,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
                 if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
                 {
+                        bDoTally_retired=true;
                         if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
                         {
                             StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
@@ -3220,6 +3240,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
 
             //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
+            // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
             if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
             {
                     if (bb.superblock.length() > 20)
@@ -3229,6 +3250,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             {
                                         LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
                                         if (fDebug3) printf("ConnectBlock(): Superblock Loaded %d \r\n", pindex->nHeight);
+                                        if (!fColdBoot)
+                                        {
+                                            bDoTally_retired = true;
+                                        }
                             }
                             else
                             {
@@ -3281,9 +3306,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         LoadAdminMessages(false,errors1);
     }
 
+    // Slow down Retallying when in RA mode so we minimize disruption of the network
+    if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
+    {
+        if (fDebug3) printf("\r\n*BusyWaitForTally_retired*\r\n");
+        BusyWaitForTally_retired();
+    }
+
     if (IsResearchAgeEnabled(pindex->nHeight) && !OutOfSyncByAge())
     {
         fColdBoot = false;
+        bDoTally_retired=true;
     }
 
     if (fJustCheck)
@@ -3570,7 +3603,8 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                     txdb.TxnAbort();
                     InvalidChainFound(pindexNew);
                     printf("\r\nReorg tally\r\n");
-                    TallyNetworkAverages();
+                    BusyWaitForTally_retired();
+                    TallyNetworkAverages_v9();
                     return error("SetBestChain() : Reorganize failed");
             }
         }
@@ -4244,6 +4278,11 @@ void GridcoinServices()
         printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
+    if (TimerMain("ResetVars",30))
+    {
+        bTallyStarted_retired = false;
+    }
+
     if (false && TimerMain("FixSpentCoins",60))
     {
             int nMismatchSpent;
@@ -4279,16 +4318,62 @@ void GridcoinServices()
         }
     }
 
-    // Update quorum data.
-    if ((nBestHeight % 3) == 0)
+    if(IsV9Enabled_Tally(nBestHeight))
     {
-        ComputeNeuralNetworkSupermajorityHashes();
-        UpdateNeuralNetworkQuorumData();
-    }
+        // Update quorum data.
+        if ((nBestHeight % 3) == 0)
+        {
+            ComputeNeuralNetworkSupermajorityHashes();
+            UpdateNeuralNetworkQuorumData();
+        }
 
-    // Tally research averages.
-    if ((nBestHeight % TALLY_GRANULARITY) == 0)
-        TallyNetworkAverages();
+        // Tally research averages.
+        if ((nBestHeight % TALLY_GRANULARITY) == 0)
+            TallyNetworkAverages_v9();
+    }
+    else
+    {
+        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+        bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
+        if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
+
+        if (fDebug10) 
+        {
+                printf (" MRSA %" PRId64 ", BH %d", superblock_age, nBestHeight);
+        }
+
+        if (bNeedSuperblock)
+        {
+            if ((nBestHeight % 3) == 0)
+            {
+                if (fDebug10) printf("#CNNSH# ");
+                ComputeNeuralNetworkSupermajorityHashes();
+                UpdateNeuralNetworkQuorumData();
+            }
+            if ((nBestHeight % 20) == 0)
+            {
+                if (fDebug10) printf("#TIB# ");
+                bDoTally_retired = true;
+            }
+        }
+        else
+        {
+            // When superblock is not old, Tally every N mins:
+            int nTallyGranularity = fTestNet ? 60 : 20;
+            if ((nBestHeight % nTallyGranularity) == 0)
+            {
+                    if (fDebug3) printf("TIB1 ");
+                    bDoTally_retired = true;
+                    if (fDebug3) printf("CNNSH2 ");
+                    ComputeNeuralNetworkSupermajorityHashes();
+            }
+
+            if ((nBestHeight % 5)==0)
+            {
+                    UpdateNeuralNetworkQuorumData();
+            }
+        }
+    }
     
     // Every N blocks as a Synchronized TEAM:
     if ((nBestHeight % 30) == 0)
@@ -5424,8 +5509,146 @@ bool ComputeNeuralNetworkSupermajorityHashes()
 }
 
 
-bool TallyResearchAverages()
+bool TallyResearchAverages_retired(bool Forcefully)
 {
+    if(IsV9Enabled_Tally(nBestHeight))
+        return error("TallyResearchAverages_retired: called while V9 tally enabled\n");
+
+    //Iterate throught last 14 days, tally network averages
+    if (nBestHeight < 15)
+    {
+        bNetAveragesLoaded = true;
+        return true;
+    }
+
+    //8-27-2016
+    int64_t nStart = GetTimeMillis();
+
+    if (fDebug) printf("Tallying Research Averages (begin) ");
+    bNetAveragesLoaded = false;
+    bool superblockloaded = false;
+    double NetworkPayments = 0;
+    double NetworkInterest = 0;
+    
+                        //Consensus Start/End block:
+                        int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+                        int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
+                        int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
+                        if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
+                        if (nMinDepth < 2)              nMinDepth = 2;
+                        mvMagnitudesCopy.clear();
+                        int iRow = 0;
+                        //CBlock block;
+                        CBlockIndex* pblockindex = pindexBest;
+                        if (!pblockindex)
+                        {
+                                bTallyStarted_retired = false;
+                                bNetAveragesLoaded = true;
+                                return true;
+                        }
+                        while (pblockindex->nHeight > nMaxDepth)
+                        {
+                            if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;
+                            pblockindex = pblockindex->pprev;
+                        }
+
+                        if (fDebug3) printf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
+                        nStart=GetTimeMillis();
+
+
+                        // Headless critical section ()
+        try
+        {
+                        while (pblockindex->nHeight > nMinDepth)
+                        {
+                            if (!pblockindex || !pblockindex->pprev) return false;
+                            pblockindex = pblockindex->pprev;
+                            if (pblockindex == pindexGenesisBlock) return false;
+                            if (!pblockindex->IsInMainChain()) continue;
+                            NetworkPayments += pblockindex->nResearchSubsidy;
+                            NetworkInterest += pblockindex->nInterestSubsidy;
+                            AddResearchMagnitude(pblockindex);
+
+                            iRow++;
+                            if (IsSuperBlock(pblockindex) && !superblockloaded)
+                            {
+                                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+                                if (bb.superblock.length() > 20)
+                                {
+                                        std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                                        if (VerifySuperblock(superblock, pblockindex))
+                                        {
+                                                LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
+                                                superblockloaded=true;
+                                                if (fDebug)
+                                                   printf(" Superblock Loaded %i", pblockindex->nHeight);
+                                        }
+                                }
+                            }
+
+                        }
+                        // End of critical section
+                        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
+                        nStart=GetTimeMillis();
+
+
+                        if (pblockindex)
+                        {
+                            if (fDebug3)
+                               printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
+
+                            StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
+                            network.projectname="NETWORK";
+                            network.payments = NetworkPayments;
+                            network.InterestSubsidy = NetworkInterest;
+                            mvNetworkCopy["NETWORK"] = network;
+                            if(fDebug3) printf(" TMIS1 ");
+                            TallyMagnitudesInSuperblock();
+                        }
+                        // 11-19-2015 Copy dictionaries to live RAM
+                        mvDPOR = mvDPORCopy;
+                        mvMagnitudes = mvMagnitudesCopy;
+                        mvNetwork = mvNetworkCopy;
+                        bTallyStarted_retired = false;
+                        bNetAveragesLoaded = true;
+                        return true;
+        }
+        catch (bad_alloc ba)
+        {
+            printf("Bad Alloc while tallying network averages. [1]\r\n");
+            bNetAveragesLoaded=true;
+        }
+        catch(...)
+        {
+            printf("Error while tallying network averages. [1]\r\n");
+            bNetAveragesLoaded=true;
+        }
+
+        if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
+
+        bNetAveragesLoaded=true;
+        return false;
+}
+
+
+
+bool TallyNetworkAverages_retired(bool Forcefully)
+{
+    if (IsResearchAgeEnabled(pindexBest->nHeight) && !IsV9Enabled_Tally(pindexBest->nHeight))
+    {
+        return TallyResearchAverages_retired(Forcefully);
+    }
+
+    return false;
+}
+
+
+
+bool TallyResearchAverages_v9()
+{
+    if(!IsV9Enabled_Tally(nBestHeight))
+        return error("TallyResearchAverages_v9: called while V9 tally disabled\n");
+
     //Iterate throught last 14 days, tally network averages
     if (nBestHeight < 15)
     {
@@ -5545,15 +5768,18 @@ bool TallyResearchAverages()
 
 
 
-bool TallyNetworkAverages()
+bool TallyNetworkAverages_v9()
 {
-    if (IsResearchAgeEnabled(pindexBest->nHeight))
+    if (IsResearchAgeEnabled(pindexBest->nHeight) && IsV9Enabled_Tally(pindexBest->nHeight))
     {
-        return TallyResearchAverages();
+        return TallyResearchAverages_v9();
     }
 
     return false;
 }
+
+
+
 
 
 void PrintBlockTree()
