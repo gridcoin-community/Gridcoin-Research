@@ -3898,7 +3898,8 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
 
         // Verify beacon contract if a transaction contains a beacon contract
-        if (!VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+        // Current bad contracts in chain would cause a fork on sync, skip them
+        if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
             return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
     }
 
@@ -3950,10 +3951,13 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // The block height at which point we start rejecting v7 blocks and
     // start accepting v8 blocks.
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
-              || (IsV8Enabled(nHeight) && nVersion < 8))
+              || (IsV8Enabled(nHeight) && nVersion < 8)
+              || (IsV9Enabled(nHeight) && nVersion < 9)
+              )
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
              ||(!IsV8Enabled(nHeight) && nVersion >= 8)
+             ||(!IsV9Enabled(nHeight) && nVersion >= 9)
              )
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 
@@ -4163,9 +4167,23 @@ bool NeedASuperblock()
          GetSuperblockProjectCount(superblock, out_project_count, out_whitelist_count);
          */
     }
+
     int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
         bDireNeedOfSuperblock = true;
+
+    if(bDireNeedOfSuperblock && pindexBest && pindexBest->nVersion>=9)
+    {
+        // If all the checks indicate true and is v9, look 15 blocks back to
+        // prevent duplicate superblocks
+        for(CBlockIndex *pindex = pindexBest;
+            pindex && pindex->nHeight + 15 > nBestHeight;
+            pindex = pindex->pprev)
+        {
+            if(pindex->nIsSuperBlock)
+                return false;
+        }
+    }
 
     return bDireNeedOfSuperblock;
 }
@@ -5325,7 +5343,12 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
 
     //Clear the votes
-    ClearCache("neuralsecurity");
+    /* ClearCache was no-op in previous version due to bug. Now it was fixed,
+        but we have to emulate the old behaviour to prevent early forks. */
+    if(pindexBest && pindexBest->nVersion>=9)
+    {
+        ClearCache("neuralsecurity");
+    }
     WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
     try
     {
@@ -8109,7 +8132,8 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                             fMessageLoaded = true;
                         }
 
-                        WriteCache(sMessageType,sMessageKey+";TrxID",tx.GetHash().GetHex(),nTime);
+                        if(fDebug)
+                            WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
 
                   }
 
@@ -8253,10 +8277,21 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
     if(fDebug && !bVerifyingBlock) printf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)\n",cpid.c_str(),pindexLast->GetBlockHash().GetHex().c_str(),pindexLast->nHeight,pindexBest->nHeight);
+    if(pindexLast->nVersion>=9)
+    {
+        // Bugfix for newbie rewards always being around 1 GRC
+        dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+    }
     if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
     if(fDebug && !bVerifyingBlock) printf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f\n",pHistorical->GetBlockHash().GetHex().c_str(),pHistorical->nHeight,!!pHistorical->pnext,pHistorical->nMagnitude);
-    if (pHistorical->nHeight <= nNewIndex || pHistorical->nMagnitude==0 || pHistorical->nTime == 0)
+    bool bIsNewbie = (pHistorical->nHeight <= nNewIndex || pHistorical->nTime==0);
+    if(pindexLast->nVersion<9)
+    {
+        // Bugfix for zero mag stakes being mistaken for newbie stake
+        bIsNewbie |= pHistorical->nMagnitude==0;
+    }
+    if (bIsNewbie)
     {
         //No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
         if(fDebug && !bVerifyingBlock) printf("CRE: No prior block exists...\n");
@@ -8288,7 +8323,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             }
             else
             {
-                if(fDebug && !bVerifyingBlock) printf("CRE: Using 0.01 age bootstrap\n");
+                if(fDebug && !bVerifyingBlock) printf("CRE: Invalid Beacon, Using 0.01 age bootstrap\n");
                 return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
             }
         }
