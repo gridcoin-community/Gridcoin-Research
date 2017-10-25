@@ -1790,6 +1790,21 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
     return nSubsidy + nFees;
 }
 
+
+int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
+{
+    int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
+    if (height==10)
+    {
+        //R.Halford: 10-11-2014: Gridcoin Foundation Block:
+        //Note: Gridcoin Classic emitted these coins.  So we had to add them to block 10.  The coins were burned then given back to the owners that mined them in classic (as research coins).
+        nSubsidy = nGenesisSupply * COIN;
+    }
+
+    if (fTestNet) nSubsidy += 1000*COIN;
+    return nSubsidy + nFees;
+}
+
 //Survey Results: Start inflation rate: 9%, end=1%, 30 day steps, 9 steps, mag multiplier start: 2, mag end .3, 9 steps
 int64_t GetMaximumBoincSubsidy(int64_t nTime)
 {
@@ -2946,6 +2961,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
+    }
+
+    if (IsProofOfWork() && pindex->nHeight > nGrandfather)
+    {
+        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
+        // Check coinbase reward
+        if (vtx[0].GetValueOut() > nReward)
+            return DoS(50, error("ConnectBlock[] : coinbase reward exceeded (actual=%" PRId64 " vs calculated=%" PRId64 ")",
+                   vtx[0].GetValueOut(),
+                   nReward));
     }
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
