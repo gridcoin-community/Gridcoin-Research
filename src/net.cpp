@@ -1608,6 +1608,13 @@ begin:
 
 void BusyWaitForTally_retired()
 {
+    if(IsV9Enabled_Tally(nBestHeight))
+    {
+        if(fDebug10)
+            printf("BusyWaitForTally_retired: skipped (v9 enabled)\n");
+        return;
+    }
+
     if (fDebug10) printf("\r\n ** Busy Wait for Tally_retired ** \r\n");
     bTallyFinished_retired=false;
     bDoTally_retired=true;

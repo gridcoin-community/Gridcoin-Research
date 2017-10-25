@@ -3249,7 +3249,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             if (VerifySuperblock(superblock, pindex))
                             {
                                         LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
-                                        if (fDebug3) printf("ConnectBlock(): Superblock Loaded %d \r\n", pindex->nHeight);
+                                        if (fDebug)
+                                            printf("ConnectBlock(): Superblock Loaded %d\n", pindex->nHeight);
                                         if (!fColdBoot)
                                         {
                                             bDoTally_retired = true;
@@ -4323,13 +4324,18 @@ void GridcoinServices()
         // Update quorum data.
         if ((nBestHeight % 3) == 0)
         {
+            if(fDebug) printf("SVC: Updating Neural Quorum (v9 %%3) height %d\n",nBestHeight);
+            if(fDebug) printf("SVC: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
             ComputeNeuralNetworkSupermajorityHashes();
             UpdateNeuralNetworkQuorumData();
         }
 
         // Tally research averages.
         if ((nBestHeight % TALLY_GRANULARITY) == 0)
+        {
+            if(fDebug) printf("SVC: TallyNetworkAverages (v9 %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
             TallyNetworkAverages_v9();
+        }
     }
     else
     {
@@ -4346,12 +4352,15 @@ void GridcoinServices()
         {
             if ((nBestHeight % 3) == 0)
             {
+                if(fDebug) printf("SVC: Updating Neural Quorum (v3 A) height %d\n",nBestHeight);
+                if(fDebug) printf("SVC: Updating Neural Supermajority (v3 A) height %d\n",nBestHeight);
                 if (fDebug10) printf("#CNNSH# ");
                 ComputeNeuralNetworkSupermajorityHashes();
                 UpdateNeuralNetworkQuorumData();
             }
             if ((nBestHeight % 20) == 0)
             {
+                if(fDebug) printf("SVC: set off Tally (v3 B) height %d\n",nBestHeight);
                 if (fDebug10) printf("#TIB# ");
                 bDoTally_retired = true;
             }
@@ -4362,14 +4371,17 @@ void GridcoinServices()
             int nTallyGranularity = fTestNet ? 60 : 20;
             if ((nBestHeight % nTallyGranularity) == 0)
             {
+                    if(fDebug) printf("SVC: set off Tally (v3 C) height %d\n",nBestHeight);
                     if (fDebug3) printf("TIB1 ");
                     bDoTally_retired = true;
                     if (fDebug3) printf("CNNSH2 ");
+                    if(fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
                     ComputeNeuralNetworkSupermajorityHashes();
             }
 
             if ((nBestHeight % 5)==0)
             {
+                    if(fDebug) printf("SVC: Updating Neural Quorum (v3 E) height %d\n",nBestHeight);
                     UpdateNeuralNetworkQuorumData();
             }
         }
@@ -5536,6 +5548,7 @@ bool TallyResearchAverages_retired(bool Forcefully)
                         int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
                         if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
                         if (nMinDepth < 2)              nMinDepth = 2;
+    if(fDebug) printf("TallyResearchAverages_retired: start %d end %d\n",nMaxDepth,nMinDepth);
                         mvMagnitudesCopy.clear();
                         int iRow = 0;
                         //CBlock block;
@@ -5581,7 +5594,7 @@ bool TallyResearchAverages_retired(bool Forcefully)
                                                 LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
                                                 superblockloaded=true;
                                                 if (fDebug)
-                                                   printf(" Superblock Loaded %i", pblockindex->nHeight);
+                                                   printf("TallyResearchAverages_retired: Superblock Loaded {%s %i}\n", pblockindex->GetBlockHash().GetHex().c_str(),pblockindex->nHeight);
                                         }
                                 }
                             }
@@ -5664,7 +5677,7 @@ bool TallyResearchAverages_v9()
     bool superblockloaded = false;
     double NetworkPayments = 0;
     double NetworkInterest = 0;
-    
+
     //Consensus Start/End block:
     int nMaxConensusDepth = nBestHeight - CONSENSUS_LOOKBACK;
     int nMaxDepth = nMaxConensusDepth - (nMaxConensusDepth % TALLY_GRANULARITY);
@@ -5672,8 +5685,9 @@ bool TallyResearchAverages_v9()
     int nMinDepth = nMaxDepth - nLookback;
     if (nMinDepth < 2)
         nMinDepth = 2;
-    
-    if (fDebug3) printf("START BLOCK %i, END BLOCK %i", nMaxDepth, nMinDepth);
+
+    if(fDebug) printf("TallyResearchAverages: start %d end %d\n",nMaxDepth,nMinDepth);
+
     mvMagnitudesCopy.clear();
     int iRow = 0;
 
@@ -5718,7 +5732,7 @@ bool TallyResearchAverages_v9()
                         LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
                         superblockloaded=true;
                         if (fDebug)
-                            printf(" Superblock Loaded %i", pblockindex->nHeight);
+                           printf("TallyResearchAverages_v9: Superblock Loaded {%s %i}\n", pblockindex->GetBlockHash().GetHex().c_str(),pblockindex->nHeight);
                     }
                 }
             }
