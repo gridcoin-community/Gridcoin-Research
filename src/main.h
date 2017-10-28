@@ -27,7 +27,6 @@ class CNode;
 class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
-extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor

@@ -143,7 +143,6 @@ CCriticalSection cs_main;
 extern std::string NodeAddress(CNode* pfrom);
 
 CTxMemPool mempool;
-unsigned int REORGANIZE_FAILED = 0;
 unsigned int WHITELISTED_PROJECTS = 0;
 int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
@@ -3572,13 +3571,11 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                     InvalidChainFound(pindexNew);
                     printf("\r\nReorg tally\r\n");
                     TallyNetworkAverages();
-                    REORGANIZE_FAILED++;
                     return error("SetBestChain() : Reorganize failed");
             }
         }
-        // Switch to new best branch
-        REORGANIZE_FAILED=0;
 
+        // Switch to new best branch
         // Connect further blocks
         for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
         {
@@ -3652,7 +3649,6 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
-    REORGANIZE_FAILED=0;
 
     return true;
 }
