@@ -1982,26 +1982,19 @@ void ThreadMessageHandler2(void* parg)
             pnodeTrickle = vNodesCopy[GetRand(vNodesCopy.size())];
         for (auto const& pnode : vNodesCopy)
         {
-
             if (pnode->fDisconnect)
                 continue;
+
             //11-25-2015
             // Receive messages
-            {
-                TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-                if (lockRecv)
-                    if (!ProcessMessages(pnode))
-                        pnode->CloseSocketDisconnect();
-            }
+            if (!ProcessMessages(pnode))
+                pnode->CloseSocketDisconnect();
+
             if (fShutdown)
                 return;
 
             // Send messages
-            {
-                TRY_LOCK(pnode->cs_vSend, lockSend);
-                if (lockSend)
-                    SendMessages(pnode, pnode == pnodeTrickle);
-            }
+            SendMessages(pnode, pnode == pnodeTrickle);
             if (fShutdown)
                 return;
         }
