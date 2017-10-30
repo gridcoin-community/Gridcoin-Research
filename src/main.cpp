@@ -3188,8 +3188,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // Prevent duplicate superblocks
         if(nVersion >= 9 && !NeedASuperblock())
             return error(("ConnectBlock: SuperBlock rcvd, but not Needed (too early)"));
-
-        // Always perform SB checks in v9
+            
         if ((pindex->nHeight > nGrandfather && !fReorganizing) || pindex->nVersion >= 9 )
         {
             // 12-20-2015 : Add support for Binary Superblocks

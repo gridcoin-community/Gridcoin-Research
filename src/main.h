@@ -99,7 +99,7 @@ inline uint32_t IsV8Enabled(int nHeight)
 inline uint32_t IsV9Enabled(int nHeight)
 {
     return fTestNet
-            ? nHeight >=  378600
+            ? nHeight >=  392570
             : nHeight >= 2000000;
 }
 
