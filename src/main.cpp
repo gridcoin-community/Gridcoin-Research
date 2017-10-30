@@ -3180,7 +3180,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (bb.superblock.length() > 20)
     {
-        if (pindex->nHeight > nGrandfather && !fReorganizing)
+        // Prevent duplicate superblocks
+        if(nVersion >= 9 && !NeedASuperblock())
+            return error(("ConnectBlock: SuperBlock rcvd, but not Needed (too early)"));
+
+        // Always perform SB checks in v9
+        if ((pindex->nHeight > nGrandfather && !fReorganizing) || pindex->nVersion >= 9 )
         {
             // 12-20-2015 : Add support for Binary Superblocks
             std::string superblock = UnpackBinarySuperblock(bb.superblock);
@@ -3238,7 +3243,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             }
         }
 
-
+        if(nVersion<9)
+        {
             //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
             // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
             if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
@@ -3262,12 +3268,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             }
                     }
             }
-
-
-
-        /*
-            -- Normal Superblocks are loaded 15 blocks later
-        */
+            /*
+                -- Normal Superblocks are loaded during Tally
+            */
+        }
     }
 
     //  End of Network Consensus
