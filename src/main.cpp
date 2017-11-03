@@ -5537,8 +5537,17 @@ bool TallyResearchAverages_retired(bool Forcefully)
         return true;
     }
 
+    static int64_t lastTallied = 0;
+    int timespan = fTestNet ? 2 : 6;
+    if (IsLockTimeWithinMinutes(lastTallied,timespan))
+    {
+        bNetAveragesLoaded = true;
+        return true;
+    }
+
     //8-27-2016
     int64_t nStart = GetTimeMillis();
+    lastTallied = GetAdjustedTime();
 
     if (fDebug) printf("Tallying Research Averages (begin) ");
     bNetAveragesLoaded = false;
@@ -5634,11 +5643,13 @@ bool TallyResearchAverages_retired(bool Forcefully)
         {
             printf("Bad Alloc while tallying network averages. [1]\r\n");
             bNetAveragesLoaded=true;
+            lastTallied = 0;
         }
         catch(...)
         {
             printf("Error while tallying network averages. [1]\r\n");
             bNetAveragesLoaded=true;
+            lastTallied = 0;
         }
 
         if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
