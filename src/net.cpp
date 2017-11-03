@@ -1580,28 +1580,7 @@ void ThreadTallyResearchAverages_retired(void* parg)
 {
     // Make this thread recognisable
     RenameThread("grc-tallyresearchaverages");
-
-begin:
-    try
-    {
-        DoTallyResearchAverages_retired(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadTallyNetworkAverages_retired()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        printf("ThreadTallyResearchAverages_retired exited (interrupt)\r\n");
-        return;
-    }
-    catch(...)
-    {
-        printf("Error in ThreadTallyResearchAverages_retired... Recovering \r\n");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Thread TallyReasearchAverages_retired exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
+    DoTallyResearchAverages_retired(parg);
     printf("ThreadTallyResearchAverages_retired exited \r\n");
 }
 
