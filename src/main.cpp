@@ -5689,7 +5689,6 @@ bool TallyResearchAverages_v9()
 
     if (fDebug) printf("Tallying Research Averages (begin) ");
     bNetAveragesLoaded = false;
-    bool superblockloaded = false;
     double NetworkPayments = 0;
     double NetworkInterest = 0;
 
@@ -5704,23 +5703,44 @@ bool TallyResearchAverages_v9()
     if(fDebug) printf("TallyResearchAverages: start %d end %d\n",nMaxDepth,nMinDepth);
 
     mvMagnitudesCopy.clear();
-    int iRow = 0;
-
     CBlockIndex* pblockindex = pindexBest;
     if (!pblockindex)
     {
         bNetAveragesLoaded = true;
         return true;
     }
+
+    // Seek to head of tally window.
     while (pblockindex->nHeight > nMaxDepth)
     {
         if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;
         pblockindex = pblockindex->pprev;
     }
 
-    if (fDebug3) printf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
+    if (fDebug3) printf("Max block %i, seektime %" PRId64, pblockindex->nHeight, GetTimeMillis()-nStart);
     nStart=GetTimeMillis();
 
+    // Load newest superblock in tally window
+    for(CBlockIndex* sbIndex = pblockindex;
+        sbIndex != NULL;
+        sbIndex = sbIndex->pprev)
+    {
+        if(!IsSuperBlock(sbIndex))
+            continue;
+
+        MiningCPID bb = GetBoincBlockByIndex(sbIndex);
+        if(bb.superblock.length() <= 20)
+            continue;
+
+        const std::string& superblock = UnpackBinarySuperblock(bb.superblock);
+        if(!VerifySuperblock(superblock, sbIndex))
+            continue;
+
+        LoadSuperblock(superblock, sbIndex->nTime, sbIndex->nHeight);
+        if (fDebug)
+            printf("TallyResearchAverages_v9: Superblock Loaded {%s %i}\n", sbIndex->GetBlockHash().GetHex().c_str(), sbIndex->nHeight);
+        break;
+    }
 
     // Headless critical section ()
     try
@@ -5734,24 +5754,6 @@ bool TallyResearchAverages_v9()
             NetworkPayments += pblockindex->nResearchSubsidy;
             NetworkInterest += pblockindex->nInterestSubsidy;
             AddResearchMagnitude(pblockindex);
-
-            iRow++;
-            if (IsSuperBlock(pblockindex) && !superblockloaded)
-            {
-                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-                if (bb.superblock.length() > 20)
-                {
-                    std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                    if (VerifySuperblock(superblock, pblockindex))
-                    {
-                        LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
-                        superblockloaded=true;
-                        if (fDebug)
-                           printf("TallyResearchAverages_v9: Superblock Loaded {%s %i}\n", pblockindex->GetBlockHash().GetHex().c_str(),pblockindex->nHeight);
-                    }
-                }
-            }
-
         }
         // End of critical section
         if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
@@ -5760,9 +5762,6 @@ bool TallyResearchAverages_v9()
 
         if (pblockindex)
         {
-            if (fDebug3)
-                printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
-
             StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
             network.projectname="NETWORK";
             network.payments = NetworkPayments;
