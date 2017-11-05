@@ -4271,65 +4271,8 @@ void GridcoinServices()
             uiInterface.NotifyBlocksChanged();
        }
     #endif
+
     // Services thread activity
-
-    //Dont perform the following functions if out of sync
-    if (pindexBest->nHeight < nGrandfather) return;
-    
-    if (OutOfSyncByAge()) return;
-    if (fDebug) printf(" {SVC} ");
-
-    //Backup the wallet once per 900 blocks or as specified in config:
-    int nWBI = GetArg("-walletbackupinterval", 900);
-    if (nWBI == 0)
-        nWBI = 900;
-
-   if (TimerMain("backupwallet", nWBI))
-    {
-        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
-        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
-        printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
-    }
-
-    if (TimerMain("ResetVars",30))
-    {
-        bTallyStarted_retired = false;
-    }
-
-    if (false && TimerMain("FixSpentCoins",60))
-    {
-            int nMismatchSpent;
-            int64_t nBalanceInQuestion;
-            pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
-    }
-
-    if (TimerMain("MyNeuralMagnitudeReport",30))
-    {
-        try
-        {
-            if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
-            {
-                AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
-            }
-            // Run the RSA report for the overview page:
-            if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
-            {
-                if (fDebug3) printf("updating rsa\r\n");
-                MagnitudeReport(msPrimaryCPID);
-                if (fDebug3) printf("updated rsa\r\n");
-            }
-            if (fDebug3) printf("\r\n MR Complete \r\n");
-        }
-        catch (std::exception &e)
-        {
-            printf("Error in MyNeuralMagnitudeReport1.");
-        }
-        catch(...)
-        {
-            printf("Error in MyNeuralMagnitudeReport.");
-        }
-    }
 
     if(IsV9Enabled_Tally(nBestHeight))
     {
@@ -4398,7 +4341,77 @@ void GridcoinServices()
             }
         }
     }
-    
+
+    if (false && TimerMain("GridcoinPersistedDataSystem",5))
+    {
+        std::string errors1 = "";
+        LoadAdminMessages(false,errors1);
+    }
+
+    if (TimerMain("clearcache",1000))
+    {
+        ClearCache("neural_data");
+    }
+
+
+    //Dont perform the following functions if out of sync
+    if (pindexBest->nHeight < nGrandfather && OutOfSyncByAge())
+        return;
+
+    if (fDebug) printf(" {SVC} ");
+
+    //Backup the wallet once per 900 blocks or as specified in config:
+    int nWBI = GetArg("-walletbackupinterval", 900);
+    if (nWBI == 0)
+        nWBI = 900;
+
+   if (TimerMain("backupwallet", nWBI))
+    {
+        bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+        bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+        printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
+    }
+
+    if (TimerMain("ResetVars",30))
+    {
+        bTallyStarted_retired = false;
+    }
+
+    if (false && TimerMain("FixSpentCoins",60))
+    {
+            int nMismatchSpent;
+            int64_t nBalanceInQuestion;
+            pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+    }
+
+    if (TimerMain("MyNeuralMagnitudeReport",30))
+    {
+        try
+        {
+            if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
+            {
+                AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
+                if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
+            }
+            // Run the RSA report for the overview page:
+            if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+            {
+                if (fDebug3) printf("updating rsa\r\n");
+                MagnitudeReport(msPrimaryCPID);
+                if (fDebug3) printf("updated rsa\r\n");
+            }
+            if (fDebug3) printf("\r\n MR Complete \r\n");
+        }
+        catch (std::exception &e)
+        {
+            printf("Error in MyNeuralMagnitudeReport1.");
+        }
+        catch(...)
+        {
+            printf("Error in MyNeuralMagnitudeReport.");
+        }
+    }
+
     // Every N blocks as a Synchronized TEAM:
     if ((nBestHeight % 30) == 0)
     {
@@ -4451,12 +4464,6 @@ void GridcoinServices()
         }
     }
 
-    if (false && TimerMain("GridcoinPersistedDataSystem",5))
-    {
-        std::string errors1 = "";
-        LoadAdminMessages(false,errors1);
-    }
-
     if (KeyEnabled("exportmagnitude"))
     {
         if (TimerMain("export_magnitude",900))
@@ -4473,11 +4480,6 @@ void GridcoinServices()
             //LoadCPIDsInBackground();
             //printf(" {CPIDs Re-Loaded} ");
             msNeuralResponse="";
-    }
-
-    if (TimerMain("clearcache",1000))
-    {
-        ClearCache("neural_data");
     }
 
     if (TimerMain("check_for_autoupgrade",240))
