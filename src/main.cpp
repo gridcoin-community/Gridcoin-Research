@@ -5466,7 +5466,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     if (nBestHeight < 15)  return true;
     if (IsLockTimeWithinMinutes(nLastTalliedNeural,5))
     {
-        return true;
+        //return true;
     }
     nLastTalliedNeural = GetAdjustedTime();
     //Clear the neural network hash buffer
