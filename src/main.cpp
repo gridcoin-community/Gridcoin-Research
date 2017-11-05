@@ -8657,9 +8657,9 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
             return pindexGenesisBlock;
 
         CBlockIndex* pblockindex = mapItem->second;
-        if(!pblockindex->pnext)
-            printf("GetHistoricalMagnitude: WARNING index {%s %d} for cpid %s, "
-            "has no next pointer (not n main chain)\n",pblockindex->GetBlockHash().GetHex().c_str(),
+        if(!pblockindex->pnext && pblockindex!=pindexBest)
+            printf("WARNING GetHistoricalMagnitude: index {%s %d} for cpid %s, "
+            "is not in the main chain\n",pblockindex->GetBlockHash().GetHex().c_str(),
             pblockindex->nHeight,cpid.c_str());
         if (pblockindex->nHeight < nMinIndex)
         {
