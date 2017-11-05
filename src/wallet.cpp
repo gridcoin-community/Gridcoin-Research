@@ -19,6 +19,7 @@
 #include "util.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
+#include "main.h"
 
 using namespace std;
 
@@ -1706,7 +1707,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t locktime)
 {
     double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
-    double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
+    double por_min = IsResearcher(cpid) ? (MaxSubsidy/40) : 0;
     if (RSA_WEIGHT >= 24999) return 0;
     //Dynamically determines the minimum GRC block subsidy required amount for current network conditions
     if (fTestNet && (PORDiff >=0 && PORDiff < 1)) return .00001;
