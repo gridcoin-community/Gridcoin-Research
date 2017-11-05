@@ -2165,11 +2165,16 @@ bool CheckProofOfResearch(
     int64_t nCoinAge = 0;
     int64_t nFees = 0;
 
+    bool fNeedsChecked = BlockNeedsChecked(block.nTime) || block.nVersion>=9;
+
+    if(!fNeedsChecked)
+        return true;
+
     // 6-4-2017 - Verify researchers stored block magnitude
     double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, block.nTime, false);
-    if (bb.Magnitude > 0 &&
-        bb.Magnitude > (dNeuralNetworkMagnitude*1.25) &&
-        (fTestNet || (!fTestNet && pindexPrev->nHeight > 947000)))
+    if( bb.Magnitude > 0
+        && (fTestNet || (!fTestNet && pindexPrev->nHeight > 947000))
+        && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
     {
         return error("CheckProofOfResearch: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
                      bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str());
