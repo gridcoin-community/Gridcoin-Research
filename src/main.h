@@ -99,7 +99,7 @@ inline uint32_t IsV8Enabled(int nHeight)
 inline uint32_t IsV9Enabled(int nHeight)
 {
     return fTestNet
-            ? nHeight >=  378600
+            ? nHeight >=  392570
             : nHeight >= 2000000;
 }
 
@@ -113,6 +113,11 @@ inline bool AreBinarySuperblocksEnabled(int nHeight)
 	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
 }
 
+inline bool IsV9Enabled_Tally(int nHeight)
+{
+    // 3 hours after v9
+    return IsV9Enabled(nHeight-120);
+}
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
@@ -168,7 +173,6 @@ extern int64_t nMinimumInputValue;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
-extern int64_t nLastTalliedNeural;
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;

@@ -24,7 +24,8 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 
 StructCPID GetStructCPID();
 bool ComputeNeuralNetworkSupermajorityHashes();
-void TallyNetworkAverages();
+void BusyWaitForTally_retired();
+void TallyNetworkAverages_v9();
 extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
@@ -994,10 +995,13 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
-    TallyNetworkAverages();
+
+    TallyNetworkAverages_v9();
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
+
+    BusyWaitForTally_retired();
 
     if (fServer)
         threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");

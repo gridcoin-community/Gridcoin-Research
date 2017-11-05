@@ -504,7 +504,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
             StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
         }
-        else if(blocknew.nVersion==8)
+        else
         {
             uint64_t StakeModifier = 0;
             if(!FindStakeModifierRev(StakeModifier,pindexPrev))
@@ -512,7 +512,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
             StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
         }
-        else return false;
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
