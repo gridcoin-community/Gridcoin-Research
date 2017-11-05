@@ -3867,26 +3867,29 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(100, error("CheckBlock[] : more than one coinbase"));
     //Research Age
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
-    //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-    if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
+    if(nVersion<9)
     {
-        double blockVersion = BlockVersion(bb.clientversion);
-        double cvn = ClientVersionNew();
-        if (fDebug10) printf("BV %f, CV %f   ",blockVersion,cvn);
-        // Enforce Beacon Age
-        if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
-            return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
-    }
-    
-    //Orphan Flood Attack
-    if (height1 > nGrandfather)
-    {
-        double bv = BlockVersion(bb.clientversion);
-        double cvn = ClientVersionNew();
-        if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
-        // Enforce Beacon Age
-        if (bv < 3588 && height1 > 860500 && !fTestNet)
-            return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+        //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
+        if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
+        {
+            double blockVersion = BlockVersion(bb.clientversion);
+            double cvn = ClientVersionNew();
+            if (fDebug10) printf("BV %f, CV %f   ",blockVersion,cvn);
+            // Enforce Beacon Age
+            if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
+                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+        }
+
+        //Orphan Flood Attack
+        if (height1 > nGrandfather)
+        {
+            double bv = BlockVersion(bb.clientversion);
+            double cvn = ClientVersionNew();
+            if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
+            // Enforce Beacon Age
+            if (bv < 3588 && height1 > 860500 && !fTestNet)
+                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+        }
     }
 
     if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
