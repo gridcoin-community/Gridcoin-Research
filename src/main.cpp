@@ -5559,7 +5559,6 @@ bool TallyResearchAverages_retired(bool Forcefully)
     int64_t nStart = GetTimeMillis();
     lastTallied = GetAdjustedTime();
 
-    if (fDebug) printf("Tallying Research Averages (begin) ");
     bNetAveragesLoaded = false;
     bool superblockloaded = false;
     double NetworkPayments = 0;
@@ -5571,7 +5570,7 @@ bool TallyResearchAverages_retired(bool Forcefully)
                         int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
                         if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
                         if (nMinDepth < 2)              nMinDepth = 2;
-    if(fDebug) printf("TallyResearchAverages_retired: start %d end %d\n",nMaxDepth,nMinDepth);
+    if(fDebug) printf("TallyResearchAverages_retired: beginning start %d end %d\n",nMaxDepth,nMinDepth);
                         mvMagnitudesCopy.clear();
                         int iRow = 0;
                         //CBlock block;

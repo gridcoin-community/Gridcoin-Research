@@ -785,6 +785,8 @@ bool TallyMagnitudesInSuperblock()
     network.projectname="NETWORK";
     network.NetworkMagnitude = TotalNetworkMagnitude;
     network.NetworkAvgMagnitude = NetworkAvgMagnitude;
+    if (fDebug)
+       printf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries,ReadCache("superblock","block_number").c_str());
     
     double TotalProjects = 0;
     double TotalRAC = 0;
