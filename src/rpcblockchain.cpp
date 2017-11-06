@@ -2990,34 +2990,34 @@ std::string GetShareType(double dShareType)
 
 std::string GetProvableVotingWeightXML()
 {
-	std::string sXML = "<PROVABLEMAGNITUDE>";
-	//Retrieve the historical magnitude
+    std::string sXML = "<PROVABLEMAGNITUDE>";
+    //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
-		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
-		if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
-		{
-			std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-			std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
-			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
-			sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" 
-				+ RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-                "<HEIGHT>" + ToString(pHistorical->nHeight)
-				+ "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
-		}
-	}
-	sXML += "</PROVABLEMAGNITUDE>";
+        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
+        CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
+        if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
+        {
+            std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
+            std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
+            // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
+            sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>"
+                    + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
+                    "<HEIGHT>" + ToString(pHistorical->nHeight)
+                    + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
+        }
+    }
+    sXML += "</PROVABLEMAGNITUDE>";
 
     vector<COutput> vecOutputs;
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
-	std::string sRow = "";
-	double dTotal = 0;
-	double dBloatThreshhold = 100;
-	double dCurrentItemCount = 0;
-	double dItemBloatThreshhold = 50;
-	// Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
-	sXML += "<PROVABLEBALANCE>";
+    std::string sRow = "";
+    double dTotal = 0;
+    double dBloatThreshhold = 100;
+    double dCurrentItemCount = 0;
+    double dItemBloatThreshhold = 50;
+    // Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
+    sXML += "<PROVABLEBALANCE>";
     for (auto const& out : vecOutputs)
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
@@ -3068,9 +3068,9 @@ std::string GetProvableVotingWeightXML()
     }
 
 
-	sXML += "<TOTALVOTEDBALANCE>" + RoundToString(dTotal,2) + "</TOTALVOTEDBALANCE>";
-	sXML += "</PROVABLEBALANCE>";
-	return sXML;
+    sXML += "<TOTALVOTEDBALANCE>" + RoundToString(dTotal,2) + "</TOTALVOTEDBALANCE>";
+    sXML += "</PROVABLEBALANCE>";
+    return sXML;
 
 }
 
@@ -3168,60 +3168,60 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 
 Array GetJsonUnspentReport()
 {
-	// The purpose of this report is to list the details of unspent coins in the wallet, create a signed XML payload and then audit those coins as a third party
-	// Written on 5-28-2017 - R HALFORD
-	// We can use this as the basis for proving the total coin balance, and the current researcher magnitude in the voting system.
+    // The purpose of this report is to list the details of unspent coins in the wallet, create a signed XML payload and then audit those coins as a third party
+    // Written on 5-28-2017 - R HALFORD
+    // We can use this as the basis for proving the total coin balance, and the current researcher magnitude in the voting system.
     Array results;
 
-	//Retrieve the historical magnitude
+    //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
-		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
-		Object entry1;
-		entry1.push_back(Pair("Researcher Magnitude",pHistorical->nMagnitude));
-		results.push_back(entry1);
+        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
+        CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
+        Object entry1;
+        entry1.push_back(Pair("Researcher Magnitude",pHistorical->nMagnitude));
+        results.push_back(entry1);
 
-		// Create the XML Magnitude Payload
-		if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
-		{
-			std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-			std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
-			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
+        // Create the XML Magnitude Payload
+        if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
+        {
+            std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
+            std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
+            // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 
-			std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-                "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
-			std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
-			std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
-			std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
-			std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
-			Object entry;
-			entry.push_back(Pair("CPID Signature", sSignature));
-			entry.push_back(Pair("Historical Magnitude Block #", pHistorical->nHeight));
-			entry.push_back(Pair("Historical Blockhash", sBlockhash));
-			// Prove the magnitude from a 3rd party standpoint:
-			if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
-			{
-				CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
-				if (pblockindexMagnitude)
-				{
-						bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-						entry.push_back(Pair("Historical Magnitude",pblockindexMagnitude->nMagnitude));
-						entry.push_back(Pair("Signature Valid",fResult));
-						bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
-						entry.push_back(Pair("Magnitude Audited",fAudited));
-						results.push_back(entry);
-			
-				}
-			}
+            std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
+                    "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
+            std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
+            std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
+            std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
+            std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
+            Object entry;
+            entry.push_back(Pair("CPID Signature", sSignature));
+            entry.push_back(Pair("Historical Magnitude Block #", pHistorical->nHeight));
+            entry.push_back(Pair("Historical Blockhash", sBlockhash));
+            // Prove the magnitude from a 3rd party standpoint:
+            if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
+            {
+                CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
+                if (pblockindexMagnitude)
+                {
+                    bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
+                    entry.push_back(Pair("Historical Magnitude",pblockindexMagnitude->nMagnitude));
+                    entry.push_back(Pair("Signature Valid",fResult));
+                    bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
+                    entry.push_back(Pair("Magnitude Audited",fAudited));
+                    results.push_back(entry);
 
-					
-		}
-	
+                }
+            }
 
-	}
 
-	// Now we move on to proving the coins we own are ours
+        }
+
+
+    }
+
+    // Now we move on to proving the coins we own are ours
 
     vector<COutput> vecOutputs;
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
