@@ -12,7 +12,7 @@ bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-extern int DetermineCPIDType(std::string cpid);
+extern int DetermineCPIDType(const std::string& cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
@@ -277,29 +277,22 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   a proof-of-work situation.
 //
 
-int DetermineCPIDType(std::string cpid)
+int DetermineCPIDType(const std::string& cpid)
 {
     // -1 = Invalid CPID
     //  1 = Valid CPID with RAC
     //  2 = Investor or Pool Miner
-    printf("\r\nCPID Length %f\r\n",(double)cpid.length());
+    printf("\r\nCPID Length %lu\r\n", cpid.length());
 
-    if (cpid.empty()) return -1;
-    if (cpid=="INVESTOR") return 2;
-    StructCPID h = mvMagnitudes[cpid];
-    if (h.Magnitude > 0) return 1;
-    // If magnitude is 0 in the current superblock, try to get magnitude from netsoft before failing
-    if (cpid.length()==32)
-    {
-        return 1;
-    }
-    else
-    {
-        // CPID is not 32 chars long- return Investor
+    if (cpid.empty())
+        return -1;
+
+    if (!IsResearcher(cpid))
         return 2;
-    }
-}   
 
+    else
+        return 1;
+}
 
 double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {
