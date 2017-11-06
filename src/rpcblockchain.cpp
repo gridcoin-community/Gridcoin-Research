@@ -2993,7 +2993,7 @@ std::string GetProvableVotingWeightXML()
 	std::string sXML = "<PROVABLEMAGNITUDE>";
 	//Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
-	{
+    {
 		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
 		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
 		if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
@@ -3175,7 +3175,7 @@ Array GetJsonUnspentReport()
 
 	//Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
-	{
+    {
 		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
 		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
 		Object entry1;
