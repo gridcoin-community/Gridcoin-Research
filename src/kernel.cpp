@@ -12,7 +12,6 @@ bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-extern int DetermineCPIDType(const std::string& cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
@@ -276,23 +275,6 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-
-int DetermineCPIDType(const std::string& cpid)
-{
-    // -1 = Invalid CPID
-    //  1 = Valid CPID with RAC
-    //  2 = Investor or Pool Miner
-    printf("\r\nCPID Length %lu\r\n", cpid.length());
-
-    if (cpid.empty())
-        return -1;
-
-    if (!IsResearcher(cpid))
-        return 2;
-
-    else
-        return 1;
-}
 
 double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {

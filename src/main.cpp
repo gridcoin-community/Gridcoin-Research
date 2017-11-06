@@ -55,7 +55,6 @@ extern bool TallyResearchAverages_retired(bool Forcefully);
 extern bool TallyNetworkAverages_v9();
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
-int DetermineCPIDType(const std::string& cpid);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
@@ -7713,12 +7712,8 @@ void HarvestCPIDs(bool cleardata)
 
                         if (structcpid.Iscpidvalid)
                         {
-                                // Verify the CPID has magnitude > 0, otherwise set the user as an investor:
-                                int iCPIDType = DetermineCPIDType(structcpid.cpid);
-                                // -1 = Invalid CPID
-                                //  1 = Valid CPID with RAC
-                                //  2 = Investor or Pool Miner
-                                if (iCPIDType==1)
+                                // Verify the CPID is a valid researcher:
+                                if (IsResearcher(structcpid.cpid))
                                 {
                                     GlobalCPUMiningCPID.cpidhash = cpidhash;
                                     GlobalCPUMiningCPID.email = email;
