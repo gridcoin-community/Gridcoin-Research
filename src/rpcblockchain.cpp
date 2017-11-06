@@ -289,7 +289,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     uint256 blockhash = block.GetPoWHash();
     std::string sblockhash = blockhash.GetHex();
     bool IsPoR = false;
-    IsPoR = (bb.Magnitude > 0 && bb.cpid != "INVESTOR" && blockindex->IsProofOfStake());
+    IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
     std::string PoRNarr = "";
     if (IsPoR) PoRNarr = "proof-of-research";
     result.push_back(Pair("flags", 
@@ -949,7 +949,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
      LOCK(cs_main);
      {
             GetNextProject(false);
-            if (GlobalCPUMiningCPID.cpid=="INVESTOR")
+            if (!IsResearcher(GlobalCPUMiningCPID.cpid))
             {
                 sError = "INVESTORS_CANNOT_SEND_BEACONS";
                 return false;
@@ -2697,7 +2697,7 @@ Array MagnitudeReport(std::string cpid)
                                                 entry.push_back(Pair("Tx Count",(int)stCPID.Accuracy));
                             
                                                 results.push_back(entry);
-                                                if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+                                                if (cpid==msPrimaryCPID && IsResearcher(msPrimaryCPID))
                                                 {
                                                     msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
                                                         + ", Act PPD: " + RoundToString(structMag.payments/14,0) 
@@ -2783,7 +2783,7 @@ std::string TimestampToHRDate(double dtm)
 double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
 {
         StructCPID structMag = mvMagnitudes[sCPID];
-        if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR") 
+        if (structMag.initialized && IsResearcher(structMag.cpid))
         { 
             return structMag.Magnitude;
         }
@@ -2992,7 +2992,7 @@ std::string GetProvableVotingWeightXML()
 {
 	std::string sXML = "<PROVABLEMAGNITUDE>";
 	//Retrieve the historical magnitude
-	if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+    if (IsResearcher(msPrimaryCPID))
 	{
 		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
 		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
@@ -3174,7 +3174,7 @@ Array GetJsonUnspentReport()
     Array results;
 
 	//Retrieve the historical magnitude
-	if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+    if (IsResearcher(msPrimaryCPID))
 	{
 		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
 		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
@@ -3784,7 +3784,7 @@ Array MagnitudeReportCSV(bool detail)
                 StructCPID structMag = mvMagnitudes[(*ii).first];
                 if (structMag.initialized && structMag.cpid.length() > 2) 
                 { 
-                    if (structMag.cpid != "INVESTOR")
+                    if (IsResearcher(structMag.cpid))
                     {
                         outstanding = structMag.totalowed - structMag.payments;
                         
@@ -4199,7 +4199,7 @@ Value listitem(const Array& params, bool fHelp)
             if (structcpid.initialized) 
             { 
             
-                if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
+                if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
                 {
                     if (structcpid.verifiedteam=="gridcoin")
                     {
@@ -4245,7 +4245,7 @@ Value listitem(const Array& params, bool fHelp)
             
                 if ((GlobalCPUMiningCPID.cpid.length() > 3 && 
                     structcpid.cpid == GlobalCPUMiningCPID.cpid) 
-                    || structcpid.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid.length()==0)
+                    || !IsResearcher(structcpid.cpid) || !IsResearcher(GlobalCPUMiningCPID.cpid))
                 {
                     Object entry;
                     entry.push_back(Pair("Project",structcpid.projectname));
