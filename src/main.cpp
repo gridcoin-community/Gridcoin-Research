@@ -759,7 +759,7 @@ MiningCPID GetNextProject(bool bForce)
                                         GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                                         if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
                                         //Reserved for GRC Speech Synthesis
-                                        msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty() || msPrimaryCPID.empty()) ? _("Staking Interest") : _("Boinc Mining");
+                                        msMiningErrors = (msMiningCPID == "INVESTOR" || !IsResearcher(msPrimaryCPID) || msMiningCPID.empty()) ? _("Staking Interest") : _("Boinc Mining");
                                         GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
                                         GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
                                         return GlobalCPUMiningCPID;
@@ -775,7 +775,7 @@ MiningCPID GetNextProject(bool bForce)
         }
         }
 
-        msMiningErrors = (msPrimaryCPID == "INVESTOR") ? "" : _("All BOINC projects exhausted.");
+        msMiningErrors = (!IsResearcher(msPrimaryCPID)) ? "" : _("All BOINC projects exhausted.");
         msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
@@ -3020,7 +3020,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         if (bb.ResearchSubsidy > dMaxResearchAgeReward && IsResearchAgeEnabled(pindex->nHeight))
             return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeRewardWithoutFees, dMaxResearchAgeReward));
 
-        if (bb.cpid=="INVESTOR" && dStakeReward > 1)
+        if (!IsResearcher(bb.cpid) && dStakeReward > 1)
         {
             double OUT_POR = 0;
             double OUT_INTEREST_OWED = 0;
@@ -3095,7 +3095,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // ResearchAge 1: 
         GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
             pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-        if (bb.cpid != "INVESTOR" && dStakeReward > 1)
+        if (IsResearcher(bb.cpid) && dStakeReward > 1)
         {
             
                 //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
@@ -3147,7 +3147,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         //Approve first coinstake in DPOR block
-        if (bb.cpid != "INVESTOR" && IsLockTimeWithinMinutes(GetBlockTime(),15) && !IsResearchAgeEnabled(pindex->nHeight))
+        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(),15) && !IsResearchAgeEnabled(pindex->nHeight))
         {
                 if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
                 {
@@ -3279,7 +3279,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     //  End of Network Consensus
 
     // Gridcoin: Track payments to CPID, and last block paid
-    if (!bb.cpid.empty() && bb.cpid != "INVESTOR" && pindex->nHeight > nNewIndex2)
+    if (IsResearcher(bb.cpid) && pindex->nHeight > nNewIndex2)
     {
         StructCPID stCPID = GetInitializedStructCPID2(bb.cpid,mvResearchAge);
         stCPID.InterestSubsidy += bb.InterestSubsidy;
@@ -3867,7 +3867,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     if(nVersion<9)
     {
         //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-        if (bb.cpid != "INVESTOR" && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
+        if (IsResearcher(bb.cpid) && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
         {
             double blockVersion = BlockVersion(bb.clientversion);
             double cvn = ClientVersionNew();
@@ -3889,7 +3889,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         }
     }
 
-    if (bb.cpid != "INVESTOR" && height1 > nGrandfather && BlockNeedsChecked(nTime))
+    if (IsResearcher(bb.cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
     {
         if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))
             return DoS(1,error("CheckBlock::PoR Project Name invalid"));
@@ -4379,13 +4379,13 @@ void GridcoinServices()
     {
         try
         {
-            if (msNeuralResponse.length() < 25 && msPrimaryCPID != "INVESTOR" && !msPrimaryCPID.empty())
+            if (msNeuralResponse.length() < 25 && IsResearcher(msPrimaryCPID))
             {
                 AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                 if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
             }
-            // Run the RSA report for the overview page:
-            if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
+            // Run the RSA report for thhttps://www.canadianbitcoins.com/login.phpe overview page:
+            if (IsResearcher(msPrimaryCPID))
             {
                 if (fDebug3) printf("updating rsa\r\n");
                 MagnitudeReport(msPrimaryCPID);
@@ -5087,13 +5087,13 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     }
     else if (height >= cpidV2CutOverHeight && height <= cpidV3CutOverHeight)
     {
-        if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
+        if (!IsResearcher(mc.cpid)) return true;
         result = CPID_IsCPIDValid(mc.cpid, mc.cpidv2, (uint256)mc.lastblockhash);
     }
     else if (height >= cpidV3CutOverHeight)
     {
-        if (mc.cpid == "INVESTOR" || mc.cpid=="investor") return true;
         if (mc.cpid.empty()) return false;
+        if (!IsResearcher(mc.cpid)) return true;
         // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
         result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
     }
@@ -5122,7 +5122,7 @@ bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey)
                 printf("CPID length empty.");
                 return false;
             }
-            if (cpid=="INVESTOR") return true;
+            if (!IsResearcher(cpid)) return true;
             if (ENCboincpubkey == "" || ENCboincpubkey.length() < 5)
             {
                     if (fDebug10) printf("ENCBpk length empty.");
@@ -5311,7 +5311,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         {
 						    myCPID = pblockindex->GetCPID();
                         }
-                        if (cpid == myCPID && nCPIDTime==0 && myCPID != "INVESTOR")
+                        if (cpid == myCPID && nCPIDTime==0 && !IsResearcher(myCPID))
                         {
                             nCPIDTime = pblockindex->nTime;
                             nGRCTime = pblockindex->nTime;
@@ -5321,7 +5321,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     }
     int64_t EarliestStakedWalletTx = GetEarliestWalletTransaction();
     if (EarliestStakedWalletTx > 0 && EarliestStakedWalletTx < nGRCTime) nGRCTime = EarliestStakedWalletTx;
-	if (cpid=="INVESTOR" && EarliestStakedWalletTx > 0) nGRCTime = EarliestStakedWalletTx;
+    if (!IsResearcher(cpid) && EarliestStakedWalletTx > 0) nGRCTime = EarliestStakedWalletTx;
     if (fTestNet) nGRCTime -= (86400*30);
     if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
     if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
@@ -5350,7 +5350,7 @@ void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
 {
     //Eliminates issues with reorgs, disconnects, double counting, etc.. 
-    if (cpid.empty() || cpid=="INVESTOR")
+    if (!IsResearcher(cpid))
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
     
     if (fDebug10) printf("GetLifetimeCPID.BEGIN: %s %s",sCalledFrom.c_str(),cpid.c_str());
@@ -7260,7 +7260,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     if (mcpid.lastblockhash.empty()) mcpid.lastblockhash = "0";
     if (mcpid.LastPORBlockHash.empty()) mcpid.LastPORBlockHash="0";
 
-    if (!mcpid.cpid.empty() && mcpid.cpid != "INVESTOR" && mcpid.lastblockhash != "0")
+    if (IsResearcher(mcpid.cpid) && mcpid.lastblockhash != "0")
     {
         mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid, false);
     }
@@ -8504,7 +8504,7 @@ bool UnusualActivityReport()
                     {
                         std::string hb = block.vtx[0].hashBoinc;
                         MiningCPID bb = DeserializeBoincBlock(hb,block.nVersion);
-                        if (bb.cpid != "INVESTOR")
+                        if (IsResearcher(bb.cpid))
                         {
                                 printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0,
                                     bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy,(double)nStakeReward);
@@ -8651,7 +8651,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
 CBlockIndex* GetHistoricalMagnitude(std::string cpid)
 {
-    if (cpid=="INVESTOR") return pindexGenesisBlock;
+    if (!IsResearcher(cpid)) return pindexGenesisBlock;
 
     // Starting at the block prior to StartHeight, find the last instance of the CPID in the chain:
     // Limit lookback to 6 months
