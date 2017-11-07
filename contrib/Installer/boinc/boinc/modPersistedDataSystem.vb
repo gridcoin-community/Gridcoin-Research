@@ -413,8 +413,7 @@ Module modPersistedDataSystem
 
         End Try
     End Function
-    Public Sub SyncDPOR2()
-        If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
+    Public Sub SyncDPOR2(sData As String)
         If bMagsDoneLoading = False Then
             Log("Blocked call.")
             Exit Sub
@@ -423,6 +422,10 @@ Module modPersistedDataSystem
             Log("Neural network is disabled.")
             Exit Sub
         End If
+
+        msSyncData = sData
+        bMagsDoneLoading = False
+
         Dim t As New Threading.Thread(AddressOf CompleteSync)
         t.Priority = Threading.ThreadPriority.BelowNormal
         t.Start()
@@ -489,19 +492,12 @@ Module modPersistedDataSystem
         End Try
     End Function
     Public Sub CompleteSync()
-        If Math.Abs(DateDiff(DateInterval.Second, Now, mdLastSync)) > 60 * 10 Then bMagsDoneLoading = True
-        If bMagsDoneLoading = False Then Exit Sub
-
-
         mbForcefullySyncAllRac = True
         Log("Starting complete Neural Network Sync.")
 
         Try
-
             EnsureNNDirExists()
-
             msCurrentNeuralHash = ""
-            bMagsDoneLoading = False
 
             Try
                 mlPercentComplete = 1
@@ -525,12 +521,12 @@ Module modPersistedDataSystem
             Log("Completesync:" + ex.Message)
         End Try
 
-        bMagsDoneLoading = True
         mdLastSync = Now
         mlPercentComplete = 0
         '7-21-2015: Store historical magnitude so it can be charted
         StoreHistoricalMagnitude()
         bNeedsDgvRefreshed = True
+        bMagsDoneLoading = True
 
     End Sub
     Private Function GetMagByCPID(sCPID As String) As Row
