@@ -774,7 +774,7 @@ MiningCPID GetNextProject(bool bForce)
         }
         }
 
-        msMiningErrors = (!IsResearcher(msPrimaryCPID)) ? "" : _("All BOINC projects exhausted.");
+        msMiningErrors = (IsResearcher(msPrimaryCPID)) ? _("All BOINC projects exhausted.") : "";
         msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
@@ -4383,7 +4383,7 @@ void GridcoinServices()
                 AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                 if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
             }
-            // Run the RSA report for thhttps://www.canadianbitcoins.com/login.phpe overview page:
+            // Run the RSA report for the overview page:
             if (IsResearcher(msPrimaryCPID))
             {
                 if (fDebug3) printf("updating rsa\r\n");
@@ -5310,7 +5310,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         {
 						    myCPID = pblockindex->GetCPID();
                         }
-                        if (cpid == myCPID && nCPIDTime==0 && !IsResearcher(myCPID))
+                        if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
                         {
                             nCPIDTime = pblockindex->nTime;
                             nGRCTime = pblockindex->nTime;
