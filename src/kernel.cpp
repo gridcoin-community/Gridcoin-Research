@@ -12,7 +12,6 @@ bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
-extern int DetermineCPIDType(std::string cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
@@ -277,38 +276,13 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   a proof-of-work situation.
 //
 
-int DetermineCPIDType(std::string cpid)
-{
-    // -1 = Invalid CPID
-    //  1 = Valid CPID with RAC
-    //  2 = Investor or Pool Miner
-    printf("\r\nCPID Length %f\r\n",(double)cpid.length());
-
-    if (cpid.empty()) return -1;
-    if (cpid=="INVESTOR") return 2;
-    StructCPID h = mvMagnitudes[cpid];
-    if (h.Magnitude > 0) return 1;
-    // If magnitude is 0 in the current superblock, try to get magnitude from netsoft before failing
-    if (cpid.length()==32)
-    {
-        return 1;
-    }
-    else
-    {
-        // CPID is not 32 chars long- return Investor
-        return 2;
-    }
-}   
-
-
 double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
 {
     if (hashBoinc.length() > 1)
         {
             // block version not needed for now for mag
             MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,7);
-            if (boincblock.cpid == "" || boincblock.cpid.length() < 6) return 0;  //Block has no CPID
-            if (boincblock.cpid == "INVESTOR")  return 0;
+            if (!IsResearcher(boincblock.cpid)) return 0;
             if (boincblock.projectname == "")   return 0;
             if (boincblock.rac < 100)           return 0;
             if (!IsCPIDValidv2(boincblock,height)) return 0;
@@ -321,7 +295,7 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 {
     //Requires Magnitude > 0, be in superblock, with a lifetime cpid paid = 0
     //12-3-2015
-    if (cpid.empty() || cpid=="INVESTOR")
+    if (!IsResearcher(cpid))
         return 0;
 
     double dWeight = 0;
@@ -345,7 +319,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
 
 
     double weight = 0;
-    if (cpid=="" || cpid=="INVESTOR") return 5000;
+    if (!IsResearcher(cpid)) return 5000;
     if (mvMagnitudes.size() > 0)
     {
             StructCPID UntrustedHost = GetStructCPID();
@@ -367,7 +341,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
             }
             else
             {
-                if (cpid.length() > 5 && cpid != "INVESTOR")
+                if (IsResearcher(cpid))
                 {
                         weight = 25000;
                 }
@@ -375,7 +349,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
     }
     else
     {
-        if (cpid.length() > 5 && cpid != "INVESTOR")
+        if (IsResearcher(cpid))
         {
                 weight = 5000;
         }
@@ -403,7 +377,7 @@ double GetLastPaymentTimeByCPID(std::string cpid)
             }
             else
             {
-                if (cpid.length() > 5 && cpid != "INVESTOR")
+                if (IsResearcher(cpid))
                 {
                         lpt = 0;
                 }
@@ -411,7 +385,7 @@ double GetLastPaymentTimeByCPID(std::string cpid)
     }
     else
     {
-        if (cpid.length() > 5 && cpid != "INVESTOR")
+        if (IsResearcher(cpid))
         {
                 lpt=0;
         }
@@ -422,7 +396,7 @@ double GetLastPaymentTimeByCPID(std::string cpid)
 int64_t GetRSAWeightByBlock(MiningCPID boincblock)
 {
     int64_t rsa_weight = 0;
-    if (boincblock.cpid != "INVESTOR")
+    if (IsResearcher(boincblock.cpid))
     {
         rsa_weight = boincblock.RSAWeight + boincblock.Magnitude;
     }
@@ -448,7 +422,7 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed)
             }
             else
             {
-                if (cpid.length() > 5 && cpid != "INVESTOR")
+                if (IsResearcher(cpid))
                 {
                         out_owed = 0;
                 }
@@ -456,7 +430,7 @@ double GetUntrustedMagnitude(std::string cpid, double& out_owed)
     }
     else
     {
-        if (cpid.length() > 5 && cpid != "INVESTOR")
+        if (IsResearcher(cpid))
         {
                 out_owed = 0;
         }
@@ -511,7 +485,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
 
     double coin_age = std::abs((double)nTimeTx-(double)txPrev.nTime);
     double payment_age = std::abs((double)nTimeTx-(double)boincblock.LastPaymentTime);
-    if ((payment_age > 60*60) && boincblock.Magnitude > 1 && boincblock.cpid != "INVESTOR" && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT)
+    if ((payment_age > 60*60) && boincblock.Magnitude > 1 && IsResearcher(boincblock.cpid) && (coin_age > 4*60*60) && (coin_age > RSA_WEIGHT)
         && (RSA_WEIGHT/14 > MintLimiter(PORDiff,RSA_WEIGHT,boincblock.cpid,nTimeTx)) )
     {
         //Coins are older than RSA balance
@@ -536,7 +510,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
     uint64_t nStakeModifier = 0;
     int nStakeModifierHeight = 0;
     int64_t nStakeModifierTime = 0;
-    if (boincblock.cpid=="INVESTOR")
+    if (!IsResearcher(boincblock.cpid))
     {
         if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
         {
@@ -650,7 +624,7 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits,
     double BitsAge = PORDiff * 144;     //For every 100 Diff in Bits, two hours of coin age for researchers
     if (BitsAge > 86400) BitsAge=86400; //Limit to 24 hours (possibility of astronomical diff)
 
-    if (boincblock.cpid != "INVESTOR") {
+    if (IsResearcher(boincblock.cpid)) {
         if (checking_local && RSA_WEIGHT >= 24999 && boincblock.Magnitude > .25)
             msMiningErrors7="Newbie block being generated.";
         // Halford : Explain to the Researcher why they are not staking:

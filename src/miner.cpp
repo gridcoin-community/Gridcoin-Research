@@ -791,7 +791,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+="Net averages not yet loaded; ";
-        if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
+        if (LessVerbose(100) && IsResearcher(msPrimaryCPID)) printf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
 
