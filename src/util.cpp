@@ -1465,8 +1465,15 @@ std::string RoundToString(double d, int place)
 
 double RoundFromString(const std::string& s, int place)
 {
-    double num = boost::lexical_cast<double>(s);
-    return Round(num, place);
+    try
+    {
+        double num = boost::lexical_cast<double>(s);
+        return Round(num, place);
+    }
+    catch(const boost::bad_lexical_cast& e)
+    {
+        return 0;
+    }
 }
 
 bool Contains(const std::string& data, const std::string& instring)
