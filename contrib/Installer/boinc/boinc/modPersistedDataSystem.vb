@@ -1064,7 +1064,9 @@ Module modPersistedDataSystem
             Dim fi As FileInfo
             Dim sPrefix = GetEntryPrefix(DataRow)
             For Each fi In fiArr
-                If Left(fi.Name, Len(sPrefix)) = sPrefix Then
+                If Left(fi.Name, Len(sPrefix)) <> sPrefix Then Continue For
+
+                Try
                     Using Stream As New System.IO.FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
                         Dim objReader As New System.IO.StreamReader(Stream)
                         While objReader.EndOfStream = False
@@ -1088,7 +1090,10 @@ Module modPersistedDataSystem
                         End While
                         objReader.Close()
                     End Using
-                End If
+                Catch ex As IO.FileNotFoundException
+                    Log("GetList: Error reading " + fi.FullName)
+                End Try
+
             Next fi
         End SyncLock
         Return x
