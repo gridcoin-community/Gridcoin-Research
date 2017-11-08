@@ -55,7 +55,6 @@ extern Array SuperblockReport(std::string cpid);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
-double ExtractMagnitudeFromExplainMagnitude();
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool ComputeNeuralNetworkSupermajorityHashes();
@@ -3963,13 +3962,6 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
 	}
-    else if (sitem == "debugexplainmagnitude")
-    {
-        double dMag = ExtractMagnitudeFromExplainMagnitude();
-        Object entry;
-        entry.push_back(Pair("Mag",dMag));
-        results.push_back(entry);
-    }
     else if (sitem == "explainmagnitude")
     {        
         Object entry;
@@ -4260,7 +4252,6 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("list cpids", "Displays information on cpids and the projects they are associated with"));
         entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
         entry.push_back(Pair("list detailmagnitudecsv", "Records more detailed magnitude report into a csv file"));
-        entry.push_back(Pair("list debugexplainmagnitude", "Displays more in detail your explainmagnitude from NN"));
         entry.push_back(Pair("list explainmagnitude <true>", "Displays information about your magnitude from NN; Optional true to force response"));
         entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
         entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
