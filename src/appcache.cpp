@@ -1,9 +1,14 @@
 #include "appcache.h"
-
-// TODO: Remove this include when mvApplicationCache has moved to this file.
+#include "util.h"
 #include "main.h"
 
 #include <boost/algorithm/string.hpp>
+
+namespace
+{
+    std::map<std::string, std::string> mvApplicationCache;
+    std::map<std::string, int64_t> mvApplicationCacheTimestamp;
+}
 
 // Predicate
 AppCacheMatches::AppCacheMatches(const std::string& section)
@@ -51,6 +56,19 @@ std::string ReadCache(
                    : "";
 }
 
+int64_t ReadCacheTimestamp(
+        const std::string& section,
+        const std::string& key)
+{
+    if (section.empty() || key.empty())
+        return 0;
+
+    auto item = mvApplicationCacheTimestamp.find(section + ";" + key);
+    return item != mvApplicationCacheTimestamp.end()
+                   ? item->second
+                   : 0;
+}
+
 void ClearCache(const std::string& section)
 {
     for(const auto& item : AppCacheFilter(section))
@@ -65,4 +83,49 @@ void DeleteCache(const std::string& section, const std::string& key)
     const std::string entry = section + ";" + key;
     mvApplicationCache.erase(entry);
     mvApplicationCacheTimestamp.erase(entry);
+}
+
+std::string GetListOf(const std::string& section)
+{
+    return GetListOf(section, 0, 0);
+}
+
+std::string GetListOf(
+        const std::string& section,
+        int64_t minTime,
+        int64_t maxTime)
+{
+    std::string rows;
+    for(const auto& item : AppCacheFilter(section))
+    {
+        const std::string& key = item.first;
+        const std::string& value = item.second;
+        const std::string& subkey = key.substr(section.length()+1,key.length()-section.length()-1);
+
+        // Skip invalid beacons.
+        if (section == "beacon" && Contains(value, "INVESTOR"))
+            continue;
+
+        // Compare age restrictions if specified.
+        if(minTime || maxTime)
+        {
+            int64_t timestamp = ReadCacheTimestamp(section, subkey);
+            if((minTime && timestamp <= minTime) ||
+               (maxTime && timestamp >= maxTime))
+                continue;
+        }
+
+        std::string row = subkey + "<COL>" + value;
+        if (!row.empty())
+            rows += row + "<ROW>";
+    }
+
+    return rows;
+}
+
+size_t GetCountOf(const std::string& section)
+{
+    std::string data = GetListOf(section);
+    std::vector<std::string> vScratchPad = split(data.c_str(),"<ROW>");
+    return vScratchPad.size()+1;
 }

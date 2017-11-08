@@ -53,8 +53,21 @@ void WriteCache(
 //! \brief Read values from appcache section.
 //! \param section Cache section to read from.
 //! \param key Entry key to read.
+//! \returns Value for \p key in \p section if available, or an empty string
+//! if either the section or the key don't exist.
 //!
 std::string ReadCache(
+        const std::string& section,
+        const std::string& key);
+
+//!
+//! \brief Read values from appcache section.
+//! \param section Cache section to read from.
+//! \param key Entry key to read timestamp from.
+//! \returns Timestamp for \p key in \p section if available, or an 0
+//! if either the section or the key don't exist.
+//!
+int64_t ReadCacheTimestamp(
         const std::string& section,
         const std::string& key);
 
@@ -71,3 +84,41 @@ void ClearCache(const std::string& section);
 //! \param key Entry key to erase.
 //!
 void DeleteCache(const std::string& section, const std::string& key);
+
+//!
+//! \brief Get a list of section values.
+//! \param section Section to read.
+//!
+//! Reads \p section and concatenates the keys and values into a string:
+//!
+//! key<COL>value<ROW>
+//!
+//! \note If \p section is \a "beacon" then all non-valid CPID values are
+//! discarded.
+//!
+//! \return Formatted section values string.
+//! \todo Make this return std::vector<std::string> instead.
+//!
+std::string GetListOf(const std::string& section);
+
+//!
+//! \brief Get a list of section values with age restrictions.
+//! \copydoc GetListOf
+//! \param minTime Entry min timestamp. Set to 0 to disable limit.
+//! \param maxTime Entry max timestamp. Set to 0 to disable limit.
+//!
+std::string GetListOf(
+        const std::string& section,
+        int64_t minTime,
+        int64_t maxTime);
+
+//!
+//! \brief Count value entries in section.
+//!
+//! Performs a GetListOf() and counts the results.
+//!
+//! \param section Section to count.
+//! \return Number of values in \p section.
+//! \see GetListOf() for beacon restrictions.
+//!
+size_t GetCountOf(const std::string& section);

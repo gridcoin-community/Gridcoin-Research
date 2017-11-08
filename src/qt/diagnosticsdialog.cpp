@@ -1,7 +1,8 @@
-#include <fstream>
 #include "main.h"
 #include "util.h"
 #include "boinc.h"
+#include "appcache.h"
+
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -10,8 +11,8 @@
 #include "ui_diagnosticsdialog.h"
 
 #include <numeric>
+#include <fstream>
 
-std::string GetListOf(std::string datatype);
 double PreviousBlockAge();
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :

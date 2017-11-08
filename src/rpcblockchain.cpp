@@ -73,7 +73,6 @@ extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, s
 
 double Round(double d, int place);
 bool UnusualActivityReport();
-double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
@@ -114,9 +113,6 @@ extern Array GetJSONBeaconReport();
 
 
 void GatherNeuralHashes();
-extern std::string GetListOf(std::string datatype);
-extern std::string GetListOfWithConsensus(std::string datatype);
-
 void qtSyncWithDPORNodes(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
@@ -856,67 +852,6 @@ bool TallyMagnitudesInSuperblock()
 
 }
 
-double GetCountOf(std::string datatype)
-{
-    std::string data = GetListOf(datatype);
-    std::vector<std::string> vScratchPad = split(data.c_str(),"<ROW>");
-    return vScratchPad.size()+1;
-}
-
-// TODO: Make this return std::vector<std::string> instead.
-std::string GetListOf(std::string datatype)
-{
-    std::string rows;
-    for(const auto& item : AppCacheFilter(datatype))
-    {
-        const std::string& key_name = item.first;
-        const std::string& key_value = item.second;
-        const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-        std::string row = subkey + "<COL>" + key_value;
-
-        if (datatype=="beacon" && Contains(row,"INVESTOR"))
-            continue;
-
-        if (!row.empty())
-            rows += row + "<ROW>";
-    }
-
-    return rows;
-}
-
-std::string GetListOfWithConsensus(std::string datatype)
-{
-       std::string rows = "";
-       std::string row = "";
-	   int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-       int64_t nLookback = 30 * 6 * 86400;
-       int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-       printf(" getlistofwithconsensus startime %f , endtime %f, lookback %f \r\n ",(double)iStartTime,(double)iEndTime, (double)nLookback);
-	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-       {
-             std::string key_name  = (*ii).first;
-             if (key_name.length() > datatype.length())
-             {
-                 if (key_name.substr(0,datatype.length())==datatype)
-                 {
- 			           int64_t iBeaconTimestamp = mvApplicationCacheTimestamp[(*ii).first];
-				       if (iBeaconTimestamp > iStartTime && iBeaconTimestamp < iEndTime)
-					   {
-							std::string key_value = mvApplicationCache[(*ii).first];
-							std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-							row = subkey + "<COL>" + key_value;
-							if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
-							if (row != "")
-							{
-								rows += row + "<ROW>";
-							}
-						}
-                  }
-             }
-       }
-       return rows;
-}
-
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
             std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
@@ -1527,8 +1462,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "syncdpor2")
     {
         std::string sOut = "";
-        double dBC = GetCountOf("beacon");
-        bool bFull = dBC < 50 ? true : false;
+        bool bFull = GetCountOf("beacon") < 50 ? true : false;
         LoadAdminMessages(bFull,sOut);
         FullSyncWithDPORNodes();
         entry.push_back(Pair("Syncing",1));
@@ -1586,12 +1520,12 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "superblockage")
     {
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-        entry.push_back(Pair("Superblock Age",superblock_age));
-        std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-        entry.push_back(Pair("Superblock Timestamp",timestamp));
-        entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
-        entry.push_back(Pair("Pending Superblock Height",ReadCache("neuralsecurity","pending")));
+        int64_t superblock_time = ReadCacheTimestamp("superblock", "magnitudes");
+        int64_t superblock_age = GetAdjustedTime() - superblock_time;
+        entry.push_back(Pair("Superblock Age", superblock_age));
+        entry.push_back(Pair("Superblock Timestamp", TimestampToHRDate(superblock_time)));
+        entry.push_back(Pair("Superblock Block Number", ReadCache("superblock", "block_number")));
+        entry.push_back(Pair("Pending Superblock Height", ReadCache("neuralsecurity","pending")));
         results.push_back(entry);
     }
     else if (sItem == "unusual")
@@ -1764,10 +1698,8 @@ Value execute(const Array& params, bool fHelp)
                                 std::string cpid1 = GlobalCPUMiningCPID.cpid;
                                 std::string GRCAddress1 = DefaultWalletAddress();
                                 GetEarliestStakeTime(GRCAddress1,cpid1);
-                                int64_t nGRCTime = mvApplicationCacheTimestamp["nGRCTime"];
-                                int64_t nCPIDTime = mvApplicationCacheTimestamp["nCPIDTime"];
-                                double cpid_age = GetAdjustedTime() - nCPIDTime;
-                                double stake_age = GetAdjustedTime() - nGRCTime;
+                                double cpid_age = GetAdjustedTime() - ReadCacheTimestamp("global", "nCPIDTime");
+                                double stake_age = GetAdjustedTime() - ReadCacheTimestamp("global", "nGRCTime");
 
                                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
 
@@ -1985,8 +1917,8 @@ Value execute(const Array& params, bool fHelp)
             std::string cpid = GlobalCPUMiningCPID.cpid;
             std::string GRCAddress = DefaultWalletAddress();
             GetEarliestStakeTime(GRCAddress,cpid);
-            entry.push_back(Pair("GRCTime",mvApplicationCacheTimestamp["nGRCTime"]));
-            entry.push_back(Pair("CPIDTime",mvApplicationCacheTimestamp["nCPIDTime"]));
+            entry.push_back(Pair("GRCTime", ReadCacheTimestamp("global", "nGRCTime")));
+            entry.push_back(Pair("CPIDTime",ReadCacheTimestamp("global", "nCPIDTime")));
             results.push_back(entry);
     }
     else if (sItem=="testnewcontract")
@@ -2200,7 +2132,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("average_magnitude",out_avg));
         entry.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+        int64_t superblock_age = GetAdjustedTime() - ReadCacheTimestamp("superblock", "magnitudes");
         entry.push_back(Pair("Superblock Age",superblock_age));
         bool bDireNeed = NeedASuperblock();
         entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
@@ -2240,9 +2172,8 @@ Value execute(const Array& params, bool fHelp)
         else
         {
             std::string sType = params[1].get_str();
-            entry.push_back(Pair("Key Type",sType));
-            std::string data = GetListOf(sType);
-            entry.push_back(Pair("Data",data));
+            entry.push_back(Pair("Key Type", sType));
+            entry.push_back(Pair("Data", GetListOf(sType)));
             results.push_back(entry);
         }
 
@@ -3579,7 +3510,7 @@ Array GetJSONNeuralNetworkReport()
       {
           entry.push_back(Pair("Pending",SuperblockHeight));
       }
-      int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+      int64_t superblock_age = GetAdjustedTime() - ReadCacheTimestamp("superblock", "magnitudes");
 
       entry.push_back(Pair("Superblock Age",superblock_age));
       if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
@@ -3632,7 +3563,7 @@ Array GetJSONCurrentNeuralNetworkReport()
       {
           entry.push_back(Pair("Pending",SuperblockHeight));
       }
-      int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+      int64_t superblock_age = GetAdjustedTime() - ReadCacheTimestamp("superblock", "magnitudes");
 
       entry.push_back(Pair("Superblock Age",superblock_age));
       if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
