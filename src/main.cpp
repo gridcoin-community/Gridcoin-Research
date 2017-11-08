@@ -6035,52 +6035,20 @@ double ExtractMagnitudeFromExplainMagnitude()
 
 bool VerifyExplainMagnitudeResponse()
 {
-        if (msNeuralResponse.empty()) return false;
-        try
-        {
-            double dMag = ExtractMagnitudeFromExplainMagnitude();
-            if (dMag==0)
-            {
-                    WriteCache("maginvalid","invalid",RoundToString(RoundFromString("0"+ReadCache("maginvalid","invalid"),0),0),GetAdjustedTime());
-                    double failures = RoundFromString("0"+ReadCache("maginvalid","invalid"),0);
-                    if (failures < 10)
-                    {
-                        msNeuralResponse = "";
-                    }
-            }
-            else
-            {
-                return true;
-            }
-        }
-        catch(...)
-        {
-            return false;
-        }
+    if (msNeuralResponse.empty())
         return false;
-}
 
+    double dMag = ExtractMagnitudeFromExplainMagnitude();
+    if (dMag == 0)
+        msNeuralResponse.clear();
+
+    return dMag != 0;
+}
 
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
     if (pfrom->nStartingHeight > (nBestHeight*.5) && acid_test) return true;
     return false;
-}
-
-
-bool PreventCommandAbuse(std::string sNeuralRequestID, std::string sCommandName)
-{
-                bool bIgnore = false;
-                if (RoundFromString("0"+ReadCache(sCommandName,sNeuralRequestID),0) > 10)
-                {
-                    if (fDebug10) printf("Ignoring %s request for %s",sCommandName.c_str(),sNeuralRequestID.c_str());
-                    bIgnore = true;
-                }
-                if (!bIgnore)
-                {
-                    WriteCache(sCommandName,sNeuralRequestID,RoundToString(RoundFromString("0"+ReadCache(sCommandName,sNeuralRequestID),0),0),GetAdjustedTime());
-                }
-                return bIgnore;
 }
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
@@ -6772,69 +6740,32 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "neural")
     {
-        //printf("Received Neural Request \r\n");
-
         std::string neural_request = "";
         std::string neural_request_id = "";
         vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-        //printf("neural request %s \r\n",neural_request.c_str());
         std::string neural_response = "generic_response";
 
         if (neural_request=="neural_data")
         {
-            if (!PreventCommandAbuse("neural_data",NodeAddress(pfrom)))
-            {
-                // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
-                bool bIgnore = false;
-                if (RoundFromString("0"+ReadCache("explainmag",neural_request_id),0) > 10)
-                {
-                    if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
-                    pfrom->Misbehaving(1);
-                    bIgnore = true;
-                }
-                if (!bIgnore)
-                {
-                    WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
-                    // 7/11/2015 - Allow linux/mac to make neural requests
-                    neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-                    pfrom->PushMessage("expmag_nresp", neural_response);
-                }
-		//std::string contract = "";
-                //NN::SetTestnetFlag(fTestNet);
-                //pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
-            }
+            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+            pfrom->PushMessage("expmag_nresp", neural_response);
         }
         else if (neural_request=="neural_hash")
         {
-            //printf("Neural response %s",neural_response.c_str());
             pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
         }
         else if (neural_request=="explainmag")
         {
-            // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
-            bool bIgnore = false;
-            if (RoundFromString("0"+ReadCache("explainmag",neural_request_id),0) > 10)
-            {
-                if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
-                pfrom->Misbehaving(1);
-                bIgnore = true;
-            }
-            if (!bIgnore)
-            {
-                WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
-                // 7/11/2015 - Allow linux/mac to make neural requests
-                neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-                pfrom->PushMessage("expmag_nresp", neural_response);
+            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+            pfrom->PushMessage("expmag_nresp", neural_response);   pfrom->PushMessage("expmag_nresp", neural_response);
             }
         }
         else if (neural_request=="quorum")
         {
-            // 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
+            // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             std::string contract = "";
             NN::SetTestnetFlag(fTestNet);
-            pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
-        }
-        else
+            pe
         {
             neural_response="generic_response";
         }
