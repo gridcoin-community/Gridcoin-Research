@@ -2648,7 +2648,6 @@ Array MagnitudeReport(std::string cpid)
            results.push_back(c);
            double total_owed = 0;
            double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
-           msRSAOverview = "";
            if (!pindexBest) return results;
             
            try
@@ -2697,13 +2696,6 @@ Array MagnitudeReport(std::string cpid)
                                                 entry.push_back(Pair("Tx Count",(int)stCPID.Accuracy));
                             
                                                 results.push_back(entry);
-                                                if (cpid==msPrimaryCPID && IsResearcher(msPrimaryCPID))
-                                                {
-                                                    msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
-                                                        + ", Act PPD: " + RoundToString(structMag.payments/14,0) 
-                                                        + ", Fulf %: " + RoundToString(fulfilled,2) 
-                                                        + ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
-                                                }
                                             }
                                             else
                                             {

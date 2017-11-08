@@ -305,7 +305,6 @@ std::string    msMiningErrors8;
 std::string    msAttachmentGuid;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
-std::string    msRSAOverview;
 std::string    msNeuralResponse;
 std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
@@ -520,7 +519,6 @@ void GetGlobalStatus()
         GlobalStatusStruct.status = msMiningErrors;
         GlobalStatusStruct.poll = msPoll;
         GlobalStatusStruct.errors =  MinerStatus.ReasonNotStaking + MinerStatus.Message + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
-        GlobalStatusStruct.rsaOverview =  msRSAOverview; // not displayed on overview page anymore.
         }
         return;
     }
@@ -4382,13 +4380,6 @@ void GridcoinServices()
             {
                 AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                 if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
-            }
-            // Run the RSA report for the overview page:
-            if (IsResearcher(msPrimaryCPID))
-            {
-                if (fDebug3) printf("updating rsa\r\n");
-                MagnitudeReport(msPrimaryCPID);
-                if (fDebug3) printf("updated rsa\r\n");
             }
             if (fDebug3) printf("\r\n MR Complete \r\n");
         }
