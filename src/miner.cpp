@@ -10,6 +10,7 @@
 #include "cpid.h"
 #include "util.h"
 #include "main.h"
+#include "appcache.h"
 #include "neuralnet.h"
 
 #include <memory>

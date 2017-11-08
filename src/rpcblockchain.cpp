@@ -62,7 +62,6 @@ bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
-void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 int64_t GetEarliestWalletTransaction();
 extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
@@ -124,7 +123,6 @@ extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
 
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
-std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);

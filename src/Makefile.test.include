@@ -18,6 +18,7 @@ JSON_TEST_FILES = \
 
 # test_n binary #
 GRIDCOIN_TESTS =\
+  test/appcache_tests.cpp \
   test/Checkpoints_tests.cpp \
   test/DoS_tests.cpp \
   test/accounting_tests.cpp \

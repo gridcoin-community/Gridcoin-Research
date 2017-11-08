@@ -6,8 +6,8 @@
 #include <boost/algorithm/string.hpp>
 
 // Predicate
-AppCacheMatches::AppCacheMatches(const std::string& needle)
-    : needle(needle)
+AppCacheMatches::AppCacheMatches(const std::string& section)
+    : needle(section + ";")
 {}
 
 bool AppCacheMatches::operator()(const AppCache::value_type& t)
@@ -24,3 +24,45 @@ boost::iterator_range<filter_iterator> AppCacheFilter(const std::string& needle)
     return boost::make_iterator_range(begin, end);
 }
 
+void WriteCache(
+        const std::string& section,
+        const std::string& key,
+        const std::string& value,
+        int64_t locktime)
+{
+    if (section.empty() || key.empty())
+        return;
+
+    const std::string entry = section + ";" + key;
+    mvApplicationCache[entry] = value;
+    mvApplicationCacheTimestamp[entry] = locktime;
+}
+
+std::string ReadCache(
+        const std::string& section,
+        const std::string& key)
+{
+    if (section.empty() || key.empty())
+        return "";
+
+    auto item = mvApplicationCache.find(section + ";" + key);
+    return item != mvApplicationCache.end()
+                   ? item->second
+                   : "";
+}
+
+void ClearCache(const std::string& section)
+{
+    for(const auto& item : AppCacheFilter(section))
+    {
+        mvApplicationCache[item.first].clear();
+        mvApplicationCacheTimestamp[item.first] = 1;
+    }
+}
+
+void DeleteCache(const std::string& section, const std::string& key)
+{
+    const std::string entry = section + ";" + key;
+    mvApplicationCache.erase(entry);
+    mvApplicationCacheTimestamp.erase(entry);
+}
