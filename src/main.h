@@ -206,7 +206,6 @@ extern std::string  msAttachmentGuid;
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
 extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
@@ -227,7 +226,6 @@ struct globalStatusType
     std::string status;
     std::string poll;
     std::string errors;
-    std::string rsaOverview;
 };
 
 extern globalStatusType GlobalStatusStruct;
