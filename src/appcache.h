@@ -2,40 +2,25 @@
 
 #include <string>
 #include <map>
-#include <boost/iterator/filter_iterator.hpp>
-#include <boost/range.hpp>
+
+//!
+//! \brief An entry in the application cache.
+//!
+struct AppCacheEntry
+{
+    std::string value; //!< Value of entry.
+    int64_t timestamp; //!< Timestamp of entry.
+};
+
+//!
+//! \brief Application cache section type.
+//! 
+typedef std::map<std::string, AppCacheEntry> AppCacheSection;
 
 //!
 //! \brief Application cache type.
 //!
-typedef std::map<std::string, std::string> AppCache;
-
-// Predicate
-struct AppCacheMatches
-{
-    AppCacheMatches(const std::string& section);
-    bool operator()(const AppCache::value_type& t);
-    std::string needle;
-};
-
-typedef boost::filter_iterator<AppCacheMatches, AppCache::iterator> filter_iterator;
-
-//!
-//! \brief Application cache data key iterator.
-//! \param section Section to iterate over.
-//!
-//! An iterator like class which can be used to iterate through the application
-//! in ranged based for loops based on keys. For example, to iterate through
-//! all the cached polls:
-//!
-//! \code
-//! for(const auto& item : AppCacheFilter("poll")
-//! {
-//!    const std::string& poll_name = item.second;
-//! }
-//! \endcode
-//!
-boost::iterator_range<filter_iterator> AppCacheFilter(const std::string& section);
+typedef std::map<std::string, AppCacheSection> AppCache;
 
 //!
 //! \brief Write value into application cache.
@@ -56,20 +41,16 @@ void WriteCache(
 //! \returns Value for \p key in \p section if available, or an empty string
 //! if either the section or the key don't exist.
 //!
-std::string ReadCache(
+AppCacheEntry ReadCache(
         const std::string& section,
         const std::string& key);
 
 //!
-//! \brief Read values from appcache section.
-//! \param section Cache section to read from.
-//! \param key Entry key to read timestamp from.
-//! \returns Timestamp for \p key in \p section if available, or an 0
-//! if either the section or the key don't exist.
+//! \brief Read section from cache.
+//! \param section Section to read.
+//! \returns The data for \p section if available.
 //!
-int64_t ReadCacheTimestamp(
-        const std::string& section,
-        const std::string& key);
+AppCacheSection ReadCacheSection(const std::string& section);
 
 //!
 //! \brief Clear all values in a cache section.

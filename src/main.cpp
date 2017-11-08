@@ -111,7 +111,7 @@ extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
-extern std::string ToOfficialNameNew(std::string proj);
+extern std::string ToOfficialName(std::string proj);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;
@@ -256,7 +256,6 @@ double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
 extern std::string getfilecontents(std::string filename);
-extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
@@ -343,14 +342,14 @@ bool TimerMain(std::string timer_name, int max_ms)
 bool UpdateNeuralNetworkQuorumData()
 {
     if (!bGlobalcomInitialized) return false;
-    int64_t superblock_time = ReadCacheTimestamp("superblock", "magnitudes");
+    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     std::string myNeuralHash = "";
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number");
-    std::string sTimestamp = TimestampToHRDate(superlock_time);
+    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
     std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
@@ -366,12 +365,12 @@ bool PushGridcoinDiagnostics()
     LoadAdminMessages(false,errors1);
     std::string cpiddata = GetListOf("beacon");
     std::string sWhitelist = GetListOf("project");
-    int64_t superblock_time = ReadCacheTimestamp("superblock", "magnitudes");
+    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number");
+    std::string sBlock = ReadCache("superblock", "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     printf("Pushing diagnostic data...");
     double lastblockage = PreviousBlockAge();
@@ -379,9 +378,8 @@ bool PushGridcoinDiagnostics()
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-    double dResponse = Restarter::PushGridcoinDiagnosticData(data);
+    NN::SetTestnetFlag(fTestNet);
+    Restarter::PushGridcoinDiagnosticData(data);
     return true;
 }
 
@@ -402,16 +400,20 @@ bool FullSyncWithDPORNodes()
     }
     std::string errors1;
     LoadAdminMessages(false,errors1);
-    std::string cpiddata = GetListOfWithConsensus("beacon");
+
+    const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+    const int64_t nLookback = 30 * 6 * 86400;
+    const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
+    std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
     std::string sWhitelist = GetListOf("project");
-    int64_t superblock_time = ReadCacheTimestamp("superblock", "magnitudes");
+    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     printf(" list of cpids %s \r\n",cpiddata.c_str());
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number");
-    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
         + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
         + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
@@ -4170,7 +4172,7 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 bool NeedASuperblock()
 {
     bool bDireNeedOfSuperblock = false;
-    std::string superblock = ReadCache("superblock","all");
+    std::string superblock = ReadCache("superblock","all").value;
     if (superblock.length() > 20 && !OutOfSyncByAge())
     {
         if (!VerifySuperblock(superblock, pindexBest))
@@ -4183,7 +4185,7 @@ bool NeedASuperblock()
          */
     }
 
-    int64_t superblock_age = GetAdjustedTime() - ReadCacheTimestamp("superblock", "magnitudes");
+    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
         bDireNeedOfSuperblock = true;
 
@@ -4245,7 +4247,7 @@ void GridcoinServices()
     }
     else
     {
-        int64_t superblock_age = GetAdjustedTime() - ReadCacheTimestamp("superblock", "magnitudes");
+        int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
         bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
         if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
@@ -5202,15 +5204,11 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         return true;
     }
 
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
-		 mvApplicationCacheTimestamp["nCPIDTime"] > 0))  return true;
-    int64_t nGRCTime = ReadCacheTimestamp("global", "nGRCTime");
-    int64_t nCPIDTime = ReadCacheTimestamp("global", "nCPIDTime");
+    int64_t nGRCTime = ReadCache("global", "nGRCTime").timestamp;
+    int64_t nCPIDTime = ReadCache("global", "nCPIDTime").timestamp;
     if (IsLockTimeWithinMinutes(nLastGRCtallied,100) &&
         (nGRCTime > 0 || nCPIDTime > 0))
         return true;
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
-         mvApplicationCacheTimestamp["nCPIDTime"] > 0))  return true;
 
     nLastGRCtallied = GetAdjustedTime();
     CBlock block;
@@ -6758,16 +6756,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
             pfrom->PushMessage("expmag_nresp", neural_response);   pfrom->PushMessage("expmag_nresp", neural_response);
-            }
         }
         else if (neural_request=="quorum")
         {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             std::string contract = "";
             NN::SetTestnetFlag(fTestNet);
-            pe
-        {
-            neural_response="generic_response";
+            pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
         }
     }
     else if (strCommand == "ping")
@@ -7292,43 +7287,16 @@ bool ProjectIsValid(std::string sProject)
 
     boost::to_lower(sProject);
 
-    for (const auto& item : AppCacheFilter("project"))
+    for (const auto& item : ReadCacheSection("project"))
     {
-        std::string sProjectKey = item.first;
-        std::vector<std::string> vProjectKey = split(sProjectKey, ";");
-        std::string sProjectName = ToOfficialName(vProjectKey[1]);
+        const AppCacheEntry& entry = item.second;
+        std::string sProjectName = ToOfficialName(entry.value);
 
         if (sProjectName == sProject)
             return true;
     }
 
     return false;
-}
-
-std::string ToOfficialName(std::string proj)
-{
-
-            return ToOfficialNameNew(proj);
-
-            /*
-            boost::to_lower(proj);
-            //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-            if (proj=="boincsimap")             proj = "simap";
-            if (proj=="pogs")                   proj = "theskynet pogs";
-            if (proj=="convector.fsv.cvut.cz")  proj = "convector";
-            if (proj=="distributeddatamining")  proj = "distributed data mining";
-            if (proj=="distrrtgen")             proj = "distributed rainbow table generator";
-            if (proj=="eon2")                   proj = "eon";
-            if (proj=="test4theory@home")       proj = "test4theory";
-            if (proj=="lhc@home")               proj = "lhc@home 1.0";
-            if (proj=="mindmodeling@beta")      proj = "mindmodeling@beta";
-            if (proj=="volpex@uh")              proj = "volpex";
-            if (proj=="oproject")               proj = "oproject@home";
-            if (proj=="universe@home test")     proj = "universe@home";
-            if (proj=="find@home")              proj = "fightmalaria";
-            if (proj=="virtuallhc@home")        proj = "vLHCathome";
-            return proj;
-            */
 }
 
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
@@ -7348,25 +7316,22 @@ std::string LowerUnderscore(std::string data)
     return data;
 }
 
-std::string ToOfficialNameNew(std::string proj)
+std::string ToOfficialName(std::string proj)
 {
     proj = LowerUnderscore(proj);
     //Convert local XML project name [On the Left] to official [Netsoft] projectname:
     std::string sType = "projectmapping";
-    for(const auto& item : AppCacheFilter(sType))
+    for(const auto& item : ReadCacheSection("projectmapping"))
     {
-        const std::string& key_name  = item.first;
-        const std::string& key_value = item.second;
-        std::vector<std::string> vKey = split(key_name,";");
-        if (vKey.size() > 0)
-        {
-            std::string project_boinc   = vKey[1];
-            std::string project_netsoft = key_value;
-            proj=LowerUnderscore(proj);
-            project_boinc=LowerUnderscore(project_boinc);
-            project_netsoft=LowerUnderscore(project_netsoft);
-            if (proj==project_boinc) proj=project_netsoft;
-        }
+        const std::string& key = item.first;
+        const AppCacheEntry& entry = item.second;
+
+        std::string project_boinc   = key;
+        std::string project_netsoft = entry.value;
+        proj=LowerUnderscore(proj);
+        project_boinc=LowerUnderscore(project_boinc);
+        project_netsoft=LowerUnderscore(project_netsoft);
+        if (proj==project_boinc) proj=project_netsoft;
     }
 
     return proj;
@@ -7701,22 +7666,6 @@ MiningCPID GetMiningCPID()
     return mc;
 }
 
-
-void TrackRequests(CNode* pfrom,std::string sRequestType)
-{
-        std::string sKey = "request_type" + sRequestType;
-        double dReqCt = RoundFromString(ReadCache(sKey,NodeAddress(pfrom)),0) + 1;
-        WriteCache(sKey,NodeAddress(pfrom),RoundToString(dReqCt,0),GetAdjustedTime());
-        if ( (dReqCt > 20 && !OutOfSyncByAge()) )
-        {
-                    printf(" Node requests for %s exceeded threshold (misbehaving) %s ",sRequestType.c_str(),NodeAddress(pfrom).c_str());
-                    //pfrom->Misbehaving(1);
-                    pfrom->fDisconnect = true;
-                    WriteCache(sKey,NodeAddress(pfrom),"0",GetAdjustedTime());
-        }
-}
-
-
 bool SendMessages(CNode* pto, bool fSendTrickle)
 {
     // Treat lock failures as send successes in case the caller disconnects
@@ -7917,7 +7866,7 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
             temp_hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
     }
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("currentneuralsecurity",GRCAddress);
+    std::string Security = ReadCache("currentneuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
@@ -7969,7 +7918,7 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
             temp_hashcount = mvNeuralNetworkHash[NeuralHash];
     }
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("neuralsecurity",GRCAddress);
+    std::string Security = ReadCache("neuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
