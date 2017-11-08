@@ -253,7 +253,6 @@ bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 
-extern void WriteAppCache(std::string key, std::string value);
 extern void LoadCPIDsInBackground();
 
 extern void ThreadCPIDs();
@@ -321,8 +320,6 @@ std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats 
 std::map<std::string, StructCPID> mvNetwork;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvCreditNodeCPID;        // Contains verified CPID Magnitudes;
-std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
-std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 
@@ -520,24 +517,6 @@ bool Timer_Main(std::string timer_name, int max_ms)
     }
     return false;
 }
-
-
-
-void WriteAppCache(std::string key, std::string value)
-{
-    StructCPIDCache setting = mvAppCache["cache"+key];
-    if (!setting.initialized)
-    {
-        setting.initialized=true;
-        setting.xml = "";
-        mvAppCache.insert(map<string,StructCPIDCache>::value_type("cache"+key,setting));
-        mvAppCache["cache"+key]=setting;
-    }
-    setting.xml = value;
-    mvAppCache["cache"+key]=setting;
-}
-
-
 
 void RegisterWallet(CWallet* pwalletIn)
 {
@@ -7546,7 +7525,6 @@ void HarvestCPIDs(bool cleardata)
     if (cleardata)
     {
         mvCPIDs.clear();
-        mvCPIDCache.clear();
     }
     std::string email = GetArgument("email","");
     boost::to_lower(email);

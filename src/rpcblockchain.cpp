@@ -1305,7 +1305,6 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="proveownership")
     {
-        mvCPIDCache.clear();
         HarvestCPIDs(true);
         GetNextProject(true);
         std::string email = GetArgument("email", "NA");
@@ -2342,7 +2341,6 @@ Value execute(const Array& params, bool fHelp)
     {
             //Reload the config file
             ReadConfigFile(mapArgs, mapMultiArgs);
-            mvCPIDCache.clear();
             HarvestCPIDs(true);
             GetNextProject(true);
             entry.push_back(Pair("Reset",1));
