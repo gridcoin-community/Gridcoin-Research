@@ -111,6 +111,7 @@ extern bool fTestNet;
 extern bool fNoListen;
 extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
+extern bool fDevbuildCripple;
 
 void RandAddSeed();
 void RandAddSeedPerfmon();

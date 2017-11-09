@@ -84,6 +84,7 @@ CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
 std::string GetNeuralVersion();
 
+bool fDevbuildCripple;
 
 int64_t IsNeural();
 
