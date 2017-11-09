@@ -150,6 +150,7 @@ int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
 int64_t nLastLoadAdminMessages = 0;
+int64_t nLastTalliedNeural = 0;
 int64_t nCPIDsLoaded = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
@@ -5444,7 +5445,12 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
 
 bool ComputeNeuralNetworkSupermajorityHashes()
 {
-    if (nBestHeight < 15)  return true;
+    if (nBestHeight < 15 ||
+        IsLockTimeWithinMinutes(nLastTalliedNeural,5))
+	    return true;
+
+    nLastTalliedNeural = GetAdjustedTime();
+
     //Clear the neural network hash buffer
     if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
     if (mvNeuralVersion.size() > 0)  mvNeuralVersion.clear();
