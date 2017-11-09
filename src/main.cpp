@@ -3194,7 +3194,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if (IsLockTimeWithinMinutes(GetBlockTime(),15)  && !fColdBoot)
+            if ((IsLockTimeWithinMinutes(GetBlockTime(),15) || nVersion>=9) && !fColdBoot)
             {
                 // Let this take effect together with stakev8
                 if (nVersion>=8)
@@ -4272,11 +4272,15 @@ void GridcoinServices()
     if(IsV9Enabled_Tally(nBestHeight))
     {
         // Update quorum data.
-        if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
+        if ((nBestHeight % 3) == 0)
         {
-            if (fDebug) printf("SVC: Updating Neural Quorum (v9 %%3) height %d\n",nBestHeight);
             if (fDebug) printf("SVC: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
             ComputeNeuralNetworkSupermajorityHashes();
+        }
+        // Update quorum data.
+        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
+        {
+            if (fDebug) printf("SVC: Updating Neural Quorum (v9 M) height %d\n",nBestHeight);
             UpdateNeuralNetworkQuorumData();
         }
 
@@ -4297,12 +4301,15 @@ void GridcoinServices()
 
         if (bNeedSuperblock)
         {
+            if ((nBestHeight % 3) == 0)
+            {
+                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 A) height %d\n",nBestHeight);
+                ComputeNeuralNetworkSupermajorityHashes();
+            }
             if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
             {
                 if (fDebug) printf("SVC: Updating Neural Quorum (v3 A) height %d\n",nBestHeight);
-                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 A) height %d\n",nBestHeight);
                 if (fDebug10) printf("#CNNSH# ");
-                ComputeNeuralNetworkSupermajorityHashes();
                 UpdateNeuralNetworkQuorumData();
             }
             if ((nBestHeight % 20) == 0)
@@ -4323,12 +4330,15 @@ void GridcoinServices()
                 bDoTally_retired = true;
             }
 
+            if ((nBestHeight % 5)==0)
+            {
+                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
+                UpdateNeuralNetworkQuorumData();
+            }
             if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
             {
                 if (fDebug) printf("SVC: Updating Neural Quorum (v3 E) height %d\n",nBestHeight);
-                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
                 if (fDebug3) printf("CNNSH2 ");
-                ComputeNeuralNetworkSupermajorityHashes();
                 UpdateNeuralNetworkQuorumData();
             }
         }
