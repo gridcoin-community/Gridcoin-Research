@@ -38,7 +38,7 @@ static int cancelDownloader(void *p,
 
 std::string geturl()
 {
-    std::string url = "http://download.gridcoin.us/download/signed/";
+    std::string url = "https://download.gridcoin.us/download/downloadstake/signed/";
     // this will later be OS-dependent
     return url;
 }

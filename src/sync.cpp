@@ -41,7 +41,7 @@ struct CLockLocation {
 
     std::string ToString() const
     {
-        return mutexName + "  " + sourceFile + ":" + ToString(sourceLine) + (fTry ? " (TRY)" : "");
+        return mutexName + "  " + sourceFile + ":" + ::ToString(sourceLine) + (fTry ? " (TRY)" : "");
     }
 
     bool fTry;
@@ -82,7 +82,7 @@ static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch,
         if (i.first == mismatch.second) {
             printf(" (2)");
         }
-        printf(" %s\n", i.second.ToString());
+        printf(" %s\n", i.second.ToString().c_str());
     }
     printf("Current lock order is:\n");
     for (const std::pair<void*, CLockLocation> & i : s1) {
@@ -92,7 +92,7 @@ static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch,
         if (i.first == mismatch.second) {
             printf(" (2)");
         }
-        printf(" %s\n", i.second.ToString());
+        printf(" %s\n", i.second.ToString().c_str());
     }
     assert(false);
 }

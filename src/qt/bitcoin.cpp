@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
     int currentExitCode = 0;
 
-    boost::shared_ptr<ThreadHandler> threads(new ThreadHandler);
+    std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
@@ -335,6 +335,7 @@ int main(int argc, char *argv[])
     }
 
     // delete thread handler
+    threads->interruptAll();
     threads->removeAll();
     threads.reset();
 

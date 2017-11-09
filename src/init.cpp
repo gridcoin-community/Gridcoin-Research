@@ -24,12 +24,12 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 
 StructCPID GetStructCPID();
 bool ComputeNeuralNetworkSupermajorityHashes();
-void BusyWaitForTally();
+void BusyWaitForTally_retired();
+void TallyNetworkAverages_v9();
+extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
-
-std::string ToOfficialName(std::string proj);
 
 #ifndef WIN32
 #include <signal.h>
@@ -45,8 +45,6 @@ extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
-void InitializeBoincProjects();
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -72,58 +70,6 @@ void StartShutdown()
 #endif
 }
 
-void InitializeBoincProjects()
-{
-       //Initialize GlobalCPUMiningCPID
-        GlobalCPUMiningCPID.initialized = true;
-        GlobalCPUMiningCPID.cpid="";
-        GlobalCPUMiningCPID.cpidv2 = "";
-        GlobalCPUMiningCPID.projectname ="";
-        GlobalCPUMiningCPID.rac=0;
-        GlobalCPUMiningCPID.encboincpublickey = "";
-        GlobalCPUMiningCPID.boincruntimepublickey = "";
-        GlobalCPUMiningCPID.pobdifficulty = 0;
-        GlobalCPUMiningCPID.diffbytes = 0;
-        GlobalCPUMiningCPID.email = "";
-        GlobalCPUMiningCPID.RSAWeight = 0;
-
-        //Loop through projects saved in the Gridcoin Persisted Data System
-        std::string sType = "project";
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-        {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                            std::string key_value = mvApplicationCache[(*ii).first];
-                            std::vector<std::string> vKey = split(key_name,";");
-                            if (vKey.size() > 0)
-                            {
-
-                                std::string project_name = vKey[1];
-                                printf("Proj %s ",project_name.c_str());
-                                std::string project_value = key_value;
-                                boost::to_lower(project_name);
-                                std::string mainProject = ToOfficialName(project_name);
-                                boost::to_lower(mainProject);
-                                StructCPID structcpid = GetStructCPID();
-                                mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
-                                structcpid = mvBoincProjects[mainProject];
-                                structcpid.initialized = true;
-                                structcpid.link = "http://";
-                                structcpid.projectname = mainProject;
-                                mvBoincProjects[mainProject] = structcpid;
-                                WHITELISTED_PROJECTS++;
-
-                            }
-                     }
-                }
-       }
-
-}
-
-
 void Shutdown(void* parg)
 {
     static CCriticalSection cs_Shutdown;
@@ -147,10 +93,10 @@ void Shutdown(void* parg)
          printf("gridcoinresearch exiting...\r\n");
 
         fShutdown = true;
-        nTransactionsUpdated++;
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
+        StopRPCThreads();
         boost::filesystem::remove(GetPidFile());
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
@@ -191,7 +137,7 @@ bool AppInit(int argc, char* argv[])
 
     bool fRet = false;
 
-    boost::shared_ptr<ThreadHandler> threads(new ThreadHandler);
+    ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
 
     try
     {
@@ -254,6 +200,7 @@ bool AppInit(int argc, char* argv[])
     Shutdown(NULL);
 
     // delete thread handler
+    threads->interruptAll();
     threads->removeAll();
     threads.reset();
 
@@ -328,7 +275,6 @@ std::string HelpMessage()
         "  -externalip=<ip>       " + _("Specify your own public address") + "\n" +
         "  -onlynet=<net>         " + _("Only connect to nodes in network <net> (IPv4, IPv6 or Tor)") + "\n" +
         "  -discover              " + _("Discover own IP address (default: 1 when listening and no -externalip)") + "\n" +
-        "  -irc                   " + _("Find peers using internet relay chat (default: 0)") + "\n" +
         "  -listen                " + _("Accept connections from outside (default: 1 if no -proxy or -connect)") + "\n" +
         "  -bind=<addr>           " + _("Bind to given address. Use [host]:port notation for IPv6") + "\n" +
         "  -dnsseed               " + _("Find peers using DNS lookup (default: 1)") + "\n" +
@@ -414,7 +360,7 @@ bool InitSanityCheck(void)
 
 
 
-void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th)
+void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
@@ -432,7 +378,7 @@ void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th)
 /** Initialize Gridcoin.
  *  @pre Parameters should be parsed and config file should be read.
  */
-bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
+bool AppInit2(ThreadHandlerPtr threads)
 {
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER
@@ -504,11 +450,7 @@ bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
 
     nMinerSleep = GetArg("-minersleep", 8000);
     nDerivationMethodIndex = 0;
-
     fTestNet = GetBoolArg("-testnet");
-    if (fTestNet) {
-        SoftSetBoolArg("-irc", true);
-    }
 
     if (mapArgs.count("-bind")) {
         // when specifying an explicit binding address, you want to listen on it
@@ -1027,8 +969,6 @@ bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
     LoadAdminMessages(true,sOut);
     printf("Done loading Admin messages");
 
-    InitializeBoincProjects();
-    printf("Done loading boinc projects");
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
@@ -1055,10 +995,13 @@ bool AppInit2(boost::shared_ptr<ThreadHandler> threads)
 
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
-    if (!threads->createThread(StartNode, NULL, "Start Thread"))
 
+    TallyNetworkAverages_v9();
+
+    if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
-    BusyWaitForTally();
+
+    BusyWaitForTally_retired();
 
     if (fServer)
         threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");

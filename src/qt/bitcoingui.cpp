@@ -24,6 +24,7 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
+#include "diagnosticsdialog.h"
 #include "upgradedialog.h"
 #include "upgrader.h"
 #include "sendcoinsdialog.h"
@@ -121,7 +122,6 @@ json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, st
 
 extern int64_t IsNeural();
 
-double cdbl(std::string s, int place);
 std::string getfilecontents(std::string filename);
 int nRegVersion;
 
@@ -240,6 +240,8 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
      connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
      connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
+
+     diagnosticsDialog = new DiagnosticsDialog(this);
 
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
@@ -762,10 +764,14 @@ void BitcoinGUI::createMenuBar()
 #endif /* defined(WIN32) */
     qmAdvanced->addSeparator();
     qmAdvanced->addAction(rebuildAction);
+#ifdef WIN32
     qmAdvanced->addAction(downloadAction);
+#endif
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
+    help->addSeparator();
+    help->addAction(diagnosticsAction);
     help->addSeparator();
     help->addAction(aboutAction);
 #ifdef WIN32
@@ -1360,12 +1366,9 @@ void BitcoinGUI::configClicked()
 
 void BitcoinGUI::diagnosticsClicked()
 {
-#ifdef WIN32
-    if (!bGlobalcomInitialized) return;
-    qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-    bool result = PushGridcoinDiagnostics();
-    globalcom->dynamicCall("ShowDiagnostics()");
-#endif
+    diagnosticsDialog->show();
+    diagnosticsDialog->raise();
+    diagnosticsDialog->activateWindow();
 }
 
 void BitcoinGUI::foundationClicked()

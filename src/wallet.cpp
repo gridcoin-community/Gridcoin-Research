@@ -19,14 +19,13 @@
 #include "util.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
+#include "main.h"
 
 using namespace std;
 
-double cdbl(std::string s, int place);
 std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
-void AddPeek(std::string data);
 
 MiningCPID DeserializeBoincBlock(std::string block);
 
@@ -465,7 +464,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             wtx.nTimeSmart = wtx.nTimeReceived;
             if (wtxIn.hashBlock != 0)
             {
-                if (mapBlockIndex.count(wtxIn.hashBlock))
+                auto mapItem = mapBlockIndex.find(wtxIn.hashBlock);
+                if (mapItem != mapBlockIndex.end())
                 {
                     unsigned int latestNow = wtx.nTimeReceived;
                     unsigned int latestEntry = 0;
@@ -499,7 +499,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                         }
                     }
 
-                    unsigned int& blocktime = mapBlockIndex[wtxIn.hashBlock]->nTime;
+                    unsigned int& blocktime = mapItem->second->nTime;
                     wtx.nTimeSmart = std::max(latestEntry, std::min(blocktime, latestNow));
                 }
                 else
@@ -1117,10 +1117,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             uint256 hash = tx.GetHash();
             if (!txdb.ContainsTx(hash))
-            {
                 RelayTransaction((CTransaction)tx, hash);
-                AddPeek("Relaying wallet transaction " + tx.GetHash().ToString());
-            }
         }
     }
     if (!(IsCoinBase() || IsCoinStake()))
@@ -1130,8 +1127,6 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             if (fDebug10) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
             RelayTransaction((CTransaction)*this, hash);
-            AddPeek("Relaying wallet transaction " + hash.ToString());
-
         }
     }
 }
@@ -1712,7 +1707,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t locktime)
 {
     double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
-    double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
+    double por_min = IsResearcher(cpid) ? (MaxSubsidy/40) : 0;
     if (RSA_WEIGHT >= 24999) return 0;
     //Dynamically determines the minimum GRC block subsidy required amount for current network conditions
     if (fTestNet && (PORDiff >=0 && PORDiff < 1)) return .00001;

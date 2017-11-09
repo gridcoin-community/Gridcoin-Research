@@ -13,6 +13,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 #include <cmath>
+#include <boost/lexical_cast.hpp>
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -1462,6 +1463,19 @@ std::string RoundToString(double d, int place)
     return ss.str();
 }
 
+double RoundFromString(const std::string& s, int place)
+{
+    try
+    {
+        double num = boost::lexical_cast<double>(s);
+        return Round(num, place);
+    }
+    catch(const boost::bad_lexical_cast& e)
+    {
+        return 0;
+    }
+}
+
 bool Contains(const std::string& data, const std::string& instring)
 {
     return data.find(instring) != std::string::npos;
@@ -1601,7 +1615,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
     return safemessage;
 }
 
-bool ThreadHandler::createThread(void(*pfn)(boost::shared_ptr<ThreadHandler>), boost::shared_ptr<ThreadHandler> parg, const std::string tname)
+bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname)
 {
     try
     {

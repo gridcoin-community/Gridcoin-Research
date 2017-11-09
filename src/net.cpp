@@ -3,7 +3,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "irc.h"
 #include "db.h"
 #include "net.h"
 #include "init.h"
@@ -27,8 +26,6 @@
 #endif
 
 using namespace std;
-bool TallyNetworkAverages(bool ColdBoot);
-extern void DoTallyResearchAverages(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
@@ -476,7 +473,6 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
     return error("GetMyExternalIP() : connection closed");
 }
 
-// We now get our external IP from the IRC server first and only use this as a backup
 bool GetMyExternalIP(CNetAddr& ipRet)
 {
     CService addrConnect;
@@ -1575,82 +1571,71 @@ void DumpAddresses()
 
 }
 
-void ThreadTallyResearchAverages(void* parg)
+void DoTallyResearchAverages_retired(void* parg);
+bool TallyNetworkAverages_retired(bool);
+extern volatile bool bTallyFinished_retired;
+extern volatile bool bDoTally_retired;
+
+void ThreadTallyResearchAverages_retired(void* parg)
 {
     // Make this thread recognisable
     RenameThread("grc-tallyresearchaverages");
-
-begin:
-    try
-    {
-        DoTallyResearchAverages(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadTallyNetworkAverages()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        printf("ThreadTallyResearchAverages exited (interrupt)\r\n");
-        return;
-    }
-    catch(...)
-    {
-        printf("Error in ThreadTallyResearchAverages... Recovering \r\n");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-    printf("ThreadTallyResearchAverages exited \r\n");
+    DoTallyResearchAverages_retired(parg);
+    printf("ThreadTallyResearchAverages_retired exited \r\n");
 }
 
 
-void BusyWaitForTally()
+void BusyWaitForTally_retired()
 {
-    if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
+    if(IsV9Enabled_Tally(nBestHeight))
     {
+        if(fDebug10)
+            printf("BusyWaitForTally_retired: skipped (v9 enabled)\n");
         return;
     }
-    if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
-    bTallyFinished=false;
-    bDoTally=true;
+
+    if (fDebug10) printf("\r\n ** Busy Wait for Tally_retired ** \r\n");
+    bTallyFinished_retired=false;
+    bDoTally_retired=true;
     int iTimeout = 0;
-    while(!bTallyFinished)
+
+    int64_t deadline = GetAdjustedTime() + 15000;
+    while(!bTallyFinished_retired)
     {
-        MilliSleep(1);
+        MilliSleep(10);
+        if(GetAdjustedTime() >= deadline)
+            break;
         iTimeout+=1;
-        if (iTimeout > 15000) break;
     }
-    nLastTallyBusyWait = GetAdjustedTime();
 }
 
 
-void DoTallyResearchAverages(void* parg)
+void DoTallyResearchAverages_retired(void* parg)
 {
-    printf("\r\nStarting dedicated Tally thread...\r\n");
+    printf("\r\nStarting dedicated Tally_retired thread...\r\n");
 
     while (!fShutdown)
     {
         MilliSleep(100);
-        if (bDoTally)
+        if (bDoTally_retired)
         {
-            bTallyFinished = false;
-            bDoTally=false;
-            printf("\r\n[DoTallyRA_START] ");
+            bTallyFinished_retired = false;
+            bDoTally_retired=false;
+            printf("\r\n[DoTallyRA_START_retired] ");
             try
             {
-                TallyNetworkAverages(false);
+                TallyNetworkAverages_retired(false);
             }
             catch (std::exception& e)
             {
-                PrintException(&e, "ThreadTallyNetworkAverages()");
+                PrintException(&e, "ThreadTallyNetworkAverages_retired()");
             }
             catch(...)
             {
-                printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
+                printf("\r\nError occurred in DoTallyResearchAverages_retired...Recovering\r\n");
             }
-            printf(" [DoTallyRA_END] \r\n");
-            bTallyFinished = true;
+            printf(" [DoTallyRA_END_retired] \r\n");
+            bTallyFinished_retired = true;
         }
     }
 }
@@ -1822,7 +1807,7 @@ void ThreadOpenConnections2(void* parg)
         if (fShutdown)
             return;
 
-        // Add seed nodes if IRC isn't working
+        // Add seed nodes
         if (addrman.size()==0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
@@ -2066,26 +2051,19 @@ void ThreadMessageHandler2(void* parg)
             pnodeTrickle = vNodesCopy[GetRand(vNodesCopy.size())];
         for (auto const& pnode : vNodesCopy)
         {
-
             if (pnode->fDisconnect)
                 continue;
+
             //11-25-2015
             // Receive messages
-            {
-                TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-                if (lockRecv)
-                    if (!ProcessMessages(pnode))
-                        pnode->CloseSocketDisconnect();
-            }
+            if (!ProcessMessages(pnode))
+                pnode->CloseSocketDisconnect();
+
             if (fShutdown)
                 return;
 
             // Send messages
-            {
-                TRY_LOCK(pnode->cs_vSend, lockSend);
-                if (lockSend)
-                    SendMessages(pnode, pnode == pnodeTrickle);
-            }
+            SendMessages(pnode, pnode == pnodeTrickle);
             if (fShutdown)
                 return;
         }
@@ -2305,10 +2283,6 @@ void StartNode(void* parg)
     if (fUseUPnP)
         MapPort();
 
-    // Get addresses from IRC and advertise ours
-    if (!netThreads->createThread(ThreadIRCSeed,NULL,"ThreadIRCSeed"))
-        printf("Error: createThread(ThreadIRCSeed) failed\r\n");
-
     // Send and receive from sockets, accept connections
     if (!netThreads->createThread(ThreadSocketHandler,NULL,"ThreadSocketHandler"))
         printf("Error: createThread(ThreadSocketHandler) failed\r\n");
@@ -2330,9 +2304,9 @@ void StartNode(void* parg)
         printf("Error: createThread(ThreadDumpAddress) failed\r\n");
 
     // Tally network averages
-    if (!NewThread(ThreadTallyResearchAverages, NULL))
-        printf("Error; NewThread(ThreadTally) failed\n");
-    
+    if (!NewThread(ThreadTallyResearchAverages_retired, NULL))
+        printf("Error; NewThread(ThreadTally_retired) failed\n");
+
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
         printf("Staking disabled\r\n");
@@ -2345,7 +2319,6 @@ bool StopNode()
 {
     printf("StopNode()\n");
     fShutdown = true;
-    nTransactionsUpdated++;
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();

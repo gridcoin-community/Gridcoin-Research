@@ -14,8 +14,8 @@ void StartShutdown();
 bool ShutdownRequested();
 
 void Shutdown(void* parg);
-bool AppInit2(boost::shared_ptr<ThreadHandler> threads);
-void ThreadAppInit2(boost::shared_ptr<ThreadHandler> th);
+bool AppInit2(ThreadHandlerPtr threads);
+void ThreadAppInit2(ThreadHandlerPtr th);
 
 std::string HelpMessage();
 std::string LogSomething();

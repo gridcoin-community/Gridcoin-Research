@@ -32,7 +32,6 @@ void ThreadTopUpKeyPool(void* parg);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
-double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string qtGetNeuralContract(std::string data);
@@ -505,7 +504,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
             StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
         }
-        else if(blocknew.nVersion==8)
+        else
         {
             uint64_t StakeModifier = 0;
             if(!FindStakeModifierRev(StakeModifier,pindexPrev))
@@ -513,7 +512,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
             StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
         }
-        else return false;
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -674,7 +672,7 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(!NeedASuperblock())
         return printf("AddNeuralContractOrVote: not Needed\n");
 
-    int pending_height = cdbl(ReadCache("neuralsecurity","pending"),0);
+    int pending_height = RoundFromString(ReadCache("neuralsecurity","pending"),0);
 
     /* Add our Neural Vote */
     bb.NeuralHash = sb_hash;
@@ -722,20 +720,6 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid = GlobalCPUMiningCPID;
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
-
-    /* This is should be already done in GetNextProject
-    miningcpid.cpidv2 = ComputeCPIDv2(
-        GlobalCPUMiningCPID.email,
-        GlobalCPUMiningCPID.boincruntimepublickey,
-        pbh );
-
-
-    miningcpid.Magnitude = CalculatedMagnitude2(
-        GlobalCPUMiningCPID.cpid, blocknew.nTime,
-        false );
-
-    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-    */
 
     miningcpid.lastblockhash = pbh.GetHex();
     miningcpid.ResearchSubsidy = OUT_POR;
@@ -796,7 +780,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+="Net averages not yet loaded";
-        if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
+        if (LessVerbose(100) && IsResearcher(msPrimaryCPID)) printf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
 
@@ -833,10 +817,12 @@ void StakeMiner(CWallet *pwallet)
             //clear miner messages
             MinerStatus.ReasonNotStaking="";
 
-            //New version
+            //New versions
             StakeBlock.nVersion = 7;
             if(IsV8Enabled(pindexPrev->nHeight+1))
                 StakeBlock.nVersion = 8;
+            if(IsV9Enabled(pindexPrev->nHeight+1))
+                StakeBlock.nVersion = 9;
 
             MinerStatus.Version= StakeBlock.nVersion;
         }
