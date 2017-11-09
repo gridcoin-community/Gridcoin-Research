@@ -4271,10 +4271,10 @@ void GridcoinServices()
     if(IsV9Enabled_Tally(nBestHeight))
     {
         // Update quorum data.
-        if ((nBestHeight % 3) == 0)
+        if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
         {
-            if(fDebug) printf("SVC: Updating Neural Quorum (v9 %%3) height %d\n",nBestHeight);
-            if(fDebug) printf("SVC: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
+            if (fDebug) printf("SVC: Updating Neural Quorum (v9 %%3) height %d\n",nBestHeight);
+            if (fDebug) printf("SVC: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
             ComputeNeuralNetworkSupermajorityHashes();
             UpdateNeuralNetworkQuorumData();
         }
@@ -4282,7 +4282,7 @@ void GridcoinServices()
         // Tally research averages.
         if ((nBestHeight % TALLY_GRANULARITY) == 0)
         {
-            if(fDebug) printf("SVC: TallyNetworkAverages (v9 %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
+            if (fDebug) printf("SVC: TallyNetworkAverages (v9 %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
             TallyNetworkAverages_v9();
         }
     }
@@ -4292,46 +4292,43 @@ void GridcoinServices()
         bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
         if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
-        if (fDebug10) 
-        {
-                printf (" MRSA %" PRId64 ", BH %d", superblock_age, nBestHeight);
-        }
+        if (fDebug10) printf(" MRSA %" PRId64 ", BH %d\n", superblock_age, nBestHeight);
 
         if (bNeedSuperblock)
         {
-            if ((nBestHeight % 3) == 0)
+            if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
             {
-                if(fDebug) printf("SVC: Updating Neural Quorum (v3 A) height %d\n",nBestHeight);
-                if(fDebug) printf("SVC: Updating Neural Supermajority (v3 A) height %d\n",nBestHeight);
+                if (fDebug) printf("SVC: Updating Neural Quorum (v3 A) height %d\n",nBestHeight);
+                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 A) height %d\n",nBestHeight);
                 if (fDebug10) printf("#CNNSH# ");
                 ComputeNeuralNetworkSupermajorityHashes();
                 UpdateNeuralNetworkQuorumData();
             }
             if ((nBestHeight % 20) == 0)
             {
-                if(fDebug) printf("SVC: set off Tally (v3 B) height %d\n",nBestHeight);
+                if (fDebug) printf("SVC: set off Tally (v3 B) height %d\n",nBestHeight);
                 if (fDebug10) printf("#TIB# ");
                 bDoTally_retired = true;
             }
         }
         else
         {
-            // When superblock is not old, Tally every N mins:
+            // When superblock is not old, Tally every N blocks:
             int nTallyGranularity = fTestNet ? 60 : 20;
             if ((nBestHeight % nTallyGranularity) == 0)
             {
-                    if(fDebug) printf("SVC: set off Tally (v3 C) height %d\n",nBestHeight);
-                    if (fDebug3) printf("TIB1 ");
-                    bDoTally_retired = true;
-                    if (fDebug3) printf("CNNSH2 ");
-                    if(fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
-                    ComputeNeuralNetworkSupermajorityHashes();
+                if (fDebug) printf("SVC: set off Tally (v3 C) height %d\n",nBestHeight);
+                if (fDebug3) printf("TIB1 ");
+                bDoTally_retired = true;
             }
 
-            if ((nBestHeight % 5)==0)
+            if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
             {
-                    if(fDebug) printf("SVC: Updating Neural Quorum (v3 E) height %d\n",nBestHeight);
-                    UpdateNeuralNetworkQuorumData();
+                if (fDebug) printf("SVC: Updating Neural Quorum (v3 E) height %d\n",nBestHeight);
+                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
+                if (fDebug3) printf("CNNSH2 ");
+                ComputeNeuralNetworkSupermajorityHashes();
+                UpdateNeuralNetworkQuorumData();
             }
         }
     }
@@ -4343,7 +4340,7 @@ void GridcoinServices()
 
 
     //Dont perform the following functions if out of sync
-    if (pindexBest->nHeight < nGrandfather && OutOfSyncByAge())
+    if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
         return;
 
     if (fDebug) printf(" {SVC} ");
