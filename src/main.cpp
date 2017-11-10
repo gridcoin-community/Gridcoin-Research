@@ -111,7 +111,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 
 extern double GetOwedAmount(std::string cpid);
-extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
@@ -3181,11 +3180,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (bb.superblock.length() > 20)
     {
-        // Prevent duplicate superblocks
-        if(nVersion >= 9 && !NeedASuperblock())
-            return error(("ConnectBlock: SuperBlock rcvd, but not Needed (too early)"));
-            
-        if ((pindex->nHeight > nGrandfather && !fReorganizing) || pindex->nVersion >= 9 )
+        if(nVersion >= 9)
+        {
+            // break away from block timing
+            if (fDebug) printf("ConnectBlock: Updating Neural Supermajority (v9 CB) height %d\n",pindex->nHeight);            ComputeNeuralNetworkSupermajorityHashes();
+            // Prevent duplicate superblocks
+            if(nVersion >= 9 && !NeedASuperblock())
+                return error(("ConnectBlock: SuperBlock rcvd, but not Needed (too early)"));
+        }
+
+        if ((pindex->nHeight > nGrandfather && !fReorganizing) || nVersion >= 9 )
         {
             // 12-20-2015 : Add support for Binary Superblocks
             std::string superblock = UnpackBinarySuperblock(bb.superblock);
