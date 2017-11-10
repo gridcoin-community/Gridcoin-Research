@@ -4333,7 +4333,7 @@ void GridcoinServices()
             if ((nBestHeight % 5)==0)
             {
                 if (fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
-                UpdateNeuralNetworkQuorumData();
+                ComputeNeuralNetworkSupermajorityHashes();
             }
             if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
             {
