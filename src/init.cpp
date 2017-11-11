@@ -23,7 +23,6 @@
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 
 StructCPID GetStructCPID();
-bool ComputeNeuralNetworkSupermajorityHashes();
 void BusyWaitForTally_retired();
 void TallyNetworkAverages_v9();
 extern void ThreadAppInit2(void* parg);
