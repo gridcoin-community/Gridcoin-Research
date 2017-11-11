@@ -673,6 +673,13 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
         return printf("AddNeuralContractOrVote: Not Participating\n");
 
+    if(blocknew.nVersion >= 9)
+    {
+        // break away from block timing
+        if (fDebug) printf("AddNeuralContractOrVote: Updating Neural Supermajority (v9 M) height %d\n",nBestHeight);
+        ComputeNeuralNetworkSupermajorityHashes();
+    }
+
     if(!NeedASuperblock())
         return printf("AddNeuralContractOrVote: not Needed\n");
 
