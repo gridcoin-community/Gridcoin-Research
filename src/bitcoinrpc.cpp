@@ -24,6 +24,8 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 
+#include <memory>
+
 #define printf OutputDebugStringF
 
 using namespace std;
@@ -669,12 +671,14 @@ private:
 
 void StopRPCThreads()
 {
+    printf("Stop RPC IO service\n");
     if(!rpc_io_service)
+    {
+        printf("RPC IO server not started\n");
         return;
+    }
     
     rpc_io_service->stop();
-    delete rpc_io_service;
-    rpc_io_service = NULL;
 }
 
 void ThreadRPCServer(void* parg)
@@ -694,10 +698,6 @@ void ThreadRPCServer(void* parg)
     {
             printf("ThreadRPCServer exited (interrupt)\r\n");
             return;
-    }
-    catch (...)
-    {
-        PrintException(NULL, "ThreadRPCServer()");
     }
     printf("ThreadRPCServer exited\n");
 }
@@ -902,6 +902,9 @@ void ThreadRPCServer2(void* parg)
 
     while (!fShutdown)
         rpc_io_service->run_one();
+    
+    delete rpc_io_service;
+    rpc_io_service = NULL;
     StopRequests();
 }
 
