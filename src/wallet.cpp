@@ -1803,6 +1803,11 @@ void NetworkTimer()
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
+    if(fDevbuildCripple)
+    {
+        error("CommitTransaction(): Development build restrictions in effect");
+        return false;
+    }
     {
         LOCK2(cs_main, cs_wallet);
         if (fDebug) printf("CommitTransaction:\n%s", wtxNew.ToString().c_str());

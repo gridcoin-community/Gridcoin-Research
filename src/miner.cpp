@@ -794,6 +794,13 @@ bool IsMiningAllowed(CWallet *pwallet)
         status=false;
     }
 
+    if(fDevbuildCripple)
+    {
+        LOCK(MinerStatus.lock);
+        MinerStatus.ReasonNotStaking+="Testnet-only version; ";
+        status=false;
+    }
+
     if (!bNetAveragesLoaded)
     {
         LOCK(MinerStatus.lock);

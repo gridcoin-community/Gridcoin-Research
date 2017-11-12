@@ -623,6 +623,16 @@ bool AppInit2(ThreadHandlerPtr threads)
     printf("Used data directory %s\n", strDataDir.c_str());
     std::ostringstream strErrors;
 
+    fDevbuildCripple = false;
+    if((CLIENT_VERSION_BUILD != 0) && !fTestNet)
+    {
+        fDevbuildCripple = true;
+        printf("WARNING: Running development version outside of testnet!\n"
+               "Staking and sending transactions will be disabled.\n");
+        if( (GetArg("-devbuild", "") == "override") && fDebug )
+            fDevbuildCripple = false;
+    }
+
     if (fDaemon)
         fprintf(stdout, "Gridcoin server starting\n");
 
