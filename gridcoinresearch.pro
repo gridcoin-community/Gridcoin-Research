@@ -134,8 +134,8 @@ contains(NO_UPGRADE, 1) {
 
 INCLUDEPATH += src/leveldb/include src/leveldb/helpers
 LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
-SOURCES += src/txdb-leveldb.cpp \ 
-    src/qt/diagnosticsdialog.cpp
+SOURCES += src/txdb-leveldb.cpp
+
 !win32 {
     # we use QMAKE_CXXFLAGS_RELEASE even without RELEASE=1 because we use RELEASE to indicate linking preferences not -O preferences
     genleveldb.commands = cd $$PWD/src/leveldb && CC=\"$$QMAKE_CC\" CXX=\"$$QMAKE_CXX\" $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
@@ -290,6 +290,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/qt/votingdialog.cpp \
+    src/qt/diagnosticsdialog.cpp \
     src/alert.cpp \
     src/block.cpp \
     src/beacon.cpp \
