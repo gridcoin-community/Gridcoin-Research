@@ -178,10 +178,6 @@ define $(package)_build_cmds
   $(MAKE) -C ../qttranslations
 endef
 
-#  $(MAKE) -C qtactiveqt/src/activeqt/container INSTALL_ROOT=$($(package)_staging_dir) install_target && \
-#  $(MAKE) -C qtactiveqt/src/activeqt/control INSTALL_ROOT=$($(package)_staging_dir) install_target && \
-
-
 define $(package)_stage_cmds
   $(MAKE) -C src INSTALL_ROOT=$($(package)_staging_dir) $(addsuffix -install_subtargets,$(addprefix sub-,$($(package)_qt_libs))) && cd .. && \
   $(MAKE) -C qttools/src/linguist/lrelease INSTALL_ROOT=$($(package)_staging_dir) install_target && \

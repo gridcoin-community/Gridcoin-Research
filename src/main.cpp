@@ -74,7 +74,6 @@ extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
 extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
-//std::string getMacAddress();
 std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
@@ -95,9 +94,6 @@ extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 extern bool FullSyncWithDPORNodes();
 
-//std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
-
 bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
 extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -116,11 +112,8 @@ extern void DeleteCache(std::string section, std::string keyname);
 extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
-//std::string qtGetNeuralContract(std::string data);
 extern std::string GetNeuralNetworkReport();
-//void qtSyncWithDPORNodes(std::string data);
 std::string GetListOf(std::string datatype);
-//std::string qtGetNeuralHash(std::string data);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
@@ -163,7 +156,6 @@ double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t lo
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
 extern int64_t PreviousBlockAge();
-//void CheckForUpgrade();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();

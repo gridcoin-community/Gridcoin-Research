@@ -18,10 +18,6 @@ using namespace boost;
 using namespace boost::assign;
 using namespace json_spirit;
 
-//extern std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, int& out_rac);
-//extern void Imker(void *kippel);
-//extern Upgrader upgrader;
-
 extern std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx);
 extern std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 std::string TimestampToHRDate(double dtm);
@@ -29,11 +25,6 @@ std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLEl
 std::string GetShareType(double dShareType);
 bool PollCreatedAfterSecurityUpgrade(std::string pollname);
 double DoubleFromAmount(int64_t amount);
-
-/* #ifdef QT_GUI */
-/* #include "qt/upgradedialog.h" */
-/* extern Checker checker; */
-/* #endif */
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {

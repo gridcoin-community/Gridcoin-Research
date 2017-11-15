@@ -119,8 +119,6 @@ extern std::string GetListOf(std::string datatype);
 extern std::string GetListOfWithConsensus(std::string datatype);
 
 void qtSyncWithDPORNodes(std::string data);
-//std::string qtGetNeuralHash(std::string data);
-//std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
@@ -150,7 +148,6 @@ std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-//void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
