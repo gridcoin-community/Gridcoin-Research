@@ -56,7 +56,6 @@ Value getmininginfo(const Array& params, bool fHelp)
         obj.push_back(Pair("netstakeweight", nNetworkWeight));
         obj.push_back(Pair("staking", staking));
         obj.push_back(Pair("mining-error", MinerStatus.ReasonNotStaking));
-        obj.push_back(Pair("mining-message", MinerStatus.Message));
         obj.push_back(Pair("time-to-stake_days", nExpectedTime/86400.0));
         obj.push_back(Pair("expectedtime", nExpectedTime));
         obj.push_back(Pair("mining-version", MinerStatus.Version));

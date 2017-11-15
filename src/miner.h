@@ -13,7 +13,6 @@ struct CMinerStatus
 {
     CCriticalSection lock;
     std::string ReasonNotStaking;
-    std::string Message;
     uint64_t WeightSum,WeightMin,WeightMax;
     double ValueSum;
     double CoinAgeSum;

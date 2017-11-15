@@ -62,7 +62,6 @@ public:
 
 void CMinerStatus::Clear()
 {
-    Message= "";
     WeightSum= ValueSum= WeightMin= WeightMax= 0;
     Version= 0;
     CoinAgeSum= 0;
@@ -591,14 +590,12 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             printf("CreateCoinStake: added kernel type=%d credit=%f\n", whichType,CoinToDouble(nCredit));
 
             LOCK(MinerStatus.lock);
-            MinerStatus.Message+="Found Kernel "+ ToString(CoinToDouble(nCredit))+"; ";
             MinerStatus.KernelsFound++;
             return true;
         }
     }
 
     LOCK(MinerStatus.lock);
-    MinerStatus.Message+="Stake Weight "+ ToString(StakeWeightSum)+"; ";
     MinerStatus.WeightSum = StakeWeightSum;
     MinerStatus.ValueSum = StakeValueSum;
     MinerStatus.WeightMin=StakeWeightMin;
