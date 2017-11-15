@@ -700,7 +700,7 @@ public:
     }
     bool IsConfirmed() const
     {
-        return GetDepthInMainChain() >= 10;
+        return (GetDepthInMainChain() >= 10 || GetDepthInMainChain < 0);
     }
     bool IsTrusted() const
     {
