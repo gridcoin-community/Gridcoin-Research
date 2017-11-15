@@ -6863,7 +6863,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
             bool bIgnore = false;
-            if (cdbl("0"+ReadCache("explainmag",neural_request_id),0) > 10)
+            if (RoundFromString("0"+ReadCache("explainmag",neural_request_id),0) > 10)
             {
                 if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
                 pfrom->Misbehaving(1);
@@ -6871,7 +6871,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             if (!bIgnore)
             {
-                WriteCache("explainmag",neural_request_id,RoundToString(cdbl("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
+                WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
                 // 7/11/2015 - Allow linux/mac to make neural requests
                 neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
                 pfrom->PushMessage("expmag_nresp", neural_response);
