@@ -1,11 +1,15 @@
 src/*.exe
 src/gridccoinstake
 src/gridcoinresearchd
-src/test_gridcoin
+src/test/test_gridcoin
 src/build.h
 src/obj
 src/qt/forms/*.h
 src/qt/moc_*.cpp
+src/qt/moc.*
+src/qt/*.moc
+src/qt/test/moc*.cpp
+src/qt/test/test_gridcoin-qt
 
 contrib/deprecated
 contrib/deprecated/bin
@@ -27,9 +31,13 @@ release
 *.force
 *.suo
 *.scc
+*.json.h
+*.a
 gridcoinresearch.zip
 .gridcoin
 .gridcoinresearch
+.deps
+.dirstamp
 #compilation and Qt preprocessor part
 *.qm
 Makefile
@@ -39,6 +47,7 @@ gridcoinresearch
 qrc_*.cpp
 #qt creator
 *.pro.user
+*.pro.user.*
 #mac specific
 .DS_Store
 build
@@ -70,8 +79,8 @@ config.log
 config.status
 configure
 libtool
-src/config/bitcoin-config.h
-src/config/bitcoin-config.h.in
+src/config/gridcoin-config.h
+src/config/gridcoin-config.h.in
 src/config/stamp-h1
 share/setup.nsi
 share/qt/Info.plist
