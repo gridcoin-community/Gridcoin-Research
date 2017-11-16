@@ -1,3 +1,0 @@
-echo Hash of daemon binary [experimental]...
-bash dahash.sh $ROOTPATHSH/src/${COINNAME}d.exe
-echo phelix got: 35f2d548eec995d4a68e514d0268b00c38b3677e99cbe0478dad34bf3bdc7c84 (v3.70)

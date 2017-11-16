@@ -7,6 +7,10 @@
 #include "util.h"
 #include "sync.h"
 
+#if !defined(HAVE_MSG_NOSIGNAL)
+#define MSG_NOSIGNAL 0
+#endif
+
 #ifndef WIN32
 #include <sys/fcntl.h>
 #endif

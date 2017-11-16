@@ -34,6 +34,8 @@ namespace boost {
 #include <openssl/rand.h>
 #include <cstdarg>
 
+#include "neuralnet.h"
+
 #ifdef WIN32
 #ifdef _MSC_VER
 #pragma warning(disable:4786)
@@ -86,7 +88,7 @@ std::string GetNeuralVersion();
 
 bool fDevbuildCripple;
 
-int64_t IsNeural();
+//int64_t IsNeural();
 
 void MilliSleep(int64_t n)
 {
@@ -1501,16 +1503,10 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 
 std::string GetNeuralVersion()
 {
-
     std::string neural_v = "0";
-
-    #if defined(WIN32) && defined(QT_GUI)
-        int64_t neural_id = IsNeural();
-        neural_v = ToString(MINOR_VERSION) + "." + ToString(neural_id);
-    #endif
-
+    int64_t neural_id = NN::IsNeuralNet();
+    neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
     return neural_v;
-
 }
 
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
