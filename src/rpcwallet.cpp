@@ -1062,7 +1062,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
             obj.push_back(Pair("account",       strAccount));
             obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
-            obj.push_back(Pair("tx_count", (*it).second.sContracts.size()));
+            obj.push_back(Pair("tx_count",      (uint64_t) it->second.sContracts.size()));
 
             // Add support for contract or message information appended to the TX itself
             Object oTX;
