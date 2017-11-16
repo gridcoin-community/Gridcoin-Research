@@ -3,6 +3,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#if defined(HAVE_CONFIG_H)
+#include "config/gridcoin-config.h"
+#endif
+
 #include "db.h"
 #include "net.h"
 #include "init.h"
@@ -13,6 +17,10 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
 #include <inttypes.h>
+
+#if !defined(HAVE_MSG_NOSIGNAL)
+#define MSG_NOSIGNAL 0
+#endif
 
 #ifdef WIN32
   #include <string.h>

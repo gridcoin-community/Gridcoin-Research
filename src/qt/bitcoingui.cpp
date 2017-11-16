@@ -25,8 +25,6 @@
 #include "addressbookpage.h"
 
 #include "diagnosticsdialog.h"
-#include "upgradedialog.h"
-#include "upgrader.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
@@ -162,7 +160,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     trayIcon(0),
     notificator(0),
     rpcConsole(0),
-    upgrader(0),
     nWeight(0)
 {
 
@@ -235,13 +232,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
-     upgrader = new UpgradeDialog(this);
-     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
-     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
-     connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
-     connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
-
-     diagnosticsDialog = new DiagnosticsDialog(this);
+    diagnosticsDialog = new DiagnosticsDialog(this);
 
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
@@ -704,14 +695,10 @@ void BitcoinGUI::createActions()
     connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
     connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
     connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
-
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
-
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-
     connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
     connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
-
     connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
@@ -751,7 +738,8 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
-    QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows
     qmAdvanced->addAction(configAction);
     qmAdvanced->addAction(miningAction);
@@ -760,13 +748,10 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(faqAction);
     qmAdvanced->addAction(foundationAction);
 //	qmAdvanced->addAction(diagnosticsAction);
-
+     qmAdvanced->addAction(downloadAction);
 #endif /* defined(WIN32) */
     qmAdvanced->addSeparator();
     qmAdvanced->addAction(rebuildAction);
-#ifdef WIN32
-    qmAdvanced->addAction(downloadAction);
-#endif
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
@@ -1754,7 +1739,7 @@ void BitcoinGUI::timerfire()
     try
     {
         if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-        {            
+        {
             ReinstantiateGlobalcom();
             nRegVersion=9999;
 

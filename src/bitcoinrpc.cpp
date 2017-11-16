@@ -288,11 +288,6 @@ static const CRPCCommand vRPCCommands[] =
     { "importprivkey",          &importprivkey,          false,  false },
     { "listunspent",            &listunspent,            false,  false },
     { "list",                   &listitem,               false,  false },
-    { "upgrade",                &upgrade,                false,  false },
-    { "downloadblocks",         &downloadblocks,         false,  false },
-    { "downloadstate",          &downloadstate,          false,  false },
-    { "downloadcancel",         &downloadcancel,         false,  false },
-    { "restart",                &restart,                false,  false },
     { "execute",                &execute,                false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
@@ -677,7 +672,7 @@ void StopRPCThreads()
         printf("RPC IO server not started\n");
         return;
     }
-    
+
     rpc_io_service->stop();
 }
 
@@ -902,7 +897,7 @@ void ThreadRPCServer2(void* parg)
 
     while (!fShutdown)
         rpc_io_service->run_one();
-    
+
     delete rpc_io_service;
     rpc_io_service = NULL;
     StopRequests();
@@ -1248,9 +1243,6 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
     if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
     if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<int64_t>(params[1]);

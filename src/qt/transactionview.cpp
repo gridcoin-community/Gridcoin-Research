@@ -189,8 +189,6 @@ void TransactionView::setModel(WalletModel *model)
         transactionView->horizontalHeader()->setSectionResizeMode(
                 TransactionTableModel::ToAddress, QHeaderView::Stretch);
 #endif
-        transactionView->horizontalHeader()->setResizeMode(
-                TransactionTableModel::ToAddress, QHeaderView::Stretch);
         transactionView->horizontalHeader()->resizeSection(
                 TransactionTableModel::Amount, 100);
 

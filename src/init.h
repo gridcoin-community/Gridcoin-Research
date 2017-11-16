@@ -6,6 +6,7 @@
 #define BITCOIN_INIT_H
 
 #include "wallet.h"
+#include <boost/thread.hpp>
 
 extern CWallet* pwalletMain;
 
@@ -19,5 +20,6 @@ void ThreadAppInit2(ThreadHandlerPtr th);
 
 std::string HelpMessage();
 std::string LogSomething();
+
 
 #endif
