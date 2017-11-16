@@ -4,8 +4,6 @@
 
 BOOST_AUTO_TEST_SUITE(cpid_tests);
 
-#include <iostream>
-
 BOOST_AUTO_TEST_CASE(cpid_VerifyComputeCPIDv2)
 {
     uint256 blockhash = 1;
