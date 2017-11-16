@@ -123,7 +123,7 @@ QT_MOC_CPP = \
   qt/moc_votingdialog.cpp \
   qt/moc_walletmodel.cpp
 
-GRIDOIN_MM = \
+GRIDCOIN_MM = \
   qt/macdockiconhandler.mm \
   qt/macnotificationhandler.mm
 
@@ -302,7 +302,7 @@ qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_QT_CPP) $(GRIDCOINRESEARCH_QT_H)
   $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(PROTOBUF_PROTO) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES)
 
 if TARGET_WINDOWS
-qt_libgridcoinqt_a_SOURCES += $(GRIDOIN_CORE_H) $(GRIDCOIN_CORE_CPP) grcrestarter.cpp neuralnet.cpp
+qt_libgridcoinqt_a_SOURCES += $(GRIDCOIN_CORE_H) $(GRIDCOIN_CORE_CPP) grcrestarter.cpp neuralnet.cpp
 qt_libgridcoinqt_a_CXXFLAGS += -DUNICODE
 endif
 
