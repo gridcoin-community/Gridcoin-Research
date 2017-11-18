@@ -88,7 +88,7 @@ extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_populari
 
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-
+double DoubleFromAmount(int64_t amount);
 
 extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
@@ -4353,8 +4353,7 @@ void GridcoinServices()
         bTallyStarted_retired = false;
     }
 
-
-    if (false && TimerMain("FixSpentCoins",60))
+    if (TimerMain("FixSpentCoins",60))
     {
             int nMismatchSpent;
             int64_t nBalanceInQuestion;
