@@ -35,12 +35,10 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     CBlockIndex* pindex = NULL;
     CBlock block;
     {
-        map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(mtx.hashBlock);
-
+        BlockMap::iterator mi = mapBlockIndex.find(mtx.hashBlock);
         if (mi == mapBlockIndex.end())
         {
             res.push_back(std::make_pair(_("ERROR"), _("Block not in index")));
-
             return res;
         }
 
@@ -49,7 +47,6 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         if (!block.ReadFromDisk(pindex))
         {
             res.push_back(std::make_pair(_("ERROR"), _("Block read failed")));
-
             return res;
         }
     }
@@ -461,7 +458,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
     if (hashBlock != 0)
     {
         entry.push_back(Pair("blockhash", hashBlock.GetHex()));
-        map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi != mapBlockIndex.end() && (*mi).second)
         {
             CBlockIndex* pindex = (*mi).second;
