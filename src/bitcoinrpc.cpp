@@ -24,6 +24,8 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 
+#include <memory>
+
 #define printf OutputDebugStringF
 
 using namespace std;
@@ -240,7 +242,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getnettotals",           &getnettotals,           true,   true  },
     { "getdifficulty",          &getdifficulty,          true,   false },
     { "getinfo",                &getinfo,                true,   false },
-    { "getsubsidy",             &getsubsidy,             true,   false },
     { "getmininginfo",          &getmininginfo,          true,   false },
     { "getstakinginfo",         &getmininginfo,          true,   false },
     { "getnewaddress",          &getnewaddress,          true,   false },
@@ -287,11 +288,6 @@ static const CRPCCommand vRPCCommands[] =
     { "importprivkey",          &importprivkey,          false,  false },
     { "listunspent",            &listunspent,            false,  false },
     { "list",                   &listitem,               false,  false },
-    { "upgrade",                &upgrade,                false,  false },
-    { "downloadblocks",         &downloadblocks,         false,  false },
-    { "downloadstate",          &downloadstate,          false,  false },
-    { "downloadcancel",         &downloadcancel,         false,  false },
-    { "restart",                &restart,                false,  false },
     { "execute",                &execute,                false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
@@ -308,6 +304,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendalert",              &sendalert,              false,  false},
     { "reorganize",             &rpc_reorganize,         false,  false},
     { "getblockstats",          &rpc_getblockstats,      false,  false},
+    { "sendalert2",             &sendalert2,             false,  false},
 };
 
 CRPCTable::CRPCTable()
@@ -669,12 +666,14 @@ private:
 
 void StopRPCThreads()
 {
+    printf("Stop RPC IO service\n");
     if(!rpc_io_service)
+    {
+        printf("RPC IO server not started\n");
         return;
-    
+    }
+
     rpc_io_service->stop();
-    delete rpc_io_service;
-    rpc_io_service = NULL;
 }
 
 void ThreadRPCServer(void* parg)
@@ -694,10 +693,6 @@ void ThreadRPCServer(void* parg)
     {
             printf("ThreadRPCServer exited (interrupt)\r\n");
             return;
-    }
-    catch (...)
-    {
-        PrintException(NULL, "ThreadRPCServer()");
     }
     printf("ThreadRPCServer exited\n");
 }
@@ -902,6 +897,9 @@ void ThreadRPCServer2(void* parg)
 
     while (!fShutdown)
         rpc_io_service->run_one();
+
+    delete rpc_io_service;
+    rpc_io_service = NULL;
     StopRequests();
 }
 
@@ -1233,6 +1231,10 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "sendalert"              && n > 5) ConvertTo<int64_t>(params[5]);
     if (strMethod == "sendalert"              && n > 6) ConvertTo<int64_t>(params[6]);
 
+    if (strMethod == "sendalert2"              && n > 5) ConvertTo<int64_t>(params[5]);
+    if (strMethod == "sendalert2"              && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "sendalert2"              && n > 4) ConvertTo<int64_t>(params[4]);
+
     if (strMethod == "sendmany"               && n > 1) ConvertTo<Object>(params[1]);
     if (strMethod == "sendmany"               && n > 2) ConvertTo<int64_t>(params[2]);
     if (strMethod == "reservebalance"         && n > 0) ConvertTo<bool>(params[0]);
@@ -1241,9 +1243,6 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
     if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
     if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<int64_t>(params[1]);

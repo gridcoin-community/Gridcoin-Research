@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "clientversion.h"
 #include "txdb.h"
 #include "wallet.h"
 #include "walletdb.h"
@@ -22,8 +23,6 @@ extern void ThreadTopUpKeyPool(void* parg);
 
 double CoinToDouble(double surrogate);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-
-extern Array StakingReport();
 
 extern void ThreadCleanWalletPassphrase(void* parg);
 
@@ -110,7 +109,7 @@ Value getinfo(const Array& params, bool fHelp)
 
     Object obj, diff;
     obj.push_back(Pair("version",       FormatFullVersion()));
-    obj.push_back(Pair("minor_version",   MINOR_VERSION));
+    obj.push_back(Pair("minor_version", CLIENT_VERSION_MINOR));
 
     obj.push_back(Pair("protocolversion", PROTOCOL_VERSION));
     obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
@@ -1063,7 +1062,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
             obj.push_back(Pair("account",       strAccount));
             obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
-            obj.push_back(Pair("tx_count", (*it).second.sContracts.size()));
+            obj.push_back(Pair("tx_count",      (uint64_t) it->second.sContracts.size()));
 
             // Add support for contract or message information appended to the TX itself
             Object oTX;
@@ -1251,68 +1250,6 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
             }
         }
     }
-}
-
-
-
-Array StakingReport()
-{
-
-    Array results;
-    Object c;
-    std::string Narr = ToString(GetAdjustedTime());
-    c.push_back(Pair("Staking Report",Narr));
-    results.push_back(c);
-    Object entry;
-    int64_t nCoinStakeTotal = 0;
-    int64_t nNonCoinStakeTotal = 0;
-    int64_t nStake = 0;
-    int64_t nImmature = 0;
-    int64_t nDepthImmature = 0;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (map<uint256, CWalletTx>::const_iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
-    {
-        const CWalletTx* pcoin = &(*it).second;
-        int64_t amt = pwalletMain->GetCredit(*pcoin);
-
-        if (pcoin->IsCoinStake())
-        {
-                 nCoinStakeTotal += amt;
-                 if (pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)
-                 {
-                     nStake += amt;
-                 }
-                 else
-                 {
-                     
-                     if (pcoin->GetBlocksToMaturity() < 1) 
-                     {
-                                nImmature+=amt;
-                     }
-                     else
-                     {
-                                if (pcoin->GetDepthInMainChain() < 1) nDepthImmature += amt;
-                     }
-                 }
-   
-        }
-        else
-        {
-                 //Sent Tx
-                 nNonCoinStakeTotal += amt;
-   
-        }
-    }
-    
-    entry.push_back(Pair("CoinStakeTotal",     CoinToDouble(nCoinStakeTotal)));
-    entry.push_back(Pair("Non-CoinStakeTotal", CoinToDouble(nNonCoinStakeTotal)));
-    entry.push_back(Pair("Blocks Immature",    CoinToDouble(nImmature)));
-    entry.push_back(Pair("Depth Immature",     CoinToDouble(nDepthImmature)));
-    entry.push_back(Pair("Total Immature",     CoinToDouble(nImmature+nDepthImmature)));
-    entry.push_back(Pair("Total Eligibile for Staking", CoinToDouble(nStake)));
-    results.push_back(entry);
-    return results;
-
 }
 
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, const isminefilter& filter=MINE_SPENDABLE)

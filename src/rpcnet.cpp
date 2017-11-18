@@ -407,3 +407,64 @@ Value sendalert(const Array& params, bool fHelp)
         result.push_back(Pair("nCancel", alert.nCancel));
     return result;
 }
+
+Value sendalert2(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 7)
+        throw runtime_error(
+            //          0            1    2            3            4        5          6
+            "sendalert <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
+            "<message> is the alert text message\n"
+            "<privatekey> is hex string of alert master private key\n"
+            "<subverlist> comma separated list of versions warning applies to\n"
+            "<priority> integer, >1000->visible\n"
+            "<id> is the unique alert number\n"
+            "<cancellist> comma separated ids of alerts to cancel\n"
+            "<expire> alert expiration in days\n"
+            "Returns true or false.");
+
+    CAlert alert;
+    CKey key;
+
+    alert.strStatusBar = params[6].get_str();
+    alert.nMinVer = PROTOCOL_VERSION;
+    alert.nMaxVer = PROTOCOL_VERSION;
+    alert.nPriority = params[5].get_int();
+    alert.nID = params[1].get_int();
+    alert.nVersion = PROTOCOL_VERSION;
+    alert.nRelayUntil = alert.nExpiration = GetAdjustedTime() + 24*60*60*params[4].get_int();
+
+    std::vector<std::string> split_subver = split(params[2].get_str(), ",");
+    alert.setSubVer.insert(split_subver.begin(),split_subver.end());
+
+    std::vector<std::string> split_cancel = split(params[3].get_str(), ",");
+    for(std::string &s : split_cancel)
+    {
+        int aver = RoundFromString(s, 0);
+        alert.setCancel.insert(aver);
+    }
+
+    CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
+    sMsg << (CUnsignedAlert)alert;
+    alert.vchMsg = vector<unsigned char>(sMsg.begin(), sMsg.end());
+
+    vector<unsigned char> vchPrivKey = ParseHex(params[0].get_str());
+    key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
+    if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
+        throw runtime_error(
+            "Unable to sign alert, check private key?\n");  
+    if(!alert.ProcessAlert()) 
+        throw runtime_error(
+            "Failed to process alert.\n");
+    // Relay alert
+    {
+        LOCK(cs_vNodes);
+        for (auto const& pnode : vNodes)
+            alert.RelayTo(pnode);
+    }
+
+    Object result;
+    result.push_back(Pair("Content", alert.ToString()));
+    result.push_back(Pair("Success", true));
+    return result;
+}

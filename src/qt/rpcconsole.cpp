@@ -290,7 +290,7 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 
         // Provide initial values
-		QString cvi = model->formatFullVersion() + "-" + toqstring(MINOR_VERSION);
+		QString cvi = model->formatFullVersion() + "-" + toqstring(CLIENT_VERSION_MINOR);
 
 	    ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());

@@ -21,15 +21,15 @@
 #include "global_objects_noui.hpp"
 
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
-bool ComputeNeuralNetworkSupermajorityHashes();
-void BusyWaitForTally();
+void BusyWaitForTally_retired();
+void TallyNetworkAverages_v9();
+extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDsInBackground();
 bool IsConfigFileEmpty();
-
-std::string ToOfficialName(std::string proj);
 
 #ifndef WIN32
 #include <signal.h>
@@ -45,8 +45,6 @@ extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern bool fUseFastIndex;
-void InitializeBoincProjects();
-
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -72,58 +70,6 @@ void StartShutdown()
 #endif
 }
 
-void InitializeBoincProjects()
-{
-       //Initialize GlobalCPUMiningCPID
-        GlobalCPUMiningCPID.initialized = true;
-        GlobalCPUMiningCPID.cpid="";
-        GlobalCPUMiningCPID.cpidv2 = "";
-        GlobalCPUMiningCPID.projectname ="";
-        GlobalCPUMiningCPID.rac=0;
-        GlobalCPUMiningCPID.encboincpublickey = "";
-        GlobalCPUMiningCPID.boincruntimepublickey = "";
-        GlobalCPUMiningCPID.pobdifficulty = 0;
-        GlobalCPUMiningCPID.diffbytes = 0;
-        GlobalCPUMiningCPID.email = "";
-        GlobalCPUMiningCPID.RSAWeight = 0;
-
-        //Loop through projects saved in the Gridcoin Persisted Data System
-        std::string sType = "project";
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-        {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                            std::string key_value = mvApplicationCache[(*ii).first];
-                            std::vector<std::string> vKey = split(key_name,";");
-                            if (vKey.size() > 0)
-                            {
-
-                                std::string project_name = vKey[1];
-                                printf("Proj %s ",project_name.c_str());
-                                std::string project_value = key_value;
-                                boost::to_lower(project_name);
-                                std::string mainProject = ToOfficialName(project_name);
-                                boost::to_lower(mainProject);
-                                StructCPID structcpid = GetStructCPID();
-                                mvBoincProjects.insert(map<string,StructCPID>::value_type(mainProject,structcpid));
-                                structcpid = mvBoincProjects[mainProject];
-                                structcpid.initialized = true;
-                                structcpid.link = "http://";
-                                structcpid.projectname = mainProject;
-                                mvBoincProjects[mainProject] = structcpid;
-                                WHITELISTED_PROJECTS++;
-
-                            }
-                     }
-                }
-       }
-
-}
-
-
 void Shutdown(void* parg)
 {
     static CCriticalSection cs_Shutdown;
@@ -147,7 +93,6 @@ void Shutdown(void* parg)
          printf("gridcoinresearch exiting...\r\n");
 
         fShutdown = true;
-        nTransactionsUpdated++;
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
@@ -177,107 +122,6 @@ void HandleSIGHUP(int)
 {
     fReopenDebugLog = true;
 }
-
-
-
-
-
-//////////////////////////////////////////////////////////////////////////////
-//
-// Start
-//
-#if !defined(QT_GUI)
-bool AppInit(int argc, char* argv[])
-{
-
-    bool fRet = false;
-
-    ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
-
-    try
-    {
-        //
-        // Parameters
-        //
-        // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
-        ParseParameters(argc, argv);
-        printf("AppInit");
-        if (!boost::filesystem::is_directory(GetDataDir(false)))
-        {
-            fprintf(stderr, "Error: Specified directory does not exist\n");
-            Shutdown(NULL);
-        }
-        ReadConfigFile(mapArgs, mapMultiArgs);
-
-        if (mapArgs.count("-?") || mapArgs.count("--help"))
-        {
-            // First part of help message is specific to bitcoind / RPC client
-            std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
-                _("Usage:") + "\n" +
-                  "  gridcoind [options]                     " + "\n" +
-                  "  gridcoind [options] <command> [params]  " + _("Send command to -server or gridcoind") + "\n" +
-                  "  gridcoind [options] help                " + _("List commands") + "\n" +
-                  "  gridcoind [options] help <command>      " + _("Get help for a command") + "\n";
-
-            strUsage += "\n" + HelpMessage();
-
-            fprintf(stdout, "%s", strUsage.c_str());
-            return false;
-        }
-
-        // Command-line RPC  - Test this - ensure single commands execute and exit please.
-        for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
-                fCommandLine = true;
-
-        if (fCommandLine)
-        {
-            int ret = CommandLineRPC(argc, argv);
-            exit(ret);
-        }
-
-        fRet = AppInit2(threads);
-    }
-    catch (std::exception& e) {
-        printf("AppInit()Exception1");
-
-        PrintException(&e, "AppInit()");
-    } catch (...) {
-        printf("AppInit()Exception2");
-
-        PrintException(NULL, "AppInit()");
-    }
-    if (fRet)
-    {   // succesfully initialized, wait for shutdown
-        while (!ShutdownRequested())
-            MilliSleep(500);
-    }
-    Shutdown(NULL);
-
-    // delete thread handler
-    threads->interruptAll();
-    threads->removeAll();
-    threads.reset();
-
-    return fRet;
-}
-
-extern void noui_connect();
-int main(int argc, char* argv[])
-{
-    bool fRet = false;
-
-    // Connect bitcoind signal handlers
-    noui_connect();
-
-    fRet = AppInit(argc, argv);
-
-    if (fRet && fDaemon)
-        return 0;
-
-    return 1;
-}
-#endif
 
 bool static InitError(const std::string &str)
 {
@@ -500,7 +344,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     //Placeholder: Load Remote CPIDs Here
 
-    nNodeLifespan = GetArg("-addrlifespan", 7);    
+    nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
@@ -678,6 +522,16 @@ bool AppInit2(ThreadHandlerPtr threads)
     printf("Default data directory %s\n", GetDefaultDataDir().string().c_str());
     printf("Used data directory %s\n", strDataDir.c_str());
     std::ostringstream strErrors;
+
+    fDevbuildCripple = false;
+    if((CLIENT_VERSION_BUILD != 0) && !fTestNet)
+    {
+        fDevbuildCripple = true;
+        printf("WARNING: Running development version outside of testnet!\n"
+               "Staking and sending transactions will be disabled.\n");
+        if( (GetArg("-devbuild", "") == "override") && fDebug )
+            fDevbuildCripple = false;
+    }
 
     if (fDaemon)
         fprintf(stdout, "Gridcoin server starting\n");
@@ -1024,8 +878,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     LoadAdminMessages(true,sOut);
     printf("Done loading Admin messages");
 
-    InitializeBoincProjects();
-    printf("Done loading boinc projects");
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
@@ -1052,10 +904,13 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
-    if (!threads->createThread(StartNode, NULL, "Start Thread"))
 
+    TallyNetworkAverages_v9();
+
+    if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
-    BusyWaitForTally();
+
+    BusyWaitForTally_retired();
 
     if (fServer)
         threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");

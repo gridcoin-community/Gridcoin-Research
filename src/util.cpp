@@ -13,6 +13,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 #include <cmath>
+#include <boost/lexical_cast.hpp>
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -32,6 +33,8 @@ namespace boost {
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
 #include <cstdarg>
+
+#include "neuralnet.h"
 
 #ifdef WIN32
 #ifdef _MSC_VER
@@ -83,8 +86,9 @@ CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
 std::string GetNeuralVersion();
 
+bool fDevbuildCripple;
 
-int64_t IsNeural();
+//int64_t IsNeural();
 
 void MilliSleep(int64_t n)
 {
@@ -1462,6 +1466,19 @@ std::string RoundToString(double d, int place)
     return ss.str();
 }
 
+double RoundFromString(const std::string& s, int place)
+{
+    try
+    {
+        double num = boost::lexical_cast<double>(s);
+        return Round(num, place);
+    }
+    catch(const boost::bad_lexical_cast& e)
+    {
+        return 0;
+    }
+}
+
 bool Contains(const std::string& data, const std::string& instring)
 {
     return data.find(instring) != std::string::npos;
@@ -1486,16 +1503,10 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 
 std::string GetNeuralVersion()
 {
-
     std::string neural_v = "0";
-
-    #if defined(WIN32) && defined(QT_GUI)
-        int64_t neural_id = IsNeural();
-        neural_v = ToString(MINOR_VERSION) + "." + ToString(neural_id);
-    #endif
-
+    int64_t neural_id = NN::IsNeuralNet();
+    neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
     return neural_v;
-
 }
 
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)

@@ -7,6 +7,7 @@
 
 #include <deque>
 #include <array>
+#include <boost/thread.hpp>
 #include <atomic>
 #include <openssl/rand.h>
 
@@ -104,6 +105,7 @@ public:
 };
 
 extern bool fDiscover;
+void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
 extern uint64_t nLocalServices;
 extern uint64_t nLocalHostNonce;
@@ -222,7 +224,7 @@ public:
 	int nTrust;
 	////////////////////////
 
-	
+
 	//Block Flood attack Halford
 	int64_t nLastOrphan;
 	int nOrphanCount;
@@ -476,7 +478,7 @@ public:
         assert(ssSend.size () >= CMessageHeader::CHECKSUM_OFFSET + sizeof(nChecksum));
         memcpy((char*)&ssSend[CMessageHeader::CHECKSUM_OFFSET], &nChecksum, sizeof(nChecksum));
 
-        if (fDebug10) 
+        if (fDebug10)
 		{
             printf("(%d bytes)\n", nSize);
         }

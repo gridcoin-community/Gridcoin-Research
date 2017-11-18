@@ -138,41 +138,75 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
 
 bool VerifyBeaconContractTx(const std::string& txhashBoinc)
 {
+    // Mandatory condition handled in CheckBlock
+
     // Check if tx contains beacon advertisement and evaluate for certain conditions
     std::string chkMessageType = ExtractXML(txhashBoinc, "<MT>", "</MT>");
     std::string chkMessageAction = ExtractXML(txhashBoinc, "<MA>", "</MA>");
-    if (chkMessageAction != "A" && chkMessageType != "beacon")
+
+    if (chkMessageType != "beacon")
         return true; // Not beacon contract
+
+    if (chkMessageAction != "A")
+        return true; // Not an add contract for beacon
+
     std::string chkMessageContract = ExtractXML(txhashBoinc, "<MV>", "</MV>");
     std::string chkMessageContractCPID = ExtractXML(txhashBoinc, "<MK>", "</MK>");
     // Here we GetBeaconElements for the contract in the tx
     std::string tx_out_cpid;
     std::string tx_out_address;
     std::string tx_out_publickey;
+
     GetBeaconElements(chkMessageContract, tx_out_cpid, tx_out_address, tx_out_publickey);
-    if (tx_out_cpid == "" || tx_out_address == "" || tx_out_publickey == "" || chkMessageContractCPID == "")
-        return false;
+
+    if (tx_out_cpid.empty() || tx_out_address.empty() || tx_out_publickey.empty() || chkMessageContractCPID.empty())
+        return false; // Incomplete contract
+
     std::string chkKey = "beacon;" + chkMessageContractCPID;
     std::string chkValue = mvApplicationCache[chkKey];
+
+    if (chkValue.empty())
+    {
+        if (fDebug10)
+            printf("VBCTX : No Previous beacon found for CPID %s\n", chkMessageContractCPID.c_str());
+
+        return true; // No previous beacon in cache
+    }
+
     int64_t chkiAge = pindexBest != NULL
         ? pindexBest->nTime - mvApplicationCacheTimestamp[chkKey]
         : 0;
     int64_t chkSecondsBase = 60 * 24 * 30 * 60;
+
     // Conditions
     // Condition a) if beacon is younger then 5 months deny tx
     if (chkiAge <= chkSecondsBase * 5 && chkiAge >= 1)
+    {
+        if (fDebug10)
+            printf("VBCTX : Beacon age violation. Beacon Age %" PRId64 " < Required Age %" PRId64 "\n", chkiAge, (chkSecondsBase * 5));
+
         return false;
+    }
+
     // Condition b) if beacon is younger then 6 months but older then 5 months verify using the same keypair; if not deny tx
     if (chkiAge >= chkSecondsBase * 5 && chkiAge <= chkSecondsBase * 6)
     {
         std::string chk_out_cpid;
         std::string chk_out_address;
         std::string chk_out_publickey;
+
         // Here we GetBeaconElements for the contract in the current beacon in chain
         GetBeaconElements(chkValue, chk_out_cpid, chk_out_address, chk_out_publickey);
+
         if (tx_out_publickey != chk_out_publickey)
+        {
+            if (fDebug10)
+                printf("VBCTX : Beacon tx publickey != publickey in chain. %s != %s\n", tx_out_publickey.c_str(), chk_out_publickey.c_str());
+
             return false;
+        }
     }
+
     // Passed checks
     return true;
 }

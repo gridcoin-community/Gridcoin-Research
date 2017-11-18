@@ -12,15 +12,17 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
+#include "neuralnet.h"
+#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
 #include <fstream>
+#include <algorithm>
 
 using namespace json_spirit;
 using namespace std;
@@ -42,8 +44,8 @@ extern Array MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
-bool TallyResearchAverages(bool Forcefully);
-int RestartClient();
+bool bNetAveragesLoaded_retired;
+bool TallyResearchAverages_retired(bool);
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
@@ -54,13 +56,10 @@ extern Array SuperblockReport(std::string cpid);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
-double ExtractMagnitudeFromExplainMagnitude();
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-bool ComputeNeuralNetworkSupermajorityHashes();
 bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
-Array StakingReport();
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
@@ -70,7 +69,6 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-std::string ExtractHTML(std::string HTMLdata, std::string tagstartprefix,  std::string tagstart_suffix, std::string tag_end);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 
@@ -121,8 +119,6 @@ extern std::string GetListOf(std::string datatype);
 extern std::string GetListOfWithConsensus(std::string datatype);
 
 void qtSyncWithDPORNodes(std::string data);
-std::string qtGetNeuralHash(std::string data);
-std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
@@ -138,21 +134,20 @@ double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
-int ReindexWallet();
 extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
-double cdbl(std::string s, int place);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
 
 std::string getfilecontents(std::string filename);
 
+std::string ToOfficialName(std::string proj);
+
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
@@ -175,17 +170,17 @@ double GetNetworkTotalByProject(std::string projectname)
         return networkavgrac;
 }
 
-std::string FileManifest()            
+std::string FileManifest()
 {
     using namespace boost::filesystem;
     path dir_path = GetDataDir() / "nn2";
     std::string sMyManifest;
     for(directory_iterator it(dir_path); it != directory_iterator(); ++it)
-    { 
+    {
        if(boost::filesystem::is_regular_file(it->path()))
        {
            sMyManifest += it->path().string();
-       } 
+       }
     }
     return sMyManifest;
 }
@@ -289,10 +284,10 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     uint256 blockhash = block.GetPoWHash();
     std::string sblockhash = blockhash.GetHex();
     bool IsPoR = false;
-    IsPoR = (bb.Magnitude > 0 && bb.cpid != "INVESTOR" && blockindex->IsProofOfStake());
+    IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
     std::string PoRNarr = "";
     if (IsPoR) PoRNarr = "proof-of-research";
-    result.push_back(Pair("flags", 
+    result.push_back(Pair("flags",
         strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr        )       );
     result.push_back(Pair("proofhash", blockindex->hashProof.GetHex()));
     result.push_back(Pair("entropybit", (int)blockindex->GetStakeEntropyBit()));
@@ -325,7 +320,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
         result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
         result.push_back(Pair("RSAWeight",bb.RSAWeight));
     }
-    
+
     result.push_back(Pair("Magnitude", bb.Magnitude));
     if (fDebug3) result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
     result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
@@ -344,7 +339,7 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
         bool fValidSig = VerifyCPIDSignature(bb.cpid, bb.lastblockhash, bb.BoincSignature);
         result.push_back(Pair("SignatureValid",fValidSig));
     }
-    result.push_back(Pair("ClientVersion",bb.clientversion));   
+    result.push_back(Pair("ClientVersion",bb.clientversion));
 
     if (!bb.cpidv2.empty())     result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
     bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
@@ -556,12 +551,12 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
      std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
      std::vector<unsigned char> vchSig;
      key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
-     if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))  
+     if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
      {
              return "Unable to sign message, check private key.";
      }
-     
-     const std::string sig(vchSig.begin(), vchSig.end());     
+
+     const std::string sig(vchSig.begin(), vchSig.end());
      std::string SignedMessage = EncodeBase64(sig);
      return SignedMessage;
 }
@@ -590,7 +585,7 @@ bool CheckMessageSignature(std::string sAction,std::string messagetype, std::str
      std::vector<unsigned char> vchSig = vector<unsigned char>(db64.begin(), db64.end());
      if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig)) return false;
      return true;
-   
+
 }
 
 
@@ -667,7 +662,7 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
             if (vSuperblock[i].length() > 1)
             {
                 std::string sTempCPID = ExtractValue(vSuperblock[i],",",0);
-                double magnitude = cdbl(ExtractValue("0"+vSuperblock[i],",",1),0);
+                double magnitude = RoundFromString(ExtractValue("0"+vSuperblock[i],",",1),0);
                 boost::to_lower(sTempCPID);
                 boost::to_lower(cpid);
                 // For each CPID in the contract
@@ -718,7 +713,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
 		if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }
-    catch (std::exception &e) 
+    catch (std::exception &e)
     {
                 printf("Error in GetSuperblockAvgMag.");
                 return 0;
@@ -728,7 +723,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
                 printf("Error in GetSuperblockAvgMag.");
                 return 0;
     }
-     
+
 }
 
 
@@ -743,14 +738,14 @@ bool TallyMagnitudesInSuperblock()
         double TotalNetworkMagnitude = 0;
         double TotalNetworkEntries = 0;
         if (mvDPORCopy.size() > 0 && vSuperblock.size() > 1)    mvDPORCopy.clear();
-        
+
         for (unsigned int i = 0; i < vSuperblock.size(); i++)
         {
             // For each CPID in the contract
             if (vSuperblock[i].length() > 1)
             {
                     std::string cpid = ExtractValue(vSuperblock[i],",",0);
-                    double magnitude = cdbl(ExtractValue(vSuperblock[i],",",1),0);
+                    double magnitude = RoundFromString(ExtractValue(vSuperblock[i],",",1),0);
                     if (cpid.length() > 10)
                     {
                         StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
@@ -773,7 +768,7 @@ bool TallyMagnitudesInSuperblock()
                         mvMagnitudesCopy[cpid] = stMagg;
                         TotalNetworkMagnitude += stMagg.Magnitude;
                         TotalNetworkEntries++;
-    
+
                     }
             }
     }
@@ -785,7 +780,9 @@ bool TallyMagnitudesInSuperblock()
     network.projectname="NETWORK";
     network.NetworkMagnitude = TotalNetworkMagnitude;
     network.NetworkAvgMagnitude = NetworkAvgMagnitude;
-    
+    if (fDebug)
+       printf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries,ReadCache("superblock","block_number").c_str());
+
     double TotalProjects = 0;
     double TotalRAC = 0;
     double AVGRac = 0;
@@ -803,7 +800,7 @@ bool TallyMagnitudesInSuperblock()
             if (vProjects[i].length() > 1)
             {
                     std::string project = ExtractValue(vProjects[i],",",0);
-                    double avg = cdbl(ExtractValue("0" + vProjects[i],",",1),0);
+                    double avg = RoundFromString(ExtractValue("0" + vProjects[i],",",1),0);
                     if (project.length() > 1)
                     {
                         StructCPID stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
@@ -811,7 +808,7 @@ bool TallyMagnitudesInSuperblock()
                         stProject.AverageRAC = avg;
                         //As of 7-16-2015, start pulling in Total RAC
                         totalRAC = 0;
-                        totalRAC = cdbl("0" + ExtractValue(vProjects[i],",",2),0);
+                        totalRAC = RoundFromString("0" + ExtractValue(vProjects[i],",",2),0);
                         stProject.rac = totalRAC;
                         mvNetworkCopy[project]=stProject;
                         TotalProjects++;
@@ -837,8 +834,8 @@ bool TallyMagnitudesInSuperblock()
             if (vQ[i].length() > 1)
             {
                     std::string symbol = ExtractValue(vQ[i],",",0);
-                    double price = cdbl(ExtractValue("0" + vQ[i],",",1),0);
-                    
+                    double price = RoundFromString(ExtractValue("0" + vQ[i],",",1),0);
+
                     WriteCache("quotes",symbol,RoundToString(price,2),GetAdjustedTime());
                     if (fDebug3) printf("symbol %s price %f ",symbol.c_str(),price);
             }
@@ -849,7 +846,7 @@ bool TallyMagnitudesInSuperblock()
     if (fDebug3) printf(".TMS43.");
     return true;
     }
-    catch (std::exception &e) 
+    catch (std::exception &e)
     {
                 printf("Error in TallySuperblock.");
                 return false;
@@ -895,10 +892,10 @@ std::string GetListOfWithConsensus(std::string datatype)
        std::string rows = "";
        std::string row = "";
 	   int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-       int64_t nLookback = 30 * 6 * 86400; 
+       int64_t nLookback = 30 * 6 * 86400;
        int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
        printf(" getlistofwithconsensus startime %f , endtime %f, lookback %f \r\n ",(double)iStartTime,(double)iEndTime, (double)nLookback);
-	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
+	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
        {
              std::string key_name  = (*ii).first;
              if (key_name.length() > datatype.length())
@@ -907,7 +904,7 @@ std::string GetListOfWithConsensus(std::string datatype)
                  {
  			           int64_t iBeaconTimestamp = mvApplicationCacheTimestamp[(*ii).first];
 				       if (iBeaconTimestamp > iStartTime && iBeaconTimestamp < iEndTime)
-					   {		
+					   {
 							std::string key_value = mvApplicationCache[(*ii).first];
 							std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
 							row = subkey + "<COL>" + key_value;
@@ -940,14 +937,13 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
     std::string cpidv1 = cpidv2.substr(0,32);
     return (externalcpid==cpidv1);
 }
-        
 
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
-{	
+{
      LOCK(cs_main);
      {
             GetNextProject(false);
-            if (GlobalCPUMiningCPID.cpid=="INVESTOR")
+            if (!IsResearcher(GlobalCPUMiningCPID.cpid))
             {
                 sError = "INVESTORS_CANNOT_SEND_BEACONS";
                 return false;
@@ -955,10 +951,10 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
             //If beacon is already in the chain, exit early
             std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-            if (!sBeaconPublicKey.empty()) 
+            if (!sBeaconPublicKey.empty())
             {
                 // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
-                // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)		
+                // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)
                 sError = "ALREADY_IN_CHAIN";
                 return false;
             }
@@ -990,8 +986,8 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 sError = "Balance too low to send beacon, 1.01 GRC minimum balance required.";
                 return false;
             }
-        
-            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);  
+
+            GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
             if (sOutPrivKey.empty() || sOutPubKey.empty())
             {
                 sError = "Keypair is empty.";
@@ -1040,7 +1036,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 sError = "Error: Unable to send beacon::"+json_spirit::write_string(json_spirit::Value(objError),true);
                 return false;
             }
-            catch (std::exception &e) 
+            catch (std::exception &e)
             {
                 sError = "Error: Unable to send beacon;:"+std::string(e.what());
                 return false;
@@ -1069,12 +1065,12 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      catch (std::exception& e)
      {
          printf("Std exception %s \r\n",method.c_str());
-         
+
          std::string caught = e.what();
          return "Exception " + caught;
 
-     } 
-     catch (...) 
+     }
+     catch (...)
      {
             printf("Generic exception (Please try unlocking the wallet) %s \r\n",method.c_str());
             return "Generic Exception (Please try unlocking the wallet).";
@@ -1104,12 +1100,12 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      catch (std::exception& e)
      {
          printf("Std exception %s \r\n",method.c_str());
-         
+
          std::string caught = e.what();
          return "Exception " + caught;
 
-     } 
-     catch (...) 
+     }
+     catch (...)
      {
             printf("Generic exception (Please try unlocking the wallet) %s \r\n",method.c_str());
             return "Generic Exception (Please try unlocking the wallet).";
@@ -1136,12 +1132,12 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      catch (std::exception& e)
      {
          printf("Std exception %s \r\n",method.c_str());
-         
+
          std::string caught = e.what();
          return "Exception " + caught;
 
-     } 
-     catch (...) 
+     }
+     catch (...)
      {
             printf("Generic exception (Please try unlocking the wallet). %s \r\n",method.c_str());
             return "Generic Exception (Please try unlocking the wallet).";
@@ -1179,27 +1175,22 @@ Value execute(const Array& params, bool fHelp)
     oOut.push_back(Pair("Command",sItem));
     results.push_back(oOut);
     Object entry;
-        
+
     if (sItem == "restorepoint")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
+            int r= Restarter::CreateGridcoinRestorePoint();
             //We must stop the node before we can do this
-            r = CreateRestorePoint();
             //RestartGridcoin();
-            #endif 
             entry.push_back(Pair("Restore Point",r));
             results.push_back(entry);
     }
     else if (sItem == "restart")
     {
         printf("Restarting Gridcoin...");
-        int iResult = 0;
-#if defined(WIN32) && defined(QT_GUI)
-        iResult = RestartClient();
-#endif
-        entry.push_back(Pair("result", iResult));
+        int iResult = Restarter::RestartGridcoin();
+        entry.push_back(Pair("RebootClient", iResult));
         results.push_back(entry);
+
     }
     else if (sItem == "sendblock")
     {
@@ -1207,7 +1198,7 @@ Value execute(const Array& params, bool fHelp)
             {
                 entry.push_back(Pair("Error","You must specify the block hash to send."));
                 results.push_back(entry);
-            } 
+            }
             std::string sHash = params[1].get_str();
             uint256 hash = uint256(sHash);
             bool fResult = AskForOutstandingBlocks(hash);
@@ -1235,14 +1226,14 @@ Value execute(const Array& params, bool fHelp)
                 std::string sDetail  = params[4].get_str();
                 CBitcoinAddress address(sAddress);
                 bool isValid = address.IsValid();
-                if (!isValid) 
+                if (!isValid)
                 {
                     entry.push_back(Pair("Error","Invalid GRC Burn Address."));
                     results.push_back(entry);
                     return results;
                 }
 
-                double dAmount = cdbl(sAmount,6);
+                double dAmount = RoundFromString(sAmount,6);
 
                 if (dAmount == 0 || dAmount < 0)
                 {
@@ -1289,8 +1280,8 @@ Value execute(const Array& params, bool fHelp)
         vector<unsigned char> vchDecoded30(sDecoded30.begin(), sDecoded30.end());
         std::string sDecodedHex = ConvertBinToHex(sDecoded30);
         // Get sha256 Checksum of DecodedHex
-        uint256 hash = Hash(vchDecoded30.begin(), vchDecoded30.end()); 
-        // The BTC address spec calls for double SHA256 hashing 
+        uint256 hash = Hash(vchDecoded30.begin(), vchDecoded30.end());
+        // The BTC address spec calls for double SHA256 hashing
         uint256 DoubleHash = Hash(hash.begin(),hash.end());
         std::string sSha256 = DoubleHash.GetHex();
         // Only use the first 8 hex bytes to retrieve the checksum
@@ -1329,7 +1320,7 @@ Value execute(const Array& params, bool fHelp)
         std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
         entry.push_back(Pair("Computed Email Hash",sEmailMD5));
         entry.push_back(Pair("Computed BPK",sBPKMD5));
-        
+
         entry.push_back(Pair("Computed CPID",sLongCPID));
         entry.push_back(Pair("Computed Short CPID", sShortCPID));
         bool fResult = CPID_IsCPIDValid(sShortCPID,sLongCPID,1);
@@ -1344,26 +1335,26 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem=="beaconstatus")
     {
         // Search for beacon, and report on beacon status.
-            
+
         std::string sCPID = msPrimaryCPID;
         if (params.size()==2)
         {
             sCPID = params[1].get_str();
         }
-        
+
         entry.push_back(Pair("CPID", sCPID));
         std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
         std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
         int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
         std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
-    
+
         bool hasBeacon = HasActiveBeacon(sCPID);
         entry.push_back(Pair("Beacon Exists",YesNo(hasBeacon)));
         entry.push_back(Pair("Beacon Timestamp",timestamp.c_str()));
 
         entry.push_back(Pair("Public Key", sPubKey.c_str()));
         entry.push_back(Pair("Private Key", sPrivKey.c_str()));
-        
+
         std::string sErr = "";
         if (sPubKey.empty())
         {
@@ -1386,8 +1377,8 @@ Value execute(const Array& params, bool fHelp)
         {
             sErr += "Local configuration public key does not match beacon public key.  This can happen if you copied the wrong public key into your configuration file.  Please request that your beacon is deleted, or look into walletbackups for the correct keypair. ";
         }
-        
-        // Prior superblock Magnitude 
+
+        // Prior superblock Magnitude
         double dMagnitude = GetMagnitudeByCpidFromLastSuperblock(sCPID);
         entry.push_back(Pair("Magnitude (As of last superblock)", dMagnitude));
         if (dMagnitude==0)
@@ -1408,7 +1399,7 @@ Value execute(const Array& params, bool fHelp)
             }
         }
 
-        if (!sErr.empty()) 
+        if (!sErr.empty())
         {
             entry.push_back(Pair("Errors", sErr));
             entry.push_back(Pair("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon."));
@@ -1454,8 +1445,8 @@ Value execute(const Array& params, bool fHelp)
                     std::string sAmount = vReward[1];
                     if (sAddress.length() > 10 && sAmount.length() > 0)
                     {
-                        double dAmount = cdbl(sAmount,4);
-                        if (dAmount > 0) 
+                        double dAmount = RoundFromString(sAmount,4);
+                        if (dAmount > 0)
                         {
                             CBitcoinAddress address(sAddress);
                             if (!address.IsValid())
@@ -1522,9 +1513,9 @@ Value execute(const Array& params, bool fHelp)
                 entry.push_back(Pair("Result",SuccessFail(fResult)));
                 entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
                 entry.push_back(Pair("Message",sMessage.c_str()));
-                
+
                 if (!sError.empty())        entry.push_back(Pair("Errors",sError));
-            
+
                 if (!fResult)
                 {
                     entry.push_back(Pair("FAILURE","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>'."));
@@ -1535,7 +1526,7 @@ Value execute(const Array& params, bool fHelp)
                     entry.push_back(Pair("Warning!","Your public and private research keys have been stored in gridcoinresearch.conf.  Do not lose your private key (It is non-recoverable).  It is recommended that you back up your gridcoinresearch.conf file on a regular basis."));
                 }
                 results.push_back(entry);
-            
+
     }
     else if (sItem == "syncdpor2")
     {
@@ -1593,11 +1584,9 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="myneuralhash")
     {
-        #if defined(WIN32) && defined(QT_GUI)
-            std::string myNeuralHash = qtGetNeuralHash("");
-            entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
-            results.push_back(entry);
-        #endif
+        std::string myNeuralHash = NN::GetNeuralHash();
+        entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+        results.push_back(entry);
     }
     else if (sItem == "superblockage")
     {
@@ -1611,7 +1600,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "unusual")
     {
-        
+
             UnusualActivityReport();
             entry.push_back(Pair("UAR",1));
             results.push_back(entry);
@@ -1669,7 +1658,7 @@ Value execute(const Array& params, bool fHelp)
                 entry.push_back(Pair("Result",result));
                 results.push_back(entry);
         }
-            
+
     }
     else if (sItem == "readdata")
     {
@@ -1684,18 +1673,18 @@ Value execute(const Array& params, bool fHelp)
                 std::string sValue = "?";
                 //CTxDB txdb("cr");
                 CTxDB txdb;
-                if (!txdb.ReadGenericData(sKey,sValue)) 
+                if (!txdb.ReadGenericData(sKey,sValue))
                 {
                         entry.push_back(Pair("Error",sValue));
-            
+
                         sValue = "Failed to read from disk.";
                 }
                 entry.push_back(Pair("Key",sKey));
-                
+
                 entry.push_back(Pair("Result",sValue));
                 results.push_back(entry);
         }
-            
+
     }
     else if (sItem == "refhash")
     {
@@ -1714,7 +1703,7 @@ Value execute(const Array& params, bool fHelp)
                 results.push_back(entry);
 
         }
-        
+
     }
     else if (sItem == "vote")
     {
@@ -1727,11 +1716,11 @@ Value execute(const Array& params, bool fHelp)
         {
                 std::string Title = params[1].get_str();
                 std::string Answer = params[2].get_str();
-                if (Title=="" || Answer == "" ) 
+                if (Title=="" || Answer == "" )
                 {
                             entry.push_back(Pair("Error","You must specify both the answer and the title."));
                             results.push_back(entry);
-    
+
                 }
                 else
                 {
@@ -1750,7 +1739,7 @@ Value execute(const Array& params, bool fHelp)
                     {
                             entry.push_back(Pair("Error","Poll does not exist."));
                             results.push_back(entry);
-    
+
                     }
                     else
                     {
@@ -1784,22 +1773,20 @@ Value execute(const Array& params, bool fHelp)
                                 double cpid_age = GetAdjustedTime() - nCPIDTime;
                                 double stake_age = GetAdjustedTime() - nGRCTime;
 
-                                // Phase II - Prevent Double Voting
-                                                                                                
                                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
 
-                                
+
                                 printf("CPIDAge %f,StakeAge %f,Poll Duration %f \r\n",cpid_age,stake_age,poll_duration);
 
-                                double dShareType= cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
-                            
+                                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+
                                 // Share Type 1 == "Magnitude"
                                 // Share Type 2 == "Balance"
                                 // Share Type 3 == "Both"
                                 if (cpid_age < poll_duration) dmag = 0;
                                 if (stake_age < poll_duration) nBalance = 0;
 
-                                if ((dShareType == 1) && cpid_age < poll_duration) 
+                                if ((dShareType == 1) && cpid_age < poll_duration)
                                 {
                                     entry.push_back(Pair("Error","Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
                                     results.push_back(entry);
@@ -1816,9 +1803,9 @@ Value execute(const Array& params, bool fHelp)
                                 }
                                 else
                                 {
-                                    std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>" 
-										+ GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>" 
-										+ hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2) 
+                                    std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
+										+ GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
+										+ hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
 										+ "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
 									// Add the provable balance and the provable magnitude - this goes into effect July 1 2017
 									voter += GetProvableVotingWeightXML();
@@ -1855,20 +1842,20 @@ Value execute(const Array& params, bool fHelp)
         {
                 std::string Title = params[1].get_str();
                 std::string Days = params[2].get_str();
-                double days = cdbl(Days,0);
+                double days = RoundFromString(Days,0);
                 std::string Question = params[3].get_str();
                 std::string Answers = params[4].get_str();
                 std::string ShareType = params[5].get_str();
                 std::string sURL = params[6].get_str();
-                double sharetype = cdbl(ShareType,0);
-                if (Title=="" || Question == "" || Answers == "") 
+                double sharetype = RoundFromString(ShareType,0);
+                if (Title=="" || Question == "" || Answers == "")
                 {
                         entry.push_back(Pair("Error","You must specify a Poll Title, Poll Question and Poll Answers."));
                         results.push_back(entry);
                 }
                 else
                 {
-                if (days < 7) 
+                if (days < 7)
                 {
                         entry.push_back(Pair("Error","Minimum duration is 7 days; please specify a longer poll duration."));
                         results.push_back(entry);
@@ -1876,7 +1863,7 @@ Value execute(const Array& params, bool fHelp)
                 else
                 {
                     double nBalance = GetTotalBalance();
-                
+
                     if (nBalance < 100000)
                     {
                         entry.push_back(Pair("Error","You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
@@ -1888,7 +1875,7 @@ Value execute(const Array& params, bool fHelp)
                         {
                             entry.push_back(Pair("Error","You must specify a positive value for days for the expiration date."));
                             results.push_back(entry);
-            
+
                         }
                         else
                         {
@@ -1924,7 +1911,7 @@ Value execute(const Array& params, bool fHelp)
         else
         {
             std::string Title1 = params[1].get_str();
-                
+
             if (!PollExists(Title1))
             {
                 entry.push_back(Pair("Error","Poll does not exist.  Please execute listpolls."));
@@ -1981,7 +1968,7 @@ Value execute(const Array& params, bool fHelp)
         else
         {
             std::string Title1 = params[1].get_str();
-                
+
             if (!PollExists(Title1))
             {
                 entry.push_back(Pair("Error","Poll does not exist.  Please execute listpolls."));
@@ -2008,17 +1995,11 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="testnewcontract")
     {
-        std::string contract = "";
-        std::string myNeuralHash = "";
-        #if defined(WIN32) && defined(QT_GUI)
-            contract = qtGetNeuralContract("");
-        #endif
-        #if defined(WIN32) && defined(QT_GUI)
-            myNeuralHash = qtGetNeuralHash("");
-            entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
-            results.push_back(entry);
-        #endif
-        LoadSuperblock(contract,GetAdjustedTime(),280000);
+        std::string contract = NN::GetNeuralContract();
+        std::string myNeuralHash = NN::GetNeuralHash();
+        entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+        results.push_back(entry);
+
         entry.push_back(Pair("Contract Test",contract));
         // Convert to Binary
         std::string sBin = PackBinarySuperblock(contract);
@@ -2045,40 +2026,10 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
             results.push_back(entry);
     }
-    else if (sItem == "explainmagnitude2")
-    {
-        bool force = false;
-        if (params.size() == 2)
-        {
-            std::string optional = params[1].get_str();
-            boost::to_lower(optional);
-            if (optional == "force") force = true;
-        }
-
-        if (force) msNeuralResponse = "";
-        if (msNeuralResponse=="")
-        {
-            AsyncNeuralRequest("explainmag",GlobalCPUMiningCPID.cpid,10);
-            entry.push_back(Pair("Requested Explain Magnitude For",GlobalCPUMiningCPID.cpid));
-        }
-
-        std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
-        for (unsigned int i = 0; i < vMag.size(); i++)
-        {
-                entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
-        }
-        if (msNeuralResponse=="") 
-        {
-                    entry.push_back(Pair("Response","No response."));
-        }
-
-        results.push_back(entry);
-    }
     else if (sItem == "tally")
     {
-            bNetAveragesLoaded = false;
-            nLastTallied = 0;
-            TallyResearchAverages(true);
+            bNetAveragesLoaded_retired = false;
+            TallyResearchAverages_retired(true);
             entry.push_back(Pair("Tally Network Averages",1));
             results.push_back(entry);
     }
@@ -2098,7 +2049,7 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("[Specify in config file] autounlock=",encrypted));
             results.push_back(entry);
         }
-    
+
     }
     else if (sItem == "genboinckey")
     {
@@ -2133,9 +2084,9 @@ Value execute(const Array& params, bool fHelp)
             std::string test = AdvancedCrypt(sParam1);
             entry.push_back(Pair("EncPhrase",test));
             results.push_back(entry);
-    
+
         }
-    
+
     }
 
     else if (sItem == "decryptphrase")
@@ -2152,16 +2103,16 @@ Value execute(const Array& params, bool fHelp)
             std::string test = AdvancedDecrypt(sParam1);
             entry.push_back(Pair("DecPhrase",test));
             results.push_back(entry);
-    
+
         }
-    
+
     }
     else if (sItem == "dportally")
     {
         TallyMagnitudesInSuperblock();
         entry.push_back(Pair("Done","Done"));
         results.push_back(entry);
-    
+
     }
     else if (sItem == "addkey")
     {
@@ -2239,7 +2190,7 @@ Value execute(const Array& params, bool fHelp)
         LoadAdminMessages(true,sOut);
         entry.push_back(Pair("Results",sOut));
         results.push_back(entry);
-        
+
     }
     else if (sItem == "superblockaverage")
     {
@@ -2261,10 +2212,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "currentcontractaverage")
     {
-        std::string contract;
-        #if defined(WIN32) && defined(QT_GUI)
-                    contract = qtGetNeuralContract("");
-        #endif
+        std::string contract = NN::GetNeuralContract();
         entry.push_back(Pair("Contract",contract));
         double out_beacon_count = 0;
         double out_participant_count = 0;
@@ -2277,19 +2225,14 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("superblock_valid",bValid));
         //Show current contract neural hash
-        std::string sNeuralHash = "";
-
-        #if defined(WIN32) && defined(QT_GUI)
-            sNeuralHash = qtGetNeuralHash("");
-            entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
-        #endif
-    
+        std::string sNeuralHash = NN::GetNeuralHash();
+        entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
         entry.push_back(Pair("Length",(double)contract.length()));
         std::string neural_hash = GetQuorumHash(contract);
         entry.push_back(Pair("Wallet Neural Hash",neural_hash));
-        
+
         results.push_back(entry);
-        
+
     }
     else if (sItem == "getlistof")
     {
@@ -2353,9 +2296,9 @@ Value execute(const Array& params, bool fHelp)
                 entry.push_back(Pair("OrgKey",key));
             }
             results.push_back(entry);
-    
+
         }
-    
+
     }
     else if (sItem == "testorgkey")
     {
@@ -2373,29 +2316,23 @@ Value execute(const Array& params, bool fHelp)
             std::string key = sParam1 + "," + AdvancedDecryptWithSalt(sParam2,sParam1);
             entry.push_back(Pair("PubKey",key));
             results.push_back(entry);
-    
+
         }
-    
+
     }
     else if (sItem == "reindex")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
-            ReindexWallet();
-            r = CreateRestorePoint();
-            #endif 
+            int r = Restarter::CreateGridcoinRestorePoint();
+            Restarter::ReindexGridcoinWallet();
             entry.push_back(Pair("Reindex Chain",r));
             results.push_back(entry);
     }
-    else if (sItem == "downloadblocks")
+    /*else if (sItem == "downloadblocks")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
-                r = DownloadBlocks();
-            #endif 
+            int r=Restarter::DownloadGridcoinBlocks();
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
-    }
+    }*/
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
@@ -2417,7 +2354,7 @@ Value execute(const Array& params, bool fHelp)
             ResendWalletTransactions(true);
             entry.push_back(Pair("Resending unsent wallet transactions...",1));
             results.push_back(entry);
-    } 
+    }
     else if (sItem == "encrypt_deprecated")
     {
             std::string s1 = "1234";
@@ -2501,34 +2438,25 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
         entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
-        #if defined(WIN32) && defined(QT_GUI)
-        entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
-        #endif
+        //entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
-        entry.push_back(Pair("execute explainmagnitude2 <true>", "Explains your neural network magnitude. True is optional for force"));
         entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
         entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
         entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
         entry.push_back(Pair("execute listpollresults <title> <true>", "Displays poll results for specified title. True is optional for expired polls"));
         entry.push_back(Pair("execute listpolls", "Displays all active polls"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
-        #endif
         entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
         entry.push_back(Pair("execute neuralreport", "Displays information of recently staked neural votes by participating nodes"));
         entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
         entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute reindex", "Reindex blockchain"));
-        #endif
         entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
         entry.push_back(Pair("execute resetcpids", "Resets wallet cpids (can be used to correct cpids after a split cpid is fixed)"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute restart", "Restarts wallet"));
         entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
-        #endif
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
         entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
@@ -2545,9 +2473,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "helpdev")
     {
         entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute executecode", "Excute .net code"));
-        #endif
         entry.push_back(Pair("execute forcequorum", "Force quorum"));
         entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
         entry.push_back(Pair("execute getlistof <keytype>", "Get list of keytype data"));
@@ -2578,7 +2504,7 @@ Value execute(const Array& params, bool fHelp)
             results.push_back(entry);
     }
     return results;
-        
+
 }
 
 
@@ -2600,7 +2526,7 @@ Array LifetimeReport(std::string cpid)
             {
                 entry.push_back(Pair(RoundToString((double)pindex->nHeight,0), RoundToString(pindex->nResearchSubsidy,2)));
             }
-            
+
        }
        //8-14-2015
        StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
@@ -2661,6 +2587,7 @@ Array SuperblockReport(std::string cpid)
                     c.push_back(Pair("Magnitude",mag));
                 }
 
+
                 results.push_back(c);
             }
         }
@@ -2678,9 +2605,8 @@ Array MagnitudeReport(std::string cpid)
            results.push_back(c);
            double total_owed = 0;
            double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
-           msRSAOverview = "";
            if (!pindexBest) return results;
-            
+
            try
            {
                    if (mvMagnitudes.size() < 1)
@@ -2688,12 +2614,12 @@ Array MagnitudeReport(std::string cpid)
                            if (fDebug3) printf("no results");
                            return results;
                    }
-                   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+                   for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
                    {
                         // For each CPID on the network, report:
                         StructCPID structMag = mvMagnitudes[(*ii).first];
-                        if (structMag.initialized && !structMag.cpid.empty()) 
-                        { 
+                        if (structMag.initialized && !structMag.cpid.empty())
+                        {
                                 if (cpid.empty() || (Contains(structMag.cpid,cpid)))
                                 {
                                             Object entry;
@@ -2712,7 +2638,7 @@ Array MagnitudeReport(std::string cpid)
                                                 double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
                                                 entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
                                                 entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
-                                
+
                                                 // Fulfillment %
                                                 double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
                                                 entry.push_back(Pair("Fulfillment %", fulfilled));
@@ -2720,20 +2646,13 @@ Array MagnitudeReport(std::string cpid)
                                                 entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
                                                 entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
                                                 entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
-                            
+
                                                 entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01)));
                                                 entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
                                                 entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
                                                 entry.push_back(Pair("Tx Count",(int)stCPID.Accuracy));
-                            
+
                                                 results.push_back(entry);
-                                                if (cpid==msPrimaryCPID && !msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
-                                                {
-                                                    msRSAOverview = "Exp PPD: " + RoundToString(dExpected14/14,0) 
-                                                        + ", Act PPD: " + RoundToString(structMag.payments/14,0) 
-                                                        + ", Fulf %: " + RoundToString(fulfilled,2) 
-                                                        + ", GRCMagUnit: " + RoundToString(magnitude_unit,4);
-                                                }
                                             }
                                             else
                                             {
@@ -2758,7 +2677,7 @@ Array MagnitudeReport(std::string cpid)
                         }
 
                     }
-                    
+
                     if (fDebug3) printf("MR8");
 
                     Object entry2;
@@ -2775,10 +2694,10 @@ Array MagnitudeReport(std::string cpid)
                         entry3.push_back(Pair("Start Block",nMinDepth));
                         entry3.push_back(Pair("End Block",nMaxDepth));
                         results.push_back(entry3);
-        
+
                     }
                     if (fDebug3) printf("*MR5*");
-                                    
+
                     return results;
             }
             catch(...)
@@ -2813,8 +2732,8 @@ std::string TimestampToHRDate(double dtm)
 double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID)
 {
         StructCPID structMag = mvMagnitudes[sCPID];
-        if (structMag.initialized && structMag.cpid.length() > 2 && structMag.cpid != "INVESTOR") 
-        { 
+        if (structMag.initialized && IsResearcher(structMag.cpid))
+        {
             return structMag.Magnitude;
         }
         return 0;
@@ -2830,7 +2749,7 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
 
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
 {
-    // Returns the Signature of the CPID+BlockHash message. 
+    // Returns the Signature of the CPID+BlockHash message.
     std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
     std::string sMessage = sCPID + sBlockHash;
     std::string sSignature = SignMessage(sMessage,sPrivateKey);
@@ -2859,7 +2778,7 @@ bool PollExists(std::string pollname)
 bool PollExpired(std::string pollname)
 {
     std::string contract = GetPollContractByTitle("poll",pollname);
-    double expiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+    double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
     return (expiration < (double)GetAdjustedTime()) ? true : false;
 }
 
@@ -2868,7 +2787,7 @@ bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 {
 	// If the expiration is after July 1 2017, use the new security features.
 	std::string contract = GetPollContractByTitle("poll",pollname);
-	double expiration = cdbl(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+	double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
 	return (expiration > 1498867200) ? true : false;
 }
 
@@ -2876,7 +2795,7 @@ bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 double PollDuration(std::string pollname)
 {
     std::string contract = GetPollContractByTitle("poll",pollname);
-    double days = cdbl(ExtractXML(contract,"<DAYS>","</DAYS>"),0);
+    double days = RoundFromString(ExtractXML(contract,"<DAYS>","</DAYS>"),0);
     return days;
 }
 
@@ -2898,7 +2817,7 @@ double GetMoneySupplyFactor()
         double Factor = (MoneySupply/TotalNetworkMagnitude+.01);
         return Factor;
 
-}       
+}
 
 double PollCalculateShares(std::string contract, double sharetype, double MoneySupplyFactor, unsigned int VoteAnswerCount)
 {
@@ -2917,7 +2836,7 @@ double PollCalculateShares(std::string contract, double sharetype, double MoneyS
         double UserWeightedMagnitude = (MoneySupplyFactor/5.67) * magnitude;
         return (UserWeightedMagnitude+balance) / VoteAnswerCount;
     }
-    if (sharetype==4) 
+    if (sharetype==4)
     {
         if (magnitude > 0) return 1;
         return 0;
@@ -2929,13 +2848,13 @@ double PollCalculateShares(std::string contract, double sharetype, double MoneyS
     }
     return 0;
 }
-                            
+
 
 double VotesCount(std::string pollname, std::string answer, double sharetype, double& out_participants)
 {
     double total_shares = 0;
     out_participants = 0;
-    
+
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
     for(const auto& item : AppCacheFilter("vote"))
@@ -2984,7 +2903,7 @@ bool PollAcceptableAnswer(std::string pollname, std::string answer)
                 boost::to_lower(vAnswers[i]); //Contains Poll acceptable answers
                 std::string sUserAnswer = vUserAnswers[x];
                 boost::to_lower(sUserAnswer);
-                if (sUserAnswer == vAnswers[i]) 
+                if (sUserAnswer == vAnswers[i])
                 {
                         bFoundAnswer=true;
                         break;
@@ -3020,34 +2939,34 @@ std::string GetShareType(double dShareType)
 
 std::string GetProvableVotingWeightXML()
 {
-	std::string sXML = "<PROVABLEMAGNITUDE>";
-	//Retrieve the historical magnitude
-	if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
-	{
-		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
-		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
-		if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
-		{
-			std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-			std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
-			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
-			sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" 
-				+ RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-                "<HEIGHT>" + ToString(pHistorical->nHeight)
-				+ "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
-		}
-	}
-	sXML += "</PROVABLEMAGNITUDE>";
+    std::string sXML = "<PROVABLEMAGNITUDE>";
+    //Retrieve the historical magnitude
+    if (IsResearcher(msPrimaryCPID))
+    {
+        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
+        CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
+        if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
+        {
+            std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
+            std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
+            // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
+            sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>"
+                    + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
+                    "<HEIGHT>" + ToString(pHistorical->nHeight)
+                    + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
+        }
+    }
+    sXML += "</PROVABLEMAGNITUDE>";
 
     vector<COutput> vecOutputs;
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
-	std::string sRow = "";
-	double dTotal = 0;
-	double dBloatThreshhold = 100;
-	double dCurrentItemCount = 0;
-	double dItemBloatThreshhold = 50;
-	// Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
-	sXML += "<PROVABLEBALANCE>";
+    std::string sRow = "";
+    double dTotal = 0;
+    double dBloatThreshhold = 100;
+    double dCurrentItemCount = 0;
+    double dItemBloatThreshhold = 50;
+    // Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
+    sXML += "<PROVABLEBALANCE>";
     for (auto const& out : vecOutputs)
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
@@ -3098,9 +3017,9 @@ std::string GetProvableVotingWeightXML()
     }
 
 
-	sXML += "<TOTALVOTEDBALANCE>" + RoundToString(dTotal,2) + "</TOTALVOTEDBALANCE>";
-	sXML += "</PROVABLEBALANCE>";
-	return sXML;
+    sXML += "<TOTALVOTEDBALANCE>" + RoundToString(dTotal,2) + "</TOTALVOTEDBALANCE>";
+    sXML += "</PROVABLEBALANCE>";
+    return sXML;
 
 }
 
@@ -3108,8 +3027,8 @@ std::string GetProvableVotingWeightXML()
 double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade)
 {
 	std::string sPayload = ExtractXML(sXML,"<PROVABLEBALANCE>","</PROVABLEBALANCE>");
-	double dTotalVotedBalance = cdbl(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
-	double dLegacyBalance = cdbl(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
+	double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
+	double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
 
 	if (fDebug10) printf(" \r\n Total Voted Balance %f, Legacy Balance %f \r\n",(float)dTotalVotedBalance,(float)dLegacyBalance);
 
@@ -3128,7 +3047,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
 		std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
 		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
 		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
-		int32_t iPos = cdbl(sPos,0);
+		int32_t iPos = RoundFromString(sPos,0);
 		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
 		{
@@ -3151,7 +3070,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
       					   		entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
  						    	std::string sDecXmlSig = DecodeBase64(sXmlSig);
 							    CKey keyVerify;
-							    if (keyVerify.SetPubKey(ParseHex(sPubKey)))	
+							    if (keyVerify.SetPubKey(ParseHex(sPubKey)))
 								{
 									  	std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
 										std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
@@ -3172,7 +3091,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
 
 double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade)
 {
-	double dLegacyMagnitude  = cdbl(ExtractXML(sXML,"<MAGNITUDE>","</MAGNITUDE>"),2);
+	double dLegacyMagnitude  = RoundFromString(ExtractXML(sXML,"<MAGNITUDE>","</MAGNITUDE>"),2);
 	if (!bCreatedAfterSecurityUpgrade) return dLegacyMagnitude;
 
 	std::string sMagXML = ExtractXML(sXML,"<PROVABLEMAGNITUDE>","</PROVABLEMAGNITUDE>");
@@ -3186,7 +3105,7 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 		if (pblockindexMagnitude)
 		{
 				bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-				bool fAudited = (cdbl(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==cdbl(sMagnitude,0) && fResult);
+				bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
 				if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
 		}
 	}
@@ -3198,60 +3117,59 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 
 Array GetJsonUnspentReport()
 {
-	// The purpose of this report is to list the details of unspent coins in the wallet, create a signed XML payload and then audit those coins as a third party
-	// Written on 5-28-2017 - R HALFORD
-	// We can use this as the basis for proving the total coin balance, and the current researcher magnitude in the voting system.
+    // The purpose of this report is to list the details of unspent coins in the wallet, create a signed XML payload and then audit those coins as a third party
+    // Written on 5-28-2017 - R HALFORD
+    // We can use this as the basis for proving the total coin balance, and the current researcher magnitude in the voting system.
     Array results;
 
-	//Retrieve the historical magnitude
-	if (!msPrimaryCPID.empty() && msPrimaryCPID != "INVESTOR")
-	{
-		StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
-		CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
-		Object entry1;
-		entry1.push_back(Pair("Researcher Magnitude",pHistorical->nMagnitude));
-		results.push_back(entry1);
+    //Retrieve the historical magnitude
+    if (IsResearcher(msPrimaryCPID))
+    {
+        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
+        CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
+        Object entry1;
+        entry1.push_back(Pair("Researcher Magnitude",pHistorical->nMagnitude));
+        results.push_back(entry1);
 
-		// Create the XML Magnitude Payload
-		if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
-		{
-			std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-			std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
-			// Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
+        // Create the XML Magnitude Payload
+        if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
+        {
+            std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
+            std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
+            // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 
-			std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" + 
-                "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
-			std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
-			std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
-			std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
-			std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
-			Object entry;
-			entry.push_back(Pair("CPID Signature", sSignature));
-			entry.push_back(Pair("Historical Magnitude Block #", pHistorical->nHeight));
-			entry.push_back(Pair("Historical Blockhash", sBlockhash));
-			// Prove the magnitude from a 3rd party standpoint:
-			if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
-			{
-				CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
-				if (pblockindexMagnitude)
-				{
-						bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-						entry.push_back(Pair("Historical Magnitude",pblockindexMagnitude->nMagnitude));
-						entry.push_back(Pair("Signature Valid",fResult));
-						bool fAudited = (cdbl(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==cdbl(sMagnitude,0) && fResult);
-						entry.push_back(Pair("Magnitude Audited",fAudited));
-						results.push_back(entry);
-			
-				}
-			}
+            std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
+                    "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
+            std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
+            std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
+            std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
+            std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
+            Object entry;
+            entry.push_back(Pair("CPID Signature", sSignature));
+            entry.push_back(Pair("Historical Magnitude Block #", pHistorical->nHeight));
+            entry.push_back(Pair("Historical Blockhash", sBlockhash));
+            // Prove the magnitude from a 3rd party standpoint:
+            if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
+            {
+                CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
+                if (pblockindexMagnitude)
+                {
+                    bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
+                    entry.push_back(Pair("Historical Magnitude",pblockindexMagnitude->nMagnitude));
+                    entry.push_back(Pair("Signature Valid",fResult));
+                    bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
+                    entry.push_back(Pair("Magnitude Audited",fAudited));
+                    results.push_back(entry);
+                }
+            }
 
-					
-		}
-	
 
-	}
+        }
 
-	// Now we move on to proving the coins we own are ours
+
+    }
+
+    // Now we move on to proving the coins we own are ours
 
     vector<COutput> vecOutputs;
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
@@ -3319,7 +3237,7 @@ Array GetJsonUnspentReport()
 	// Now we will need to go back through the XML and Audit the claimed vote weight balance as a 3rd party
 
 	double dCounted = 0;
-   
+
 	std::vector<std::string> vXML= split(sXML.c_str(),"<ROW>");
 	for (unsigned int x = 0; x < vXML.size(); x++)
 	{
@@ -3333,9 +3251,9 @@ Array GetJsonUnspentReport()
 		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
 		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
 
-		int32_t iPos = cdbl(sPos,0);
+		int32_t iPos = RoundFromString(sPos,0);
 		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
-	
+
 		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
 		{
 
@@ -3358,7 +3276,7 @@ Array GetJsonUnspentReport()
       					   		entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
  						    	std::string sDecXmlSig = DecodeBase64(sXmlSig);
 							    CKey keyVerify;
-							    if (keyVerify.SetPubKey(ParseHex(sPubKey)))	
+							    if (keyVerify.SetPubKey(ParseHex(sPubKey)))
 								{
 									  	std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
 										std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
@@ -3382,7 +3300,7 @@ Array GetJsonUnspentReport()
 
 	entry.push_back(Pair("Total Voting Balance Weight", dTotal));
     entry.push_back(Pair("Grand Verified Amount",dCounted));
-	    
+
 	std::string sBalCheck2 = GetProvableVotingWeightXML();
 	double dVerifiedBalance = ReturnVerifiedVotingBalance(sBalCheck2,true);
 	double dVerifiedMag = ReturnVerifiedVotingMagnitude(sBalCheck2, true);
@@ -3423,7 +3341,7 @@ Array GetJsonVoteDetailsReport(std::string pollname)
             const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
             const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");
 
-            double dShareType = cdbl(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
+            double dShareType = RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
             std::string sShareType= GetShareType(dShareType);
             std::string sURL = ExtractXML(contract,"<URL>","</URL>");
 
@@ -3492,8 +3410,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 total_shares=0;
                 std::string BestAnswer;
                 double highest_share = 0;
-                std::string ExpirationDate = TimestampToHRDate(cdbl(Expiration,0));
-                std::string sShareType = GetShareType(cdbl(ShareType,0));
+                std::string ExpirationDate = TimestampToHRDate(RoundFromString(Expiration,0));
+                std::string sShareType = GetShareType(RoundFromString(ShareType,0));
                 std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
                                         + " (" + ExpirationDate + " ) - " + sShareType;
 
@@ -3509,7 +3427,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                     for (const std::string& answer : vAnswers)
                     {
                         double participants=0;
-                        double dShares = VotesCount(Title, answer, cdbl(ShareType,0),participants);
+                        double dShares = VotesCount(Title, answer, RoundFromString(ShareType,0),participants);
                         if (dShares > highest_share)
                         {
                             highest_share = dShares;
@@ -3539,7 +3457,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
             }
         }
     }
-    
+
     results.push_back(entry);
     out_export = sExport;
     return results;
@@ -3613,7 +3531,7 @@ double GetTotalNeuralNetworkHashVotes()
 {
     double total = 0;
     std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
     {
                 double popularity = mvNeuralNetworkHash[(*ii).first];
                 neural_hash = (*ii).first;
@@ -3622,9 +3540,9 @@ double GetTotalNeuralNetworkHashVotes()
                 {
                     total += popularity;
                 }
-                
+
     }
-    return total;    
+    return total;
 }
 
 
@@ -3632,7 +3550,7 @@ double GetTotalCurrentNeuralNetworkHashVotes()
 {
     double total = 0;
     std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii) 
+    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
     {
                 double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
                 neural_hash = (*ii).first;
@@ -3641,9 +3559,9 @@ double GetTotalCurrentNeuralNetworkHashVotes()
                 {
                     total += popularity;
                 }
-                
+
     }
-    return total;    
+    return total;
 }
 
 
@@ -3659,11 +3577,11 @@ Array GetJSONNeuralNetworkReport()
       entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
       double votes = GetTotalNeuralNetworkHashVotes();
 
-      for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii) 
+      for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
       {
                 double popularity = mvNeuralNetworkHash[(*ii).first];
                 neural_hash = (*ii).first;
-    
+
                 //If the hash != empty_hash: >= .01
                 if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
                 {
@@ -3680,7 +3598,7 @@ Array GetJSONNeuralNetworkReport()
           entry.push_back(Pair("Pending",SuperblockHeight));
       }
       int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-     
+
       entry.push_back(Pair("Superblock Age",superblock_age));
       if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
       {
@@ -3712,11 +3630,11 @@ Array GetJSONCurrentNeuralNetworkReport()
       entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
       double votes = GetTotalCurrentNeuralNetworkHashVotes();
 
-      for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii) 
+      for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
       {
                 double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
                 neural_hash = (*ii).first;
-    
+
                 //If the hash != empty_hash: >= .01
                 if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
                 {
@@ -3733,7 +3651,7 @@ Array GetJSONCurrentNeuralNetworkReport()
           entry.push_back(Pair("Pending",SuperblockHeight));
       }
       int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-     
+
       entry.push_back(Pair("Superblock Age",superblock_age));
       if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
       {
@@ -3763,12 +3681,12 @@ Array GetJSONVersionReport()
       double pct = 0;
       Object entry;
       entry.push_back(Pair("Version","Popularity,Percent %"));
-      
+
       double votes = 0;
       for(auto it : mvNeuralVersion)
           votes += it.second;
-      
-      for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii) 
+
+      for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii)
       {
                 double popularity = mvNeuralVersion[(*ii).first];
                 neural_ver = (*ii).first;
@@ -3793,7 +3711,7 @@ Array MagnitudeReportCSV(bool detail)
            Array results;
            Object c;
            StructCPID globalmag = mvMagnitudes["global"];
-           double payment_timespan = 14; 
+           double payment_timespan = 14;
            std::string Narr = "Research Savings Account Report - Generated " + ToString(GetAdjustedTime()) + " - Timespan: " + ToString(payment_timespan);
            c.push_back(Pair("RSA Report",Narr));
            results.push_back(c);
@@ -3803,31 +3721,31 @@ Array MagnitudeReportCSV(bool detail)
            double outstanding = 0;
            double totaloutstanding = 0;
            std::string header = "CPID,GRCAddress,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan";
-           
+
            if (detail) header += ",PaymentDate,ResearchPaymentAmount,InterestPaymentAmount,Block#";
            header += "\r\n";
 
            std::string row = "";
-           for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
+           for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
            {
                 // For each CPID on the network, report:
                 StructCPID structMag = mvMagnitudes[(*ii).first];
-                if (structMag.initialized && structMag.cpid.length() > 2) 
-                { 
-                    if (structMag.cpid != "INVESTOR")
+                if (structMag.initialized && structMag.cpid.length() > 2)
+                {
+                    if (IsResearcher(structMag.cpid))
                     {
                         outstanding = structMag.totalowed - structMag.payments;
-                        
+
                         StructCPID stDPOR = mvDPOR[structMag.cpid];
-                    
-                        row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.Magnitude,2) + "," 
-                            + RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
+
+                        row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.Magnitude,2) + ","
+                            + RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2)
                             + "," + RoundToString(structMag.totalowed/14,2)
-                            + "," + RoundToString(structMag.payments,2) + "," 
-                            + RoundToString(structMag.interestPayments,2) + "," + TimestampToHRDate(structMag.LastPaymentTime) 
-                            + "," + RoundToString(structMag.owed,2) 
+                            + "," + RoundToString(structMag.payments,2) + ","
+                            + RoundToString(structMag.interestPayments,2) + "," + TimestampToHRDate(structMag.LastPaymentTime)
+                            + "," + RoundToString(structMag.owed,2)
                             + "," + RoundToString(structMag.owed/2,2)
-                            + "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "," 
+                            + "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + ","
                             + RoundToString(structMag.PaymentTimespan,0) + "\n";
                         header += row;
                         if (detail)
@@ -3837,10 +3755,10 @@ Array MagnitudeReportCSV(bool detail)
                             std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
                             std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
                             std::vector<std::string> vCPIDPaymentBlocks    = split(structMag.PaymentAmountsBlocks.c_str(),",");
-                            
+
                             for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
                             {
-                                    double dTime = cdbl(vCPIDTimestamps[i],0);
+                                    double dTime = RoundFromString(vCPIDTimestamps[i],0);
                                     std::string sResearchAmount = vCPIDPayments[i];
                                     std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
                                     std::string sInterestAmount = vCPIDInterestPayments[i];
@@ -3868,7 +3786,7 @@ Array MagnitudeReportCSV(bool detail)
            Object entry;
            entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%" PRId64 ".csv",timestamp)));
            results.push_back(entry);
-           
+
            CSVToFile(strprintf("magnitude_%" PRId64 ".csv",timestamp), header);
            return results;
 }
@@ -3880,13 +3798,13 @@ std::string GetBurnAddress()
 
 
 
-std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
+std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
                      int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress)
 {
     CBitcoinAddress address(sBurnAddress);
     if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     std::string sMasterKey = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-        
+
     int64_t nAmount = AmountFromValue(dFees);
     // Wallet comments
     CWalletTx wtx;
@@ -3914,7 +3832,7 @@ std::string SendReward(std::string sAddress, int64_t nAmount)
     // Wallet comments
     CWalletTx wtx;
     if (pwalletMain->IsLocked()) return "Error: Please enter the wallet passphrase with walletpassphrase first.";
-    std::string sMessageType      = "<MT>REWARD</MT>";  
+    std::string sMessageType      = "<MT>REWARD</MT>";
     std::string sMessageValue     = "<MV>" + sAddress + "</MV>";
     wtx.hashBoinc = sMessageType + sMessageValue;
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, 1, wtx);
@@ -3924,7 +3842,7 @@ std::string SendReward(std::string sAddress, int64_t nAmount)
 
 
 
-std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
+std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
                     std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
 {
     std::string sAddress = GetBurnAddress();
@@ -3968,13 +3886,13 @@ Value listitem(const Array& params, bool fHelp)
         "Displays help on various available list commands.\n");
 
     std::string sitem = params[0].get_str();
-    
+
     std::string args = "";
     if (params.size()==2)
     {
         args=params[1].get_str();
     }
-    
+
 
     Array results;
     Object e2;
@@ -3993,7 +3911,7 @@ Value listitem(const Array& params, bool fHelp)
         int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
         out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
 
-    
+
         Object entry;
         entry.push_back(Pair("RSA Weight",RSAWEIGHT));
         entry.push_back(Pair("Magnitude",out_magnitude));
@@ -4001,104 +3919,49 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
 	}
-    else if (sitem == "debugexplainmagnitude")
-    {
-        double dMag = ExtractMagnitudeFromExplainMagnitude();
-        Object entry;
-        entry.push_back(Pair("Mag",dMag));
-        results.push_back(entry);
-    }
     else if (sitem == "explainmagnitude")
     {
+        Object entry;
+
+        bool bForce = false;
+
+        if (params.size() == 2)
+        {
+            std::string sOptional = params[1].get_str();
+
+            boost::to_lower(sOptional);
+
+            if (sOptional == "true")
+                bForce = true;
+        }
+
+        if (bForce)
+        {
+            if (msNeuralResponse.length() < 25)
+            {
+                entry.push_back(Pair("Neural Response", "Empty; Requesting a response.."));
+                entry.push_back(Pair("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses"));
+
+                msNeuralResponse = "";
+
+                AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
+            }
+        }
 
         if (msNeuralResponse.length() > 25)
         {
-            Object entry;
+            entry.push_back(Pair("Neural Response", "true"));
+
             std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+
             for (unsigned int i = 0; i < vMag.size(); i++)
-            {
                 entry.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
-            }
-            results.push_back(entry);
         }
+
         else
-        {
-    
-        double mytotalrac = 0;
-        double nettotalrac  = 0;
-        double projpct = 0;
-        double mytotalpct = 0;
-        double ParticipatingProjectCount = 0;
-        double TotalMagnitude = 0;
-        double Mag = 0;
-        Object entry;
-        std::string narr = "";
-        std::string narr_desc = "";
-        double TotalProjectRAC = 0;
-        double TotalUserVerifiedRAC = 0;
+            entry.push_back(Pair("Neural Response", "false; Try again at a later time"));
 
-        for(map<string,StructCPID>::iterator ibp=mvBoincProjects.begin(); ibp!=mvBoincProjects.end(); ++ibp) 
-        {
-            StructCPID WhitelistedProject = mvBoincProjects[(*ibp).first];
-            if (WhitelistedProject.initialized)
-            {
-                double ProjectRAC = GetNetworkTotalByProject(WhitelistedProject.projectname);
-                StructCPID structcpid = mvCPIDs[WhitelistedProject.projectname];
-                bool including = false;
-                narr = "";
-                narr_desc = "";
-                double UserVerifiedRAC = 0;
-                if (structcpid.initialized) 
-                { 
-                    if (structcpid.projectname.length() > 1)
-                    {
-                        including = (ProjectRAC > 0 && structcpid.Iscpidvalid && structcpid.rac > 1);
-                        UserVerifiedRAC = structcpid.rac;
-                        narr_desc = "NetRac: " + RoundToString(ProjectRAC,0) + ", CPIDValid: " 
-                            + YesNo(structcpid.Iscpidvalid) + ", RAC: " +RoundToString(structcpid.rac,0);
-                    }
-                }
-                narr = including ? ("Participating " + narr_desc) : ("Enumerating " + narr_desc);
-                if (structcpid.projectname.length() > 1 && including)
-                {
-                        entry.push_back(Pair(narr + " Project",structcpid.projectname));
-                }
-
-                projpct = UserVerifiedRAC/(ProjectRAC+.01);
-                nettotalrac += ProjectRAC;
-                mytotalrac = mytotalrac + UserVerifiedRAC;
-                mytotalpct = mytotalpct + projpct;
-                
-                double project_magnitude = 
-                    ((UserVerifiedRAC / (ProjectRAC + 0.01)) / (WHITELISTED_PROJECTS + 0.01)) * NeuralNetworkMultiplier;
-
-                if (including)
-                {
-                        TotalMagnitude += project_magnitude;
-                        TotalUserVerifiedRAC += UserVerifiedRAC;
-                        TotalProjectRAC += ProjectRAC;
-                        ParticipatingProjectCount++;
-                        
-                        entry.push_back(Pair("User " + structcpid.projectname + " Verified RAC",UserVerifiedRAC));
-                        entry.push_back(Pair(structcpid.projectname + " Network RAC",ProjectRAC));
-                        entry.push_back(Pair("Your Project Magnitude",project_magnitude));
-                }
-                
-             }
-        }
-        entry.push_back(Pair("Whitelisted Project Count", ToString(WHITELISTED_PROJECTS)));
-        entry.push_back(Pair("Grand-Total Verified RAC",mytotalrac));
-        entry.push_back(Pair("Grand-Total Network RAC",nettotalrac));
-        entry.push_back(Pair("Total Magnitude for All Projects",TotalMagnitude));
-        entry.push_back(Pair("Grand-Total Whitelisted Projects",ToString(WHITELISTED_PROJECTS)));
-        entry.push_back(Pair("Participating Project Count",ParticipatingProjectCount));
-        Mag = TotalMagnitude;
-        std::string babyNarr = "(" + RoundToString(TotalUserVerifiedRAC,2) + "/" + RoundToString(TotalProjectRAC,2) + ")/" + ToString(WHITELISTED_PROJECTS) + "*" + ToString(NeuralNetworkMultiplier) + "=";
-        entry.push_back(Pair(babyNarr,Mag));
         results.push_back(entry);
-        return results;
-        }
-
     }
     else if (sitem == "superblocks")
     {
@@ -4146,11 +4009,6 @@ Value listitem(const Array& params, bool fHelp)
         }
 
         results = LifetimeReport(cpid);
-        return results;
-    }
-    else if (sitem == "staking")
-    {
-        results = StakingReport();
         return results;
     }
     else if (sitem == "currenttime")
@@ -4206,60 +4064,46 @@ Value listitem(const Array& params, bool fHelp)
             results = MagnitudeReport(msPrimaryCPID);
             return results;
     }
-    else if (sitem=="newbieage")
+    else if (sitem == "projects")
     {
-        double dBeaconDt = BeaconTimeStamp(args,false);
-        Object entry;
-        entry.push_back(Pair("Sent",dBeaconDt));
-        dBeaconDt = BeaconTimeStamp(args,true);
-        entry.push_back(Pair("Sent With ZeroOut Feature",dBeaconDt));
-        results.push_back(entry);
-        return results;
-    }
-    else if (sitem == "projects") 
-    {
-        for(map<string,StructCPID>::iterator ii=mvBoincProjects.begin(); ii!=mvBoincProjects.end(); ++ii) 
+        for (const auto& item : AppCacheFilter("project"))
         {
+            Object entry;
 
-            StructCPID structcpid = mvBoincProjects[(*ii).first];
+            std::string sProjectKey = item.first;
+            std::vector<std::string> vProjectKey = split(sProjectKey, ";");
+            std::string sProjectName = ToOfficialName(vProjectKey[1]);
+            std::string sProjectURL = item.second;
+            sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
 
-            if (structcpid.initialized) 
-            { 
-                Object entry;
-                entry.push_back(Pair("Project",structcpid.projectname));
-                entry.push_back(Pair("URL",structcpid.link));
-                results.push_back(entry);
+            if (sProjectName.empty())
+                continue;
 
+            // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
+            if (sProjectURL.find("stats/") != string::npos)
+            {
+                std::size_t tFound = sProjectURL.find("stats/");
+                sProjectURL.erase(tFound, sProjectURL.length());
             }
+
+            entry.push_back(Pair("Project", sProjectName));
+            entry.push_back(Pair("URL", sProjectURL));
+            results.push_back(entry);
         }
-        return results;
     }
-    else if (sitem == "leder")
+    else if (sitem == "network")
     {
-        double subsidy = LederstrumpfMagnitude2(450, GetAdjustedTime());
-        Object entry;
-        entry.push_back(Pair("Mag Out For 450",subsidy));
-        if (args.length() > 1)
-        {
-            double myrac=cdbl(args,0);
-            subsidy = LederstrumpfMagnitude2(myrac, GetAdjustedTime());
-            entry.push_back(Pair("Mag Out",subsidy));
-        }
-        results.push_back(entry);
-    }
-    else if (sitem == "network") 
-    {
-        for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii) 
+        for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii)
         {
 
             StructCPID stNet = mvNetwork[(*ii).first];
 
-            if (stNet.initialized) 
-            { 
+            if (stNet.initialized)
+            {
                 Object entry;
                 entry.push_back(Pair("Project",stNet.projectname));
                 entry.push_back(Pair("Avg RAC",stNet.AverageRAC));
-                if (stNet.projectname=="NETWORK") 
+                if (stNet.projectname=="NETWORK")
                 {
                         entry.push_back(Pair("Network Total Magnitude",stNet.NetworkMagnitude));
                         entry.push_back(Pair("Network Average Magnitude",stNet.NetworkAvgMagnitude));
@@ -4281,22 +4125,22 @@ Value listitem(const Array& params, bool fHelp)
         }
         return results;
     }
-    else if (sitem=="validcpids") 
+    else if (sitem=="validcpids")
     {
         //Dump vectors:
-        if (mvCPIDs.size() < 1) 
+        if (mvCPIDs.size() < 1)
         {
             HarvestCPIDs(false);
         }
-        for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
+        for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
         {
 
             StructCPID structcpid = mvCPIDs[(*ii).first];
 
-            if (structcpid.initialized) 
-            { 
-            
-                if (structcpid.cpid == GlobalCPUMiningCPID.cpid || structcpid.cpid=="INVESTOR" || structcpid.cpid=="investor")
+            if (structcpid.initialized)
+            {
+
+                if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
                 {
                     if (structcpid.verifiedteam=="gridcoin")
                     {
@@ -4322,27 +4166,27 @@ Value listitem(const Array& params, bool fHelp)
 
 
     }
-    else if (sitem=="cpids") 
+    else if (sitem=="cpids")
     {
         //Dump vectors:
-        
-        if (mvCPIDs.size() < 1) 
+
+        if (mvCPIDs.size() < 1)
         {
             HarvestCPIDs(false);
         }
         printf ("generating cpid report %s",sitem.c_str());
 
-        for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii) 
+        for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
         {
 
             StructCPID structcpid = mvCPIDs[(*ii).first];
 
-            if (structcpid.initialized) 
-            { 
-            
-                if ((GlobalCPUMiningCPID.cpid.length() > 3 && 
-                    structcpid.cpid == GlobalCPUMiningCPID.cpid) 
-                    || structcpid.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid=="INVESTOR" || GlobalCPUMiningCPID.cpid.length()==0)
+            if (structcpid.initialized)
+            {
+
+                if ((GlobalCPUMiningCPID.cpid.length() > 3 &&
+                    structcpid.cpid == GlobalCPUMiningCPID.cpid)
+                    || !IsResearcher(structcpid.cpid) || !IsResearcher(GlobalCPUMiningCPID.cpid))
                 {
                     Object entry;
                     entry.push_back(Pair("Project",structcpid.projectname));
@@ -4365,8 +4209,7 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("list cpids", "Displays information on cpids and the projects they are associated with"));
         entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
         entry.push_back(Pair("list detailmagnitudecsv", "Records more detailed magnitude report into a csv file"));
-        entry.push_back(Pair("list debugexplainmagnitude", "Displays more in detail your explainmagnitude from NN"));
-        entry.push_back(Pair("list explainmagnitude", "Displays information about your magnitude from NN"));
+        entry.push_back(Pair("list explainmagnitude <true>", "Displays information about your magnitude from NN; Optional true to force response"));
         entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
         entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
         entry.push_back(Pair("list magnitudecsv", "Records magnitude report into a csv file"));
@@ -4440,7 +4283,7 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         throw runtime_error(
             "getblockstats mode [startheight [endheight]]\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
-    long mode= cdbl(params[0].get_str(),0);
+    long mode= RoundFromString(params[0].get_str(),0);
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
@@ -4449,20 +4292,20 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     {
         if(params.size()>=2)
         {
-            lowheight= cdbl(params[1].get_str(),0);
+            lowheight= RoundFromString(params[1].get_str(),0);
             maxblocks= INT_MAX;
         }
         if(params.size()>=3)
-            highheight= cdbl(params[2].get_str(),0);
+            highheight= RoundFromString(params[2].get_str(),0);
     }
     else if(mode==1)
     {
         /* count highheight */
         maxblocks= 30000;
         if(params.size()>=2)
-            maxblocks= cdbl(params[1].get_str(),0);
+            maxblocks= RoundFromString(params[1].get_str(),0);
         if(params.size()>=3)
-            highheight= cdbl(params[2].get_str(),0);
+            highheight= RoundFromString(params[2].get_str(),0);
     }
     else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;

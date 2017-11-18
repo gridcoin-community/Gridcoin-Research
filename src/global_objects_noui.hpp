@@ -14,8 +14,6 @@ extern bool bForceUpdate;
 extern bool bCheckedForUpgrade;
 extern bool bCheckedForUpgradeLive;
 extern bool bGlobalcomInitialized;
-extern bool bDoTally;
-extern bool bTallyFinished;
 extern bool bGridcoinGUILoaded;
 
 struct StructCPID
@@ -149,8 +147,6 @@ extern std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached bloc
 //Global CPU Mining CPID:
 extern MiningCPID GlobalCPUMiningCPID;
 
-//Boinc Valid Projects
-extern std::map<std::string, StructCPID> mvBoincProjects; // Contains all of the allowed boinc projects;
 // Timers
 extern std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 

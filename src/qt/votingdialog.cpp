@@ -373,13 +373,13 @@ VotingDialog::VotingDialog(QWidget *parent)
     // buttons in horizontal layout
     QHBoxLayout *groupboxhlayout = new QHBoxLayout();
     groupboxvlayout->addLayout(groupboxhlayout);
-    
+
     QPushButton *resetButton = new QPushButton();
     resetButton->setText(tr("Reload Polls"));
     resetButton->setMaximumWidth(150);
     groupboxhlayout->addWidget(resetButton);
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetData()));
-    
+
     QPushButton *histButton = new QPushButton();
     histButton->setText(tr("Load History"));
     histButton->setMaximumWidth(150);
@@ -391,7 +391,7 @@ VotingDialog::VotingDialog(QWidget *parent)
     newPollButton->setMaximumWidth(150);
     groupboxhlayout->addWidget(newPollButton);
     connect(newPollButton, SIGNAL(clicked()), this, SLOT(showNewPollDialog()));
-    
+
     groupboxhlayout->addStretch();
 
     tableView_ = new QTableView();
@@ -662,10 +662,10 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTable_->setRowCount(0);
     answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
     answerTable_->setHorizontalHeaderLabels(answerTableHeader);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-    answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-#else
+#if QT_VERSION < 0x050000
     answerTable_->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
+#else
+    answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 #endif
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
@@ -785,31 +785,31 @@ VotingVoteDialog::VotingVoteDialog(QWidget *parent)
     answer_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     answer_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     glayout->addWidget(answer_, 3, 1);
-    
+
     answerList_ = new QListWidget(this);
     vlayout->addWidget(answerList_);
-    
+
     QHBoxLayout *hlayout = new QHBoxLayout();
     vlayout->addLayout(hlayout);
-    
+
     QPushButton *voteButton = new QPushButton();
     voteButton->setText(tr("Vote"));
     hlayout->addWidget(voteButton);
     connect(voteButton, SIGNAL(clicked()), this, SLOT(vote()));
-    
+
     voteNote_ = new QLabel();
     voteNote_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     voteNote_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     voteNote_->setWordWrap(true);
     hlayout->addWidget(voteNote_);
-    
+
 }
 
 void VotingVoteDialog::resetData(const VotingItem *item)
 {
     if (!item)
         return;
-    
+
     answerList_->clear();
     voteNote_->clear();
     question_->setText(item->question_);
@@ -828,22 +828,22 @@ void VotingVoteDialog::vote(void)
 {
     QString sVoteValue = GetVoteValue();
     voteNote_->setStyleSheet("QLabel { color : red; }");
-    
+
     if(sVoteValue.isEmpty()){
         voteNote_->setText(tr("Vote failed! Select one or more items to vote."));
         return;
     }
-    
+
     // replace spaces with underscores
     sVoteValue.replace(" ","_");
     sVoteTitle.replace(" ","_");
-    
+
     const std::string &sResult = ExecuteRPCCommand("vote", sVoteTitle.toStdString(), sVoteValue.toStdString());
-    
+
     if (sResult.find("Success") != std::string::npos) {
         voteNote_->setStyleSheet("QLabel { color : green; }");
     }
-    voteNote_->setText(QString::fromStdString(sResult)); 
+    voteNote_->setText(QString::fromStdString(sResult));
 }
 
 QString VotingVoteDialog::GetVoteValue(void)
@@ -858,8 +858,6 @@ QString VotingVoteDialog::GetVoteValue(void)
     return sVote;
 }
 
-// NewPollDialog
-//
 NewPollDialog::NewPollDialog(QWidget *parent)
     : QDialog(parent)
 {
@@ -876,7 +874,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     glayout->setColumnStretch(2, 5);
 
     vlayout->addLayout(glayout);
-    
+
     //title
     QLabel *title = new QLabel(tr("Title: "));
     title->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
@@ -885,8 +883,8 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     title_ = new QLineEdit();
     title_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    glayout->addWidget(title_, 0, 1);  
-    
+    glayout->addWidget(title_, 0, 1);
+
     //days
     QLabel *days = new QLabel(tr("Days: "));
     days->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
@@ -895,8 +893,8 @@ NewPollDialog::NewPollDialog(QWidget *parent)
 
     days_ = new QLineEdit();
     days_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
-    glayout->addWidget(days_, 1, 1);     
-    
+    glayout->addWidget(days_, 1, 1);
+
     //question
     QLabel *question = new QLabel(tr("Question: "));
     question->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
@@ -916,30 +914,30 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     url_ = new QLineEdit();
     url_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     glayout->addWidget(url_, 3, 1);
-    
+
     //share type
     QLabel *shareType = new QLabel(tr("Share Type: "));
     shareType->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     shareType->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    glayout->addWidget(shareType, 4, 0);    
-    
+    glayout->addWidget(shareType, 4, 0);
+
     shareTypeBox_ = new QComboBox(this);
     QStringList shareTypeBoxItems;
     shareTypeBoxItems << "Magnitude" << "Balance" << "Both" << "CPIDCount" << "ParticipantCount";
     shareTypeBox_->addItems(shareTypeBoxItems);
     shareTypeBox_->setCurrentIndex(2);
     glayout->addWidget(shareTypeBox_, 4, 1);
-    
+
     //answers
     answerList_ = new QListWidget(this);
     answerList_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(answerList_, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(showContextMenu(const QPoint &)));
     vlayout->addWidget(answerList_);
     connect (answerList_, SIGNAL (itemDoubleClicked (QListWidgetItem *)), this, SLOT (editItem (QListWidgetItem *)));
-    
+
     QHBoxLayout *hlayoutTools = new QHBoxLayout();
     vlayout->addLayout(hlayoutTools);
-    
+
     QPushButton *addItemButton = new QPushButton();
     addItemButton->setText(tr("Add Item"));
     hlayoutTools->addWidget(addItemButton);
@@ -954,7 +952,7 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     clearAllButton->setText(tr("Clear All"));
     hlayoutTools->addWidget(clearAllButton);
     connect(clearAllButton, SIGNAL(clicked()), this, SLOT(resetData()));
-    
+
     QHBoxLayout *hlayoutBottom = new QHBoxLayout();
     vlayout->addLayout(hlayoutBottom);
 
@@ -962,13 +960,13 @@ NewPollDialog::NewPollDialog(QWidget *parent)
     pollButton->setText(tr("Create Poll"));
     hlayoutBottom->addWidget(pollButton);
     connect(pollButton, SIGNAL(clicked()), this, SLOT(createPoll()));
-    
+
     pollNote_ = new QLabel();
     pollNote_->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);
     pollNote_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     pollNote_->setWordWrap(true);
     hlayoutBottom->addWidget(pollNote_);
-    
+
 }
 
 void NewPollDialog::resetData()
@@ -1025,7 +1023,7 @@ void NewPollDialog::createPoll(void)
     }
     pollNote_->setText(QString::fromStdString(sResult));
 }
- 
+
 void NewPollDialog::GetPollValues(void)
 {
 
@@ -1048,7 +1046,7 @@ void NewPollDialog::addItem (void)
     QListWidgetItem *answerItem = new QListWidgetItem("New Item",answerList_);
     answerItem->setFlags (answerItem->flags() | Qt::ItemIsEditable);
 }
- 
+
 void NewPollDialog::editItem (QListWidgetItem *item)
 {
     answerList_->editItem(item);
@@ -1061,7 +1059,7 @@ void NewPollDialog::removeItem(void)
     {
         delete answerList_->takeItem(answerList_->row(item));
     }
-    
+
 }
 
 void NewPollDialog::showContextMenu(const QPoint &pos)

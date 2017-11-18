@@ -3,6 +3,10 @@ language: cpp
 sudo: required
 dist: trusty
 
+os:
+  - linux
+  - osx
+
 addons:
   apt:
     packages:
@@ -21,13 +25,18 @@ addons:
     - qttools5-dev-tools
     - libminiupnpc-dev
     - libzip-dev
+    - autoconf
+    - automake
+
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update ; fi
+
+install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install boost pkg-config berkeley-db@4 leveldb miniupnpc libzip qrencode qt || true ; fi
 
 script:
-  - mkdir -p src/obj
-  - chmod 755 src/leveldb/build_detect_platform
-  - cd src
-  - make -f makefile.unix DEBUGFLAGS="" USE_UPNP=1
-  - cd ..
-  - qmake "USE_QRCODE=1" "USE_UPNP=1" "NO_UPGRADE=1"
+  - ./autogen.sh
+  - mkdir build
+  - cd build
+  - ../configure --with-gui=qt5 --with-incompatible-bdb
   - make
-

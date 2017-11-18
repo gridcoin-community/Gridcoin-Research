@@ -111,6 +111,7 @@ extern bool fTestNet;
 extern bool fNoListen;
 extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
+extern bool fDevbuildCripple;
 
 void RandAddSeed();
 void RandAddSeedPerfmon();
@@ -200,19 +201,28 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
 
 //!
-//! \brief Round decimal value to N decimal places.
+//! \brief Round double value to N decimal places.
 //! \param d Value to round.
 //! \param place Number of decimal places.
 //!
 double Round(double d, int place);
 
 //!
-//! \brief Round a decimal value and convert it to a string.
+//! \brief Round a double value and convert it to a string.
 //! \param d Value to round.
 //! \param place Number of decimal places.
 //! \note This always produces an output with dot as decimal separator.
 //!
 std::string RoundToString(double d, int place);
+
+//!
+//! \brief Round a double value contained in a string.
+//!
+//! Does \c atof on \p s and rounds the result.
+//!
+//! \returns \p s represented as a double rounded to \p place decimals.
+//!
+double RoundFromString(const std::string& s, int place);
 
 //!
 //! \brief Convert any value to a string.

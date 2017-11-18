@@ -27,10 +27,10 @@ class CNode;
 class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
-extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-static const int BLOCK_GRANULARITY = 10;   //Consensus block divisor 
+static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
+static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;   
 
 static const double NeuralNetworkMultiplier = 115000;
 
@@ -96,6 +96,13 @@ inline uint32_t IsV8Enabled(int nHeight)
             : nHeight > 1010000;
 }
 
+inline uint32_t IsV9Enabled(int nHeight)
+{
+    return fTestNet
+            ? nHeight >=  399000
+            : nHeight >= 2000000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
@@ -106,6 +113,11 @@ inline bool AreBinarySuperblocksEnabled(int nHeight)
 	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
 }
 
+inline bool IsV9Enabled_Tally(int nHeight)
+{
+    // 3 hours after v9
+    return IsV9Enabled(nHeight-120);
+}
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
@@ -145,7 +157,6 @@ extern uint256 nBestChainTrust;
 extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
-extern unsigned int nTransactionsUpdated;
 extern const std::string strMessageMagic;
 extern int64_t nTimeBestReceived;
 extern CCriticalSection cs_setpwalletRegistered;
@@ -159,15 +170,12 @@ extern bool bOPReturnEnabled;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-extern int64_t nLastTallied;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
-extern int64_t nLastTalliedNeural;
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
-extern int64_t nLastTallyBusyWait;
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -198,7 +206,6 @@ extern std::string  msAttachmentGuid;
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
 extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
@@ -219,7 +226,6 @@ struct globalStatusType
     std::string status;
     std::string poll;
     std::string errors;
-    std::string rsaOverview;
 };
 
 extern globalStatusType GlobalStatusStruct;
@@ -247,6 +253,11 @@ double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
+// Validate researcher rewards.
+bool CheckProofOfResearch(
+    const CBlockIndex* pindexPrev, //previous block in chain index
+    const CBlock &block);    //block to check
+
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 
@@ -261,7 +272,6 @@ bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
 std::string ReadCache(std::string section, std::string key);
-double cdbl(std::string s, int place);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string PackBinarySuperblock(std::string sBlock);
 std::string UnpackBinarySuperblock(std::string sBlock);
@@ -291,6 +301,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
 bool IsResearcher(const std::string& cpid);
+extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 /** Position on disk for a particular transaction. */
 class CDiskTxPos
@@ -976,7 +987,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 8;
+    static const int CURRENT_VERSION = 9;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
