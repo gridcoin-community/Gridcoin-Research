@@ -2609,7 +2609,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     <message>
         <location line="+1"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>As moedas gerados pelo Gricoin devem maturar durante 110 blocos antes de poderem ser gastas. Quando gerou este bloco, ele foi transmitido à rede para ser adicionado à cadeia de blocos. Se falhar a entrada na cadeia, o seu estado será alterado para &quot;não aceite&quot; e não será&apos; possivel de usar. Isto pode acontecer ocasionalmente se outro módulo gerar um bloxo com segundos de diferença do seu.</translation>
+        <translation>As moedas gerados pelo Gridcoin devem maturar durante 110 blocos antes de poderem ser gastas. Quando gerou este bloco, ele foi transmitido à rede para ser adicionado à cadeia de blocos. Se falhar a entrada na cadeia, o seu estado será alterado para &quot;não aceite&quot; e não será&apos; possivel de usar. Isto pode acontecer ocasionalmente se outro módulo gerar um bloxo com segundos de diferença do seu.</translation>
     </message>
     <message>
         <location line="+14"/>
