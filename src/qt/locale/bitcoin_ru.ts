@@ -642,7 +642,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation type="unfinished">%1 Активные соединения в сети Gricoin</translation>
+        <translation type="unfinished">%1 Активные соединения в сети Gridcoin</translation>
     </message>
     <message>
         <location line="+25"/>
