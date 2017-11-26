@@ -221,18 +221,25 @@ will also work on other Linux distributions, however the commands for
 installing the toolchain will be different.
 
 Make sure you install the build requirements mentioned above.
-Then, install the toolchain and curl:
+Then, install the toolchain and curl for 64 bit:
+
+    sudo apt-get install g++-aarch64-linux-gnu
+
+And for 32 bit:
 
     sudo apt-get install g++-arm-linux-gnueabihf curl
 
-To build executables for ARM:
+To build executables for 64 bit ARM:
 
     cd depends
-    make HOST=arm-linux-gnueabihf NO_QT=1
+    make HOST=aarch64-linux-gnu NO_QT=1
     cd ..
-    ./configure --prefix=$PWD/depends/arm-linux-gnueabihf --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
+    ./configure --prefix=$PWD/depends/aarch64-linux-gnu --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
     make
 
+For 32 bit configure with:
+
+    ./configure --prefix=$PWD/depends/arm-linux-gnueabihf --enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++
 
 For further documentation on the depends system see [README.md](../depends/README.md) in the depends directory.
 
