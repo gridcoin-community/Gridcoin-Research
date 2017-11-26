@@ -127,7 +127,7 @@ obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
 	@$(top_srcdir)/share/genbuild.sh "$(abs_top_builddir)/src/obj/build.h" \
 	  "$(abs_top_srcdir)"
-#libbitcoin_util_a-clientversion.$(OBJEXT): obj/build.h
+libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 
 
 # util: shared between all executables.
@@ -147,6 +147,9 @@ endif
 if GLIBC_BACK_COMPAT
 libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
 endif
+
+nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
+
 
 # gridcoinresearchd binary #
 gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
@@ -179,8 +182,7 @@ CLEANFILES += script/*.gcda script/*.gcno
 CLEANFILES += support/*.gcda support/*.gcno
 CLEANFILES += wallet/*.gcda wallet/*.gcno
 CLEANFILES += wallet/test/*.gcda wallet/test/*.gcno
-
-DISTCLEANFILES = obj/build.h
+CLEANFILES = obj/build.h
 
 EXTRA_DIST = $(CTAES_DIST)
 
