@@ -44,7 +44,6 @@ GRIDCOIN_CORE_H = \
 	block.h \
 	boinc.h \
 	checkpoints.h \
-	clientversion.h \
 	coincontrol.h \
 	compat.h \
 	cpid.h \
