@@ -141,6 +141,9 @@ private:
 
     uint64_t nWeight;
 
+    // name extension to change icons according to stylesheet
+    QString sSheet;
+
     /** Create the main UI actions. */
     void createActions();
     /** Create the menu bar and sub-menus. */
@@ -152,7 +155,7 @@ private:
     /** Create system tray menu (or setup the dock menu) */
     void createTrayIconMenu();
     /** Set Icons */
-    void setIcons(QString sSheet);
+    void setIcons();
 
 
 public slots:

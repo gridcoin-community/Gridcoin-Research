@@ -14,7 +14,6 @@ QMainWindow {
 
 #toolbar2 {
     border:none;
-    width:1.625em;
     background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
     min-width:1.625em;
     max-width:1.625em;

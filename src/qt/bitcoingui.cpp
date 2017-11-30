@@ -533,7 +533,11 @@ void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 
         qApp->setStyleSheet(sMainWindowHTML);
     }
-    setIcons(qssFileName);
+    sSheet=qssFileName;
+    setIcons();
+    // reset encryption status to apply icon color changes
+    if(walletModel)
+        setEncryptionStatus(walletModel->getEncryptionStatus());
 }
 
 
@@ -701,7 +705,8 @@ void BitcoinGUI::createActions()
     connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
-void BitcoinGUI::setIcons(QString sSheet){
+void BitcoinGUI::setIcons()
+{
     overviewAction->setIcon(QPixmap(":/icons/overview_"+sSheet));
     sendCoinsAction->setIcon(QPixmap(":/icons/send_"+sSheet));
     receiveCoinsAction->setIcon(QPixmap(":/icons/receiving_addresses_"+sSheet));
@@ -1589,7 +1594,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         break;
     case WalletModel::Unlocked:
         labelEncryptionIcon->show();
-        labelEncryptionIcon->setPixmap(QIcon(":/icons/lock_open").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelEncryptionIcon->setPixmap(QIcon(":/icons/lock_open_"+sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>unlocked</b>"));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
@@ -1599,7 +1604,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         break;
     case WalletModel::Locked:
         labelEncryptionIcon->show();
-        labelEncryptionIcon->setPixmap(QIcon(":/icons/lock_closed").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelEncryptionIcon->setPixmap(QIcon(":/icons/lock_closed_"+sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
