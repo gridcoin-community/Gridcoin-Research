@@ -3598,10 +3598,6 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
             return error("SetBestChain() : Reorganize failed");
         }
 
-        // Retally after reorganize to sync up amounts owed.
-        BusyWaitForTally_retired();
-        TallyNetworkAverages_v9();
-
         // Switch to new best branch
         // Connect further blocks
         for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
@@ -3620,14 +3616,11 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
             if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
-
-            // Retally every N blocks.
-            if ((pindex->nHeight % TALLY_GRANULARITY) == 0)
-            {
-                BusyWaitForTally_retired();
-                TallyNetworkAverages_v9();
-            }
         }
+
+        // Retally after reorganize to sync up amounts owed.
+        BusyWaitForTally_retired();
+        TallyNetworkAverages_v9();
     }
 
     // Update best block in wallet (so we can detect restored wallets)
@@ -3684,6 +3677,11 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
+
+    // Perform Gridcoin services now that w have a new head.
+    // Remove V9 checks after the V9 switch.
+    if(IsV9Enabled(nBestHeight))
+        GridcoinServices();
 
     return true;
 }
@@ -4691,7 +4689,11 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     printf("{PB}: ACC; \r\n");
-    GridcoinServices();
+
+    // Compatiblity while V8 is in use. Can be removed after the V9 switch.
+    if(IsV9Enabled(pindexBest->nHeight) == false)
+        GridcoinServices();
+
     return true;
 }
 
