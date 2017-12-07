@@ -3388,7 +3388,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     printf("REORGANIZE: Disconnect %" PRIszu " blocks; %s..%s\n", vDisconnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexBest->GetBlockHash().ToString().substr(0,20).c_str());
     printf("REORGANIZE: Connect %" PRIszu " blocks; %s..%s\n", vConnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexNew->GetBlockHash().ToString().substr(0,20).c_str());
 
-    if (vDisconnect.size() > 0)
+    if (vDisconnect.empty() == false)
     {
         //Block was disconnected - User is Re-eligibile for staking
 
@@ -3401,7 +3401,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         }
         nLastBlockSolved = 0;
     }
-    printf("REORGANIZE Disc Size %f",(double)vDisconnect.size());
+    printf("REORGANIZE Disc Size %" PRIszu, vDisconnect.size());
 
     // Disconnect shorter branch
     list<CTransaction> vResurrect;
@@ -3449,13 +3449,6 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         // Queue memory transactions to delete
         for( const CTransaction& tx : block.vtx )
             vDelete.push_back(tx);
-
-        if (!IsResearchAgeEnabled(pindex->nHeight))
-        {
-            //MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-            //bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-            //mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
-        }
     }
 
     if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
@@ -3581,41 +3574,33 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     {
         // the first block in the new chain that will cause it to become the new best chain
         CBlockIndex *pindexIntermediate = pindexNew;
+
         // list of blocks that need to be connected afterwards
         std::vector<CBlockIndex*> vpindexSecondary;
         printf("\r\n**Reorganize**");
 
-        //10-6-2015 Make Reorganize work more gracefully - try up to 5 times to reorganize, each with an intermediate further back
-        for (int iRegression = 0; iRegression < 5; iRegression++)
+        // Reorganize is costly in terms of db load, as it works in a single db transaction.
+        // Try to limit how much needs to be done inside
+        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust)
         {
-            int rollback = iRegression * 100;
-
-            // Reorganize is costly in terms of db load, as it works in a single db transaction.
-            // Try to limit how much needs to be done inside
-            int rolled_back = 1;
-            while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back < rollback)
-            {
-                vpindexSecondary.push_back(pindexIntermediate);
-                pindexIntermediate = pindexIntermediate->pprev;
-                if (pindexIntermediate==pindexGenesisBlock) break;
-                rolled_back++;
-            }
-
-            if (!vpindexSecondary.empty())
-            printf("\r\nReorganizing Attempt #%f, regression to block #%f \r\n",(double)iRegression+1,(double)pindexIntermediate->nHeight);
-
-            printf("Postponing %" PRIszu " reconnects\n", vpindexSecondary.size());
-            if (iRegression==4 && !Reorganize(txdb, pindexIntermediate))
-            {
-                    printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
-                    txdb.TxnAbort();
-                    InvalidChainFound(pindexNew);
-                    printf("\r\nReorg tally\r\n");
-                    BusyWaitForTally_retired();
-                    TallyNetworkAverages_v9();
-                    return error("SetBestChain() : Reorganize failed");
-            }
+            vpindexSecondary.push_back(pindexIntermediate);
+            pindexIntermediate = pindexIntermediate->pprev;
         }
+
+        if (!vpindexSecondary.empty())
+            printf("Postponing %" PRIszu " reconnects\n", vpindexSecondary.size());
+
+        if (!Reorganize(txdb, pindexIntermediate))
+        {
+            printf("Reorganize failed");
+            txdb.TxnAbort();
+            InvalidChainFound(pindexNew);
+            return error("SetBestChain() : Reorganize failed");
+        }
+
+        // Retally after reorganize to sync up amounts owed.
+        BusyWaitForTally_retired();
+        TallyNetworkAverages_v9();
 
         // Switch to new best branch
         // Connect further blocks
@@ -3631,9 +3616,17 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                 printf("SetBestChain() : TxnBegin 2 failed\n");
                 break;
             }
+
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
             if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
+
+            // Retally every N blocks.
+            if ((pindex->nHeight % TALLY_GRANULARITY) == 0)
+            {
+                BusyWaitForTally_retired();
+                TallyNetworkAverages_v9();
+            }
         }
     }
 
