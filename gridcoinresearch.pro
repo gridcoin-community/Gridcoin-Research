@@ -355,7 +355,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/backup.cpp \
     src/appcache.cpp \
     src/grcrestarter.cpp \
-    src/neuralnet.cpp
+    src/neuralnet.cpp \
     src/qt/clicklabel.cpp
 
 ##
