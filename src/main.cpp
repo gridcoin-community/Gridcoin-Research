@@ -3065,7 +3065,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             }
             iPos++;
         }
-        pindex->sGRCAddress = bb.GRCAddress;
     }
 
     double mint = CoinToDouble(pindex->nMint);
@@ -5221,7 +5220,6 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
     {
         StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
         stMag.cpid = pIndex->GetCPID();
-        stMag.GRCAddress = pIndex->sGRCAddress;
         if (pIndex->nHeight > stMag.LastBlock)
         {
             stMag.LastBlock = pIndex->nHeight;

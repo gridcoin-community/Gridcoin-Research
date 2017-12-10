@@ -69,7 +69,6 @@ struct StructCPID
     std::string boincruntimepublickey;
     std::string cpidv2;
     std::string BlockHash;
-    std::string GRCAddress;
 };
 
 
