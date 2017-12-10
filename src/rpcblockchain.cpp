@@ -136,7 +136,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
 int ReindexWallet();
-extern Array MagnitudeReportCSV(bool detail);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
@@ -2749,19 +2748,6 @@ Array MagnitudeReport(std::string cpid)
 
 }
 
-
-
-void CSVToFile(std::string filename, std::string data)
-{
-    boost::filesystem::path path = GetDataDir() / "reports" / filename;
-    boost::filesystem::create_directories(path.parent_path());
-    ofstream myCSV;
-    myCSV.open (path.string().c_str());
-    myCSV << data;
-    myCSV.close();
-}
-
-
 std::string TimestampToHRDate(double dtm)
 {
     if (dtm == 0) return "1-1-1970 00:00:00";
@@ -3746,99 +3732,10 @@ Array GetJSONVersionReport()
 
 }
 
-
-
-Array MagnitudeReportCSV(bool detail)
-{
-           Array results;
-           Object c;
-           StructCPID globalmag = mvMagnitudes["global"];
-           double payment_timespan = 14; 
-           std::string Narr = "Research Savings Account Report - Generated " + ToString(GetAdjustedTime()) + " - Timespan: " + ToString(payment_timespan);
-           c.push_back(Pair("RSA Report",Narr));
-           results.push_back(c);
-           double totalpaid = 0;
-           double lto  = 0;
-           double rows = 0;
-           double outstanding = 0;
-           double totaloutstanding = 0;
-           std::string header = "CPID,GRCAddress,Magnitude,PaymentMagnitude,Accuracy,LongTermOwed14day,LongTermOwedDaily,Payments,InterestPayments,LastPaymentTime,CurrentDailyOwed,NextExpectedPayment,AvgDailyPayments,Outstanding,PaymentTimespan";
-           
-           if (detail) header += ",PaymentDate,ResearchPaymentAmount,InterestPaymentAmount,Block#";
-           header += "\r\n";
-
-           std::string row = "";
-           for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii) 
-           {
-                // For each CPID on the network, report:
-                StructCPID structMag = mvMagnitudes[(*ii).first];
-                if (structMag.initialized && structMag.cpid.length() > 2) 
-                { 
-                    if (IsResearcher(structMag.cpid))
-                    {
-                        outstanding = structMag.totalowed - structMag.payments;
-                        
-                        StructCPID stDPOR = mvDPOR[structMag.cpid];
-                    
-                        row = structMag.cpid + "," + structMag.GRCAddress + "," + RoundToString(structMag.Magnitude,2) + "," 
-                            + RoundToString(structMag.PaymentMagnitude,0) + "," + RoundToString(structMag.Accuracy,0) + "," + RoundToString(structMag.totalowed,2) 
-                            + "," + RoundToString(structMag.totalowed/14,2)
-                            + "," + RoundToString(structMag.payments,2) + "," 
-                            + RoundToString(structMag.interestPayments,2) + "," + TimestampToHRDate(structMag.LastPaymentTime) 
-                            + "," + RoundToString(structMag.owed,2) 
-                            + "," + RoundToString(structMag.owed/2,2)
-                            + "," + RoundToString(structMag.payments/14,2) + "," + RoundToString(outstanding,2) + "," 
-                            + RoundToString(structMag.PaymentTimespan,0) + "\n";
-                        header += row;
-                        if (detail)
-                        {
-                            //Add payment detail - Halford - Christmas Eve 2014
-                            std::vector<std::string> vCPIDTimestamps = split(structMag.PaymentTimestamps.c_str(),",");
-                            std::vector<std::string> vCPIDPayments   = split(structMag.PaymentAmountsResearch.c_str(),",");
-                            std::vector<std::string> vCPIDInterestPayments = split(structMag.PaymentAmountsInterest.c_str(),",");
-                            std::vector<std::string> vCPIDPaymentBlocks    = split(structMag.PaymentAmountsBlocks.c_str(),",");
-                            
-                            for (unsigned int i = 0; i < vCPIDTimestamps.size(); i++)
-                            {
-                                    double dTime = RoundFromString(vCPIDTimestamps[i],0);
-                                    std::string sResearchAmount = vCPIDPayments[i];
-                                    std::string sPaymentDate = DateTimeStrFormat("%m-%d-%Y %H:%M:%S", dTime);
-                                    std::string sInterestAmount = vCPIDInterestPayments[i];
-                                    std::string sPaymentBlock = vCPIDPaymentBlocks[i];
-                                    //std::string sPaymentHash = vCPIDPaymentBlockHashes[i];
-                                    if (dTime > 0)
-                                    {
-                                        row = " , , , , , , , , , , , , , , , , " + sPaymentDate + "," + sResearchAmount + "," + sInterestAmount + "," + sPaymentBlock + "\n";
-                                        header += row;
-                                    }
-                            }
-                        }
-                        rows++;
-                        totalpaid += structMag.payments;
-                        lto += structMag.totalowed;
-                        totaloutstanding += outstanding;
-                    }
-
-                }
-
-           }
-           int64_t timestamp = GetTime();
-           std::string footer = RoundToString(rows,0) + ", , , , ," + RoundToString(lto,2) + ", ," + RoundToString(totalpaid,2) + ", , , , , ," + RoundToString(totaloutstanding,2) + "\n";
-           header += footer;
-           Object entry;
-           entry.push_back(Pair("CSV Complete",strprintf("\\reports\\magnitude_%" PRId64 ".csv",timestamp)));
-           results.push_back(entry);
-           
-           CSVToFile(strprintf("magnitude_%" PRId64 ".csv",timestamp), header);
-           return results;
-}
-
 std::string GetBurnAddress()
 {
     return fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
 }
-
-
 
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, 
                      int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress)
@@ -4062,16 +3959,6 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
     }
-    else if (sitem == "magnitudecsv")
-    {
-        results = MagnitudeReportCSV(false);
-        return results;
-    }
-    else if (sitem=="detailmagnitudecsv")
-    {
-        results = MagnitudeReportCSV(true);
-        return results;
-    }
 	else if (sitem == "seefile")
 	{
 		// This is a unit test to prove viability of transmitting a file from node to node
@@ -4250,11 +4137,9 @@ Value listitem(const Array& params, bool fHelp)
         Object entry;
         entry.push_back(Pair("list cpids", "Displays information on cpids and the projects they are associated with"));
         entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
-        entry.push_back(Pair("list detailmagnitudecsv", "Records more detailed magnitude report into a csv file"));
         entry.push_back(Pair("list explainmagnitude <true>", "Displays information about your magnitude from NN; Optional true to force response"));
         entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
         entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
-        entry.push_back(Pair("list magnitudecsv", "Records magnitude report into a csv file"));
         entry.push_back(Pair("list memorypool", "Displays information currently on Txs in memory pool"));
         entry.push_back(Pair("list network", "Displays detailed information on the network"));
         entry.push_back(Pair("list projects", "Displays information on whitelisted projects on the network"));

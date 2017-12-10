@@ -68,10 +68,6 @@ struct StructCPID
     std::string email;
     std::string boincruntimepublickey;
     std::string cpidv2;
-    std::string PaymentTimestamps;
-    std::string PaymentAmountsResearch;
-    std::string PaymentAmountsInterest;
-    std::string PaymentAmountsBlocks;
     std::string BlockHash;
     std::string GRCAddress;
 };
