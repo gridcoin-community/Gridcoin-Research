@@ -2186,7 +2186,7 @@ bool CheckProofOfResearch(
                                 bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() );
 
             BusyWaitForTally_retired();
-            StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+            GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
                                                         pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         }
@@ -3600,6 +3600,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 
         // Switch to new best branch
         // Connect further blocks
+        std::set<uint128> connected_cpids;
         for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
         {
             CBlock block;
@@ -3616,11 +3617,18 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
             if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
+
+            if(pindex->IsUserCPID())
+               connected_cpids.emplace(pindex->cpid);
         }
 
         // Retally after reorganize to sync up amounts owed.
         BusyWaitForTally_retired();
         TallyNetworkAverages_v9();
+
+        // Recalculate amounts paid.
+        for(const auto& cpid : connected_cpids)
+            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
     }
 
     // Update best block in wallet (so we can detect restored wallets)
@@ -5738,18 +5746,13 @@ bool TallyResearchAverages_v9()
         bNetAveragesLoaded = true;
         return true;
     }
-    catch (bad_alloc ba)
+    catch (const std::bad_alloc& ba)
     {
         printf("Bad Alloc while tallying network averages. [1]\r\n");
         bNetAveragesLoaded=true;
     }
-    catch(...)
-    {
-        printf("Error while tallying network averages. [1]\r\n");
-        bNetAveragesLoaded=true;
-    }
 
-    if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
+    if (fDebug3) printf("NA loaded in %" PRId64, GetTimeMillis() - nStart);
 
     bNetAveragesLoaded=true;
     return false;
