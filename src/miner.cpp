@@ -66,6 +66,8 @@ void CMinerStatus::Clear()
     WeightSum= ValueSum= WeightMin= WeightMax= 0;
     Version= 0;
     CoinAgeSum= 0;
+    KernelDiffMax = 0;
+    KernelDiffSum = 0;
     nLastCoinStakeSearchInterval = 0;
 }
 
@@ -600,6 +602,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             LOCK(MinerStatus.lock);
             MinerStatus.Message+="Found Kernel "+ ToString(CoinToDouble(nCredit))+"; ";
             MinerStatus.KernelsFound++;
+            MinerStatus.KernelDiffMax = 0;
+            MinerStatus.KernelDiffSum = StakeDiffSum;
             return true;
         }
     }
@@ -611,6 +615,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.WeightMin=StakeWeightMin;
     MinerStatus.WeightMax=StakeWeightMax;
     MinerStatus.CoinAgeSum=StakeCoinAgeSum;
+    MinerStatus.KernelDiffMax = std::max(MinerStatus.KernelDiffMax,StakeDiffMax);
+    MinerStatus.KernelDiffSum = StakeDiffSum;
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }

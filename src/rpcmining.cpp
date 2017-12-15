@@ -67,6 +67,9 @@ Value getmininginfo(const Array& params, bool fHelp)
         // reuse value found by miner which has to load blocks anyway
         double dInterest = MinerStatus.CoinAgeSum * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
         obj.push_back(Pair("InterestPending",dInterest/(double)COIN));
+
+        obj.push_back(Pair("kernel-diff-best",MinerStatus.KernelDiffMax));
+        obj.push_back(Pair("kernel-diff-sum",MinerStatus.KernelDiffSum));
     }
 
     obj.push_back(Pair("difficulty",    diff));
