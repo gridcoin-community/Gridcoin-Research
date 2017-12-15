@@ -2157,15 +2157,15 @@ Value burn(const Array& params, bool fHelp)
     int64_t nAmount = AmountFromValue(params[0]);
     CScript scriptPubKey;
 
-    if (params.size() > 1) {
+    if (params.size() > 1)
+    {
         vector<unsigned char> data;
-        if (params[1].get_str().size() > 0){
+        if (params[1].get_str().size() > 0)
             data = ParseHexV(params[1], "Data");
-        }
         scriptPubKey = CScript() << OP_RETURN << data;
-    } else {
-        scriptPubKey = CScript() << OP_RETURN;
     }
+    else
+        scriptPubKey = CScript() << OP_RETURN;
 
     CWalletTx wtx;
     string strError = pwalletMain->SendMoney(scriptPubKey, nAmount, wtx);
