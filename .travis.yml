@@ -40,3 +40,4 @@ script:
   - cd build
   - ../configure --with-gui=qt5 --with-incompatible-bdb
   - make
+  - ./src/test/test_gridcoin
