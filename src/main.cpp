@@ -527,13 +527,13 @@ void GetGlobalStatus()
         GlobalStatusStruct.errors.clear();
         std::string Alerts = GetWarnings("statusbar");
         if(!Alerts.empty())
-            GlobalStatusStruct.errors += "Alert: " + Alerts + "; ";
+            GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
 
         if (PORDiff < 0.1)
-            GlobalStatusStruct.errors +=  "Low difficulty!; ";
+            GlobalStatusStruct.errors +=  _("Low difficulty!; ");
 
         if(!MinerStatus.ReasonNotStaking.empty())
-            GlobalStatusStruct.errors +=  "Miner: " + MinerStatus.ReasonNotStaking + "; ";
+            GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking + "; ";
 
         unsigned long stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
         if(stk_dropped)
