@@ -5,16 +5,18 @@
 
 #include "base58.h"
 #include "util.h"
+#include "data/base58_encode_decode.json.h"
+#include "data/base58_keys_invalid.json.h"
 
 using namespace json_spirit;
-extern Array read_json(const std::string& filename);
+extern Array read_json(std::string& jsondata);
 
 BOOST_AUTO_TEST_SUITE(base58_tests)
 
 // Goal: test low-level base58 encoding functionality
 BOOST_AUTO_TEST_CASE(base58_EncodeBase58)
 {
-    Array tests = read_json("base58_encode_decode.json");
+    Array tests = read_json(json_tests::base58_encode_decode);
 
     for(Value& tv : tests)
     {
@@ -36,7 +38,7 @@ BOOST_AUTO_TEST_CASE(base58_EncodeBase58)
 // Goal: test low-level base58 decoding functionality
 BOOST_AUTO_TEST_CASE(base58_DecodeBase58)
 {
-    Array tests = read_json("base58_encode_decode.json");
+    Array tests = read_json(json_tests::base58_encode_decode);
     std::vector<unsigned char> result;
 
     for(Value& tv : tests)
@@ -236,7 +238,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
 // Goal: check that base58 parsing code is robust against a variety of corrupted data
 BOOST_AUTO_TEST_CASE(base58_keys_invalid)
 {
-    Array tests = read_json("base58_keys_invalid.json"); // Negative testcases
+    Array tests = read_json(json_tests::base58_keys_invalid);
     std::vector<unsigned char> result;
     CBitcoinSecret secret;
     CBitcoinAddress addr;

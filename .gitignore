@@ -31,7 +31,6 @@ release
 *.force
 *.suo
 *.scc
-*.json.h
 *.a
 gridcoinresearch.zip
 .gridcoin

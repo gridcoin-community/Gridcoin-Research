@@ -6,11 +6,14 @@
 #include "main.h"
 #include "wallet.h"
 
+#include "data/tx_valid.json.h"
+#include "data/tx_invalid.json.h"
+
 using namespace std;
 using namespace json_spirit;
 
 // In script_tests.cpp
-extern Array read_json(const std::string& filename);
+extern Array read_json(std::string& filename);
 extern CScript ParseScript(string s);
 
 // Gridcoin, 2017-03-18: Temporarily disable broken tests.
