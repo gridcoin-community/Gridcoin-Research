@@ -22,14 +22,11 @@ struct CMinerStatus
     uint64_t AcceptedCnt;
     uint64_t KernelsFound;
     int64_t nLastCoinStakeSearchInterval;
+    double KernelDiffMax;
+    double KernelDiffSum;
 
     void Clear();
-    CMinerStatus()
-    {
-        Clear();
-        ReasonNotStaking= "";
-        CreatedCnt= AcceptedCnt= KernelsFound= 0;
-    }
+    CMinerStatus();
 };
 
 extern CMinerStatus MinerStatus;
