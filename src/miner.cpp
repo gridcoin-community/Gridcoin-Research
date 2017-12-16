@@ -60,13 +60,20 @@ public:
     }
 };
 
+CMinerStatus::CMinerStatus(void)
+{
+    Clear();
+    ReasonNotStaking= "";
+    CreatedCnt= AcceptedCnt= KernelsFound= 0;
+    KernelDiffMax= 0;
+}
+
 void CMinerStatus::Clear()
 {
     Message= "";
     WeightSum= ValueSum= WeightMin= WeightMax= 0;
     Version= 0;
     CoinAgeSum= 0;
-    KernelDiffMax = 0;
     KernelDiffSum = 0;
     nLastCoinStakeSearchInterval = 0;
 }

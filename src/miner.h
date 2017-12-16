@@ -26,12 +26,7 @@ struct CMinerStatus
     double KernelDiffSum;
 
     void Clear();
-    CMinerStatus()
-    {
-        Clear();
-        ReasonNotStaking= "";
-        CreatedCnt= AcceptedCnt= KernelsFound= 0;
-    }
+    CMinerStatus();
 };
 
 extern CMinerStatus MinerStatus;
