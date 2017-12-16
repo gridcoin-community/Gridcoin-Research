@@ -159,7 +159,6 @@ extern int64_t PreviousBlockAge();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
-json_spirit::Array MagnitudeReportCSV(bool detail);
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
@@ -3042,7 +3041,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             }
             iPos++;
         }
-        pindex->sGRCAddress = bb.GRCAddress;
     }
 
     double mint = CoinToDouble(pindex->nMint);
@@ -4430,23 +4428,8 @@ void GridcoinServices()
         }
     }
 
-    if (KeyEnabled("exportmagnitude"))
-    {
-        if (TimerMain("export_magnitude",900))
-        {
-            json_spirit::Array results;
-            results = MagnitudeReportCSV(true);
-
-        }
-    }
-
     if (TimerMain("gather_cpids",480))
-    {
-            //if (fDebug10) printf("\r\nReharvesting cpids in background thread...\r\n");
-            //LoadCPIDsInBackground();
-            //printf(" {CPIDs Re-Loaded} ");
-            msNeuralResponse="";
-    }
+        msNeuralResponse.clear();
 
     if (TimerMain("check_for_autoupgrade",240))
     {
@@ -5209,7 +5192,6 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
     {
         StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
         stMag.cpid = pIndex->GetCPID();
-        stMag.GRCAddress = pIndex->sGRCAddress;
         if (pIndex->nHeight > stMag.LastBlock)
         {
             stMag.LastBlock = pIndex->nHeight;
@@ -5219,11 +5201,6 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
         stMag.interestPayments += pIndex->nInterestSubsidy;
 
         AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
-        // Track detailed payments made to each CPID
-        stMag.PaymentTimestamps         += ToString(pIndex->nTime) + ",";
-        stMag.PaymentAmountsResearch    += RoundToString(pIndex->nResearchSubsidy,2) + ",";
-        stMag.PaymentAmountsInterest    += RoundToString(pIndex->nInterestSubsidy,2) + ",";
-        stMag.PaymentAmountsBlocks      += ToString(pIndex->nHeight) + ",";
         stMag.Accuracy++;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;

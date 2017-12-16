@@ -1318,7 +1318,6 @@ public:
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
-	std::string sGRCAddress;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1375,7 +1374,6 @@ public:
 		nMagnitude = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
-		sGRCAddress = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1634,12 +1632,15 @@ public:
 		{
 			READWRITE(nIsSuperBlock);
 			READWRITE(nIsContract);
-			READWRITE(sGRCAddress);
 
-                        // Blocks used to come with a reserved string. Keep (de)serializing
-                        // it until it's used.
-                        std::string sReserved;
-                        READWRITE(sReserved);
+         std::string dummy;
+
+         // Blocks used to contain the GRC address.
+         READWRITE(dummy);
+
+         // Blocks used to come with a reserved string. Keep (de)serializing
+         // it until it's used.
+         READWRITE(dummy);
 		}
 
 
