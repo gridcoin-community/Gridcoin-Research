@@ -547,7 +547,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>&amp;Neural Network</source>
-        <translation">&amp;Neural Network</translation>
+        <translation>&amp;Neural Network</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -755,35 +755,35 @@ Adres: %4
     <message numerus="yes">
         <location line="+300"/>
         <source>%n second(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n saniye</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n minute(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n dakika</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n hour(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n saat</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <location line="+4"/>
         <source>%n day(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n gün</numerusform>
         </translation>
     </message>
     <message>
         <location line="+27"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="unfinished"></translation>
+        <translation>Pay Alınıyor.&lt;br&gt;Sizin Ağırlığınız: %1&lt;br&gt;Ağın Ağırlığı: %2&lt;br&gt;&lt;b&gt;Pay almak için TAHMİNİ&lt;/b&gt; süre: %3. %4</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -803,12 +803,12 @@ Adres: %4
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
+        <translation>Pay alınamıyor çünkü olgunlaşmış coininiz yok ya da pay ağırlığı çok düşük.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
-        <translation>Pay alınmıyor çünkü olgunlaşmış coininiz yoktur</translation>
+        <translation>Pay alınmıyor çünkü olgunlaşmış coininiz yok</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1615,7 +1615,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+13"/>
         <source>Unconfirmed</source>
-        <translation type="unfinished">Teyit edilmemiş</translation>
+        <translation>Teyit Edilmemiş</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -2335,7 +2335,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin adresi girin</translation>
     </message>
 </context>
 <context>
@@ -2443,7 +2443,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished"></translation>
+        <translation>Bir Gridcoin adresi girin</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2612,12 +2612,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+14"/>
         <source>Information</source>
-        <translation type="unfinished">Bilgi</translation>
+        <translation>Bilgi</translation>
     </message>
     <message>
         <location line="-152"/>
         <source>unknown</source>
-        <translation>bilinmiyor</translation>
+        <translation>Bilinmiyor</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2630,12 +2630,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-77"/>
         <location line="+2"/>
         <source>own address</source>
-        <translation>kendi adresiniz</translation>
+        <translation>Kendi adresiniz</translation>
     </message>
     <message>
         <location line="-2"/>
         <source>label</source>
-        <translation>etiket</translation>
+        <translation>Etiket</translation>
     </message>
     <message>
         <location line="+37"/>
@@ -2780,12 +2780,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+64"/>
         <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>Onaylanıyor (%2 de %1 Onay aldı)</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>Olgunlaşmamış (%1 onaylar, %2 onay sonra geçerli olacaktır)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2795,7 +2795,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+80"/>
         <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin Madeni Çıkarıldı- DPOR</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -2805,12 +2805,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin Madeni Çıkarıldı-POR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin Madeni Çıkarıldı- Sadece Pay Alındı</translation>
     </message>
     <message>
         <location line="+257"/>
@@ -3698,7 +3698,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>HATA: wallet.dat yüklenemedi, wallet.dat daha yeni bir Gridcoin istemcisine ihtiyaç duyuyor.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3738,12 +3738,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
-        <translation>Hata: Cüzdan kilitli, işlem yaratılamıyor</translation>
+        <translation>Hata: Cüzdan kilitli, işlem yapılamıyor.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Error: Wallet unlocked for staking only, unable to create transaction.</source>
-        <translation type="unfinished"></translation>
+        <translation>Hata: Cüzdan sadece pay almak için açık, coin gönderilemez.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3917,7 +3917,7 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <location line="+1"/>
         <source>Gridcoin</source>
-        <translation type="unfinished">Gridcoin</translation>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+132"/>
