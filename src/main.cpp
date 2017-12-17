@@ -533,7 +533,7 @@ void GetGlobalStatus()
             GlobalStatusStruct.errors +=  _("Low difficulty!; ");
 
         if(!MinerStatus.ReasonNotStaking.empty())
-            GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking + "; ";
+            GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
 
         unsigned long stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
         if(stk_dropped)
