@@ -849,7 +849,7 @@ Adres: %4
         <location line="+285"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
-            <numerusform>Muamele tarihçesinden %n blok işlendi.</numerusform>
+            <numerusform>İşlem tarihçesinden %n blok işlendi.</numerusform>
         </translation>
     </message>
     <message>
@@ -1459,7 +1459,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>&amp;Display addresses in transaction list</source>
-        <translation>Muamele listesinde adresleri &amp;göster</translation>
+        <translation>İşlem listesinde adresleri &amp;göster</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2722,7 +2722,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/transactiondescdialog.ui" line="+20"/>
         <source>Transaction details</source>
-        <translation>Muamele detayları</translation>
+        <translation>İşlem detayları</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2815,7 +2815,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+257"/>
         <source>Destination address of transaction.</source>
-        <translation>Muamelenin alıcı adresi.</translation>
+        <translation>İşlemin alıcı adresi.</translation>
     </message>
     <message numerus="yes">
         <location line="-374"/>
@@ -3536,7 +3536,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Rescan the block chain for missing wallet transactions</source>
-        <translation>Blok zincirini eksik cüzdan muameleleri için tekrar yapılandır</translation>
+        <translation>Blok zincirini eksik cüzdan işlemleri için tekrar yapılandır</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3606,7 +3606,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Uyarı: -paytxfee çok yüksek bir değere ayarlanmış! Bu, muamele gönderirseniz ödeyeceğiniz muamele ücretidir.</translation>
+        <translation>Uyarı: -paytxfee çok yüksek bir değere ayarlanmış! Bu, coin gönderirseniz ödeyeceğiniz işlem ücretidir.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3616,7 +3616,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
-        <translation type="unfinished"></translation>
+        <translation>Başlatma kontrolü başarışız oldu. Gridcoin kapanıyor.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3641,7 +3641,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Uyarı: wallet.dat bozuk, veriler geri kazanıldı! Özgün wallet.dat, wallet.{zamandamgası}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da muameleleriniz yanlışsa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
+        <translation>Uyarı: wallet.dat bozuk, veriler geri kazanıldı! Özgün wallet.dat, wallet.{zamandamgası}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da işlemleriniz yanlışsa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -3693,7 +3693,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Uyarı: wallet.dat dosyasının okunması sırasında bir hata meydana geldi! Tüm anahtarlar doğru bir şekilde okundu, ancak muamele verileri ya da adres defteri unsurları hatalı veya eksik olabilir.</translation>
+        <translation>Uyarı: wallet.dat dosyasının okunması sırasında bir hata meydana geldi! Tüm anahtarlar doğru bir şekilde okundu, ancak işlem verileri ya da adres defteri unsurları hatalı veya eksik olabilir.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3703,7 +3703,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
-        <translation type="unfinished"></translation>
+        <translation>Cüzdanın tekrardan oluşturulması gerekiyor: Gridcoin istemcisini yeniden başlatın</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3718,12 +3718,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Importing bootstrap blockchain data file.</source>
-        <translation>Önyükleme blok zinciri veri dosyas? içeri aktarılıyor.</translation>
+        <translation>Önyükleme blok zinciri veri dosyası içeri aktarılıyor.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Error: could not start node</source>
-        <translation type="unfinished"></translation>
+        <translation>Ağ Noktası Başlatılamadı</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3783,12 +3783,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation>UYARI: senkronize edilen kontrol noktası ihlali tespit edildi ancak atlandı!</translation>
+        <translation>UYARI: Senkronize edilen kontrol noktası ihlali tespit edildi ancak atlandı!</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Warning: Disk space is low!</source>
-        <translation>Uyarı: Disk alanı düşüktür!</translation>
+        <translation>Uyarı: Disk alanınız düşük!</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3892,7 +3892,7 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <location line="+5"/>
         <source>Gridcoin version</source>
-        <translation>Gridcoin versiyonu</translation>
+        <translation>Gridcoin Versiyonu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3902,17 +3902,17 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <location line="+1"/>
         <source>Send command to -server or gridcoind</source>
-        <translation type="unfinished"></translation>
+        <translation>Server'a veya Hata Ayıklama Konsoluna Komut Gönder</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>List commands</source>
-        <translation>Komutları listele</translation>
+        <translation>Komutları Listele</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Get help for a command</source>
-        <translation>Bir komut için yardım al</translation>
+        <translation>Komutlar için yardım al</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3937,7 +3937,7 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <location line="+41"/>
         <source>Insufficient funds</source>
-        <translation>Yetersiz bakiye</translation>
+        <translation>Yetersiz Bakiye</translation>
     </message>
     <message>
         <location line="-33"/>
@@ -3972,7 +3972,7 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <location line="+5"/>
         <source>Done loading</source>
-        <translation>Yükleme tamamlandı</translation>
+        <translation>Yükleme Tamamlandı</translation>
     </message>
     <message>
         <location line="-150"/>
