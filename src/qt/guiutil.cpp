@@ -148,7 +148,7 @@ bool parseBitcoinURI(QString uri, SendCoinsRecipient *out)
 
     if(uri.startsWith("gridcoin://"))
     {
-        uri.replace(0, 12, "gridcoin:");
+        uri.replace(0, 11, "gridcoin:");
     }
     QUrl uriInstance(uri);
     return parseBitcoinURI(uriInstance, out);
