@@ -114,12 +114,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+250"/>
         <source>Export Address Book Data</source>
-        <translation>Adres Defteri Verisini Dışarı Aktar</translation>
+        <translation>Adres Defteri Verisini Dışa Aktar</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Error exporting</source>
-        <translation>Dışarı aktarım hatası</translation>
+        <translation>Dışa aktarım hatası</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -462,7 +462,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+4"/>
         <source>&amp;Export...</source>
-        <translation>&amp;Dışarı aktar...</translation>
+        <translation>&amp;Dışa aktar...</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2211,7 +2211,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Hata: İşlem reddedildi. Bu, örneğin wallet.dat dosyasının bir kopyasını kullandıysanız ve coinler, kopyada harcanmış ve burada harcanmış olarak işaretlenmemişse, cüzdanınızdaki coinlerin bir bölümünün harcanmasından dolayı olabilir. </translation>
+        <translation>Hata: İşlem reddedildi. Bu durum, örneğin wallet.dat dosyasının bir kopyasını kullandıysanız ve coinler, kopyada harcanmış ve burada harcanmış olarak işaretlenmemişse, cüzdanınızdaki coinlerin bir bölümünün harcanmasından dolayı olabilir. </translation>
     </message>
     <message>
         <location line="+251"/>
@@ -2221,7 +2221,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+17"/>
         <source>WARNING: unknown change address</source>
-        <translation>UYARI: bilinmeyen adres değişikliği</translation>
+        <translation>UYARI: Bilinmeyen adres değişikliği</translation>
     </message>
     <message>
         <location line="-420"/>
@@ -2320,12 +2320,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+37"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin alıcısına bir mesaj yaz</translation>
     </message>
     <message>
         <location line="+22"/>
         <source>Track Coins</source>
-        <translation type="unfinished"></translation>
+        <translation>Coinleri Takip Et</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -2335,7 +2335,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../sendcoinsentry.cpp" line="+1"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Gridcoin adresi girin</translation>
+        <translation>Gridcoin adresi girin (Örnek: G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
 </context>
 <context>
@@ -2443,7 +2443,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../signverifymessagedialog.cpp" line="+27"/>
         <location line="+3"/>
         <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Bir Gridcoin adresi girin</translation>
+        <translation>Bir Gridcoin adresi girin(Örnek: G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2539,22 +2539,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+6"/>
         <source>conflicted</source>
-        <translation>çakışma</translation>
+        <translation>Çakışma</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1/offline</source>
-        <translation>%1/çevrimdışı</translation>
+        <translation>%1/Çevrimdışı</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1/unconfirmed</source>
-        <translation>%1/doğrulanmadı</translation>
+        <translation>%1/Doğrulanmadı</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 confirmations</source>
-        <translation>%1 doğrulama</translation>
+        <translation>%1 Doğrulama</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -2630,7 +2630,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-77"/>
         <location line="+2"/>
         <source>own address</source>
-        <translation>Kendi adresiniz</translation>
+        <translation>Kendi Adresiniz</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -2656,7 +2656,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>not accepted</source>
-        <translation>kabul edilmedi</translation>
+        <translation>Kabul Edilmedi</translation>
     </message>
     <message>
         <location line="+44"/>
