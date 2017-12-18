@@ -4,15 +4,6 @@
 
 #include <QUrl>
 
-/*
-struct SendCoinsRecipient
-{
-    QString address;
-    QString label;
-    qint64 amount;
-};
-*/
-
 void URITests::uriTests()
 {
     SendCoinsRecipient rv;
@@ -55,13 +46,9 @@ void URITests::uriTests()
     QVERIFY(rv.address == QString("S9FYyGQK14zzXFnSqPLuXSGREfDjDr2G9s"));
     QVERIFY(rv.label == QString());
 
-    //QVERIFY(GUIUtil::parseBitcoinURI("gridcoin://S9FYyGQK14zzXFnSqPLuXSGREfDjDr2G9s?message=Wikipedia Example Address", &rv));
-    QVERIFY(rv.address == QString("S9FYyGQK14zzXFnSqPLuXSGREfDjDr2G9s"));
-    QVERIFY(rv.label == QString());
-
     QVERIFY(GUIUtil::parseBitcoinURI("gridcoin://S9FYyGQK14zzXFnSqPLuXSGREfDjDr2G9s?message=Wikipedia Example Address", &rv));
     QVERIFY(rv.address == QString("S9FYyGQK14zzXFnSqPLuXSGREfDjDr2G9s"));
-QVERIFY(rv.label == QString());
+    QVERIFY(rv.label == QString());
 
     // We currently don't implement the message parameter (ok, yea, we break spec...)
     uri.setUrl(QString("gridcoin:S9FYyGQK14zzXFnSqPLuXSGREfDjDr2G9s?req-message=Wikipedia Example Address"));

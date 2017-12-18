@@ -41,3 +41,4 @@ script:
   - ../configure --with-gui=qt5 --with-incompatible-bdb
   - make
   - ./src/test/test_gridcoin
+  - ./src/qt/test/test_gridcoin-qt
