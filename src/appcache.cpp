@@ -91,9 +91,7 @@ std::string GetListOf(
         if (section == "beacon" && Contains("INVESTOR", entry.value))
             continue;
 
-        std::string row = key + "<COL>" + entry.value;
-        if (!row.empty())
-            rows += row + "<ROW>";
+        rows += key + "<COL>" + entry.value + "<ROW>";
     }
 
     return rows;
@@ -102,6 +100,15 @@ std::string GetListOf(
 size_t GetCountOf(const std::string& section)
 {
     const std::string& data = GetListOf(section);
-    const std::vector<std::string>& vScratchPad = split(data.c_str(),"<ROW>");
-    return vScratchPad.size()+1;
+    size_t count = 0;
+    size_t pos = 0;
+    const std::string needle("<ROW>");
+    const size_t width = needle.size();
+    while((pos = data.find(needle, pos)) != std::string::npos)
+    {
+       ++count;
+       pos += width;
+    }
+
+    return count;
 }

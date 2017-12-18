@@ -26,5 +26,12 @@ BOOST_AUTO_TEST_CASE(appcache_KeyShouldBeEmptyAfterDeleteCache)
     BOOST_CHECK(ReadCache("section", "key").value.empty() == true);
 }
 
+BOOST_AUTO_TEST_CASE(appcache_GetCountOfShouldCountEntries)
+{
+   WriteCache("section", "key1", "hello", 123456789);
+   WriteCache("section", "key2", "hello", 123456789);
+   WriteCache("section", "key3", "hello", 123456789);
+   BOOST_CHECK_EQUAL(GetCountOf("section"), 3);
+}
 
 BOOST_AUTO_TEST_SUITE_END()
