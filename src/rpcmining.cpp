@@ -40,7 +40,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     Object obj, diff, weight;
     double nNetworkWeight = GetPoSKernelPS();
     obj.push_back(Pair("blocks",        nBestHeight));
-    diff.push_back(Pair("proof-of-work",        GetDifficulty()));
+    //proof of work difficulty removed
     diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
 
     { LOCK(MinerStatus.lock);
@@ -74,7 +74,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     }
 
     obj.push_back(Pair("difficulty",    diff));
-    obj.push_back(Pair("pow_reward",    GetProofOfWorkReward(0,  GetAdjustedTime(),1)/(double)COIN));
+    //POW reward calculation removal
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
@@ -98,7 +98,7 @@ Value getmininginfo(const Array& params, bool fHelp)
         obj.push_back(Pair("BoincRewardPending",nBoinc/(double)COIN));
     }
 
-    obj.push_back(Pair("MiningProject",msMiningProject));
+    //Mining Project Remowed, We can list the projects with CPIDS instead of this though
     obj.push_back(Pair("MiningInfo 1", msMiningErrors));
     obj.push_back(Pair("MiningInfo 2", msPoll));
     obj.push_back(Pair("MiningInfo 5", msMiningErrors5));
