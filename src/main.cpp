@@ -8303,7 +8303,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
                                 {
                                     WriteCache(sMessageType,sMessageKey+";Recipient",sRecipient,nTime);
-                                    WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
+                                    WriteCache(sMessageType,sMessageKey+";BurnAmount",ToString(dAmount),nTime);
                                 }
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
                                 if(fDebug && sMessageType=="beacon" ){
