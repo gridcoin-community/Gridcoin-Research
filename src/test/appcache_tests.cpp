@@ -34,4 +34,15 @@ BOOST_AUTO_TEST_CASE(appcache_GetCountOfShouldCountEntries)
    BOOST_CHECK_EQUAL(GetCountOf("section"), 3);
 }
 
+BOOST_AUTO_TEST_CASE(appcache_GetListOfBeaconShouldIgnoreInvestors)
+{
+
+   WriteCache("beacon", "CPID1", "INVESTOR", 12345);
+   BOOST_CHECK(GetListOf("beacon").empty() == true);
+
+   WriteCache("beacon", "CPID2", "abc123", 12345);
+   BOOST_CHECK(GetListOf("beacon").empty() == false);
+   BOOST_CHECK(GetListOf("beacon").find("abc123") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
