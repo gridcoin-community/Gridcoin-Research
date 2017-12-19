@@ -7320,7 +7320,6 @@ std::string ToOfficialName(std::string proj)
 {
     proj = LowerUnderscore(proj);
     //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-    std::string sType = "projectmapping";
     for(const auto& item : ReadCacheSection("projectmapping"))
     {
         const std::string& key = item.first;
