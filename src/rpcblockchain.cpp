@@ -1232,7 +1232,7 @@ Value execute(const Array& params, bool fHelp)
                     return results;
                 }
 
-                double dAmount = RoundFromString(sAmount,6);
+                double dAmount = RoundFromString(sAmount,8);
 
                 if (dAmount == 0 || dAmount < 0)
                 {
