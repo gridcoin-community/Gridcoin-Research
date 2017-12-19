@@ -2161,7 +2161,7 @@ bool CheckProofOfResearch(
                                 bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() );
 
             BusyWaitForTally_retired();
-            StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+            GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
                                                         pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         }
@@ -3362,7 +3362,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     printf("REORGANIZE: Disconnect %" PRIszu " blocks; %s..%s\n", vDisconnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexBest->GetBlockHash().ToString().substr(0,20).c_str());
     printf("REORGANIZE: Connect %" PRIszu " blocks; %s..%s\n", vConnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexNew->GetBlockHash().ToString().substr(0,20).c_str());
 
-    if (vDisconnect.size() > 0)
+    if (!vDisconnect.empty())
     {
         //Block was disconnected - User is Re-eligibile for staking
 
@@ -3375,7 +3375,7 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         }
         nLastBlockSolved = 0;
     }
-    printf("REORGANIZE Disc Size %f",(double)vDisconnect.size());
+    printf("REORGANIZE Disc Size %" PRIszu, vDisconnect.size());
 
     // Disconnect shorter branch
     list<CTransaction> vResurrect;
@@ -3423,13 +3423,6 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         // Queue memory transactions to delete
         for( const CTransaction& tx : block.vtx )
             vDelete.push_back(tx);
-
-        if (!IsResearchAgeEnabled(pindex->nHeight))
-        {
-            //MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-            //bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-            //mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
-        }
     }
 
     if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
@@ -3555,44 +3548,33 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     {
         // the first block in the new chain that will cause it to become the new best chain
         CBlockIndex *pindexIntermediate = pindexNew;
+
         // list of blocks that need to be connected afterwards
         std::vector<CBlockIndex*> vpindexSecondary;
         printf("\r\n**Reorganize**");
 
-        //10-6-2015 Make Reorganize work more gracefully - try up to 5 times to reorganize, each with an intermediate further back
-        for (int iRegression = 0; iRegression < 5; iRegression++)
+        // Reorganize is costly in terms of db load, as it works in a single db transaction.
+        // Try to limit how much needs to be done inside
+        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust)
         {
-            int rollback = iRegression * 100;
+            vpindexSecondary.push_back(pindexIntermediate);
+            pindexIntermediate = pindexIntermediate->pprev;
+        }
 
-            // Reorganize is costly in terms of db load, as it works in a single db transaction.
-            // Try to limit how much needs to be done inside
-            int rolled_back = 1;
-            while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back < rollback)
-            {
-                vpindexSecondary.push_back(pindexIntermediate);
-                pindexIntermediate = pindexIntermediate->pprev;
-                if (pindexIntermediate==pindexGenesisBlock) break;
-                rolled_back++;
-            }
-
-            if (!vpindexSecondary.empty())
-            printf("\r\nReorganizing Attempt #%f, regression to block #%f \r\n",(double)iRegression+1,(double)pindexIntermediate->nHeight);
-
+        if (!vpindexSecondary.empty())
             printf("Postponing %" PRIszu " reconnects\n", vpindexSecondary.size());
-            if (iRegression==4 && !Reorganize(txdb, pindexIntermediate))
-            {
-                    printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
-                    txdb.TxnAbort();
-                    InvalidChainFound(pindexNew);
-                    printf("\r\nReorg tally\r\n");
-                    BusyWaitForTally_retired();
-                    TallyNetworkAverages_v9();
-                    return error("SetBestChain() : Reorganize failed");
-            }
+
+        if (!Reorganize(txdb, pindexIntermediate))
+        {
+            printf("Reorganize failed");
+            txdb.TxnAbort();
+            InvalidChainFound(pindexNew);
+            return error("SetBestChain() : Reorganize failed");
         }
 
         // Switch to new best branch
         // Connect further blocks
+        std::set<uint128> connected_cpids;
         for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
         {
             CBlock block;
@@ -3605,10 +3587,22 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                 printf("SetBestChain() : TxnBegin 2 failed\n");
                 break;
             }
+
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
             if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
+
+            if(pindex->IsUserCPID())
+               connected_cpids.emplace(pindex->cpid);
         }
+
+        // Retally after reorganize to sync up amounts owed.
+        BusyWaitForTally_retired();
+        TallyNetworkAverages_v9();
+
+        // Recalculate amounts paid.
+        for(const auto& cpid : connected_cpids)
+            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
     }
 
     // Update best block in wallet (so we can detect restored wallets)
@@ -3640,31 +3634,17 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     else
         printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
 
-    // Check the version of the last 100 blocks to see if we need to upgrade:
-    if (!fIsInitialDownload)
-    {
-        int nUpgraded = 0;
-        const CBlockIndex* pindex = pindexBest;
-        for (int i = 0; i < 100 && pindex != NULL; i++)
-        {
-            if (pindex->nVersion > CBlock::CURRENT_VERSION)
-                ++nUpgraded;
-            pindex = pindex->pprev;
-        }
-        if (nUpgraded > 0)
-            printf("SetBestChain: %d of last 100 blocks above version %d\n", nUpgraded, CBlock::CURRENT_VERSION);
-        if (nUpgraded > 100/2)
-            // strMiscWarning is read by GetWarnings(), called by Qt and the JSON-RPC code to warn the user:
-            strMiscWarning = _("Warning: This version is obsolete, upgrade required!");
-    }
-
     std::string strCmd = GetArg("-blocknotify", "");
-
     if (!fIsInitialDownload && !strCmd.empty())
     {
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
+
+    // Perform Gridcoin services now that w have a new head.
+    // Remove V9 checks after the V9 switch.
+    if(IsV9Enabled(nBestHeight))
+        GridcoinServices();
 
     return true;
 }
@@ -4653,7 +4633,11 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     }
 
     printf("{PB}: ACC; \r\n");
-    GridcoinServices();
+
+    // Compatiblity while V8 is in use. Can be removed after the V9 switch.
+    if(IsV9Enabled(pindexBest->nHeight) == false)
+        GridcoinServices();
+
     return true;
 }
 
@@ -5711,18 +5695,13 @@ bool TallyResearchAverages_v9()
         bNetAveragesLoaded = true;
         return true;
     }
-    catch (bad_alloc ba)
+    catch (const std::bad_alloc& ba)
     {
         printf("Bad Alloc while tallying network averages. [1]\r\n");
         bNetAveragesLoaded=true;
     }
-    catch(...)
-    {
-        printf("Error while tallying network averages. [1]\r\n");
-        bNetAveragesLoaded=true;
-    }
 
-    if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
+    if (fDebug3) printf("NA loaded in %" PRId64, GetTimeMillis() - nStart);
 
     bNetAveragesLoaded=true;
     return false;
