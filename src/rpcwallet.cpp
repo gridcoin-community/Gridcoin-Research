@@ -1371,6 +1371,7 @@ Value listtransactions(const Array& params, bool fHelp)
             "2. count          (numeric, optional, default=10) The number of transactions to return\n"
             "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
             "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
+            "                                     If \"\" is set true, it will list sent transactions as well\n"
             "\nResult:\n"
             "[\n"
             "  {\n"
