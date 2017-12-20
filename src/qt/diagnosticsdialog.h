@@ -21,15 +21,15 @@ public:
 private:
     Ui::DiagnosticsDialog *ui;
     void GetData();
-    int VarifyBoincPath();
+    int VerifyBoincPath();
     int VerifyCPIDIsInNeuralNetwork();
-    int VarifyWalletIsSynced();
-    int VarifyCPIDHasRAC();
-    int VarifyAddNode();
-    int VarifyIsCPIDValid();
+    int VerifyWalletIsSynced();
+    int VerifyCPIDHasRAC();
+    int VerifyAddNode();
+    int VerifyIsCPIDValid();
     int FindCPID();
-    void VarifyClock();
-    void VarifyTCPPort();
+    void VerifyClock();
+    void VerifyTCPPort();
     double GetTotalCPIDRAC(std::string cpid);
     double GetUserRAC(std::string cpid, int *projects);
     std::string KeyValue(std::string key);

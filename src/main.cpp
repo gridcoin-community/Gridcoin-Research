@@ -155,7 +155,6 @@ std::string DefaultOrgKey(int key_length);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
-extern int64_t PreviousBlockAge();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
@@ -383,11 +382,11 @@ bool PushGridcoinDiagnostics()
     std::string sBlock = mvApplicationCache["superblock;block_number"];
     std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
     printf("Pushing diagnostic data...");
-    double lastblockage = PreviousBlockAge();
+    std::string sLastBlockAge = ToString(PreviousBlockAge());
     double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
         + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
+        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + sLastBlockAge + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
     NN::SetTestnetFlag(fTestNet);
     double dResponse = Restarter::PushGridcoinDiagnosticData(data);
     return true;

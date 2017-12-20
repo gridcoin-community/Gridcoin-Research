@@ -69,7 +69,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QLabel" name="varifyCPIDValidResultLbl">
+      <widget class="QLabel" name="verifyCPIDValidResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -127,7 +127,7 @@
       </widget>
      </item>
      <item row="6" column="1">
-      <widget class="QLabel" name="varifyWalletIsSyncedResultLbl">
+      <widget class="QLabel" name="verifyWalletIsSyncedResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -185,7 +185,7 @@
       </widget>
      </item>
      <item row="4" column="1">
-      <widget class="QLabel" name="varifyCPIDHasRACResultLbl">
+      <widget class="QLabel" name="verifyCPIDHasRACResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -226,7 +226,7 @@
       </widget>
      </item>
      <item row="5" column="1">
-      <widget class="QLabel" name="varifyCPIDIsInNNResultLbl">
+      <widget class="QLabel" name="verifyCPIDIsInNNResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -255,7 +255,7 @@
       </widget>
      </item>
      <item row="7" column="1">
-      <widget class="QLabel" name="varifyClkResultLbl">
+      <widget class="QLabel" name="verifyClkResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -284,7 +284,7 @@
       </widget>
      </item>
      <item row="8" column="1">
-      <widget class="QLabel" name="varifyAddnodeResultLbl">
+      <widget class="QLabel" name="verifyAddnodeResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -313,7 +313,7 @@
       </widget>
      </item>
      <item row="9" column="1">
-      <widget class="QLabel" name="varifyTCPPortResultLbl">
+      <widget class="QLabel" name="verifyTCPPortResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
