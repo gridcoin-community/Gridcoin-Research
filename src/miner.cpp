@@ -10,6 +10,7 @@
 #include "cpid.h"
 #include "util.h"
 #include "main.h"
+#include "appcache.h"
 #include "neuralnet.h"
 
 #include <memory>
@@ -692,7 +693,7 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(!NeedASuperblock())
         return printf("AddNeuralContractOrVote: not Needed\n");
 
-    int pending_height = RoundFromString(ReadCache("neuralsecurity","pending"),0);
+    int pending_height = RoundFromString(ReadCache("neuralsecurity","pending").value, 0);
 
     /* Add our Neural Vote */
     bb.NeuralHash = sb_hash;

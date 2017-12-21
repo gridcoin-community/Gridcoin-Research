@@ -127,8 +127,6 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
 
-extern std::map<std::string, std::string> mvApplicationCache;
-extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 extern std::map<std::string, double> mvNeuralNetworkHash;
 extern std::map<std::string, double> mvCurrentNeuralNetworkHash;
 extern std::map<std::string, double> mvNeuralVersion;
@@ -278,7 +276,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
-std::string ReadCache(std::string section, std::string key);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string PackBinarySuperblock(std::string sBlock);
 std::string UnpackBinarySuperblock(std::string sBlock);
