@@ -169,7 +169,6 @@ email=
 rpcuser=<username>
 rpcpassword=<password>
 addnode=node.gridcoin.us
-addnode=gridcoin.asia
 
 Ctrl-X to exit and save
 

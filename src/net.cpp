@@ -1485,8 +1485,8 @@ void MapPort()
 static const char *strDNSSeed[][2] = {
     {"node.gridcoin.us", "node.gridcoin.us"},
     {"london.grcnode.co.uk", "london.grcnode.co.uk"},
-	{ "www.grcpool.com", "www.grcpool.com" },
-	{ "nuad.de", "nuad.de" },
+    {"www.grcpool.com", "www.grcpool.com"},
+    {"nuad.de", "nuad.de"},
     {"", ""},
 };
 

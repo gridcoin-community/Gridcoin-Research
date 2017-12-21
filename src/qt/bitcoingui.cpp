@@ -1225,7 +1225,7 @@ bool CreateNewConfigFile(std::string boinc_email)
     myConfig << row;
     row = "addnode=node.gridcoin.us \r\n";
     myConfig << row;
-    row = "addnode=gridcoin.asia \r\n";
+    row = "addnode=www.grcpool.com \r\n";
     myConfig << row;
     row = "addnode=grcmagnitude.com \r\n";
     myConfig << row;
@@ -1293,12 +1293,9 @@ void BitcoinGUI::NewUserWizard()
         ReadConfigFile(mapArgs, mapMultiArgs);
         //Force some addnodes in to get user started
         ForceInAddNode("node.gridcoin.us");
-        ForceInAddNode("gridcoin.asia");
-        ForceInAddNode("grcmagnitude.com");
-        ForceInAddNode("amsterdam.grcnode.co.uk");
         ForceInAddNode("london.grcnode.co.uk");
-        ForceInAddNode("frankfurt.grcnode.co.uk");
-        ForceInAddNode("nyc.grcnode.co.uk");
+        ForceInAddNode("nuad.de");
+        ForceInAddNode("www.grcpool.com");
 
         if (sBoincNarr != "")
         {
