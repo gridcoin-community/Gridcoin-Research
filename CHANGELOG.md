@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.0.0]
+### Added
+ - Provide Difficulty of best kernel found, #766 (@tomasbrod).
+ - Add Travis support for OSX, 665 (@acey1).
+ - Add better command for sending alerts, #731 (@tomasbrod).
+ - Add RPC for sending raw contracts, #683 (@tomasbrod).
+ - Add portable diagnostic page, #631 (@fooforever).
+
+### Fixed
+ - Fixed minor spelling mistakes, #742 (@denravonska).
+ - Several tally improvements. There should now be less forking and the wallet
+   should use ~50MB less memory, #668, #756 (@denravonska, @tomasbrod)
+ - Data scraper can no longer run concurrently, #742 (@denravonska).
+ - Improve superblock validations, #730 (@tomasbrod).
+ - Fix potential deadlock, #708 (@denravonska).
+ - Prevent duplicate superblocks, #534 (@tomasbrod).
+ - Fix issue with application cache clears, #577 (@tomasbrod).
+ - Fix bug which caused rewards to be lost when staking the newbie block.
+   Missing rewards will be reimbursed, #552 (@Foggyx420).
+ - Fix minor UI typos, #661 (@Erkan-Yilmaz).
+ - Fix stake modifier, #686 (@tomasbrod).
+
+### Changed
+ - Changed versioning extraction from git. Test builds can no longer be used to
+   stake in production unless explicitly enabled, #729 (@tomasbrod).
+ - Don't update network quorum while syncing, #728 (@Foggyx420).
+ - Snapshot URL now uses https, #727 (@Foggyx420).
+ - Code cleanup (@Foggyx420, @denravonska).
+ - Use more efficient data structure for blocks, #679 (@denravonska).
+ - Improve transaction description dialog, #676 (@Foggyx420).
+ - Improve beacon handling, #604, #645, #649, #684, #701 (@Foggyx420, @tomasbrod).
+ - Optimize double<->string conversions, #692 (@denravonska).
+ - Optimize application cache access, #506 (@denravonska).
+ - Improve thread handling, #656 (@skcin).
+ - Replace `boost::shared_ptr` with `std::shared_ptr`.
+ - Optimize string split function, #672 (@denravonska).
+ - Improve sync speeds, #650 (@denravonska).
+ - The RPC command `restartclient` is now called `restart`.
+ - Fix voting sorting issues, #610 (@MagixInTheAir).
+ - Improve wallet backup, #610 (@Foggyx420).
+
+### Removed
+ - Remove CSV exporter which used unreliable data, #759 (@denravonska).
+ - Remove block download menu options on non-Windows, #727 (@Foggyx420).
+ - Removed RPC commands (@Foggyx420, @denravonska):
+    - debugexplainmagnitude
+    - executecode
+    - getsubsidy
+    - list newbieage
+    - list staking
+    - leder
+    - reboot
+ - Remove checkpoint relaying to improve sync speeds, #678 (@denravonska).
+ - Remove IRC peer discovery.
+
 ## [3.6.3.0] 2017-10-09
 ### Fixed
  - Fix problems sending beacons on Windows, #684 (@tomasbrod).
