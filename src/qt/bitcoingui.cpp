@@ -1294,6 +1294,7 @@ void BitcoinGUI::NewUserWizard()
         //Force some addnodes in to get user started
         ForceInAddNode("node.gridcoin.us");
         ForceInAddNode("london.grcnode.co.uk");
+        ForceInAddNode("gridcoin.crypto.fans");
         ForceInAddNode("nuad.de");
         ForceInAddNode("www.grcpool.com");
 
