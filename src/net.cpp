@@ -1488,6 +1488,7 @@ static const char *strDNSSeed[][2] = {
     {"gridcoin.crypto.fans", "gridcoin.crypto.fans"},
     {"www.grcpool.com", "www.grcpool.com"},
     {"nuad.de", "nuad.de"},
+    {"seeds.gridcoin.ifoggz-network.xyz", "seeds.gridcoin.ifoggz-network.xyz"},
     {"", ""},
 };
 

@@ -1227,7 +1227,7 @@ bool CreateNewConfigFile(std::string boinc_email)
     myConfig << row;
     row = "addnode=www.grcpool.com \r\n";
     myConfig << row;
-    row = "addnode=grcmagnitude.com \r\n";
+    row = "addnode=seeds.gridcoin.ifoggz-network.xyz \r\n";
     myConfig << row;
     myConfig.close();
     return true;
@@ -1295,6 +1295,7 @@ void BitcoinGUI::NewUserWizard()
         ForceInAddNode("node.gridcoin.us");
         ForceInAddNode("london.grcnode.co.uk");
         ForceInAddNode("gridcoin.crypto.fans");
+        ForceInAddNode("seeds.gridcoin.ifoggz-network.xyz");
         ForceInAddNode("nuad.de");
         ForceInAddNode("www.grcpool.com");
 
