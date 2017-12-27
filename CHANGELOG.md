@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - The RPC command `restartclient` is now called `restart`.
  - Fix voting sorting issues, #610 (@MagixInTheAir).
  - Improve wallet backup, #610 (@Foggyx420).
+ - Update seed nodes, #783 (@barton2526).
 
 ### Removed
  - Remove CSV exporter which used unreliable data, #759 (@denravonska).
