@@ -183,7 +183,6 @@ int main(int argc, char *argv[])
     QTextCodec::setCodecForCStrings(QTextCodec::codecForTr());
 #endif
 
-    Q_INIT_RESOURCE(bitcoin);
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;

@@ -17,6 +17,8 @@ BOOST_AUTO_TEST_CASE(appcache_ClearCacheShouldClearEntireSection)
     ClearCache("section");
     BOOST_CHECK(ReadCache("section", "key1").value.empty() == true);
     BOOST_CHECK(ReadCache("section", "key2").value.empty() == true);
+    DeleteCache("section","key1");
+    DeleteCache("section","key2");
 }
 
 BOOST_AUTO_TEST_CASE(appcache_KeyShouldBeEmptyAfterDeleteCache)
@@ -24,6 +26,7 @@ BOOST_AUTO_TEST_CASE(appcache_KeyShouldBeEmptyAfterDeleteCache)
     WriteCache("section", "key", "hello", 123456789);
     DeleteCache("section", "key");
     BOOST_CHECK(ReadCache("section", "key").value.empty() == true);
+    BOOST_CHECK_EQUAL(GetCountOf("section"),0);
 }
 
 BOOST_AUTO_TEST_CASE(appcache_GetCountOfShouldCountEntries)
