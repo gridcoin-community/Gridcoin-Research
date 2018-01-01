@@ -409,11 +409,7 @@ VotingDialog::VotingDialog(QWidget *parent)
 
     tableView_->setModel(proxyModel_);
     tableView_->setFont(QFont("Arial", 8));
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-#else
-    tableView_->horizontalHeader()->setResizeMode(QHeaderView::Interactive);
-#endif
     tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_BestAnswer);
 
     groupboxvlayout->addWidget(tableView_);
@@ -662,11 +658,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTable_->setRowCount(0);
     answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
     answerTable_->setHorizontalHeaderLabels(answerTableHeader);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
     answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-#else
-    answerTable_->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
-#endif
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
     vlayout->addWidget(resTabWidget);
