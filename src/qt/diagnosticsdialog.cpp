@@ -12,7 +12,6 @@
 #include <numeric>
 
 std::string GetListOf(std::string datatype);
-double PreviousBlockAge();
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
@@ -29,7 +28,7 @@ DiagnosticsDialog::~DiagnosticsDialog()
     delete ui;
 }
 
-int DiagnosticsDialog::VarifyBoincPath() {
+int DiagnosticsDialog::VerifyBoincPath() {
     boost::filesystem::path boincPath = (boost::filesystem::path) GetBoincDataDir();
     if(boincPath.empty())
         boincPath = (boost::filesystem::path) GetArgument("boincdatadir", "");
@@ -51,7 +50,7 @@ int DiagnosticsDialog::FindCPID() {
         return 0;
 }
 
-int DiagnosticsDialog::VarifyIsCPIDValid() {
+int DiagnosticsDialog::VerifyIsCPIDValid() {
     boost::filesystem::path clientStatePath = (boost::filesystem::path) GetBoincDataDir();
     if(!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
@@ -96,20 +95,17 @@ int DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork() {
         return 0;
 }
 
-int DiagnosticsDialog::VarifyWalletIsSynced() {
-    std::string walletAgeString = ToString(PreviousBlockAge());
-    long int walletAge = std::stoi(walletAgeString,nullptr,10);
+int DiagnosticsDialog::VerifyWalletIsSynced() {
+    int64_t nwalletAge = PreviousBlockAge();
 
-    if(walletAgeString.length() == 0)
-        return -1;
-    if(walletAge < (60 * 60))
+    if(nwalletAge < (60 * 60))
         return 1;
     else
         return 0;
 
 }
 
-int DiagnosticsDialog::VarifyCPIDHasRAC() {
+int DiagnosticsDialog::VerifyCPIDHasRAC() {
     boost::filesystem::path clientStatePath = (boost::filesystem::path) GetBoincDataDir();
     if(!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
@@ -147,7 +143,7 @@ int DiagnosticsDialog::VarifyCPIDHasRAC() {
 
 }
 
-int DiagnosticsDialog::VarifyAddNode() {
+int DiagnosticsDialog::VerifyAddNode() {
     long int peersLength = boost::filesystem::file_size(GetDataDir(true) / "peers.dat");
     std::string addNode = GetArgument("addnode", "");
 
@@ -163,7 +159,7 @@ int DiagnosticsDialog::VarifyAddNode() {
 
 }
 
-void DiagnosticsDialog::VarifyClock() {
+void DiagnosticsDialog::VerifyClock() {
     QHostInfo info = QHostInfo::fromName("pool.ntp.org");
     udpSocket = new QUdpSocket(this);
 
@@ -180,7 +176,7 @@ void DiagnosticsDialog::VarifyClock() {
 
 
 
-void DiagnosticsDialog::VarifyTCPPort() {
+void DiagnosticsDialog::VerifyTCPPort() {
     tcpSocket = new QTcpSocket(this);
 
     connect(tcpSocket, SIGNAL(connected()), this, SLOT(TCPFinished()));
@@ -195,7 +191,7 @@ void DiagnosticsDialog::on_testBtn_clicked() {
     //boinc path
     ui->boincPathResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyBoincPath();
+    result = DiagnosticsDialog::VerifyBoincPath();
     if(result == 1)
         ui->boincPathResultLbl->setText("Passed");
     else
@@ -209,63 +205,61 @@ void DiagnosticsDialog::on_testBtn_clicked() {
     else
         ui->findCPIDReaultLbl->setText("Failed (Is CPID in gridcoinresearch.conf?)");
     //cpid valid
-    ui->varifyCPIDValidResultLbl->setText("Testing...");
+    ui->verifyCPIDValidResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyIsCPIDValid();
+    result = DiagnosticsDialog::VerifyIsCPIDValid();
     if(result == 1)
-        ui->varifyCPIDValidResultLbl->setText("Passed");
+        ui->verifyCPIDValidResultLbl->setText("Passed");
     else
-        ui->varifyCPIDValidResultLbl->setText("Failed (BOINC CPID and gridcoinresearch.conf CPID do not match)");
+        ui->verifyCPIDValidResultLbl->setText("Failed (BOINC CPID and gridcoinresearch.conf CPID do not match)");
     //cpid has rac
-    ui->varifyCPIDHasRACResultLbl->setText("Testing...");
+    ui->verifyCPIDHasRACResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyCPIDHasRAC();
+    result = DiagnosticsDialog::VerifyCPIDHasRAC();
     if(result > 0)
-        ui->varifyCPIDHasRACResultLbl->setText(QString::fromStdString("Passed RAC: " + std::to_string(result)));
+        ui->verifyCPIDHasRACResultLbl->setText(QString::fromStdString("Passed RAC: " + std::to_string(result)));
     else
-        ui->varifyCPIDHasRACResultLbl->setText("Failed");
+        ui->verifyCPIDHasRACResultLbl->setText("Failed");
     //cpid is in nn
-    ui->varifyCPIDIsInNNResultLbl->setText("Testing...");
+    ui->verifyCPIDIsInNNResultLbl->setText("Testing...");
     this->repaint();
     result = DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork();
     if(result == 1)
-        ui->varifyCPIDIsInNNResultLbl->setText("Passed");
+        ui->verifyCPIDIsInNNResultLbl->setText("Passed");
     else if (result == -1)
-        ui->varifyCPIDIsInNNResultLbl->setText("Beacon data empty, sync wallet");
+        ui->verifyCPIDIsInNNResultLbl->setText("Beacon data empty, sync wallet");
     else
-        ui->varifyCPIDIsInNNResultLbl->setText("Failed");
+        ui->verifyCPIDIsInNNResultLbl->setText("Failed");
     //wallet synced
-    ui->varifyWalletIsSyncedResultLbl->setText("Testing...");
+    ui->verifyWalletIsSyncedResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyWalletIsSynced();
+    result = DiagnosticsDialog::VerifyWalletIsSynced();
     if(result == 1)
-        ui->varifyWalletIsSyncedResultLbl->setText("Passed");
-    else if (result == -1)
-        ui->varifyWalletIsSyncedResultLbl->setText("Sync data empty");
+        ui->verifyWalletIsSyncedResultLbl->setText("Passed");
     else
-        ui->varifyWalletIsSyncedResultLbl->setText("Failed");
+        ui->verifyWalletIsSyncedResultLbl->setText("Failed");
     //clock
-    ui->varifyClkResultLbl->setText("Testing...");
+    ui->verifyClkResultLbl->setText("Testing...");
     this->repaint();
-    DiagnosticsDialog::VarifyClock();
+    DiagnosticsDialog::VerifyClock();
     //addnode
-    ui->varifyAddnodeResultLbl->setText("Testing...");
+    ui->verifyAddnodeResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyAddNode();
+    result = DiagnosticsDialog::VerifyAddNode();
     if(result == 1)
-        ui->varifyAddnodeResultLbl->setText("Passed");
+        ui->verifyAddnodeResultLbl->setText("Passed");
     else if(result == 2)
-        ui->varifyAddnodeResultLbl->setText("Passed (Addnode does not exist but peers are synced)");
+        ui->verifyAddnodeResultLbl->setText("Passed (Addnode does not exist but peers are synced)");
     else if(result == 3)
-        ui->varifyAddnodeResultLbl->setText("Passed (Addnode exists but peers not synced)");
+        ui->verifyAddnodeResultLbl->setText("Passed (Addnode exists but peers not synced)");
     else if(result == -1)
-        ui->varifyAddnodeResultLbl->setText("Failed (Please add addnode=node.gridcoin.us in conf file)");
+        ui->verifyAddnodeResultLbl->setText("Failed (Please add addnode=node.gridcoin.us in conf file)");
     else
-        ui->varifyAddnodeResultLbl->setText("Failed");
+        ui->verifyAddnodeResultLbl->setText("Failed");
     //tcp port
-    ui->varifyTCPPortResultLbl->setText("Testing...");
+    ui->verifyTCPPortResultLbl->setText("Testing...");
     this->repaint();
-    DiagnosticsDialog::VarifyTCPPort();
+    DiagnosticsDialog::VerifyTCPPort();
     //client version
     ui->checkClientVersionResultLbl->setText("Testing...");
     networkManager->get(QNetworkRequest(QUrl("https://api.github.com/repos/gridcoin/Gridcoin-Research/releases/latest")));
@@ -294,21 +288,21 @@ void DiagnosticsDialog::clkFinished() {
     boost::posix_time::time_duration timeDiff = networkTime - localTime;
 
     if(timeDiff.minutes() < 3)
-        ui->varifyClkResultLbl->setText("Passed");
+        ui->verifyClkResultLbl->setText("Passed");
     else
-        ui->varifyClkResultLbl->setText("Failed (Sync local time with network)");
+        ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
 
     this->repaint();
 }
 
 void DiagnosticsDialog::TCPFinished() {
     tcpSocket->close();
-    ui->varifyTCPPortResultLbl->setText("Passed");
+    ui->verifyTCPPortResultLbl->setText("Passed");
     this->repaint();
 }
 
 void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket) {
-    ui->varifyTCPPortResultLbl->setText("Failed (Port 32749 may be blocked by your firewall)");
+    ui->verifyTCPPortResultLbl->setText("Failed (Port 32749 may be blocked by your firewall)");
     this->repaint();
 }
 
