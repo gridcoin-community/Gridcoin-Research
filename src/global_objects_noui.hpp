@@ -11,8 +11,6 @@ extern bool bCPIDsLoaded;
 extern bool bProjectsInitialized;
 extern bool bNetAveragesLoaded;
 extern bool bForceUpdate;
-extern bool bCheckedForUpgrade;
-extern bool bCheckedForUpgradeLive;
 extern bool bGlobalcomInitialized;
 extern bool bGridcoinGUILoaded;
 

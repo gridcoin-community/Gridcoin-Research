@@ -85,7 +85,7 @@ extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-       
+
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
 
@@ -162,13 +162,15 @@ std::string DefaultOrgKey(int key_length);
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
-void CheckForUpgrade();
+bool IsUpgradeAvailable();
+int UpgradeClient();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
+int64_t nLastCheckedForUpdate = 0;
 
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
@@ -251,8 +253,6 @@ extern std::string aes_complex_hash(uint256 scrypt_hash);
 bool bNetAveragesLoaded = false;
 bool bTallyStarted_retired      = false;
 bool bForceUpdate = false;
-bool bCheckedForUpgrade = false;
-bool bCheckedForUpgradeLive = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
 volatile bool bDoTally_retired = false;
@@ -4436,23 +4436,26 @@ void GridcoinServices()
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
-    if (TimerMain("check_for_autoupgrade",240))
+#ifdef QT_GUI
+    // Check for updates once per day.
+    if(GetAdjustedTime() - nLastCheckedForUpdate > 24 * 60 * 60)
     {
+        nLastCheckedForUpdate = GetAdjustedTime();
+
         if (fDebug3) printf("Checking for upgrade...");
-        bCheckedForUpgradeLive = true;
-    }
-
-    #if defined(WIN32) && defined(QT_GUI)
-        if (bCheckedForUpgradeLive && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
+        if(IsUpgradeAvailable())
         {
-            bCheckedForUpgradeLive=false;
-            printf("{Checking for Upgrade} ");
-            CheckForUpgrade();
-            printf("{Done checking for upgrade} ");
+            printf("Upgrade available.");
+            if(GetArgument("autoupgrade", "false") == "true")
+            {
+                printf("Upgrading client.");
+                UpgradeClient();
+            }
         }
-    #endif
-    if (fDebug10) printf(" {/SVC} ");
+    }
+#endif
 
+    if (fDebug10) printf(" {/SVC} ");
 }
 
 
