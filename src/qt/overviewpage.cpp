@@ -57,14 +57,9 @@ public:
         qint64 amount = index.data(TransactionTableModel::AmountRole).toLongLong();
         bool confirmed = index.data(TransactionTableModel::ConfirmedRole).toBool();
 
-
-		//QColor foreground = option.palette.color(QPalette::Text);
-		//R Halford: 11-28-2013: 
 		QColor foreground = QColor(200, 0, 0);
-		
         QVariant value = index.data(Qt::ForegroundRole);
-        //QColor foreground = option.palette.color(QPalette::Text);
-        if(value.canConvert(QMetaType::QColor))
+        if(value.canConvert<QColor>())
         {
             foreground = qvariant_cast<QColor>(value);
         }
