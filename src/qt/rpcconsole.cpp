@@ -301,7 +301,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->startupTime->setText(model->formatClientStartupTime());
 
         setNumConnections(model->getNumConnections());
-        ui->isTestNet->setChecked(model->isTestNet());
+        ui->isTestNet->setText(model->isTestNet() ? tr("Yes") : tr("No"));
 
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 
