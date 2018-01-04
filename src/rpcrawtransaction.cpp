@@ -236,17 +236,20 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                     CBlockIndex* pblockindex = mapBlockIndex[mtx.hashBlock];
                     CBlock block;
 
-                    int nEndHeight = pblockindex->nHeight - (BLOCKS_PER_DAY*14);
+                    if(pblockindex)
+                    {
+                        int nEndHeight = pblockindex->nHeight - (BLOCKS_PER_DAY*14);
 
-                    // Incase; Why throw.
-                    if (nEndHeight < 1)
-                        nEndHeight = 1;
+                        // Incase; Why throw.
+                        if (nEndHeight < 1)
+                            nEndHeight = 1;
 
-                    // Iterate back to find previous superblock
-                    while (pblockindex->nHeight > nEndHeight && pblockindex->nIsSuperBlock == 0)
-                        pblockindex = pblockindex->pprev;
+                        // Iterate back to find previous superblock
+                        while (pblockindex->nHeight > nEndHeight && pblockindex->nIsSuperBlock == 0)
+                            pblockindex = pblockindex->pprev;
+                    }
 
-                    if (pblockindex->nIsSuperBlock == 1)
+                    if (pblockindex && pblockindex->nIsSuperBlock)
                     {
                         block.ReadFromDisk(pblockindex);
 
@@ -302,7 +305,10 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                     {
                         res.push_back(std::make_pair(_("ERROR"), _("Unable to obtain superblock data before vote was made to calculate voting weight")));
 
-                        return res;
+                        dVoteWeight = -1;
+                        res.push_back(std::make_pair(_("Magnitude"), RoundToString(dVoteMagnitude, 2)));
+                        res.push_back(std::make_pair(_("Balance"), RoundToString(dVoteBalance, 2)));
+
                     }
                 }
 

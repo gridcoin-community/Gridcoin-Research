@@ -298,6 +298,7 @@ void ResendWalletTransactions(bool fForce = false);
 
 std::string DefaultWalletAddress();
 
+int64_t PreviousBlockAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
