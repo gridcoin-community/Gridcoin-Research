@@ -32,7 +32,7 @@ AppCacheEntry ReadCache(
     auto entry = cache.find(key);
     return entry != cache.end()
                    ? entry->second
-                   : AppCacheEntry{};
+                   : AppCacheEntry{std::string(), 0};
 }
 
 AppCacheSection ReadCacheSection(const std::string& section)
@@ -40,7 +40,7 @@ AppCacheSection ReadCacheSection(const std::string& section)
     const auto& cache = mvApplicationCache.find(section);
     return cache != mvApplicationCache.end()
         ? cache->second
-        : AppCacheSection{};
+        : AppCacheSection();
 }
 
 void ClearCache(const std::string& section)
