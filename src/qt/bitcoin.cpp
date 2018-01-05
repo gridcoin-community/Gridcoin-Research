@@ -184,6 +184,7 @@ int main(int argc, char *argv[])
 #endif
 
     Q_INIT_RESOURCE(bitcoin);
+    Q_INIT_RESOURCE(bitcoin_locale);
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
