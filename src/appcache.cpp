@@ -45,16 +45,7 @@ AppCacheSection ReadCacheSection(const std::string& section)
 
 void ClearCache(const std::string& section)
 {
-    auto cache = mvApplicationCache.find(section);
-    if(cache == mvApplicationCache.end())
-        return;
-
-    for(auto& item : cache->second)
-    {
-        AppCacheEntry& entry = item.second;
-        entry.value.clear();
-        entry.timestamp = 1;
-    }
+    mvApplicationCache.erase(section);
 }
 
 void DeleteCache(const std::string& section, const std::string& key)
