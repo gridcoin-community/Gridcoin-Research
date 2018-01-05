@@ -26,7 +26,7 @@ AppCacheEntry ReadCache(
         const std::string& key)
 {
     if (section.empty() || key.empty())
-        return AppCacheEntry{};
+        return AppCacheEntry{ std::string(), 0 };
 
     const auto& cache = ReadCacheSection(section);
     auto entry = cache.find(key);
