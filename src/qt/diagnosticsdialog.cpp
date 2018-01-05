@@ -308,11 +308,6 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket) {
 }
 
 void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
-    // Qt didn't get JSON support until 5.x. Ignore version checks when using
-    // Qt4 an drop this condition once we drop Qt4 support.
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-    ui->checkClientVersionResultLbl->setText("N/A");
-#else
     QByteArray data;
     data = reply->readAll();
     std::string newVersionString;
@@ -354,5 +349,4 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
         } else
             ui->checkClientVersionResultLbl->setText("Up to date");
     }
-#endif
 }

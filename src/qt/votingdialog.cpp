@@ -7,7 +7,7 @@
 #include <QAction>
 #include <QApplication>
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
 	#include <QtCharts/QChartView>
 	#include <QtCharts/QPieSeries>
 #endif
@@ -619,7 +619,7 @@ void VotingDialog::showNewPollDialog(void)
 //
 VotingChartDialog::VotingChartDialog(QWidget *parent)
     : QDialog(parent)
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
     ,chart_(0)
 #endif
     ,answerTable_(NULL)
@@ -672,7 +672,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
 
     QTabWidget *resTabWidget = new QTabWidget;
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
     chart_ = new QtCharts::QChart;
     chart_->legend()->setVisible(true);
     chart_->legend()->setAlignment(Qt::AlignRight);
@@ -700,12 +700,10 @@ void VotingChartDialog::resetData(const VotingItem *item)
     answerTable_->setRowCount(0);
     answerTable_->setSortingEnabled(false);
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-    //chart_->removeAllSeries();
+#ifdef QT_CHARTS_LIB
     QList<QtCharts::QAbstractSeries *> oldSeriesList = chart_->series();
-    foreach (QtCharts::QAbstractSeries *oldSeries, oldSeriesList) {
+    foreach (QtCharts::QAbstractSeries *oldSeries, oldSeriesList)
         chart_->removeSeries(oldSeries);
-    }
 
     QtCharts::QPieSeries *series = new QtCharts::QPieSeries();
 #endif
@@ -735,7 +733,7 @@ void VotingChartDialog::resetData(const VotingItem *item)
         percentItem->setData(Qt::DisplayRole,(float)iShares[y]/(float)sharesSum*100);
         answerTable_->setItem(y, 2, percentItem);
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
         unsigned int num = rand();
         int r = (num >>  0) % 0xFF;
@@ -743,12 +741,11 @@ void VotingChartDialog::resetData(const VotingItem *item)
         int b = (num >> 16) % 0xFF;
         slice->setColor(QColor(r, g, b));
         series->append(slice);
+        chart_->addSeries(series);
 #endif
     }
+
     answerTable_->setSortingEnabled(true);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-    chart_->addSeries(series);
-#endif
 }
 
 // VotingVoteDialog

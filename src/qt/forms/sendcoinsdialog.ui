@@ -490,6 +490,9 @@
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
+            <property name="placeholderText">
+             <string>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</string>
+            </property>
            </widget>
           </item>
           <item>
@@ -544,8 +547,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>834</width>
-        <height>129</height>
+        <width>830</width>
+        <height>167</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
