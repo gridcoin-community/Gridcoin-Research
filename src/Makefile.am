@@ -28,8 +28,7 @@ if BUILD_GRIDCOINRESEARCHD
     bin_PROGRAMS += gridcoinresearchd
 endif
 
-
-.PHONY: FORCE check-symbols check-security
+.PHONY: FORCE
 # gridcoin core #
 GRIDCOIN_CORE_H = \
 	addrman.h \
@@ -49,8 +48,9 @@ GRIDCOIN_CORE_H = \
 	cpid.h \
 	crypter.h \
 	db.h \
-	easy.h \
 	fwd.h \
+    global_objects.hpp \
+    global_objects_noui.hpp \
 	gridcoin.h \
 	grcrestarter.h \
 	init.h \
@@ -59,9 +59,7 @@ GRIDCOIN_CORE_H = \
 	keystore.h \
 	main.h \
 	miner.h \
-	mprintf.h \
 	mruset.h \
-	multi.h \
 	neuralnet.h \
 	netbase.h \
 	net.h \
@@ -70,7 +68,6 @@ GRIDCOIN_CORE_H = \
 	script.h \
 	scrypt.h \
 	serialize.h \
-	stdcheaders.h \
 	strlcpy.h \
 	sync.h \
 	threadsafety.h \
@@ -128,6 +125,17 @@ obj/build.h: FORCE
 	  "$(abs_top_srcdir)"
 libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 
+GRIDCOIN_JSON_H = \
+	json/json_spirit_error_position.h \
+	json/json_spirit_reader.cpp \
+	json/json_spirit_reader_template.h \
+	json/json_spirit_utils.h  \
+	json/json_spirit_value.h  \   
+	json/json_spirit_writer.h \
+	json/json_spirit.h \
+	json/json_spirit_reader.h \    
+	json/json_spirit_stream_reader.h \    
+	json/json_spirit_writer_template.h
 
 # util: shared between all executables.
 # This library *must* be included to make sure that the glibc
@@ -137,18 +145,17 @@ libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
     grcrestarter_stub.cpp \
     neuralnet_stub.cpp \
-    $(GRIDCOIN_CORE_H)
+    json/json_spirit_reader.cpp \
+    json/json_spirit_value.cpp \
+    json/json_spirit_writer.cpp \
+	$(GRIDCOIN_CORE_H) \
+	$(GRIDCOIN_JSON_H)
 
 if TARGET_WINDOWS
 libgridcoin_util_a_CXXFLAGS += -DUNICODE
 endif
 
-if GLIBC_BACK_COMPAT
-libgridcoin_util_a_SOURCES += compat/glibc_compat.cpp
-endif
-
 nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
-
 
 # gridcoinresearchd binary #
 gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
@@ -206,18 +213,6 @@ clean-local:
 .mm.o:
 	$(AM_V_CXX) $(OBJCXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	  $(CPPFLAGS) $(AM_CXXFLAGS) $(QT_INCLUDES) $(AM_CXXFLAGS) $(PIE_FLAGS) $(CXXFLAGS) -c -o $@ $<
-
-check-symbols: $(bin_PROGRAMS)
-if GLIBC_BACK_COMPAT
-	@echo "Checking glibc back compat..."
-	$(AM_V_at) READELF=$(READELF) CPPFILT=$(CPPFILT) $(top_srcdir)/contrib/devtools/symbol-check.py < $(bin_PROGRAMS)
-endif
-
-check-security: $(bin_PROGRAMS)
-if HARDEN
-	@echo "Checking binary security..."
-	$(AM_V_at) READELF=$(READELF) OBJDUMP=$(OBJDUMP) $(top_srcdir)/contrib/devtools/security-check.py < $(bin_PROGRAMS)
-endif
 
 %.pb.cc %.pb.h: %.proto
 	@test -f $(PROTOC)
