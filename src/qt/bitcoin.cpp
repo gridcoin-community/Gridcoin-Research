@@ -183,6 +183,7 @@ int main(int argc, char *argv[])
     QTextCodec::setCodecForCStrings(QTextCodec::codecForTr());
 #endif
 
+    Q_INIT_RESOURCE(bitcoin);
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
@@ -358,17 +359,4 @@ int main(int argc, char *argv[])
     // delete thread handler
     threads->interruptAll();
     threads->removeAll();
-    threads.reset();
-
-    // use exit codes to trigger restart of the wallet
-    if(currentExitCode == EXIT_CODE_REBOOT)
-    {
-        printf("Restarting wallet...\r\n");
-        QStringList args = QApplication::arguments();
-        args.removeFirst();
-        QProcess::startDetached(QApplication::applicationFilePath(), args);
-    }
-
-    return 0;
-}
-#endif // BITCOIN_QT_TEST
+    threads.re
