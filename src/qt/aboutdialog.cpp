@@ -23,7 +23,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui->setupUi(this);
 
     // Set current copyright year and boinc utilization
-    QString cr = "Copyright 2009-2015 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers";
+    QString cr = "Copyright 2009-2018 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers";
     std::string sBoincUtilization="";
     sBoincUtilization = strprintf("%d",nBoincUtilization);
 	QString qsUtilization = QString::fromUtf8(sBoincUtilization.c_str());
