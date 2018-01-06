@@ -75,11 +75,7 @@
 #include <QDateTime>
 #include <QMovie>
 #include <QFileDialog>
-
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <QStandardPaths>
-#endif
-
 #include <QTimer>
 #include <QDragEnterEvent>
 #include <QDesktopServices> // for opening URLs
@@ -1628,11 +1624,7 @@ void BitcoinGUI::encryptWallet(bool status)
 
 void BitcoinGUI::backupWallet()
 {
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     QString saveDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-#else
-    QString saveDir = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
-#endif
     QString walletfilename = QFileDialog::getSaveFileName(this, tr("Backup Wallet"), saveDir, tr("Wallet Data (*.dat)"));
     if(!walletfilename.isEmpty()) {
         if(!BackupWallet(*pwalletMain, FromQString(walletfilename))) {
