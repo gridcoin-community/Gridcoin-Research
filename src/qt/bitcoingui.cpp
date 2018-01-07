@@ -129,9 +129,6 @@ extern int CreateRestorePoint();
 extern int DownloadBlocks();
 void GetGlobalStatus();
 
-extern int UpgradeClient();
-extern void CheckForUpgrade();
-
 bool IsConfigFileEmpty();
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
@@ -471,20 +468,20 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
     #endif
 }
 
-void CheckForUpgrade()
+bool IsUpgradeAvailable()
 {
-            if (!bGlobalcomInitialized) return;
+   if (!bGlobalcomInitialized)
+      return false;
 
-            if (bCheckedForUpgrade == false && !fTestNet && bProjectsInitialized)
-            {
-                int nNeedsUpgrade = 0;
-                bCheckedForUpgrade = true;
-                #ifdef WIN32
-                    nNeedsUpgrade = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
-                #endif
-                printf("Needs upgraded %f\r\n",(double)nNeedsUpgrade);
-                if (nNeedsUpgrade) UpgradeClient();
-            }
+   bool upgradeAvailable = false;
+   if (!fTestNet)
+   {
+#ifdef WIN32
+      upgradeAvailable = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
+#endif
+   }
+
+   return upgradeAvailable;
 }
 
 
