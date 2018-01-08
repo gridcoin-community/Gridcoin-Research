@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.0.0]
+## [3.7.0.0] 2018-01-08
 ### Added
  - Provide Difficulty of best kernel found, #766 (@tomasbrod).
  - Add Travis support for OSX, 665 (@acey1).
