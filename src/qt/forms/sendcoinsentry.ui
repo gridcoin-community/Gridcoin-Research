@@ -179,13 +179,6 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="2">
-    <widget class="QCheckBox" name="cbTrack">
-     <property name="text">
-      <string>Track Coins</string>
-     </property>
-    </widget>
-   </item>
    <item row="5" column="2">
     <widget class="QPushButton" name="btnAddAttachment">
      <property name="text">
