@@ -10,6 +10,7 @@
 #include "init.h"
 #include "base58.h"
 #include "util.h"
+#include "backup.h"
 
 using namespace json_spirit;
 using namespace std;
@@ -21,8 +22,6 @@ extern void ThreadTopUpKeyPool(void* parg);
 
 double CoinToDouble(double surrogate);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-
-extern Array StakingReport();
 
 extern void ThreadCleanWalletPassphrase(void* parg);
 
@@ -1252,68 +1251,6 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
     }
 }
 
-
-
-Array StakingReport()
-{
-
-    Array results;
-    Object c;
-    std::string Narr = ToString(GetAdjustedTime());
-    c.push_back(Pair("Staking Report",Narr));
-    results.push_back(c);
-    Object entry;
-    int64_t nCoinStakeTotal = 0;
-    int64_t nNonCoinStakeTotal = 0;
-    int64_t nStake = 0;
-    int64_t nImmature = 0;
-    int64_t nDepthImmature = 0;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (map<uint256, CWalletTx>::const_iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
-    {
-        const CWalletTx* pcoin = &(*it).second;
-        int64_t amt = pwalletMain->GetCredit(*pcoin);
-
-        if (pcoin->IsCoinStake())
-        {
-                 nCoinStakeTotal += amt;
-                 if (pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)
-                 {
-                     nStake += amt;
-                 }
-                 else
-                 {
-                     
-                     if (pcoin->GetBlocksToMaturity() < 1) 
-                     {
-                                nImmature+=amt;
-                     }
-                     else
-                     {
-                                if (pcoin->GetDepthInMainChain() < 1) nDepthImmature += amt;
-                     }
-                 }
-   
-        }
-        else
-        {
-                 //Sent Tx
-                 nNonCoinStakeTotal += amt;
-   
-        }
-    }
-    
-    entry.push_back(Pair("CoinStakeTotal",     CoinToDouble(nCoinStakeTotal)));
-    entry.push_back(Pair("Non-CoinStakeTotal", CoinToDouble(nNonCoinStakeTotal)));
-    entry.push_back(Pair("Blocks Immature",    CoinToDouble(nImmature)));
-    entry.push_back(Pair("Depth Immature",     CoinToDouble(nDepthImmature)));
-    entry.push_back(Pair("Total Immature",     CoinToDouble(nImmature+nDepthImmature)));
-    entry.push_back(Pair("Total Eligibile for Staking", CoinToDouble(nStake)));
-    results.push_back(entry);
-    return results;
-
-}
-
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, Array& ret, const isminefilter& filter=MINE_SPENDABLE)
 {
     int64_t nFee;
@@ -1752,16 +1689,17 @@ Value gettransaction(const Array& params, bool fHelp)
 
 Value backupwallet(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || params.size() > 0)
         throw runtime_error(
-            "backupwallet <destination>\n"
-            "Safely copies wallet.dat to destination, which can be a directory or a path with filename.");
+            "backupwallet\n"
+            "Backup your wallet and config files.");
 
-    string strDest = params[0].get_str();
-    if (!BackupWallet(*pwalletMain, strDest))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Wallet backup failed!");
-
-    return Value::null;
+    bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
+    bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
+    Object ret;
+    ret.push_back(Pair("Backup wallet success", bWalletBackupResults));
+    ret.push_back(Pair("Backup config success", bConfigBackupResults));
+    return ret;
 }
 
 

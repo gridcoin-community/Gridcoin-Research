@@ -19,15 +19,13 @@
 #include "util.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
+#include "main.h"
 
 using namespace std;
 
-double cdbl(std::string s, int place);
 std::string SendReward(std::string sAddress, int64_t nAmount);
-void qtUpdateConfirm(std::string txid);
 extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
-void AddPeek(std::string data);
 
 MiningCPID DeserializeBoincBlock(std::string block);
 
@@ -466,7 +464,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             wtx.nTimeSmart = wtx.nTimeReceived;
             if (wtxIn.hashBlock != 0)
             {
-                if (mapBlockIndex.count(wtxIn.hashBlock))
+                auto mapItem = mapBlockIndex.find(wtxIn.hashBlock);
+                if (mapItem != mapBlockIndex.end())
                 {
                     unsigned int latestNow = wtx.nTimeReceived;
                     unsigned int latestEntry = 0;
@@ -500,7 +499,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                         }
                     }
 
-                    unsigned int& blocktime = mapBlockIndex[wtxIn.hashBlock]->nTime;
+                    unsigned int& blocktime = mapItem->second->nTime;
                     wtx.nTimeSmart = std::max(latestEntry, std::min(blocktime, latestNow));
                 }
                 else
@@ -535,42 +534,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             fUpdated |= wtx.UpdateSpent(wtxIn.vfSpent);
         }
 
-        //// debug print 12-9-2014 (received coins)
-        if (fDebug) printf("AddToWallet %s  %s %s \n", wtxIn.GetHash().ToString().c_str(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
-        if (fInsertedNew)
-        {
-            // If this is a tracked tx, update via SQL:
-            if (!wtxIn.hashBoinc.empty() && bGlobalcomInitialized)
-            {
-                if (Contains(wtxIn.hashBoinc,"<TRACK>"))
-                {
-                    //wtx.GetHash().ToString()
-                    printf("Updating tx id %s",wtxIn.GetHash().ToString().c_str());
-                    #if defined(WIN32) && defined(QT_GUI)
-                        qtUpdateConfirm(wtxIn.GetHash().ToString());
-                    #endif
-                    printf("Updated.");
-                }
-            }
-
-            // (Reserved:If this is a coinbase, update the interest and the researchsubsidy on the tx: (12-17-2014 Halford)):
-            // This dead code is reserved for future use: If we ever add new fields to a wallet TX, it will be useful in remembering how to update the values upon RECEIVING money from an outside source
-            if (false)
-            {
-                CBlockIndex* pboincblockindex = mapBlockIndex[wtxIn.hashBlock];
-                CBlock blk;
-                bool h = blk.ReadFromDisk(pboincblockindex);
-                if (h) 
-                {
-                    //MiningCPID mcpidWalletTx = DeserializeBoincBlock(blk.vtx[0].hashBoinc);
-                    //wtx.nResearchSubsidy = mcpidWalletTx.ResearchSubsidy;
-                    //wtx.nInterestSubsidy = mcpidWalletTx.InterestSubsidy;
-                    //printf("Logging coinbase tx in Research %f, Interest %f",(double)wtx.nResearchSubsidy,(double)wtx.nInterestSubsidy);
-                }
-            }
-    
-
-        }
         // Write to disk
         if (fInsertedNew || fUpdated)
             if (!wtx.WriteToDisk())
@@ -1154,10 +1117,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             uint256 hash = tx.GetHash();
             if (!txdb.ContainsTx(hash))
-            {
                 RelayTransaction((CTransaction)tx, hash);
-                AddPeek("Relaying wallet transaction " + tx.GetHash().ToString());
-            }
         }
     }
     if (!(IsCoinBase() || IsCoinStake()))
@@ -1167,8 +1127,6 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         {
             if (fDebug10) printf("Relaying wtx %s\n", hash.ToString().substr(0,10).c_str());
             RelayTransaction((CTransaction)*this, hash);
-            AddPeek("Relaying wallet transaction " + hash.ToString());
-
         }
     }
 }
@@ -1749,7 +1707,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t locktime)
 {
     double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
-    double por_min = (cpid != "INVESTOR") ? (MaxSubsidy/40) : 0;
+    double por_min = IsResearcher(cpid) ? (MaxSubsidy/40) : 0;
     if (RSA_WEIGHT >= 24999) return 0;
     //Dynamically determines the minimum GRC block subsidy required amount for current network conditions
     if (fTestNet && (PORDiff >=0 && PORDiff < 1)) return .00001;
@@ -1845,6 +1803,11 @@ void NetworkTimer()
 // Call after CreateTransaction unless you want to abort
 bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 {
+    if(fDevbuildCripple)
+    {
+        error("CommitTransaction(): Development build restrictions in effect");
+        return false;
+    }
     {
         LOCK2(cs_main, cs_wallet);
         if (fDebug) printf("CommitTransaction:\n%s", wtxNew.ToString().c_str());

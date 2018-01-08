@@ -13,6 +13,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
 #include <cmath>
+#include <boost/lexical_cast.hpp>
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -83,6 +84,7 @@ CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
 std::string GetNeuralVersion();
 
+bool fDevbuildCripple;
 
 int64_t IsNeural();
 
@@ -1462,9 +1464,39 @@ std::string RoundToString(double d, int place)
     return ss.str();
 }
 
+double RoundFromString(const std::string& s, int place)
+{
+    try
+    {
+        double num = boost::lexical_cast<double>(s);
+        return Round(num, place);
+    }
+    catch(const boost::bad_lexical_cast& e)
+    {
+        return 0;
+    }
+}
+
 bool Contains(const std::string& data, const std::string& instring)
 {
     return data.find(instring) != std::string::npos;
+}
+
+std::vector<std::string> split(const std::string& s, const std::string& delim)
+{
+    size_t pos = 0;
+    size_t end = 0;
+    std::vector<std::string> elems;
+
+    while((end = s.find(delim, pos)) != std::string::npos)
+    {
+        elems.push_back(s.substr(pos, end - pos));
+        pos = end + delim.size();
+    }
+
+    // Append final value
+    elems.push_back(s.substr(pos, end - pos));
+    return elems;
 }
 
 std::string GetNeuralVersion()
@@ -1582,4 +1614,67 @@ std::string MakeSafeMessage(const std::string& messagestring)
         safemessage = "";
     }
     return safemessage;
+}
+
+bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname)
+{
+    try
+    {
+        boost::thread *newThread = new boost::thread(pfn, parg);
+        threadGroup.add_thread(newThread);
+        threadMap[tname] = newThread;
+    } catch(boost::thread_resource_error &e) {
+        printf("Error creating thread: %s\n", e.what());
+        return false;
+    }
+    return true;
+}
+
+bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::string tname)
+{
+    try
+    {
+        boost::thread *newThread = new boost::thread(pfn, parg);
+        threadGroup.add_thread(newThread);
+        threadMap[tname] = newThread;
+    } catch(boost::thread_resource_error &e) {
+        printf("Error creating thread: %s\n", e.what());
+        return false;
+    }
+    return true;
+}
+
+int ThreadHandler::numThreads()
+{
+    return threadGroup.size();
+}
+
+bool ThreadHandler::threadExists(const string tname)
+{
+    if(threadMap.count(tname) > 0)
+        return true;
+    else
+        return false;
+}
+
+void ThreadHandler::interruptAll(){
+    threadGroup.interrupt_all();
+}
+
+void ThreadHandler::removeByName(const std::string tname)
+{
+    threadGroup.remove_thread(threadMap[tname]);
+    threadMap[tname]->join();
+    threadMap.erase(tname);
+}
+
+void ThreadHandler::removeAll()
+{
+    printf("Wait for %d threads to join.\n",numThreads());
+    threadGroup.join_all();
+    for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
+    {
+        threadGroup.remove_thread(it->second);
+    }
+    threadMap.clear();
 }

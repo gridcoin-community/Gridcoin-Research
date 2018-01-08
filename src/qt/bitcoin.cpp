@@ -5,13 +5,13 @@
 
 #include <QApplication>
 #include <QTimer>
-#include <boost/thread.hpp>
 
 #include "bitcoingui.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
+#include "util.h"
 #include "guiconstants.h"
 #include "init.h"
 #include "ui_interface.h"
@@ -22,6 +22,7 @@
 #include <QTranslator>
 #include <QSplashScreen>
 #include <QLibraryInfo>
+#include <QProcess>
 
 #if defined(BITCOIN_NEED_QT_PLUGINS) && !defined(_BITCOIN_QT_PLUGINS_INCLUDED)
 #define _BITCOIN_QT_PLUGINS_INCLUDED
@@ -37,9 +38,6 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
-
-void ThreadAppInit2(void* parg);
-boost::thread_group threadGroup;
 
 //Global reference to globalcom
 
@@ -149,6 +147,11 @@ static void handleRunawayException(std::exception *e)
 #ifndef BITCOIN_QT_TEST
 int main(int argc, char *argv[])
 {
+    // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
+    int currentExitCode = 0;
+
+    std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
+
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
@@ -268,7 +271,7 @@ int main(int argc, char *argv[])
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
 
 	    //Start globalcom
-		if (!NewThread(ThreadAppInit2, NULL))
+        if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
 		{
 				printf("Error; NewThread(ThreadAppInit2) failed\n");
 		        return 1;
@@ -309,7 +312,7 @@ int main(int argc, char *argv[])
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);
 
-                app.exec();
+                currentExitCode = app.exec();
 
                 window.hide();
                 window.setClientModel(0);
@@ -330,6 +333,21 @@ int main(int argc, char *argv[])
 	{
         handleRunawayException(NULL);
     }
+
+    // delete thread handler
+    threads->interruptAll();
+    threads->removeAll();
+    threads.reset();
+
+    // use exit codes to trigger restart of the wallet
+    if(currentExitCode == EXIT_CODE_REBOOT)
+    {
+        printf("Restarting wallet...\r\n");
+        QStringList args = QApplication::arguments();
+        args.removeFirst();
+        QProcess::startDetached(QApplication::applicationFilePath(), args);
+    }
+
     return 0;
 }
 #endif // BITCOIN_QT_TEST

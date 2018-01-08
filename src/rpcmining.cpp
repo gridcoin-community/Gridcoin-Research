@@ -26,16 +26,6 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
 
-Value getsubsidy(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "getsubsidy [nTarget]\n"
-            "Returns proof-of-work subsidy value for the specified value of target.");
-
-    return (uint64_t)GetProofOfWorkReward(0, GetAdjustedTime(),0);
-}
-
 Value getmininginfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -77,6 +67,9 @@ Value getmininginfo(const Array& params, bool fHelp)
         // reuse value found by miner which has to load blocks anyway
         double dInterest = MinerStatus.CoinAgeSum * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
         obj.push_back(Pair("InterestPending",dInterest/(double)COIN));
+
+        obj.push_back(Pair("kernel-diff-best",MinerStatus.KernelDiffMax));
+        obj.push_back(Pair("kernel-diff-sum",MinerStatus.KernelDiffSum));
     }
 
     obj.push_back(Pair("difficulty",    diff));

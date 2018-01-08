@@ -24,6 +24,8 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 
+#include <memory>
+
 #define printf OutputDebugStringF
 
 using namespace std;
@@ -34,6 +36,9 @@ using namespace json_spirit;
 void ThreadRPCServer2(void* parg);
 
 static std::string strRPCUserColonPass;
+
+// These are created by StartRPCThreads, destroyed in StopRPCThreads
+static asio::io_service* rpc_io_service = NULL;
 
 const Object emptyobj;
 
@@ -237,7 +242,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getnettotals",           &getnettotals,           true,   true  },
     { "getdifficulty",          &getdifficulty,          true,   false },
     { "getinfo",                &getinfo,                true,   false },
-    { "getsubsidy",             &getsubsidy,             true,   false },
     { "getmininginfo",          &getmininginfo,          true,   false },
     { "getstakinginfo",         &getmininginfo,          true,   false },
     { "getnewaddress",          &getnewaddress,          true,   false },
@@ -305,6 +309,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendalert",              &sendalert,              false,  false},
     { "reorganize",             &rpc_reorganize,         false,  false},
     { "getblockstats",          &rpc_getblockstats,      false,  false},
+    { "sendalert2",             &sendalert2,             false,  false},
 };
 
 CRPCTable::CRPCTable()
@@ -664,6 +669,18 @@ private:
     iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
 };
 
+void StopRPCThreads()
+{
+    printf("Stop RPC IO service\n");
+    if(!rpc_io_service)
+    {
+        printf("RPC IO server not started\n");
+        return;
+    }
+    
+    rpc_io_service->stop();
+}
+
 void ThreadRPCServer(void* parg)
 {
     // Make this thread recognisable as the RPC listener
@@ -671,23 +688,23 @@ void ThreadRPCServer(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_RPCLISTENER]++;
         ThreadRPCServer2(parg);
-        vnThreadsRunning[THREAD_RPCLISTENER]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_RPCLISTENER]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadRPCServer()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_RPCLISTENER]--;
-        PrintException(NULL, "ThreadRPCServer()");
+    }
+    catch (boost::thread_interrupted&)
+    {
+            printf("ThreadRPCServer exited (interrupt)\r\n");
+            return;
     }
     printf("ThreadRPCServer exited\n");
 }
 
 // Forward declaration required for RPCListen
-template <typename Protocol, typename SocketAcceptorService>
-static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol, SocketAcceptorService> > acceptor,
+template <typename Protocol>
+static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
                              ssl::context& context,
                              bool fUseSSL,
                              AcceptedConnection* conn,
@@ -696,8 +713,8 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol, 
 /**
  * Sets up I/O resources to accept and handle a new connection.
  */
-template <typename Protocol, typename SocketAcceptorService>
-static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol, SocketAcceptorService> > acceptor,
+template <typename Protocol>
+static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
                    ssl::context& context,
                    const bool fUseSSL)
 {
@@ -707,7 +724,7 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol, SocketA
     acceptor->async_accept(
             conn->sslStream.lowest_layer(),
             conn->peer,
-            boost::bind(&RPCAcceptHandler<Protocol, SocketAcceptorService>,
+            boost::bind(&RPCAcceptHandler<Protocol>,
                 acceptor,
                 boost::ref(context),
                 fUseSSL,
@@ -718,14 +735,13 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol, SocketA
 /**
  * Accept and handle incoming connection.
  */
-template <typename Protocol, typename SocketAcceptorService>
-static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol, SocketAcceptorService> > acceptor,
+template <typename Protocol>
+static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
                              ssl::context& context,
                              const bool fUseSSL,
                              AcceptedConnection* conn,
                              const boost::system::error_code& error)
 {
-    vnThreadsRunning[THREAD_RPCLISTENER]++;
 
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
     if (error != asio::error::operation_aborted
@@ -753,12 +769,10 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol, 
     }
 
     // start HTTP client thread
-    else if (!NewThread(ThreadRPCServer3, conn)) {
-        printf("Failed to create RPC server client thread\n");
+    else if (!netThreads->createThread(ThreadRPCServer3, conn,"ThreadRPCServer3")) {
+        printf("Failed to create RPC server client thread\r\n");
         delete conn;
     }
-
-    vnThreadsRunning[THREAD_RPCLISTENER]--;
 }
 
 void ThreadRPCServer2(void* parg)
@@ -796,9 +810,10 @@ void ThreadRPCServer2(void* parg)
 
     const bool fUseSSL = GetBoolArg("-rpcssl");
 
-    asio::io_service io_service;
+    assert(rpc_io_service == NULL);
+    rpc_io_service = new asio::io_service();
 
-    ssl::context context(io_service, ssl::context::sslv23);
+    ssl::context context(ssl::context::sslv23);
     if (fUseSSL)
     {
         context.set_options(ssl::context::no_sslv2);
@@ -814,7 +829,7 @@ void ThreadRPCServer2(void* parg)
         else printf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string().c_str());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(context.impl(), strCiphers.c_str());
+        SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
@@ -822,7 +837,7 @@ void ThreadRPCServer2(void* parg)
     asio::ip::address bindAddress = loopback ? asio::ip::address_v6::loopback() : asio::ip::address_v6::any();
     ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
-    boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(io_service));
+    boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
 
     boost::signals2::signal<void ()> StopRequests;
 
@@ -859,7 +874,7 @@ void ThreadRPCServer2(void* parg)
             bindAddress = loopback ? asio::ip::address_v4::loopback() : asio::ip::address_v4::any();
             endpoint.address(bindAddress);
 
-            acceptor.reset(new ip::tcp::acceptor(io_service));
+            acceptor.reset(new ip::tcp::acceptor(*rpc_io_service));
             acceptor->open(endpoint.protocol());
             acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
             acceptor->bind(endpoint);
@@ -885,10 +900,11 @@ void ThreadRPCServer2(void* parg)
         return;
     }
 
-    vnThreadsRunning[THREAD_RPCLISTENER]--;
     while (!fShutdown)
-        io_service.run_one();
-    vnThreadsRunning[THREAD_RPCLISTENER]++;
+        rpc_io_service->run_one();
+    
+    delete rpc_io_service;
+    rpc_io_service = NULL;
     StopRequests();
 }
 
@@ -978,7 +994,6 @@ void ThreadRPCServer3(void* parg)
 
     {
         LOCK(cs_THREAD_RPCHANDLER);
-        vnThreadsRunning[THREAD_RPCHANDLER]++;
     }
     AcceptedConnection *conn = (AcceptedConnection *) parg;
 
@@ -991,7 +1006,6 @@ void ThreadRPCServer3(void* parg)
             delete conn;
             {
                 LOCK(cs_THREAD_RPCHANDLER);
-                --vnThreadsRunning[THREAD_RPCHANDLER];
             }
             return;
         }
@@ -1063,7 +1077,6 @@ void ThreadRPCServer3(void* parg)
     delete conn;
     {
         LOCK(cs_THREAD_RPCHANDLER);
-        vnThreadsRunning[THREAD_RPCHANDLER]--;
     }
 }
 
@@ -1112,7 +1125,7 @@ Object CallRPC(const string& strMethod, const Array& params)
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");
     asio::io_service io_service;
-    ssl::context context(io_service, ssl::context::sslv23);
+    ssl::context context(ssl::context::sslv23);
     context.set_options(ssl::context::no_sslv2);
     asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_service, context);
     SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
@@ -1222,6 +1235,10 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "sendalert"              && n > 4) ConvertTo<int64_t>(params[4]);
     if (strMethod == "sendalert"              && n > 5) ConvertTo<int64_t>(params[5]);
     if (strMethod == "sendalert"              && n > 6) ConvertTo<int64_t>(params[6]);
+
+    if (strMethod == "sendalert2"              && n > 5) ConvertTo<int64_t>(params[5]);
+    if (strMethod == "sendalert2"              && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "sendalert2"              && n > 4) ConvertTo<int64_t>(params[4]);
 
     if (strMethod == "sendmany"               && n > 1) ConvertTo<Object>(params[1]);
     if (strMethod == "sendmany"               && n > 2) ConvertTo<int64_t>(params[2]);

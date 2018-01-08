@@ -32,7 +32,6 @@ void ThreadTopUpKeyPool(void* parg);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
-double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string qtGetNeuralContract(std::string data);
@@ -61,12 +60,21 @@ public:
     }
 };
 
+CMinerStatus::CMinerStatus(void)
+{
+    Clear();
+    ReasonNotStaking= "";
+    CreatedCnt= AcceptedCnt= KernelsFound= 0;
+    KernelDiffMax= 0;
+}
+
 void CMinerStatus::Clear()
 {
     Message= "";
     WeightSum= ValueSum= WeightMin= WeightMax= 0;
     Version= 0;
     CoinAgeSum= 0;
+    KernelDiffSum = 0;
     nLastCoinStakeSearchInterval = 0;
 }
 
@@ -435,6 +443,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
     uint64_t StakeCoinAgeSum=0;
+    double StakeDiffSum = 0;
+    double StakeDiffMax = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
 
     //initialize the transaction
@@ -505,7 +515,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
             StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
         }
-        else if(blocknew.nVersion==8)
+        else
         {
             uint64_t StakeModifier = 0;
             if(!FindStakeModifierRev(StakeModifier,pindexPrev))
@@ -513,7 +523,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
             StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
         }
-        else return false;
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -521,6 +530,9 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeWeightSum += CoinWeight;
         StakeWeightMin=std::min(StakeWeightMin,CoinWeight);
         StakeWeightMax=std::max(StakeWeightMax,CoinWeight);
+        double StakeKernelDiff = GetBlockDifficulty(StakeKernelHash.GetCompact())*CoinWeight;
+        StakeDiffSum += StakeKernelDiff;
+        StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
 
         if (fDebug2) {
             int64_t RSA_WEIGHT = GetRSAWeightByBlock(GlobalCPUMiningCPID);
@@ -528,13 +540,15 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 "CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
 " RSA_WEIGHT %.f\n"
 " Stk %72s\n"
-" Trg %72s\n",
+" Trg %72s\n"
+" Diff %0.7f of %0.7f\n",
             blocknew.nVersion,
             (double)txnew.nTime, mdPORNonce,
             (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
             (double)RSA_WEIGHT,
-            StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str()
-        );
+            StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
+            StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
+            );
         }
 
         if( StakeKernelHash <= StakeTarget )
@@ -595,6 +609,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             LOCK(MinerStatus.lock);
             MinerStatus.Message+="Found Kernel "+ ToString(CoinToDouble(nCredit))+"; ";
             MinerStatus.KernelsFound++;
+            MinerStatus.KernelDiffMax = 0;
+            MinerStatus.KernelDiffSum = StakeDiffSum;
             return true;
         }
     }
@@ -606,6 +622,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.WeightMin=StakeWeightMin;
     MinerStatus.WeightMax=StakeWeightMax;
     MinerStatus.CoinAgeSum=StakeCoinAgeSum;
+    MinerStatus.KernelDiffMax = std::max(MinerStatus.KernelDiffMax,StakeDiffMax);
+    MinerStatus.KernelDiffSum = StakeDiffSum;
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }
@@ -675,10 +693,17 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
         return printf("AddNeuralContractOrVote: Not Participating\n");
 
+    if(blocknew.nVersion >= 9)
+    {
+        // break away from block timing
+        if (fDebug) printf("AddNeuralContractOrVote: Updating Neural Supermajority (v9 M) height %d\n",nBestHeight);
+        ComputeNeuralNetworkSupermajorityHashes();
+    }
+
     if(!NeedASuperblock())
         return printf("AddNeuralContractOrVote: not Needed\n");
 
-    int pending_height = cdbl(ReadCache("neuralsecurity","pending"),0);
+    int pending_height = RoundFromString(ReadCache("neuralsecurity","pending"),0);
 
     /* Add our Neural Vote */
     bb.NeuralHash = sb_hash;
@@ -726,20 +751,6 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid = GlobalCPUMiningCPID;
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
-
-    /* This is should be already done in GetNextProject
-    miningcpid.cpidv2 = ComputeCPIDv2(
-        GlobalCPUMiningCPID.email,
-        GlobalCPUMiningCPID.boincruntimepublickey,
-        pbh );
-
-
-    miningcpid.Magnitude = CalculatedMagnitude2(
-        GlobalCPUMiningCPID.cpid, blocknew.nTime,
-        false );
-
-    miningcpid.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-    */
 
     miningcpid.lastblockhash = pbh.GetHex();
     miningcpid.ResearchSubsidy = OUT_POR;
@@ -803,11 +814,18 @@ bool IsMiningAllowed(CWallet *pwallet)
         status=false;
     }
 
+    if(fDevbuildCripple)
+    {
+        LOCK(MinerStatus.lock);
+        MinerStatus.ReasonNotStaking+="Testnet-only version; ";
+        status=false;
+    }
+
     if (!bNetAveragesLoaded)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+="Net averages not yet loaded; ";
-        if (LessVerbose(100) && msPrimaryCPID != "INVESTOR") printf("ResearchMiner:Net averages not yet loaded...");
+        if (LessVerbose(100) && IsResearcher(msPrimaryCPID)) printf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
 
@@ -845,10 +863,12 @@ void StakeMiner(CWallet *pwallet)
             MinerStatus.Message="";
             MinerStatus.ReasonNotStaking="";
 
-            //New version
+            //New versions
             StakeBlock.nVersion = 7;
             if(IsV8Enabled(pindexPrev->nHeight+1))
                 StakeBlock.nVersion = 8;
+            if(IsV9Enabled(pindexPrev->nHeight+1))
+                StakeBlock.nVersion = 9;
 
             MinerStatus.Version= StakeBlock.nVersion;
         }

@@ -15,8 +15,6 @@ using namespace boost;
 
 static uint64_t nAccountingEntryNumber = 0;
 extern bool fWalletUnlockStakingOnly;
-extern bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
-extern bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 
 //
 // CWalletDB
@@ -680,75 +678,6 @@ void ThreadFlushWalletDB(void* parg)
             }
         }
     }
-}
-
-bool BackupWallet(const CWallet& wallet, const std::string& strDest)
-{
-    if (!wallet.fFileBacked)
-        return false;
-    while (!fShutdown)
-    {
-        {
-            LOCK(bitdb.cs_db);
-            if (!bitdb.mapFileUseCount.count(wallet.strWalletFile) || bitdb.mapFileUseCount[wallet.strWalletFile] == 0)
-            {
-                // Flush log data to the dat file
-                bitdb.CloseDb(wallet.strWalletFile);
-                bitdb.CheckpointLSN(wallet.strWalletFile);
-                bitdb.mapFileUseCount.erase(wallet.strWalletFile);
-
-                // Copy wallet.dat - Leave strDest support for WalletModel
-                filesystem::path WalletTarget = GetDataDir() / "walletbackups" / strDest;
-                filesystem::create_directories(WalletTarget.parent_path());
-                filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
-                if (filesystem::is_directory(WalletTarget))
-                    WalletTarget /= wallet.strWalletFile;
-                try
-                {
-                    #if BOOST_VERSION >= 104000
-                        filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
-                    #else
-                        filesystem::copy_file(WalletSource, WalletTarget);
-                    #endif
-                    printf("BackupWallet: Copied wallet.dat to %s\r\n", WalletTarget.string().c_str());
-                    return true;
-                }
-                catch(const filesystem::filesystem_error &e) {
-                    printf("BackupWallet: Error copying wallet.dat to %s - %s\r\n", WalletTarget.string().c_str(), e.what());
-                    return false;
-                }
-            }
-        }
-        MilliSleep(100);
-    }
-    return false;
-}
-
-bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors)
-{
-    if (wallet.IsLocked() || fWalletUnlockStakingOnly)
-    {
-        sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
-        return false;
-    }
-    filesystem::path PrivateKeysTarget = GetDataDir() / "walletbackups" / GetBackupFilename("keys.dat");
-    filesystem::create_directories(PrivateKeysTarget.parent_path());
-    sTarget = PrivateKeysTarget.string();
-    std::ofstream myBackup;
-    myBackup.open (PrivateKeysTarget.string().c_str());
-    std::string sError;
-    for(const auto& keyPair : wallet.GetAllPrivateKeys(sError))
-    {
-        if (!sError.empty())
-        {
-            sErrors = sError;
-            return false;
-        }
-        myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
-    }
-    printf("BackupPrivateKeys: Backup made to %s\r\n", PrivateKeysTarget.string().c_str());
-    myBackup.close();
-    return true;
 }
 
 //

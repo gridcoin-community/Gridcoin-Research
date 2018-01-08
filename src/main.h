@@ -27,21 +27,16 @@ class CNode;
 class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
-extern unsigned int REORGANIZE_FAILED;
 extern unsigned int WHITELISTED_PROJECTS;
-extern unsigned int CHECKPOINT_VIOLATIONS;
-static const int MAX_NEWBIE_BLOCKS = 200;
-static const int MAX_NEWBIE_BLOCKS_LEVEL2 = 500;
-static const int CHECKPOINT_DISTRIBUTED_MODE = 50;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
-static const int BLOCK_GRANULARITY = 10;   //Consensus block divisor 
+static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
+static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;   
 
 static const double NeuralNetworkMultiplier = 115000;
 
 extern int64_t nLastBlockSolved;
 extern int64_t nLastBlockSubmitted;
 
-extern uint256 muGlobalCheckpointHashRelayed;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
@@ -71,7 +66,6 @@ static const int64_t MAX_MONEY = 2000000000 * COIN;
 inline bool MoneyRange(int64_t nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }
 /** Threshold for nLockTime: below this value it is interpreted as block number, otherwise as UNIX timestamp. */
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
-static const unsigned int MINIMUM_CHECKPOINT_TRANSMISSION_BALANCE = 4000000;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -102,6 +96,13 @@ inline uint32_t IsV8Enabled(int nHeight)
             : nHeight > 1010000;
 }
 
+inline uint32_t IsV9Enabled(int nHeight)
+{
+    return fTestNet
+            ? nHeight >=  399000
+            : nHeight >= 1144000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
@@ -112,6 +113,11 @@ inline bool AreBinarySuperblocksEnabled(int nHeight)
 	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
 }
 
+inline bool IsV9Enabled_Tally(int nHeight)
+{
+    // 3 hours after v9
+    return IsV9Enabled(nHeight-120);
+}
 
 inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
@@ -151,7 +157,6 @@ extern uint256 nBestChainTrust;
 extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
-extern unsigned int nTransactionsUpdated;
 extern const std::string strMessageMagic;
 extern int64_t nTimeBestReceived;
 extern CCriticalSection cs_setpwalletRegistered;
@@ -165,15 +170,12 @@ extern bool bOPReturnEnabled;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-extern int64_t nLastTallied;
 extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
-extern int64_t nLastTalliedNeural;
 extern int64_t nCPIDsLoaded;
 extern int64_t nLastGRCtallied;
 extern int64_t nLastCleaned;
-extern int64_t nLastTallyBusyWait;
 
 extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
@@ -199,14 +201,11 @@ extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
 extern std::string  msMiningErrors8;
-extern std::string  msPeek;
-extern std::string  msLastCommand;
 extern std::string  msAttachmentGuid;
 
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern std::string  msRSAOverview;
 extern std::string  msNeuralResponse;
 extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
@@ -227,7 +226,6 @@ struct globalStatusType
     std::string status;
     std::string poll;
     std::string errors;
-    std::string rsaOverview;
 };
 
 extern globalStatusType GlobalStatusStruct;
@@ -255,11 +253,16 @@ double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
+// Validate researcher rewards.
+bool CheckProofOfResearch(
+    const CBlockIndex* pindexPrev, //previous block in chain index
+    const CBlock &block);    //block to check
+
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
 
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
-int64_t GetProofOfStakeReward(int64_t nCoinAge, int64_t nFees, std::string cpid,
+int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
@@ -269,7 +272,6 @@ bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
 std::string ReadCache(std::string section, std::string key);
-double cdbl(std::string s, int place);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string PackBinarySuperblock(std::string sBlock);
 std::string UnpackBinarySuperblock(std::string sBlock);
@@ -292,17 +294,15 @@ void ResendWalletTransactions(bool fForce = false);
 
 std::string DefaultWalletAddress();
 
+int64_t PreviousBlockAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
-
-std::string GetBackupFilename(const std::string& basename, const std::string& suffix = "");
-bool BackupConfigFile(const std::string& strDest);
-
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
 bool IsResearcher(const std::string& cpid);
+extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 /** Position on disk for a particular transaction. */
 class CDiskTxPos
@@ -988,7 +988,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 8;
+    static const int CURRENT_VERSION = 9;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -1312,7 +1312,6 @@ public:
 	// Indicators (9-13-2015)
 	unsigned int nIsSuperBlock;
 	unsigned int nIsContract;
-	std::string sGRCAddress;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum  
@@ -1369,7 +1368,6 @@ public:
 		nMagnitude = 0;
 		nIsSuperBlock = 0;
 		nIsContract = 0;
-		sGRCAddress = "";
     }
 
     CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
@@ -1628,12 +1626,15 @@ public:
 		{
 			READWRITE(nIsSuperBlock);
 			READWRITE(nIsContract);
-			READWRITE(sGRCAddress);
 
-                        // Blocks used to come with a reserved string. Keep (de)serializing
-                        // it until it's used.
-                        std::string sReserved;
-                        READWRITE(sReserved);
+         std::string dummy;
+
+         // Blocks used to contain the GRC address.
+         READWRITE(dummy);
+
+         // Blocks used to come with a reserved string. Keep (de)serializing
+         // it until it's used.
+         READWRITE(dummy);
 		}
 
 

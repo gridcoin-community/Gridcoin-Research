@@ -6,7 +6,6 @@
 #include <QMessageBox>
 #include <QModelIndex>
 
-void ExecuteCode();
 QString ToQString(std::string s);
 std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 

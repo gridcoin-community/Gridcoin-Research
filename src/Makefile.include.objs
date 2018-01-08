@@ -8,7 +8,6 @@ OBJS= \
     obj/key.o \
     obj/db.o \
     obj/init.o \
-    obj/irc.o \
     obj/keystore.o \
     obj/miner.o \
     obj/main.o \
@@ -38,5 +37,6 @@ OBJS= \
     obj/block.o \
     obj/beacon.o \
     obj/boinc.o \
-    obj/allocators.o
-
+    obj/allocators.o \
+    obj/backup.o \
+    obj/appcache.o

@@ -3,7 +3,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "irc.h"
 #include "db.h"
 #include "net.h"
 #include "init.h"
@@ -27,15 +26,9 @@
 #endif
 
 using namespace std;
-bool TallyNetworkAverages(bool ColdBoot);
-extern void DoTallyResearchAverages(void* parg);
-extern void ExecGridcoinServices(void* parg);
 std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
-#ifndef QT_GUI
- boost::thread_group threadGroup;
-#endif
 extern std::string GetCommandNonce(std::string command);
 extern std::string DefaultOrg();
 extern std::string DefaultOrgKey(int key_length);
@@ -79,7 +72,8 @@ static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
 CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
-std::array<int, THREAD_MAX> vnThreadsRunning;
+
+ThreadHandler* netThreads = new ThreadHandler;
 static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
@@ -479,7 +473,6 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
     return error("GetMyExternalIP() : connection closed");
 }
 
-// We now get our external IP from the IRC server first and only use this as a backup
 bool GetMyExternalIP(CNetAddr& ipRet)
 {
     CService addrConnect;
@@ -543,12 +536,26 @@ void ThreadGetMyExternalIP(void* parg)
 {
     // Make this thread recognisable as the external IP detection thread
     RenameThread("grc-ext-ip");
-
-    CNetAddr addrLocalHost;
-    if (GetMyExternalIP(addrLocalHost))
+    try
     {
-        printf("GetMyExternalIP() returned %s\n", addrLocalHost.ToStringIP().c_str());
-        AddLocal(addrLocalHost, LOCAL_HTTP);
+        CNetAddr addrLocalHost;
+        if (GetMyExternalIP(addrLocalHost))
+        {
+            printf("GetMyExternalIP() returned %s\n", addrLocalHost.ToStringIP().c_str());
+            AddLocal(addrLocalHost, LOCAL_HTTP);
+        }
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadMyExternalIP()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        return;
+    }
+    catch (...)
+    {
+        PrintException(NULL, "ThreadGetMyExternalIP()");
     }
 }
 
@@ -963,18 +970,22 @@ void ThreadSocketHandler(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_SOCKETHANDLER]++;
         ThreadSocketHandler2(parg);
-        vnThreadsRunning[THREAD_SOCKETHANDLER]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_SOCKETHANDLER]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadSocketHandler()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_SOCKETHANDLER]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadSocketHandler exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         throw; // support pthread_cancel()
     }
-    printf("ThreadSocketHandler exited\n");
+    printf("ThreadSocketHandler exited\r\n");
 }
 
 void ThreadSocketHandler2(void* parg)
@@ -1103,10 +1114,8 @@ void ThreadSocketHandler2(void* parg)
             }
         }
 
-        vnThreadsRunning[THREAD_SOCKETHANDLER]--;
         int nSelect = select(have_fds ? hSocketMax + 1 : 0,
                              &fdsetRecv, &fdsetSend, &fdsetError, &timeout);
-        vnThreadsRunning[THREAD_SOCKETHANDLER]++;
         if (fShutdown)
             return;
         if (nSelect == SOCKET_ERROR)
@@ -1312,14 +1321,6 @@ void ThreadSocketHandler2(void* parg)
     }
 }
 
-
-
-
-
-
-
-
-
 #ifdef USE_UPNP
 void ThreadMapPort(void* parg)
 {
@@ -1328,18 +1329,21 @@ void ThreadMapPort(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_UPNP]++;
         ThreadMapPort2(parg);
-        vnThreadsRunning[THREAD_UPNP]--;
     }
     catch (std::exception& e) {
-        vnThreadsRunning[THREAD_UPNP]--;
         PrintException(&e, "ThreadMapPort()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_UPNP]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadMapPort exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         PrintException(NULL, "ThreadMapPort()");
     }
-    printf("ThreadMapPort exited\n");
+    printf("ThreadMapPort exited\r\n");
 }
 
 void ThreadMapPort2(void* parg)
@@ -1385,7 +1389,7 @@ void ThreadMapPort2(void* parg)
                     AddLocal(CNetAddr(externalIPAddress), LOCAL_UPNP);
                 }
                 else
-                    printf("UPnP: GetExternalIPAddress not successful.\n");
+                    printf("UPnP: GetExternalIPAddress not successful.\r\n");
             }
         }
 
@@ -1453,10 +1457,10 @@ void ThreadMapPort2(void* parg)
 
 void MapPort()
 {
-    if (fUseUPnP && vnThreadsRunning[THREAD_UPNP] < 1)
+    if (fUseUPnP && !netThreads->threadExists("ThreadMapPort"))
     {
-        if (!NewThread(ThreadMapPort, NULL))
-            printf("Error: ThreadMapPort(ThreadMapPort) did not succeed\n");
+        if (!netThreads->createThread(ThreadMapPort,NULL,"ThreadMapPort"))
+            printf("Error: createThread(ThreadMapPort) failed\r\n");
     }
 }
 #else
@@ -1466,24 +1470,17 @@ void MapPort()
 }
 #endif
 
-
-
-
-
-
-
-
-
 // DNS seeds
 // Each pair gives a source name and a seed name.
 // The first name is used as information source for addrman.
 // The second name should resolve to a list of seed addresses.
 static const char *strDNSSeed[][2] = {
     {"node.gridcoin.us", "node.gridcoin.us"},
-    {"gridcoin.asia", "gridcoin.asia"},
-    {"amsterdam.grcnode.co.uk", "amsterdam.grcnode.co.uk"},
     {"london.grcnode.co.uk", "london.grcnode.co.uk"},
-    {"frankfurt.grcnode.co.uk", "frankfurt.grcnode.co.uk"},
+    {"gridcoin.crypto.fans", "gridcoin.crypto.fans"},
+    {"www.grcpool.com", "www.grcpool.com"},
+    {"nuad.de", "nuad.de"},
+    {"seeds.gridcoin.ifoggz-network.xyz", "seeds.gridcoin.ifoggz-network.xyz"},
     {"", ""},
 };
 
@@ -1494,18 +1491,22 @@ void ThreadDNSAddressSeed(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_DNSSEED]++;
         ThreadDNSAddressSeed2(parg);
-        vnThreadsRunning[THREAD_DNSSEED]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_DNSSEED]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadDNSAddressSeed()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_DNSSEED]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        if (fDebug10) printf("ThreadDNSAddressSeed exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         throw; // support pthread_cancel()
     }
-    if (fDebug10) printf("ThreadDNSAddressSeed exited\n");
+    if (fDebug10) printf("ThreadDNSAddressSeed exited\r\n");
 }
 
 void ThreadDNSAddressSeed2(void* parg)
@@ -1571,144 +1572,82 @@ void DumpAddresses()
 
 }
 
-void ThreadTallyResearchAverages(void* parg)
+void DoTallyResearchAverages_retired(void* parg);
+bool TallyNetworkAverages_retired(bool);
+extern volatile bool bTallyFinished_retired;
+extern volatile bool bDoTally_retired;
+
+void ThreadTallyResearchAverages_retired(void* parg)
 {
     // Make this thread recognisable
     RenameThread("grc-tallyresearchaverages");
-
-begin:
-    try
-    {
-        DoTallyResearchAverages(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadTallyNetworkAverages()");
-    }
-    catch(...)
-    {
-        printf("Error in ThreadTallyResearchAverages... Recovering ");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Thread TallyReasearchAverages exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-
+    DoTallyResearchAverages_retired(parg);
+    printf("ThreadTallyResearchAverages_retired exited \r\n");
 }
 
 
-
-
-void ThreadExecuteGridcoinServices(void* parg)
+void BusyWaitForTally_retired()
 {
-    RenameThread("grc-services");
-
-begin:
-    try
+    if(IsV9Enabled_Tally(nBestHeight))
     {
-        ExecGridcoinServices(parg);
-    }
-    catch (bad_alloc ba)
-    {
-        printf("\r\nBad Allocation Error in ThreadExecuteGridcoinServices... Recovering \r\n");
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadExecuteGridcoinServices()");
-    }
-    catch(...)
-    {
-        printf("Error in ThreadExecuteGridcoinServices... Recovering ");
-    }
-    MilliSleep(10000);
-    if (!fShutdown) printf("Services Exited, Restarting.. \r\n");
-    if (!fShutdown) goto begin;
-}
-
-
-
-void BusyWaitForTally()
-{
-    if (IsLockTimeWithinMinutes(nLastTallyBusyWait,10))
-    {
+        if(fDebug10)
+            printf("BusyWaitForTally_retired: skipped (v9 enabled)\n");
         return;
     }
-    if (fDebug10) printf("\r\n ** Busy Wait for Tally ** \r\n");
-    bTallyFinished=false;
-    bDoTally=true;
+
+    if (fDebug10) printf("\r\n ** Busy Wait for Tally_retired ** \r\n");
+    bTallyFinished_retired=false;
+    bDoTally_retired=true;
     int iTimeout = 0;
-    while(!bTallyFinished)
+
+    int64_t deadline = GetAdjustedTime() + 15000;
+    while(!bTallyFinished_retired)
     {
-        MilliSleep(1);
+        MilliSleep(10);
+        if(GetAdjustedTime() >= deadline)
+            break;
         iTimeout+=1;
-        if (iTimeout > 15000) break;
     }
-    nLastTallyBusyWait = GetAdjustedTime();
 }
 
 
-void DoTallyResearchAverages(void* parg)
+void DoTallyResearchAverages_retired(void* parg)
 {
-    vnThreadsRunning[THREAD_TALLY]++;
-    printf("\r\nStarting dedicated Tally thread...\r\n");
+    printf("\r\nStarting dedicated Tally_retired thread...\r\n");
 
     while (!fShutdown)
     {
         MilliSleep(100);
-        if (bDoTally)
+        if (bDoTally_retired)
         {
-            bTallyFinished = false;
-            bDoTally=false;
-            printf("\r\n[DoTallyRA_START] ");
+            bTallyFinished_retired = false;
+            bDoTally_retired=false;
+            printf("\r\n[DoTallyRA_START_retired] ");
             try
             {
-                TallyNetworkAverages(false);
+                TallyNetworkAverages_retired(false);
             }
             catch (std::exception& e)
             {
-                PrintException(&e, "ThreadTallyNetworkAverages()");
+                PrintException(&e, "ThreadTallyNetworkAverages_retired()");
             }
             catch(...)
             {
-                printf("\r\nError occurred in DoTallyResearchAverages...Recovering\r\n");
+                printf("\r\nError occurred in DoTallyResearchAverages_retired...Recovering\r\n");
             }
-            printf(" [DoTallyRA_END] \r\n");
-            bTallyFinished = true;
+            printf(" [DoTallyRA_END_retired] \r\n");
+            bTallyFinished_retired = true;
         }
     }
-    vnThreadsRunning[THREAD_TALLY]--;
 }
-
-
-void ExecGridcoinServices(void* parg)
-{
-    vnThreadsRunning[THREAD_SERVICES]++;
-    printf("\r\nStarting dedicated Gridcoin Services thread...\r\n");
-
-    while (!fShutdown)
-    {
-        MilliSleep(5000);
-        if (bExecuteGridcoinServices)
-        {
-                bExecuteGridcoinServices=false;
-        }
-    }
-    vnThreadsRunning[THREAD_SERVICES]--;
-}
-
-
-
 
 void ThreadDumpAddress2(void* parg)
 {
-    vnThreadsRunning[THREAD_DUMPADDRESS]++;
     while (!fShutdown)
     {
         DumpAddresses();
-        vnThreadsRunning[THREAD_DUMPADDRESS]--;
         MilliSleep(600000);
-        vnThreadsRunning[THREAD_DUMPADDRESS]++;
     }
-    vnThreadsRunning[THREAD_DUMPADDRESS]--;
 }
 
 void ThreadDumpAddress(void* parg)
@@ -1720,10 +1659,20 @@ void ThreadDumpAddress(void* parg)
     {
         ThreadDumpAddress2(parg);
     }
-    catch (std::exception& e) {
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadDumpAddress()");
     }
-    printf("ThreadDumpAddress exited\n");
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadDumpAddress exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
+        PrintException(NULL, "ThreadDumpAddress");
+    }
+    printf("ThreadDumpAddress exited\r\n");
 }
 
 void ThreadOpenConnections(void* parg)
@@ -1733,18 +1682,22 @@ void ThreadOpenConnections(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]++;
         ThreadOpenConnections2(parg);
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadOpenConnections()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadOpenConnections exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         PrintException(NULL, "ThreadOpenConnections()");
     }
-    printf("ThreadOpenConnections exited\n");
+    printf("ThreadOpenConnections exited\r\n");
 }
 
 void static ProcessOneShot()
@@ -1776,18 +1729,22 @@ void static ThreadStakeMiner(void* parg)
     }
     try
     {
-        vnThreadsRunning[THREAD_STAKE_MINER]++;
         StakeMiner(pwallet);
-        vnThreadsRunning[THREAD_STAKE_MINER]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_STAKE_MINER]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadStakeMiner()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_STAKE_MINER]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadStakeMiner exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         PrintException(NULL, "ThreadStakeMiner()");
     }
-    printf("ThreadStakeMiner exiting, %d threads remaining\n", vnThreadsRunning[THREAD_STAKE_MINER]);
+    printf("ThreadStakeMiner exited\r\n");
 }
 
 
@@ -1842,20 +1799,16 @@ void ThreadOpenConnections2(void* parg)
     while (true)
     {
         ProcessOneShot();
-
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
         MilliSleep(500);
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]++;
+
         if (fShutdown)
             return;
 
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
         CSemaphoreGrant grant(*semOutbound);
-        vnThreadsRunning[THREAD_OPENCONNECTIONS]++;
         if (fShutdown)
             return;
 
-        // Add seed nodes if IRC isn't working
+        // Add seed nodes
         if (addrman.size()==0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
@@ -1940,18 +1893,22 @@ void ThreadOpenAddedConnections(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_ADDEDCONNECTIONS]++;
         ThreadOpenAddedConnections2(parg);
-        vnThreadsRunning[THREAD_ADDEDCONNECTIONS]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_ADDEDCONNECTIONS]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadOpenAddedConnections()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_ADDEDCONNECTIONS]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadOpenAddedConnections exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         PrintException(NULL, "ThreadOpenAddedConnections()");
     }
-    printf("ThreadOpenAddedConnections exited\n");
+    printf("ThreadOpenAddedConnections exited\r\n");
 }
 
 void ThreadOpenAddedConnections2(void* parg)
@@ -1969,9 +1926,7 @@ void ThreadOpenAddedConnections2(void* parg)
                 OpenNetworkConnection(addr, &grant, strAddNode.c_str());
                 MilliSleep(500);
             }
-            vnThreadsRunning[THREAD_ADDEDCONNECTIONS]--;
             MilliSleep(120000); // Retry every 2 minutes
-            vnThreadsRunning[THREAD_ADDEDCONNECTIONS]++;
         }
         return;
     }
@@ -2017,9 +1972,7 @@ void ThreadOpenAddedConnections2(void* parg)
         }
         if (fShutdown)
             return;
-        vnThreadsRunning[THREAD_ADDEDCONNECTIONS]--;
         MilliSleep(120000); // Retry every 2 minutes
-        vnThreadsRunning[THREAD_ADDEDCONNECTIONS]++;
         if (fShutdown)
             return;
     }
@@ -2041,9 +1994,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     if (strDest && FindNode(strDest))
         return false;
 
-    vnThreadsRunning[THREAD_OPENCONNECTIONS]--;
     CNode* pnode = ConnectNode(addrConnect, strDest);
-    vnThreadsRunning[THREAD_OPENCONNECTIONS]++;
     if (fShutdown)
         return false;
     if (!pnode)
@@ -2057,9 +2008,6 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     return true;
 }
 
-
-
-
 void ThreadMessageHandler(void* parg)
 {
     // Make this thread recognisable as the message handling thread
@@ -2067,18 +2015,22 @@ void ThreadMessageHandler(void* parg)
 
     try
     {
-        vnThreadsRunning[THREAD_MESSAGEHANDLER]++;
         ThreadMessageHandler2(parg);
-        vnThreadsRunning[THREAD_MESSAGEHANDLER]--;
     }
-    catch (std::exception& e) {
-        vnThreadsRunning[THREAD_MESSAGEHANDLER]--;
+    catch (std::exception& e)
+    {
         PrintException(&e, "ThreadMessageHandler()");
-    } catch (...) {
-        vnThreadsRunning[THREAD_MESSAGEHANDLER]--;
+    }
+    catch(boost::thread_interrupted&)
+    {
+        printf("ThreadMessageHandler exited (interrupt)\r\n");
+        return;
+    }
+    catch (...)
+    {
         PrintException(NULL, "ThreadMessageHandler()");
     }
-    printf("ThreadMessageHandler exited\n");
+    printf("ThreadMessageHandler exited\r\n");
 }
 
 void ThreadMessageHandler2(void* parg)
@@ -2100,26 +2052,19 @@ void ThreadMessageHandler2(void* parg)
             pnodeTrickle = vNodesCopy[GetRand(vNodesCopy.size())];
         for (auto const& pnode : vNodesCopy)
         {
-
             if (pnode->fDisconnect)
                 continue;
+
             //11-25-2015
             // Receive messages
-            {
-                TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-                if (lockRecv)
-                    if (!ProcessMessages(pnode))
-                        pnode->CloseSocketDisconnect();
-            }
+            if (!ProcessMessages(pnode))
+                pnode->CloseSocketDisconnect();
+
             if (fShutdown)
                 return;
 
             // Send messages
-            {
-                TRY_LOCK(pnode->cs_vSend, lockSend);
-                if (lockSend)
-                    SendMessages(pnode, pnode == pnodeTrickle);
-            }
+            SendMessages(pnode, pnode == pnodeTrickle);
             if (fShutdown)
                 return;
         }
@@ -2131,13 +2076,10 @@ void ThreadMessageHandler2(void* parg)
         }
 
         // Wait and allow messages to bunch up.
-        // Reduce vnThreadsRunning so StopNode has permission to exit while
         // we're sleeping, but we must always check fShutdown after doing this.
-        vnThreadsRunning[THREAD_MESSAGEHANDLER]--;
         MilliSleep(100);
         if (fRequestShutdown)
             StartShutdown();
-        vnThreadsRunning[THREAD_MESSAGEHANDLER]++;
         if (fShutdown)
             return;
     }
@@ -2189,7 +2131,10 @@ bool BindListenPort(const CService &addrBind, string& strError)
 #ifndef WIN32
     // Allow binding if the port is still in TIME_WAIT state after
     // the program was closed and restarted.  Not an issue on windows.
-    setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int));
+    if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int)) < 0)
+        if (fDebug10) printf("setsockopt(SO_REUSEADDR) failed");
+    if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEPORT, (void*)&nOne, sizeof(int)) < 0)
+        if (fDebug10) printf("setsockopt(SO_SO_REUSEPORT) failed");
 #endif
 
 
@@ -2302,7 +2247,7 @@ void static Discover()
 
     // Don't use external IPv4 discovery, when -onlynet="IPv6"
     if (!IsLimited(NET_IPV4))
-        NewThread(ThreadGetMyExternalIP, NULL);
+        netThreads->createThread(ThreadGetMyExternalIP, NULL,"ThreadGetMyExternalIP");
 }
 
 void StartNode(void* parg)
@@ -2330,91 +2275,57 @@ void StartNode(void* parg)
     //
 
     if (!GetBoolArg("-dnsseed", true))
-        printf("DNS seeding disabled\n");
+        printf("DNS seeding disabled\r\n");
     else
-        if (!NewThread(ThreadDNSAddressSeed, NULL))
-            printf("Error: NewThread(ThreadDNSAddressSeed) failed\n");
+        if (!netThreads->createThread(ThreadDNSAddressSeed,NULL,"ThreadDNSAddressSeed"))
+            printf("Error: createThread(ThreadDNSAddressSeed) failed\r\n");
 
     // Map ports with UPnP
     if (fUseUPnP)
         MapPort();
 
-    // Get addresses from IRC and advertise ours
-    if (!NewThread(ThreadIRCSeed, NULL))
-        printf("Error: NewThread(ThreadIRCSeed) failed\n");
-
     // Send and receive from sockets, accept connections
-    if (!NewThread(ThreadSocketHandler, NULL))
-        printf("Error: NewThread(ThreadSocketHandler) failed\n");
+    if (!netThreads->createThread(ThreadSocketHandler,NULL,"ThreadSocketHandler"))
+        printf("Error: createThread(ThreadSocketHandler) failed\r\n");
 
     // Initiate outbound connections from -addnode
-    if (!NewThread(ThreadOpenAddedConnections, NULL))
-        printf("Error: NewThread(ThreadOpenAddedConnections) failed\n");
+    if (!netThreads->createThread(ThreadOpenAddedConnections,NULL,"ThreadOpenAddedConnections"))
+        printf("Error: createThread(ThreadOpenAddedConnections) failed\r\n");
 
     // Initiate outbound connections
-    if (!NewThread(ThreadOpenConnections, NULL))
-        printf("Error: NewThread(ThreadOpenConnections) failed\n");
+    if (!netThreads->createThread(ThreadOpenConnections,NULL,"ThreadOpenConnections"))
+        printf("Error: createThread(ThreadOpenConnections) failed\r\n");
 
     // Process messages
-    if (!NewThread(ThreadMessageHandler, NULL))
-        printf("Error: NewThread(ThreadMessageHandler) failed\n");
+    if (!netThreads->createThread(ThreadMessageHandler,NULL,"ThreadMessageHandler"))
+        printf("Error: createThread(ThreadMessageHandler) failed\n");
 
     // Dump network addresses
-    if (!NewThread(ThreadDumpAddress, NULL))
-        printf("Error; NewThread(ThreadDumpAddress) failed\n");
+    if (!netThreads->createThread(ThreadDumpAddress,NULL,"ThreadDumpAddress"))
+        printf("Error: createThread(ThreadDumpAddress) failed\r\n");
 
     // Tally network averages
-    if (!NewThread(ThreadTallyResearchAverages, NULL))
-        printf("Error; NewThread(ThreadTally) failed\n");
-
-    // Services
-    if (!NewThread(ThreadExecuteGridcoinServices, NULL))
-       printf("Error; NewThread(ThreadExecuteGridcoinServices) failed\r\n");
+    if (!NewThread(ThreadTallyResearchAverages_retired, NULL))
+        printf("Error; NewThread(ThreadTally_retired) failed\n");
 
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
-        printf("Staking disabled\n");
+        printf("Staking disabled\r\n");
     else
-        if (!NewThread(ThreadStakeMiner, pwalletMain))
-            printf("Error: NewThread(ThreadStakeMiner) failed\n");
+        if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
+            printf("Error: createThread(ThreadStakeMiner) failed\r\n");
 }
 
 bool StopNode()
 {
     printf("StopNode()\n");
     fShutdown = true;
-    nTransactionsUpdated++;
-    int64_t nStart = GetAdjustedTime();
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
-    do
-    {
-        int nThreadsRunning = 0;
-        for (int n = 0; n < THREAD_MAX; n++)
-            nThreadsRunning += vnThreadsRunning[n];
-        if (nThreadsRunning == 0)
-            break;
-        if (GetAdjustedTime() - nStart > 20)
-            break;
-        MilliSleep(20);
-    } while(true);
-    if (vnThreadsRunning[THREAD_SOCKETHANDLER] > 0)    printf("ThreadSocketHandler still running\n");
-    if (vnThreadsRunning[THREAD_OPENCONNECTIONS] > 0)  printf("ThreadOpenConnections still running\n");
-    if (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0)   printf("ThreadMessageHandler still running\n");
-    if (vnThreadsRunning[THREAD_RPCLISTENER] > 0)      printf("ThreadRPCListener still running\n");
-    if (vnThreadsRunning[THREAD_RPCHANDLER] > 0)       printf("ThreadsRPCServer still running\n");
-#ifdef USE_UPNP
-    if (vnThreadsRunning[THREAD_UPNP] > 0)             printf("ThreadMapPort still running\n");
-#endif
-    if (vnThreadsRunning[THREAD_DNSSEED] > 0)          printf("ThreadDNSAddressSeed still running\n");
-    if (vnThreadsRunning[THREAD_ADDEDCONNECTIONS] > 0) printf("ThreadOpenAddedConnections still running\n");
-    if (vnThreadsRunning[THREAD_DUMPADDRESS] > 0)      printf("ThreadDumpAddresses still running\n");
-    if (vnThreadsRunning[THREAD_TALLY] > 0)            printf("ThreadTally still running\n");
-    if (vnThreadsRunning[THREAD_SERVICES] > 0)         printf("ThreadServices still running\n");
-    if (vnThreadsRunning[THREAD_STAKE_MINER] > 0)      printf("ThreadStakeMiner still running\n");
-    while (vnThreadsRunning[THREAD_MESSAGEHANDLER] > 0 || vnThreadsRunning[THREAD_RPCHANDLER] > 0)
-        MilliSleep(20);
+
+    netThreads->interruptAll();
+    netThreads->removeAll();
     MilliSleep(50);
     DumpAddresses();
     return true;

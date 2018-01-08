@@ -360,4 +360,20 @@ BOOST_AUTO_TEST_CASE(util_VerifyRoundToString)
     BOOST_CHECK_EQUAL("1.2346", RoundToString(1.23456789, 4));
 }
 
+BOOST_AUTO_TEST_CASE(util_RoundFromStringShouldRoundToDouble)
+{
+    BOOST_CHECK_EQUAL(3.14, RoundFromString("3.1415", 2));
+}
+
+BOOST_AUTO_TEST_CASE(util_VerifySplit)
+{
+    const std::string str("Hello;;My;;String;;");
+    const auto res = split(str, ";;");
+    BOOST_CHECK(res.size() == 4);
+    BOOST_CHECK_EQUAL("Hello",  res[0]);
+    BOOST_CHECK_EQUAL("My",     res[1]);
+    BOOST_CHECK_EQUAL("String", res[2]);
+    BOOST_CHECK_EQUAL("",       res[3]);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

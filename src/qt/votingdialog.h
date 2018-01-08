@@ -51,15 +51,15 @@ QT_CHARTS_END_NAMESPACE
 
 class VotingItem {
 public:
-    int rowNumber_;
+    unsigned int rowNumber_;
     QString title_;
     QDateTime expiration_;
     QString shareType_;
     QString question_;
     QString answers_;
     QString arrayOfAnswers_;
-    QString totalParticipants_;
-    QString totalShares_;
+    unsigned int totalParticipants_;
+    unsigned int totalShares_;
     QString url_;
     QString bestAnswer_;
 };

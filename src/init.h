@@ -14,7 +14,9 @@ void StartShutdown();
 bool ShutdownRequested();
 
 void Shutdown(void* parg);
-bool AppInit2();
+bool AppInit2(ThreadHandlerPtr threads);
+void ThreadAppInit2(ThreadHandlerPtr th);
+
 std::string HelpMessage();
 std::string LogSomething();
 

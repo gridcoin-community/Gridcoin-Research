@@ -14,7 +14,7 @@ Public Class Utilization
     Private mlSpeakMagnitude As Double
     Public ReadOnly Property Version As Double
         Get
-            Return 424
+            Return 425
         End Get
     End Property
 
@@ -151,12 +151,6 @@ Public Class Utilization
             Try
             Catch ex As Exception
                 Log("New:" + ex.Message)
-            End Try
-            Try
-                Dim sContract As String = GetMagnitudeContract()
-                If Len(sContract) = 0 Then bMagsDoneLoading = False
-            Catch ex As Exception
-                Log("contract err " + ex.Message)
             End Try
         Catch ex As Exception
             Log("While loading clsUtilization : " + ex.Message)
@@ -501,8 +495,7 @@ Public Class Utilization
     Public Function SyncCPIDsWithDPORNodes(sData As String) As Double
         'Write the Gridcoin CPIDs to the Persisted Data System
         Try
-            msSyncData = sData
-            Call SyncDPOR2()
+            Call SyncDPOR2(sData)
         Catch ex As Exception
             Log("Exception during SyncDpor2 : " + ex.Message)
             Return -2

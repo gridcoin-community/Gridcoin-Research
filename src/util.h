@@ -7,6 +7,7 @@
 #define BITCOIN_UTIL_H
 
 #include "uint256.h"
+#include "fwd.h"
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -26,6 +27,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/date_time/gregorian/gregorian_types.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/thread.hpp>
 
 #include <openssl/sha.h>
 #include <openssl/ripemd.h>
@@ -109,6 +111,7 @@ extern bool fTestNet;
 extern bool fNoListen;
 extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
+extern bool fDevbuildCripple;
 
 void RandAddSeed();
 void RandAddSeedPerfmon();
@@ -198,19 +201,28 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime);
 void runCommand(std::string strCommand);
 
 //!
-//! \brief Round decimal value to N decimal places.
+//! \brief Round double value to N decimal places.
 //! \param d Value to round.
 //! \param place Number of decimal places.
 //!
 double Round(double d, int place);
 
 //!
-//! \brief Round a decimal value and convert it to a string.
+//! \brief Round a double value and convert it to a string.
 //! \param d Value to round.
 //! \param place Number of decimal places.
 //! \note This always produces an output with dot as decimal separator.
 //!
 std::string RoundToString(double d, int place);
+
+//!
+//! \brief Round a double value contained in a string.
+//!
+//! Does \c atof on \p s and rounds the result.
+//!
+//! \returns \p s represented as a double rounded to \p place decimals.
+//!
+double RoundFromString(const std::string& s, int place);
 
 //!
 //! \brief Convert any value to a string.
@@ -227,6 +239,7 @@ std::string ToString(const T& val)
 }
 
 bool Contains(const std::string& data, const std::string& instring);
+std::vector<std::string> split(const std::string& s, const std::string& delim);
 
 std::string MakeSafeMessage(const std::string& messagestring);
 
@@ -620,6 +633,22 @@ public:
 
 bool NewThread(void(*pfn)(void*), void* parg);
 void RenameThread(const char* name);
+
+class ThreadHandler
+{
+public:
+    ThreadHandler(){};
+    bool createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr parg, const std::string tname);
+    bool createThread(void(*pfn)(void*), void* parg, const std::string tname);
+    int numThreads();
+    bool threadExists(const std::string tname);
+    void interruptAll();
+    void removeAll();
+    void removeByName(const std::string tname);
+private:
+    boost::thread_group threadGroup;
+    std::map<std::string,boost::thread*> threadMap;
+};
 
 #endif
 
