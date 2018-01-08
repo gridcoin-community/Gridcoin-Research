@@ -100,7 +100,7 @@ inline uint32_t IsV9Enabled(int nHeight)
 {
     return fTestNet
             ? nHeight >=  399000
-            : nHeight >= 2000000;
+            : nHeight >= 1144000;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
