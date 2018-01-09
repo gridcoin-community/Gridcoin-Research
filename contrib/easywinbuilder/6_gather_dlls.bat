@@ -1,9 +1,9 @@
 @call set_vars.bat
-copy %QTDIR%\5.8\mingw53_32\Qt5Charts.dll %ROOTPATH%\release\
-copy %QTDIR%\5.8\mingw53_32\Qt5Core.dll %ROOTPATH%\release\
-copy %QTDIR%\5.8\mingw53_32\Qt5Gui.dll %ROOTPATH%\release\
-copy %QTDIR%\5.8\mingw53_32\Qt5Network.dll %ROOTPATH%\release\
-copy %QTDIR%\5.8\mingw53_32\Qt5Widgets.dll %ROOTPATH%\release\
+copy %QTDIR%\5.8\mingw53_32\bin\Qt5Charts.dll %ROOTPATH%\release\
+copy %QTDIR%\5.8\mingw53_32\bin\Qt5Core.dll %ROOTPATH%\release\
+copy %QTDIR%\5.8\mingw53_32\bin\Qt5Gui.dll %ROOTPATH%\release\
+copy %QTDIR%\5.8\mingw53_32\bin\Qt5Network.dll %ROOTPATH%\release\
+copy %QTDIR%\5.8\mingw53_32\bin\Qt5Widgets.dll %ROOTPATH%\release\
 copy %QTDIR%\5.8\mingw53_32\bin\libgcc_s_dw2-1.dll %ROOTPATH%\release\
 copy "%QTDIR%\5.8\mingw53_32\bin\libstdc++-6.dll" %ROOTPATH%\release\
 copy %QTDIR%\5.8\mingw53_32\bin\libwinpthread-1.dll %ROOTPATH%\release\
