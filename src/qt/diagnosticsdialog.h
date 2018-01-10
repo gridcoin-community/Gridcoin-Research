@@ -43,6 +43,8 @@ private:
 private slots:
     void on_testBtn_clicked();
     void clkFinished();
+    void clkStateChanged(QAbstractSocket::SocketState state);
+    void clkSocketError(QAbstractSocket::SocketError error);
     void TCPFinished();
     void TCPFailed(QAbstractSocket::SocketError socketError);
     void getGithubVersionFinished(QNetworkReply *reply);
