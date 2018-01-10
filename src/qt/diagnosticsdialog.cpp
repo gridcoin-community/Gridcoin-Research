@@ -1,7 +1,6 @@
 #include "main.h"
 #include "util.h"
 #include "boinc.h"
-#include "appcache.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -326,6 +325,12 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket) {
 }
 
 void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
+    if (reply->error())
+    {
+        // Incase ssl dlls are not present or corrupted; avoid crash
+        ui->checkClientVersionResultLbl->setText("Failed (" + reply->errorString() + ")");
+        return;
+    }
     QByteArray data;
     data = reply->readAll();
     std::string newVersionString;
