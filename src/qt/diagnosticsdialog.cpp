@@ -268,7 +268,7 @@ void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
     {
         connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
 
-        char NTPMessage[48] = {010, 0, 0, 0 ,0, 0, 0, 0, 0};
+        char NTPMessage[48] = {0x1b, 0, 0, 0 ,0, 0, 0, 0, 0};
 
         udpSocket->writeDatagram(NTPMessage, sizeof(NTPMessage), udpSocket->peerAddress(), udpSocket->peerPort());
     }
