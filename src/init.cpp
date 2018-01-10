@@ -100,7 +100,9 @@ void Shutdown(void* parg)
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
-        CTxDB().Close();
+        // This causes issues on daemons where it tries to create a second
+        // lock file.
+        //CTxDB().Close();
         MilliSleep(50);
         printf("Gridcoin exited\n\n");
         fExit = true;
@@ -191,8 +193,10 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(NULL, "AppInit()");
     }
-    if (fRet)
-    {   // succesfully initialized, wait for shutdown
+
+    // Succesfully initialized, wait for shutdown
+    if (fRet && !fDaemon)
+    {
         while (!ShutdownRequested())
             MilliSleep(500);
     }
