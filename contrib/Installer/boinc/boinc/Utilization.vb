@@ -233,9 +233,6 @@ Public Class Utilization
         fmVoting.Show()
         Return 1
     End Function
-    Public Sub CS1()
-        CompleteSync()
-    End Sub
     Public Function ShowForm(sFormName As String) As String
         Try
             Dim vFormName() As String
