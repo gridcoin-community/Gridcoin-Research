@@ -1,7 +1,7 @@
-#include <fstream>
 #include "main.h"
 #include "util.h"
 #include "boinc.h"
+
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -10,6 +10,7 @@
 #include "ui_diagnosticsdialog.h"
 
 #include <numeric>
+#include <fstream>
 
 std::string GetListOf(std::string datatype);
 
@@ -160,18 +161,13 @@ int DiagnosticsDialog::VerifyAddNode() {
 }
 
 void DiagnosticsDialog::VerifyClock() {
-    QHostInfo info = QHostInfo::fromName("pool.ntp.org");
+    QHostInfo NTPHost = QHostInfo::fromName("pool.ntp.org");
     udpSocket = new QUdpSocket(this);
 
-    connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
+    connect(udpSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(clkStateChanged(QAbstractSocket::SocketState)));
+    connect(udpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(clkSocketError(QAbstractSocket::SocketError)));
 
-    udpSocket->bind(QHostAddress::LocalHost, 123);
-
-    QByteArray sendBuffer = QByteArray(47, 0);
-    sendBuffer.insert(0, 35);
-
-    connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
-    udpSocket->writeDatagram(sendBuffer, info.addresses().first(), 123);
+    udpSocket->connectToHost(QHostAddress(NTPHost.addresses().first()), 123, QIODevice::ReadWrite);
 }
 
 
@@ -266,33 +262,55 @@ void DiagnosticsDialog::on_testBtn_clicked() {
 
 }
 
-void DiagnosticsDialog::clkFinished() {
-    time_t ntpTime(0);
+void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
+{
+    if (state == QAbstractSocket::ConnectedState)
+    {
+        connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
 
-    while(udpSocket->pendingDatagramSize() != -1) {
-        char recvBuffer[udpSocket->pendingDatagramSize()];
-        udpSocket->readDatagram(&recvBuffer[0], 48, nullptr, nullptr);
-        if(sizeof(recvBuffer) == 48){
-            int count= 40;
-            unsigned long DateTimeIn= uchar(recvBuffer[count])+ (uchar(recvBuffer[count+ 1]) << 8)+ (uchar(recvBuffer[count+ 2]) << 16)+ (uchar(recvBuffer[count+ 3]) << 24);
-            ntpTime = ntohl((time_t)DateTimeIn);
-            ntpTime -= 2208988800U;
-        }
+        char NTPMessage[48] = {0x1b, 0, 0, 0 ,0, 0, 0, 0, 0};
+
+        udpSocket->writeDatagram(NTPMessage, sizeof(NTPMessage), udpSocket->peerAddress(), udpSocket->peerPort());
     }
+}
+
+void DiagnosticsDialog::clkSocketError(QAbstractSocket::SocketError error)
+{
+    ui->verifyClkResultLbl->setText("Failed to make connection to NTP server");
 
     udpSocket->close();
+}
 
-    boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
-    boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(ntpTime);
+void DiagnosticsDialog::clkFinished()
+{
+    if (udpSocket->waitForReadyRead())
+    {
+        while (udpSocket->hasPendingDatagrams())
+        {
+            QByteArray BufferSocket = udpSocket->readAll();
 
-    boost::posix_time::time_duration timeDiff = networkTime - localTime;
+            if (BufferSocket.size() == 48)
+            {
+                int nNTPCount = 40;
+                unsigned long DateTimeIn = uchar(BufferSocket.at(nNTPCount)) + (uchar(BufferSocket.at(nNTPCount + 1)) << 8) + (uchar(BufferSocket.at(nNTPCount + 2)) << 16) + (uchar(BufferSocket.at(nNTPCount + 3)) << 24);
+                long tmit = ntohl((time_t)DateTimeIn);
+                tmit -= 2208988800U;
 
-    if(timeDiff.minutes() < 3)
-        ui->verifyClkResultLbl->setText("Passed");
-    else
-        ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
+                udpSocket->close();
 
-    this->repaint();
+                boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
+                boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
+                boost::posix_time::time_duration timeDiff = networkTime - localTime;
+
+                if(timeDiff.minutes() < 3)
+                    ui->verifyClkResultLbl->setText("Passed");
+                else
+                    ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
+
+                this->repaint();
+            }
+        }
+    }
 }
 
 void DiagnosticsDialog::TCPFinished() {
@@ -307,11 +325,12 @@ void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket) {
 }
 
 void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
-    // Qt didn't get JSON support until 5.x. Ignore version checks when using
-    // Qt4 an drop this condition once we drop Qt4 support.
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-    ui->checkClientVersionResultLbl->setText("N/A");
-#else
+    if (reply->error())
+    {
+        // Incase ssl dlls are not present or corrupted; avoid crash
+        ui->checkClientVersionResultLbl->setText("Failed (" + reply->errorString() + ")");
+        return;
+    }
     QByteArray data;
     data = reply->readAll();
     std::string newVersionString;
@@ -353,5 +372,4 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
         } else
             ui->checkClientVersionResultLbl->setText("Up to date");
     }
-#endif
 }
