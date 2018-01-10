@@ -10,4 +10,6 @@ copy %QTDIR%\5.8\mingw53_32\bin\libwinpthread-1.dll %ROOTPATH%\release\
 copy %QTDIR%\5.8\mingw53_32\plugins\iconengines\qsvgicon.dll %ROOTPATH%\release\iconengines\qsvgicon.dll
 copy %QTDIR%\5.8\mingw53_32\plugins\imageformats\qsvg.dll %ROOTPATH%\release\imageformats\qsvg.dll
 copy %QTDIR%\5.8\mingw53_32\plugins\platforms\qwindows.dll %ROOTPATH%\release\platforms\qwindows.dll
+copy %QTDIR%\Tools\mingw530_32\opt\bin\libeay32.dll %ROOTPATH%\release\libeay32.dll
+copy %QTDIR%\Tools\mingw530_32\opt\bin\ssleay32.dll %ROOTPATH%\release\ssleay32.dll
 @if not "%RUNALL%"=="1" pause
