@@ -13,6 +13,7 @@
 #include <numeric>
 #include <fstream>
 
+std::string GetListOf(std::string datatype);
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
