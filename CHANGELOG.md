@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.1.0] 2018-01-10
+### Fixed
+ - Fix several crashes in diagnostic dialog, #816 (@Foggyx420).
+ - Fix client not exiting when running as daemon (@denravonska).
+ - Fix issue with boincstake.dll not updating on dirty installs (@Foggyx420).
+
+### Changed
+ - Update splash screen, #685 (acey1).
+
 ## [3.7.0.0] 2018-01-08
 ### Added
  - Provide Difficulty of best kernel found, #766 (@tomasbrod).
