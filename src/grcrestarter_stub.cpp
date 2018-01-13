@@ -13,10 +13,13 @@ namespace Restarter
         return 0;
     }
 
-    void CheckUpgrade()
+    bool IsUpgradeAvailable()
     {
-        return;
+        return false;
     }
+
+    void UpgradeClient()
+    {}
 
     int DownloadGridcoinBlocks()
     {

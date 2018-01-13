@@ -4,7 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.0.0]
+## [3.7.3.0] 2018-01-13
+### Fixed
+ - Fix for UI getting stuck in splash screen (@denravonska).
+
+## [3.7.2.0] 2018-01-13
+### Fixed
+ - Properly fix for wallet not daemonizing, #822 (@denravonska).
+
+## [3.7.1.0] 2018-01-10
+### Fixed
+ - Fix several crashes in diagnostic dialog, #816 (@Foggyx420).
+ - Fix client not exiting when running as daemon (@denravonska).
+ - Fix issue with boincstake.dll not updating on dirty installs (@Foggyx420).
+
+### Changed
+ - Update splash screen, #685 (acey1).
+
+## [3.7.0.0] 2018-01-08
 ### Added
  - Provide Difficulty of best kernel found, #766 (@tomasbrod).
  - Add Travis support for OSX, 665 (@acey1).
@@ -25,6 +42,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    Missing rewards will be reimbursed, #552 (@Foggyx420).
  - Fix minor UI typos, #661 (@Erkan-Yilmaz).
  - Fix stake modifier, #686 (@tomasbrod).
+ - Improve boost-1.66.0 compatibility, #800 (@denravonska).
+ - Fix crash in diagnostics dialog, #794 (@Foggyx420).
 
 ### Changed
  - Changed versioning extraction from git. Test builds can no longer be used to
@@ -45,6 +64,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix voting sorting issues, #610 (@MagixInTheAir).
  - Improve wallet backup, #610 (@Foggyx420).
  - Update seed nodes, #783 (@barton2526).
+ - Auto upgrades are now opt-in via the "autoupgrade" flag, #796 (@denravonska).
+ - Clean up seed nodes, #783 (@barton2526).
 
 ### Removed
  - Remove CSV exporter which used unreliable data, #759 (@denravonska).

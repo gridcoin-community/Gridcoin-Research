@@ -8,7 +8,9 @@ namespace Restarter
 
     double PushGridcoinDiagnosticData(std::string);
 
-    void CheckUpgrade();
+    bool IsUpgradeAvailable();
+
+    void UpgradeClient();
 
     int DownloadGridcoinBlocks();
 
