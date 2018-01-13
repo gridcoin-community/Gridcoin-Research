@@ -182,7 +182,6 @@ bool AppInit(int argc, char* argv[])
             exit(ret);
         }
 
-        // Blocking call until shutdown is requested
         fRet = AppInit2(threads);
     }
     catch (std::exception& e) {
@@ -193,6 +192,13 @@ bool AppInit(int argc, char* argv[])
         printf("AppInit()Exception2");
 
         PrintException(NULL, "AppInit()");
+    }
+
+    // Succesfully initialized, wait for shutdown
+    if(fRet)
+    {
+        while (!ShutdownRequested())
+            MilliSleep(500);
     }
 
     Shutdown(NULL);
@@ -601,7 +607,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (pid > 0)
         {
             CreatePidFile(GetPidFile(), pid);
-            return true;
+
+            // While this is technically successful we need to return false
+            // in order to shut down the parent process. This can be improved
+            // by either returning an enum or checking if the current process
+            // is a child process.
+            return false;
         }
 
         pid_t sid = setsid();
@@ -1024,10 +1035,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 
      // Add wallet transactions that aren't already in a block to mapTransactions
     pwalletMain->ReacceptWalletTransactions();
-
-    // Succesfully initialized, wait for shutdown
-    while (!ShutdownRequested())
-        MilliSleep(500);
 
     return true;
 }
