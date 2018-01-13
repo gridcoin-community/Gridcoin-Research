@@ -182,6 +182,7 @@ bool AppInit(int argc, char* argv[])
             exit(ret);
         }
 
+        // Blocking call until shutdown is requested
         fRet = AppInit2(threads);
     }
     catch (std::exception& e) {
@@ -194,12 +195,6 @@ bool AppInit(int argc, char* argv[])
         PrintException(NULL, "AppInit()");
     }
 
-    // Succesfully initialized, wait for shutdown
-    if (fRet && !fDaemon)
-    {
-        while (!ShutdownRequested())
-            MilliSleep(500);
-    }
     Shutdown(NULL);
 
     // delete thread handler
@@ -1030,6 +1025,9 @@ bool AppInit2(ThreadHandlerPtr threads)
      // Add wallet transactions that aren't already in a block to mapTransactions
     pwalletMain->ReacceptWalletTransactions();
 
-    printf("\r\nExiting AppInit2\r\n");
+    // Succesfully initialized, wait for shutdown
+    while (!ShutdownRequested())
+        MilliSleep(500);
+
     return true;
 }
