@@ -1301,7 +1301,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+10"/>
         <source>Share Type: </source>
-        <translation>分享类型：</translation>
+        <translation>计票方式：</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -3176,7 +3176,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Share Type</source>
-        <translation>分享类型</translation>
+        <translation>计票方式</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3197,7 +3197,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Total Shares</source>
-        <translation>总分享次数</translation>
+        <translation>总票数</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3227,7 +3227,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation>分享类型。</translation>
+        <translation>计票方式。</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3242,7 +3242,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Total Shares.</source>
-        <translation>总分享数。</translation>
+        <translation>总票数。</translation>
     </message>
     <message>
         <location line="+2"/>
