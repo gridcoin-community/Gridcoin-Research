@@ -27,12 +27,12 @@ namespace Restarter
 
     bool IsUpgradeAvailable()
     {
-        return IsUpgradeAvailable();
+        return ::IsUpgradeAvailable();
     }
 
     void UpgradeClient()
     {
-        return UpgradeClient();
+        return ::UpgradeClient();
     }
 
     int DownloadGridcoinBlocks()
