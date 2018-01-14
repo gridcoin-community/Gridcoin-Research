@@ -35,7 +35,7 @@ namespace Restarter
         return UpgradeClient();
     }
 
-    bool DownloadGridcoinBlocks()
+    int DownloadGridcoinBlocks()
     {
         return DownloadBlocks();
     }
