@@ -235,7 +235,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     upgrader = new UpgradeDialog(this);
     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(show()));
     connect(upgradeAction, SIGNAL(triggered()), upgrader, SLOT(upgrade()));
-    upgradeAction->setEnabled(false);
+    upgradeAction->setVisible(false);
     connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(show()));
     connect(downloadAction, SIGNAL(triggered()), upgrader, SLOT(blocks()));
 
