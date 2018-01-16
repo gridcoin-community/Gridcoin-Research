@@ -99,9 +99,21 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(NULL, "AppInit()");
     }
-    if (!fRet)
-        Shutdown(NULL);
+    if(fRet)
+    {
+        while (!ShutdownRequested())
+            MilliSleep(500);
+    }
+
+    Shutdown(NULL);
+
+    // delete thread handler
+    threads->interruptAll();
+    threads->removeAll();
+    threads.reset();
+
     return fRet;
+
 }
 
 extern void noui_connect();
