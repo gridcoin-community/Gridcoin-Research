@@ -491,7 +491,8 @@ Value downloadstate(const Array& params, bool fHelp)
 
 Value upgrade(const Array& params, bool fHelp)
 {
-        if (fHelp || params.size() != 0)
+    throw runtime_error("upgrader disabled");
+        /*if (fHelp || params.size() != 0)
         throw runtime_error(
             "upgrade \n"
             "Upgrades client to the latest version.\n"
@@ -517,7 +518,7 @@ Value upgrade(const Array& params, bool fHelp)
               QMetaObject::invokeMethod(&checker, "check", Qt::QueuedConnection);
              #endif
              return "Initiated download of client";
-        }
+        }*/
 
 }
 

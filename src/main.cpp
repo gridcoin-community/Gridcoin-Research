@@ -4436,7 +4436,7 @@ void GridcoinServices()
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
-#ifdef QT_GUI
+/*#ifdef QT_GUI
     // Check for updates once per day.
     if(GetAdjustedTime() - nLastCheckedForUpdate > 24 * 60 * 60)
     {
@@ -4453,7 +4453,7 @@ void GridcoinServices()
             }
         }
     }
-#endif
+#endif*/
 
     if (fDebug10) printf(" {/SVC} ");
 }
