@@ -122,7 +122,7 @@ Alternatively, to build with Qt 4 you need the following:
 
     sudo apt-get install libqt4-dev libprotobuf-dev protobuf-compiler
 
-libqrencode (optional) can be installed with:
+libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
     sudo apt-get install libqrencode-dev
 
@@ -187,7 +187,7 @@ Alternatively, to build with Qt 4 you need the following:
 
     sudo zypper install libqt4-devel
 
-libqrencode (optional) can be installed with:
+libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
     sudo zypper install qrencode-devel
 
