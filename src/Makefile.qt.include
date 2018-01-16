@@ -315,6 +315,7 @@ GRIDCOIN_RC = qt/res/gridcoinresearch.rc
 
 if USE_QRCODE
 GRIDCOINRESEARCH_QT_CPP += qt/qrcodedialog.cpp
+QT_MOC_CPP += qt/moc_qrcodedialog.cpp
 GRIDCOINRESEARCH_QT_H += qt/qrcodedialog.h
 QT_FORMS_UI += qt/forms/qrcodedialog.ui
 endif
