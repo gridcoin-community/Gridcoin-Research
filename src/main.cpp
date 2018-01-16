@@ -5957,9 +5957,9 @@ bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 
         if (grid_pass_decrypted != bhrn+nonce+org+pub_key_prefix)
         {
-            if (fDebug10) printf("Decrypted gridpass %s <> hashed message",grid_pass_decrypted.c_str());
-            nonce="";
-            command="";
+            if (fDebug10) printf("Decrypted gridpass != hashed message");
+            nonce.clear();
+            command.clear();
         }
 
         std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
