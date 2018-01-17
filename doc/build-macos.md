@@ -1,10 +1,10 @@
-Mac OS X Build Instructions and Notes
-====================================
+MacOS Build and Run Instructions
+================================
 The commands in this guide should be executed in a Terminal application.
 The built-in one is located in `/Applications/Utilities/Terminal.app`.
 
-Preparation
------------
+~Preparation~
+-------------
 Install the OS X command line tools:
 
 `xcode-select --install`
@@ -13,19 +13,17 @@ When the popup appears, click `Install`.
 
 Then install [Homebrew](https://brew.sh).
 
-Dependencies
-----------------------
+Install Dependencies
+--------------------
 
     brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt
 
 If you want to build the disk image with `make deploy` (.dmg / optional), you need RSVG
 
-    brew install librsvg
+    brew install librsvg 
 
-NOTE: Building with Qt4 is still supported, however, could result in a broken UI. Building with Qt5 is recommended.
-
-Build Gridcoin
-------------------------
+To Build Gridcoin
+-----------------
 
 1. Clone the Gridcoin source code and cd into `Gridcoin-Research`
 
@@ -41,10 +39,13 @@ Build Gridcoin
         ./autogen.sh
         ./configure
 	make
+	
+    make clean 	[cleans out previous builds!!!!!! Do this between versions]
 
-    The daemon binary is placed in src/ and the gui client is found in src/qt/ . Run the gui client for testnet for example with
+    The daemon binary is placed in src/ and the gui client is found in src/qt/ . Run the gui client for testnet for example with...
     	
-	./gridcoinresearch -testnet
+	./src/qt/gridcoinresearch -testnet  (or)  
+	./src/qt/gridcoinresearch -printtoconsole -debug=true -testnet
 
 3.  It is recommended to build and run the unit tests:
 
@@ -55,3 +56,4 @@ Build Gridcoin
         make deploy
 
 
+To have terminal give full readout:      make V=1 -j #number_of_cores_whatever >& build.log
