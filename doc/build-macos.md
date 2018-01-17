@@ -3,7 +3,7 @@ MacOS Build and Run Instructions
 The commands in this guide should be executed in a Terminal application.
 The built-in one is located in `/Applications/Utilities/Terminal.app`.
 
-~Preparation~
+Preparation
 -------------
 Install the OS X command line tools:
 
