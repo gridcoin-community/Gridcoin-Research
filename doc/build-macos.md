@@ -7,11 +7,11 @@ Preparation
 -----------
 Install the OS X command line tools:
 
-        `xcode-select --install`
+        xcode-select --install
 
 When the popup appears, click:
 
-        `Install`
+        Install
 
 Then install [Homebrew](https://brew.sh).
 
