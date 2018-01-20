@@ -608,11 +608,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             CreatePidFile(GetPidFile(), pid);
 
-            // While this is technically successful we need to return false
-            // in order to shut down the parent process. This can be improved
-            // by either returning an enum or checking if the current process
-            // is a child process.
-            return false;
+            // Now that we are forked we can request a shutdown so the parent
+            // exits while the child lives on.
+            StartShutdown();
+            return true;
         }
 
         pid_t sid = setsid();
@@ -885,7 +884,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-    if (GetBoolArg("-upgradewallet", fFirstRun))
+/*    if (GetBoolArg("-upgradewallet", fFirstRun))
     {
         int nMaxVersion = GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
@@ -899,7 +898,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nMaxVersion < pwalletMain->GetVersion())
             strErrors << _("Cannot downgrade wallet") << "\n";
         pwalletMain->SetMaxVersion(nMaxVersion);
-    }
+    }*/
 
     if (fFirstRun)
     {

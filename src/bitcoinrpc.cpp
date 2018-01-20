@@ -42,8 +42,6 @@ static asio::io_service* rpc_io_service = NULL;
 
 const Object emptyobj;
 
-void ThreadRPCServer3(void* parg);
-
 static inline unsigned short GetDefaultRPCPort()
 {
     return GetBoolArg("-testnet", false) ? 25715 : 15715;
@@ -669,6 +667,8 @@ private:
     iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
 };
 
+void ServiceConnection(AcceptedConnection *conn);
+
 void StopRPCThreads()
 {
     printf("Stop RPC IO service\n");
@@ -742,37 +742,30 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
                              AcceptedConnection* conn,
                              const boost::system::error_code& error)
 {
-
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
-    if (error != asio::error::operation_aborted
-     && acceptor->is_open())
+    if (error != asio::error::operation_aborted && acceptor->is_open())
         RPCListen(acceptor, context, fUseSSL);
 
-    AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
-
     // TODO : Actually handle errors
-    if (error)
-    {
-        delete conn;
+    if (!error)
+    {        
+        // Restrict callers by IP.  It is important to
+        // do this before starting client thread, to filter out
+        // certain DoS and misbehaving clients.
+        AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
+        if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
+        {
+            // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
+            if (!fUseSSL)
+                conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
+        }
+        else
+            ServiceConnection(conn);
+
+        conn->close();        
     }
 
-    // Restrict callers by IP.  It is important to
-    // do this before starting client thread, to filter out
-    // certain DoS and misbehaving clients.
-    else if (tcp_conn
-          && !ClientAllowed(tcp_conn->peer.address()))
-    {
-        // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
-        if (!fUseSSL)
-            conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
-        delete conn;
-    }
-
-    // start HTTP client thread
-    else if (!netThreads->createThread(ThreadRPCServer3, conn,"ThreadRPCServer3")) {
-        printf("Failed to create RPC server client thread\r\n");
-        delete conn;
-    }
+    delete conn;
 }
 
 void ThreadRPCServer2(void* parg)
@@ -985,30 +978,17 @@ static string JSONRPCExecBatch(const Array& vReq)
     return write_string(Value(ret), false) + "\n";
 }
 
-static CCriticalSection cs_THREAD_RPCHANDLER;
-
-void ThreadRPCServer3(void* parg)
+void ServiceConnection(AcceptedConnection *conn)
 {
     // Make this thread recognisable as the RPC handler
     RenameThread("grc-rpchand");
-
-    {
-        LOCK(cs_THREAD_RPCHANDLER);
-    }
-    AcceptedConnection *conn = (AcceptedConnection *) parg;
 
     bool fRun = true;
     while (true)
     {
         if (fShutdown || !fRun)
-        {
-            conn->close();
-            delete conn;
-            {
-                LOCK(cs_THREAD_RPCHANDLER);
-            }
-            return;
-        }
+           break;
+
         map<string, string> mapHeaders;
         string strRequest;
 
@@ -1072,11 +1052,6 @@ void ThreadRPCServer3(void* parg)
             ErrorReply(conn->stream(), JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq.id);
             break;
         }
-    }
-
-    delete conn;
-    {
-        LOCK(cs_THREAD_RPCHANDLER);
     }
 }
 
