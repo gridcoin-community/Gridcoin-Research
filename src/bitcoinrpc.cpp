@@ -742,35 +742,30 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
                              AcceptedConnection* conn,
                              const boost::system::error_code& error)
 {
-
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
     if (error != asio::error::operation_aborted && acceptor->is_open())
         RPCListen(acceptor, context, fUseSSL);
 
-    AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
-
     // TODO : Actually handle errors
-    if (error)
-    {
-        delete conn;
+    if (!error)
+    {        
+        // Restrict callers by IP.  It is important to
+        // do this before starting client thread, to filter out
+        // certain DoS and misbehaving clients.
+        AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn);
+        if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
+        {
+            // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
+            if (!fUseSSL)
+                conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
+        }
+        else
+            ServiceConnection(conn);
+
+        conn->close();        
     }
 
-    // Restrict callers by IP.  It is important to
-    // do this before starting client thread, to filter out
-    // certain DoS and misbehaving clients.
-    else if (tcp_conn && !ClientAllowed(tcp_conn->peer.address()))
-    {
-        // Only send a 403 if we're not using SSL to prevent a DoS during the SSL handshake.
-        if (!fUseSSL)
-            conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
-        delete conn;
-    }
-    else
-    {
-        ServiceConnection(conn);
-        conn->close();
-        delete conn;
-    }
+    delete conn;
 }
 
 void ThreadRPCServer2(void* parg)
