@@ -1509,7 +1509,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+6"/>
         <source>Show only a tray icon after minimizing the window.</source>
-        <translation>Mostra solo un icona nella tray bar quando si riduce ad icona.</translation>
+        <translation>Mostra solo un&apos;icona nella tray bar quando si riduce ad icona.</translation>
     </message>
     <message>
         <location line="+3"/>
