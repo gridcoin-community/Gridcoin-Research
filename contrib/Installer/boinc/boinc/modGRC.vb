@@ -820,9 +820,7 @@ Module modGRC
     End Function
     Public Function GetGridPath(ByVal sType As String) As String
         Dim sTemp As String
-        sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\" + sType
-        Dim sOverridden As String = KeyValue("datadir")
-        sTemp = IIf(Len(sOverridden) > 0, sOverridden, sTemp)
+        sTemp = GetGridFolder() + sType
         If System.IO.Directory.Exists(sTemp) = False Then
             Try
                 System.IO.Directory.CreateDirectory(sTemp)
@@ -830,7 +828,6 @@ Module modGRC
                 Log("Unable to create Gridcoin Path " + sTemp)
             End Try
         End If
-        If mbTestNet Then sTemp += "\Testnet\"
         Return sTemp
     End Function
     Public Function GetGridFolder() As String
