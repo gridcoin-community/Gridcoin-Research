@@ -259,7 +259,7 @@ Questo prodotto include software sviluppato dal progetto OpenSSL per l&apos;uso 
         <location line="+44"/>
         <location line="+6"/>
         <source>Wallet encryption failed</source>
-        <translation>Il processo di crittografia del tuo portafogli è fallito</translation>
+        <translation>Il processo di cifratura del tuo portafogli è fallito</translation>
     </message>
     <message>
         <location line="-56"/>
@@ -976,7 +976,7 @@ Indirizzo: %4
     <message>
         <location line="+29"/>
         <source>List mode</source>
-        <translation>Modalità Lista</translation>
+        <translation>Modalità lista</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1076,7 +1076,7 @@ Indirizzo: %4
  This means a fee of at least %1 per kb is required.
 
  Can vary +/- 1 Byte per input.</source>
-        <translation>Questa etichetta diventa rossa se la dimensione della transazione è maggiore di 10000 bytes.
+        <translation>Questa etichetta diventa rossa se la dimensione della transazione è maggiore di 10000 byte.
 
  Ciò significa che è richiesta una commissione di almeno %1 per kb.
 
@@ -1262,7 +1262,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
-        <translation>Imposta la lingua, ad esempio &quot;it_IT&quot; (default: locale di sistema)</translation>
+        <translation>Imposta la lingua, ad esempio &quot;it_IT&quot; (default: system locale)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1331,27 +1331,27 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+36"/>
         <source>Creating poll failed! Title is missing.</source>
-        <translation>Creazione sondaggio fallita! Il titolo è mancante.</translation>
+        <translation>Creazione sondaggio fallita! Titolo mancante.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Days value is missing.</source>
-        <translation>Creazione sondaggio fallita! Il valore dei giorni è mancante.</translation>
+        <translation>Creazione sondaggio fallita! Valore giorni mancante.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Question is missing.</source>
-        <translation>Creazione sondaggio fallita! La domanda è mancante.</translation>
+        <translation>Creazione sondaggio fallita! Domanda mancante.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! URL is missing.</source>
-        <translation>Creazione sondaggio fallita! L&apos;URL è mancante.</translation>
+        <translation>Creazione sondaggio fallita! URL mancante.</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Answer is missing.</source>
-        <translation>Creazione sondaggio fallita! La risposta è mancante.</translation>
+        <translation>Creazione sondaggio fallita! Risposta mancante.</translation>
     </message>
 </context>
 <context>
@@ -1399,7 +1399,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+7"/>
         <source>Detach block and address databases at shutdown. This means they can be moved to another data directory, but it slows down shutdown. The wallet is always detached.</source>
-        <translation>Scollega i database dei blocchi e degli indirizzi alla chiusura. Ciò significa che possono essere spostati in un altra cartella, ma la chiusura dell&apos;applicazione rallenta. Il portamonete è sempre scollegato.</translation>
+        <translation>Scollega i database dei blocchi e degli indirizzi alla chiusura. Ciò significa che possono essere spostati in un altra cartella, ma la chiusura dell&apos;applicazione risulterà più lenta. Il portamonete è sempre scollegato.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1534,7 +1534,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+24"/>
         <source>&amp;Unit to show amounts in:</source>
-        <translation>&amp;Unità di misura con cui visualizzare gli importi:</translation>
+        <translation>&amp;Unità di misura degli importi:</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1554,7 +1554,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+7"/>
         <source>&amp;Cancel</source>
-        <translation>&amp;Cancella</translation>
+        <translation>&amp;Annulla</translation>
     </message>
     <message>
         <location filename="../optionsdialog.cpp" line="+55"/>
@@ -1724,7 +1724,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location filename="../forms/qrcodedialog.ui" line="+14"/>
         <source>QR Code Dialog</source>
-        <translation>QR Code</translation>
+        <translation>Finestra QR Code</translation>
     </message>
     <message>
         <location line="+62"/>
@@ -1922,7 +1922,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location filename="../forms/rpcconsole.ui" line="-717"/>
         <source>Gridcoin - Debug Console</source>
-        <translation>Gridcoin - Consol di Debug</translation>
+        <translation>Gridcoin - Console di Debug</translation>
     </message>
     <message>
         <location line="+25"/>
@@ -2151,7 +2151,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Copy amount</source>
-        <translation>Copia l&apos;importo</translation>
+        <translation>Copia importo</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2284,7 +2284,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+7"/>
         <source>Paste address from clipboard</source>
-        <translation>Incollare l&apos;indirizzo dagli appunti</translation>
+        <translation>Incolla l&apos;indirizzo dagli appunti</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2305,7 +2305,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+39"/>
         <location filename="../sendcoinsentry.cpp" line="+29"/>
         <source>Enter a label for this address to add it to your address book</source>
-        <translation>Inserisci un&apos;etichetta per questo indirizzo per aggiungerlo nella rubrica</translation>
+        <translation>Inserisci un&apos;etichetta per questo indirizzo per aggiungerlo alla rubrica</translation>
     </message>
     <message>
         <location line="+27"/>
@@ -2415,7 +2415,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+24"/>
         <source>Copy the current signature to the system clipboard</source>
-        <translation>Copia la firma corrente nella clipboard</translation>
+        <translation>Copia la firma corrente negli appunti</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -2466,7 +2466,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+73"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
-        <translation>Per favore controlla l&apos;indirizzo e prova ancora.</translation>
+        <translation>Per favore controlla l&apos;indirizzo e riprova.</translation>
     </message>
     <message>
         <location line="-81"/>
@@ -2503,7 +2503,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+0"/>
         <location line="+13"/>
         <source>Please check the signature and try again.</source>
-        <translation>Per favore controlla la firma e prova ancora.</translation>
+        <translation>Per favore controlla la firma e riprova.</translation>
     </message>
     <message>
         <location line="+0"/>
@@ -2622,7 +2622,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>Le monete generate da Gridcoin devono maturare 110 blocchi prima che possano essere spese. Quando hai generato questo blocco, è stato trasmesso alla rete per essere aggiunto alla catena di blocchi. Se non riesce a entrare nella catena, il suo stato cambierà in &quot;non accettato&quot; e non sarà spendibile. Questo può accadere occasionalmente se un altro nodo genera un blocco entro pochi secondi dal tuo.</translation>
+        <translation>Le monete generate da Gridcoin devono maturare 110 blocchi prima che possano essere spese. Quando hai generato questo blocco, è stato trasmesso alla rete per essere aggiunto alla catena di blocchi. Se non riuscirà ad entrare nella catena, il suo stato cambierà in &quot;non accettato&quot; e non sarà spendibile. Questo può accadere occasionalmente se un altro nodo genera un blocco entro pochi secondi dal tuo.</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -2730,7 +2730,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location filename="../forms/transactiondescdialog.ui" line="+20"/>
         <source>Transaction details</source>
-        <translation>Dettagli sulla transazione</translation>
+        <translation>Dettagli transazione</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -2826,22 +2826,22 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+14"/>
         <source>Mined - DPOR</source>
-        <translation>Minato - DPOR</translation>
+        <translation>Estratto - DPOR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Minted - (Local) DPOR</source>
-        <translation>Minato - DPOR (Locale)</translation>
+        <translation>Estratto - DPOR (Locale)</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Mined - PoR</source>
-        <translation>Minato - PoR</translation>
+        <translation>Estratto - PoR</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Mined - Interest</source>
-        <translation>Minato - Interesse</translation>
+        <translation>Estratto - Interesse</translation>
     </message>
     <message>
         <location line="+257"/>
@@ -3190,7 +3190,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Share Type</source>
-        <translation>Tipo di quota</translation>
+        <translation>Tipo quota</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3226,7 +3226,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+144"/>
         <source>Row Number.</source>
-        <translation>Numero di riga.</translation>
+        <translation>Numero riga.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3241,7 +3241,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation>Tipo di quota.</translation>
+        <translation>Tipo quota.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3326,12 +3326,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation>Specificare il file di configurazione (default: gridcoin.conf)</translation>
+        <translation>Specifica il file di configurazione (default: gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Specify pid file (default: gridcoind.pid)</source>
-        <translation>Specificare il file pid (default: gridcoind.pid)</translation>
+        <translation>Specifica il file pid (default: gridcoind.pid)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3371,7 +3371,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+2"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
-        <translation>Resta in ascolto per le connessioni sulla &lt;port&gt; (default: 32749 o testnet: 32748)</translation>
+        <translation>Resta in ascolto per le connessioni sulla &lt;porta&gt; (default: 32749 o testnet: 32748)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3396,12 +3396,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
-        <translation>Connetti solo a nodi nella rete &lt;net&gt; (IPv4, IPv6 o Tor)</translation>
+        <translation>Connetti solo a nodi nella rete &lt;rete&gt; (IPv4, IPv6 o Tor)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
-        <translation>Scopri proprio indirizzo IP (predefinito: 1 se in ascolto e no -externalip)</translation>
+        <translation>Scoprire il prorio indirizzo IP (predefinito: 1 se in ascolto e -externalip non impostato)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3411,7 +3411,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
-        <translation>Accetta connessioni dall&apos;esterno (predefinito: 1 se no -proxy o -connect)</translation>
+        <translation>Accetta connessioni dall&apos;esterno (predefinito: 1 se -proxy o -connect non impostati)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3441,7 +3441,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
-        <translation>Numero di secondi di sospensione che i peer di cattiva qualità devono aspettare prima di riconnettersi (predefiniti: 86400)</translation>
+        <translation>Numero di secondi che i peer di cattiva qualità devono attendere prima di riconnettersi (predefiniti: 86400)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3456,12 +3456,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
-        <translation>Usa UPnP per mappare la porta in ascolto (predefinito: 1 when listening)</translation>
+        <translation>Usa UPnP per mappare la porta in ascolto (default: 1 quando in ascolto)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
-        <translation>Usa UPnP per mappare la porta in ascolto (predefinito: 0)</translation>
+        <translation>Usa UPnP per mappare la porta in ascolto (default: 0)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3497,7 +3497,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Prepend debug output with timestamp</source>
-        <translation>Anteponi timestamp agli autput del debug</translation>
+        <translation>Anteponi timestamp agli output del debug</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3507,7 +3507,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+3"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
-        <translation>Resta in ascolto per le connessioni JSON-RPC sulla &lt;port&gt; (default: 15715 or testnet: 25715)</translation>
+        <translation>Resta in ascolto per le connessioni JSON-RPC sulla &lt;porta&gt; (default: 15715 o testnet: 25715)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3574,17 +3574,17 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+2"/>
         <source>Set minimum block size in bytes (default: 0)</source>
-        <translation>Imposta la dimensione minima del blocco in bytes (default: 0)</translation>
+        <translation>Imposta la dimensione minima del blocco in byte (default: 0)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
-        <translation>Imposta la dimensione massima di un blocco in bytes (default: 250000)</translation>
+        <translation>Imposta la dimensione massima di un blocco in byte (default: 250000)</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
-        <translation>Imposta la dimensione massima delle transazioni high-priority/low-fee in bytes (default: 27000)</translation>
+        <translation>Imposta la dimensione massima delle transazioni high-priority/low-fee in byte (default: 27000)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3615,7 +3615,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+3"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation>Importo non valido per -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
+        <translation>Importo non valido per -paytxfee=&lt;importo&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3625,7 +3625,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+3"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
-        <translation>Importo non valido per -mininput=&lt;amount&gt;: &apos;%s&apos;</translation>
+        <translation>Importo non valido per -mininput=&lt;importo&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3685,7 +3685,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
-        <translation>Importo non valido per -reservebalance=&lt;amount&gt;</translation>
+        <translation>Importo non valido per -reservebalance=&lt;importo&gt;</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3897,7 +3897,7 @@ per esempio: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
     <message>
         <location line="+14"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
-        <translation>Errore riscontrato durante l&apos;impostazione della porta RPC %u per l&apos;ascolto su IPv6, si torna su IPv4: %s</translation>
+        <translation>Errore riscontrato durante l&apos;impostazione della porta RPC %u per l&apos;ascolto su IPv6, torno su IPv4: %s</translation>
     </message>
     <message>
         <location line="+3"/>
