@@ -1484,6 +1484,7 @@ void MapPort()
 // The second name should resolve to a list of seed addresses.
 static const char *strDNSSeed[][2] = {
     {"node.gridcoin.us", "node.gridcoin.us"},
+    {"node.gridcoin.network", "node.gridcoin.network"},
     {"london.grcnode.co.uk", "london.grcnode.co.uk"},
     {"gridcoin.crypto.fans", "gridcoin.crypto.fans"},
     {"www.grcpool.com", "www.grcpool.com"},

@@ -72,6 +72,7 @@ nano gridcoinresearch.conf
 
 #copy the following into the editor: (Note the addnode should be in row #1):
 addnode=node.gridcoin.us
+addnode=node.gridcoin.network
 server=1 
 daemon=1 
 rpcport=9332 
@@ -169,6 +170,7 @@ email=
 rpcuser=<username>
 rpcpassword=<password>
 addnode=node.gridcoin.us
+addnode=node.gridcoin.network
 
 Ctrl-X to exit and save
 
