@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.4.0] 2018-01-20
+### Fixed
+ - Fix RPC resource leak regression. This also reduces RPC overhead,
+   making calls ~25-35% faster, #848 (@denravonska).
+ - Fix incorrect return code when forking, #832 (@denravonska).
+
+### Removed
+ - Remove upgrader option until rewritten, #836 (@Foggyx420).
+
 ## [3.7.3.0] 2018-01-13
 ### Fixed
  - Fix for UI getting stuck in splash screen (@denravonska).

@@ -84,7 +84,7 @@ extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-       
+
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
 double DoubleFromAmount(int64_t amount);
@@ -521,7 +521,7 @@ void GetGlobalStatus()
         printf("Error obtaining status\r\n");
         return;
     }
-    }
+}
 
 bool Timer_Main(std::string timer_name, int max_ms)
 {
@@ -4406,6 +4406,7 @@ void GridcoinServices()
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
+/*
     // Check for updates once per day.
     if(GetAdjustedTime() - nLastCheckedForUpdate > 24 * 60 * 60)
     {
@@ -4422,6 +4423,7 @@ void GridcoinServices()
             }
         }
     }
+*/
 
     if (fDebug10) printf(" {/SVC} ");
 }
@@ -6041,7 +6043,7 @@ bool VerifyExplainMagnitudeResponse()
         msNeuralResponse.clear();
 
     return dMag != 0;
-                    }
+            }
 
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
@@ -6747,7 +6749,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
             neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
             pfrom->PushMessage("expmag_nresp", neural_response);
-            }
+                }
             else if (neural_request=="neural_hash")
             {
             pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
