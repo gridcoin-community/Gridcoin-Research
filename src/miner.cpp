@@ -851,7 +851,6 @@ void StakeMiner(CWallet *pwallet)
 
     while (!fShutdown)
     {
-
         //wait for next round
         MilliSleep(nMinerSleep);
 
@@ -879,6 +878,10 @@ void StakeMiner(CWallet *pwallet)
             MinerStatus.Clear();
             continue;
         }
+
+        // Lock main lock since GetNextProject and subsequent calls
+        // require the state to be static.
+        LOCK(cs_main);
 
         GetNextProject(true);
 
@@ -920,7 +923,6 @@ void StakeMiner(CWallet *pwallet)
         }
 
         // * delegate to ProcessBlock
-        LOCK(cs_main);
         if (!ProcessBlock(NULL, &StakeBlock, true))
         {
             { LOCK(MinerStatus.lock);
