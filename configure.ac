@@ -419,6 +419,20 @@ case $host in
      ;;
 esac
 
+if test "x$enable_debug" = xyes; then
+    if test "x$GCC" = xyes; then
+        if test x$TARGET_OS = xwindows; then
+          CFLAGS="$CFLAGS -O1"
+        fi
+    fi
+    if test "x$GXX" = xyes; then
+        if test x$TARGET_OS = xwindows; then
+          CXXFLAGS="$CXXFLAGS -O1"
+        fi
+    fi
+fi
+
+
 if test x$use_pkgconfig = xyes; then
   m4_ifndef([PKG_PROG_PKG_CONFIG], [AC_MSG_ERROR(PKG_PROG_PKG_CONFIG macro not found. Please install pkg-config and re-run autogen.sh.)])
   m4_ifdef([PKG_PROG_PKG_CONFIG], [
@@ -675,6 +689,7 @@ if test x$use_upnp != xno; then
     [have_miniupnpc=no]
   )
 fi
+
 
 BITCOIN_QT_INIT
 
@@ -1017,6 +1032,7 @@ fi
 if test x$build_bitcoin_utils$build_bitcoin_libs$build_gridcoinresearchd$bitcoin_enable_qt$use_bench$use_tests = xnononononono; then
   AC_MSG_ERROR([No targets! Please specify at least one of: --with-utils --with-libs --with-daemon --with-gui --enable-bench or --enable-tests])
 fi
+
 
 AM_CONDITIONAL([TARGET_DARWIN], [test x$TARGET_OS = xdarwin])
 AM_CONDITIONAL([BUILD_DARWIN], [test x$BUILD_OS = xdarwin])
