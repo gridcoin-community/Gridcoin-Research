@@ -2831,7 +2831,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+4"/>
         <source>Minted - (Local) DPOR</source>
-        <translation>Estratto - DPOR (Locale)</translation>
+        <translation>Coniato - DPOR (Locale)</translation>
     </message>
     <message>
         <location line="+5"/>
