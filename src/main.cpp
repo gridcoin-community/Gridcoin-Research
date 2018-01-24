@@ -255,7 +255,7 @@ bool bForceUpdate = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
 volatile bool bDoTally_retired = false;
-volatile bool bTallyFinished_retired = false;
+volatile bool bTallyFinished_retired = true;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -4264,6 +4264,15 @@ void GridcoinServices()
         // Tally research averages.
         if ((nBestHeight % TALLY_GRANULARITY) == 0)
         {
+            // Wait for previous retired tally to finish if running.
+            // This can happen when syncing the chain.
+            if(!bTallyFinished_retired)
+            {
+                printf("SVC: Wait for retired tally to finish\n");
+                while(!bTallyFinished_retired)
+                    MilliSleep(10);
+            }
+
             if (fDebug) printf("SVC: TallyNetworkAverages (v9 %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
             TallyNetworkAverages_v9();
         }
