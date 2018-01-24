@@ -1723,10 +1723,6 @@ void static ThreadStakeMiner(void* parg)
 
     if (fDebug10) printf("ThreadStakeMiner started\n");
     CWallet* pwallet = (CWallet*)parg;
-    while (!bCPIDsLoaded)
-    {
-        MilliSleep(100);
-    }
     try
     {
         StakeMiner(pwallet);
