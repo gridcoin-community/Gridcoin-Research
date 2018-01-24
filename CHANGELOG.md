@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.5.0] 2018-01-24
+### Fixed
+ - Fix crash when switching to new tally on block 1144120, #868 (@denravonska).
+ - Fix crash when staking while tallying, #866 (@denravonska).
+
 ## [3.7.4.0] 2018-01-20
 ### Fixed
  - Fix RPC resource leak regression. This also reduces RPC overhead,
