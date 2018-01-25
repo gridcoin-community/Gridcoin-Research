@@ -2197,56 +2197,6 @@ Value execute(const Array& params, bool fHelp)
         }
 
     }
-    else if (sItem == "genorgkey")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify a passphrase and organization name"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("Passphrase",sParam1));
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("OrgName",sParam2));
-
-            std::string sboinchashargs = LegacyDefaultBoincHashArgs();
-            if (sParam1 != sboinchashargs)
-            {
-                entry.push_back(Pair("Error","Admin must be logged in"));
-            }
-            else
-            {
-                std::string modulus = sboinchashargs.substr(0,12);
-                std::string key = sParam2 + "," + AdvancedCryptWithSalt(modulus,sParam2);
-                entry.push_back(Pair("OrgKey",key));
-            }
-            results.push_back(entry);
-
-        }
-
-    }
-    else if (sItem == "testorgkey")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify an org and public key"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("Org",sParam1));
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("Key",sParam2));
-            std::string key = sParam1 + "," + AdvancedDecryptWithSalt(sParam2,sParam1);
-            entry.push_back(Pair("PubKey",key));
-            results.push_back(entry);
-
-        }
-
-    }
     else if (sItem == "reindex")
     {
             int r = Restarter::CreateGridcoinRestorePoint();

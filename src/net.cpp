@@ -117,16 +117,7 @@ unsigned short GetListenPort()
 
 std::string GetCommandNonce(std::string command)
 {
-    //1-11-2015 Message Attacks - Halford
-    std::string sboinchashargs = DefaultOrgKey(12);
-    std::string nonce = ToString(GetAdjustedTime());
-    std::string org = DefaultOrg();
-    std::string pub_key_prefix = OrgId();
-    std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
-    uint256 boincHashRandNonce = GetRandHash();
-    std::string bhrn = boincHashRandNonce.GetHex();
-    std::string grid_pass_encrypted = AdvancedCryptWithSalt(bhrn+nonce+org+pub_key_prefix,sboinchashargs);
-    std::string sComm = nonce+","+command+","+pw1+","+org+","+pub_key_prefix+","+bhrn+","+grid_pass_encrypted;
+    std::string sComm = "deprecated,d,d,d,d,d,d";
     return sComm;
 }
 
@@ -679,58 +670,6 @@ void CNode::CloseSocketDisconnect()
 }
 
 
-std::string LegacyDefaultBoincHashArgs()
-{
-       std::string boinc2 = BoincHashMerkleRootNew;
-       return boinc2;
-}
-
-
-std::string DefaultBoincHashArgs()
-{
-    // (Gridcoin), add support for ProofOfBoinc Node Relay support:
-    std::string bha = GetArg("-boinchash", "boinchashargs");
-    if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-    std::string org = DefaultOrg();
-    std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
-    return ClientPublicKey;
-}
-
-std::string OrgId()
-{
-    std::string bha = GetArg("-boinchash", "boinchashargs");
-    if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-    std::string org = DefaultOrg();
-    if (bha.length() > 8) org += "-" + bha.substr(0,8);
-    std::string ClientPublicKey = AdvancedDecryptWithSalt(bha,org);
-    if (ClientPublicKey.length() > 8) org += "-" + ClientPublicKey.substr(0,5);
-    return org;
-}
-
-
-std::string DefaultOrg()
-{
-    std::string org = GetArg("-org", "windows");
-    return org;
-}
-
-
-std::string DefaultOrgKey(int key_length)
-{
-    std::string dok = DefaultBoincHashArgs();
-    if ((int)dok.length() >= key_length) return dok.substr(0,key_length);
-    return "";
-}
-
-
-std::string DefaultBlockKey(int key_length)
-{
-    std::string bha = GetArg("-boinchash", "boinchashargs");
-    if (bha=="boinchashargs") bha = BoincHashWindowsMerkleRootNew;
-    return (int)bha.length() >= key_length ? bha.substr(0,key_length) : "";
-}
-
-
 void CNode::PushVersion()
 {
     /// when NTP implemented, change to just nTime = GetAdjustedTime()
@@ -741,18 +680,16 @@ void CNode::PushVersion()
     if (fDebug10) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
-    std::string sboinchashargs = DefaultBoincHashArgs();
-    uint256 boincHashRandNonce = GetRandHash();
-    std::string nonce = boincHashRandNonce.GetHex();
-    std::string pw1 = RetrieveMd5(nonce+","+sboinchashargs);
-    std::string mycpid = GlobalCPUMiningCPID.cpidv2;
+    std::string sboinchashargs = "";
+    std::string nonce = "";
+    std::string pw1 = "";
+    std::string mycpid = "INVESTOR";
     std::string acid = GetCommandNonce("aries");
-    std::string sGRCAddress = DefaultWalletAddress();
 
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
                 mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
                 nLocalHostNonce, FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-                nBestHeight, sGRCAddress);
+                nBestHeight);
 
 
 }

@@ -7062,8 +7062,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     int subsidy_places= BlockVersion<8 ? 2 : 8;
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
-        mcpid.Organization = DefaultOrg();
-        mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
+        mcpid.Organization = GetArg("-org", "windows");
+        mcpid.OrganizationKey = "12345678"; //Only reveal 8 characters
     }
     else
     {
