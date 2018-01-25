@@ -28,7 +28,7 @@ void BusyWaitForTally_retired();
 void TallyNetworkAverages_v9();
 extern void ThreadAppInit2(void* parg);
 
-void LoadCPIDsInBackground();
+void LoadCPIDs();
 bool IsConfigFileEmpty();
 
 #ifndef WIN32
@@ -887,8 +887,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
-    printf("Starting CPID thread...");
-    LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
+    LoadCPIDs();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 
