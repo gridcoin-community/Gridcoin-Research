@@ -5944,48 +5944,7 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 
 bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
 {
-    std::vector<std::string> vCommand = split(acid,",");
-    if (vCommand.size() >= 6)
-    {
-        std::string sboinchashargs = DefaultOrgKey(12);  //Use 12 characters for inter-client communication
-        std::string nonce =          vCommand[0];
-        std::string command =        vCommand[1];
-        std::string hash =           vCommand[2];
-        std::string org =            vCommand[3];
-        std::string pub_key_prefix = vCommand[4];
-        std::string bhrn =           vCommand[5];
-        std::string grid_pass =      vCommand[6];
-        std::string grid_pass_decrypted = AdvancedDecryptWithSalt(grid_pass,sboinchashargs);
-
-        if (grid_pass_decrypted != bhrn+nonce+org+pub_key_prefix)
-        {
-            if (fDebug10) printf("Decrypted gridpass != hashed message");
-            nonce.clear();
-            command.clear();
-        }
-
-        std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
-
-        if (precommand=="aries")
-        {
-            //pfrom->securityversion = pw1;
-        }
-        if (fDebug10) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
-        if (false && hash != pw1)
-        {
-            //2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows          if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
-            double punishment = GetArg("-punishment", 10);
-            pfrom->Misbehaving(punishment);
-            return false;
-        }
-        return true;
-    }
-    else
-    {
-        if (fDebug2) printf("Message corrupted. Node %s partially banned.",NodeAddress(pfrom).c_str());
-        pfrom->Misbehaving(1);
-        return false;
-    }
+    /* it did nothing anyway */
     return true;
 }
 
@@ -6055,7 +6014,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 {
     RandAddSeedPerfmon();
     if (fDebug10)
-        printf("received: %s (%" PRIszu " bytes)\n", strCommand.c_str(), vRecv.size());
+        printf("received: %s from %s (%" PRIszu " bytes)\n", strCommand.c_str(), pfrom->addrName.c_str(), vRecv.size());
     if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
     {
         printf("dropmessagestest DROPPING RECV MESSAGE\n");
@@ -6091,6 +6050,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         std::string acid = "";
         vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
 
+        if (fDebug10)
+            printf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ...\n"
+            ,pfrom->nVersion, pfrom->boinchashnonce.c_str(), pfrom->boinchashpw.c_str()
+            ,pfrom->cpid.c_str(), pfrom->enccpid.c_str(), acid.c_str());
         
         //Halford - 12-26-2014 - Thwart Hackers
         bool ver_valid = AcidTest(strCommand,acid,pfrom);
