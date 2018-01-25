@@ -4295,9 +4295,9 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
     }
     if(params.size()>=3)
         endblock= RoundFromString(params[2].get_str(),0);
-    if( (smoothing<1) || ((smoothing%2)==0) )
+    if( (smoothing<1) || (smoothing%2) )
         throw runtime_error(
-            "smoothing must be odd positive\n");
+            "smoothing must be even positive\n");
     /*
     if( maxblocks % smoothing )
         throw runtime_error(
@@ -4364,10 +4364,33 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
         min_spacing=std::min(min_spacing,i_spacing);
         max_spacing=std::max(max_spacing,i_spacing);
 
-        const double i_research = cur->nResearchSubsidy;
+        cnt_investor += !! (cur->nFlags & CBlockIndex::INVESTOR_CPID);
+        cnt_contract += !! cur->nIsContract;
+
+        CBlock block;
+        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+            throw runtime_error("failed to read block");
+
+        cnt_trans += block.vtx.size()-2; /* 2 transactions are special */
+        cnt_empty += ( block.vtx.size()<=2 );
+        double i_size = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
+        sum_size= sum_size + i_size;
+        min_size=std::min(min_size,i_size);
+        max_size=std::max(max_size,i_size);
+
+        const MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+        cnt_neuralvote += (bb.NeuralHash.size()>0);
+        if( bb.CurrentNeuralHash.size()>0
+            && bb.CurrentNeuralHash != "d41d8cd98f00b204e9800998ecf8427e"
+            && bb.CurrentNeuralHash != "TOTAL_VOTES" )
+        {
+            cnt_neuralcurr += 1;
+        }
+
+        const double i_research = bb.ResearchSubsidy;
         sum_research= sum_research + i_research;
         max_research=std::max(max_research,i_research);
-        const double i_interest = cur->nInterestSubsidy;
+        const double i_interest = bb.InterestSubsidy;
         sum_interest= sum_interest + i_interest;
         max_interest=std::max(max_interest,i_interest);
 
@@ -4378,14 +4401,11 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
             cnt_research += 1;
         }
 
-        cnt_investor += !! (cur->nFlags & CBlockIndex::INVESTOR_CPID);
-        cnt_contract += !! cur->nIsContract;
-
         blockcount++;
         samples++;
         if(samples>=smoothing)
         {
-            int midheight = cur->nHeight + ((smoothing+1)/2);
+            int midheight = cur->nHeight + (smoothing/2);
             double samples_w_cpid = samples - cnt_investor;
             if(samples == cnt_investor)
                 samples_w_cpid = std::numeric_limits<double>::max();
@@ -4411,6 +4431,7 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
             Output << (cnt_neuralvote / samples) << " " << cnt_neuralvote << "  ";
             Output << (cnt_neuralcurr / samples) << " " << cnt_neuralcurr << "  ";
             Output << (sum_magnitude / samples_w_cpid) << "  ";
+            // missing: trans, empty, size, neural
 
             Output << "\n";
             samples = 0;
