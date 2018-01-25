@@ -4074,7 +4074,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
 {
     if(fHelp || params.size() < 1 || params.size() > 3 )
         throw runtime_error(
-            "getblockstats mode [startheight [endheight]]\n"
+            "getblockstats 0 [startheight [endheight]]\n"
+            "getblockstats 1 [samples [endheight]]\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
     long mode= RoundFromString(params[0].get_str(),0);
     (void)mode; //TODO
