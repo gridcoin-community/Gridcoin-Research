@@ -117,8 +117,7 @@ unsigned short GetListenPort()
 
 std::string GetCommandNonce(std::string command)
 {
-    std::string sComm = "deprecated,d,d,d,d,d,d";
-    return sComm;
+    return "deprecated,d,d,d,d,d,d";
 }
 
 
@@ -680,9 +679,9 @@ void CNode::PushVersion()
     if (fDebug10) printf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString().c_str(), addrYou.ToString().c_str(), addr.ToString().c_str());
 
-    std::string sboinchashargs = "";
-    std::string nonce = "";
-    std::string pw1 = "";
+    std::string sboinchashargs;
+    std::string nonce;
+    std::string pw1;
     std::string mycpid = "INVESTOR";
     std::string acid = GetCommandNonce("aries");
 

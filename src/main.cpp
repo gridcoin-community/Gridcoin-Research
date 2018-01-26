@@ -5942,13 +5942,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 }
 
 
-bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
-{
-    /* it did nothing anyway */
-    return true;
-}
-
-
 
 
 // The message start string is designed to be unlikely to occur in normal data.
@@ -6002,7 +5995,7 @@ bool VerifyExplainMagnitudeResponse()
         msNeuralResponse.clear();
 
     return dMag != 0;
-            }
+}
 
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
@@ -6054,40 +6047,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             printf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ...\n"
             ,pfrom->nVersion, pfrom->boinchashnonce.c_str(), pfrom->boinchashpw.c_str()
             ,pfrom->cpid.c_str(), pfrom->enccpid.c_str(), acid.c_str());
-        
-        //Halford - 12-26-2014 - Thwart Hackers
-        bool ver_valid = AcidTest(strCommand,acid,pfrom);
-        if (fDebug10) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
-        if (!ver_valid)
-        {
-            pfrom->Misbehaving(100);
-            pfrom->fDisconnect = true;
-            return false;
-        }
 
-        bool unauthorized = false;
         double timedrift = std::abs(GetAdjustedTime() - nTime);
 
-        if (true)
+        if (timedrift > (8*60))
         {
-            if (timedrift > (8*60))
-            {
-                if (fDebug10) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
-                unauthorized = true;
-            }
-        }
-        else
-        {
-            if (timedrift > (10*60) && LessVerbose(500))
-            {
-                if (fDebug10) printf("Disconnecting authorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
-                unauthorized = true;
-            }
-        }
-
-        if (unauthorized)
-        {
-            if (fDebug10) printf("  Disconnected unauthorized peer.         ");
+            if (fDebug10) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\n",(double)timedrift);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;
@@ -6147,25 +6112,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
                 
                 // Note: Hacking attempts start in this area
-                if (false && pfrom->nStartingHeight < (nBestHeight/2) && LessVerbose(1) && !fTestNet)
-                {
-                    if (fDebug3) printf("Node with low height");
-                    pfrom->fDisconnect=true;
-                    return false;
-                }
-                /*
-                
-                if (pfrom->nStartingHeight < 1 && LessVerbose(980) && !fTestNet)
-                {
-                    pfrom->Misbehaving(100);
-                    if (fDebug3) printf("Disconnecting possible hacker node.  Banned for 24 hours.\r\n");
-                    pfrom->fDisconnect=true;
-                    return false;
-                }
-                */
-
-
-                // End of critical Section
 
                 if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
                 {
@@ -6232,7 +6178,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
             {
-                if (SecurityTest(pfrom,ver_valid))
+                if (SecurityTest(pfrom,true))
                 {
                     //Dont store the peer unless it passes the test
                     addrman.Add(addrFrom, addrFrom);
@@ -6627,15 +6573,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> block >> acid;
         uint256 hashBlock = block.GetHash();
 
-        bool block_valid = AcidTest(strCommand,acid,pfrom);
-        if (!block_valid) 
-        {   
-            printf("\r\n Acid test failed for block %s \r\n",hashBlock.ToString().c_str());
-            return false;
-        }
-
-        if (fDebug10) printf("Acid %s, Validity %s ",acid.c_str(),YesNo(block_valid).c_str());
-
         printf(" Received block %s; ", hashBlock.ToString().c_str());
         if (fDebug10) block.print();
 
@@ -6737,8 +6674,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             uint64_t nonce = 0;
             vRecv >> nonce >> acid;
-            bool pong_valid = AcidTest(strCommand,acid,pfrom);
-            if (!pong_valid) return false;
             //if (fDebug10) printf("pong valid %s",YesNo(pong_valid).c_str());
 
             // Echo the message back with the nonce. This allows for two useful features:
