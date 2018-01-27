@@ -1,7 +1,7 @@
 MacOS Build and Run Instructions
 ================================
 The commands in this guide should be executed in a Terminal application.
-The built-in one is located in `/Applications/Utilities/Terminal.app`.
+The built-in one is located in /Applications/Utilities/Terminal.app.
 
 Preparation
 -----------
@@ -18,18 +18,18 @@ Then install [Homebrew](https://brew.sh).
 Dependencies
 ------------
 
-    brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt
+        brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt
 
-If you want to build the disk image with `make deploy` (.dmg / optional), you need RSVG
+To build .app and .dmg files with, make deploy, you will need RSVG installed.
 
-    brew install librsvg
+        brew install librsvg
 
 NOTE: Building with Qt4 is no longer supported. Build with Qt5.
 
 Build Gridcoin
 --------------
 
-1. Clone the Gridcoin source code and cd into `Gridcoin-Research`
+1. Clone the Gridcoin source code and cd into /Gridcoin-Research.
 
         git clone https://github.com/gridcoin/Gridcoin-Research
         cd Gridcoin-Research
@@ -59,10 +59,15 @@ Build Gridcoin
 
         make check
 
-4.  You can also create a .dmg that contains the .app bundle (optional):
-
-        make deploy
-
-5.  To have terminal give full readout if desired:
+4. To have terminal give full readout if desired: 
 
         make V=1 -j #number_of_cores_whatever >& build.log
+
+5. You can also create an .app and .dmg that can be found in /Gridcoin-Reasearch: 
+
+        make deploy
+     
+6. Testnet operating info is found at [Using-Testnet](http://wiki.gridcoin.us/OS_X_Guide#Using_Testnet).
+   To open the app in testnet mode:
+
+        open -a  /your/path/to/gridcoinresearch.app --args -testnet
