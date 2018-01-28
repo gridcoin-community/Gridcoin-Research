@@ -194,15 +194,15 @@ void DiagnosticsDialog::on_testBtn_clicked() {
         ui->boincPathResultLbl->setText("Failed");
     //find cpid
 #ifndef WIN32
-    ui->findCPIDReaultLbl->setText("N/A");
+    ui->findCPIDResultLbl->setText("N/A");
 #else
-    ui->findCPIDReaultLbl->setText("Testing...");
+    ui->findCPIDResultLbl->setText("Testing...");
     this->repaint();
     result = DiagnosticsDialog::FindCPID();
     if(result == 1)
-        ui->findCPIDReaultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("PrimaryCPID", "")));
+        ui->findCPIDResultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("PrimaryCPID", "")));
     else
-        ui->findCPIDReaultLbl->setText("Failed (Is PrimaryCPID in gridcoinresearch.conf?)");
+        ui->findCPIDResultLbl->setText("Failed (Is PrimaryCPID in gridcoinresearch.conf?)");
 #endif
     //cpid valid
     ui->verifyCPIDValidResultLbl->setText("Testing...");
