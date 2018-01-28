@@ -209,7 +209,7 @@
      <item row="2" column="0">
       <widget class="QLabel" name="label_4">
        <property name="text">
-        <string>Find CPID</string>
+        <string>Find PrimaryCPID (Windows Only)</string>
        </property>
       </widget>
      </item>

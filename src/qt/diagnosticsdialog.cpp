@@ -43,7 +43,7 @@ int DiagnosticsDialog::VerifyBoincPath() {
 }
 
 int DiagnosticsDialog::FindCPID() {
-    std::string cpid = GetArgument("cpid", "");
+    std::string cpid = GetArgument("PrimaryCPID", "");
 
     if(cpid.length() != 0)
         return 1;
@@ -76,7 +76,7 @@ int DiagnosticsDialog::VerifyIsCPIDValid() {
         cpid.erase(pos, cpid.length());
     }
 
-    if(GetArgument("cpid", "") == cpid)
+    if(msPrimaryCPID == cpid)
         return 1;
     else
         return 0;
@@ -89,7 +89,7 @@ int DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork() {
     if(beacons.length() < 100)
         return -1;
 
-    std::string cpid = GetArgument("cpid", "");
+    std::string cpid = msPrimaryCPID;
     if(cpid != "" && beacons.find(cpid) != std::string::npos)
         return 1;
     else
@@ -178,7 +178,7 @@ void DiagnosticsDialog::VerifyTCPPort() {
     connect(tcpSocket, SIGNAL(connected()), this, SLOT(TCPFinished()));
     connect(tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(TCPFailed(QAbstractSocket::SocketError)));
 
-    tcpSocket->connectToHost("london.grcnode.co.uk", 32749);
+    tcpSocket->connectToHost("seeds.gridcoin.ifoggz-network.xyz", 32749);
 
 }
 
@@ -193,13 +193,17 @@ void DiagnosticsDialog::on_testBtn_clicked() {
     else
         ui->boincPathResultLbl->setText("Failed");
     //find cpid
+#ifndef WIN32
+    ui->findCPIDReaultLbl->setText("N/A");
+#else
     ui->findCPIDReaultLbl->setText("Testing...");
     this->repaint();
     result = DiagnosticsDialog::FindCPID();
     if(result == 1)
-        ui->findCPIDReaultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("cpid", "")));
+        ui->findCPIDReaultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("PrimaryCPID", "")));
     else
-        ui->findCPIDReaultLbl->setText("Failed (Is CPID in gridcoinresearch.conf?)");
+        ui->findCPIDReaultLbl->setText("Failed (Is PrimaryCPID in gridcoinresearch.conf?)");
+#endif
     //cpid valid
     ui->verifyCPIDValidResultLbl->setText("Testing...");
     this->repaint();
@@ -207,7 +211,7 @@ void DiagnosticsDialog::on_testBtn_clicked() {
     if(result == 1)
         ui->verifyCPIDValidResultLbl->setText("Passed");
     else
-        ui->verifyCPIDValidResultLbl->setText("Failed (BOINC CPID and gridcoinresearch.conf CPID do not match)");
+        ui->verifyCPIDValidResultLbl->setText("Failed (BOINC CPID and gridcoinresearch.conf msPrimaryCPID do not match)");
     //cpid has rac
     ui->verifyCPIDHasRACResultLbl->setText("Testing...");
     this->repaint();
