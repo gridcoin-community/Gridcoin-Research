@@ -178,7 +178,7 @@ void DiagnosticsDialog::VerifyTCPPort() {
     connect(tcpSocket, SIGNAL(connected()), this, SLOT(TCPFinished()));
     connect(tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(TCPFailed(QAbstractSocket::SocketError)));
 
-    tcpSocket->connectToHost("seeds.gridcoin.ifoggz-network.xyz", 32749);
+    tcpSocket->connectToHost("portquiz.net", 32749);
 
 }
 
