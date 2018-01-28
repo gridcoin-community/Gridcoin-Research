@@ -1,3 +1,6 @@
+Assets Attribution
+===================
+
 Code: src/strlcpy.h
 Author: Todd C. Miller <Todd.Miller@courtesan.com>
 License: ISC
@@ -55,4 +58,3 @@ Site: https://bitcointalk.org/index.php?topic=32273.0
 License: Public domain
 
 Gridcoin Logo: CryptoCoinTalk Community
-
