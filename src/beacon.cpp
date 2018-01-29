@@ -136,13 +136,11 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
           : value;
 }
 
-bool VerifyBeaconContractTx(const std::string& txhashBoinc)
+bool VerifyBeaconContractTx(const CTransaction& tx)
 {
-    // Mandatory condition handled in CheckBlock
-
     // Check if tx contains beacon advertisement and evaluate for certain conditions
-    std::string chkMessageType = ExtractXML(txhashBoinc, "<MT>", "</MT>");
-    std::string chkMessageAction = ExtractXML(txhashBoinc, "<MA>", "</MA>");
+    std::string chkMessageType = ExtractXML(tx.hashBoinc, "<MT>", "</MT>");
+    std::string chkMessageAction = ExtractXML(tx.hashBoinc, "<MA>", "</MA>");
 
     if (chkMessageType != "beacon")
         return true; // Not beacon contract
@@ -150,8 +148,8 @@ bool VerifyBeaconContractTx(const std::string& txhashBoinc)
     if (chkMessageAction != "A")
         return true; // Not an add contract for beacon
 
-    std::string chkMessageContract = ExtractXML(txhashBoinc, "<MV>", "</MV>");
-    std::string chkMessageContractCPID = ExtractXML(txhashBoinc, "<MK>", "</MK>");
+    std::string chkMessageContract = ExtractXML(tx.hashBoinc, "<MV>", "</MV>");
+    std::string chkMessageContractCPID = ExtractXML(tx.hashBoinc, "<MK>", "</MK>");
     // Here we GetBeaconElements for the contract in the tx
     std::string tx_out_cpid;
     std::string tx_out_address;
@@ -174,7 +172,7 @@ bool VerifyBeaconContractTx(const std::string& txhashBoinc)
     }
 
     int64_t chkiAge = pindexBest != NULL
-        ? pindexBest->nTime - mvApplicationCacheTimestamp[chkKey]
+        ? tx.nLockTime - mvApplicationCacheTimestamp[chkKey]
         : 0;
     int64_t chkSecondsBase = 60 * 24 * 30 * 60;
 
