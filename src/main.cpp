@@ -3875,7 +3875,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             LoadAdminMessages(false,sOut2);
             if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
             {
-                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s", height1,
+                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]", height1,
                              bb.cpid.c_str(), bb.cpidv2.c_str(),
                              bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
             }
@@ -5068,8 +5068,8 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     }
     else if (height >= cpidV3CutOverHeight)
     {
-        if (mc.cpid.empty()) return false;
-        if (!IsResearcher(mc.cpid)) return true;
+        if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
+        if (!IsResearcher(mc.cpid)) return true; /* is investor? */
         // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
         result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
     }
