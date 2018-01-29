@@ -3486,6 +3486,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
 bool ForceReorganizeToHash(uint256 NewHash)
 {
+    LOCK(cs_main);
+
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
