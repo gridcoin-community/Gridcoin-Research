@@ -1357,7 +1357,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
     // Verify beacon contract in tx if found
-    if (!VerifyBeaconContractTx(tx.hashBoinc))
+    if (!VerifyBeaconContractTx(tx))
         return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx %s; rejected", tx.GetHash().ToString().c_str()));
 
     // Coinbase is only valid in a block, not as a loose transaction
@@ -3939,7 +3939,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
         // Verify beacon contract if a transaction contains a beacon contract
         // Current bad contracts in chain would cause a fork on sync, skip them
-        if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+        if (nVersion>=9 && !VerifyBeaconContractTx(tx) && !fLoadingIndex)
             return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
     }
 
