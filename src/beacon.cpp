@@ -17,6 +17,21 @@ namespace
     {
         return fTestNet ? "testnet" : "";
     }
+
+    bool TxContainsBeacon(const CTransaction& tx)
+    {
+        // Check if tx contains beacon advertisement and evaluate for certain conditions
+        std::string chkMessageType = ExtractXML(tx.hashBoinc, "<MT>", "</MT>");
+        std::string chkMessageAction = ExtractXML(tx.hashBoinc, "<MA>", "</MA>");
+
+        if (chkMessageType != "beacon")
+            return false; // Not beacon contract
+
+        if (chkMessageAction != "A")
+            return false; // Not an add contract for beacon
+
+        return true;
+    }
 }
 
 bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey)
@@ -138,15 +153,8 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
 
 bool VerifyBeaconContractTx(const CTransaction& tx)
 {
-    // Check if tx contains beacon advertisement and evaluate for certain conditions
-    std::string chkMessageType = ExtractXML(tx.hashBoinc, "<MT>", "</MT>");
-    std::string chkMessageAction = ExtractXML(tx.hashBoinc, "<MA>", "</MA>");
-
-    if (chkMessageType != "beacon")
-        return true; // Not beacon contract
-
-    if (chkMessageAction != "A")
-        return true; // Not an add contract for beacon
+    if(!TxContainsBeacon(tx))
+        return true;
 
     std::string chkMessageContract = ExtractXML(tx.hashBoinc, "<MV>", "</MV>");
     std::string chkMessageContractCPID = ExtractXML(tx.hashBoinc, "<MK>", "</MK>");
@@ -207,4 +215,17 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
 
     // Passed checks
     return true;
+}
+
+void DeleteBeaconContractTx(const CTransaction &tx)
+{
+    if(!TxContainsBeacon(tx))
+        return;
+
+    std::string chkMessageContractCPID = ExtractXML(tx.hashBoinc, "<MK>", "</MK>");
+    if(chkMessageContractCPID.empty())
+        return;
+
+    printf("Delete beacon for CPID %s\n", chkMessageContractCPID.c_str());
+    DeleteCache("beacon", chkMessageContractCPID);
 }
