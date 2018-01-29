@@ -112,8 +112,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 extern double GetOwedAmount(std::string cpid);
 
-extern void DeleteCache(std::string section, std::string keyname);
-extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 std::string qtGetNeuralContract(std::string data);
@@ -2584,6 +2582,8 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         {
             bDiscTxFailed = true;
         }
+
+        DeleteBeaconContractTx(vtx[i]);
     }
 
     // Update block index on disk without changing it in memory.
@@ -3476,8 +3476,6 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         mempool.remove(tx);
         mempool.removeConflicts(tx);
     }
-
-    // Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
     
     printf("REORGANIZE: done\n");
     return true;
@@ -3546,8 +3544,10 @@ bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorga
 
 bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 {
-    uint256 hash = GetHash();
+    bool reorganized = false;
+    std::set<uint128> connected_cpids;
 
+    uint256 hash = GetHash();    
     if (!txdb.TxnBegin())
         return error("SetBestChain() : TxnBegin failed");
 
@@ -3568,6 +3568,10 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     }
     else
     {
+        // This is a reorganize to a new chain. We will need to scan for beacons
+        // and retally the amounts owed.
+        reorganized = true;
+
         // the first block in the new chain that will cause it to become the new best chain
         CBlockIndex *pindexIntermediate = pindexNew;
 
@@ -3595,8 +3599,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         }
 
         // Switch to new best branch
-        // Connect further blocks
-        std::set<uint128> connected_cpids;
+        // Connect further blocks        
         for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
         {
             CBlock block;
@@ -3610,21 +3613,13 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                 break;
             }
 
+            if(pindex->IsUserCPID())
+               connected_cpids.emplace(pindex->cpid);
+
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
             if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
-
-            if(pindex->IsUserCPID())
-               connected_cpids.emplace(pindex->cpid);
         }
-
-        // Retally after reorganize to sync up amounts owed.
-        BusyWaitForTally_retired();
-        TallyNetworkAverages_v9();
-
-        // Recalculate amounts paid.
-        for(const auto& cpid : connected_cpids)
-            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
     }
 
     // Update best block in wallet (so we can detect restored wallets)
@@ -3642,16 +3637,32 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexNew->nChainTrust;
     nTimeBestReceived =  GetAdjustedTime();
-
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
+
+    if(reorganized)
+    {
+        printf("{SBC} Load admin messages\n");
+        std::string admin_messages;
+        LoadAdminMessages(true, admin_messages);
+
+        // Retally after reorganize to sync up amounts owed.
+        printf("{SBC} Tally\n");
+        BusyWaitForTally_retired();
+        TallyNetworkAverages_v9();
+
+        // Recalculate amounts paid.
+        printf("{SBC} Calculate amounts owed\n");
+        for(const auto& cpid : connected_cpids)
+            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
+    }
 
     if (fDebug)
     {
         printf("{SBC} SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-          hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
-          CBigNum(nBestChainTrust).ToString().c_str(),
-          nBestBlockTrust.Get64(),
-          DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+               hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
+               CBigNum(nBestChainTrust).ToString().c_str(),
+               nBestBlockTrust.Get64(),
+               DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
     }
     else
         printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
