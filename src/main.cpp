@@ -3940,7 +3940,12 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // Verify beacon contract if a transaction contains a beacon contract
         // Current bad contracts in chain would cause a fork on sync, skip them
         if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
+            printf("CheckBlock[] : bad beacon contract found in tx %s contained within block; IGNORED\n"
+                ,tx.GetHash().ToString().c_str());
+            /*
             return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
+            */
+
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
