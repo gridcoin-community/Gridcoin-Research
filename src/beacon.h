@@ -65,3 +65,4 @@ int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR);
 bool HasActiveBeacon(const std::string& cpid);
 
 bool VerifyBeaconContractTx(const CTransaction& tx);
+void DeleteBeaconContractTx(const CTransaction& tx);

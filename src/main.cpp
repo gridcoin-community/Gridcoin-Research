@@ -70,6 +70,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 json_spirit::Array MagnitudeReport(std::string cpid);
 extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
+void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
 extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
@@ -112,8 +113,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 extern double GetOwedAmount(std::string cpid);
 
-extern void DeleteCache(std::string section, std::string keyname);
-extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
 extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 std::string qtGetNeuralContract(std::string data);
@@ -2584,6 +2583,8 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         {
             bDiscTxFailed = true;
         }
+
+        DeleteBeaconContractTx(vtx[i]);
     }
 
     // Update block index on disk without changing it in memory.
@@ -3415,15 +3416,14 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
                 vResurrect.push_front(tx);
 
-        // remeber the cpid to re-read later
-        vRereadCPIDs.insert(pindex->GetCPID());
-    }
+        if(pindex->IsUserCPID())
+        {
+            // The user has no longer staked this block.
+            RemoveCPIDBlockHash(pindex->GetCPID(), pindex->GetBlockHash());
 
-    // Re-read researchers history after all blocks disconnected
-    for( const string& sRereadCPID : vRereadCPIDs )
-    {
-        StructCPID stCPID = GetLifetimeCPID(sRereadCPID,"DisconnectBlock()");
-        (void)stCPID;
+            // remeber the cpid to re-read later
+            vRereadCPIDs.insert(pindex->GetCPID());
+        }
     }
 
     // Connect longer branch
@@ -3477,8 +3477,10 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         mempool.removeConflicts(tx);
     }
 
-    // Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-    
+    // Re-read researchers history after all blocks disconnected
+    for( const string& sRereadCPID : vRereadCPIDs )
+        GetLifetimeCPID(sRereadCPID,"Reorgnize()");
+
     printf("REORGANIZE: done\n");
     return true;
 }
@@ -3486,6 +3488,8 @@ bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
 bool ForceReorganizeToHash(uint256 NewHash)
 {
+    LOCK(cs_main);
+
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
@@ -3544,8 +3548,10 @@ bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorga
 
 bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 {
-    uint256 hash = GetHash();
+    bool reorganized = false;
+    std::set<uint128> connected_cpids;
 
+    uint256 hash = GetHash();    
     if (!txdb.TxnBegin())
         return error("SetBestChain() : TxnBegin failed");
 
@@ -3566,6 +3572,10 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     }
     else
     {
+        // This is a reorganize to a new chain. We will need to scan for beacons
+        // and retally the amounts owed.
+        reorganized = true;
+
         // the first block in the new chain that will cause it to become the new best chain
         CBlockIndex *pindexIntermediate = pindexNew;
 
@@ -3593,8 +3603,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         }
 
         // Switch to new best branch
-        // Connect further blocks
-        std::set<uint128> connected_cpids;
+        // Connect further blocks        
         for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
         {
             CBlock block;
@@ -3608,21 +3617,13 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
                 break;
             }
 
+            if(pindex->IsUserCPID())
+               connected_cpids.emplace(pindex->cpid);
+
             // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
             if (!block.SetBestChainInner(txdb, pindex, true))
                 break;
-
-            if(pindex->IsUserCPID())
-               connected_cpids.emplace(pindex->cpid);
         }
-
-        // Retally after reorganize to sync up amounts owed.
-        BusyWaitForTally_retired();
-        TallyNetworkAverages_v9();
-
-        // Recalculate amounts paid.
-        for(const auto& cpid : connected_cpids)
-            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
     }
 
     // Update best block in wallet (so we can detect restored wallets)
@@ -3640,16 +3641,32 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexNew->nChainTrust;
     nTimeBestReceived =  GetAdjustedTime();
-
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
+
+    if(reorganized)
+    {
+        printf("{SBC} Load admin messages\n");
+        std::string admin_messages;
+        LoadAdminMessages(true, admin_messages);
+
+        // Recalculate amounts owed.
+        printf("{SBC} Calculate amounts owed\n");
+        for(const auto& cpid : connected_cpids)
+            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
+
+        // Retally after reorganize to sync up amounts owed.
+        printf("{SBC} Tally\n");
+        BusyWaitForTally_retired();
+        TallyNetworkAverages_v9();
+    }
 
     if (fDebug)
     {
         printf("{SBC} SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-          hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
-          CBigNum(nBestChainTrust).ToString().c_str(),
-          nBestBlockTrust.Get64(),
-          DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+               hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
+               CBigNum(nBestChainTrust).ToString().c_str(),
+               nBestBlockTrust.Get64(),
+               DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
     }
     else
         printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
@@ -5314,16 +5331,20 @@ HashSet GetCPIDBlockHashes(const std::string& cpid)
 
 void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
 {
-    // Add block hash to CPID hash set.
     mvCPIDBlockHashes[cpid].insert(blockhash);
+}
+
+void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
+{
+   mvCPIDBlockHashes[cpid].erase(blockhash);
 }
 
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
 {
-    //Eliminates issues with reorgs, disconnects, double counting, etc.. 
+    //Eliminates issues with reorgs, disconnects, double counting, etc..
     if (!IsResearcher(cpid))
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
-    
+
     if (fDebug10) printf("GetLifetimeCPID.BEGIN: %s %s",sCalledFrom.c_str(),cpid.c_str());
 
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
