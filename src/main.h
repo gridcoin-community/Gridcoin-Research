@@ -304,6 +304,8 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
 bool IsResearcher(const std::string& cpid);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
+
 /** Position on disk for a particular transaction. */
 class CDiskTxPos
 {
@@ -1268,7 +1270,6 @@ public:
     bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
     bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
-    bool SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
     bool CheckBlock(std::string sCaller, int height1, int64_t mint, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
     bool AcceptBlock(bool generated_by_me);
@@ -1276,7 +1277,6 @@ public:
     bool CheckBlockSignature() const;
 
 private:
-    bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing);
 };
 
 
