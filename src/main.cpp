@@ -3527,7 +3527,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
                 return error("ReorganizeChain: unable to find fork root with tally point");
         }
 
-        if (pcommon!=pindexBest)
+        if (pcommon!=pindexBest || pindexNew->pprev!=pcommon)
         {
             printf("\nReorganizeChain: from {%s %d}\n"
                      "ReorganizeChain: comm {%s %d}\n"
@@ -3630,6 +3630,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         // Add to current best branch
         if(pindex->pprev)
         {
+            assert( !pindex->pprev->pnext );
             pindex->pprev->pnext = pindex;
             nBestBlockTrust = pindexBest->nChainTrust - pindexBest->pprev->nChainTrust;
         }
