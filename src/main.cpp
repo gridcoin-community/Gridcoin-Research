@@ -3396,7 +3396,7 @@ bool ForceReorganizeToHash(uint256 NewHash)
     return true;
 }
 
-bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon, const int disconnect_tally_height)
+bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
 {
     set<string> vRereadCPIDs;
     while(pindexBest != pcommon)
@@ -3443,12 +3443,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
 
-        // Tally research averages.
-        if (nBestHeight==disconnect_tally_height)
-        {
-            if (fDebug) printf("DisconnectBlocksBatch: TallyNetworkAverages (v9P %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
-            TallyNetworkAverages_v9();
-        }
     }
 
     /* fix up after disconnecting, prepare for new blocks */
@@ -3472,17 +3466,26 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
         // Need to reload all contracts
+        if (fDebug10) printf("DisconnectBlocksBatch: LoadAdminMessages\n");
         std::string admin_messages;
         LoadAdminMessages(true, admin_messages);
 
-        // Re-read researchers history after all blocks disconnected
-        for( const string& sRereadCPID : vRereadCPIDs )
-            GetLifetimeCPID(sRereadCPID,"DisconnectBlocksBatch");
-
-        if(!IsV9Enabled_Tally(nBestHeight))
+        // Tally research averages.
+        if(IsV9Enabled_Tally(nBestHeight))
+        {
+            assert(0==(pcommon->nHeight % TALLY_GRANULARITY));
+            if (fDebug) printf("DisconnectBlocksBatch: TallyNetworkAverages (v9P %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
+            TallyNetworkAverages_v9();
+        }
+        else
         {
             // todo: do something with retired tally? maybe?
         }
+
+        // Re-read researchers history after all blocks disconnected
+        if (fDebug10) printf("DisconnectBlocksBatch: GetLifetimeCPID\n");
+        for( const string& sRereadCPID : vRereadCPIDs )
+            GetLifetimeCPID(sRereadCPID,"DisconnectBlocksBatch");
 
     }
     return true;
@@ -3503,7 +3506,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
     list<CTransaction> vResurrect;
     list<CBlockIndex*> vConnect;
     set<string> vRereadCPIDs;
-    int disconnect_tally_height = -1;
 
     /* find fork point */
     CBlockIndex *pcommon = NULL;
@@ -3514,11 +3516,15 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             pcommon = pcommon->pprev;
 
-            if (IsV9Enabled_Tally(pcommon->nHeight) && (pcommon->nHeight % TALLY_GRANULARITY) == 0)
-                disconnect_tally_height = pcommon->nHeight;
-
             if(!pcommon)
                 return error("ReorganizeChain: unable to find fork root");
+        }
+
+        if(pcommon!=pindexBest) while( (pcommon->nHeight % TALLY_GRANULARITY)!=0 )
+        {
+            pcommon = pcommon->pprev;
+            if(!pcommon)
+                return error("ReorganizeChain: unable to find fork root with tally point");
         }
 
         if (pcommon!=pindexBest)
@@ -3534,15 +3540,13 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
                 ,pindexNew->nHeight - pcommon->nHeight);
         }
     }
-    if (fDebug && disconnect_tally_height>0)
-        printf("ReorganizeChain: set to tally at %d\n",disconnect_tally_height);
 
     /* disconnect blocks */
     if(pcommon!=pindexBest)
     {
         if (!txdb.TxnBegin())
             return error("ReorganizeChain: TxnBegin failed");
-        if(!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon, disconnect_tally_height))
+        if(!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon))
         {
             error("ReorganizeChain: DisconnectBlocksBatch() failed");
             printf("This is fatal error. Chain index may be corrupt. Aborting.\n"
@@ -3632,9 +3636,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         else
             nBestBlockTrust = pindex->nChainTrust;
 
-        if(pindex->IsUserCPID()) // is this needed?
-            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
-
         // update best block
         hashBestChain = hash;
         pindexBest = pindex;
@@ -3662,6 +3663,9 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             //TODO: do something with retired tally?
         }
+
+        if(pindex->IsUserCPID()) // is this needed?
+            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
     }
 
     if (fDebug && (cnt_dis>0 || cnt_con>1))
