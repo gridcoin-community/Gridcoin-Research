@@ -2773,6 +2773,10 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
     std::string sConcatMessage = sCPID + sBlockHash;
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
+    if(!bValid)
+        printf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s\n"
+        ,sSignature.c_str(), sBeaconPublicKey.c_str());
+
     return bValid;
 }
 

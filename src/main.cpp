@@ -70,6 +70,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 json_spirit::Array MagnitudeReport(std::string cpid);
 extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
+void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
 extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
@@ -108,7 +109,6 @@ extern void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, c
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-
 
 extern double GetOwedAmount(std::string cpid);
 
@@ -1357,7 +1357,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
     // Verify beacon contract in tx if found
-    if (!VerifyBeaconContractTx(tx.hashBoinc))
+    if (!VerifyBeaconContractTx(tx))
         return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx %s; rejected", tx.GetHash().ToString().c_str()));
 
     // Coinbase is only valid in a block, not as a loose transaction
@@ -2584,10 +2584,25 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         {
             bDiscTxFailed = true;
         }
+
+        /* Delete the contract.
+         * Previous version will be reloaded in reoranize. */
+        {
+            std::string sMType = ExtractXML(vtx[i].hashBoinc, "<MT>", "</MT>");
+            if(!sMType.empty())
+            {
+                std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
+                DeleteCache(sMKey, sMType);
+                if(fDebug)
+                    printf("DisconnectBlock: Delete contract %s %s\n", sMType.c_str(), sMKey.c_str());
+            }
+        }
+
     }
 
     // Update block index on disk without changing it in memory.
     // The memory index structure will be changed after the db commits.
+    // Brod: I do not like this...
     if (pindex->pprev)
     {
         CDiskBlockIndex blockindexPrev(pindex->pprev);
@@ -2600,8 +2615,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     for (auto const& tx : vtx)
         SyncWithWallets(tx, this, false, false);
 
-    // We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
-    if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
+    if (bDiscTxFailed) return error("DisconnectBlock(): Failed");
     return true;
 }
 
@@ -3349,143 +3363,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 }
 
 
-
-
-bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
-{
-    printf("REORGANIZE\n");
-    // Find the fork
-    CBlockIndex* pfork = pindexBest;
-    CBlockIndex* plonger = pindexNew;
-    while (pfork != plonger)
-    {
-        while (plonger->nHeight > pfork->nHeight)
-            if (!(plonger = plonger->pprev))
-                return error("Reorganize() : plonger->pprev is null");
-        if (pfork == plonger)
-            break;
-        if (!(pfork = pfork->pprev))
-            return error("Reorganize() : pfork->pprev is null");
-    }
-
-    // List of what to disconnect
-    vector<CBlockIndex*> vDisconnect;
-    for (CBlockIndex* pindex = pindexBest; pindex != pfork; pindex = pindex->pprev)
-        vDisconnect.push_back(pindex);
-
-    // List of what to connect
-    vector<CBlockIndex*> vConnect;
-    for (CBlockIndex* pindex = pindexNew; pindex != pfork; pindex = pindex->pprev)
-        vConnect.push_back(pindex);
-    reverse(vConnect.begin(), vConnect.end());
-
-    printf("REORGANIZE: Disconnect %" PRIszu " blocks; %s..%s\n", vDisconnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexBest->GetBlockHash().ToString().substr(0,20).c_str());
-    printf("REORGANIZE: Connect %" PRIszu " blocks; %s..%s\n", vConnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexNew->GetBlockHash().ToString().substr(0,20).c_str());
-
-    if (!vDisconnect.empty())
-    {
-        //Block was disconnected - User is Re-eligibile for staking
-
-        StructCPID sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
-
-        if (sMag.initialized)
-        {
-            sMag.LastPaymentTime = 0;
-            mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
-        }
-        nLastBlockSolved = 0;
-    }
-    printf("REORGANIZE Disc Size %" PRIszu, vDisconnect.size());
-
-    // Disconnect shorter branch
-    list<CTransaction> vResurrect;
-    set<string> vRereadCPIDs;
-    for( CBlockIndex* pindex : vDisconnect )
-    {
-        CBlock block;
-        if (!block.ReadFromDisk(pindex))
-            return error("Reorganize() : ReadFromDisk for disconnect failed");
-        if (!block.DisconnectBlock(txdb, pindex))
-            return error("Reorganize() : DisconnectBlock %s failed", pindex->GetBlockHash().ToString().substr(0,20).c_str());
-
-        // Queue memory transactions to resurrect.
-        // We only do this for blocks after the last checkpoint (reorganisation before that
-        // point should only happen with -reindex/-loadblock, or a misbehaving peer.
-        for (auto const& tx : boost::adaptors::reverse(block.vtx))
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
-                vResurrect.push_front(tx);
-
-        // remeber the cpid to re-read later
-        vRereadCPIDs.insert(pindex->GetCPID());
-    }
-
-    // Re-read researchers history after all blocks disconnected
-    for( const string& sRereadCPID : vRereadCPIDs )
-    {
-        StructCPID stCPID = GetLifetimeCPID(sRereadCPID,"DisconnectBlock()");
-        (void)stCPID;
-    }
-
-    // Connect longer branch
-    vector<CTransaction> vDelete;
-    for (unsigned int i = 0; i < vConnect.size(); i++)
-    {
-        CBlockIndex* pindex = vConnect[i];
-        CBlock block;
-        if (!block.ReadFromDisk(pindex))
-            return error("Reorganize() : ReadFromDisk for connect failed");
-        if (!block.ConnectBlock(txdb, pindex, false, true))
-        {
-            // Invalid block
-            return error("Reorganize() : ConnectBlock %s failed", pindex->GetBlockHash().ToString().substr(0,20).c_str());
-        }
-
-        // Queue memory transactions to delete
-        for( const CTransaction& tx : block.vtx )
-            vDelete.push_back(tx);
-    }
-
-    if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
-        return error("Reorganize() : WriteHashBestChain failed");
-
-    // Make sure it's successfully written to disk before changing memory structure
-    if (!txdb.TxnCommit())
-        return error("Reorganize() : TxnCommit failed");
-
-    // Disconnect shorter branch
-    for( CBlockIndex* pindex : vDisconnect)
-    {
-        if (pindex->pprev)
-            pindex->pprev->pnext = NULL;
-    }
-
-    // Connect longer branch
-    for( CBlockIndex* pindex : vConnect)
-    {
-        if (pindex->pprev)
-            pindex->pprev->pnext = pindex;
-    }
-
-    // Resurrect memory transactions that were in the disconnected branch
-    for( CTransaction& tx : vResurrect)
-        AcceptToMemoryPool(mempool, tx, NULL);
-
-    // Delete redundant memory transactions that are in the connected branch
-    for( CTransaction& tx : vDelete)
-    {
-        mempool.remove(tx);
-        mempool.removeConflicts(tx);
-    }
-
-    // Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-    
-    printf("REORGANIZE: done\n");
-    return true;
-}
-
-
 bool ForceReorganizeToHash(uint256 NewHash)
 {
+    LOCK(cs_main);
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
@@ -3506,7 +3386,7 @@ bool ForceReorganizeToHash(uint256 NewHash)
     }
 
     //Re-process the last block to trigger orphan and shit
-    if (!blockNew.SetBestChain(txdb, pindexNew))
+    if (!SetBestChain(txdb, blockNew, pindexNew))
     {
         return error("ForceReorganizeToHash Fatal Error while setting best chain.\r\n");
     }
@@ -3516,114 +3396,312 @@ bool ForceReorganizeToHash(uint256 NewHash)
     return true;
 }
 
-// Called from inside SetBestChain: attaches a block to the new best chain being built
-bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing)
+bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
 {
-    uint256 hash = GetHash();
-
-    // Adding to current best branch
-    if (!ConnectBlock(txdb, pindexNew, false, fReorganizing) || !txdb.WriteHashBestChain(hash))
+    set<string> vRereadCPIDs;
+    while(pindexBest != pcommon)
     {
-        txdb.TxnAbort();
-        if (fDebug3) printf("Invalid Chain Found.  Invalid block %s\r\n",hash.GetHex().c_str());
-        InvalidChainFound(pindexNew);
-        return false;
+        if(!pindexBest->pprev)
+            return error("DisconnectBlocksBatch: attempt to reorganize beyond genesis"); /*fatal*/
+
+        if (fDebug) printf("DisconnectBlocksBatch: %s\n",pindexBest->GetBlockHash().GetHex().c_str());
+
+        CBlock block;
+        if (!block.ReadFromDisk(pindexBest))
+            return error("DisconnectBlocksBatch: ReadFromDisk for disconnect failed"); /*fatal*/
+        if (!block.DisconnectBlock(txdb, pindexBest))
+            return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
+
+        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
+            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
+
+        // disconnect from memory
+        assert(!pindexBest->pnext);
+        if (pindexBest->pprev)
+            pindexBest->pprev->pnext = NULL;
+
+        // Queue memory transactions to resurrect.
+        // We only do this for blocks after the last checkpoint (reorganisation before that
+        // point should only happen with -reindex/-loadblock, or a misbehaving peer.
+        for (auto const& tx : boost::adaptors::reverse(block.vtx))
+            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate())
+                vResurrect.push_front(tx);
+
+        if(pindexBest->IsUserCPID())
+        {
+            // remeber the cpid to re-read later
+            vRereadCPIDs.insert(pindexBest->GetCPID());
+            // The user has no longer staked this block.
+            RemoveCPIDBlockHash(pindexBest->GetCPID(), pindexBest->GetBlockHash());
+        }
+
+        // New best block
+        cnt_dis++;
+        pindexBest = pindexBest->pprev;
+        hashBestChain = pindexBest->GetBlockHash();
+        blockFinder.Reset();
+        nBestHeight = pindexBest->nHeight;
+        nBestChainTrust = pindexBest->nChainTrust;
+
     }
-    if (!txdb.TxnCommit())
-        return error("SetBestChain() : TxnCommit failed");
 
-    // Add to current best branch
-    pindexNew->pprev->pnext = pindexNew;
+    /* fix up after disconnecting, prepare for new blocks */
+    if(cnt_dis>0)
+    {
 
-    // Delete redundant memory transactions
-    for (auto const& tx : vtx)
-        mempool.remove(tx);
+        //Block was disconnected - User is Re-eligibile for staking
+        StructCPID sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
+        nLastBlockSolved = 0;
+        if (sMag.initialized)
+        {
+            sMag.LastPaymentTime = 0;
+            mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
+        }
+
+        // Resurrect memory transactions that were in the disconnected branch
+        for( CTransaction& tx : vResurrect)
+            AcceptToMemoryPool(mempool, tx, NULL);
+
+        if (!txdb.TxnCommit())
+            return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
+        // Need to reload all contracts
+        if (fDebug10) printf("DisconnectBlocksBatch: LoadAdminMessages\n");
+        std::string admin_messages;
+        LoadAdminMessages(true, admin_messages);
+
+        // Tally research averages.
+        if(IsV9Enabled_Tally(nBestHeight))
+        {
+            assert(0==(pcommon->nHeight % TALLY_GRANULARITY));
+            if (fDebug) printf("DisconnectBlocksBatch: TallyNetworkAverages (v9P %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
+            TallyNetworkAverages_v9();
+        }
+        else
+        {
+            // todo: do something with retired tally? maybe?
+        }
+
+        // Re-read researchers history after all blocks disconnected
+        if (fDebug10) printf("DisconnectBlocksBatch: GetLifetimeCPID\n");
+        for( const string& sRereadCPID : vRereadCPIDs )
+            GetLifetimeCPID(sRereadCPID,"DisconnectBlocksBatch");
+
+    }
+    return true;
+}
+
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew)
+{
+    assert(pindexNew);
+    //assert(!pindexNew->pnext);
+    //assert(pindexBest || hashBestChain == pindexBest->GetBlockHash());
+    //assert(nBestHeight = pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
+    //assert(!pindexBest->pnext);
+    assert(pindexNew->GetBlockHash()==blockNew.GetHash());
+    /* note: it was already determined that this chain is better than current best */
+    /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overriden by command */
+    assert( !pindexGenesisBlock == !pindexBest );
+
+    list<CTransaction> vResurrect;
+    list<CBlockIndex*> vConnect;
+    set<string> vRereadCPIDs;
+
+    /* find fork point */
+    CBlockIndex *pcommon = NULL;
+    if(pindexGenesisBlock)
+    {
+        pcommon = pindexNew;
+        while( pcommon->pnext==NULL && pcommon!=pindexBest )
+        {
+            pcommon = pcommon->pprev;
+
+            if(!pcommon)
+                return error("ReorganizeChain: unable to find fork root");
+        }
+
+        if(pcommon!=pindexBest) while( (pcommon->nHeight % TALLY_GRANULARITY)!=0 )
+        {
+            pcommon = pcommon->pprev;
+            if(!pcommon)
+                return error("ReorganizeChain: unable to find fork root with tally point");
+        }
+
+        if (pcommon!=pindexBest || pindexNew->pprev!=pcommon)
+        {
+            printf("\nReorganizeChain: from {%s %d}\n"
+                     "ReorganizeChain: comm {%s %d}\n"
+                     "ReorganizeChain: to   {%s %d}\n"
+                     "REORGANIZE: disconnect %d, connect %d blocks\n"
+                ,pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight
+                ,pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight
+                ,pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight
+                ,pindexBest->nHeight - pcommon->nHeight
+                ,pindexNew->nHeight - pcommon->nHeight);
+        }
+    }
+
+    /* disconnect blocks */
+    if(pcommon!=pindexBest)
+    {
+        if (!txdb.TxnBegin())
+            return error("ReorganizeChain: TxnBegin failed");
+        if(!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon))
+        {
+            error("ReorganizeChain: DisconnectBlocksBatch() failed");
+            printf("This is fatal error. Chain index may be corrupt. Aborting.\n"
+                "Please Reindex the chain and Restart.\n");
+            exit(1); //todo
+        }
+    }
+
+    if (fDebug && cnt_dis>0) printf("ReorganizeChain: disconnected %d blocks\n",cnt_dis);
+
+    for(CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev)
+        vConnect.push_front(p);
+
+    /* Connect blocks */
+    for(auto const pindex : vConnect)
+    {
+        CBlock block_load;
+        CBlock &block = (pindex==pindexNew)? blockNew : block_load;
+
+        if(pindex!=pindexNew)
+        {
+            if (!block.ReadFromDisk(pindex))
+                return error("ReorganizeChain: ReadFromDisk for connect failed");
+            assert(pindex->GetBlockHash()==block.GetHash());
+        }
+        else
+        {
+            assert(pindex==pindexNew);
+            assert(pindexNew->GetBlockHash()==block.GetHash());
+            assert(pindexNew->GetBlockHash()==blockNew.GetHash());
+        }
+
+        uint256 hash = block.GetHash();
+        uint256 nBestBlockTrust;
+
+        if (fDebug) printf("ReorganizeChain: connect %s\n",hash.ToString().c_str());
+
+        if (!txdb.TxnBegin())
+            return error("ReorganizeChain: TxnBegin failed");
+
+        if (pindexGenesisBlock == NULL)
+        {
+            if(hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+            {
+                txdb.TxnAbort();
+                return error("ReorganizeChain: genesis block hash does not match");
+            }
+            pindexGenesisBlock = pindex;
+        }
+        else
+        {
+            assert(pindex->GetBlockHash()==block.GetHash());
+            assert(pindex->pprev == pindexBest);
+            if (!block.ConnectBlock(txdb, pindex, false, false))
+            {
+                txdb.TxnAbort();
+                error("ReorganizeChain: ConnectBlock %s failed", hash.ToString().c_str());
+                printf("Previous block %s\n",pindex->pprev->GetBlockHash().ToString().c_str());
+                InvalidChainFound(pindex);
+                return false;
+            }
+        }
+
+        // Delete redundant memory transactions
+        for (auto const& tx : block.vtx)
+        {
+            mempool.remove(tx);
+            mempool.removeConflicts(tx);
+        }
+
+        if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
+        {
+            txdb.TxnAbort();
+            return error("ReorganizeChain: WriteHashBestChain failed");
+        }
+
+        // Make sure it's successfully written to disk before changing memory structure
+        if (!txdb.TxnCommit())
+            return error("ReorganizeChain: TxnCommit failed");
+
+        // Add to current best branch
+        if(pindex->pprev && pindexBest && pindexBest->pprev)
+        {
+            assert( !pindex->pprev->pnext );
+            pindex->pprev->pnext = pindex;
+            nBestBlockTrust = pindexBest->nChainTrust - pindexBest->pprev->nChainTrust;
+        }
+        else
+            nBestBlockTrust = pindex->nChainTrust;
+
+        // update best block
+        hashBestChain = hash;
+        pindexBest = pindex;
+        blockFinder.Reset();
+        nBestHeight = pindexBest->nHeight;
+        nBestChainTrust = pindexBest->nChainTrust;
+        nTimeBestReceived =  GetAdjustedTime();
+        cnt_con++;
+
+        // Load recent contracts
+        std::string admin_messages;
+        LoadAdminMessages(false, admin_messages);
+
+        if(IsV9Enabled_Tally(nBestHeight))
+        {
+            // quorum not needed
+            // Tally research averages.
+            if ((nBestHeight % TALLY_GRANULARITY) == 0)
+            {
+                if (fDebug) printf("ReorganizeChain: TallyNetworkAverages (v9N %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
+                TallyNetworkAverages_v9();
+            }
+        }
+        else
+        {
+            //TODO: do something with retired tally?
+        }
+
+        if(pindex->IsUserCPID()) // is this needed?
+            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
+    }
+
+    if (fDebug && (cnt_dis>0 || cnt_con>1))
+        printf("ReorganizeChain: Disconnected %d and Connected %d blocks.\n",cnt_dis,cnt_con);
 
     return true;
 }
 
-bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
 {
-    uint256 hash = GetHash();
+    unsigned cnt_dis=0;
+    unsigned cnt_con=0;
+    bool success = false;
+    const auto prevTrust = nBestChainTrust;
 
-    if (!txdb.TxnBegin())
-        return error("SetBestChain() : TxnBegin failed");
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if (pindexGenesisBlock == NULL && hash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+    if(!success)
+        return false;
+    if(!success || prevTrust>nBestChainTrust)
     {
-        txdb.WriteHashBestChain(hash);
-        if (!txdb.TxnCommit())
-            return error("SetBestChain() : TxnCommit failed");
-        pindexGenesisBlock = pindexNew;
+        /*
+        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+
+        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+        */
     }
-    else if (hashPrevBlock == hashBestChain)
-    {
-        if (!SetBestChainInner(txdb, pindexNew, false))
-        {
-            //int nResult = 0;
-            return error("SetBestChain() : SetBestChainInner failed");
-        }
-    }
-    else
-    {
-        // the first block in the new chain that will cause it to become the new best chain
-        CBlockIndex *pindexIntermediate = pindexNew;
 
-        // list of blocks that need to be connected afterwards
-        std::vector<CBlockIndex*> vpindexSecondary;
-        printf("\r\n**Reorganize**");
+    /* Fix up after block connecting */
 
-        // Reorganize is costly in terms of db load, as it works in a single db transaction.
-        // Try to limit how much needs to be done inside
-        while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust)
-        {
-            vpindexSecondary.push_back(pindexIntermediate);
-            pindexIntermediate = pindexIntermediate->pprev;
-        }
 
-        if (!vpindexSecondary.empty())
-            printf("Postponing %" PRIszu " reconnects\n", vpindexSecondary.size());
+    //std::set<uint128> connected_cpids;
 
-        if (!Reorganize(txdb, pindexIntermediate))
-        {
-            printf("Reorganize failed");
-            txdb.TxnAbort();
-            InvalidChainFound(pindexNew);
-            return error("SetBestChain() : Reorganize failed");
-        }
-
-        // Switch to new best branch
-        // Connect further blocks
-        std::set<uint128> connected_cpids;
-        for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
-        {
-            CBlock block;
-            if (!block.ReadFromDisk(pindex))
-            {
-                printf("SetBestChain() : ReadFromDisk failed\n");
-                break;
-            }
-            if (!txdb.TxnBegin()) {
-                printf("SetBestChain() : TxnBegin 2 failed\n");
-                break;
-            }
-
-            // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
-            if (!block.SetBestChainInner(txdb, pindex, true))
-                break;
-
-            if(pindex->IsUserCPID())
-               connected_cpids.emplace(pindex->cpid);
-        }
-
-        // Retally after reorganize to sync up amounts owed.
-        BusyWaitForTally_retired();
-        TallyNetworkAverages_v9();
-
-        // Recalculate amounts paid.
-        for(const auto& cpid : connected_cpids)
-            GetLifetimeCPID(cpid.GetHex(), "SetBestChain()");
-    }
 
     // Update best block in wallet (so we can detect restored wallets)
     bool fIsInitialDownload = IsInitialBlockDownload();
@@ -3633,26 +3711,35 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         ::SetBestChain(locator);
     }
 
-    // New best block
-    hashBestChain = hash;
-    pindexBest = pindexNew;
-    blockFinder.Reset();
-    nBestHeight = pindexBest->nHeight;
-    nBestChainTrust = pindexNew->nChainTrust;
-    nTimeBestReceived =  GetAdjustedTime();
+    // Retally after reorganize to sync up amounts owed.
+    if (!fIsInitialDownload)
+        BusyWaitForTally_retired();
 
-    uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
+    if(IsV9Enabled_Tally(nBestHeight))
+    {
+        // Update quorum data.
+        if ((nBestHeight % 3) == 0)
+        {
+            if (fDebug) printf("SetBestChain: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
+            ComputeNeuralNetworkSupermajorityHashes();
+        }
+        // Update quorum data.
+        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
+        {
+            if (fDebug) printf("SetBestChain: Updating Neural Quorum (v9 M) height %d\n",nBestHeight);
+            UpdateNeuralNetworkQuorumData();
+        }
+    }
 
     if (fDebug)
     {
-        printf("{SBC} SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-          hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
-          CBigNum(nBestChainTrust).ToString().c_str(),
-          nBestBlockTrust.Get64(),
-          DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+        printf("{SBC} {%s %d}  trust=%s  date=%s\n",
+               hashBestChain.ToString().c_str(), nBestHeight,
+               CBigNum(nBestChainTrust).ToString().c_str(),
+               DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
     }
     else
-        printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
+        printf("{SBC} new best {%s %d} ; ",hashBestChain.ToString().c_str(), nBestHeight);
 
     std::string strCmd = GetArg("-blocknotify", "");
     if (!fIsInitialDownload && !strCmd.empty())
@@ -3663,6 +3750,7 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 
     // Perform Gridcoin services now that w have a new head.
     // Remove V9 checks after the V9 switch.
+    // TODO: ???
     if(IsV9Enabled(nBestHeight))
         GridcoinServices();
 
@@ -3794,7 +3882,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
     // New best
     if (pindexNew->nChainTrust > nBestChainTrust)
-        if (!SetBestChain(txdb, pindexNew))
+        if (!SetBestChain(txdb, *this, pindexNew))
             return false;
 
     if (pindexNew == pindexBest)
@@ -3875,7 +3963,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             LoadAdminMessages(false,sOut2);
             if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
             {
-                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s", height1,
+                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]", height1,
                              bb.cpid.c_str(), bb.cpidv2.c_str(),
                              bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
             }
@@ -3936,11 +4024,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
-
-        // Verify beacon contract if a transaction contains a beacon contract
-        // Current bad contracts in chain would cause a fork on sync, skip them
-        if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -4019,11 +4102,17 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
     }
 
-
-    // Check that all transactions are finalized
     for (auto const& tx : vtx)
+    {
+        // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
+
+        // Verify beacon contract if a transaction contains a beacon contract
+        // Current bad contracts in chain would cause a fork on sync, skip them
+        if (nVersion>=9 && !VerifyBeaconContractTx(tx))
+            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
+    }
 
     // Check that the block chain matches the known block chain up to a checkpoint
     if (!Checkpoints::CheckHardened(nHeight, hash))
@@ -4248,34 +4337,7 @@ void GridcoinServices()
 
     if(IsV9Enabled_Tally(nBestHeight))
     {
-        // Update quorum data.
-        if ((nBestHeight % 3) == 0)
-        {
-            if (fDebug) printf("SVC: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
-            ComputeNeuralNetworkSupermajorityHashes();
-        }
-        // Update quorum data.
-        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
-        {
-            if (fDebug) printf("SVC: Updating Neural Quorum (v9 M) height %d\n",nBestHeight);
-            UpdateNeuralNetworkQuorumData();
-        }
-
-        // Tally research averages.
-        if ((nBestHeight % TALLY_GRANULARITY) == 0)
-        {
-            // Wait for previous retired tally to finish if running.
-            // This can happen when syncing the chain.
-            if(!bTallyFinished_retired)
-            {
-                printf("SVC: Wait for retired tally to finish\n");
-                while(!bTallyFinished_retired)
-                    MilliSleep(10);
-            }
-
-            if (fDebug) printf("SVC: TallyNetworkAverages (v9 %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
-            TallyNetworkAverages_v9();
-        }
+        // in SetBestChain
     }
     else
     {
@@ -5068,8 +5130,8 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     }
     else if (height >= cpidV3CutOverHeight)
     {
-        if (mc.cpid.empty()) return false;
-        if (!IsResearcher(mc.cpid)) return true;
+        if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
+        if (!IsResearcher(mc.cpid)) return true; /* is investor? */
         // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
         result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
     }
@@ -5314,7 +5376,12 @@ HashSet GetCPIDBlockHashes(const std::string& cpid)
 void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
 {
     // Add block hash to CPID hash set.
-    mvCPIDBlockHashes[cpid].insert(blockhash);
+    mvCPIDBlockHashes[cpid].emplace(blockhash);
+}
+
+void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
+{
+   mvCPIDBlockHashes[cpid].erase(blockhash);
 }
 
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
@@ -5351,6 +5418,10 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         if (fDebug10)
             printf("GetLifetimeCPID: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f\n",
             uHash.GetHex().c_str(),pblockindex->nHeight,(int)stCPID.LastBlock,pblockindex->nResearchSubsidy);
+        if(!pblockindex->pnext && pblockindex!=pindexBest)
+            printf("WARNING GetLifetimeCPID: index {%s %d} for cpid %s, "
+                "is not in the main chain\n",pblockindex->GetBlockHash().GetHex().c_str(),
+                pblockindex->nHeight,cpid.c_str());
         if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
         {
             stCPID.LastBlock = pblockindex->nHeight;
@@ -5749,6 +5820,14 @@ bool TallyNetworkAverages_v9()
 {
     if (IsResearchAgeEnabled(pindexBest->nHeight) && IsV9Enabled_Tally(pindexBest->nHeight))
     {
+        if(!bTallyFinished_retired)
+        {
+            // Wait for previous retired tally to finish if running.
+            // This can happen when syncing the chain.
+            printf("TallyNetworkAverages_v9: Wait for retired tally to finish\n");
+            while(!bTallyFinished_retired)
+                MilliSleep(10);
+        }
         return TallyResearchAverages_v9();
     }
 
