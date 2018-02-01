@@ -3628,7 +3628,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
             return error("ReorganizeChain: TxnCommit failed");
 
         // Add to current best branch
-        if(pindex->pprev)
+        if(pindex->pprev && pindexBest && pindexBest->pprev)
         {
             assert( !pindex->pprev->pnext );
             pindex->pprev->pnext = pindex;
