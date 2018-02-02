@@ -3412,9 +3412,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!block.DisconnectBlock(txdb, pindexBest))
             return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
 
-        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
-            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
-
         // disconnect from memory
         assert(!pindexBest->pnext);
         if (pindexBest->pprev)
@@ -3442,6 +3439,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
+
+        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
+            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
 
     }
 
