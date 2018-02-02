@@ -3412,9 +3412,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!block.DisconnectBlock(txdb, pindexBest))
             return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
 
-        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
-            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
-
         // disconnect from memory
         assert(!pindexBest->pnext);
         if (pindexBest->pprev)
@@ -3442,6 +3439,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         blockFinder.Reset();
         nBestHeight = pindexBest->nHeight;
         nBestChainTrust = pindexBest->nChainTrust;
+
+        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
+            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
 
     }
 
@@ -3628,11 +3628,11 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
             return error("ReorganizeChain: TxnCommit failed");
 
         // Add to current best branch
-        if(pindex->pprev && pindexBest && pindexBest->pprev)
+        if(pindex->pprev)
         {
             assert( !pindex->pprev->pnext );
             pindex->pprev->pnext = pindex;
-            nBestBlockTrust = pindexBest->nChainTrust - pindexBest->pprev->nChainTrust;
+            nBestBlockTrust = pindex->nChainTrust - pindex->pprev->nChainTrust;
         }
         else
             nBestBlockTrust = pindex->nChainTrust;
