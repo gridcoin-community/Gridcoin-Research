@@ -3628,11 +3628,11 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
             return error("ReorganizeChain: TxnCommit failed");
 
         // Add to current best branch
-        if(pindex->pprev && pindexBest && pindexBest->pprev)
+        if(pindex->pprev)
         {
             assert( !pindex->pprev->pnext );
             pindex->pprev->pnext = pindex;
-            nBestBlockTrust = pindexBest->nChainTrust - pindexBest->pprev->nChainTrust;
+            nBestBlockTrust = pindex->nChainTrust - pindex->pprev->nChainTrust;
         }
         else
             nBestBlockTrust = pindex->nChainTrust;
