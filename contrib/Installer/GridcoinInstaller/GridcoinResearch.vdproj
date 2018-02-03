@@ -250,25 +250,7 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_6AEABB5004EC4B57225B51B085DB5625"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
+        "OwnerKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -280,7 +262,25 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
+        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_6AEABB5004EC4B57225B51B085DB5625"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -1209,19 +1209,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{8557575E-B6D1-44FD-AAB7-2991D5A05FC1}"
-        "PackageCode" = "8:{5FA00E53-C606-4E17-A59C-D58D1209077B}"
+        "ProductCode" = "8:{EF6BE97A-94D3-431D-BD50-AC0AB701824E}"
+        "PackageCode" = "8:{222FA3F8-30CD-4B7A-A530-56A36A016834}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:44.4"
+        "ProductVersion" = "8:44.5"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research 44.4"
+        "Title" = "8:Gridcoin Research 44.5"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"
