@@ -14,6 +14,7 @@
 #include "util.h"
 #include "backup.h"
 #include "appcache.h"
+#include "tally.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
@@ -23,7 +24,7 @@
 #include <algorithm>
 
 
-bool TallyResearchAverages_v9();
+bool TallyResearchAverages_v9(CBlockIndex* index);
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
@@ -2047,10 +2048,11 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "tally")
     {
-            bNetAveragesLoaded_retired = false;
-            TallyResearchAverages_v9();
-            entry.push_back(Pair("Tally Network Averages",1));
-            results.push_back(entry);
+        bNetAveragesLoaded_retired = false;
+        CBlockIndex* tallyIndex = FindTallyTrigger(pindexBest);
+        TallyResearchAverages_v9(tallyIndex);
+        entry.push_back(Pair("Tally Network Averages",1));
+        results.push_back(entry);
     }
     else if (sItem == "encrypt")
     {
