@@ -260,7 +260,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/boinc.h \
     src/qt/diagnosticsdialog.h \
     src/backup.h \
-    src/appcache.h
+    src/appcache.h \
+    src/tally.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -340,7 +341,8 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/boinc.cpp \
     src/allocators.cpp \
     src/backup.cpp \
-    src/appcache.cpp
+    src/appcache.cpp \
+    src/tally.cpp
 
 ##
 #RC_FILE  = qaxserver.rc
