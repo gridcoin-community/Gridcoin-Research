@@ -3119,7 +3119,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
 							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
 				}
-				
+
+                // 6-4-2017 - Verify researchers stored block magnitude
+                // 2018 02 04 - Moved here for better effect.
+                double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+                if( bb.Magnitude > 0
+                    && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
+                    && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
+                {
+                    return error("ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                                 bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str());
+                }
 
                 if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
                 {
