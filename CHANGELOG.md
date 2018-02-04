@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.7.0]
+### Fixed
+ - Beacon validation are now done when accepting blocks, not when receiving,
+   #899 (@denravonska).
+ - Fix crashes due to buffer overflow in encrypt/decrypt, #890 (@denravonska).
+ - Rewrite reorganize routine to be more reliable and drop contracts received
+   or issued while on a side chain to help reducing forks, #902 (@tomasbrod).
+
+## [3.7.6.0]
+Internal test version used to sort out the forks.
+
 ## [3.7.5.0] 2018-01-24
 ### Fixed
  - Fix crash when switching to new tally on block 1144120, #868 (@denravonska).
