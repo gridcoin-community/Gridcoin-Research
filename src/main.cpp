@@ -3132,7 +3132,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 }
 
                 // 2018 02 04 - Brod - Move cpid check here for better effect
-                //if (IsResearcher(bb.cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
+                /* Only signature check is sufficient here, but kiss and
+                    call the function. The height is of previous block. */
                 if (!IsCPIDValidv2(bb,pindex->nHeight-1))
                 {
                     return error("ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
@@ -3976,16 +3977,39 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))
             return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 
-        if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+        if (!fLoadingIndex)
         {
-            std::string sOut2;
-            LoadAdminMessages(false,sOut2);
-            if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+            bool cpidresult = false;
+            int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
+            int cpidV3CutOverHeight = fTestNet ? 196300 : 725000;
+            if (height1 < cpidV2CutOverHeight)
             {
+                cpidresult = IsCPIDValid_Retired(bb.cpid,bb.enccpid);
+            }
+            else if (height1 <= cpidV3CutOverHeight)
+            {
+                cpidresult = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
+            }
+            else
+            {
+
+                cpidresult = (bb.lastblockhash.size()==64)
+                    && (bb.BoincSignature.size()>=16)
+                    && (bb.BoincSignature.find(' ')==std::string::npos);
+
+                /* This is not used anywhere, so let it be.
+                cpidresult = cpidresult
+                    && (bb.BoincPublicKey.size()==130)
+                    && (bb.BoincPublicKey.find(' ')==std::string::npos);
+                */
+
+                /* full "v3" signature check is performed in ConnectBlock */
+            }
+
+            if(!cpidresult)
                 return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]", height1,
                              bb.cpid.c_str(), bb.cpidv2.c_str(),
                              bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
-            }
         }
     }
 
