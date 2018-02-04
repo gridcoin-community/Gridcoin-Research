@@ -8438,7 +8438,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                     WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
                                 }
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                                if(fDebug && sMessageType=="beacon" ){
+                                if(fDebug10 && sMessageType=="beacon" ){
                                     printf("BEACON add %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
                                 }
                                 fMessageLoaded = true;
@@ -8459,7 +8459,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
-                                if(fDebug && sMessageType=="beacon" ){
+                                if(fDebug10 && sMessageType=="beacon" ){
                                     printf("BEACON DEL %s - %s\r\n",sMessageKey.c_str(),TimestampToHRDate(nTime).c_str());
                                 }
                                 DeleteCache(sMessageType,sMessageKey);
