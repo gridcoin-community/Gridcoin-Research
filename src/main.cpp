@@ -4188,11 +4188,16 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         }
     }
 
-    // Verify proof of research.
-    if(!CheckProofOfResearch(pindexPrev, *this))
+    if(nVersion<9)
     {
-        return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+        // Verify proof of research.
+        if(!CheckProofOfResearch(pindexPrev, *this))
+        {
+            return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+        }
     }
+    /*else Do not check v9 rewards here as context here is insufficient and it is
+      checked again in ConnectBlock */
     
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
