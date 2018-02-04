@@ -3131,6 +3131,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                  bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str());
                 }
 
+                // 2018 02 04 - Brod - Move cpid check here for better effect
+                //if (IsResearcher(bb.cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
+                if (!IsCPIDValidv2(bb,pindex->nHeight-1))
+                {
+                    return error("ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                             bb.cpid.c_str(), bb.cpidv2.c_str(),
+                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
+                }
+
                 if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
                 {
 						// Mitigate DPOR Relay attack 
