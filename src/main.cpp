@@ -3145,15 +3145,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                      bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
                         }
 
-						// Mitigate DPOR Relay attack 
-						// bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
-						if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-						{
-							std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
-							if (fTestNet || (pindex->nHeight > 975000)) return error(" %s ",sNarr.c_str());
+                        // Mitigate DPOR Relay attack 
+                        // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
+                        if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                        {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+                            printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
+                            if (fTestNet || (pindex->nHeight > 975000)) return error(" %s ",sNarr.c_str());
                         }
-				
+
                         if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
