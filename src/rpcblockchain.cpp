@@ -739,61 +739,61 @@ bool TallyMagnitudesInSuperblock()
             // For each CPID in the contract
             if (vSuperblock[i].length() > 1)
             {
-                    std::string cpid = ExtractValue(vSuperblock[i],",",0);
-                    double magnitude = RoundFromString(ExtractValue(vSuperblock[i],",",1),0);
-                    if (cpid.length() > 10)
+                std::string cpid = ExtractValue(vSuperblock[i],",",0);
+                double magnitude = RoundFromString(ExtractValue(vSuperblock[i],",",1),0);
+                if (cpid.length() > 10)
+                {
+                    StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
+                    stCPID.TotalMagnitude = magnitude;
+                    stCPID.Magnitude = magnitude;
+                    stCPID.cpid = cpid;
+                    mvDPORCopy[cpid]=stCPID;
+                    StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
+                    stMagg.cpid = cpid;
+                    stMagg.Magnitude = stCPID.Magnitude;
+                    stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
+                    //Adjust total owed - in case they are a newbie:
+                    if (true)
                     {
-                        StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
-                        stCPID.TotalMagnitude = magnitude;
-                        stCPID.Magnitude = magnitude;
-                        stCPID.cpid = cpid;
-                        mvDPORCopy[cpid]=stCPID;
-                        StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
-                        stMagg.cpid = cpid;
-                        stMagg.Magnitude = stCPID.Magnitude;
-                        stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
-                        //Adjust total owed - in case they are a newbie:
-                        if (true)
-                        {
-                            double total_owed = 0;
-                            stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
-                            stMagg.totalowed = total_owed;
-                        }
-
-                        mvMagnitudesCopy[cpid] = stMagg;
-                        TotalNetworkMagnitude += stMagg.Magnitude;
-                        TotalNetworkEntries++;
-
+                        double total_owed = 0;
+                        stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
+                        stMagg.totalowed = total_owed;
                     }
+
+                    mvMagnitudesCopy[cpid] = stMagg;
+                    TotalNetworkMagnitude += stMagg.Magnitude;
+                    TotalNetworkEntries++;
+
+                }
             }
-    }
+        }
 
-    if (fDebug3) printf(".TMIS41.");
-    double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
-    // Store the Total Network Magnitude:
-    StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
-    network.projectname="NETWORK";
-    network.NetworkMagnitude = TotalNetworkMagnitude;
-    network.NetworkAvgMagnitude = NetworkAvgMagnitude;
-    if (fDebug)
-       printf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries, ReadCache("superblock","block_number").value.c_str());
+        if (fDebug3) printf(".TMIS41.");
+        double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
+        // Store the Total Network Magnitude:
+        StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
+        network.projectname="NETWORK";
+        network.NetworkMagnitude = TotalNetworkMagnitude;
+        network.NetworkAvgMagnitude = NetworkAvgMagnitude;
+        if (fDebug)
+            printf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries, ReadCache("superblock","block_number").value.c_str());
 
-    double TotalProjects = 0;
-    double TotalRAC = 0;
-    double AVGRac = 0;
-    // Load boinc project averages from neural network
-    std::string projects = ReadCache("superblock","averages").value;
-    if (projects.empty()) return false;
-    std::vector<std::string> vProjects = split(projects.c_str(),";");
-    if (vProjects.size() > 0)
-    {
-        double totalRAC = 0;
-        WHITELISTED_PROJECTS = 0;
-        for (unsigned int i = 0; i < vProjects.size(); i++)
+        double TotalProjects = 0;
+        double TotalRAC = 0;
+        double AVGRac = 0;
+        // Load boinc project averages from neural network
+        std::string projects = ReadCache("superblock","averages").value;
+        if (projects.empty()) return false;
+        std::vector<std::string> vProjects = split(projects.c_str(),";");
+        if (vProjects.size() > 0)
         {
-            // For each Project in the contract
-            if (vProjects[i].length() > 1)
+            double totalRAC = 0;
+            WHITELISTED_PROJECTS = 0;
+            for (unsigned int i = 0; i < vProjects.size(); i++)
             {
+                // For each Project in the contract
+                if (vProjects[i].length() > 1)
+                {
                     std::string project = ExtractValue(vProjects[i],",",0);
                     double avg = RoundFromString(ExtractValue("0" + vProjects[i],",",1),0);
                     if (project.length() > 1)
@@ -811,47 +811,21 @@ bool TallyMagnitudesInSuperblock()
                         TotalRAC += avg;
                     }
                 }
-        }
-    }
-    AVGRac = TotalRAC/(TotalProjects+.01);
-    network.AverageRAC = AVGRac;
-    network.rac = TotalRAC;
-    network.NetworkProjects = TotalProjects;
-    //8-16-2015 Store the quotes
-    std::string q = ReadCache("superblock","quotes").value;
-    if (fDebug3) printf("q %s",q.c_str());
-    std::vector<std::string> vQ = split(q.c_str(),";");
-    if (vQ.size() > 0)
-    {
-        for (unsigned int i = 0; i < vQ.size(); i++)
-        {
-            // For each quote in the contract
-            if (vQ[i].length() > 1)
-            {
-                    std::string symbol = ExtractValue(vQ[i],",",0);
-                    double price = RoundFromString(ExtractValue("0" + vQ[i],",",1),0);
-
-                    WriteCache("quotes",symbol,RoundToString(price,2),GetAdjustedTime());
-                    if (fDebug3) printf("symbol %s price %f ",symbol.c_str(),price);
             }
         }
+        AVGRac = TotalRAC/(TotalProjects+.01);
+        network.AverageRAC = AVGRac;
+        network.rac = TotalRAC;
+        network.NetworkProjects = TotalProjects;
+        mvNetworkCopy["NETWORK"] = network;
+        if (fDebug3) printf(".TMS43.");
+        return true;
     }
-
-    mvNetworkCopy["NETWORK"] = network;
-    if (fDebug3) printf(".TMS43.");
-    return true;
-    }
-    catch (std::exception &e)
+    catch (const std::exception &e)
     {
-                printf("Error in TallySuperblock.");
-                return false;
+        printf("Error in TallySuperblock.");
+        return false;
     }
-    catch(...)
-    {
-                printf("Error in TallySuperblock");
-                return false;
-    }
-
 }
 
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
