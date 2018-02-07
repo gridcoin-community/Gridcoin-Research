@@ -4200,7 +4200,9 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         printf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
         if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
         {
-            return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+            printf(" prev %s\n",pindexPrev->GetBlockHash().ToString().c_str());
+            return false;
         }
     }
 
