@@ -3139,12 +3139,23 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         // 2018 02 04 - Brod - Move cpid check here for better effect
                         /* Only signature check is sufficient here, but kiss and
                             call the function. The height is of previous block. */
-                        if (!IsCPIDValidv2(bb,pindex->nHeight-1))
+                        if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
                         {
-                            return DoS(20, error(
+                            /* ignore on bad blocks already in chain */
+                            const std::set<uint256> vSkipHashBoincSignCheck =
+                            {    uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e")
+                                ,uint256("471292b59e5f3ad94c39b3784a9a3f7a8324b9b56ff0ad00bd48c31658537c30")
+                                ,uint256("5b63d4edbdec06ddc2182703ce45a3ced70db0d813e329070e83bf37347a6c2c")
+                                ,uint256("13e8dee125c5d40d49df77428ad255deee69c44f96bae68b971ab20b0791db95")
+                                ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940")
+                                ,uint256("9387774230f23a898b11c016533f7c5da6d095edec0e9347a147be8c3cada3ac")
+                            };
+                            if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
+                                return DoS(20, error(
                                     "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
                                      bb.cpid.c_str(), bb.cpidv2.c_str(),
                                      bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
+                            else printf("WARNING: ignoring invalid hashBoinc signature on block");
                         }
 
                         // Mitigate DPOR Relay attack 
