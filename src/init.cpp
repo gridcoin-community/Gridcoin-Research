@@ -25,8 +25,7 @@
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 
 StructCPID GetStructCPID();
-void BusyWaitForTally_retired();
-void TallyNetworkAverages_v9(CBlockIndex* index);
+void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDs();
@@ -1017,12 +1016,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     CBlockIndex* tallyHeight = FindTallyTrigger(pindexBest);
     if(tallyHeight)
-        TallyNetworkAverages_v9(tallyHeight);
+        TallyResearchAverages(tallyHeight);
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
-
-    BusyWaitForTally_retired();
 
     if (fServer)
         threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");

@@ -46,7 +46,6 @@ std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
-bool TallyResearchAverages_retired(bool);
 int RestartClient();
 extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
