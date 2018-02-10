@@ -23,6 +23,7 @@
 #include "miner.h"
 #include "backup.h"
 #include "appcache.h"
+#include "tally.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -52,7 +53,7 @@ extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 extern bool TallyResearchAverages_retired(bool Forcefully);
-extern bool TallyNetworkAverages_v9();
+extern bool TallyNetworkAverages_v9(CBlockIndex* index);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
@@ -3508,9 +3509,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight))
         {
-            assert(0==(pcommon->nHeight % TALLY_GRANULARITY));
+            assert(IsTallyTrigger(pcommon));
             if (fDebug) printf("DisconnectBlocksBatch: TallyNetworkAverages (v9P %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
-            TallyNetworkAverages_v9();
+            TallyNetworkAverages_v9(pindexBest);
         }
         else
         {
@@ -3555,9 +3556,9 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
                 return error("ReorganizeChain: unable to find fork root");
         }
 
-        if(pcommon!=pindexBest) while( (pcommon->nHeight % TALLY_GRANULARITY)!=0 )
+        if(pcommon != pindexBest)
         {
-            pcommon = pcommon->pprev;
+            pcommon = FindTallyTrigger(pcommon);
             if(!pcommon)
                 return error("ReorganizeChain: unable to find fork root with tally point");
         }
@@ -3689,10 +3690,10 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             // quorum not needed
             // Tally research averages.
-            if ((nBestHeight % TALLY_GRANULARITY) == 0)
+            if(IsTallyTrigger(pindexBest))
             {
                 if (fDebug) printf("ReorganizeChain: TallyNetworkAverages (v9N %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
-                TallyNetworkAverages_v9();
+                TallyNetworkAverages_v9(pindexBest);
             }
         }
         else
@@ -5763,13 +5764,13 @@ bool TallyNetworkAverages_retired(bool Forcefully)
 
 
 
-bool TallyResearchAverages_v9()
+bool TallyResearchAverages_v9(CBlockIndex* index)
 {
-    if(!IsV9Enabled_Tally(nBestHeight))
+    if(!IsV9Enabled_Tally(index->nHeight))
         return error("TallyResearchAverages_v9: called while V9 tally disabled\n");
 
     //Iterate throught last 14 days, tally network averages
-    if (nBestHeight < 15)
+    if (index->nHeight < 15)
     {
         bNetAveragesLoaded = true;
         return true;
@@ -5784,7 +5785,7 @@ bool TallyResearchAverages_v9()
     double NetworkInterest = 0;
 
     //Consensus Start/End block:
-    int nMaxConensusDepth = nBestHeight - CONSENSUS_LOOKBACK;
+    int nMaxConensusDepth = index->nHeight - CONSENSUS_LOOKBACK;
     int nMaxDepth = nMaxConensusDepth - (nMaxConensusDepth % TALLY_GRANULARITY);
     int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
     int nMinDepth = nMaxDepth - nLookback;
@@ -5794,7 +5795,7 @@ bool TallyResearchAverages_v9()
     if(fDebug) printf("TallyResearchAverages: start %d end %d\n",nMaxDepth,nMinDepth);
 
     mvMagnitudesCopy.clear();
-    CBlockIndex* pblockindex = pindexBest;
+    CBlockIndex* pblockindex = index;
     if (!pblockindex)
     {
         bNetAveragesLoaded = true;
@@ -5880,11 +5881,9 @@ bool TallyResearchAverages_v9()
     return false;
 }
 
-
-
-bool TallyNetworkAverages_v9()
+bool TallyNetworkAverages_v9(CBlockIndex* index)
 {
-    if (IsResearchAgeEnabled(pindexBest->nHeight) && IsV9Enabled_Tally(pindexBest->nHeight))
+    if (IsResearchAgeEnabled(index->nHeight) && IsV9Enabled_Tally(index->nHeight))
     {
         if(!bTallyFinished_retired)
         {
@@ -5894,7 +5893,7 @@ bool TallyNetworkAverages_v9()
             while(!bTallyFinished_retired)
                 MilliSleep(10);
         }
-        return TallyResearchAverages_v9();
+        return TallyResearchAverages_v9(index);
     }
 
     return false;

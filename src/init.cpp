@@ -9,6 +9,8 @@
 #include "init.h"
 #include "util.h"
 #include "ui_interface.h"
+#include "tally.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
@@ -24,7 +26,7 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 
 StructCPID GetStructCPID();
 void BusyWaitForTally_retired();
-void TallyNetworkAverages_v9();
+void TallyNetworkAverages_v9(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
 void LoadCPIDs();
@@ -1013,7 +1015,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
 
-    TallyNetworkAverages_v9();
+    CBlockIndex* tallyHeight = FindTallyTrigger(pindexBest);
+    if(tallyHeight)
+        TallyNetworkAverages_v9(tallyHeight);
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
