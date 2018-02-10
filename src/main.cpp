@@ -3099,7 +3099,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // ResearchAge 1: 
         GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
             pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-        if (IsResearcher(bb.cpid) && dStakeReward > 1)
+        if (IsResearcher(bb.cpid))
         {
             
                 //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
@@ -3108,9 +3108,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                        return error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
                             (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str());
+                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str()));
 
                 }
 
@@ -3119,19 +3119,54 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
 							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
 				}
-				
 
-                if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
+                if (IsResearchAgeEnabled(pindex->nHeight)
+                    && (BlockNeedsChecked(nTime) || nVersion>=9))
                 {
-						// Mitigate DPOR Relay attack 
-						// bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
-						if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-						{
-							std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
-							if (fTestNet || (pindex->nHeight > 975000)) return error(" %s ",sNarr.c_str());
+
+                        // 6-4-2017 - Verify researchers stored block magnitude
+                        // 2018 02 04 - Moved here for better effect.
+                        double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+                        if( bb.Magnitude > 0
+                            && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
+                            && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
+                        {
+                            return DoS(20, error(
+                                "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                                bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
                         }
-				
+
+                        // 2018 02 04 - Brod - Move cpid check here for better effect
+                        /* Only signature check is sufficient here, but kiss and
+                            call the function. The height is of previous block. */
+                        if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
+                        {
+                            /* ignore on bad blocks already in chain */
+                            const std::set<uint256> vSkipHashBoincSignCheck =
+                            {    uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e")
+                                ,uint256("471292b59e5f3ad94c39b3784a9a3f7a8324b9b56ff0ad00bd48c31658537c30")
+                                ,uint256("5b63d4edbdec06ddc2182703ce45a3ced70db0d813e329070e83bf37347a6c2c")
+                                ,uint256("13e8dee125c5d40d49df77428ad255deee69c44f96bae68b971ab20b0791db95")
+                                ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940")
+                                ,uint256("9387774230f23a898b11c016533f7c5da6d095edec0e9347a147be8c3cada3ac")
+                            };
+                            if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
+                                return DoS(20, error(
+                                    "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                                     bb.cpid.c_str(), bb.cpidv2.c_str(),
+                                     bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
+                            else printf("WARNING: ignoring invalid hashBoinc signature on block");
+                        }
+
+                        // Mitigate DPOR Relay attack 
+                        // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
+                        if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                        {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+                            printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
+                            if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
+                        }
+
                         if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
@@ -3957,16 +3992,40 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))
             return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 
-        if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+        if (!fLoadingIndex)
         {
-            std::string sOut2;
-            LoadAdminMessages(false,sOut2);
-            if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+            bool cpidresult = false;
+            int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
+            int cpidV3CutOverHeight = fTestNet ? 196300 : 725000;
+            if (height1 < cpidV2CutOverHeight)
             {
-                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]", height1,
-                             bb.cpid.c_str(), bb.cpidv2.c_str(),
-                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
+                cpidresult = IsCPIDValid_Retired(bb.cpid,bb.enccpid);
             }
+            else if (height1 <= cpidV3CutOverHeight)
+            {
+                cpidresult = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
+            }
+            else
+            {
+
+                cpidresult = (bb.lastblockhash.size()==64)
+                    && (bb.BoincSignature.size()>=16)
+                    && (bb.BoincSignature.find(' ')==std::string::npos);
+
+                /* This is not used anywhere, so let it be.
+                cpidresult = cpidresult
+                    && (bb.BoincPublicKey.size()==130)
+                    && (bb.BoincPublicKey.find(' ')==std::string::npos);
+                */
+
+                /* full "v3" signature check is performed in ConnectBlock */
+            }
+
+            if(!cpidresult)
+                return DoS(20, error(
+                            "Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                             height1, bb.cpid.c_str(), bb.cpidv2.c_str(),
+                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
         }
     }
 
@@ -4141,15 +4200,22 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         printf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
         if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
         {
-            return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+            printf(" prev %s\n",pindexPrev->GetBlockHash().ToString().c_str());
+            return false;
         }
     }
 
-    // Verify proof of research.
-    if(!CheckProofOfResearch(pindexPrev, *this))
+    if(nVersion<9)
     {
-        return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+        // Verify proof of research.
+        if(!CheckProofOfResearch(pindexPrev, *this))
+        {
+            return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+        }
     }
+    /*else Do not check v9 rewards here as context here is insufficient and it is
+      checked again in ConnectBlock */
     
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
@@ -8390,7 +8456,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                     WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
                                 }
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                                if(fDebug && sMessageType=="beacon" ){
+                                if(fDebug10 && sMessageType=="beacon" ){
                                     printf("BEACON add %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
                                 }
                                 fMessageLoaded = true;
@@ -8411,7 +8477,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
-                                if(fDebug && sMessageType=="beacon" ){
+                                if(fDebug10 && sMessageType=="beacon" ){
                                     printf("BEACON DEL %s - %s\r\n",sMessageKey.c_str(),TimestampToHRDate(nTime).c_str());
                                 }
                                 DeleteCache(sMessageType,sMessageKey);
