@@ -669,6 +669,9 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     const std::string& sb_contract = NN::GetNeuralContract();
     const std::string& sb_hash = GetQuorumHash(sb_contract);
 
+    if(sb_contract.empty())
+        return printf("AddNeuralContractOrVote: Local Contract Empty\n");
+
     /* To save network bandwidth, start posting the neural hashes in the
        CurrentNeuralHash field, so that out of sync neural network nodes can
        request neural data from those that are already synced and agree with the
@@ -676,9 +679,6 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
        Note: CurrentNeuralHash is not actually used for sb validity
     */
     bb.CurrentNeuralHash = sb_hash;
-
-    if(sb_contract.empty())
-        return printf("AddNeuralContractOrVote: Local Contract Empty\n");
 
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
         return printf("AddNeuralContractOrVote: Not Participating\n");
