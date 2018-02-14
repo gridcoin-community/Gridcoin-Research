@@ -92,6 +92,15 @@ void RPCTypeCheck(const json_spirit::Object& o,
 
 typedef json_spirit::Value(*rpcfn_type)(const json_spirit::Array& params, bool fHelp);
 
+enum rpccategory
+{
+    cat_null,
+    cat_wallet,
+    cat_neuralnetwork,
+    cat_developer,
+    cat_network
+};
+
 class CRPCCommand
 {
 public:
@@ -99,6 +108,7 @@ public:
     rpcfn_type actor;
     bool okSafeMode;
     bool unlocked;
+    rpccategory category;
 };
 
 /**
@@ -111,7 +121,7 @@ private:
 public:
     CRPCTable();
     const CRPCCommand* operator[](std::string name) const;
-    std::string help(std::string name) const;
+    std::string help(std::string name, rpccategory category) const;
 
     /**
      * Execute a method.
@@ -141,6 +151,13 @@ extern uint256 ParseHashV(const json_spirit::Value& v, std::string strName);
 extern uint256 ParseHashO(const json_spirit::Object& o, std::string strKey);
 extern std::vector<unsigned char> ParseHexV(const json_spirit::Value& v, std::string strName);
 
+// Rpc reordered by category
+
+// Wallet
+extern json_spirit::Value addmultisigaddress(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value addredeemscript(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value backupprivatekeys(const json_spirit::Array& params, bool fHelp);
+
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
@@ -169,8 +186,6 @@ extern json_spirit::Value getbalance(const json_spirit::Array& params, bool fHel
 extern json_spirit::Value movecmd(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendfrom(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendmany(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value addmultisigaddress(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value addredeemscript(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value listreceivedbyaddress(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value listreceivedbyaccount(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value listtransactions(const json_spirit::Array& params, bool fHelp);
@@ -224,5 +239,8 @@ extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool 
 // Brod
 extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert2(const json_spirit::Array& params, bool fHelp);
+
+// iFoggz
+//extern json_spirit::Value blockchain(const json_spirit::Array& params, bool fHelp);
 
 #endif
