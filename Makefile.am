@@ -6,7 +6,7 @@ ACLOCAL_AMFLAGS = -I build-aux/m4
 SUBDIRS = src
 .PHONY: deploy FORCE
 
-GZIP_ENV="-9n"
+override GZIP_ENV = "-9n"
 export PYTHONPATH
 
 BITCOIND_BIN=$(top_builddir)/src/$(GRIDCOIN_DAEMON_NAME)$(EXEEXT)
