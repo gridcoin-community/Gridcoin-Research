@@ -1063,6 +1063,31 @@ int64_t AmountFromDouble(double dAmount)
     return nAmount;
 }
 
+// Rpc
+
+Value backupprivatekeys(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+                "backupprivatekeys\n"
+                "\n"
+                "Backup wallet private keys to file\n"
+                "Wallet must be fully unlocked!\n");
+
+    string sErrors;
+    string sTarget;
+    Object entry;
+    bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
+
+    if (!bBackupPrivateKeys)
+        entry.push_back(Pair("error", sErrors));
+
+    else
+        entry.push_back(Pair("location", sTarget));
+
+    entry.push_back(Pair("result", bBackupPrivateKeys));
+    return entry;
+}
 
 Value execute(const Array& params, bool fHelp)
 {
@@ -2377,19 +2402,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
         results.push_back(entry);
     }
-    else if (sItem == "backupprivatekeys")
-    {
-        string sErrors;
-        string sTarget;
-        bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
-        if (!bBackupPrivateKeys)
-            entry.push_back(Pair("error", sErrors));
-        else
-            entry.push_back(Pair("location", sTarget));
-        entry.push_back(Pair("result", bBackupPrivateKeys));
-        results.push_back(entry);
-    }
-    else
+else
     {
             entry.push_back(Pair("Command " + sItem + " not found.",-1));
             results.push_back(entry);
@@ -4082,13 +4095,13 @@ static bool compare_second(const pair<std::string, long>  &p1, const pair<std::s
     return p1.second > p2.second;
 }
 
-json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
+Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
 {
     if(fHelp || params.size() < 1 || params.size() > 3 )
         throw runtime_error(
             "getblockstats mode [startheight [endheight]]\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
-    long mode= RoundFromString(params[0].get_str(),0);
+    long mode= params[0].get_int();
     (void)mode; //TODO
     long lowheight= 0;
     long highheight= INT_MAX;
@@ -4097,20 +4110,20 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     {
         if(params.size()>=2)
         {
-            lowheight= RoundFromString(params[1].get_str(),0);
+            lowheight= params[1].get_int();
             maxblocks= INT_MAX;
         }
         if(params.size()>=3)
-            highheight= RoundFromString(params[2].get_str(),0);
+            highheight= params[2].get_int();
     }
     else if(mode==1)
     {
         /* count highheight */
         maxblocks= 30000;
         if(params.size()>=2)
-            maxblocks= RoundFromString(params[1].get_str(),0);
+            maxblocks= params[1].get_int();
         if(params.size()>=3)
-            highheight= RoundFromString(params[2].get_str(),0);
+            highheight= params[2].get_int();
     }
     else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;

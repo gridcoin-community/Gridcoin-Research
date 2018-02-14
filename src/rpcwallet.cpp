@@ -848,6 +848,7 @@ Value addmultisigaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 3)
     {
         string msg = "addmultisigaddress <nrequired> <'[\"key\",\"key\"]'> [account]\n"
+            "\n"
             "Add a nrequired-to-sign multisignature address to the wallet\n"
             "each key is a Gridcoin address or hex-encoded public key\n"
             "If [account] is specified, assign address to [account].";
@@ -922,6 +923,7 @@ Value addredeemscript(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
     {
         string msg = "addredeemscript <redeemScript> [account]\n"
+            "\n"
             "Add a P2SH address with a specified redeemScript to the wallet.\n"
             "If [account] is specified, assign address to [account].";
         throw runtime_error(msg);
@@ -1694,6 +1696,7 @@ Value backupwallet(const Array& params, bool fHelp)
     if (fHelp || params.size() > 0)
         throw runtime_error(
             "backupwallet\n"
+            "\n"
             "Backup your wallet and config files.");
 
     bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
