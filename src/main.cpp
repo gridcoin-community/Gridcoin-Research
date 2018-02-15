@@ -3325,13 +3325,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     //  End of Network Consensus
 
     // Gridcoin: Track payments to CPID, and last block paid
-    if (IsResearcher(bb.cpid) && pindex->nHeight > nNewIndex2)
+    if (pindex->nResearchSubsidy > 0 && IsResearcher(bb.cpid))
     {
         StructCPID stCPID = GetInitializedStructCPID2(bb.cpid,mvResearchAge);
+
         stCPID.InterestSubsidy += bb.InterestSubsidy;
         stCPID.ResearchSubsidy += bb.ResearchSubsidy;
-
-        if (pindex->nHeight > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
+        if (pindex->nHeight > stCPID.LastBlock)
         {
                 stCPID.LastBlock = pindex->nHeight;
                 stCPID.BlockHash = pindex->GetBlockHash().GetHex();
@@ -5331,31 +5331,54 @@ bool BlockNeedsChecked(int64_t BlockTime)
     }
 }
 
-void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
-{
-        if (timestamp > strCPID.LastPaymentTime && subsidy > 0) strCPID.LastPaymentTime = timestamp;
-        if (timestamp < strCPID.EarliestPaymentTime) strCPID.EarliestPaymentTime = timestamp;
-}
-
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {
-    if (pIndex->nResearchSubsidy <= 0)
+    // TODO: There are 3 different loops which do the same thing:
+    //  - this function
+    //  - LoadBlockIndex in txdb-leveldb.cpp
+    //  - CBlock::ConnectBlock in main.cpp.
+    //
+    // This function should be the only one and the other two uses should
+    // call it to update the data. At the same time, remove mvMagnitudesCopy
+    // (and the other struct copies) as they are no longer used in a multi
+    // threaded environment when the the tally thread is gone.
+
+
+    if (pIndex->IsUserCPID() == false || pIndex->nResearchSubsidy <= 0)
         return;
     
     try
     {
         StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
         stMag.cpid = pIndex->GetCPID();
+
+        stMag.InterestSubsidy += pIndex->nInterestSubsidy;
+        stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
         {
             stMag.LastBlock = pIndex->nHeight;
+            stMag.BlockHash = pIndex->GetBlockHash().GetHex();
         }
+
+        if(pIndex->nMagnitude > 0)
+        {
+            stMag.Accuracy++;
+            stMag.TotalMagnitude += pIndex->nMagnitude;
+            stMag.ResearchAverageMagnitude = stMag.TotalMagnitude/(stMag.Accuracy+.01);
+        }
+
+        if (pIndex->nTime > stMag.LastPaymentTime)
+            stMag.LastPaymentTime = pIndex->nTime;
+        if (pIndex->nTime < stMag.EarliestPaymentTime)
+            stMag.EarliestPaymentTime = pIndex->nTime;
+        if (pIndex->nTime < stMag.LowLockTime)
+            stMag.LowLockTime = pIndex->nTime;
+        if (pIndex->nTime > stMag.HighLockTime)
+            stMag.HighLockTime = pIndex->nTime;
+
         stMag.entries++;
         stMag.payments += pIndex->nResearchSubsidy;
         stMag.interestPayments += pIndex->nInterestSubsidy;
-        
-        AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
-        stMag.Accuracy++;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;
         stMag.owed = GetOutstandingAmountOwed(stMag,
@@ -5494,23 +5517,27 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
             printf("WARNING GetLifetimeCPID: index {%s %d} for cpid %s, "
                 "is not in the main chain\n",pblockindex->GetBlockHash().GetHex().c_str(),
                 pblockindex->nHeight,cpid.c_str());
-        if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
-        {
-            stCPID.LastBlock = pblockindex->nHeight;
-            stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
-            if (fDebug10) printf("GetLifetimeCPID: using it\n");
-        }
-        stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
-        stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
-        stCPID.Accuracy++;
-        if (pblockindex->nMagnitude > 0)
-        {
-            stCPID.TotalMagnitude += pblockindex->nMagnitude;
-            stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-        }
 
-        if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
-        if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        if(pblockindex->nResearchSubsidy> 0)
+        {
+            stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
+            stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
+            if(pblockindex->nHeight > stCPID.LastBlock)
+            {
+                stCPID.LastBlock = pblockindex->nHeight;
+                stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+            }
+
+            if (pblockindex->nMagnitude > 0)
+            {
+                stCPID.Accuracy++;
+                stCPID.TotalMagnitude += pblockindex->nMagnitude;
+                stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+            }
+
+            if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
+            if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        }
     }
 
     // Save updated CPID data holder.
