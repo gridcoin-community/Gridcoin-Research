@@ -4257,3 +4257,119 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
     }
     return result1;
 }
+
+json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fHelp)
+{
+    if(fHelp || params.size() < 1 || params.size() > 3 )
+        throw runtime_error(
+            "getrecentblocks detail count\n"
+            "Show list of _count_ recent block hashes and optional details.\n");
+    long detail= RoundFromString(params[0].get_str(),0);
+    long blockcount=0;
+    long maxblocks= RoundFromString(params[1].get_str(),0);
+
+    CBlockIndex* cur;
+    Object result1;
+    {
+        LOCK(cs_main);
+        cur= pindexBest;
+    }
+
+    for( ; (cur
+            &&( blockcount<maxblocks )
+        );
+        cur= cur->pprev, ++blockcount
+        )
+    {
+        /* detail:
+            0 height: hash
+            1 height: hash diff spacing, flg
+            2 height: hash diff spacing, flg, cpid, R, I, F
+            20 height: hash diff spacing, flg, org, ver
+            21 height: hash diff spacing, flg, org, ver, cpid, neural
+
+            100 json
+        */
+    
+        double diff = GetDifficulty(cur);
+        unsigned int delta = 0;
+        if(cur->pprev)
+            delta = (cur->nTime - cur->pprev->nTime);
+
+        Object result2;
+        std::string line = cur->GetBlockHash().GetHex();
+
+        if(detail<100)
+        {
+            if(detail>=1)
+            {
+                line+="<|>"+RoundToString(diff,4)
+                    + "<|>"+ToString(delta);
+
+                line+= "<|>"
+                    + std::string((cur->nIsSuperBlock?"S":(cur->nIsContract?"C":"-")))
+                    + (cur->IsUserCPID()? (cur->nResearchSubsidy>0? "R": "U"): "I")
+                    //+ (cur->GeneratedStakeModifier()? "M": "-")
+                    ;
+            }
+
+            if(detail>=2 && detail<20)
+            {
+                line+="<|>"+cur->GetCPID()
+                    + "<|>"+RoundToString(cur->nResearchSubsidy,4)
+                    + "<|>"+RoundToString(cur->nInterestSubsidy,4);
+            }
+        }
+        else
+        {
+            result2.push_back(Pair("hash", line ));
+            result2.push_back(Pair("difficulty", diff ));
+            result2.push_back(Pair("deltatime", delta ));
+            result2.push_back(Pair("issuperblock", cur->nIsSuperBlock ));
+            result2.push_back(Pair("iscontract", cur->nIsContract ));
+            result2.push_back(Pair("ismodifier", cur->GeneratedStakeModifier() ));
+            result2.push_back(Pair("cpid", cur->GetCPID() ));
+            result2.push_back(Pair("research", cur->nResearchSubsidy ));
+            result2.push_back(Pair("interest", cur->nInterestSubsidy ));
+            result2.push_back(Pair("magnitude", cur->nMagnitude ));
+        }
+
+        if( (detail<100 && detail>=20) || (detail>=120) )
+        {
+            CBlock block;
+            if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+                throw runtime_error("failed to read block");
+            //assert(block.vtx.size() > 0);
+            MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+
+            if(detail<100)
+            {
+                if(detail>=20)
+                {
+                    line+="<|>"+bb.Organization
+                        + "<|>"+bb.clientversion
+                        + "<|>"+ToString(block.vtx.size()-2);
+                }
+                if(detail==21)
+                {
+                    line+="<|>"+bb.cpid
+                        + "<|>"+(bb.NeuralHash.empty()? "--" : bb.NeuralHash);
+                }
+            }
+            else
+            {
+                result2.push_back(Pair("organization", bb.Organization ));
+                result2.push_back(Pair("cversion", bb.clientversion ));
+                result2.push_back(Pair("neuralhash", bb.NeuralHash ));
+                result2.push_back(Pair("superblocksize", bb.NeuralHash ));
+                result2.push_back(Pair("vtxsz", block.vtx.size() ));
+            }
+        }
+        if(detail<100)
+            result1.push_back(Pair(ToString(cur->nHeight), line ));
+        else
+            result1.push_back(Pair(ToString(cur->nHeight), result2 ));
+
+    }
+    return result1;
+}
