@@ -144,12 +144,14 @@ Value getnewpubkey(const Array& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getnewpubkey [account]\n"
-            "Returns new public key for coinbase generation.");
+            "Returns new public key for coinbase generation.\n");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
     if (params.size() > 0)
         strAccount = AccountFromValue(params[0]);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->IsLocked())
         pwalletMain->TopUpKeyPool();
@@ -174,12 +176,14 @@ Value getnewaddress(const Array& params, bool fHelp)
             "getnewaddress [account]\n"
             "Returns a new Gridcoin address for receiving payments.  "
             "If [account] is specified, it is added to the address book "
-            "so payments received with the address will be credited to [account].");
+            "so payments received with the address will be credited to [account].\n");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
     if (params.size() > 0)
         strAccount = AccountFromValue(params[0]);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->IsLocked())
         pwalletMain->TopUpKeyPool();
@@ -239,12 +243,14 @@ Value getaccountaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getaccountaddress <account>\n"
-            "Returns the current Gridcoin address for receiving payments to this account.");
+            "Returns the current Gridcoin address for receiving payments to this account.\n");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
 
     Value ret;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     ret = GetAccountAddress(strAccount).ToString();
 
@@ -258,12 +264,13 @@ Value setaccount(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "setaccount <gridcoinaddress> <account>\n"
-            "Sets the account associated with the given address.");
+            "Sets the account associated with the given address.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CBitcoinAddress address(params[0].get_str());
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-
 
     string strAccount;
     if (params.size() > 1)
@@ -288,13 +295,16 @@ Value getaccount(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getaccount <gridcoinaddress>\n"
-            "Returns the account associated with the given address.");
+            "Returns the account associated with the given address.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CBitcoinAddress address(params[0].get_str());
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
 
     string strAccount;
+
     map<CTxDestination, string>::iterator mi = pwalletMain->mapAddressBook.find(address.Get());
     if (mi != pwalletMain->mapAddressBook.end() && !(*mi).second.empty())
         strAccount = (*mi).second;
@@ -307,12 +317,15 @@ Value getaddressesbyaccount(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getaddressesbyaccount <account>\n"
-            "Returns the list of addresses for the given account.");
+            "Returns the list of addresses for the given account.\n");
 
     string strAccount = AccountFromValue(params[0]);
 
     // Find all addresses that have the given account
     Array ret;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     for (auto const& item : pwalletMain->mapAddressBook)
     {
         const CBitcoinAddress& address = item.first;
@@ -328,8 +341,10 @@ Value sendtoaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
             "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to]\n"
-            "<amount> is a real and is rounded to the nearest 0.000001"
+            "<amount> is a real and is rounded to the nearest 0.000001\n"
             + HelpRequiringPassphrase());
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CBitcoinAddress address(params[0].get_str());
     if (!address.IsValid())
@@ -362,7 +377,9 @@ Value listaddressgroupings(const Array& params, bool fHelp)
             "listaddressgroupings\n"
             "Lists groups of addresses which have had their common ownership\n"
             "made public by common use as inputs or as the resulting change\n"
-            "in past transactions");
+            "in past transactions\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     Array jsonGroupings;
     map<CTxDestination, int64_t> balances = pwalletMain->GetAddressBalances();
@@ -375,7 +392,6 @@ Value listaddressgroupings(const Array& params, bool fHelp)
             addressInfo.push_back(CBitcoinAddress(address).ToString());
             addressInfo.push_back(ValueFromAmount(balances[address]));
             {
-                LOCK(pwalletMain->cs_wallet);
                 if (pwalletMain->mapAddressBook.find(CBitcoinAddress(address).Get()) != pwalletMain->mapAddressBook.end())
                     addressInfo.push_back(pwalletMain->mapAddressBook.find(CBitcoinAddress(address).Get())->second);
             }
@@ -391,7 +407,9 @@ Value signmessage(const Array& params, bool fHelp)
     if (fHelp || params.size() != 2)
         throw runtime_error(
             "signmessage <Gridcoinaddress> <message>\n"
-            "Sign a message with the private key of an address");
+            "Sign a message with the private key of an address\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
@@ -426,11 +444,13 @@ Value verifymessage(const Array& params, bool fHelp)
     if (fHelp || params.size() != 3)
         throw runtime_error(
             "verifymessage <Gridcoinaddress> <signature> <message>\n"
-            "Verify a signed message");
+            "Verify a signed message\n");
 
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();
     string strMessage  = params[2].get_str();
+
+    LOCK(cs_main);
 
     CBitcoinAddress addr(strAddress);
     if (!addr.IsValid())
@@ -463,7 +483,9 @@ Value getreceivedbyaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "getreceivedbyaddress <Gridcoinaddress> [minconf=1]\n"
-            "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.");
+            "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Bitcoin address
     CBitcoinAddress address = CBitcoinAddress(params[0].get_str());
@@ -513,7 +535,7 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "getreceivedbyaccount <account> [minconf=1]\n"
-            "Returns the total amount received by addresses with <account> in transactions with at least [minconf] confirmations.");
+            "Returns the total amount received by addresses with <account> in transactions with at least [minconf] confirmations.\n");
 
     accountingDeprecationCheck();
 
@@ -521,6 +543,8 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
     int nMinDepth = 1;
     if (params.size() > 1)
         nMinDepth = params[1].get_int();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Get the set of pub keys assigned to account
     string strAccount = AccountFromValue(params[0]);
@@ -630,6 +654,7 @@ Value getbalance(const Array& params, bool fHelp)
             "\nAs a json rpc call\n"
         );
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (params.size() == 0)
         return  ValueFromAmount(pwalletMain->GetBalance());
@@ -689,7 +714,7 @@ Value movecmd(const Array& params, bool fHelp)
     if (fHelp || params.size() < 3 || params.size() > 5)
         throw runtime_error(
             "move <fromaccount> <toaccount> <amount> [minconf=1] [comment]\n"
-            "Move from one account in your wallet to another.");
+            "Move from one account in your wallet to another.\n");
 
     accountingDeprecationCheck();
 
@@ -703,6 +728,8 @@ Value movecmd(const Array& params, bool fHelp)
     string strComment;
     if (params.size() > 4)
         strComment = params[4].get_str();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CWalletDB walletdb(pwalletMain->strWalletFile);
     if (!walletdb.TxnBegin())
@@ -742,10 +769,13 @@ Value sendfrom(const Array& params, bool fHelp)
     if (fHelp || params.size() < 3 || params.size() > 6)
         throw runtime_error(
             "sendfrom <fromaccount> <toGridcoinaddress> <amount> [minconf=1] [comment] [comment-to]\n"
-            "<amount> is a real and is rounded to the nearest 0.000001"
+            "<amount> is a real and is rounded to the nearest 0.000001\n"
             + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     CBitcoinAddress address(params[1].get_str());
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
@@ -783,7 +813,7 @@ Value sendmany(const Array& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
             "sendmany <fromaccount> {address:amount,...} [minconf=1] [comment]\n"
-            "amounts are double-precision floating point numbers"
+            "amounts are double-precision floating point numbers\n"
             + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
@@ -791,6 +821,8 @@ Value sendmany(const Array& params, bool fHelp)
     int nMinDepth = 1;
     if (params.size() > 2)
         nMinDepth = params[2].get_int();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CWalletTx wtx;
     wtx.strFromAccount = strAccount;
@@ -851,7 +883,7 @@ Value addmultisigaddress(const Array& params, bool fHelp)
             "\n"
             "Add a nrequired-to-sign multisignature address to the wallet\n"
             "each key is a Gridcoin address or hex-encoded public key\n"
-            "If [account] is specified, assign address to [account].";
+            "If [account] is specified, assign address to [account].\n";
         throw runtime_error(msg);
     }
 
@@ -871,9 +903,11 @@ Value addmultisigaddress(const Array& params, bool fHelp)
 
     if (keys.size() > 16)       throw runtime_error("Number of addresses involved in the multisignature address creation > 16\nReduce the number");
 
-
     std::vector<CKey> pubkeys;
     pubkeys.resize(keys.size());
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     for (unsigned int i = 0; i < keys.size(); i++)
     {
         const std::string& ks = keys[i].get_str();
@@ -925,13 +959,15 @@ Value addredeemscript(const Array& params, bool fHelp)
         string msg = "addredeemscript <redeemScript> [account]\n"
             "\n"
             "Add a P2SH address with a specified redeemScript to the wallet.\n"
-            "If [account] is specified, assign address to [account].";
+            "If [account] is specified, assign address to [account].\n";
         throw runtime_error(msg);
     }
 
     string strAccount;
     if (params.size() > 1)
         strAccount = AccountFromValue(params[1]);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Construct using pay-to-script-hash:
     vector<unsigned char> innerData = ParseHexV(params[0], "redeemScript");
@@ -1129,6 +1165,8 @@ Value listreceivedbyaddress(const Array& params, bool fHelp)
               "\nExamples:\n"
             );
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     return ListReceived(params, false);
 }
 
@@ -1150,6 +1188,8 @@ Value listreceivedbyaccount(const Array& params, bool fHelp)
         "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
         "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
         );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     accountingDeprecationCheck();
 
@@ -1419,6 +1459,7 @@ Value listtransactions(const Array& params, bool fHelp)
             "\nList transactions 100 to 120 from the tabby account\n"
             "\nAs a json rpc call\n"
         );
+
     string strAccount = "*";
     int nCount = 10;
     int nFrom = 0;
@@ -1447,6 +1488,7 @@ Value listtransactions(const Array& params, bool fHelp)
 
     Array ret;
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     std::list<CAccountingEntry> acentries;
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
@@ -1507,6 +1549,9 @@ Value listaccounts(const Array& params, bool fHelp)
              if(params[1].get_bool())
                  includeWatchonly = includeWatchonly | MINE_WATCH_ONLY;
     }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     map<string, int64_t> mapAccountBalances;
     for (auto const& entry : pwalletMain->mapAddressBook) {
        if (IsMine(*pwalletMain, entry.first) & includeWatchonly) // This address belongs to me
@@ -1563,6 +1608,8 @@ Value listsinceblock(const Array& params, bool fHelp)
             "{\n"
             "  \"transactions\": [\n"
             );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CBlockIndex *pindex = NULL;
     int target_confirms = 1;
@@ -1628,7 +1675,7 @@ Value gettransaction(const Array& params, bool fHelp)
               "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
               "\nResult:\n"
               "{\n"
-              "  \"amount\" : x.xxx,        (numeric) The transaction amount in btc\n"
+              "  \"amount\" : x.xxx,        (numeric) The transaction amount in grc\n"
             );
 
     uint256 hash;
@@ -1638,6 +1685,8 @@ Value gettransaction(const Array& params, bool fHelp)
          if(params[1].get_bool())
              filter = filter | MINE_WATCH_ONLY;
     Object entry;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (pwalletMain->mapWallet.count(hash))
     {
@@ -1697,7 +1746,9 @@ Value backupwallet(const Array& params, bool fHelp)
         throw runtime_error(
             "backupwallet\n"
             "\n"
-            "Backup your wallet and config files.");
+            "Backup your wallet and config files.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
     bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
@@ -1713,7 +1764,7 @@ Value keypoolrefill(const Array& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "keypoolrefill [new-size]\n"
-            "Fills the keypool."
+            "Fills the keypool.\n"
             + HelpRequiringPassphrase());
 
     unsigned int nSize = max(GetArg("-keypool", 100), (int64_t)0);
@@ -1722,6 +1773,8 @@ Value keypoolrefill(const Array& params, bool fHelp)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");
         nSize = (unsigned int) params[0].get_int();
     }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
@@ -1792,9 +1845,10 @@ Value walletpassphrase(const Array& params, bool fHelp)
         throw runtime_error(
             "walletpassphrase <passphrase> <timeout> [stakingonly]\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.\n"
-            "if [stakingonly] is true sending functions are disabled.");
+            "if [stakingonly] is true sending functions are disabled.\n");
     if (fHelp)
         return true;
+
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
 
@@ -1814,6 +1868,8 @@ Value walletpassphrase(const Array& params, bool fHelp)
 
     if (strWalletPass.length() > 0)
     {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
         if (!pwalletMain->Unlock(strWalletPass))
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
     }
@@ -1841,9 +1897,10 @@ Value walletpassphrasechange(const Array& params, bool fHelp)
     if (pwalletMain->IsCrypted() && (fHelp || params.size() != 2))
         throw runtime_error(
             "walletpassphrasechange <oldpassphrase> <newpassphrase>\n"
-            "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>.");
+            "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>.\n");
     if (fHelp)
         return true;
+
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
 
@@ -1860,7 +1917,9 @@ Value walletpassphrasechange(const Array& params, bool fHelp)
     if (strOldWalletPass.length() < 1 || strNewWalletPass.length() < 1)
         throw runtime_error(
             "walletpassphrasechange <oldpassphrase> <newpassphrase>\n"
-            "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>.");
+            "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>\n.");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass))
         throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -1876,11 +1935,14 @@ Value walletlock(const Array& params, bool fHelp)
             "walletlock\n"
             "Removes the wallet encryption key from memory, locking the wallet.\n"
             "After calling this method, you will need to call walletpassphrase again\n"
-            "before being able to call any methods which require the wallet to be unlocked.");
+            "before being able to call any methods which require the wallet to be unlocked.\n");
     if (fHelp)
         return true;
+
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     {
         LOCK(cs_nWalletUnlockTime);
@@ -1897,9 +1959,8 @@ Value encryptwallet(const Array& params, bool fHelp)
     if (!pwalletMain->IsCrypted() && (fHelp || params.size() != 1))
         throw runtime_error(
             "encryptwallet <passphrase>\n"
-            "Encrypts the wallet with <passphrase>.");
-    if (fHelp)
-        return true;
+            "Encrypts the wallet with <passphrase>.\n");
+
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
 
@@ -1912,7 +1973,9 @@ Value encryptwallet(const Array& params, bool fHelp)
     if (strWalletPass.length() < 1)
         throw runtime_error(
             "encryptwallet <passphrase>\n"
-            "Encrypts the wallet with <passphrase>.");
+            "Encrypts the wallet with <passphrase>.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->EncryptWallet(strWalletPass))
         throw JSONRPCError(RPC_WALLET_ENCRYPTION_FAILED, "Error: Failed to encrypt the wallet.");
@@ -1965,7 +2028,9 @@ Value validateaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "validateaddress <gridcoinaddress>\n"
-            "Return information about <gridcoinaddress>.");
+            "Return information about <gridcoinaddress>.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CBitcoinAddress address(params[0].get_str());
     bool isValid = address.IsValid();
@@ -1994,9 +2059,12 @@ Value validatepubkey(const Array& params, bool fHelp)
     if (fHelp || !params.size() || params.size() > 2)
         throw runtime_error(
             "validatepubkey <gridcoinpubkey>\n"
-            "Return information about <gridcoinpubkey>.");
+            "Return information about <gridcoinpubkey>.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     std::vector<unsigned char> vchPubKey = ParseHex(params[0].get_str());
+
     CPubKey pubKey(vchPubKey);
 
     bool isValid = pubKey.IsValid();
@@ -2152,7 +2220,8 @@ Value burn(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "burn <amount> [hex string]\n"
-            "<amount> is a real and is rounded to the nearest 0.00000001"
+            "\n"
+            "<amount> is a real and is rounded to the nearest 0.00000001\n"
             + HelpRequiringPassphrase());
 
     if (pwalletMain->IsLocked())

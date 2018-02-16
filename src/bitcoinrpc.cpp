@@ -236,7 +236,7 @@ Value stop(const Array& params, bool fHelp)
     if (fHelp || params.size() > 0)
         throw runtime_error(
             "stop\n"
-            "Stop Gridcoin server.");
+            "Stop Gridcoin server.\n");
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...\n");
     StartShutdown();
@@ -248,14 +248,71 @@ Value stop(const Array& params, bool fHelp)
 //
 // Call Table
 //
+// We no longer use the unlocked feature here.
+// Bitcoin has removed this option and placed the locks inside the rpc calls to reduce the scope
+// Also removes the un needed locking when the end result is a rpc run time error reply over params!
+// This also has improved the performance of rpc outputs.
 
 static const CRPCCommand vRPCCommands[] =
-{ //  name                      function                 safemd  unlocked  category
-  //  ------------------------  -----------------------  ------  --------  --------
-    { "help",                   &help,                   true,   true,     cat_null },
-    { "addmultisigaddress",     &addmultisigaddress,     false,  false,    cat_wallet },
-    { "addredeemscript",        &addredeemscript,        false,  false,    cat_wallet },
-    { "backupprivatekeys",      &backupprivatekeys,      false,  true,     cat_wallet },
+{ //  name                      function                 safemd  category
+  //  ------------------------  -----------------------  ------  -----------------
+    { "help",                   &help,                   true,   cat_null          },
+    { "addmultisigaddress",     &addmultisigaddress,     false,  cat_wallet        },
+    { "addredeemscript",        &addredeemscript,        false,  cat_wallet        },
+    { "backupprivatekeys",      &backupprivatekeys,      false,  cat_wallet        },
+    { "backupwallet",           &backupwallet,           true,   cat_wallet        },
+    { "burn",                   &burn,                   false,  cat_wallet        },
+    { "burn2",                  &burn2,                  false,  cat_wallet        },
+    { "checkwallet",            &checkwallet,            false,  cat_wallet        },
+    { "createrawtransaction",   &createrawtransaction,   false,  cat_wallet        },
+    { "decoderawtransaction",   &decoderawtransaction,   false,  cat_wallet        },
+    { "decodescript",           &decodescript,           false,  cat_wallet        },
+    { "dumpprivkey",            &dumpprivkey,            false,  cat_wallet        },
+    { "dumpwallet",             &dumpwallet,             true,   cat_wallet        },
+    { "encrypt",                &encrypt,                true,   cat_wallet        },
+    { "encryptwallet",          &encryptwallet,          false,  cat_wallet        },
+    { "getaccount",             &getaccount,             false,  cat_wallet        },
+    { "getaccountaddress",      &getaccountaddress,      true,   cat_wallet        },
+    { "getaddressesbyaccount",  &getaddressesbyaccount,  true,   cat_wallet        },
+    { "getbalance",             &getbalance,             false,  cat_wallet        },
+    { "getnewaddress",          &getnewaddress,          true,   cat_wallet        },
+    { "getnewpubkey",           &getnewpubkey,           true,   cat_wallet        },
+    { "getrawtransaction",      &getrawtransaction,      false,  cat_wallet        },
+    { "getreceivedbyaccount",   &getreceivedbyaccount,   false,  cat_wallet        },
+    { "getreceivedbyaddress",   &getreceivedbyaddress,   false,  cat_wallet        },
+    { "gettransaction",         &gettransaction,         false,  cat_wallet        },
+    { "importprivkey",          &importprivkey,          false,  cat_wallet        },
+    { "importwallet",           &importwallet,           false,  cat_wallet        },
+    { "keypoolrefill",          &keypoolrefill,          true,   cat_wallet        },
+    { "listaccounts",           &listaccounts,           false,  cat_wallet        },
+    { "listaddressgroupings",   &listaddressgroupings,   false,  cat_wallet        },
+    { "listreceivedbyaccount",  &listreceivedbyaccount,  false,  cat_wallet        },
+    { "listreceivedbyaddress",  &listreceivedbyaddress,  false,  cat_wallet        },
+    { "listsinceblock",         &listsinceblock,         false,  cat_wallet        },
+    { "listtransactions",       &listtransactions,       false,  cat_wallet        },
+    { "listunspent",            &listunspent,            false,  cat_wallet        },
+    { "makekeypair",            &makekeypair,            false,  cat_wallet        },
+    { "move",                   &movecmd,                false,  cat_wallet        },
+    { "newburnaddress",         &newburnaddress,         false,  cat_wallet        },
+    { "rain",                   &rain,                   false,  cat_wallet        },
+    { "repairewallet",          &repairwallet,           false,  cat_wallet        },
+    { "resendtx",               &resendtx,               false,  cat_wallet        },
+    { "reservebalance",         &reservebalance,         false,  cat_wallet        },
+    { "sendfrom",               &sendfrom,               false,  cat_wallet        },
+    { "sendrawtransaction",     &sendrawtransaction,     false,  cat_wallet        },
+    { "sendtoaddress",          &sendtoaddress,          false,  cat_wallet        },
+    { "setaccount",             &setaccount,             true,   cat_wallet        },
+    { "settxfee",               &settxfee,               false,  cat_wallet        },
+    { "signmessage",            &signmessage,            false,  cat_wallet        },
+    { "signrawtransaction",     &signrawtransaction,     false,  cat_wallet        },
+    { "unspentreport",          &unspentreport,          false,  cat_wallet        },
+    { "validateaddress",        &validateaddress,        true,   cat_wallet        },
+    { "validatepubkey",         &validatepubkey,         true,   cat_wallet        },
+    { "verifymessage",          &verifymessage,          false,  cat_wallet        },
+    { "walletlock",             &walletlock,             true,   cat_wallet        },
+    { "walletpassphrase",       &walletpassphrase,       true,   cat_wallet        },
+    { "walletpassphrasechange", &walletpassphrasechange, false,  cat_wallet        },
+
 };
 
 template<typename T>
@@ -291,8 +348,51 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     //
     // Special case non-string parameter types
     //
+    // Wallet
     if (strMethod == "addmultisigaddress"     && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
+    if (strMethod == "burn"                   && n > 0) ConvertTo<double>(params[0]);
+    if (strMethod == "burn2"                  && n > 1) ConvertTo<double>(params[1]);
+    if (strMethod == "createrawtransaction"   && n > 0) ConvertTo<Array>(params[0]);
+    if (strMethod == "createrawtransaction"   && n > 1) ConvertTo<Object>(params[1]);
+    if (strMethod == "getbalance"             && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "getbalance"             && n > 2) ConvertTo<bool>(params[2]);
+    if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "getreceivedbyaccount"   && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "getreceivedbyaddress"   && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "gettransaction"         && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "importprivkey"          && n > 2) ConvertTo<bool>(params[2]);
+    if (strMethod == "keypoolrefill"          && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "listaccounts"           && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "listaccounts"           && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "listreceivedbyaccount"  && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "listreceivedbyaccount"  && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "listreceivedbyaccount"  && n > 2) ConvertTo<bool>(params[2]);
+    if (strMethod == "listreceivedbyaddress"  && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "listreceivedbyaddress"  && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "listreceivedbyaddress"  && n > 2) ConvertTo<bool>(params[2]);
+    if (strMethod == "listsinceblock"         && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "listsinceblock"         && n > 2) ConvertTo<bool>(params[2]);
+    if (strMethod == "listtransactions"       && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "listtransactions"       && n > 2) ConvertTo<int64_t>(params[2]);
+    if (strMethod == "listtransactions"       && n > 3) ConvertTo<bool>(params[3]);
+    if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
+    if (strMethod == "move"                   && n > 2) ConvertTo<double>(params[2]);
+    if (strMethod == "move"                   && n > 3) ConvertTo<int64_t>(params[3]);
+    if (strMethod == "reservebalance"         && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "reservebalance"         && n > 1) ConvertTo<double>(params[1]);
+    if (strMethod == "sendfrom"               && n > 2) ConvertTo<double>(params[2]);
+    if (strMethod == "sendfrom"               && n > 3) ConvertTo<int64_t>(params[3]);
+    if (strMethod == "sendmany"               && n > 1) ConvertTo<Object>(params[1]);
+    if (strMethod == "sendmany"               && n > 2) ConvertTo<int64_t>(params[2]);
+    if (strMethod == "sendtoaddress"          && n > 1) ConvertTo<double>(params[1]);
+    if (strMethod == "settxfee"               && n > 0) ConvertTo<double>(params[0]);
+    if (strMethod == "signrawtransaction"     && n > 1) ConvertTo<Array>(params[1], true);
+    if (strMethod == "signrawtransaction"     && n > 2) ConvertTo<Array>(params[2], true);
+    if (strMethod == "walletpassphrase"       && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "walletpassphrase"       && n > 2) ConvertTo<bool>(params[2]);
 
     return params;
 }
@@ -1058,15 +1158,8 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
     try
     {
         // Execute
-        Value result;
-        {
-            if (pcmd->unlocked)
-                result = pcmd->actor(params, false);
-            else {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                result = pcmd->actor(params, false);
-            }
-        }
+        Value result = pcmd->actor(params, false);
+
         return result;
     }
     catch (std::exception& e)
@@ -1074,7 +1167,6 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
         throw JSONRPCError(RPC_MISC_ERROR, e.what());
     }
 }
-
 
 Object CallRPC(const string& strMethod, const Array& params)
 {

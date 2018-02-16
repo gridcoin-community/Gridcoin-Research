@@ -484,18 +484,20 @@ Value getrawtransaction(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getrawtransaction <txid> [verbose=0]\n"
-            "If verbose=0, returns a string that is\n"
+            "getrawtransaction <txid> [verbose=bool]\n"
+            "If verbose is false, returns a string that is\n"
             "serialized, hex-encoded data for <txid>.\n"
-            "If verbose is non-zero, returns an Object\n"
-            "with information about <txid>.");
+            "If verbose is true, returns an Object\n"
+            "with information about <txid>.\n");
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
 
     bool fVerbose = false;
     if (params.size() > 1)
-        fVerbose = (params[1].get_int() != 0);
+        fVerbose = (params[1].get_bool());
+
+    LOCK(cs_main);
 
     CTransaction tx;
     uint256 hashBlock = 0;
@@ -524,7 +526,7 @@ Value listunspent(const Array& params, bool fHelp)
             "with between minconf and maxconf (inclusive) confirmations.\n"
             "Optionally filtered to only include txouts paid to specified addresses.\n"
             "Results are an array of Objects, each of which has:\n"
-            "{txid, vout, scriptPubKey, amount, confirmations}");
+            "{txid, vout, scriptPubKey, amount, confirmations}\n");
 
     RPCTypeCheck(params, list_of(int_type)(int_type)(array_type));
 
@@ -552,7 +554,11 @@ Value listunspent(const Array& params, bool fHelp)
     }
 
     Array results;
+
     vector<COutput> vecOutputs;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     pwalletMain->AvailableCoins(vecOutputs, false,NULL,false);
     for (auto const& out : vecOutputs)
     {
@@ -623,13 +629,14 @@ Value createrawtransaction(const Array& params, bool fHelp)
             "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01} "
             "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"data\\\":\\\"00010203\\\"} "
             "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
-            "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} "
+            "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} \n"
         );
-    LOCK(cs_main);
     RPCTypeCheck(params, list_of(array_type)(obj_type));
 
     Array inputs = params[0].get_array();
     Object sendTo = params[1].get_obj();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTransaction rawTx;
 
@@ -694,11 +701,14 @@ Value decoderawtransaction(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "decoderawtransaction <hex string>\n"
-            "Return a JSON object representing the serialized, hex-encoded transaction.");
+            "Return a JSON object representing the serialized, hex-encoded transaction.\n");
 
     RPCTypeCheck(params, list_of(str_type));
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
+
+    LOCK(cs_main);
+
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
     CTransaction tx;
     try {
@@ -719,7 +729,7 @@ Value decodescript(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "decodescript <hex string>\n"
-            "Decode a hex-encoded script.");
+            "Decode a hex-encoded script.\n");
 
     RPCTypeCheck(params, list_of(str_type));
 
@@ -751,10 +761,12 @@ Value signrawtransaction(const Array& params, bool fHelp)
             "ALL|ANYONECANPAY, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY.\n"
             "Returns json object with keys:\n"
             "  hex : raw transaction with signature(s) (hex-encoded string)\n"
-            "  complete : 1 if transaction has a complete set of signature (0 if not)"
+            "  complete : 1 if transaction has a complete set of signature (0 if not)\n"
             + HelpRequiringPassphrase());
 
     RPCTypeCheck(params, list_of(str_type)(array_type)(array_type)(str_type), true);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
@@ -932,9 +944,11 @@ Value sendrawtransaction(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 1)
         throw runtime_error(
             "sendrawtransaction <hex string>\n"
-            "Submits raw transaction (serialized, hex-encoded) to local node and network.");
+            "Submits raw transaction (serialized, hex-encoded) to local node and network.\n");
 
     RPCTypeCheck(params, list_of(str_type));
+
+    LOCK(cs_main);
 
     // parse hex string from parameter
     vector<unsigned char> txData(ParseHex(params[0].get_str()));

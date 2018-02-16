@@ -108,7 +108,7 @@ Value importprivkey(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
         "importprivkey <gridcoinprivkey> [label] [rescan=true]\n"
-            "Adds a private key (as returned by dumpprivkey) to your wallet.");
+            "Adds a private key (as returned by dumpprivkey) to your wallet.\n");
 
     string strSecret = params[0].get_str();
     string strLabel = "";
@@ -118,11 +118,7 @@ Value importprivkey(const Array& params, bool fHelp)
      // Whether to perform rescan after import
     bool fRescan = true;
     if (params.size() > 2)
-    {
-        string strRescan = params[2].get_str();
-        fRescan = (strRescan=="true") ? true : false;
-    }
-
+        fRescan = params[2].get_bool();
 
     CBitcoinSecret vchSecret;
     bool fGood = vchSecret.SetString(strSecret);
@@ -169,14 +165,16 @@ Value importwallet(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "importwallet <filename>\n"
-            "Imports keys from a wallet dump file (see dumpwallet).");
-
-    EnsureWalletIsUnlocked();
+            "Imports keys from a wallet dump file (see dumpwallet).\n");
 
     ifstream file;
     file.open(params[0].get_str().c_str());
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
 
     int64_t nTimeBegin = pindexBest->nTime;
 
@@ -267,6 +265,9 @@ Value dumpprivkey(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     if (fWalletUnlockStakingOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     CKeyID keyID;
     if (!address.GetKeyID(keyID))
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
@@ -282,7 +283,7 @@ Value dumpwallet(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "dumpwallet <filename>\n"
-            "Dumps all wallet keys in a human-readable format.");
+            "Dumps all wallet keys in a human-readable format.\n");
 
     EnsureWalletIsUnlocked();
 
@@ -294,6 +295,8 @@ Value dumpwallet(const Array& params, bool fHelp)
     std::map<CKeyID, int64_t> mapKeyBirth;
 
     std::set<CKeyID> setKeyPool;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     pwalletMain->GetKeyBirthTimes(mapKeyBirth);
 
