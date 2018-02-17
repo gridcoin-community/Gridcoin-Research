@@ -5201,6 +5201,10 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
         if (!IsResearcher(mc.cpid)) return true; /* is investor? */
         // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
         result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
+
+        bool scval = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
+        if(scval!=result)
+            printf("WARNING: IsCPIDValidv2(): inconsistent result\n");
     }
 
     return result;
