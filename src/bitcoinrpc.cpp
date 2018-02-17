@@ -161,26 +161,37 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         // We already filter duplicates, but these deprecated screw up the sort order
         if (strMethod.find("label") != string::npos)
             continue;
-        if (strCommand != "" && strMethod != strCommand)
+        // Refactored rules for supporting of subcategories
+        if (       strCommand.empty()
+                && (   (pcmd->category != cat_null && pcmd->category != category)
+                    || (category != cat_null && strMethod == "help")
+                   )
+           )
+            continue;
+        if (       !strCommand.empty()
+                && (    pcmd->category == cat_null
+                    ||  strMethod != strCommand
+                   )
+           )
             continue;
         try
         {
             Array params;
             rpcfn_type pfn = pcmd->actor;
-            if (setDone.insert(pfn).second && (pcmd->category == category || category == cat_null))
+            if (setDone.insert(pfn).second)
                 (*pfn)(params, true);
         }
         catch (std::exception& e)
         {
             // Help text is returned in an exception
             string strHelp = string(e.what());
-            if (strCommand == "")
+            if (strCommand.empty())
                 if (strHelp.find('\n') != string::npos)
                     strHelp = strHelp.substr(0, strHelp.find('\n'));
             strRet += strHelp + "\n";
         }
     }
-    if (strRet == "")
+    if (strRet.empty())
         strRet = strprintf("help: unknown command: %s\n", strCommand);
     strRet = strRet.substr(0,strRet.size()-1);
     return strRet;
@@ -190,15 +201,16 @@ Value help(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() == 0 || params.size() > 1)
         throw runtime_error(
-            "help\n"
-            "Returns list of subcategories for extended help\n"
+            "help [command/category]\n"
+            "Returns help on a specific command or category you request\n"
             "\n"
-            "help [command]        Returns help for a specific requested command\n"
+            "help command --> Returns help for specified command; ex. help backupwallet\n"
             "\n"
-            "help wallet           Returns help for blockchain related commands\n"
-            "help neuralnetwork    Returns help for neural network/cpid/beacon related commands\n"
-            "help developer        Returns help for developer commands\n"
-            "help network          Returns help for network related commands\n");
+            "Categories:\n"
+            "wallet --------> Returns help for blockchain related commands\n"
+            "neuralnetwork -> Returns help for neural network/cpid/beacon related commands\n"
+            "developer -----> Returns help for developer commands\n"
+            "network -------> Returns help for network related commands\n");
     
     // Allow to process through if params size is > 0
     string strCommand;
@@ -208,7 +220,7 @@ Value help(const Array& params, bool fHelp)
 
     // Subcategory help area
     // Blockchain related commands
-    rpccategory category = cat_null;
+    rpccategory category;
 
     if (strCommand == "wallet")
         category = cat_wallet;
@@ -217,7 +229,7 @@ Value help(const Array& params, bool fHelp)
         category = cat_neuralnetwork;
 
     else if (strCommand == "developer")
-        category = cat_neuralnetwork;
+        category = cat_developer;
 
     else if (strCommand == "network")
         category = cat_network;
