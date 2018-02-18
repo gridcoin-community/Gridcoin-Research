@@ -208,7 +208,7 @@ Value help(const Array& params, bool fHelp)
             "\n"
             "Categories:\n"
             "wallet --------> Returns help for blockchain related commands\n"
-            "neuralnetwork -> Returns help for neural network/cpid/beacon related commands\n"
+            "mining --------> Returns help for neural network/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n");
     
@@ -225,8 +225,8 @@ Value help(const Array& params, bool fHelp)
     if (strCommand == "wallet")
         category = cat_wallet;
 
-    else if (strCommand == "neuralnetwork")
-        category = cat_neuralnetwork;
+    else if (strCommand == "mining")
+        category = cat_mining;
 
     else if (strCommand == "developer")
         category = cat_developer;
@@ -269,6 +269,8 @@ static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 safemd  category
   //  ------------------------  -----------------------  ------  -----------------
     { "help",                   &help,                   true,   cat_null          },
+
+  // Wallet commands
     { "addmultisigaddress",     &addmultisigaddress,     false,  cat_wallet        },
     { "addredeemscript",        &addredeemscript,        false,  cat_wallet        },
     { "backupprivatekeys",      &backupprivatekeys,      false,  cat_wallet        },
@@ -307,7 +309,7 @@ static const CRPCCommand vRPCCommands[] =
     { "move",                   &movecmd,                false,  cat_wallet        },
     { "newburnaddress",         &newburnaddress,         false,  cat_wallet        },
     { "rain",                   &rain,                   false,  cat_wallet        },
-    { "repairewallet",          &repairwallet,           false,  cat_wallet        },
+    { "repairwallet",           &repairwallet,           false,  cat_wallet        },
     { "resendtx",               &resendtx,               false,  cat_wallet        },
     { "reservebalance",         &reservebalance,         false,  cat_wallet        },
     { "sendfrom",               &sendfrom,               false,  cat_wallet        },
@@ -324,6 +326,35 @@ static const CRPCCommand vRPCCommands[] =
     { "walletlock",             &walletlock,             true,   cat_wallet        },
     { "walletpassphrase",       &walletpassphrase,       true,   cat_wallet        },
     { "walletpassphrasechange", &walletpassphrasechange, false,  cat_wallet        },
+
+    // Mining commands
+    { "advertisebeacon",        &advertisebeacon,        false,  cat_mining        },
+    { "beaconreport",           &beaconreport,           true,   cat_mining        },
+    { "beaconstatus",           &beaconstatus,           true,   cat_mining        },
+    { "cpids",                  &cpids,                  true,   cat_mining        },
+    { "currentneuralhash",      &currentneuralhash,      true,   cat_mining        },
+    { "currentneuralreport",    &currentneuralreport,    true,   cat_mining        },
+    { "explainmagnitude",       &explainmagnitude,       true,   cat_mining        },
+    { "getmininginfo",          &getmininginfo,          false,  cat_mining        },
+    { "lifetime",               &lifetime,               true,   cat_mining        },
+    { "magnitude",              &magnitude,              true,   cat_mining        },
+    { "mymagnitude",            &mymagnitude,            true,   cat_mining        },
+#ifdef WIN32
+    { "myneuralhash",           &myneuralhash,           true,   cat_mining        },
+#endif
+    { "neuralhash",             &neuralhash,             true,   cat_mining        },
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
 
 };
 
@@ -406,6 +437,8 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "walletpassphrase"       && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "walletpassphrase"       && n > 2) ConvertTo<bool>(params[2]);
 
+    // Mining
+    if (strMethod == "explainmagnitude"       && n > 0) ConvertTo<bool>(params[0]);
     return params;
 }
 
@@ -1167,10 +1200,29 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
         !pcmd->okSafeMode)
         throw JSONRPCError(RPC_FORBIDDEN_BY_SAFE_MODE, string("Safe mode: ") + strWarning);
 
+    // Lets add a optional debug4 to display how long it takes the rpc commands to be performed in ms
+    // We will do this only on successful calls not exceptions
     try
     {
-        // Execute
-        Value result = pcmd->actor(params, false);
+        Value result;
+
+        if (fDebug4)
+        {
+            int64_t nRPCtimebegin;
+            int64_t nRPCtimetotal;
+
+            nRPCtimebegin = GetTimeMillis();
+
+            result = pcmd->actor(params, false);
+
+            nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
+
+            printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
+
+            return result;
+        }
+
+        result = pcmd->actor(params, false);
 
         return result;
     }

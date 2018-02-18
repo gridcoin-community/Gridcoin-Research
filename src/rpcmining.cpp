@@ -26,7 +26,9 @@ Value getmininginfo(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getmininginfo\n"
-            "Returns an object containing mining-related information.");
+            "Returns an object containing mining-related information.\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     uint64_t nWeight = 0;
     int64_t nTime= GetAdjustedTime();

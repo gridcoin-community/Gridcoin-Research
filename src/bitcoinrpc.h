@@ -96,7 +96,7 @@ enum rpccategory
 {
     cat_null,
     cat_wallet,
-    cat_neuralnetwork,
+    cat_mining,
     cat_developer,
     cat_network
 };
@@ -210,6 +210,22 @@ extern json_spirit::Value walletlock(const json_spirit::Array& params, bool fHel
 extern json_spirit::Value walletpassphrase(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value walletpassphrasechange(const json_spirit::Array& params, bool fHelp);
 
+//Mining
+extern json_spirit::Value advertisebeacon(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value beaconreport(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value beaconstatus(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value cpids(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value currentneuralhash(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value currentneuralreport(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value explainmagnitude(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getmininginfo(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value lifetime(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value magnitude(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value mymagnitude(const json_spirit::Array& params, bool fHelp);
+#ifdef WIN32
+extern json_spirit::Value myneuralhash(const json_spirit::Array& params, bool fHelp);
+#endif
+extern json_spirit::Value neuralhash(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
@@ -217,7 +233,6 @@ extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getaddednodeinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value addnode(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value getmininginfo(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
 
