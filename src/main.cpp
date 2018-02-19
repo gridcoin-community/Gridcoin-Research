@@ -5350,8 +5350,6 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
     try
     {
         StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
-        stMag.cpid = pIndex->GetCPID();
-
         stMag.InterestSubsidy += pIndex->nInterestSubsidy;
         stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
@@ -5568,6 +5566,7 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
         if (!cpid.initialized)
         {
             cpid = GetStructCPID();
+            cpid.cpid = name;
             cpid.initialized=true;
             cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
             cpid.HighLockTime = 0;
