@@ -637,7 +637,7 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         std::string sBoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash);
         if (sBoincSignature.empty())
         {
-            // Prevent a block from being staked with boinchash containing and failed signature
+            // Prevent a block from being staked with boinchash containing a failed signature
             if (fDebug2) printf("SignStakeBlock: Failed to sign block;\n");
             return false;
         }
