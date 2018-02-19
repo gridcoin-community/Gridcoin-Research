@@ -2807,8 +2807,8 @@ bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, 
     // If we failed to sign then return false
     if (sSignature == "Unable to sign message, check private key.")
     {
-        sSignature = "";
         sError = sSignature;
+        sSignature = "";
         return false;
     }
 
