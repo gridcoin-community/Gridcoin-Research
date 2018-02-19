@@ -3150,6 +3150,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                 ,uint256("13e8dee125c5d40d49df77428ad255deee69c44f96bae68b971ab20b0791db95")
                                 ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940")
                                 ,uint256("9387774230f23a898b11c016533f7c5da6d095edec0e9347a147be8c3cada3ac")
+                                ,uint256("95f15ad917588323446ea3d71dd8fbe0dc19522ed542607f0c6b62a20f5a544c")
                             };
                             if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
                                 return DoS(20, error(
@@ -5201,6 +5202,10 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
         if (!IsResearcher(mc.cpid)) return true; /* is investor? */
         // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
         result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
+
+        bool scval = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
+        if(scval!=result)
+            printf("WARNING: IsCPIDValidv2(): inconsistent result\n");
     }
 
     return result;
