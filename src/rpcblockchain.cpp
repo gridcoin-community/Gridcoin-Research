@@ -2788,6 +2788,9 @@ std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
     std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
     std::string sMessage = sCPID + sBlockHash;
     std::string sSignature = SignMessage(sMessage,sPrivateKey);
+    // If we failed to sign then return empty string
+    if (sSignature == "Unable to sign message, check private key.")
+        return "";
     return sSignature;
 }
 

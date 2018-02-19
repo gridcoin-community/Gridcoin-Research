@@ -634,8 +634,14 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
     if (!PublicKey.empty())
     {
-        BoincData.BoincSignature = SignBlockWithCPID(
-            GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
+        std::string sBoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash);
+        if (sBoincSignature.empty())
+        {
+            // Prevent a block from being staked with boinchash containing and failed signature
+            if (fDebug2) printf("SignStakeBlock: Failed to sign block;\n");
+            return false;
+        }
+        BoincData.BoincSignature = sBoincSignature;
         if(fDebug2) printf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\r\n",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.lastblockhash.c_str(),BoincData.BoincSignature.c_str());
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
