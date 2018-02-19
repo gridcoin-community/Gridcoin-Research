@@ -8184,68 +8184,45 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
 std::string ReadCache(std::string section, std::string key)
 {
-    if (section.empty() || key.empty()) return "";
-
-    try
-    {
-            std::string value = mvApplicationCache[section + ";" + key];
-            if (value.empty())
-            {
-                mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,""));
-                mvApplicationCache[section + ";" + key]="";
-                return "";
-            }
-            return value;
-    }
-    catch(...)
-    {
-        printf("readcache error %s",section.c_str());
+    if (section.empty() || key.empty())
         return "";
-    }
+
+    auto item = mvApplicationCache.find(section + ";" + key);
+    return item != mvApplicationCache.end()
+                   ? item->second
+                   : "";
 }
 
 
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime)
 {
-    if (section.empty() || key.empty()) return;
-    std::string temp_value = mvApplicationCache[section + ";" + key];
-    if (temp_value.empty())
-    {
-        mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,value));
-        mvApplicationCache[section + ";" + key]=value;
-    }
-    mvApplicationCache[section + ";" + key]=value;
-    // Record Cache Entry timestamp
-    int64_t temp_locktime = mvApplicationCacheTimestamp[section + ";" + key];
-    if (temp_locktime == 0)
-    {
-        mvApplicationCacheTimestamp.insert(map<std::string,int64_t>::value_type(section+";"+key,1));
-        mvApplicationCacheTimestamp[section+";"+key]=locktime;
-    }
-    mvApplicationCacheTimestamp[section+";"+key] = locktime;
+    if (section.empty() || key.empty())
+        return;
 
+    mvApplicationCache[section + ";" + key] = value;
+    mvApplicationCacheTimestamp[section+ ";" + key] = locktime;
 }
 
 
 void ClearCache(std::string section)
 {
-       for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-       {
-                const std::string& key_section = (*ii).first;
-                if (boost::algorithm::starts_with(key_section, section))
-                {
-                        mvApplicationCache[key_section]="";
-                        mvApplicationCacheTimestamp[key_section]=1;
-                }
-       }
+    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
+    {
+        const std::string& key_section = (*ii).first;
+        if (boost::algorithm::starts_with(key_section, section))
+        {
+            mvApplicationCache[key_section]="";
+            mvApplicationCacheTimestamp[key_section]=1;
+        }
+    }
 }
 
 
 void DeleteCache(std::string section, std::string keyname)
 {
-       std::string pk = section + ";" +keyname;
-       mvApplicationCache.erase(pk);
-       mvApplicationCacheTimestamp.erase(pk);
+    std::string pk = section + ";" +keyname;
+    mvApplicationCache.erase(pk);
+    mvApplicationCacheTimestamp.erase(pk);
 }
 
 
