@@ -33,7 +33,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
-std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError);
 std::string qtGetNeuralContract(std::string data);
 
 // Some explaining would be appreciated
@@ -634,11 +634,12 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
     if (!PublicKey.empty())
     {
-        std::string sBoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash);
-        if (sBoincSignature.empty())
+        std::string sBoincSignature;
+        std::string sError;
+        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sBoincSignature, sError);
+        if (!bResult)
         {
-            // Prevent a block from being staked with boinchash containing a failed signature
-            if (fDebug2) printf("SignStakeBlock: Failed to sign block;\n");
+            if (fDebug2) printf("SignStakeBlock: Failed to sign block -> %s\n", sError.c_str());
             return false;
         }
         BoincData.BoincSignature = sBoincSignature;
