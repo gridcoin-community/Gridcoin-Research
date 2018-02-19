@@ -610,7 +610,7 @@ MiningCPID GetNextProject(bool bForce)
 
 
 
-    if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude > 1)
+    if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude >= 1)
     {
                 if (!Timer_Main("globalcpuminingcpid",10))
                 {
