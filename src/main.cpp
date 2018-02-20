@@ -4417,7 +4417,10 @@ void GridcoinServices()
                 if (fDebug10) printf("#CNNSH# ");
                 UpdateNeuralNetworkQuorumData();
             }
-            if ((nBestHeight % 20) == 0)
+
+            // Perform retired tallies between the V9 block switch (1144000) and the
+            // V9 tally switch (1144120) or else blocks will be rejected in between.
+            if (IsV9Enabled(nBestHeight) && (nBestHeight % 20) == 0)
             {
                 if (fDebug) printf("SVC: set off Tally (v3 B) height %d\n",nBestHeight);
                 if (fDebug10) printf("#TIB# ");
@@ -4428,7 +4431,7 @@ void GridcoinServices()
         {
             // When superblock is not old, Tally every N blocks:
             int nTallyGranularity = fTestNet ? 60 : 20;
-            if ((nBestHeight % nTallyGranularity) == 0)
+            if (IsV9Enabled(nBestHeight) && (nBestHeight % nTallyGranularity) == 0)
             {
                 if (fDebug) printf("SVC: set off Tally (v3 C) height %d\n",nBestHeight);
                 if (fDebug3) printf("TIB1 ");
