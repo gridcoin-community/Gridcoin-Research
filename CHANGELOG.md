@@ -4,7 +4,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.0.0]
+## [3.7.7.0]
+### Fixed
+ - Beacon validation are now done when accepting blocks, not when receiving,
+   #899 (@denravonska).
+ - Fix crashes due to buffer overflow in encrypt/decrypt, #890 (@denravonska).
+ - Rewrite reorganize routine to be more reliable and drop contracts received
+   or issued while on a side chain to help reducing forks, #902 (@tomasbrod).
+
+## [3.7.6.0]
+Internal test version used to sort out the forks.
+
+## [3.7.5.0] 2018-01-24
+### Fixed
+ - Fix crash when switching to new tally on block 1144120, #868 (@denravonska).
+ - Fix crash when staking while tallying, #866 (@denravonska).
+
+## [3.7.4.0] 2018-01-20
+### Fixed
+ - Fix RPC resource leak regression. This also reduces RPC overhead,
+   making calls ~25-35% faster, #848 (@denravonska).
+ - Fix incorrect return code when forking, #832 (@denravonska).
+
+### Removed
+ - Remove upgrader option until rewritten, #836 (@Foggyx420).
+
+## [3.7.3.0] 2018-01-13
+### Fixed
+ - Fix for UI getting stuck in splash screen (@denravonska).
+
+## [3.7.2.0] 2018-01-13
+### Fixed
+ - Properly fix for wallet not daemonizing, #822 (@denravonska).
+
+## [3.7.1.0] 2018-01-10
+### Fixed
+ - Fix several crashes in diagnostic dialog, #816 (@Foggyx420).
+ - Fix client not exiting when running as daemon (@denravonska).
+ - Fix issue with boincstake.dll not updating on dirty installs (@Foggyx420).
+
+### Changed
+ - Update splash screen, #685 (acey1).
+
+## [3.7.0.0] 2018-01-08
 ### Added
  - Provide Difficulty of best kernel found, #766 (@tomasbrod).
  - Add Travis support for OSX, 665 (@acey1).

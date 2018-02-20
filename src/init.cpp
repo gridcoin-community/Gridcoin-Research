@@ -27,7 +27,7 @@ void BusyWaitForTally_retired();
 void TallyNetworkAverages_v9();
 extern void ThreadAppInit2(void* parg);
 
-void LoadCPIDsInBackground();
+void LoadCPIDs();
 bool IsConfigFileEmpty();
 
 #ifndef WIN32
@@ -100,7 +100,9 @@ void Shutdown(void* parg)
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
-        CTxDB().Close();
+        // This causes issues on daemons where it tries to create a second
+        // lock file.
+        //CTxDB().Close();
         MilliSleep(50);
         printf("Gridcoin exited\n\n");
         fExit = true;
@@ -191,11 +193,14 @@ bool AppInit(int argc, char* argv[])
 
         PrintException(NULL, "AppInit()");
     }
-    if (fRet)
-    {   // succesfully initialized, wait for shutdown
+
+    // Succesfully initialized, wait for shutdown
+    if(fRet)
+    {
         while (!ShutdownRequested())
             MilliSleep(500);
     }
+
     Shutdown(NULL);
 
     // delete thread handler
@@ -602,6 +607,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (pid > 0)
         {
             CreatePidFile(GetPidFile(), pid);
+
+            // Now that we are forked we can request a shutdown so the parent
+            // exits while the child lives on.
+            StartShutdown();
             return true;
         }
 
@@ -875,7 +884,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-    if (GetBoolArg("-upgradewallet", fFirstRun))
+/*    if (GetBoolArg("-upgradewallet", fFirstRun))
     {
         int nMaxVersion = GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
@@ -889,7 +898,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nMaxVersion < pwalletMain->GetVersion())
             strErrors << _("Cannot downgrade wallet") << "\n";
         pwalletMain->SetMaxVersion(nMaxVersion);
-    }
+    }*/
 
     if (fFirstRun)
     {
@@ -981,8 +990,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
-    printf("Starting CPID thread...");
-    LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
+    LoadCPIDs();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 
@@ -1026,6 +1034,5 @@ bool AppInit2(ThreadHandlerPtr threads)
      // Add wallet transactions that aren't already in a block to mapTransactions
     pwalletMain->ReacceptWalletTransactions();
 
-    printf("\r\nExiting AppInit2\r\n");
     return true;
 }

@@ -22,6 +22,8 @@
 #include <fstream>
 #include <algorithm>
 
+
+bool TallyResearchAverages_v9();
 using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
@@ -2046,7 +2048,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "tally")
     {
             bNetAveragesLoaded_retired = false;
-            TallyResearchAverages_retired(true);
+            TallyResearchAverages_v9();
             entry.push_back(Pair("Tally Network Averages",1));
             results.push_back(entry);
     }
@@ -2771,6 +2773,10 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
     std::string sConcatMessage = sCPID + sBlockHash;
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
+    if(!bValid)
+        printf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s\n"
+        ,sSignature.c_str(), sBeaconPublicKey.c_str());
+
     return bValid;
 }
 

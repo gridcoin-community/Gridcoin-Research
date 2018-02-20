@@ -1723,10 +1723,6 @@ void static ThreadStakeMiner(void* parg)
 
     if (fDebug10) printf("ThreadStakeMiner started\n");
     CWallet* pwallet = (CWallet*)parg;
-    while (!bCPIDsLoaded)
-    {
-        MilliSleep(100);
-    }
     try
     {
         StakeMiner(pwallet);
@@ -2133,8 +2129,12 @@ bool BindListenPort(const CService &addrBind, string& strError)
     // the program was closed and restarted.  Not an issue on windows.
     if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEADDR, (void*)&nOne, sizeof(int)) < 0)
         if (fDebug10) printf("setsockopt(SO_REUSEADDR) failed");
+#ifdef SO_REUSEPORT
+    // Not all systems have SO_REUSEPORT. Required by OSX, available in some
+    // Linux flavors.
     if (setsockopt(hListenSocket, SOL_SOCKET, SO_REUSEPORT, (void*)&nOne, sizeof(int)) < 0)
         if (fDebug10) printf("setsockopt(SO_SO_REUSEPORT) failed");
+#endif
 #endif
 
 
