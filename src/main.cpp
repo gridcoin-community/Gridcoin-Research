@@ -2892,6 +2892,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     bool bIsDPOR = false;
 
+    if(nVersion>=8)
+    {
+        uint256 tmp_hashProof;
+        if(!CheckProofOfStakeV8(pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
+            return error("ConnectBlock(): check proof-of-stake failed");
+    }
 
     for (auto &tx : vtx)
     {
