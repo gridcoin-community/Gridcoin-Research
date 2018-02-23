@@ -1984,14 +1984,23 @@ void ThreadMessageHandler2(void* parg)
 
             //11-25-2015
             // Receive messages
-            if (!ProcessMessages(pnode))
-                pnode->CloseSocketDisconnect();
+            {
+                TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
+                if (lockRecv)
+                    if (!ProcessMessages(pnode))
+                        pnode->CloseSocketDisconnect();
+            }
 
             if (fShutdown)
                 return;
 
             // Send messages
-            SendMessages(pnode, pnode == pnodeTrickle);
+            {
+                TRY_LOCK(pnode->cs_vSend, lockSend);
+                if (lockSend)
+                    SendMessages(pnode, pnode == pnodeTrickle);
+            }
+
             if (fShutdown)
                 return;
         }

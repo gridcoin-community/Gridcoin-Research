@@ -6596,7 +6596,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (vInv.size() > MAX_INV_SZ)
         {
             pfrom->Misbehaving(50);
-            printf("\r\n **Hacker tried to send inventory > MAX_INV_SZ **\r\n");
             return error("message inv size() = %" PRIszu "", vInv.size());
         }
 
@@ -6608,6 +6607,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 break;
             }
         }
+
+        LOCK(cs_main);
         CTxDB txdb("r");
         for (unsigned int nInv = 0; nInv < vInv.size(); nInv++)
         {
@@ -6655,6 +6656,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (fDebug10)  printf("received getdata (%" PRIszu " invsz)\n", vInv.size());
         }
 
+        LOCK(cs_main);
         for (auto const& inv : vInv)
         {
             if (fShutdown)
@@ -6723,6 +6725,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint256 hashStop;
         vRecv >> locator >> hashStop;
 
+        LOCK(cs_main);
+
         // Find the last block the caller has in the main chain
         CBlockIndex* pindex = locator.GetBlockIndex();
 
@@ -6759,6 +6763,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CBlockLocator locator;
         uint256 hashStop;
         vRecv >> locator >> hashStop;
+
+        LOCK(cs_main);
 
         CBlockIndex* pindex = NULL;
         if (locator.IsNull())
@@ -6797,6 +6803,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         CInv inv(MSG_TX, tx.GetHash());
         pfrom->AddInventoryKnown(inv);
+
+        LOCK(cs_main);
 
         bool fMissingInputs = false;
         if (AcceptToMemoryPool(mempool, tx, &fMissingInputs))
@@ -6876,6 +6884,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CInv inv(MSG_BLOCK, hashBlock);
         pfrom->AddInventoryKnown(inv);
 
+        LOCK(cs_main);
+
         if (ProcessBlock(pfrom, &block, false))
         {
             mapAlreadyAskedFor.erase(inv);
@@ -6904,6 +6914,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == "mempool")
     {
+        LOCK(cs_main);
+
         std::vector<uint256> vtxid;
         mempool.queryHashes(vtxid);
         vector<CInv> vInv;
@@ -7196,13 +7208,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 // requires LOCK(cs_vRecvMsg)
 bool ProcessMessages(CNode* pfrom)
-{    
-    LOCK(cs_main);
-
-    TRY_LOCK(pfrom->cs_vRecvMsg, lockRecv);
-    if (!lockRecv)
-        return true;
-
+{
     //
     // Message format
     //  (4) message start
@@ -7270,7 +7276,7 @@ bool ProcessMessages(CNode* pfrom)
         bool fRet = false;
         try
         {
-           fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
+            fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
             if (fShutdown)
                 break;
         }
@@ -7953,10 +7959,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     // the node based on the return value.
     TRY_LOCK(cs_main, lockMain);
     if(!lockMain)
-        return true;
-
-    TRY_LOCK(pto->cs_vSend, lockSend);
-    if (!lockSend)
         return true;
 
     // Don't send anything until we get their version message
