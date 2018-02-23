@@ -3316,13 +3316,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     //  End of Network Consensus
 
     // Gridcoin: Track payments to CPID, and last block paid
-    if (IsResearcher(bb.cpid) && pindex->nHeight > nNewIndex2)
+    if (pindex->nResearchSubsidy > 0 && IsResearcher(bb.cpid))
     {
         StructCPID stCPID = GetInitializedStructCPID2(bb.cpid,mvResearchAge);
+
         stCPID.InterestSubsidy += bb.InterestSubsidy;
         stCPID.ResearchSubsidy += bb.ResearchSubsidy;
-
-        if (pindex->nHeight > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
+        if (pindex->nHeight > stCPID.LastBlock)
         {
                 stCPID.LastBlock = pindex->nHeight;
                 stCPID.BlockHash = pindex->GetBlockHash().GetHex();
@@ -5319,31 +5319,52 @@ bool BlockNeedsChecked(int64_t BlockTime)
     }
 }
 
-void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
-{
-        if (timestamp > strCPID.LastPaymentTime && subsidy > 0) strCPID.LastPaymentTime = timestamp;
-        if (timestamp < strCPID.EarliestPaymentTime) strCPID.EarliestPaymentTime = timestamp;
-}
-
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {
-    if (pIndex->nResearchSubsidy <= 0)
+    // TODO: There are 3 different loops which do the same thing:
+    //  - this function
+    //  - LoadBlockIndex in txdb-leveldb.cpp
+    //  - CBlock::ConnectBlock in main.cpp.
+    //
+    // This function should be the only one and the other two uses should
+    // call it to update the data. At the same time, remove mvMagnitudesCopy
+    // (and the other struct copies) as they are no longer used in a multi
+    // threaded environment when the the tally thread is gone.
+
+
+    if (pIndex->IsUserCPID() == false || pIndex->nResearchSubsidy <= 0)
         return;
     
     try
     {
         StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
-        stMag.cpid = pIndex->GetCPID();
+        stMag.InterestSubsidy += pIndex->nInterestSubsidy;
+        stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
         {
             stMag.LastBlock = pIndex->nHeight;
+            stMag.BlockHash = pIndex->GetBlockHash().GetHex();
         }
+
+        if(pIndex->nMagnitude > 0)
+        {
+            stMag.Accuracy++;
+            stMag.TotalMagnitude += pIndex->nMagnitude;
+            stMag.ResearchAverageMagnitude = stMag.TotalMagnitude/(stMag.Accuracy+.01);
+        }
+
+        if (pIndex->nTime > stMag.LastPaymentTime)
+            stMag.LastPaymentTime = pIndex->nTime;
+        if (pIndex->nTime < stMag.EarliestPaymentTime)
+            stMag.EarliestPaymentTime = pIndex->nTime;
+        if (pIndex->nTime < stMag.LowLockTime)
+            stMag.LowLockTime = pIndex->nTime;
+        if (pIndex->nTime > stMag.HighLockTime)
+            stMag.HighLockTime = pIndex->nTime;
+
         stMag.entries++;
         stMag.payments += pIndex->nResearchSubsidy;
         stMag.interestPayments += pIndex->nInterestSubsidy;
-        
-        AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
-        stMag.Accuracy++;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;
         stMag.owed = GetOutstandingAmountOwed(stMag,
@@ -5482,23 +5503,27 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
             printf("WARNING GetLifetimeCPID: index {%s %d} for cpid %s, "
                 "is not in the main chain\n",pblockindex->GetBlockHash().GetHex().c_str(),
                 pblockindex->nHeight,cpid.c_str());
-        if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
-        {
-            stCPID.LastBlock = pblockindex->nHeight;
-            stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
-            if (fDebug10) printf("GetLifetimeCPID: using it\n");
-        }
-        stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
-        stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
-        stCPID.Accuracy++;
-        if (pblockindex->nMagnitude > 0)
-        {
-            stCPID.TotalMagnitude += pblockindex->nMagnitude;
-            stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-        }
 
-        if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
-        if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        if(pblockindex->nResearchSubsidy> 0)
+        {
+            stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
+            stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
+            if(pblockindex->nHeight > stCPID.LastBlock)
+            {
+                stCPID.LastBlock = pblockindex->nHeight;
+                stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+            }
+
+            if (pblockindex->nMagnitude > 0)
+            {
+                stCPID.Accuracy++;
+                stCPID.TotalMagnitude += pblockindex->nMagnitude;
+                stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+            }
+
+            if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
+            if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        }
     }
 
     // Save updated CPID data holder.
@@ -5529,6 +5554,7 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
         if (!cpid.initialized)
         {
             cpid = GetStructCPID();
+            cpid.cpid = name;
             cpid.initialized=true;
             cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
             cpid.HighLockTime = 0;
@@ -8116,68 +8142,45 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
 std::string ReadCache(std::string section, std::string key)
 {
-    if (section.empty() || key.empty()) return "";
-
-    try
-    {
-            std::string value = mvApplicationCache[section + ";" + key];
-            if (value.empty())
-            {
-                mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,""));
-                mvApplicationCache[section + ";" + key]="";
-                return "";
-            }
-            return value;
-    }
-    catch(...)
-    {
-        printf("readcache error %s",section.c_str());
+    if (section.empty() || key.empty())
         return "";
-    }
+
+    auto item = mvApplicationCache.find(section + ";" + key);
+    return item != mvApplicationCache.end()
+                   ? item->second
+                   : "";
 }
 
 
 void WriteCache(std::string section, std::string key, std::string value, int64_t locktime)
 {
-    if (section.empty() || key.empty()) return;
-    std::string temp_value = mvApplicationCache[section + ";" + key];
-    if (temp_value.empty())
-    {
-        mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,value));
-        mvApplicationCache[section + ";" + key]=value;
-    }
-    mvApplicationCache[section + ";" + key]=value;
-    // Record Cache Entry timestamp
-    int64_t temp_locktime = mvApplicationCacheTimestamp[section + ";" + key];
-    if (temp_locktime == 0)
-    {
-        mvApplicationCacheTimestamp.insert(map<std::string,int64_t>::value_type(section+";"+key,1));
-        mvApplicationCacheTimestamp[section+";"+key]=locktime;
-    }
-    mvApplicationCacheTimestamp[section+";"+key] = locktime;
+    if (section.empty() || key.empty())
+        return;
 
+    mvApplicationCache[section + ";" + key] = value;
+    mvApplicationCacheTimestamp[section+ ";" + key] = locktime;
 }
 
 
 void ClearCache(std::string section)
 {
-       for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-       {
-                const std::string& key_section = (*ii).first;
-                if (boost::algorithm::starts_with(key_section, section))
-                {
-                        mvApplicationCache[key_section]="";
-                        mvApplicationCacheTimestamp[key_section]=1;
-                }
-       }
+    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
+    {
+        const std::string& key_section = (*ii).first;
+        if (boost::algorithm::starts_with(key_section, section))
+        {
+            mvApplicationCache[key_section]="";
+            mvApplicationCacheTimestamp[key_section]=1;
+        }
+    }
 }
 
 
 void DeleteCache(std::string section, std::string keyname)
 {
-       std::string pk = section + ";" +keyname;
-       mvApplicationCache.erase(pk);
-       mvApplicationCacheTimestamp.erase(pk);
+    std::string pk = section + ";" +keyname;
+    mvApplicationCache.erase(pk);
+    mvApplicationCacheTimestamp.erase(pk);
 }
 
 
