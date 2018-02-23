@@ -1847,7 +1847,7 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("<title>", "Title for poll with no spaces. Use _ in between words"));
             entry.push_back(Pair("<days>", "Number of days the poll will run"));
             entry.push_back(Pair("<question>", "The poll question in which you seek input for"));
-            entry.push_back(Pair("<answers>", "The available answers to which a voter can vote seperated by a semicolon"));
+            entry.push_back(Pair("<answers>", "The available answers to which a voter can vote separated by a semicolon"));
             entry.push_back(Pair("<sharetype>", "1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count"));
             entry.push_back(Pair("<url>", "Short url for information about the poll"));
             results.push_back(entry);
