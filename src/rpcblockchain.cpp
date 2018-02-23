@@ -2516,7 +2516,7 @@ Value execute(const Array& params, bool fHelp)
     {
         entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
         #if defined(WIN32) && defined(QT_GUI)
-        entry.push_back(Pair("execute executecode", "Excute .net code"));
+        entry.push_back(Pair("execute executecode", "Execute .net code"));
         #endif
         entry.push_back(Pair("execute forcequorum", "Force quorum"));
         entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
