@@ -3161,6 +3161,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                 ,uint256("1d30c6d4dce377d69c037f1a725aabbc6bafa72a95456dbe2b2538bc1da115bd")
                                 ,uint256("934c6291209d90bb5d3987885b413c18e39f0e28430e8d302f20888d2a35e725")
                                 ,uint256("58282559939ced7ebed7d390559c7ac821932958f8f2399ad40d1188eb0a57f9")
+                                ,uint256("6085d4d0cd800d79794c1b9a09db4a8cc3d6b1ed49b43ebe8df2ea6ff4e9a0e1")
+                                ,uint256("0001efda66323dcbc8c3fdf80dab2421660b4eb5c6531f350bb5e64ec35310f1")
+                                ,uint256("f6fb998e0df3ccb4d7bb82fc84eefde186c28570ca6048d7759012d64234f305")
+                                ,uint256("41cd6208f0cd9b916fe8913766fe17cef0c7c57951ff9257bff13994a7d00ede")
+                                ,uint256("dd4071743eb5d8fa0b997039968d0d6a66cd87c370a1aa1b33aa32c02fc276a1")
+                                ,uint256("9f3185895eb91a0d00394fe3f538b13248da97e2550fd69b6355cd8fa5c704fe")
+                                ,uint256("91f4825aef14d2831927f3f996ed84a031e4ee7643b28c60abc9991a9ff5c793")
+                                ,uint256("8749688550e1ac05fd01f9b5be1529808efc171b4df3221640bbbec0a483499e")
+                                ,uint256("7e2b19def67236ef2da1435751d86b9f2d92c6deea42b4ddf97851736eb4400c")
                             };
                             if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
                                 return DoS(20, error(
