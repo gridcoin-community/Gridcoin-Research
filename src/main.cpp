@@ -3732,22 +3732,20 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     unsigned cnt_dis=0;
     unsigned cnt_con=0;
     bool success = false;
-    const auto prevTrust = nBestChainTrust;
+    const auto origBestIndex = pindexBest;
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
+    if(origBestIndex->nChainTrust > nBestChainTrust)
+    {
+        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
+        CBlock origBlock;
+        if (!origBlock.ReadFromDisk(origBestIndex))
+            return error("SetBestChain: Fatal Error while reading original best block");
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+    }
     if(!success)
         return false;
-    if(!success || prevTrust>nBestChainTrust)
-    {
-        /*
-        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
-
-        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
-        */
-    }
 
     /* Fix up after block connecting */
 
@@ -4213,12 +4211,11 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         //must be proof of stake
         //no grandfather exceptions
         //if (IsProofOfStake())
-        printf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
         if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
         {
-            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f", hash.ToString().c_str(),(double)nNonce);
             printf(" prev %s\n",pindexPrev->GetBlockHash().ToString().c_str());
-            return false;
+            //return false;
         }
     }
 
