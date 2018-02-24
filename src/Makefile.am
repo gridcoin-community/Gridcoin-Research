@@ -70,6 +70,7 @@ GRIDCOIN_CORE_H = \
 	serialize.h \
 	strlcpy.h \
 	sync.h \
+        tally.h \
 	threadsafety.h \
 	txdb.h \
 	txdb-leveldb.h \
@@ -113,6 +114,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
+        tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
