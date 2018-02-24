@@ -1606,7 +1606,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
     }
     catch (...)
     {
-        printf("Exception occured in MakeSafeMessage. Returning an empty message.\n");
+        printf("Exception occurred in MakeSafeMessage. Returning an empty message.\n");
         safemessage = "";
     }
     return safemessage;
