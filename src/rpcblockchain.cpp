@@ -47,7 +47,7 @@ std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
 int RestartClient();
-extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+extern bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
 bool StrLessThanReferenceHash(std::string rh);
@@ -1400,7 +1400,16 @@ Value execute(const Array& params, bool fHelp)
         uint256 hashBlock = GetRandHash();
         if (!sPubKey.empty())
         {
-            std::string sSignature = SignBlockWithCPID(sCPID,hashBlock.GetHex());
+            bool bResult;
+            std::string sSignature;
+            std::string sError;
+            bResult = SignBlockWithCPID(sCPID, hashBlock.GetHex(), sSignature, sError);
+            if (!bResult)
+            {
+                sErr += "Failed to sign block with cpid ";
+                sErr += sError;
+                sErr += ";";
+            }
             bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
             entry.push_back(Pair("Block Signing Test Results", fResult));
             if (!fResult)
@@ -2781,13 +2790,28 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     return bValid;
 }
 
-std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash)
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError)
 {
-    // Returns the Signature of the CPID+BlockHash message. 
+    // Check if there is a beacon for this user
+    // If not then return false as GetStoresBeaconPrivateKey grabs from the config
+    if (!HasActiveBeacon(sCPID))
+    {
+        sError = "No active beacon";
+        return false;
+    }
+    // Returns the Signature of the CPID+BlockHash message.
     std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
     std::string sMessage = sCPID + sBlockHash;
-    std::string sSignature = SignMessage(sMessage,sPrivateKey);
-    return sSignature;
+    sSignature = SignMessage(sMessage,sPrivateKey);
+    // If we failed to sign then return false
+    if (sSignature == "Unable to sign message, check private key.")
+    {
+        sError = sSignature;
+        sSignature = "";
+        return false;
+    }
+
+    return true;
 }
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
@@ -2982,7 +3006,12 @@ std::string GetProvableVotingWeightXML()
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
             std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-            std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
+            std::string sError;
+            std::string sSignature;
+            bool bResult = SignBlockWithCPID(msPrimaryCPID, pHistorical->GetBlockHash().GetHex(), sSignature, sError);
+            // Just because below comment it'll keep in line with that
+            if (!bResult)
+                sSignature = sError;
             // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
             sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>"
                     + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
@@ -3169,7 +3198,13 @@ Array GetJsonUnspentReport()
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
             std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-            std::string sSignature = SignBlockWithCPID(msPrimaryCPID,pHistorical->GetBlockHash().GetHex());
+            std::string sError;
+            std::string sSignature;
+            bool bResult = SignBlockWithCPID(msPrimaryCPID, pHistorical->GetBlockHash().GetHex(), sSignature, sError);
+            // Just because below comment it'll keep in line with that
+            if (!bResult)
+                sSignature = sError;
+
             // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
 
             std::string sMagXML = "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
