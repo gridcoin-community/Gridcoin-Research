@@ -3745,7 +3745,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(origBestIndex->nChainTrust > nBestChainTrust)
+    if(origBestIndex && origBestIndex->nChainTrust > nBestChainTrust)
     {
         printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
         CBlock origBlock;
@@ -3753,6 +3753,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
             return error("SetBestChain: Fatal Error while reading original best block");
         success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
     }
+
     if(!success)
         return false;
 
