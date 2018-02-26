@@ -3170,6 +3170,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                 ,uint256("91f4825aef14d2831927f3f996ed84a031e4ee7643b28c60abc9991a9ff5c793")
                                 ,uint256("8749688550e1ac05fd01f9b5be1529808efc171b4df3221640bbbec0a483499e")
                                 ,uint256("7e2b19def67236ef2da1435751d86b9f2d92c6deea42b4ddf97851736eb4400c")
+                                ,uint256("69da74d1af75cdaba599ecb75c222e71a6d49af9d5fa90b494c9f451bc0f5b1d")
                             };
                             if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
                                 return DoS(20, error(
