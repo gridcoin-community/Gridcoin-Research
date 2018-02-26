@@ -1619,8 +1619,11 @@ Value magnitude(const json_spirit::Array& params, bool fHelp)
     if (results.size() > 1000)
     {
         results.clear();
+
         Object entry;
+
         entry.push_back(Pair("Error","Magnitude report too large; try specifying the cpid : magnitude <cpid>."));
+
         results.push_back(entry);
     }
 
@@ -1640,7 +1643,9 @@ Value mymagnitude(const Array& params, bool fHelp)
     if (msPrimaryCPID.empty())
     {
         Object res;
+
         res.push_back(Pair("Error", "Your CPID appears to be empty"));
+
         results.push_back(res);
     }
 
@@ -1666,7 +1671,6 @@ Value myneuralhash(const Array& params, bool fHelp)
 
     return res;
 }
-#endif
 
 Value neuralhash(const Array& params, bool fHelp)
 {
@@ -1680,6 +1684,251 @@ Value neuralhash(const Array& params, bool fHelp)
 
     std::string myNeuralHash = NN::GetNeuralHash();
     res.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+
+    return res;
+}
+#endif
+
+Value neuralreport(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "neuralreport\n"
+                "\n"
+                "Displays neural report for the network\n");
+
+    Object res;
+
+    Array myNeuralJSON = GetJSONNeuralNetworkReport();
+    res.push_back(myNeuralJSON);
+
+    return res;
+}
+
+Value proveownership(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "proveownership\n"
+                "\n"
+                "Prove ownership of your CPID\n");
+
+    Object res;
+
+    HarvestCPIDs(true);
+    GetNextProject(true);
+    std::string email = GetArgument("email", "NA");
+    boost::to_lower(email);
+
+    res.push_back(Pair("Boinc E-Mail", email));
+    res.push_back(Pair("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey));
+    res.push_back(Pair("CPID", GlobalCPUMiningCPID.cpid));
+
+    std::string sLongCPID = ComputeCPIDv2(email, GlobalCPUMiningCPID.boincruntimepublickey,1);
+    std::string sShortCPID = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey + email);
+    std::string sEmailMD5 = RetrieveMd5(email);
+    std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
+
+    res.push_back(Pair("Computed Email Hash", sEmailMD5));
+    res.push_back(Pair("Computed BPK", sBPKMD5));
+    res.push_back(Pair("Computed CPID", sLongCPID));
+    res.push_back(Pair("Computed Short CPID", sShortCPID));
+
+    bool fResult = CPID_IsCPIDValid(sShortCPID, sLongCPID, 1);
+
+    if (GlobalCPUMiningCPID.boincruntimepublickey.empty())
+    {
+        fResult = false;
+        res.push_back(Pair("Error", "Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location."));
+    }
+
+    res.push_back(Pair("CPID Valid", fResult));
+
+    return res;
+}
+
+Value rsa(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "rsa\n"
+                "\n"
+                "Displays RSA report for your CPID\n");
+
+    Object res;
+
+    if (msPrimaryCPID.empty() || msPrimaryCPID == "INVESTOR")
+        throw runtime_error(
+                "PrimaryCPID is empty or INVESTOR; No RSA available for this condition\n");
+
+    res = MagnitudeReport(msPrimaryCPID);
+
+    return res;
+}
+
+Value rsaweight(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "rsaweight\n"
+                "\n"
+                "Display Rsaweight for your CPID\n");
+
+    Object res;
+
+    double out_magnitude = 0;
+    double out_owed = 0;
+    int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
+    out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid, out_owed);
+
+    res.push_back(Pair("RSA Weight", RSAWEIGHT));
+    res.push_back(Pair("Magnitude", out_magnitude));
+    res.push_back(Pair("RSA Owed", out_owed));
+
+    return res;
+}
+
+Value staketime(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "staketime\n"
+                "\n"
+                "Display information about staking time\n");
+
+    Object res;
+
+    std::string cpid = GlobalCPUMiningCPID.cpid;
+    std::string GRCAddress = DefaultWalletAddress();
+    GetEarliestStakeTime(GRCAddress, cpid);
+
+    res.push_back(Pair("GRCTime", ReadCache("global", "nGRCTime").timestamp));
+    res.push_back(Pair("CPIDTime", ReadCache("global", "nCPIDTime").timestamp));
+
+    return res;
+}
+
+Value superblockage(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "superblockage\n"
+                "\n"
+                "Display information regarding superblock age\n");
+
+    Object res;
+
+    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - superblock_time;
+
+    res.push_back(Pair("Superblock Age", superblock_age));
+    res.push_back(Pair("Superblock Timestamp", TimestampToHRDate(superblock_time)));
+    res.push_back(Pair("Superblock Block Number", ReadCache("superblock", "block_number").value));
+    res.push_back(Pair("Pending Superblock Height", ReadCache("neuralsecurity", "pending").value));
+
+    return res;
+}
+
+Value superblocks(const Array& params, fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+                "superblocks <cpid>\n"
+                "\n"
+                "<cpid> -> Optional: Shows magnitude for a cpid for recent superblocks\n"
+                "Display data on recent superblocks\n");
+
+    Object res;
+
+    std::string cpid = "";
+
+    if (params.size() > 0)
+        cpid = params[0].get_str();
+
+    res = SuperblockReport(cpid);
+
+    return res;
+}
+
+Value syncdpor2(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "syncdpor2\n"
+                "\n"
+                "Syncronize with the neural network\n");
+
+    Object res;
+
+    std::string sOut = "";
+
+    bool bFull = GetCountOf("beacon") < 50 ? true : false;
+
+    LoadAdminMessages(bFull, sOut);
+    FullSyncWithDPORNodes();
+
+    res.push_back(Pair("Syncing", 1));
+
+    return res;
+}
+
+Value upgradedbeaconreport(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "upgradedbeaconreport\n"
+                "\n"
+                "Display upgraded beacon report of the network\n");
+
+    Array aUpgBR = GetUpgradedBeaconReport();
+
+    return aUpgBR;
+}
+
+Value validcpids(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "validcpids\n"
+                "\n"
+                "Displays information about valid CPIDs collected from BOINC\n");
+
+    Object res;
+
+    //Dump vectors:
+    if (mvCPIDs.size() < 1)
+        HarvestCPIDs(false);
+
+    for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
+    {
+        StructCPID structcpid = mvCPIDs[(*ii).first];
+
+        if (structcpid.initialized)
+        {
+            if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
+            {
+                if (structcpid.verifiedteam == "gridcoin")
+                {
+                    Object entry;
+
+                    entry.push_back(Pair("Project", structcpid.projectname));
+                    entry.push_back(Pair("CPID", structcpid.cpid));
+                    entry.push_back(Pair("CPIDhash", structcpid.cpidhash));
+                    entry.push_back(Pair("Email", structcpid.emailhash));
+                    entry.push_back(Pair("UTC", structcpid.utc));
+                    entry.push_back(Pair("RAC", structcpid.rac));
+                    entry.push_back(Pair("Team", structcpid.team));
+                    entry.push_back(Pair("RecTime", structcpid.rectime));
+                    entry.push_back(Pair("Age", structcpid.age));
+                    entry.push_back(Pair("Is my CPID Valid?", structcpid.Iscpidvalid));
+                    entry.push_back(Pair("CPID Link", structcpid.link));
+                    entry.push_back(Pair("Errors", structcpid.errors));
+
+                    res.push_back(entry);
+                }
+            }
+        }
+    }
 
     return res;
 }
@@ -1733,33 +1982,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Result",fResult));
             results.push_back(entry);
     }
-    else if (sItem=="proveownership")
-    {
-        HarvestCPIDs(true);
-        GetNextProject(true);
-        std::string email = GetArgument("email", "NA");
-        boost::to_lower(email);
-        entry.push_back(Pair("Boinc E-Mail",email));
-        entry.push_back(Pair("Boinc Public Key",GlobalCPUMiningCPID.boincruntimepublickey));
-        entry.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid));
-        std::string sLongCPID = ComputeCPIDv2(email,GlobalCPUMiningCPID.boincruntimepublickey,1);
-        std::string sShortCPID = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey + email);
-        std::string sEmailMD5 = RetrieveMd5(email);
-        std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
-        entry.push_back(Pair("Computed Email Hash",sEmailMD5));
-        entry.push_back(Pair("Computed BPK",sBPKMD5));
-
-        entry.push_back(Pair("Computed CPID",sLongCPID));
-        entry.push_back(Pair("Computed Short CPID", sShortCPID));
-        bool fResult = CPID_IsCPIDValid(sShortCPID,sLongCPID,1);
-        if (GlobalCPUMiningCPID.boincruntimepublickey.empty())
-        {
-            fResult=false;
-            entry.push_back(Pair("Error","Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location."));
-        }
-        entry.push_back(Pair("CPID Valid",fResult));
-        results.push_back(entry);
-    }
     else if (sItem == "neuralrequest")
     {
 
@@ -1768,31 +1990,12 @@ Value execute(const Array& params, bool fHelp)
             results.push_back(entry);
 
     }
-    else if (sItem == "syncdpor2")
-    {
-        std::string sOut = "";
-        bool bFull = GetCountOf("beacon") < 50 ? true : false;
-        LoadAdminMessages(bFull,sOut);
-        FullSyncWithDPORNodes();
-        entry.push_back(Pair("Syncing",1));
-        results.push_back(entry);
-    }
     else if(sItem=="gatherneuralhashes")
     {
         GatherNeuralHashes();
         entry.push_back(Pair("Sent","."));
         results.push_back(entry);
 
-    }
-    else if (sItem == "upgradedbeaconreport")
-    {
-            Array aUpgBR = GetUpgradedBeaconReport();
-            results.push_back(aUpgBR);
-    }
-    else if (sItem == "neuralreport")
-    {
-            Array myNeuralJSON = GetJSONNeuralNetworkReport();
-            results.push_back(myNeuralJSON);
     }
     else if (sItem == "tallyneural")
     {
@@ -1805,17 +2008,6 @@ Value execute(const Array& params, bool fHelp)
     {
             Array myNeuralJSON = GetJSONVersionReport();
             results.push_back(myNeuralJSON);
-    }
-    }
-    else if (sItem == "superblockage")
-    {
-        int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
-        int64_t superblock_age = GetAdjustedTime() - superblock_time;
-        entry.push_back(Pair("Superblock Age", superblock_age));
-        entry.push_back(Pair("Superblock Timestamp", TimestampToHRDate(superblock_time)));
-        entry.push_back(Pair("Superblock Block Number", ReadCache("superblock", "block_number").value));
-        entry.push_back(Pair("Pending Superblock Height", ReadCache("neuralsecurity","pending").value));
-        results.push_back(entry);
     }
     else if (sItem == "unusual")
     {
@@ -2193,15 +2385,6 @@ Value execute(const Array& params, bool fHelp)
                 results.push_back(myPolls);
             }
         }
-    }
-    else if (sItem=="staketime")
-    {
-            std::string cpid = GlobalCPUMiningCPID.cpid;
-            std::string GRCAddress = DefaultWalletAddress();
-            GetEarliestStakeTime(GRCAddress,cpid);
-            entry.push_back(Pair("GRCTime", ReadCache("global", "nGRCTime").timestamp));
-            entry.push_back(Pair("CPIDTime",ReadCache("global", "nCPIDTime").timestamp));
-            results.push_back(entry);
     }
     else if (sItem=="testnewcontract")
     {
@@ -3975,34 +4158,6 @@ Value listitem(const Array& params, bool fHelp)
             entry.push_back(Pair("Network Time",GetAdjustedTime()));
             results.push_back(entry);
     }
-    else if (sitem == "rsaweight")
-    {
-        double out_magnitude = 0;
-        double out_owed = 0;
-        int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-        out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid,out_owed);
-
-
-        Object entry;
-        entry.push_back(Pair("RSA Weight",RSAWEIGHT));
-        entry.push_back(Pair("Magnitude",out_magnitude));
-        entry.push_back(Pair("RSA Owed",out_owed));
-        results.push_back(entry);
-
-	}
-    else if (sitem == "superblocks")
-    {
-        std::string cpid = "";
-        if (params.size() == 2)
-        {
-            cpid = params[1].get_str();
-        }
-
-        results = SuperblockReport(cpid);
-        return results;
-    }
-        return results;
-    }
     else if (sitem == "currenttime")
     {
 
@@ -4034,12 +4189,6 @@ Value listitem(const Array& params, bool fHelp)
         entry.push_back(Pair("Excluded Tx",msMiningErrorsExcluded));
         entry.push_back(Pair("Included Tx",msMiningErrorsIncluded));
         results.push_back(entry);
-    }
-    else if (sitem == "rsa")
-    {
-            if (msPrimaryCPID=="") msPrimaryCPID="INVESTOR";
-            results = MagnitudeReport(msPrimaryCPID);
-            return results;
     }
     else if (sitem == "projects")
     {
@@ -4099,47 +4248,6 @@ Value listitem(const Array& params, bool fHelp)
             }
         }
         return results;
-    }
-    else if (sitem=="validcpids")
-    {
-        //Dump vectors:
-        if (mvCPIDs.size() < 1)
-        {
-            HarvestCPIDs(false);
-        }
-        for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-        {
-
-            StructCPID structcpid = mvCPIDs[(*ii).first];
-
-            if (structcpid.initialized)
-            {
-
-                if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
-                {
-                    if (structcpid.verifiedteam=="gridcoin")
-                    {
-                        Object entry;
-                        entry.push_back(Pair("Project",structcpid.projectname));
-                        entry.push_back(Pair("CPID",structcpid.cpid));
-                        entry.push_back(Pair("CPIDhash",structcpid.cpidhash));
-                        entry.push_back(Pair("Email",structcpid.emailhash));
-                        entry.push_back(Pair("UTC",structcpid.utc));
-                        entry.push_back(Pair("RAC",structcpid.rac));
-                        entry.push_back(Pair("Team",structcpid.team));
-                        entry.push_back(Pair("RecTime",structcpid.rectime));
-                        entry.push_back(Pair("Age",structcpid.age));
-                        entry.push_back(Pair("Is my CPID Valid?",structcpid.Iscpidvalid));
-                        entry.push_back(Pair("CPID Link",structcpid.link));
-                        entry.push_back(Pair("Errors",structcpid.errors));
-                        results.push_back(entry);
-                    }
-                }
-
-            }
-        }
-
-
     }
     else if (sitem == "help")
     {

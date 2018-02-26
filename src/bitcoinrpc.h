@@ -224,8 +224,18 @@ extern json_spirit::Value magnitude(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value mymagnitude(const json_spirit::Array& params, bool fHelp);
 #ifdef WIN32
 extern json_spirit::Value myneuralhash(const json_spirit::Array& params, bool fHelp);
-#endif
 extern json_spirit::Value neuralhash(const json_spirit::Array& params, bool fHelp);
+#endif
+extern json_spirit::Value neuralreport(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value proveownership(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value rsa(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value rsaweight(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value staketime(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value superblockage(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value superblocks(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value syncdpor2(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value upgradedbeaconreport(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value validcpids(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
