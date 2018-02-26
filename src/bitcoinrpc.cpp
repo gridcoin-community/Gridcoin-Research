@@ -327,7 +327,7 @@ static const CRPCCommand vRPCCommands[] =
     { "walletpassphrase",       &walletpassphrase,       true,   cat_wallet        },
     { "walletpassphrasechange", &walletpassphrasechange, false,  cat_wallet        },
 
-    // Mining commands
+  // Mining commands
     { "advertisebeacon",        &advertisebeacon,        false,  cat_mining        },
     { "beaconreport",           &beaconreport,           true,   cat_mining        },
     { "beaconstatus",           &beaconstatus,           true,   cat_mining        },
@@ -352,6 +352,31 @@ static const CRPCCommand vRPCCommands[] =
     { "syncdpor2",              &syncdpor2,              false,  cat_mining        },
     { "upgradedbeaconreport",   &upgradedbeaconreport,   true,   cat_mining        },
     { "validcpids",             &validcpids,             true,   cat_mining        },
+
+  // Developer commands
+    { "addkey",                 &addkey,                 false,  cat_developer     },
+#ifdef WIN32
+    { "currentcontractaverage", &currentcontractaverage, false,  cat_developer     },
+#endif
+    { "debug",                  &debug,                  true,   cat_developer     },
+    { "debug10",                &debug10,                true,   cat_developer     },
+    { "debug2",                 &debug2,                 true,   cat_developer     },
+    { "debug3",                 &debug3,                 true,   cat_developer     },
+    { "debugnet",               &debugnet,               true,   cat_developer     },
+    { "dportally",              &dportally,              true,   cat_developer     },
+    { "forcequorom",            &forcequorom,            true,   cat_developer     },
+    { "gatherneuralhashes",     &gatherneuralhashes,     true,   cat_developer     },
+    { "genboinckey",            &genboinckey,            true,   cat_developer     },
+    { "genorgkey",              &genorgkey,              true,   cat_developer     },
+    { "getblockstats",          &rpc_getblockstats,      true,   cat_developer     },
+    { "getlistof",              &getlistof,              true,   cat_developer     },
+    { "getnextproject",         &getnextproject,         false,  cat_developer     },
+    { "listdata",               &listdata,               true,   cat_developer     },
+    { "memorizekeys",           &memorizekeys,           true,   cat_developer     },
+    {},
+    {},
+    {},
+    {},
     {},
     {},
     {},
@@ -439,6 +464,16 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
 
     // Mining
     if (strMethod == "explainmagnitude"       && n > 0) ConvertTo<bool>(params[0]);
+
+    // Developer
+    if (strMethod == "debug"                  && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "debug10"                && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "debug2"                 && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "debug3"                 && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "debugnet"               && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "getblockstats"          && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "getblockstats"          && n > 1) ConvertTo<int64_t>(params[1]);
+
     return params;
 }
 

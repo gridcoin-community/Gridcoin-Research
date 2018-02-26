@@ -1833,9 +1833,9 @@ Value superblocks(const Array& params, fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-                "superblocks <cpid>\n"
+                "superblocks [cpid]\n"
                 "\n"
-                "<cpid> -> Optional: Shows magnitude for a cpid for recent superblocks\n"
+                "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
                 "Display data on recent superblocks\n");
 
     Object res;
@@ -1933,6 +1933,377 @@ Value validcpids(const Array& params, bool fHelp)
     return res;
 }
 
+Value addkey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 4)
+        throw runtime_error(
+                "addkey <action> <keytype> <keyname> <keyvalue>\n"
+                "\n"
+                "<action> ---> Specify add or delete of key\n"
+                "<keytype> --> Specify keytype ex: project\n"
+                "<keyname> --> Specify keyname ex: milky\n"
+                "<keyvalue> -> Specify keyvalue ex: 1\n"
+                "Add a key to the network\n");
+
+    Object res;
+
+    //To whitelist a project:
+    //execute addkey add project projectname 1
+    //To blacklist a project:
+    //execute addkey delete project projectname 1
+    //Key examples:
+
+    //execute addkey add project milky 1
+    //execute addkey delete project milky 1
+    //execute addkey add project milky 2
+    //execute addkey add price grc .0000046
+    //execute addkey add price grc .0000045
+    //execute addkey delete price grc .0000045
+    //GRC will only memorize the *last* value it finds for a key in the highest block
+    //execute memorizekeys
+    //execute listdata project
+    //execute listdata price
+    //execute addkey add project grid20
+
+    std::string sAction = params[0].get_str();
+    bool bAdd = (sAction == "add") ? true : false;
+    std::string sType = params[1].get_str();
+    std::string sPass = "";
+    std::string sName = params[2].get_str();
+    std::string sValue = params[3].get_str();
+
+    sPass = (sType == "project" || sType == "projectmapping" || (sType == "beacon" && sAction == "delete")) ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+
+    res.push_back(Pair("Action", sAction));
+    res.push_back(Pair("Type", sType));
+    res.push_back(Pair("Passphrase", sPass));
+    res.push_back(Pair("Name", sName));
+    res.push_back(Pair("Value", sValue));
+
+    std::string result = AddMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
+
+    res.push_back(Pair("Results", result));
+
+    return res;
+}
+
+#ifdef WIN32
+Value currentcontractaverage(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "currentcontractaverage\n"
+                "\n"
+                "Displays information on your current contract average with regards to superblock contract\n");
+
+    Object res;
+
+    std::string contract = NN::GetNeuralContract();
+    double out_beacon_count = 0;
+    double out_participant_count = 0;
+    double out_avg = 0;
+    double avg = GetSuperblockAvgMag(contract, out_beacon_count, out_participant_count, out_avg, false, nBestHeight);
+    bool bValid = VerifySuperblock(contract, pindexBest);
+    //Show current contract neural hash
+    std::string sNeuralHash = NN::GetNeuralHash();
+    std::string neural_hash = GetQuorumHash(contract);
+
+    res.push_back(Pair("Contract", contract));
+    res.push_back(Pair("avg", avg));
+    res.push_back(Pair("beacon_count", out_beacon_count));
+    res.push_back(Pair("avg_mag", out_avg));
+    res.push_back(Pair("beacon_participant_count", out_participant_count));
+    res.push_back(Pair("superblock_valid", bValid));
+    res.push_back(Pair(".NET Neural Hash", sNeuralHash.c_str()));
+    res.push_back(Pair("Length", (int)contract.length()));
+    res.push_back(Pair("Wallet Neural Hash", neural_hash));
+
+    results.push_back(entry);
+}
+#endif
+
+Value debug(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "debug <bool>\n"
+                "\n"
+                "<bool> -> Specify true or false\n"
+                "Enable or disable debug mode on the fly\n");
+
+    Object res;
+
+    fDebug = params[0].get_bool();
+
+    res.push_back(Pair("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode."));
+
+    return res;
+}
+
+Value debug10(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "debug10 <bool>\n"
+                "\n"
+                "<bool> -> Specify true or false\n"
+                "Enable or disable debug mode on the fly\n");
+
+    Object res;
+
+    fDebug10 = params[0].get_bool();
+
+    res.push_back(Pair("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode."));
+
+    return res;
+}
+
+Value debug2(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "debug2 <bool>\n"
+                "\n"
+                "<bool> -> Specify true or false\n"
+                "Enable or disable debug mode on the fly\n");
+
+    Object res;
+
+    fDebug2 = params[0].get_bool();
+
+    res.push_back(Pair("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode."));
+
+    return res;
+}
+
+Value debug3(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "debug3 <bool>\n"
+                "\n"
+                "<bool> -> Specify true or false\n"
+                "Enable or disable debug mode on the fly\n");
+
+    Object res;
+
+    fDebug3 = params[0].get_bool();
+
+    res.push_back(Pair("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode."));
+
+    return res;
+}
+
+Value debugnet(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "debugnet <bool>\n"
+                "\n"
+                "<bool> -> Specify true or false\n"
+                "Enable or disable debug mode on the fly\n");
+
+    Object res;
+
+    fDebugNet = params[0].get_bool();
+
+    res.push_back(Pair("DebugNet", fDebugNet ? "Entering debug mode." : "Exiting debug mode."));
+
+    return res;
+}
+
+Value dportally(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "dporttally\n"
+                "\n"
+                "Request a tally of DPOR in superblock\n");
+
+    Object res;
+
+    TallyMagnitudesInSuperblock();
+
+    res.push_back(Pair("Done", "Done"));
+
+    return res;
+}
+
+Value forcequorom(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "forcequorom\n"
+                "\n"
+                "Requests neural network for force a quorom amoung nodes\n");
+
+    Object res;
+
+    AsyncNeuralRequest("quorum", "gridcoin", 10);
+
+    res.push_back(Pair("Requested a quorum - waiting for resolution.", 1));
+
+    return res;
+}
+
+Value gatherneuralhashes(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "gatherneuralhashes\n"
+                "\n"
+                "Requests neural network to gather neural hashes\n");
+
+    Object res;
+
+    GatherNeuralHashes();
+
+    res.push_back(Pair("Sent", "."));
+
+    return res;
+}
+
+Value genboinckey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "genboinckey\n"
+                "\n"
+                "Generates a boinc key\n");
+
+    Object res;
+
+    //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
+    GetNextProject(false);
+    std::string email = GetArgument("email", "NA");
+    boost::to_lower(email);
+    GlobalCPUMiningCPID.email = email;
+    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
+    //Store the BPK in the aesskein, and the cpid in version
+    GlobalCPUMiningCPID.aesskein = email; //Good
+    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
+
+    //block version not needed for keys for now
+    std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
+    std::string sBase = EncodeBase64(sParam);
+
+    if (fDebug3)
+        printf("GenBoincKey: Utilizing email %s with %s for %s\r\n", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
+
+    res.push_back(Pair("[Specify in config file without quotes] boinckey=", sBase));
+
+    return res;
+}
+
+Value genorgkey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+                "genorgkey <passphrase> <orgranization>\n"
+                "\n"
+                "<passphrase> -> Set passphrase to be used\n"
+                "<orgranization> -> Set orgranization name to be used\n"
+                "Generates an Org key\n");
+
+    Object res;
+
+    std::string sParam1 = params[0].get_str();
+    std::string sParam2 = params[1].get_str();
+    std::string sboinchashargs = LegacyDefaultBoincHashArgs();
+
+    res.push_back(Pair("Passphrase", sParam1));
+    res.push_back(Pair("OrgName", sParam2));
+
+    if (sParam1 != sboinchashargs)
+        res.push_back(Pair("Error", "Admin must be logged in"));
+
+    else
+    {
+        std::string modulus = sboinchashargs.substr(0, 12);
+        std::string key = sParam2 + "," + AdvancedCryptWithSalt(modulus, sParam2);
+
+        res.push_back(Pair("OrgKey", key));
+    }
+
+    return res;
+}
+
+Value getlistof(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "getlistof <keytype>\n"
+                "\n"
+                "<keytype> -> key of requested data\n"
+                "Displays data associated to a specified key type\n");
+
+    Object res;
+
+    std::string sType = params[0].get_str();
+
+    res.push_back(Pair("Key Type", sType));
+    res.push_back(Pair("Data", GetListOf(sType)));
+
+    return res;
+}
+
+Value getnextproject(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getnextproject\n"
+                "\n"
+                "Requests wallet to get next project\n");
+
+    Object res;
+
+    GetNextProject(true);
+
+    res.push_back(Pair("GetNext", 1));
+
+    return res;
+}
+
+Value listdata(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "listdata <keytype>\n"
+                "\n"
+                "<keytype> -> key in cache\n"
+                "Displays data associated to a key stored in cache\n");
+
+    Object res;
+
+    std::string sType = params[0].get_str();
+
+    res.push_back(Pair("Key Type", sType));
+
+    for(const auto& item : ReadCacheSection(sType))
+        res.push_back(Pair(item.first, item.second.value));
+
+    return res;
+}
+
+Value memorizekeys(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "memorizekeys\n"
+                "\n"
+                "Runs a full table scan of Load Admin Messages\n");
+
+    Object res;
+
+    std::string sOut;
+
+    LoadAdminMessages(true, sOut);
+
+    res.push_back(Pair("Results", sOut));
+
+    return res;
+}
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -1988,13 +2359,6 @@ Value execute(const Array& params, bool fHelp)
             std::string response = NeuralRequest("REQUEST");
             entry.push_back(Pair("Response", response));
             results.push_back(entry);
-
-    }
-    else if(sItem=="gatherneuralhashes")
-    {
-        GatherNeuralHashes();
-        entry.push_back(Pair("Sent","."));
-        results.push_back(entry);
 
     }
     else if (sItem == "tallyneural")
@@ -2413,37 +2777,12 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("Neural Network Live Quorum Hash",myNeuralHash));
         results.push_back(entry);
     }
-    else if (sItem == "forcequorum")
-    {
-            AsyncNeuralRequest("quorum","gridcoin",10);
-            entry.push_back(Pair("Requested a quorum - waiting for resolution.",1));
-            results.push_back(entry);
-    }
     else if (sItem == "tally")
     {
             bNetAveragesLoaded_retired = false;
             TallyResearchAverages_v9();
             entry.push_back(Pair("Tally Network Averages",1));
             results.push_back(entry);
-    }
-    else if (sItem == "genboinckey")
-    {
-        //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
-        GetNextProject(false);
-        std::string email = GetArgument("email", "NA");
-        boost::to_lower(email);
-        GlobalCPUMiningCPID.email=email;
-        GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
-        //Store the BPK in the aesskein, and the cpid in version
-        GlobalCPUMiningCPID.aesskein = email; //Good
-        GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
-
-        //block version not needed for keys for now
-        std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
-        if (fDebug3) printf("GenBoincKey: Utilizing email %s with %s for  %s \r\n",GlobalCPUMiningCPID.email.c_str(),GlobalCPUMiningCPID.boincruntimepublickey.c_str(),sParam.c_str());
-        std::string sBase = EncodeBase64(sParam);
-        entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
-        results.push_back(entry);
     }
     else if (sItem == "encryptphrase")
     {
@@ -2482,60 +2821,6 @@ Value execute(const Array& params, bool fHelp)
         }
 
     }
-    else if (sItem == "dportally")
-    {
-        TallyMagnitudesInSuperblock();
-        entry.push_back(Pair("Done","Done"));
-        results.push_back(entry);
-
-    }
-    else if (sItem == "addkey")
-    {
-        //To whitelist a project:
-        //execute addkey add project projectname 1
-        //To blacklist a project:
-        //execute addkey delete project projectname 1
-        //Key examples:
-
-        //execute addkey add project milky 1
-        //execute addkey delete project milky 1
-        //execute addkey add project milky 2
-        //execute addkey add price grc .0000046
-        //execute addkey add price grc .0000045
-        //execute addkey delete price grc .0000045
-        //GRC will only memorize the *last* value it finds for a key in the highest block
-
-        //execute memorizekeys
-        //execute listdata project
-        //execute listdata price
-
-        if (params.size() != 5)
-        {
-            entry.push_back(Pair("Error","You must specify an action, message type, message name and value."));
-            entry.push_back(Pair("Example","execute addkey add_or_delete keytype projectname value."));
-            results.push_back(entry);
-        }
-        else
-        {
-            //execute addkey add project grid20
-            std::string sAction = params[1].get_str();
-            entry.push_back(Pair("Action",sAction));
-            bool bAdd = (sAction=="add") ? true : false;
-            std::string sType = params[2].get_str();
-            entry.push_back(Pair("Type",sType));
-            std::string sPass = "";
-            sPass = (sType=="project" || sType=="projectmapping") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-            if (sType=="beacon" && sAction=="delete")  sPass = GetArgument("masterprojectkey","");
-            entry.push_back(Pair("Passphrase",sPass));
-            std::string sName = params[3].get_str();
-            entry.push_back(Pair("Name",sName));
-            std::string sValue = params[4].get_str();
-            entry.push_back(Pair("Value",sValue));
-            std::string result = AddMessage(bAdd,sType,sName,sValue,sPass,AmountFromValue(5),.1,"");
-            entry.push_back(Pair("Results",result));
-            results.push_back(entry);
-        }
-    }
     else if (sItem == "sendrawcontract")
     {
         if (params.size() != 2)
@@ -2559,14 +2844,6 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("TrxID",wtx.GetHash().GetHex()));
         results.push_back(entry);
     }
-    else if (sItem == "memorizekeys")
-    {
-        std::string sOut = "";
-        LoadAdminMessages(true,sOut);
-        entry.push_back(Pair("Results",sOut));
-        results.push_back(entry);
-
-    }
     else if (sItem == "superblockaverage")
     {
         std::string superblock = ReadCache("superblock","all").value;
@@ -2584,95 +2861,6 @@ Value execute(const Array& params, bool fHelp)
         bool bDireNeed = NeedASuperblock();
         entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
         results.push_back(entry);
-    }
-    else if (sItem == "currentcontractaverage")
-    {
-        std::string contract = NN::GetNeuralContract();
-        entry.push_back(Pair("Contract",contract));
-        double out_beacon_count = 0;
-        double out_participant_count = 0;
-        double out_avg = 0;
-        double avg = GetSuperblockAvgMag(contract,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
-        bool bValid = VerifySuperblock(contract, pindexBest);
-        entry.push_back(Pair("avg",avg));
-        entry.push_back(Pair("beacon_count",out_beacon_count));
-        entry.push_back(Pair("avg_mag",out_avg));
-        entry.push_back(Pair("beacon_participant_count",out_participant_count));
-        entry.push_back(Pair("superblock_valid",bValid));
-        //Show current contract neural hash
-        std::string sNeuralHash = NN::GetNeuralHash();
-        entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
-        entry.push_back(Pair("Length",(double)contract.length()));
-        std::string neural_hash = GetQuorumHash(contract);
-        entry.push_back(Pair("Wallet Neural Hash",neural_hash));
-
-        results.push_back(entry);
-
-    }
-    else if (sItem == "getlistof")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a keytype."));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sType = params[1].get_str();
-            entry.push_back(Pair("Key Type", sType));
-            entry.push_back(Pair("Data", GetListOf(sType)));
-            results.push_back(entry);
-        }
-
-
-    }
-    else if (sItem == "listdata")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a keytype (IE execute dumpkeys project)"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sType = params[1].get_str();
-            entry.push_back(Pair("Key Type",sType));
-            for(const auto& item : ReadCacheSection(sType))
-                entry.push_back(Pair(item.first, item.second.value));
-
-           results.push_back(entry);
-        }
-
-    }
-    else if (sItem == "genorgkey")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify a passphrase and organization name"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("Passphrase",sParam1));
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("OrgName",sParam2));
-
-            std::string sboinchashargs = LegacyDefaultBoincHashArgs();
-            if (sParam1 != sboinchashargs)
-            {
-                entry.push_back(Pair("Error","Admin must be logged in"));
-            }
-            else
-            {
-                std::string modulus = sboinchashargs.substr(0,12);
-                std::string key = sParam2 + "," + AdvancedCryptWithSalt(modulus,sParam2);
-                entry.push_back(Pair("OrgKey",key));
-            }
-            results.push_back(entry);
-
-        }
-
     }
     else if (sItem == "testorgkey")
     {
@@ -2707,12 +2895,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
     }*/
-    else if (sItem == "getnextproject")
-    {
-            GetNextProject(true);
-            entry.push_back(Pair("GetNext",1));
-            results.push_back(entry);
-    }
     else if (sItem == "resetcpids")
     {
             //Reload the config file
@@ -2731,61 +2913,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Execute Encrypt result2",s1dec));
             entry.push_back(Pair("Execute Encrypt result3",s1out));
             results.push_back(entry);
-    }
-    else if (sItem == "debug")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debugnet")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebugNet = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("DebugNet", fDebugNet ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug2")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug2 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug3")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug3 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
-    }
-    else if (sItem == "debug10")
-    {
-        if (params.size() == 2 && (params[1].get_str() == "true" || params[1].get_str() == "false"))
-        {
-            fDebug10 = (params[1].get_str() == "true") ? true : false;
-            entry.push_back(Pair("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode."));
-        }
-        else
-            entry.push_back(Pair("Error","You must specify true or false as an option."));
-        results.push_back(entry);
     }
     else if (sItem == "help")
     {
@@ -4129,7 +4256,7 @@ std::string YesNo(bool f)
 {
     return f ? "Yes" : "No";
 }
-
+/*
 Value listitem(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2 && params.size() != 3 && params.size() != 4))
@@ -4274,7 +4401,7 @@ Value listitem(const Array& params, bool fHelp)
     return results;
 
 }
-
+*/
 
 
 // ppcoin: get information of sync-checkpoint
@@ -4326,6 +4453,7 @@ Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
     if(fHelp || params.size() < 1 || params.size() > 3 )
         throw runtime_error(
             "getblockstats mode [startheight [endheight]]\n"
+            "\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
     long mode= params[0].get_int();
     (void)mode; //TODO

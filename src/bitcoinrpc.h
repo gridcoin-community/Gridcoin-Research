@@ -237,6 +237,27 @@ extern json_spirit::Value syncdpor2(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value upgradedbeaconreport(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value validcpids(const json_spirit::Array& params, bool fHelp);
 
+// Developers
+extern json_spirit::Value addkey(const json_spirit::Array& params, bool fHelp);
+#ifdef WIN32
+extern json_spirit::Value currentcontractaverage(const json_spirit::Array& params, bool fHelp);
+#endif
+extern json_spirit::Value debug(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value debug10(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value debug2(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value debug3(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value debugnet(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value dportally(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value forcequorom(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value gatherneuralhashes(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value genboinckey(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value genorgkey(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getlistof(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getnextproject(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value listdata(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value memorizekeys(const json_spirit::Array& params, bool fHelp);
+
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
@@ -266,7 +287,6 @@ extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
 
 // Brod
-extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert2(const json_spirit::Array& params, bool fHelp);
 
 // iFoggz
