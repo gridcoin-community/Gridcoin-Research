@@ -283,7 +283,7 @@ static const CRPCCommand vRPCCommands[] =
     { "decodescript",           &decodescript,           false,  cat_wallet        },
     { "dumpprivkey",            &dumpprivkey,            false,  cat_wallet        },
     { "dumpwallet",             &dumpwallet,             true,   cat_wallet        },
-    { "encrypt",                &encrypt,                true,   cat_wallet        },
+    { "encrypt",                &encrypt,                false,  cat_wallet        },
     { "encryptwallet",          &encryptwallet,          false,  cat_wallet        },
     { "getaccount",             &getaccount,             false,  cat_wallet        },
     { "getaccountaddress",      &getaccountaddress,      true,   cat_wallet        },
@@ -329,29 +329,29 @@ static const CRPCCommand vRPCCommands[] =
 
   // Mining commands
     { "advertisebeacon",        &advertisebeacon,        false,  cat_mining        },
-    { "beaconreport",           &beaconreport,           true,   cat_mining        },
-    { "beaconstatus",           &beaconstatus,           true,   cat_mining        },
-    { "cpids",                  &cpids,                  true,   cat_mining        },
-    { "currentneuralhash",      &currentneuralhash,      true,   cat_mining        },
-    { "currentneuralreport",    &currentneuralreport,    true,   cat_mining        },
-    { "explainmagnitude",       &explainmagnitude,       true,   cat_mining        },
+    { "beaconreport",           &beaconreport,           false,  cat_mining        },
+    { "beaconstatus",           &beaconstatus,           false,  cat_mining        },
+    { "cpids",                  &cpids,                  false,  cat_mining        },
+    { "currentneuralhash",      &currentneuralhash,      false,  cat_mining        },
+    { "currentneuralreport",    &currentneuralreport,    false,  cat_mining        },
+    { "explainmagnitude",       &explainmagnitude,       false,  cat_mining        },
     { "getmininginfo",          &getmininginfo,          false,  cat_mining        },
-    { "lifetime",               &lifetime,               true,   cat_mining        },
-    { "magnitude",              &magnitude,              true,   cat_mining        },
-    { "mymagnitude",            &mymagnitude,            true,   cat_mining        },
+    { "lifetime",               &lifetime,               false,  cat_mining        },
+    { "magnitude",              &magnitude,              false,  cat_mining        },
+    { "mymagnitude",            &mymagnitude,            false,  cat_mining        },
 #ifdef WIN32
-    { "myneuralhash",           &myneuralhash,           true,   cat_mining        },
-    { "neuralhash",             &neuralhash,             true,   cat_mining        },
+    { "myneuralhash",           &myneuralhash,           false,  cat_mining        },
+    { "neuralhash",             &neuralhash,             false,  cat_mining        },
 #endif
-    { "proveownership",         &proveownership,         true,   cat_mining        },
-    { "rsa",                    &rsa,                    true,   cat_mining        },
-    { "rsaweight",              &rsaweight,              true,   cat_mining        },
+    { "proveownership",         &proveownership,         false,  cat_mining        },
+    { "rsa",                    &rsa,                    false,  cat_mining        },
+    { "rsaweight",              &rsaweight,              false,  cat_mining        },
     { "staketime",              &staketime,              false,  cat_mining        },
-    { "superblockage",          &superblockage,          true,   cat_mining        },
-    { "superblocks",            &superblocks,            true,   cat_mining        },
+    { "superblockage",          &superblockage,          false,  cat_mining        },
+    { "superblocks",            &superblocks,            false,  cat_mining        },
     { "syncdpor2",              &syncdpor2,              false,  cat_mining        },
-    { "upgradedbeaconreport",   &upgradedbeaconreport,   true,   cat_mining        },
-    { "validcpids",             &validcpids,             true,   cat_mining        },
+    { "upgradedbeaconreport",   &upgradedbeaconreport,   false,  cat_mining        },
+    { "validcpids",             &validcpids,             false,  cat_mining        },
 
   // Developer commands
     { "addkey",                 &addkey,                 false,  cat_developer     },
@@ -363,20 +363,40 @@ static const CRPCCommand vRPCCommands[] =
     { "debug2",                 &debug2,                 true,   cat_developer     },
     { "debug3",                 &debug3,                 true,   cat_developer     },
     { "debugnet",               &debugnet,               true,   cat_developer     },
-    { "dportally",              &dportally,              true,   cat_developer     },
-    { "forcequorom",            &forcequorom,            true,   cat_developer     },
-    { "gatherneuralhashes",     &gatherneuralhashes,     true,   cat_developer     },
-    { "genboinckey",            &genboinckey,            true,   cat_developer     },
-    { "genorgkey",              &genorgkey,              true,   cat_developer     },
-    { "getblockstats",          &rpc_getblockstats,      true,   cat_developer     },
-    { "getlistof",              &getlistof,              true,   cat_developer     },
+    { "dportally",              &dportally,              false,  cat_developer     },
+    { "forcequorom",            &forcequorom,            false,  cat_developer     },
+    { "gatherneuralhashes",     &gatherneuralhashes,     false,  cat_developer     },
+    { "genboinckey",            &genboinckey,            false,  cat_developer     },
+    { "genorgkey",              &genorgkey,              false,  cat_developer     },
+    { "getblockstats",          &rpc_getblockstats,      false,  cat_developer     },
+    { "getlistof",              &getlistof,              false,  cat_developer     },
     { "getnextproject",         &getnextproject,         false,  cat_developer     },
-    { "listdata",               &listdata,               true,   cat_developer     },
-    { "memorizekeys",           &memorizekeys,           true,   cat_developer     },
-    {},
-    {},
-    {},
-    {},
+    { "listdata",               &listdata,               false,  cat_developer     },
+    { "memorizekeys",           &memorizekeys,           false,  cat_developer     },
+    { "network",                &network,                false,  cat_developer     },
+    { "neuralrequest",          &neuralrequest,          false,  cat_developer     },
+    { "projects",               &projects,               false,  cat_developer     },
+    { "readconfig",             &readconfig,             false,  cat_developer     },
+    { "readdata",               &readdata,               false,  cat_developer     },
+#ifdef WIN32
+    { "refhash",                &refhash,                false,  cat_developer     },
+#endif
+    { "reorganize",             &rpc_reorganize,         false,  cat_developer     },
+    { "seefile",                &seefile,                false,  cat_developer     },
+    { "sendalert",              &sendalert,              false,  cat_developer     },
+    { "sendalert2",             &sendalert2,             false,  cat_developer     },
+    { "sendrawcontract",        &sendrawcontract,        false,  cat_developer     },
+    { "superblockaverage",      &superblockaverage,      false,  cat_developer     },
+    { "tally",                  &tally,                  false,  cat_developer     },
+    { "tallyneural",            &tallyneural,            false,  cat_developer     },
+#ifdef WIN32
+    { "testnewcontract",        &testnewcontract,        false,  cat_developer     },
+#endif
+    { "testorgkey",             &testorgkey,             false,  cat_developer     },
+    { "unusual",                &unusual,                false,  cat_developer     },
+    { "updatequoromdata",       &updatequoromdata,       false,  cat_developer     },
+    { "versionreport",          &versionreport,          false,  cat_developer     },
+    { "writedata",              &writedata,              false,  cat_developer     },
     {},
     {},
     {},
@@ -473,6 +493,14 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "debugnet"               && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "getblockstats"          && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "getblockstats"          && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "sendalert"              && n > 2) ConvertTo<int64_t>(params[2]);
+    if (strMethod == "sendalert"              && n > 3) ConvertTo<int64_t>(params[3]);
+    if (strMethod == "sendalert"              && n > 4) ConvertTo<int64_t>(params[4]);
+    if (strMethod == "sendalert"              && n > 5) ConvertTo<int64_t>(params[5]);
+    if (strMethod == "sendalert"              && n > 6) ConvertTo<int64_t>(params[6]);
+    if (strMethod == "sendalert2"             && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "sendalert2"             && n > 4) ConvertTo<int64_t>(params[4]);
+    if (strMethod == "sendalert2"             && n > 5) ConvertTo<int64_t>(params[5]);
 
     return params;
 }

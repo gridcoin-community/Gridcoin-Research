@@ -257,12 +257,37 @@ extern json_spirit::Value getlistof(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value getnextproject(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value listdata(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value memorizekeys(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value network(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value neuralrequest(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value projects(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value readconfig(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value readdata(const json_spirit::Array& params, bool fHelp);
+#ifdef WIN32
+extern json_spirit::Value refhash(const json_spirit::Array& params, bool fHelp);
+#endif
+extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value seefile(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value sendalert(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value sendalert2(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value sendrawcontract(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value superblockaverage(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value tally(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value tallyneural(const json_spirit::Array& params, bool fHelp);
+#ifdef WIN32
+extern json_spirit::Value testnewcontract(const json_spirit::Array& params, bool fHelp);
+#endif
+extern json_spirit::Value testorgkey(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value unusual(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value updatequoromdata(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value versionreport(const json_spirit::Array& params, bool fhelp);
+extern json_spirit::value writedata(const json_spirit::Array& params, bool fHelp);
+
+
 
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getaddednodeinfo(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value sendalert(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value addnode(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
@@ -284,10 +309,8 @@ extern json_spirit::Value getcheckpoint(const json_spirit::Array& params, bool f
 extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value listitem(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
 
 // Brod
-extern json_spirit::Value sendalert2(const json_spirit::Array& params, bool fHelp);
 
 // iFoggz
 //extern json_spirit::Value blockchain(const json_spirit::Array& params, bool fHelp);

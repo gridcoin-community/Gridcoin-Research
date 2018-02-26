@@ -1114,18 +1114,21 @@ Value burn2(const Array& params, bool fHelp)
     if (!isValid)
     {
         res.push_back(Pair("Error","Invalid GRC Burn Address."));
+
         return res;
     }
 
     if (dAmount == 0 || dAmount < 0)
     {
         res.push_back(Pair("Error","Burn amount must be > 0."));
+
         return res;
     }
 
     if (sKey.empty() || sDetail.empty())
     {
         res.push_back(Pair("Error","Burn Key and Burn Detail must be populated."));
+
         return res;
     }
 
@@ -1150,8 +1153,10 @@ Value encrypt(const Array& params, bool fHelp)
     //Encrypt a phrase
     std::string sParam = params[0].get_str();
     std::string encrypted = AdvancedCryptWithHWID(sParam);
+
     res.push_back(Pair("Passphrase",encrypted));
     res.push_back(Pair("[Specify in config file] autounlock=",encrypted));
+
     return res;
 }
 
@@ -1167,6 +1172,7 @@ Value newburnaddress(const Array& params, bool fHelp)
 
     //3-12-2016 - R Halford - Allow the user to make vanity GRC Burn Addresses that have no corresponding private key
     std::string sBurnTemplate = "GRCBurnAddressGRCBurnAddressGRCBurnAddress";
+
     if (params.size() > 0)
         sBurnTemplate = params[0].get_str();
 
@@ -1196,15 +1202,19 @@ Value newburnaddress(const Array& params, bool fHelp)
     vector<unsigned char> v(sBinary.begin(), sBinary.end());
     //Make the new address so that it passes base 58 Checks
     std::string encoded1 = EncodeBase58(v);
-    res.push_back(Pair("CombinedHex",combined));
     std::string encoded2 = EncodeBase58Check(vchDecoded30);
+
+    res.push_back(Pair("CombinedHex",combined));
+
     if (encoded2.length() != 34)
     {
         res.push_back(Pair("Burn Address Creation failed","NOTE: the input phrase must not include zeroes, or nonbase58 characters."));
+
         return res;
     }
     // Give the user the new vanity burn address
     res.push_back(Pair("Burn Address",encoded2));
+
     return res;
 }
 
@@ -1226,20 +1236,26 @@ Value rain(const json_spirit::Array& params, bool fHelp)
     std::string sRainCommand = ExtractXML(sRecipients,"<RAIN>","</RAIN>");
     std::string sRainMessage = MakeSafeMessage(ExtractXML(sRecipients,"<RAINMESSAGE>","</RAINMESSAGE>"));
     std::string sRain = "<NARR>Project Rain: " + sRainMessage + "</NARR>";
-    if (!sRainCommand.empty()) sRecipients = sRainCommand;
+
+    if (!sRainCommand.empty())
+        sRecipients = sRainCommand;
+
     wtx.hashBoinc = sRain;
     int64_t totalAmount = 0;
     double dTotalToSend = 0;
     std::vector<std::string> vRecipients = split(sRecipients.c_str(),"<ROW>");
     printf("Creating Rain transaction with %f recipients. ",(double)vRecipients.size());
+
     for (unsigned int i = 0; i < vRecipients.size(); i++)
     {
         std::string sRow = vRecipients[i];
         std::vector<std::string> vReward = split(sRow.c_str(),"<COL>");
+
         if (vReward.size() > 1)
         {
             std::string sAddress = vReward[0];
             std::string sAmount = vReward[1];
+
             if (sAddress.length() > 10 && sAmount.length() > 0)
             {
                 double dAmount = RoundFromString(sAmount,4);
@@ -1248,8 +1264,10 @@ Value rain(const json_spirit::Array& params, bool fHelp)
                     CBitcoinAddress address(sAddress);
                     if (!address.IsValid())
                         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+sAddress);
+
                     if (setAddress.count(address))
                         throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+sAddress);
+
                     setAddress.insert(address);
                     dTotalToSend += dAmount;
                     int64_t nAmount = AmountFromDouble(dAmount);
@@ -1265,6 +1283,7 @@ Value rain(const json_spirit::Array& params, bool fHelp)
     EnsureWalletIsUnlocked();
     // Check funds
     double dBalance = GetTotalBalance();
+
     if (dTotalToSend > dBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
     // Send
@@ -1272,21 +1291,25 @@ Value rain(const json_spirit::Array& params, bool fHelp)
     int64_t nFeeRequired = 0;
     bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired);
     printf("Transaction Created.");
+
     if (!fCreated)
     {
         if (totalAmount + nFeeRequired > pwalletMain->GetBalance())
             throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
     }
+
     printf("Committing.");
     // Rain the recipients
     if (!pwalletMain->CommitTransaction(wtx, keyChange))
     {
         printf("Commit failed.");
+
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
     }
     std::string sNarr = "Rain successful:  Sent " + wtx.GetHash().GetHex() + ".";
     printf("Success %s",sNarr.c_str());
+
     res.push_back(Pair("Response", sNarr));
 
     return res;
@@ -1322,8 +1345,8 @@ Value advertisebeacon(const json_spirit::Array& params, bool fHelp)
     std::string sOutPrivKey = "";
     std::string sError = "";
     std::string sMessage = "";
-
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
+
     res.push_back(Pair("Result",SuccessFail(fResult)));
     res.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
     res.push_back(Pair("Message",sMessage.c_str()));
@@ -1354,6 +1377,7 @@ Value beaconreport(const Array& params, bool fHelp)
     Object res;
 
     Array myBeaconJSONReport = GetJSONBeaconReport();
+
     res.push_back(myBeaconJSONReport);
 
     return res;
@@ -1377,16 +1401,15 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
     if (params.size() > 0)
         sCPID = params[0].get_str();
 
-    res.push_back(Pair("CPID", sCPID));
     std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
     std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
     int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
     std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
-
     bool hasBeacon = HasActiveBeacon(sCPID);
+
+    res.push_back(Pair("CPID", sCPID));
     res.push_back(Pair("Beacon Exists",YesNo(hasBeacon)));
     res.push_back(Pair("Beacon Timestamp",timestamp.c_str()));
-
     res.push_back(Pair("Public Key", sPubKey.c_str()));
     res.push_back(Pair("Private Key", sPrivKey.c_str()));
 
@@ -1399,6 +1422,7 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
 
     // Verify the users Local Public Key matches the Beacon Public Key
     std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
+
     res.push_back(Pair("Local Configuration Public Key", sLocalPubKey.c_str()));
 
     if (sLocalPubKey.empty())
@@ -1409,6 +1433,7 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
 
     // Prior superblock Magnitude
     double dMagnitude = GetMagnitudeByCpidFromLastSuperblock(sCPID);
+
     res.push_back(Pair("Magnitude (As of last superblock)", dMagnitude));
 
     if (dMagnitude==0)
@@ -1421,6 +1446,7 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
     {
         std::string sSignature = SignBlockWithCPID(sCPID,hashBlock.GetHex());
         bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
+
         res.push_back(Pair("Block Signing Test Results", fResult));
 
         if (!fResult)
@@ -1495,6 +1521,7 @@ Value currentneuralhash(const Array& params, bool fHelp)
 
     double popularity = 0;
     std::string consensus_hash = GetCurrentNeuralNetworkSupermajorityHash(popularity);
+
     res.push_back(Pair("Popular",consensus_hash));
 
     return res;
@@ -1511,6 +1538,7 @@ Value currentneuralreport(const Array& params, bool fHelp)
     Object res;
 
     Array myNeuralJSON = GetJSONCurrentNeuralNetworkReport();
+
     res.push_back(myNeuralJSON);
 
     return res;
@@ -1577,21 +1605,28 @@ Value lifetime(const Array& params, bool fHelp)
 
     std::string cpid = msPrimaryCPID;
     std::string Narr = ToString(GetAdjustedTime());
+
     c.push_back(Pair("Lifetime Payments Report",Narr));
     results.push_back(c);
+
     CBlockIndex* pindex = pindexGenesisBlock;
+
     while (pindex->nHeight < pindexBest->nHeight)
     {
         pindex = pindex->pnext;
+
         if (pindex==NULL || !pindex->IsInMainChain())
             continue;
+
         if (pindex == pindexBest)
             break;
+
         if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
             res.push_back(Pair(pindex->nHeight, RoundToString(pindex->nResearchSubsidy,2)));
     }
     //8-14-2015
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+
     res.push_back(Pair("Average Magnitude",stCPID.ResearchAverageMagnitude));
     results.push_back(res);
 
@@ -1667,7 +1702,8 @@ Value myneuralhash(const Array& params, bool fHelp)
     Object res;
 
     std::string myNeuralHash = NN::GetNeuralHash();
-    res.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+
+    res.push_back(Pair("My Neural Hash", myNeuralHash.c_str()));
 
     return res;
 }
@@ -1682,8 +1718,12 @@ Value neuralhash(const Array& params, bool fHelp)
 
     Object res;
 
-    std::string myNeuralHash = NN::GetNeuralHash();
-    res.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+
+    res.push_back(Pair("Popular", consensus_hash));
+
+    results.push_back(entry);
 
     return res;
 }
@@ -1700,6 +1740,7 @@ Value neuralreport(const Array& params, bool fHelp)
     Object res;
 
     Array myNeuralJSON = GetJSONNeuralNetworkReport();
+
     res.push_back(myNeuralJSON);
 
     return res;
@@ -1717,18 +1758,17 @@ Value proveownership(const Array& params, bool fHelp)
 
     HarvestCPIDs(true);
     GetNextProject(true);
+
     std::string email = GetArgument("email", "NA");
     boost::to_lower(email);
-
-    res.push_back(Pair("Boinc E-Mail", email));
-    res.push_back(Pair("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey));
-    res.push_back(Pair("CPID", GlobalCPUMiningCPID.cpid));
-
     std::string sLongCPID = ComputeCPIDv2(email, GlobalCPUMiningCPID.boincruntimepublickey,1);
     std::string sShortCPID = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey + email);
     std::string sEmailMD5 = RetrieveMd5(email);
     std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
 
+    res.push_back(Pair("Boinc E-Mail", email));
+    res.push_back(Pair("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey));
+    res.push_back(Pair("CPID", GlobalCPUMiningCPID.cpid));
     res.push_back(Pair("Computed Email Hash", sEmailMD5));
     res.push_back(Pair("Computed BPK", sBPKMD5));
     res.push_back(Pair("Computed CPID", sLongCPID));
@@ -1739,6 +1779,7 @@ Value proveownership(const Array& params, bool fHelp)
     if (GlobalCPUMiningCPID.boincruntimepublickey.empty())
     {
         fResult = false;
+
         res.push_back(Pair("Error", "Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location."));
     }
 
@@ -2304,6 +2345,443 @@ Value memorizekeys(const Array& params, bool fHelp)
     return res;
 }
 
+Value network(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "network\n"
+                "\n"
+                "Display information about the network health\n");
+
+    Object res;
+
+    for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii)
+    {
+        StructCPID stNet = mvNetwork[(*ii).first];
+
+        if (stNet.initialized)
+        {
+            Object results;
+
+            results.push_back(Pair("Project", stNet.projectname));
+            results.push_back(Pair("Avg RAC", stNet.AverageRAC));
+
+            if (stNet.projectname == "NETWORK")
+            {
+                double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
+                double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
+                double iPct = ( (stNet.InterestSubsidy/14) * 365 / (MoneySupply+.01));
+                double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
+
+                results.push_back(Pair("Network Total Magnitude", stNet.NetworkMagnitude));
+                results.push_back(Pair("Network Average Magnitude", stNet.NetworkAvgMagnitude));
+                results.push_back(Pair("Network Avg Daily Payments", stNet.payments/14));
+                results.push_back(Pair("Network Max Daily Payments", MaximumEmission));
+                results.push_back(Pair("Network Interest Paid (14 days)", stNet.InterestSubsidy));
+                results.push_back(Pair("Network Avg Daily Interest", stNet.InterestSubsidy/14));
+                results.push_back(Pair("Total Money Supply", MoneySupply));
+                results.push_back(Pair("Network Interest %", iPct));
+                results.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+            }
+
+            res.push_back(results);
+        }
+    }
+
+    return res;
+}
+
+Value neuralrequest(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "neuralrequest\n"
+                "\n"
+                "Sends a request to neural network and displays response\n");
+
+    Object res;
+
+    std::string response = NeuralRequest("REQUEST");
+
+    res.push_back(Pair("Response", response));
+
+    return res;
+}
+
+Value projects(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "projects\n"
+                "\n"
+                "Displays information on projects in the network\n");
+
+    Object res;
+
+    for (const auto& item : ReadCacheSection("project"))
+    {
+        Object entry;
+
+        std::string sProjectName = ToOfficialName(item.first);
+
+        if (sProjectName.empty())
+            continue;
+
+        std::string sProjectURL = item.second.value;
+        sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
+
+        // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
+        if (sProjectURL.find("stats/") != string::npos)
+        {
+            std::size_t tFound = sProjectURL.find("stats/");
+            sProjectURL.erase(tFound, sProjectURL.length());
+        }
+
+        entry.push_back(Pair("Project", sProjectName));
+        entry.push_back(Pair("URL", sProjectURL));
+
+        res.push_back(entry);
+    }
+
+    return res;
+}
+
+Value readconfig(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "readconfig\n"
+                "\n"
+                "Re-reads config file; Does not overwrite pre-existing loaded values\n");
+
+    Object res;
+
+    ReadConfigFile(mapArgs, mapMultiArgs);
+
+    res.push_back(Pair("readconfig", 1));
+
+    return res;
+}
+
+Value readdata(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "readdata <key>\n"
+                "\n"
+                "<key> -> generic key\n"
+                "Reads generic data from disk from a specified key\n");
+
+    Object res;
+
+    std::string sKey = params[0].get_str();
+    std::string sValue = "?";
+
+    //CTxDB txdb("cr");
+    CTxDB txdb;
+
+    if (!txdb.ReadGenericData(sKey, sValue))
+    {
+        res.push_back(Pair("Error", sValue));
+
+        sValue = "Failed to read from disk.";
+    }
+
+    res.push_back(Pair("Key", sKey));
+    res.push_back(Pair("Result", sValue));
+
+    return res;
+}
+
+Value seefile(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "seefile\n"
+                "\n"
+                "Unit test for sending a file from node to node\n");
+
+    Object res;
+
+    // This is a unit test to prove viability of transmitting a file from node to node
+    std::string sFile = "C:\\test.txt";
+    std::vector<unsigned char> v = readFileToVector(sFile);
+
+    res.push_back(Pair("byte1", v[1]));
+    res.push_back(Pair("bytes", (int)v.size()));
+
+    for (unsigned int i = 0; i < v.size(); i++)
+        res.push_back(Pair("bytes", v[i]));
+
+    std::string sManifest = FileManifest();
+
+    res.push_back(Pair("manifest", sManifest));
+
+    return res;
+}
+
+#ifdef WIN32
+Value refhash(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "refhash <walletaddress>\n"
+                "\n"
+                "<walletaddress> -> GRC address to test against\n"
+                "Tests to see if a GRC Address is a participant in neural network along with default wallet address\n");
+
+    Object res;
+
+    std::string rh = params[0].get_str();
+    bool r1 = StrLessThanReferenceHash(rh);
+    bool r2 = IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime());
+
+    res.push_back(Pair("<Ref Hash", r1));
+
+    res.push_back(Pair("WalletAddress<Ref Hash", r2));
+
+    return res;
+}
+#endif
+
+Value sendrawcontract(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "sendrawcontract <contract>\n"
+                "\n"
+                "<contract> -> custom contract\n"
+                "Send a raw contract in a transaction on the network\n");
+
+    Object res;
+
+    if (pwalletMain->IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+
+    std::string sAddress = GetBurnAddress();
+
+    CBitcoinAddress address(sAddress);
+
+    if (!address.IsValid())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+
+    std::string sContract = params[0].get_str();
+    int64_t nAmount = CENT;
+    // Wallet comments
+    CWalletTx wtx;
+    wtx.hashBoinc = sContract;
+
+    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, false);
+
+    if (!strError.empty())
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+
+    res.push_back(Pair("Contract", sContract));
+    res.push_back(Pair("Recipient", sAddress));
+    res.push_back(Pair("TrxID", wtx.GetHash().GetHex()));
+
+    return res;
+}
+
+Value superblockaverage(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "superblockaverage\n"
+                "\n"
+                "Displays average information for current superblock\n");
+
+    Object res;
+
+    std::string superblock = ReadCache("superblock", "all").value;
+    double out_beacon_count = 0;
+    double out_participant_count = 0;
+    double out_avg = 0;
+    double avg = GetSuperblockAvgMag(superblock, out_beacon_count, out_participant_count, out_avg, false, nBestHeight);
+    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+    bool bDireNeed = NeedASuperblock();
+
+    res.push_back(Pair("avg", avg));
+    res.push_back(Pair("beacon_count", out_beacon_count));
+    res.push_back(Pair("beacon_participant_count", out_participant_count));
+    res.push_back(Pair("average_magnitude", out_avg));
+    res.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
+    res.push_back(Pair("Superblock Age", superblock_age));
+    res.push_back(Pair("Dire Need of Superblock", bDireNeed));
+
+    return res;
+}
+
+Value tally(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "tally\n"
+                "\n"
+                "Requests a tally of research averages\n");
+
+    Object res;
+
+    bNetAveragesLoaded_retired = false;
+    TallyResearchAverages_v9();
+
+    res.push_back(Pair("Tally Network Averages", 1));
+
+    return res;
+}
+
+Value tallyneural(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "tallyneural\n"
+                "\n"
+                "Requests a tally of neural network\n");
+
+    Object res;
+
+    ComputeNeuralNetworkSupermajorityHashes();
+    UpdateNeuralNetworkQuorumData();
+
+    res.push_back(Pair("Ready", "."));
+
+    return res;
+}
+
+#ifdef WIN32
+Value testnewcontract(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "testnewcontract\n"
+                "\n"
+                "Tests current local neural contract\n");
+
+    Object res;
+
+    std::string contract = NN::GetNeuralContract();
+    std::string myNeuralHash = NN::GetNeuralHash();
+    // Convert to Binary
+    std::string sBin = PackBinarySuperblock(contract);
+    // Hash of current superblock
+    std::string sUnpacked = UnpackBinarySuperblock(sBin);
+    std::string neural_hash = GetQuorumHash(contract);
+    std::string binary_neural_hash = GetQuorumHash(sUnpacked);
+
+    res.push_back(Pair("My Neural Hash", myNeuralHash));
+    res.push_back(Pair("Contract Test", contract));
+    res.push_back(Pair("Contract Length", (int)contract.length()));
+    res.push_back(Pair("Binary Length", (int)sBin.length()));
+    res.push_back(Pair("Unpacked length", (int)sUnpacked.length()));
+    res.push_back(Pair("Unpacked", sUnpacked));
+    res.push_back(Pair("Local Core Quorum Hash", neural_hash));
+    res.push_back(Pair("Binary Local Core Quorum Hash", binary_neural_hash));
+    res.push_back(Pair("Neural Network Live Quorum Hash", myNeuralHash));
+
+    return res;
+}
+#endif
+
+Value testorgkey(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+                "testorgkey <organization> <publickey>\n"
+                "\n"
+                "<organization> -> Organization name\n"
+                "<publickey> ----> Public key for testing\n"
+                "Test a orgkey created by genorgkey\n");
+
+    Object res;
+
+    std::string sParam1 = params[0].get_str();
+    std::string sParam2 = params[1].get_str();
+    std::string key = sParam1 + "," + AdvancedDecryptWithSalt(sParam2, sParam1);
+
+    res.push_back(Pair("Org", sParam1));
+    res.push_back(Pair("Key", sParam2));
+    res.push_back(Pair("PubKey", key));
+
+    return res;
+}
+
+Value unusual(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "unusual\n"
+                "\n"
+                "Displays report on unusual network activity in debug.log\n");
+
+    Object res;
+
+    UnusualActivityReport();
+
+    res.push_back(Pair("UAR", 1));
+
+    return res;
+}
+
+Value updatequoromdata(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "updatequoromdata\n"
+                "\n"
+                "Rquests update of neural network quorom data\n");
+
+    Object res;
+
+    UpdateNeuralNetworkQuorumData();
+
+    res.push_back(Pair("Updated.", ""));
+
+    return res;
+}
+
+Value versionreport(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "versionreport\n"
+                "\n"
+                "Displays a report on various versions recently stake on the network\n");
+
+    Array myNeuralJSON = GetJSONVersionReport();
+
+    return myNeuralJSON;
+}
+
+Value writedata(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+                "writedata <key> <value>\n"
+                "\n"
+                "<key> ---> Key where value will be written\n"
+                "<value> -> Value to be written to specified key\n"
+                "Writes a value to specified key\n");
+
+    Object res;
+
+    std::string sKey = params[0].get_str();
+    std::string sValue = params[1].get_str();
+    //CTxDB txdb("rw");
+    CTxDB txdb;
+    txdb.TxnBegin();
+    std::string result = "Success.";
+
+    if (!txdb.WriteGenericData(sKey, sValue))
+        result = "Unable to write.";
+
+    if (!txdb.TxnCommit())
+        result = "Unable to Commit.";
+
+    res.push_back(Pair("Result", result));
+
+    return res;
+}
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -2353,125 +2831,11 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Result",fResult));
             results.push_back(entry);
     }
-    else if (sItem == "neuralrequest")
-    {
-
-            std::string response = NeuralRequest("REQUEST");
-            entry.push_back(Pair("Response", response));
-            results.push_back(entry);
-
-    }
-    else if (sItem == "tallyneural")
-    {
-            ComputeNeuralNetworkSupermajorityHashes();
-            UpdateNeuralNetworkQuorumData();
-            entry.push_back(Pair("Ready","."));
-            results.push_back(entry);
-    }
-    else if (sItem == "versionreport")
-    {
-            Array myNeuralJSON = GetJSONVersionReport();
-            results.push_back(myNeuralJSON);
-    }
-    else if (sItem == "unusual")
-    {
-
-            UnusualActivityReport();
-            entry.push_back(Pair("UAR",1));
-            results.push_back(entry);
-
-
-    }
-    else if (sItem == "neuralhash")
-    {
-            double popularity = 0;
-            std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-            entry.push_back(Pair("Popular",consensus_hash));
-            results.push_back(entry);
-    }
-    else if (sItem=="updatequorumdata")
-    {
-            UpdateNeuralNetworkQuorumData();
-            entry.push_back(Pair("Updated.",""));
-            results.push_back(entry);
-    }
     else if (sItem == "askforoutstandingblocks")
     {
         bool fResult = AskForOutstandingBlocks(uint256(0));
         entry.push_back(Pair("Sent.",fResult));
         results.push_back(entry);
-    }
-    else if (sItem == "readconfig")
-    {
-        ReadConfigFile(mapArgs, mapMultiArgs);
-
-    }
-    else if (sItem == "writedata")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify the Key and Value.  For example execute writedata dog_color black."));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string sKey = params[1].get_str();
-                std::string sValue = params[2].get_str();
-                //CTxDB txdb("rw");
-                CTxDB txdb;
-                txdb.TxnBegin();
-                std::string result = "Success.";
-                if (!txdb.WriteGenericData(sKey,sValue)) result = "Unable to write.";
-                if (!txdb.TxnCommit()) result = "Unable to Commit.";
-                entry.push_back(Pair("Result",result));
-                results.push_back(entry);
-        }
-
-    }
-    else if (sItem == "readdata")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify the Key.  For example execute readdata dog_color."));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string sKey = params[1].get_str();
-                std::string sValue = "?";
-                //CTxDB txdb("cr");
-                CTxDB txdb;
-                if (!txdb.ReadGenericData(sKey,sValue))
-                {
-                        entry.push_back(Pair("Error",sValue));
-
-                        sValue = "Failed to read from disk.";
-                }
-                entry.push_back(Pair("Key",sKey));
-
-                entry.push_back(Pair("Result",sValue));
-                results.push_back(entry);
-        }
-
-    }
-    else if (sItem == "refhash")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify the Reference Hash."));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string rh = params[1].get_str();
-                bool r1 = StrLessThanReferenceHash(rh);
-                bool r2 = IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime());
-                entry.push_back(Pair("<Ref Hash",r1));
-                entry.push_back(Pair("WalletAddress<Ref Hash",r2));
-                results.push_back(entry);
-
-        }
-
     }
     else if (sItem == "vote")
     {
@@ -2750,40 +3114,6 @@ Value execute(const Array& params, bool fHelp)
             }
         }
     }
-    else if (sItem=="testnewcontract")
-    {
-        std::string contract = NN::GetNeuralContract();
-        std::string myNeuralHash = NN::GetNeuralHash();
-        entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
-        results.push_back(entry);
-
-        entry.push_back(Pair("Contract Test",contract));
-        // Convert to Binary
-        std::string sBin = PackBinarySuperblock(contract);
-        entry.push_back(Pair("Contract Length",(int)contract.length()));
-        entry.push_back(Pair("Binary Length",(int)sBin.length()));
-        //entry.push_back(Pair("Binary",sBin.c_str()));
-        // Hash of current superblock
-        std::string sUnpacked = UnpackBinarySuperblock(sBin);
-        entry.push_back(Pair("Unpacked length",(int)sUnpacked.length()));
-
-        entry.push_back(Pair("Unpacked",sUnpacked.c_str()));
-        std::string neural_hash = GetQuorumHash(contract);
-        std::string binary_neural_hash = GetQuorumHash(sUnpacked);
-
-        entry.push_back(Pair("Local Core Quorum Hash",neural_hash));
-        entry.push_back(Pair("Binary Local Core Quorum Hash",binary_neural_hash));
-
-        entry.push_back(Pair("Neural Network Live Quorum Hash",myNeuralHash));
-        results.push_back(entry);
-    }
-    else if (sItem == "tally")
-    {
-            bNetAveragesLoaded_retired = false;
-            TallyResearchAverages_v9();
-            entry.push_back(Pair("Tally Network Averages",1));
-            results.push_back(entry);
-    }
     else if (sItem == "encryptphrase")
     {
             if (params.size() != 2)
@@ -2816,67 +3146,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Param1",sParam1));
             std::string test = AdvancedDecrypt(sParam1);
             entry.push_back(Pair("DecPhrase",test));
-            results.push_back(entry);
-
-        }
-
-    }
-    else if (sItem == "sendrawcontract")
-    {
-        if (params.size() != 2)
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "You must specify raw contract.");
-        if (pwalletMain->IsLocked())
-            throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-        std::string sAddress = GetBurnAddress();
-        CBitcoinAddress address(sAddress);
-        if (!address.IsValid())
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-        std::string sContract = params[1].get_str();
-        entry.push_back(Pair("Contract",sContract));
-        entry.push_back(Pair("Recipient",sAddress));
-        int64_t nAmount = CENT;
-        // Wallet comments
-        CWalletTx wtx;
-        wtx.hashBoinc = sContract;
-        string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, false);
-        if (!strError.empty())
-            throw JSONRPCError(RPC_WALLET_ERROR, strError);
-        entry.push_back(Pair("TrxID",wtx.GetHash().GetHex()));
-        results.push_back(entry);
-    }
-    else if (sItem == "superblockaverage")
-    {
-        std::string superblock = ReadCache("superblock","all").value;
-        double out_beacon_count = 0;
-        double out_participant_count = 0;
-        double out_avg = 0;
-        double avg = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,false,nBestHeight);
-        entry.push_back(Pair("avg",avg));
-        entry.push_back(Pair("beacon_count",out_beacon_count));
-        entry.push_back(Pair("beacon_participant_count",out_participant_count));
-        entry.push_back(Pair("average_magnitude",out_avg));
-        entry.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
-        int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
-        entry.push_back(Pair("Superblock Age",superblock_age));
-        bool bDireNeed = NeedASuperblock();
-        entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
-        results.push_back(entry);
-    }
-    else if (sItem == "testorgkey")
-    {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify an org and public key"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("Org",sParam1));
-            std::string sParam2 = params[2].get_str();
-            entry.push_back(Pair("Key",sParam2));
-            std::string key = sParam1 + "," + AdvancedDecryptWithSalt(sParam2,sParam1);
-            entry.push_back(Pair("PubKey",key));
             results.push_back(entry);
 
         }
@@ -4294,87 +4563,12 @@ Value listitem(const Array& params, bool fHelp)
         results.push_back(entry);
 
     }
-	else if (sitem == "seefile")
-	{
-		// This is a unit test to prove viability of transmitting a file from node to node
-		std::string sFile = "C:\\test.txt";
-        std::vector<unsigned char> v = readFileToVector(sFile);
-		Object entry;
-	    entry.push_back(Pair("byte1",v[1]));
-        entry.push_back(Pair("bytes",(double)v.size()));
-        for (unsigned int i = 0; i < v.size(); i++)
-		{
-			entry.push_back(Pair("bytes",v[i]));
-		}
-		std::string sManifest = FileManifest();
-		entry.push_back(Pair("manifest",sManifest));
-		results.push_back(entry);
-	}
     else if (sitem == "memorypool")
     {
         Object entry;
         entry.push_back(Pair("Excluded Tx",msMiningErrorsExcluded));
         entry.push_back(Pair("Included Tx",msMiningErrorsIncluded));
         results.push_back(entry);
-    }
-    else if (sitem == "projects")
-    {
-        for (const auto& item : ReadCacheSection("project"))
-        {
-            Object entry;
-
-            std::string sProjectName = ToOfficialName(item.first);
-            if (sProjectName.empty())
-                continue;
-
-            std::string sProjectURL = item.second.value;
-            sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
-
-            // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
-            if (sProjectURL.find("stats/") != string::npos)
-            {
-                std::size_t tFound = sProjectURL.find("stats/");
-                sProjectURL.erase(tFound, sProjectURL.length());
-            }
-
-            entry.push_back(Pair("Project", sProjectName));
-            entry.push_back(Pair("URL", sProjectURL));
-            results.push_back(entry);
-        }
-    }
-    else if (sitem == "network")
-    {
-        for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii)
-        {
-
-            StructCPID stNet = mvNetwork[(*ii).first];
-
-            if (stNet.initialized)
-            {
-                Object entry;
-                entry.push_back(Pair("Project",stNet.projectname));
-                entry.push_back(Pair("Avg RAC",stNet.AverageRAC));
-                if (stNet.projectname=="NETWORK")
-                {
-                        entry.push_back(Pair("Network Total Magnitude",stNet.NetworkMagnitude));
-                        entry.push_back(Pair("Network Average Magnitude",stNet.NetworkAvgMagnitude));
-                        double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
-                        entry.push_back(Pair("Network Avg Daily Payments", stNet.payments/14));
-                        entry.push_back(Pair("Network Max Daily Payments",MaximumEmission));
-                        entry.push_back(Pair("Network Interest Paid (14 days)", stNet.InterestSubsidy));
-                        entry.push_back(Pair("Network Avg Daily Interest", stNet.InterestSubsidy/14));
-                        double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
-                        entry.push_back(Pair("Total Money Supply", MoneySupply));
-                        double iPct = ( (stNet.InterestSubsidy/14) * 365 / (MoneySupply+.01));
-                        entry.push_back(Pair("Network Interest %", iPct));
-                        double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
-                        entry.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-                }
-                results.push_back(entry);
-
-            }
-        }
-        return results;
     }
     else if (sitem == "help")
     {
