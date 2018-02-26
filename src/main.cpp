@@ -3415,6 +3415,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 }
 
 
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew);
 bool ForceReorganizeToHash(uint256 NewHash)
 {
     LOCK(cs_main);
@@ -3437,10 +3438,18 @@ bool ForceReorganizeToHash(uint256 NewHash)
         return false;
     }
 
-    //Re-process the last block to trigger orphan and shit
-    if (!SetBestChain(txdb, blockNew, pindexNew))
+    unsigned cnt_dis=0;
+    unsigned cnt_con=0;
+    bool success = false;
+
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+
+    if(pindexBest->nChainTrust < pindexCur->nChainTrust)
+        printf("WARNING ForceReorganizeToHash: Chain trust is now less then before!\n");
+
+    if (!success)
     {
-        return error("ForceReorganizeToHash Fatal Error while setting best chain.\r\n");
+        return error("ForceReorganizeToHash: Fatal Error while setting best chain.\r\n");
     }
 
     AskForOutstandingBlocks(uint256(0));
@@ -3732,22 +3741,20 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     unsigned cnt_dis=0;
     unsigned cnt_con=0;
     bool success = false;
-    const auto prevTrust = nBestChainTrust;
+    const auto origBestIndex = pindexBest;
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
+    if(origBestIndex->nChainTrust > nBestChainTrust)
+    {
+        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
+        CBlock origBlock;
+        if (!origBlock.ReadFromDisk(origBestIndex))
+            return error("SetBestChain: Fatal Error while reading original best block");
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+    }
     if(!success)
         return false;
-    if(!success || prevTrust>nBestChainTrust)
-    {
-        /*
-        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
-
-        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
-        */
-    }
 
     /* Fix up after block connecting */
 
