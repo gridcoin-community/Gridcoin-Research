@@ -8444,8 +8444,10 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                       else
                       {
                           // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
-                          sMessageValue="";
-                          if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
+                          //sMessageValue="";
+                          fStupidBeacon = true;
+                          if(fDebug || fDebug10)
+                            printf("WARNING: MemorizeMessage: beacon overwrite denied %s\n",sMessageKey.c_str());
                       }
                   }
               }
