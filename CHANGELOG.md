@@ -8,18 +8,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
  - Move context sensitive DPoR block checks to ConnectBlock, #912 (@tomasbrod).
  - Check incoming blocks for malformed DPoR signature, #912.
- - Corect Tally height on Init, #917 (@denravonska).
- - Prevent staking of a block with a failed signature, #945 (@Foggyx420).
+ - Corect tally height on init, #917 (@denravonska).
+ - Prevent staking of a block with a failed signature, #948 (@Foggyx420).
  - Fix UI and RPC slowdown regression, #961 (@denravonska).
  - Fix Debian lint errors, #886, #885, #884, #883 (@caraka).
  - Fix fork issue due to research age calculation inconsistencies, #939
    (@denravonska).
  - Fix crashes when tallying, #934 (@denravonska).
+ - Revert reorganize of the chain trust becomes less than what it was, #957
+   (@tomasbrod).
 
  ### Changed
   - Double check PoS kernel, #958 (@tomasbrod).
   - Don't tally until V9 to speed up syncing, #943 (@denravonska).
-  - Don't allow blocks with bad beacons to be staked, #948 (@Foggyx420).
+  - Double check proof of stake kernel, #958 (@tomasbrod).
 
 ## [3.7.7.0] 2018-02-02
 ### Fixed
