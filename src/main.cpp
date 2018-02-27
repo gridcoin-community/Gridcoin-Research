@@ -2598,6 +2598,12 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 DeleteCache(sMType, sMKey);
                 if(fDebug)
                     printf("DisconnectBlock: Delete contract %s %s\n", sMType.c_str(), sMKey.c_str());
+
+                if("beacon"==sMType)
+                {
+                    sMKey=sMKey+"A";
+                    DeleteCache("beaconalt", sMKey+"."+ToString(vtx[i].nTime));
+                }
             }
         }
 
@@ -5189,6 +5195,25 @@ bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
     return result;
 }
 
+std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
+{
+    int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+    std::set<std::string> result;
+
+    for(const auto& item : AppCacheFilter("beaconalt;"))
+    {
+        const std::string& pubkey = item.second;
+        const int64_t iAge = pindexBest != NULL
+            ? pindexBest->nTime - mvApplicationCacheTimestamp[item.first]
+            : 0;
+        if (iAge > iMaxSeconds)
+            continue;
+
+        result.emplace(pubkey);
+    }
+    return result;
+}
+
 bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
     //09-25-2016: Transition to CPID Keypairs.
@@ -5209,12 +5234,29 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     {
         if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
         if (!IsResearcher(mc.cpid)) return true; /* is investor? */
-        // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
-        result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
 
-        bool scval = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
-        if(scval!=result)
-            printf("WARNING: IsCPIDValidv2(): inconsistent result\n");
+        const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
+        bool kmval = sBPK_n == mc.BoincPublicKey;
+        const bool scval_n = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
+
+        result= scval_n;
+        if(!scval_n)
+        {
+            for(const std::string& key_alt : GetAlternativeBeaconKeys(mc.cpid))
+            {
+                const bool scval_alt = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, key_alt);
+                kmval = key_alt == mc.BoincPublicKey;
+                if(scval_alt)
+                {
+                    printf("WARNING: IsCPIDValidv2: good signature with alternative key\n");
+                    result= true;
+                }
+            }
+        }
+
+        if( !kmval )
+            printf("WARNING: IsCPIDValidv2: block key mismatch\n");
+
     }
 
     return result;
@@ -8391,37 +8433,6 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     sMessageValue="";
               }
 
-              if (sMessageType=="beacon" && sMessageAction=="A")
-              {
-                  // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value unless the public key is the same
-                  std::string sBPK = GetBeaconPublicKey(sMessageKey,false);
-                  if (!sBPK.empty())
-                  {
-                      std::string out_cpid = "";
-                      std::string out_address = "";
-                      std::string out_publickey = "";
-                      GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                      if (fDebug10 && LessVerbose(50)) 
-                      {
-                          printf("\r\n**Beacon Debug Message : beaconpubkey %s, message key %s, cpid %s, addr %s, base64 pub key %s \r\n ",sBPK.c_str(),
-                                 sMessageKey.c_str(),out_cpid.c_str(),out_address.c_str(), out_publickey.c_str());
-                      }
-                      if (sBPK == out_publickey)
-                      {
-                          // allow key to be reloaded in since this is a refreshed beacon
-                          if (fDebug10) printf("\r\n**Beacon Being Overwritten %s \r\n %s : %s\r\n",sBPK.c_str(),sMessageKey.c_str(),sBPK.c_str());
-                      }
-                      else
-                      {
-                          // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
-                          //sMessageValue="";
-                          fStupidBeacon = true;
-                          if(fDebug || fDebug10)
-                            printf("WARNING: MemorizeMessage: beacon overwrite denied %s\n",sMessageKey.c_str());
-                      }
-                  }
-              }
-
               if (sMessageType=="superblock")
               {
                   // Deny access to superblock processing runtime data
@@ -8439,6 +8450,16 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if (sMessageAction=="A")
                         {
+                                /* With this we allow verifying blocks with stupid beacon */
+                                if("beacon"==sMessageType)
+                                {
+                                    std::string out_cpid = "";
+                                    std::string out_address = "";
+                                    std::string out_publickey = "";
+                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                                    WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
+                                }
+
                                 // Ensure we have the TXID of the contract in memory
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
                                 {
