@@ -3152,43 +3152,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         {
                             /* ignore on bad blocks already in chain */
                             const std::set<uint256> vSkipHashBoincSignCheck =
-                            {    uint256("0001efda66323dcbc8c3fdf80dab2421660b4eb5c6531f350bb5e64ec35310f1")
-                                ,uint256("0c2e56ce569ea3d3458cb0b0bc1cbabc508d046506f1d6e1bf030cc72fc53459")
-                                ,uint256("1362e347495f02df6871bf50ca865fd63c9c3e4dc100008c63f466538e2fab54")
-                                ,uint256("13e8dee125c5d40d49df77428ad255deee69c44f96bae68b971ab20b0791db95")
-                                ,uint256("1d30c6d4dce377d69c037f1a725aabbc6bafa72a95456dbe2b2538bc1da115bd")
-                                ,uint256("2ab1625f6b2a97eae7c592baef9e0495a9ce1585c6fc3df2340330b8eb5c35c8")
-                                ,uint256("2cbf2624b682970c8908b0bb0ddc4baac1e0f5c76cbd1acd5f0447d521447173")
-                                ,uint256("31e67a4740e7acd937ae8f961a8c97dbe89bb47fa1330f0355421d2cbdf42503")
-                                ,uint256("36aba1c714cb152c4227db3701c892aed7198b1ad56152fa82fe34add701a47c")
-                                ,uint256("41cd6208f0cd9b916fe8913766fe17cef0c7c57951ff9257bff13994a7d00ede")
+                            {    uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e")
                                 ,uint256("471292b59e5f3ad94c39b3784a9a3f7a8324b9b56ff0ad00bd48c31658537c30")
-                                ,uint256("54f02e84fb18b56c4187eb5b390b8f34877dcd06fe833a3b3a2fb3e396a4a3d8")
-                                ,uint256("58282559939ced7ebed7d390559c7ac821932958f8f2399ad40d1188eb0a57f9")
-                                ,uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e")
                                 ,uint256("5b63d4edbdec06ddc2182703ce45a3ced70db0d813e329070e83bf37347a6c2c")
-                                ,uint256("5f5e7f5cf56693aab10957f3dae7cc7e77f66a711169f7e77ac60fb78423801b")
-                                ,uint256("6085d4d0cd800d79794c1b9a09db4a8cc3d6b1ed49b43ebe8df2ea6ff4e9a0e1")
-                                ,uint256("6135a88409e2122e9817faef7f54dd1af13893324ebdb7ec5910aa337ab83b41")
-                                ,uint256("69da74d1af75cdaba599ecb75c222e71a6d49af9d5fa90b494c9f451bc0f5b1d")
-                                ,uint256("6c081be0c814b3e585f87c767db9beb447a3e1352011476bdf0cc978996d9f05")
-                                ,uint256("7e2b19def67236ef2da1435751d86b9f2d92c6deea42b4ddf97851736eb4400c")
-                                ,uint256("812295584ed802c3bf3ec0358f508df99c24213e3f3a943facf95a7cf112d833")
-                                ,uint256("873f421b779b06ce9f0ef75793af2cee4c2bf19aea2fb1554ed407692cbbf44e")
-                                ,uint256("8749688550e1ac05fd01f9b5be1529808efc171b4df3221640bbbec0a483499e")
-                                ,uint256("883398dc059c0c9d950dff6b6d72eea3dc61aeedec23f336581f284ba0dbfb44")
-                                ,uint256("91f4825aef14d2831927f3f996ed84a031e4ee7643b28c60abc9991a9ff5c793")
-                                ,uint256("934c6291209d90bb5d3987885b413c18e39f0e28430e8d302f20888d2a35e725")
-                                ,uint256("9387774230f23a898b11c016533f7c5da6d095edec0e9347a147be8c3cada3ac")
-                                ,uint256("95f15ad917588323446ea3d71dd8fbe0dc19522ed542607f0c6b62a20f5a544c")
-                                ,uint256("9f3185895eb91a0d00394fe3f538b13248da97e2550fd69b6355cd8fa5c704fe")
-                                ,uint256("b911f04701d118e93961c372c4672a85a942c1c19ab0df8a7b8374b91b7a1616")
-                                ,uint256("da97666feb62c9391ef1bdb44c27aae5bee8ff01194fbe698685ab93e4535c08")
-                                ,uint256("dbd1de3f858fa5bd6c0e154ea0ca4807e0794c4d5d10946354ba5dff38190ad8")
-                                ,uint256("dd4071743eb5d8fa0b997039968d0d6a66cd87c370a1aa1b33aa32c02fc276a1")
                                 ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940")
-                                ,uint256("eab8c19853065b52cfbd939299217d694272b93e34118996a151efeef5f4aac1")
-                                ,uint256("f6fb998e0df3ccb4d7bb82fc84eefde186c28570ca6048d7759012d64234f305")
+                                ,uint256("1d30c6d4dce377d69c037f1a725aabbc6bafa72a95456dbe2b2538bc1da115bd")
+                                ,uint256("934c6291209d90bb5d3987885b413c18e39f0e28430e8d302f20888d2a35e725")
+                                ,uint256("58282559939ced7ebed7d390559c7ac821932958f8f2399ad40d1188eb0a57f9")
                             };
                             if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
                                 return DoS(20, error(
@@ -5239,12 +5209,23 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     {
         if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
         if (!IsResearcher(mc.cpid)) return true; /* is investor? */
-        // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
-        result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
 
-        bool scval = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
-        if(scval!=result)
-            printf("WARNING: IsCPIDValidv2(): inconsistent result\n");
+        const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
+        const std::string sBPK_s = GetBeaconPublicKey(mc.cpid+";Stupid", false);
+
+        const bool scval_b = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
+        const bool scval_n = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
+        const bool scval_s = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_s);
+
+        const bool kmval_n = sBPK_n == mc.BoincPublicKey;
+        const bool kmval_s = sBPK_s == mc.BoincPublicKey;
+
+        result = (scval_b|scval_n|scval_s) && (kmval_n|kmval_s);
+
+        if(!scval_b || !kmval_n)
+            printf("WARNING: IsCPIDValidv2: stupid bpk or sig %d%d%d-%d%d\n"
+            , !!scval_b, !!scval_n, !!scval_s, !!kmval_n, !!kmval_s )
+        ;
     }
 
     return result;
@@ -8407,6 +8388,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
     const int64_t &nTime = tx.nTime;
           if (msg.empty()) return false;
           bool fMessageLoaded = false;
+          bool fStupidBeacon = false;
 
           if (Contains(msg,"<MT>"))
           {
@@ -8467,6 +8449,10 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if (sMessageAction=="A")
                         {
+                                /* With this we allow verifying blocks with stupid beacon */
+                                if("beacon"==sMessageType && fStupidBeacon)
+                                    sMessageKey=sMessageKey+";Stupid";
+
                                 // Ensure we have the TXID of the contract in memory
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
                                 {
