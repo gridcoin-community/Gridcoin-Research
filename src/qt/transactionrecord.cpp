@@ -170,10 +170,13 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 										{
 												std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
 												QString TxMessage = MakeSafeMessage(vTxNormalInfoIn[1].second).c_str();
-												if (TxMessage == "Vote" || TxMessage == "Add Poll") {
+												// When debug is enabled there's the message length at position 1
+												QString TxMessageDebug = MakeSafeMessage(vTxNormalInfoIn[2].second).c_str();
+												if (TxMessage == "Vote" || TxMessageDebug == "Vote"|| TxMessage == "Add Poll" || TxMessageDebug == "Add Poll") {
+														OutputDebugStringF("Vote/Add Poll\n");
 														sub.type = TransactionRecord::Vote;
 												}
-												else if(TxMessage == "Add Beacon Contract") {
+												else if(TxMessage == "Add Beacon Contract" || TxMessageDebug == "Add Beacon Contract") {
 														sub.type = TransactionRecord::Beacon;
 												}
 												else
