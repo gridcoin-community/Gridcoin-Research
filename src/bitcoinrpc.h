@@ -282,13 +282,16 @@ extern json_spirit::Value updatequoromdata(const json_spirit::Array& params, boo
 extern json_spirit::Value versionreport(const json_spirit::Array& params, bool fhelp);
 extern json_spirit::value writedata(const json_spirit::Array& params, bool fHelp);
 
+// Network
+extern json_spirit::Value addnode(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value addpoll(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value askforoutstandingblocks(const json_spirit::Array& params, bool fHelp);
 
 
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getaddednodeinfo(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value addnode(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
 

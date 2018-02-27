@@ -2782,6 +2782,109 @@ Value writedata(const Array& params, bool fHelp)
     return res;
 }
 
+// Network RPC commands
+
+Value addpoll(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 6)
+        throw runtime_error(
+                "addpoll <title> <days> <question> <answers> <sharetype> <url>\n"
+                "\n"
+                "<title> -----> The title for poll with no spaces. Use _ in between words\n"
+                "<days> ------> The number of days the poll will run\n"
+                "<question> --> The question with no spaces. Use _ in between words\n"
+                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to seperate answers\n"
+                "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
+                "<url> -------> The corresponding url for the poll\n"
+                "Add a poll to the network; Requires 100K GRC balance\n");
+
+    Object res;
+
+    std::string Title = params[0].get_str();
+    double days = Round(params[1].get_real(), 0);
+    std::string Question = params[2].get_str();
+    std::string Answers = params[3].get_str();
+    double sharetype = Round(params[4].get_real(), 0);
+    std::string sURL = params[5].get_str();
+
+    if (Title.empty() || Question.empty() || Answers.empty())
+    {
+        res.push_back(Pair("Error", "You must specify a Poll Title, Poll Question and Poll Answers."));
+
+        return res;
+    }
+
+    else
+    {
+        if (days < 7)
+        {
+            res.push_back(Pair("Error", "Minimum duration is 7 days; please specify a longer poll duration."));
+
+            return res;
+        }
+
+        else
+        {
+            double nBalance = GetTotalBalance();
+
+            if (nBalance < 100000)
+            {
+                res.push_back(Pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
+
+                return res;;
+            }
+
+            else
+            {
+                if (days < 0 || days == 0)
+                {
+                    res.push_back(Pair("Error", "You must specify a positive value for days for the expiration date."));
+
+                    return res;
+                }
+
+                else
+                {
+                    if (sharetype != 1 && sharetype != 2 && sharetype != 3 && sharetype != 4 && sharetype != 5)
+                    {
+                        res.push_back(Pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sharetype."));
+
+                        return res;
+                    }
+
+                    else
+                    {
+                        std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
+                        std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + days + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + sharetype + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
+                        std::string result = AddContract("poll",Title,contract);
+
+                        res.push_back(Pair("Success", "Your poll has been added: " + result));
+
+                        return res;
+                    }
+                }
+            }
+        }
+    }
+}
+
+Value askforoutstandingblocks(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "askforoutstandingblocks\n"
+                "\n"
+                "Requests network for outstanding blocks\n");
+
+    Object res;
+
+    bool fResult = AskForOutstandingBlocks(uint256(0));
+
+    res.push_back(Pair("Sent.", fResult));
+
+    return res;
+}
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -2830,12 +2933,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Requesting",hash.ToString()));
             entry.push_back(Pair("Result",fResult));
             results.push_back(entry);
-    }
-    else if (sItem == "askforoutstandingblocks")
-    {
-        bool fResult = AskForOutstandingBlocks(uint256(0));
-        entry.push_back(Pair("Sent.",fResult));
-        results.push_back(entry);
     }
     else if (sItem == "vote")
     {
@@ -2952,83 +3049,6 @@ Value execute(const Array& params, bool fHelp)
 
                }
           }
-
-    }
-    else if (sItem == "addpoll")
-    {
-        if (params.size() != 7)
-        {
-            entry.push_back(Pair("Error","You must specify the Poll Title, Expiration In DAYS from Now, Question, Answers delimited by a semicolon, ShareType (1=Magnitude,2=Balance,3=Both,4=CPIDCount,5=ParticipantCount) and discussion URL (use TinyURL.com to make a small URL).  Please use underscores in place of spaces inside a sentence.  "));
-            entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
-            entry.push_back(Pair("<title>", "Title for poll with no spaces. Use _ in between words"));
-            entry.push_back(Pair("<days>", "Number of days the poll will run"));
-            entry.push_back(Pair("<question>", "The poll question in which you seek input for"));
-            entry.push_back(Pair("<answers>", "The available answers to which a voter can vote seperated by a semicolon"));
-            entry.push_back(Pair("<sharetype>", "1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count"));
-            entry.push_back(Pair("<url>", "Short url for information about the poll"));
-            results.push_back(entry);
-        }
-        else
-        {
-                std::string Title = params[1].get_str();
-                std::string Days = params[2].get_str();
-                double days = RoundFromString(Days,0);
-                std::string Question = params[3].get_str();
-                std::string Answers = params[4].get_str();
-                std::string ShareType = params[5].get_str();
-                std::string sURL = params[6].get_str();
-                double sharetype = RoundFromString(ShareType,0);
-                if (Title=="" || Question == "" || Answers == "")
-                {
-                        entry.push_back(Pair("Error","You must specify a Poll Title, Poll Question and Poll Answers."));
-                        results.push_back(entry);
-                }
-                else
-                {
-                if (days < 7)
-                {
-                        entry.push_back(Pair("Error","Minimum duration is 7 days; please specify a longer poll duration."));
-                        results.push_back(entry);
-                }
-                else
-                {
-                    double nBalance = GetTotalBalance();
-
-                    if (nBalance < 100000)
-                    {
-                        entry.push_back(Pair("Error","You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
-                        results.push_back(entry);
-                    }
-                    else
-                    {
-                        if (days < 0 || days == 0)
-                        {
-                            entry.push_back(Pair("Error","You must specify a positive value for days for the expiration date."));
-                            results.push_back(entry);
-
-                        }
-                        else
-                        {
-                            if (sharetype != 1 && sharetype != 2 && sharetype != 3 && sharetype !=4 && sharetype !=5)
-                            {
-                                entry.push_back(Pair("Error","You must specify a value of 1, 2, 3, 4 or 5 for the sharetype."));
-                                results.push_back(entry);
-
-                            }
-                            else
-                            {
-                                std::string expiration = RoundToString(GetAdjustedTime() + (days*86400),0);
-                                std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + RoundToString(days,0) + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + RoundToString(sharetype,0) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                                std::string result = AddContract("poll",Title,contract);
-                                entry.push_back(Pair("Success","Your poll has been added: " + result));
-                                results.push_back(entry);
-                            }
-
-                       }
-                  }
-               }
-            }
-        }
 
     }
     else if (sItem == "votedetails")
