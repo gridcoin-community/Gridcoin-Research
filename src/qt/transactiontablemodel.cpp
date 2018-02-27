@@ -384,6 +384,10 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Sent to");
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
+    case TransactionRecord::Vote:
+        return tr("Voting fee");
+    case TransactionRecord::Beacon:
+        return tr("Beacon fee");
     case TransactionRecord::Generated:
 	    if (wtx->RemoteFlag==1 && false)
 		{
@@ -436,6 +440,10 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::SendToAddress:
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
+    case TransactionRecord::Vote:
+        return QIcon(":/icons/tx_vote");
+    case TransactionRecord::Beacon:
+        return QIcon(":/icons/tx_output");
     default:
         return QIcon(":/icons/tx_inout");
     }
@@ -453,6 +461,10 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
     case TransactionRecord::SendToAddress:
     case TransactionRecord::Generated:
         return lookupAddress(wtx->address, tooltip);
+    case TransactionRecord::Vote:
+        return tr("Voting fee");
+    case TransactionRecord::Beacon:
+        return tr("Beacon fee");
     case TransactionRecord::SendToSelf:
     default:
         return tr("(n/a)");

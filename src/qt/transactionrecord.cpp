@@ -2,13 +2,14 @@
 #include "wallet.h"
 #include "base58.h"
 
+std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
 
 
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
-	
+
 	std::string ShowOrphans = GetArg("-showorphans", "false");
 
 	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
@@ -17,7 +18,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	       //Orphaned tx
 		   return (ShowOrphans=="true" ? true : false);
     }
-	
+
     if (wtx.IsCoinBase())
     {
         // Ensures we show generated coins / mined transactions at depth 1
@@ -93,7 +94,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                         continue; // last coinstake output
 
 					if (wtx.vout.size()==2)
-					{  
+					{
 						//Standard POR CoinStake
 						sub.type = TransactionRecord::Generated;
 						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
@@ -112,7 +113,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 						{
 							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
 						}
-							
+
 						hashPrev = hash;
 					}
                 }
@@ -163,8 +164,28 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 if (ExtractDestination(txout.scriptPubKey, address))
                 {
                     // Sent to Bitcoin Address
-                    sub.type = TransactionRecord::SendToAddress;
-                    sub.address = CBitcoinAddress(address).ToString();
+										sub.address = CBitcoinAddress(address).ToString();
+										// Sent to testnet or mainnet vote / beacon address
+										if (sub.address == "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" || sub.address == "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB")
+										{
+												std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
+												QString TxMessage = MakeSafeMessage(vTxNormalInfoIn[1].second).c_str();
+												if (TxMessage == "Vote" || TxMessage == "Add Poll") {
+														sub.type = TransactionRecord::Vote;
+												}
+												else if(TxMessage == "Add Beacon Contract") {
+														sub.type = TransactionRecord::Beacon;
+												}
+												else
+												{
+													sub.type = TransactionRecord::SendToAddress;
+												}
+										}
+										else
+										{
+                    		sub.type = TransactionRecord::SendToAddress;
+										}
+
                 }
                 else
                 {
@@ -292,5 +313,3 @@ std::string TransactionRecord::getTxID()
 {
     return hash.ToString() + strprintf("-%03d", idx);
 }
-
-
