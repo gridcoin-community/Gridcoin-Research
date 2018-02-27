@@ -4,7 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.7.0]
+## [3.7.8.0] Unreleased, mandatory
+### Fixed
+ - Move context sensitive DPoR block checks to ConnectBlock, #912 (@tomasbrod).
+ - Check incoming blocks for malformed DPoR signature, #912.
+ - Corect Tally height on Init, #917 (@denravonska).
+ - Prevent staking of a block with a failed signature, #945 (@Foggyx420).
+ - Fix UI and RPC slowdown regression, #961 (@denravonska).
+ - Fix Debian lint errors, #886, #885, #884, #883 (@caraka).
+ - Fix fork issue due to research age calculation inconsistencies, #939
+   (@denravonska).
+ - Fix crashes when tallying, #934 (@denravonska).
+
+ ### Changed
+  - Double check PoS kernel, #958 (@tomasbrod).
+  - Don't tally until V9 to speed up syncing, #943 (@denravonska).
+  - Don't allow blocks with bad beacons to be staked, #948 (@Foggyx420).
+
+## [3.7.7.0] 2018-02-02
 ### Fixed
  - Beacon validation are now done when accepting blocks, not when receiving,
    #899 (@denravonska).
