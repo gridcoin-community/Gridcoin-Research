@@ -5200,7 +5200,7 @@ std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
     int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
     std::set<std::string> result;
 
-    for(const auto& item : AppCacheFilter("beaconalt;"))
+    for(const auto& item : AppCacheFilter("beaconalt;"+cpid))
     {
         const std::string& pubkey = item.second;
         const int64_t iAge = pindexBest != NULL
