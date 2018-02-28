@@ -2211,7 +2211,7 @@ int GetNumBlocksOfPeers()
 bool IsInitialBlockDownload()
 {
     LOCK(cs_main);
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers())
+    if ((pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight<1185000)
         return true;
     static int64_t nLastUpdate;
     static CBlockIndex* pindexLastBest;

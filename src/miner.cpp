@@ -837,7 +837,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     }
 
     if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
-        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        (!fTestNet&& vNodes.size() < 3)
         )
     {
         LOCK(MinerStatus.lock);
