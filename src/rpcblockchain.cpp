@@ -388,7 +388,9 @@ Value getbestblockhash(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getbestblockhash\n"
-            "Returns the hash of the best block in the longest block chain.");
+            "Returns the hash of the best block in the longest block chain.\n");
+
+    LOCK(cs_main);
 
     return hashBestChain.GetHex();
 }
@@ -398,7 +400,9 @@ Value getblockcount(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getblockcount\n"
-            "Returns the number of blocks in the longest block chain.");
+            "Returns the number of blocks in the longest block chain.\n");
+
+    LOCK(cs_main);
 
     return nBestHeight;
 }
@@ -409,7 +413,9 @@ Value getdifficulty(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getdifficulty\n"
-            "Returns the difficulty as a multiple of the minimum difficulty.");
+            "Returns the difficulty as a multiple of the minimum difficulty.\n");
+
+    LOCK(cs_main);
 
     Object obj;
     obj.push_back(Pair("proof-of-work",        GetDifficulty()));
@@ -455,11 +461,14 @@ Value getblockhash(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getblockhash <index>\n"
-            "Returns hash of block in best-block-chain at <index>.");
+            "Returns hash of block in best-block-chain at <index>.\n");
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
     if (fDebug10)   LogPrintf("Getblockhash %f",(double)nHeight);
+
+    LOCK(cs_main);
+
     CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
     return RPCpblockindex->phashBlock->GetHex();
 }
@@ -470,10 +479,12 @@ Value getblock(const Array& params, bool fHelp)
         throw runtime_error(
             "getblock <hash> [txinfo]\n"
             "txinfo optional to print more detailed tx info\n"
-            "Returns details of a block with given block-hash.");
+            "Returns details of a block with given block-hash.\n");
 
     std::string strHash = params[0].get_str();
     uint256 hash(strHash);
+
+    LOCK(cs_main);
 
     if (mapBlockIndex.count(hash) == 0)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -491,7 +502,9 @@ Value getblockbynumber(const Array& params, bool fHelp)
         throw runtime_error(
             "getblockbynumber <number> [txinfo]\n"
             "txinfo optional to print more detailed tx info\n"
-            "Returns details of a block with given block-number.");
+            "Returns details of a block with given block-number.\n");
+
+    LOCK(cs_main);
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
@@ -2885,6 +2898,83 @@ Value askforoutstandingblocks(const Array& params, bool fHelp)
     return res;
 }
 
+Value currenttime(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "currenttime\n"
+                "\n"
+                "Displays UTC unix time as well as date and time in UTC\n");
+
+    Object res;
+
+    res.push_back(Pair("Unix", GetAdjustedTime()));
+    res.push_back(Pair("UTC", TimestampToHRDate(GetAdjustedTime())));
+
+    return res;
+}
+
+Value decryptphrase(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "decryptphrase <phrase>\n"
+                "\n"
+                "<phrase> -> Encrypted phrase to decrypt\n"
+                "Decrypts an encrypted phrase\n");
+
+    Object res;
+
+    std::string sParam1 = params[0].get_str();
+    std::string test = AdvancedDecrypt(sParam1);
+
+    res.push_back(Pair("Phrase", sParam1));
+    res.push_back(Pair("Decrypted Phrase", test));
+
+    return res;
+}
+
+/*
+#ifdef WIN32
+Value downloadblocks(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "downloadblocks\n"
+                "\n"
+                "Download blocks from a snapshot\n");
+
+    Object res;
+
+    int r = Restarter::DownloadGridcoinBlocks();
+
+    res.push_back(Pair("Download Blocks", r));
+
+    return res;
+}
+#endif
+*/
+
+Value encryptphrase(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "encryptphrase <phrase>\n"
+                "\n"
+                "<phrase> Phase you wish to encrypt\n"
+                "Encrypt a phrase\n");
+
+    Object res;
+
+    std::string sParam1 = params[0].get_str();
+    std::string test = AdvancedCrypt(sParam1);
+
+    res.push_back(Pair("Phrase", sParam1));
+    res.push_back(Pair("Encrypted Phrase", test));
+
+    return res;
+}
+
 Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
@@ -3134,43 +3224,7 @@ Value execute(const Array& params, bool fHelp)
             }
         }
     }
-    else if (sItem == "encryptphrase")
-    {
-            if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a phrase"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("Param1",sParam1));
-            std::string test = AdvancedCrypt(sParam1);
-            entry.push_back(Pair("EncPhrase",test));
-            results.push_back(entry);
 
-        }
-
-    }
-
-    else if (sItem == "decryptphrase")
-    {
-            if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify a phrase"));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string sParam1 = params[1].get_str();
-            entry.push_back(Pair("Param1",sParam1));
-            std::string test = AdvancedDecrypt(sParam1);
-            entry.push_back(Pair("DecPhrase",test));
-            results.push_back(entry);
-
-        }
-
-    }
     else if (sItem == "reindex")
     {
             int r = Restarter::CreateGridcoinRestorePoint();
@@ -3178,12 +3232,6 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Reindex Chain",r));
             results.push_back(entry);
     }
-    /*else if (sItem == "downloadblocks")
-    {
-            int r=Restarter::DownloadGridcoinBlocks();
-            entry.push_back(Pair("Download Blocks",r));
-            results.push_back(entry);
-    }*/
     else if (sItem == "resetcpids")
     {
             //Reload the config file
@@ -3191,16 +3239,6 @@ Value execute(const Array& params, bool fHelp)
             HarvestCPIDs(true);
             GetNextProject(true);
             entry.push_back(Pair("Reset",1));
-            results.push_back(entry);
-    }
-    else if (sItem == "encrypt_deprecated")
-    {
-            std::string s1 = "1234";
-            std::string s1dec = AdvancedCrypt(s1);
-            std::string s1out = AdvancedDecrypt(s1dec);
-            entry.push_back(Pair("Execute Encrypt result1",s1));
-            entry.push_back(Pair("Execute Encrypt result2",s1dec));
-            entry.push_back(Pair("Execute Encrypt result3",s1out));
             results.push_back(entry);
     }
     else if (sItem == "help")
@@ -4573,15 +4611,6 @@ Value listitem(const Array& params, bool fHelp)
             Object entry;
             entry.push_back(Pair("Network Time",GetAdjustedTime()));
             results.push_back(entry);
-    }
-    else if (sitem == "currenttime")
-    {
-
-        Object entry;
-        entry.push_back(Pair("Unix",GetAdjustedTime()));
-        entry.push_back(Pair("UTC",TimestampToHRDate(GetAdjustedTime())));
-        results.push_back(entry);
-
     }
     else if (sitem == "memorypool")
     {

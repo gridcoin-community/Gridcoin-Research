@@ -402,16 +402,16 @@ static const CRPCCommand vRPCCommands[] =
     { "addnode",                 &addnode,                 false,  cat_network       },
     { "addpoll",                 &addpoll,                 false,  cat_network       },
     { "askforoutstandingblocks", &askforoutstandingblocks, false,  cat_network       },
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
+    { "currenttime",             &currenttime,             false,  cat_network       },
+    { "decryptphrase",           &decryptphrase,           false,  cat_network       },
+//  { "downloadblocks",          &downloadblocks,          false,  cat_network       },
+    { "encryptphrase",           &encryptphrase,           false,  cat_network       },
+    { "getaddednodeinfo",        &getaddednodeinfo,        true,   cat_network       },
+    { "getbestblockhash",        &getbestblockhash,        true,   cat_network       },
+    { "getblock",                &getblock,                true,   cat_network       },
+    { "getblockbynumber",        &getblockbynumber,        true,   cat_network       },
+    { "getblockcount",           &getblockcount,           true,   cat_network       },
+    { "getblockhash",            &getblockhash,            true,   cat_network       },
     {},
     {},
     {},
@@ -531,6 +531,12 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     // Network
     if (strMethod == "addpoll"                && n > 1) ConvertTo<double>(params[1]);
     if (strMethod == "addpoll"                && n > 4) ConvertTo<double>(params[4]);
+    if (strMethod == "getaddednodeinfo"       && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "getblock"               && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "getblockbynumber"       && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "getblockbynumber"       && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "getblockhash"           && n > 0) ConvertTo<int64_t>(params[0]);
+
     return params;
 }
 

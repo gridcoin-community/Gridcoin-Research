@@ -286,26 +286,33 @@ extern json_spirit::value writedata(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value addnode(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value addpoll(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value askforoutstandingblocks(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value currenttime(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value decryptphrase(const json_spirit::Array& params, bool fHelp);
+//extern json_spirit::Value downloadblocks(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value encryptphrase(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getaddednodeinfo(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getbestblockhash(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getblock(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getblockbynumber(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getblockcount(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getblockhash(const json_spirit::Array& params, bool fHelp);
 
 
 extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
 extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value getaddednodeinfo(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
 
 
 extern json_spirit::Value getinfo(const json_spirit::Array& params, bool fHelp);
 
-extern json_spirit::Value getbestblockhash(const json_spirit::Array& params, bool fHelp); // in rpcblockchain.cpp
-extern json_spirit::Value getblockcount(const json_spirit::Array& params, bool fHelp); // in rpcblockchain.cpp
+
 extern json_spirit::Value getdifficulty(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getrawmempool(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value getblockhash(const json_spirit::Array& params, bool fHelp);
 
-extern json_spirit::Value getblock(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value getblockbynumber(const json_spirit::Array& params, bool fHelp);
+
+
 extern json_spirit::Value getcheckpoint(const json_spirit::Array& params, bool fHelp);
 
 //Gridcoin RPC Commands:
