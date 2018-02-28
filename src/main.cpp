@@ -2598,6 +2598,12 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 DeleteCache(sMType, sMKey);
                 if(fDebug)
                     printf("DisconnectBlock: Delete contract %s %s\n", sMType.c_str(), sMKey.c_str());
+
+                if("beacon"==sMType)
+                {
+                    sMKey=sMKey+"A";
+                    DeleteCache(sMType, sMKey);
+                }
             }
         }
 
@@ -5211,7 +5217,7 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
         if (!IsResearcher(mc.cpid)) return true; /* is investor? */
 
         const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
-        const std::string sBPK_s = GetBeaconPublicKey(mc.cpid+";Stupid", false);
+        const std::string sBPK_s = GetBeaconPublicKey(mc.cpid+"A", false);
 
         const bool scval_b = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
         const bool scval_n = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
@@ -5220,10 +5226,10 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
         const bool kmval_n = sBPK_n == mc.BoincPublicKey;
         const bool kmval_s = sBPK_s == mc.BoincPublicKey;
 
-        result = (scval_b|scval_n|scval_s) && (kmval_n|kmval_s);
+        result = scval_n | scval_s; /* accept signatures by normal and alternative key */
 
         if(!scval_b || !kmval_n)
-            printf("WARNING: IsCPIDValidv2: stupid bpk or sig %d%d%d-%d%d\n"
+            printf("WARNING: IsCPIDValidv2: alternative sig B%d N%d A%d or bpk N%d A%d\n"
             , !!scval_b, !!scval_n, !!scval_s, !!kmval_n, !!kmval_s )
         ;
     }
@@ -8388,7 +8394,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
     const int64_t &nTime = tx.nTime;
           if (msg.empty()) return false;
           bool fMessageLoaded = false;
-          bool fStupidBeacon = false;
+          bool fAltBeacon = false;
 
           if (Contains(msg,"<MT>"))
           {
@@ -8427,7 +8433,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                       {
                           // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
                           //sMessageValue="";
-                          fStupidBeacon = true;
+                          fAltBeacon = true;
                           if(fDebug || fDebug10)
                             printf("WARNING: MemorizeMessage: beacon overwrite denied %s\n",sMessageKey.c_str());
                       }
@@ -8452,8 +8458,8 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                         if (sMessageAction=="A")
                         {
                                 /* With this we allow verifying blocks with stupid beacon */
-                                if("beacon"==sMessageType && fStupidBeacon)
-                                    sMessageKey=sMessageKey+";Stupid";
+                                if("beacon"==sMessageType && fAltBeacon)
+                                    sMessageKey=sMessageKey+"A";
 
                                 // Ensure we have the TXID of the contract in memory
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
