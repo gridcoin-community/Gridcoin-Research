@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix crashes when tallying, #934 (@denravonska).
  - Revert reorganize of the chain trust becomes less than what it was, #957
    (@tomasbrod).
+ - Fix sync issues with incorrectly accepted v8 beacons, #979 (@tomasbrod).
 
  ### Changed
   - Double check PoS kernel, #958 (@tomasbrod).
