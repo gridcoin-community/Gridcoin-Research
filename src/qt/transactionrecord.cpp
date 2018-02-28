@@ -4,19 +4,19 @@
 
 std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-
+std::string GetBurnAddress();
 
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
 
-    std::string ShowOrphans = GetArg("-showorphans", "false");
+	std::string ShowOrphans = GetArg("-showorphans", "false");
 
-    //R Halford - POS Transactions - If Orphaned follow showorphans directive:
-    if (wtx.IsCoinStake() && !wtx.IsInMainChain())
-    {
-           //Orphaned tx
-           return (ShowOrphans=="true" ? true : false);
+	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
+	if (wtx.IsCoinStake() && !wtx.IsInMainChain())
+	{
+	       //Orphaned tx
+		   return (ShowOrphans=="true" ? true : false);
     }
 
     if (wtx.IsCoinBase())
@@ -30,18 +30,18 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
     return true;
 }
 
-int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
-{
-    int64_t nValueOut = 0;
-    for (auto const& txout : wtx.vout)
+	int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
     {
-        if (wallet->IsMine(txout))
+        int64_t nValueOut = 0;
+        for (auto const& txout : wtx.vout)
         {
-            nValueOut += txout.nValue;
+	       if (wallet->IsMine(txout))
+		   {
+				nValueOut += txout.nValue;
+		   }
         }
+        return nValueOut;
     }
-    return nValueOut;
-}
 
 
 /*
@@ -72,9 +72,33 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 sub.credit = txout.nValue;
                 if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
                 {
-                    // Received by Bitcoin Address
-                    sub.type = TransactionRecord::RecvWithAddress;
+                    // Received by Gridcoin Address
                     sub.address = CBitcoinAddress(address).ToString();
+                    std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
+                    for (const auto& vTxNormalInfo : vTxNormalInfoIn)
+                    {
+                        if (vTxNormalInfo.first == "Message Type")
+                        {
+                            if (vTxNormalInfo.second == "Text Message")
+                            {
+                                sub.type = TransactionRecord::RecvMessage;
+                                break;
+                            }
+
+                            else if(vTxNormalInfo.second == "Text Rain Message")
+                            {
+                                sub.type = TransactionRecord::RecvRain;
+                                break;
+                            }
+
+                            else
+                            {
+                                sub.type = TransactionRecord::RecvWithAddress;
+                                break;
+                            }
+
+                          }
+                      }
                 }
                 else
                 {
@@ -163,33 +187,56 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 CTxDestination address;
                 if (ExtractDestination(txout.scriptPubKey, address))
                 {
-                    // Sent to Bitcoin Address
+                    // Sent to Gridcoin Address
                     sub.address = CBitcoinAddress(address).ToString();
-                    // Sent to testnet or mainnet vote / beacon address
-                    if (sub.address == GetBurnAddress())
-                    {
-                        std::vector<std::pair<std::string, std::string>>  xNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
-                        String TxMessage = MakeSafeMessage(vTxNormalInfoIn[1].second).c_str();
-                        // When debug is enabled there's the message length at position 1
-                        QString TxMessageDebug = MakeSafeMessage(vTxNormalInfoIn[2].second).c_str();
-                        if (TxMessage == "Vote" || TxMessageDebug == "Vote"|| TxMessage == "Add Poll" || TxMessageDebug == "Add Poll")
-                        {
-                            sub.type = TransactionRecord::Vote;
-                        }
-                        else if(TxMessage == "Add Beacon Contract" || TxMessageDebug == "Add Beacon Contract")
-                        {
-                            sub.type = TransactionRecord::Beacon;
-                        }
-                        else
-                        {
-                            sub.type = TransactionRecord::SendToAddress;
-                        }
-                    }
-                    else
-                    {
-                        sub.type = TransactionRecord::SendToAddress;
-                    }
 
+                    std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
+                    for (const auto& vTxNormalInfo : vTxNormalInfoIn)
+                    {
+                        if (vTxNormalInfo.first == "Message Type")
+                        {
+                            // Sent to mainnet / testnet burn address
+                            if(sub.address == GetBurnAddress())
+                            {
+                                if (vTxNormalInfo.second == "Vote" || vTxNormalInfo.second == "Add Poll")
+                                {
+                                    if (fDebug)
+                                        OutputDebugStringF("Vote/Add Poll\n");
+
+                                    sub.type = TransactionRecord::Vote;
+                                    break;
+                                }
+
+                                else if (vTxNormalInfo.second == "Add Beacon Contract")
+                                {
+                                    sub.type = TransactionRecord::Beacon;
+                                    break;
+                                }
+                                else
+                                {
+                                    sub.type = TransactionRecord::SendToAddress;
+                                    break;
+                                }
+                            }
+
+                            else if (vTxNormalInfo.second == "Text Message")
+                            {
+                                OutputDebugStringF("1337133713771377");
+                                sub.type = TransactionRecord::SendMessage;
+                                break;
+                            }
+                            else if (vTxNormalInfo.second == "Text Rain Message")
+                            {
+                                sub.type = TransactionRecord::SendRain;
+                                break;
+                            }
+                            else
+                            {
+                                sub.type = TransactionRecord::SendToAddress;
+                                break;
+                            }
+                        }
+                    }
                 }
                 else
                 {

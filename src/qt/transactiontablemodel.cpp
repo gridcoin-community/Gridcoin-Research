@@ -388,6 +388,14 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Voting fee");
     case TransactionRecord::Beacon:
         return tr("Beacon fee");
+    case TransactionRecord::RecvMessage:
+        return tr("Received message with");
+    case TransactionRecord::SendMessage:
+        return tr("Sent message to");
+    case TransactionRecord::RecvRain:
+        return tr("Received rain with");
+    case TransactionRecord::SendRain:
+        return tr("Sent rain");
     case TransactionRecord::Generated:
 	    if (wtx->RemoteFlag==1 && false)
 		{
@@ -444,6 +452,14 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
         return QIcon(":/icons/tx_vote");
     case TransactionRecord::Beacon:
         return QIcon(":/icons/tx_output");
+    case TransactionRecord::RecvMessage:
+        return QIcon(":/icons/tx_input");
+    case TransactionRecord::SendMessage:
+        return QIcon(":/icons/tx_output");
+    case TransactionRecord::RecvRain:
+        return QIcon(":/icons/tx_input");
+    case TransactionRecord::SendRain:
+        return QIcon(":/icons/tx_output");
     default:
         return QIcon(":/icons/tx_inout");
     }
@@ -460,6 +476,10 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
    case TransactionRecord::RecvWithAddress:
     case TransactionRecord::SendToAddress:
     case TransactionRecord::Generated:
+    case TransactionRecord::SendMessage:
+    case TransactionRecord::RecvMessage:
+    case TransactionRecord::SendRain:
+    case TransactionRecord::RecvRain:
         return lookupAddress(wtx->address, tooltip);
     case TransactionRecord::Vote:
         return tr("Voting fee");
@@ -479,6 +499,8 @@ QVariant TransactionTableModel::addressColor(const TransactionRecord *wtx) const
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::SendToAddress:
     case TransactionRecord::Generated:
+    case TransactionRecord::SendMessage:
+    case TransactionRecord::RecvMessage:
         {
         QString label = walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(wtx->address));
         if(label.isEmpty())
@@ -548,7 +570,8 @@ QString TransactionTableModel::formatTooltip(const TransactionRecord *rec) const
 {
     QString tooltip = formatTxStatus(rec) + QString("\n") + formatTxType(rec);
     if(rec->type==TransactionRecord::RecvFromOther || rec->type==TransactionRecord::SendToOther ||
-       rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress)
+       rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress ||
+       rec->type==TransactionRecord::SendMessage   || rec->type==TransactionRecord::RecvMessage)
     {
         tooltip += QString(" ") + formatTxToAddress(rec, true);
     }

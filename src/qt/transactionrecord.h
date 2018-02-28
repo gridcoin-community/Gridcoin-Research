@@ -72,7 +72,11 @@ public:
         RecvFromOther,
         SendToSelf,
         Vote,
-        Beacon
+        Beacon,
+        SendMessage,
+        SendRain,
+        RecvMessage,
+        RecvRain
     };
 
     /** Number of confirmation recommended for accepting a transaction */
