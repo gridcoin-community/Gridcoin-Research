@@ -32,7 +32,7 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
         std::string sSignature;
         std::string sError;
         bool fResult;
-        fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError);
+        fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError, true);
         if (!fResult)
         {
             printf("GenerateNewKeyPair::Failed to sign block with cpid -> %s\n", sError.c_str());
