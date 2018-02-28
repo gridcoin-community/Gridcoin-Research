@@ -2595,7 +2595,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             if(!sMType.empty())
             {
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-                DeleteCache(sMKey, sMType);
+                DeleteCache(sMType, sMKey);
                 if(fDebug)
                     printf("DisconnectBlock: Delete contract %s %s\n", sMType.c_str(), sMKey.c_str());
             }
