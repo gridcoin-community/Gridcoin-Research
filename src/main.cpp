@@ -731,6 +731,7 @@ MiningCPID GetNextProject(bool bForce)
                                         std::string sSignature;
                                         std::string sError;
                                         bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sSignature, sError, true);
+#                                       if 0
                                         if (!bResult)
                                         {
                                             printf("GetNextProject: failed to sign block with cpid -> %s\n", sError.c_str());
@@ -742,6 +743,7 @@ MiningCPID GetNextProject(bool bForce)
                                             printf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
                                             continue;
                                         }
+#                                       endif
 
 
                                         //Only used for global status:
