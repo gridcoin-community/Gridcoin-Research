@@ -47,7 +47,7 @@ std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
 int RestartClient();
-extern bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError);
+extern bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
 bool StrLessThanReferenceHash(std::string rh);
@@ -2790,11 +2790,11 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     return bValid;
 }
 
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError)
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising)
 {
     // Check if there is a beacon for this user
     // If not then return false as GetStoresBeaconPrivateKey grabs from the config
-    if (!HasActiveBeacon(sCPID))
+    if (!HasActiveBeacon(sCPID) && !bAdvertising)
     {
         sError = "No active beacon";
         return false;
