@@ -8,3 +8,5 @@ i686*
 mips*
 arm*
 aarch64*
+#mac specific
+.DS_Store
