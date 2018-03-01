@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.8.0] Unreleased, mandatory
+## [3.7.8.0] 2018-03-01, mandatory
 ### Fixed
  - Move context sensitive DPoR block checks to ConnectBlock, #912 (@tomasbrod).
  - Check incoming blocks for malformed DPoR signature, #912.
