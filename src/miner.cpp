@@ -35,7 +35,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError);
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 
 
 // Some explaining would be appreciated
@@ -820,7 +820,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     }
 
     if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
-        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        (!fTestNet&& vNodes.size() < 3)
         )
     {
         LOCK(MinerStatus.lock);

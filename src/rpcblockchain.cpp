@@ -48,7 +48,7 @@ std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
-extern bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError);
+extern bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
 bool StrLessThanReferenceHash(std::string rh);
@@ -1941,11 +1941,11 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "tally")
     {
-            bNetAveragesLoaded_retired = false;
+        bNetAveragesLoaded_retired = false;
         CBlockIndex* tallyIndex = FindTallyTrigger(pindexBest);
         TallyResearchAverages_v9(tallyIndex);
-            entry.push_back(Pair("Tally Network Averages",1));
-            results.push_back(entry);
+        entry.push_back(Pair("Tally Network Averages",1));
+        results.push_back(entry);
     }
     else if (sItem == "encrypt")
     {
@@ -2650,16 +2650,16 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     return bValid;
 }
 
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError)
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising)
 {
     // Check if there is a beacon for this user
     // If not then return false as GetStoresBeaconPrivateKey grabs from the config
-    if (!HasActiveBeacon(sCPID))
+    if (!HasActiveBeacon(sCPID) && !bAdvertising)
     {
         sError = "No active beacon";
         return false;
     }
-    // Returns the Signature of the CPID+BlockHash message. 
+    // Returns the Signature of the CPID+BlockHash message.
     std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
     std::string sMessage = sCPID + sBlockHash;
     sSignature = SignMessage(sMessage,sPrivateKey);

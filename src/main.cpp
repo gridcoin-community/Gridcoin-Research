@@ -46,7 +46,7 @@ extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError);
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 extern void CleanInboundConnections(bool bClearAll);
 extern bool PushGridcoinDiagnostics();
 bool RequestSupermajorityNeuralData();
@@ -702,7 +702,8 @@ MiningCPID GetNextProject(bool bForce)
                                         GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
                                         std::string sSignature;
                                         std::string sError;
-                                        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sSignature, sError);
+                                        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sSignature, sError, true);
+#                                       if 0
                                         if (!bResult)
                                         {
                                             printf("GetNextProject: failed to sign block with cpid -> %s\n", sError.c_str());
@@ -714,6 +715,7 @@ MiningCPID GetNextProject(bool bForce)
                                             printf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
                                             continue;
                                         }
+#                                       endif
 
 
                                         //Only used for global status:
@@ -2183,7 +2185,7 @@ int GetNumBlocksOfPeers()
 bool IsInitialBlockDownload()
 {
     LOCK(cs_main);
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers())
+    if ((pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight<1185000)
         return true;
     static int64_t nLastUpdate;
     static CBlockIndex* pindexLastBest;
@@ -2567,9 +2569,15 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             if(!sMType.empty())
             {
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-                DeleteCache(sMKey, sMType);
+                DeleteCache(sMType, sMKey);
                 if(fDebug)
                     printf("DisconnectBlock: Delete contract %s %s\n", sMType.c_str(), sMKey.c_str());
+
+                if("beacon"==sMType)
+                {
+                    sMKey=sMKey+"A";
+                    DeleteCache("beaconalt", sMKey+"."+ToString(vtx[i].nTime));
+                }
             }
         }
 
@@ -3124,20 +3132,21 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         {
                             /* ignore on bad blocks already in chain */
                             const std::set<uint256> vSkipHashBoincSignCheck =
-                            {    uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e")
-                                ,uint256("471292b59e5f3ad94c39b3784a9a3f7a8324b9b56ff0ad00bd48c31658537c30")
-                                ,uint256("5b63d4edbdec06ddc2182703ce45a3ced70db0d813e329070e83bf37347a6c2c")
-                                ,uint256("13e8dee125c5d40d49df77428ad255deee69c44f96bae68b971ab20b0791db95")
-                                ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940")
-                                ,uint256("9387774230f23a898b11c016533f7c5da6d095edec0e9347a147be8c3cada3ac")
-                                ,uint256("95f15ad917588323446ea3d71dd8fbe0dc19522ed542607f0c6b62a20f5a544c")
+                            {    uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e") //P1144550 S
+                                ,uint256("471292b59e5f3ad94c39b3784a9a3f7a8324b9b56ff0ad00bd48c31658537c30") //P1146939 S
+                                ,uint256("5b63d4edbdec06ddc2182703ce45a3ced70db0d813e329070e83bf37347a6c2c") //P1152917 S
+                                ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940") //P1154121 S
+                                ,uint256("1d30c6d4dce377d69c037f1a725aabbc6bafa72a95456dbe2b2538bc1da115bd") //P1168122 S
+                                ,uint256("934c6291209d90bb5d3987885b413c18e39f0e28430e8d302f20888d2a35e725") //P1168193 S
+                                ,uint256("58282559939ced7ebed7d390559c7ac821932958f8f2399ad40d1188eb0a57f9") //P1170167 S
+                                ,uint256("946996f693a33fa1334c1f068574238a463d438b1a3d2cd6d1dd51404a99c73d") //P1176436 S
                             };
                             if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
                                 return DoS(20, error(
                                     "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
                                      bb.cpid.c_str(), bb.cpidv2.c_str(),
                                      bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
-                            else printf("WARNING: ignoring invalid hashBoinc signature on block");
+                            else printf("WARNING: ignoring invalid hashBoinc signature on block %s\n", pindex->GetBlockHash().ToString().c_str());
                         }
 
 						// Mitigate DPOR Relay attack 
@@ -3376,6 +3385,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 }
 
 
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew);
 bool ForceReorganizeToHash(uint256 NewHash)
 {
     LOCK(cs_main);
@@ -3398,10 +3408,18 @@ bool ForceReorganizeToHash(uint256 NewHash)
         return false;
     }
 
-    //Re-process the last block to trigger orphan and shit
-    if (!SetBestChain(txdb, blockNew, pindexNew))
+    unsigned cnt_dis=0;
+    unsigned cnt_con=0;
+    bool success = false;
+
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+
+    if(pindexBest->nChainTrust < pindexCur->nChainTrust)
+        printf("WARNING ForceReorganizeToHash: Chain trust is now less then before!\n");
+
+    if (!success)
     {
-        return error("ForceReorganizeToHash Fatal Error while setting best chain.\r\n");
+        return error("ForceReorganizeToHash: Fatal Error while setting best chain.\r\n");
     }
 
     AskForOutstandingBlocks(uint256(0));
@@ -3693,22 +3711,21 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     unsigned cnt_dis=0;
     unsigned cnt_con=0;
     bool success = false;
-    const auto prevTrust = nBestChainTrust;
+    const auto origBestIndex = pindexBest;
 
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
+    if(origBestIndex && origBestIndex->nChainTrust > nBestChainTrust)
+    {
+        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
+        CBlock origBlock;
+        if (!origBlock.ReadFromDisk(origBestIndex))
+            return error("SetBestChain: Fatal Error while reading original best block");
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+    }
+
     if(!success)
         return false;
-    if(!success || prevTrust>nBestChainTrust)
-    {
-        /*
-        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
-
-        printf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.\n");
-        success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
-        */
-    }
 
     /* Fix up after block connecting */
 
@@ -5151,6 +5168,29 @@ bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
     return result;
 }
 
+std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
+{
+    int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+    std::set<std::string> result;
+
+    for(const auto& item : ReadCacheSection("beaconalt"))
+    {
+        const std::string& key = item.first;
+        const std::string& value = item.second.value;
+        if(!std::equal(cpid.begin(), cpid.end(), key.begin()))
+            continue;
+
+        const int64_t iAge = pindexBest != NULL
+            ? pindexBest->nTime - item.second.timestamp
+            : 0;
+        if (iAge > iMaxSeconds)
+            continue;
+
+        result.emplace(value);
+    }
+    return result;
+}
+
 bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
     //09-25-2016: Transition to CPID Keypairs.
@@ -5171,12 +5211,29 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     {
         if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
         if (!IsResearcher(mc.cpid)) return true; /* is investor? */
-        // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
-        result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
 
-        bool scval = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, mc.BoincPublicKey);
-        if(scval!=result)
-            printf("WARNING: IsCPIDValidv2(): inconsistent result\n");
+        const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
+        bool kmval = sBPK_n == mc.BoincPublicKey;
+        const bool scval_n = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
+
+        result= scval_n;
+        if(!scval_n)
+        {
+            for(const std::string& key_alt : GetAlternativeBeaconKeys(mc.cpid))
+            {
+                const bool scval_alt = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, key_alt);
+                kmval = key_alt == mc.BoincPublicKey;
+                if(scval_alt)
+                {
+                    printf("WARNING: IsCPIDValidv2: good signature with alternative key\n");
+                    result= true;
+                }
+            }
+        }
+
+        if( !kmval )
+            printf("WARNING: IsCPIDValidv2: block key mismatch\n");
+
     }
 
     return result;
@@ -8177,35 +8234,6 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     sMessageValue="";
               }
 
-              if (sMessageType=="beacon" && sMessageAction=="A")
-              {
-                  // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value unless the public key is the same
-                  std::string sBPK = GetBeaconPublicKey(sMessageKey,false);
-                  if (!sBPK.empty())
-                  {
-                      std::string out_cpid = "";
-                      std::string out_address = "";
-                      std::string out_publickey = "";
-                      GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                      if (fDebug10 && LessVerbose(50)) 
-                      {
-                          printf("\r\n**Beacon Debug Message : beaconpubkey %s, message key %s, cpid %s, addr %s, base64 pub key %s \r\n ",sBPK.c_str(),
-                                 sMessageKey.c_str(),out_cpid.c_str(),out_address.c_str(), out_publickey.c_str());
-                      }
-                      if (sBPK == out_publickey)
-                      {
-                          // allow key to be reloaded in since this is a refreshed beacon
-                          if (fDebug10) printf("\r\n**Beacon Being Overwritten %s \r\n %s : %s\r\n",sBPK.c_str(),sMessageKey.c_str(),sBPK.c_str());
-                      }
-                      else
-                      {
-                          // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
-                          sMessageValue="";
-                          if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
-                      }
-                  }
-              }
-
               if (sMessageType=="superblock")
               {
                   // Deny access to superblock processing runtime data
@@ -8223,6 +8251,16 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if (sMessageAction=="A")
                         {
+                                /* With this we allow verifying blocks with stupid beacon */
+                                if("beacon"==sMessageType)
+                                {
+                                    std::string out_cpid = "";
+                                    std::string out_address = "";
+                                    std::string out_publickey = "";
+                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                                    WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
+                                }
+
                                 // Ensure we have the TXID of the contract in memory
                                 if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
                                 {
