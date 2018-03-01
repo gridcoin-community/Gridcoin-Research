@@ -4,7 +4,7 @@
 #include "key.h"
 #include "main.h"
 
-extern std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
@@ -29,8 +29,16 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
     if (!sOutPrivKey.empty() && !sOutPubKey.empty())
     {
         uint256 hashBlock = GetRandHash();
-        std::string sSignature = SignBlockWithCPID(cpid,hashBlock.GetHex());
-        bool fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
+        std::string sSignature;
+        std::string sError;
+        bool fResult;
+        fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError, true);
+        if (!fResult)
+        {
+            printf("GenerateNewKeyPair::Failed to sign block with cpid -> %s\n", sError.c_str());
+            return false;
+        }
+        fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
         if (fResult)
         {
             printf("\r\nGenerateNewKeyPair::Current keypair is valid.\r\n");

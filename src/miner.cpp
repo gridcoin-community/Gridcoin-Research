@@ -33,7 +33,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
-std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 std::string qtGetNeuralContract(std::string data);
 
 // Some explaining would be appreciated
@@ -634,8 +634,15 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
     if (!PublicKey.empty())
     {
-        BoincData.BoincSignature = SignBlockWithCPID(
-            GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
+        std::string sBoincSignature;
+        std::string sError;
+        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sBoincSignature, sError);
+        if (!bResult)
+        {
+            if (fDebug2) printf("SignStakeBlock: Failed to sign block -> %s\n", sError.c_str());
+            return false;
+        }
+        BoincData.BoincSignature = sBoincSignature;
         if(fDebug2) printf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\r\n",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.lastblockhash.c_str(),BoincData.BoincSignature.c_str());
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
@@ -830,7 +837,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     }
 
     if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
-        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        (!fTestNet&& vNodes.size() < 3)
         )
     {
         LOCK(MinerStatus.lock);
