@@ -3796,7 +3796,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>ATTENZIONE: rilevata violazione del checkpoint sincronizzato, ma ignorata!</translation>
     </message>
     <message>

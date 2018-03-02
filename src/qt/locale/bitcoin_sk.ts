@@ -3799,7 +3799,7 @@ To znamená, že je potrebný poplatok aspoň %2.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation type="unfinished">UPOZORNENIE: detekovaný synchronizovaný porušený checkpoint, ale presko?ený!</translation>
     </message>
     <message>
