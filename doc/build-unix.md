@@ -147,9 +147,6 @@ Leap:
 
 2. If that doesn't work, you can install all boost development packages with:
 
-Tumbleweed:
-
-        sudo zypper install boost_1_64-devel
 Leap:
 
         sudo zypper install boost_1_61-devel
