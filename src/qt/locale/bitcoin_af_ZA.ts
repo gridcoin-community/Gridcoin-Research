@@ -3970,8 +3970,8 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
-        <translation>Waarskuwing: syncronized kontrolepunt skending opgespoor, maar oorgeslaan!</translation>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
+        <translation>Waarskuwing: synchronized kontrolepunt skending opgespoor, maar oorgeslaan!</translation>
     </message>
     <message>
         <location line="+1"/>

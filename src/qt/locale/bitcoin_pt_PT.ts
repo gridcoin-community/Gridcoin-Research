@@ -3788,7 +3788,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>AVISO: violação detetada na sincronização de checkpoint, mas ignorada!</translation>
     </message>
     <message>

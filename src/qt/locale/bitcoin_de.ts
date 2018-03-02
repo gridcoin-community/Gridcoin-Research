@@ -3906,7 +3906,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>WARNUNG: Synchronisierter CheckpointVerstoss entdeckt, aber übersprungen! </translation>
     </message>
     <message>
