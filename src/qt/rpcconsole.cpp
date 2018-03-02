@@ -225,6 +225,9 @@ RPCConsole::RPCConsole(QWidget *parent) :
     // set OpenSSL version label
     ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
 
+    // set Qt version label
+    ui->qtVersion->setText("Qt " + QString::fromLocal8Bit(qVersion()) + " (built against " + QString::fromStdString(QT_VERSION_STR) + ")");
+
     startExecutor();
 	setTrafficGraphRange(INITIAL_TRAFFIC_GRAPH_MINS);
     clear();
@@ -290,7 +293,7 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 
         // Provide initial values
-		QString cvi = model->formatFullVersion() + "-" + toqstring(MINOR_VERSION);
+		QString cvi = model->formatFullVersion() + "-" + toqstring(CLIENT_VERSION_MINOR);
 
 	    ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());
@@ -298,7 +301,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->startupTime->setText(model->formatClientStartupTime());
 
         setNumConnections(model->getNumConnections());
-        ui->isTestNet->setChecked(model->isTestNet());
+        ui->isTestNet->setText(model->isTestNet() ? tr("Yes") : tr("No"));
 
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 

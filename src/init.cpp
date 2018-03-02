@@ -23,6 +23,7 @@
 #include "global_objects_noui.hpp"
 
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
 void TallyResearchAverages(CBlockIndex* index);
@@ -124,110 +125,6 @@ void HandleSIGHUP(int)
 {
     fReopenDebugLog = true;
 }
-
-
-
-
-
-//////////////////////////////////////////////////////////////////////////////
-//
-// Start
-//
-#if !defined(QT_GUI)
-bool AppInit(int argc, char* argv[])
-{
-
-    bool fRet = false;
-
-    ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
-
-    try
-    {
-        //
-        // Parameters
-        //
-        // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
-        ParseParameters(argc, argv);
-        printf("AppInit");
-        if (!boost::filesystem::is_directory(GetDataDir(false)))
-        {
-            fprintf(stderr, "Error: Specified directory does not exist\n");
-            Shutdown(NULL);
-        }
-        ReadConfigFile(mapArgs, mapMultiArgs);
-
-        if (mapArgs.count("-?") || mapArgs.count("--help"))
-        {
-            // First part of help message is specific to bitcoind / RPC client
-            std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
-                _("Usage:") + "\n" +
-                  "  gridcoind [options]                     " + "\n" +
-                  "  gridcoind [options] <command> [params]  " + _("Send command to -server or gridcoind") + "\n" +
-                  "  gridcoind [options] help                " + _("List commands") + "\n" +
-                  "  gridcoind [options] help <command>      " + _("Get help for a command") + "\n";
-
-            strUsage += "\n" + HelpMessage();
-
-            fprintf(stdout, "%s", strUsage.c_str());
-            return false;
-        }
-
-        // Command-line RPC  - Test this - ensure single commands execute and exit please.
-        for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
-                fCommandLine = true;
-
-        if (fCommandLine)
-        {
-            int ret = CommandLineRPC(argc, argv);
-            exit(ret);
-        }
-
-        fRet = AppInit2(threads);
-    }
-    catch (std::exception& e) {
-        printf("AppInit()Exception1");
-
-        PrintException(&e, "AppInit()");
-    } catch (...) {
-        printf("AppInit()Exception2");
-
-        PrintException(NULL, "AppInit()");
-    }
-
-    // Succesfully initialized, wait for shutdown
-    if(fRet)
-    {
-        while (!ShutdownRequested())
-            MilliSleep(500);
-    }
-
-    Shutdown(NULL);
-
-    // delete thread handler
-    threads->interruptAll();
-    threads->removeAll();
-    threads.reset();
-
-    return fRet;
-}
-
-extern void noui_connect();
-int main(int argc, char* argv[])
-{
-    bool fRet = false;
-
-    // Connect bitcoind signal handlers
-    noui_connect();
-
-    fRet = AppInit(argc, argv);
-
-    if (fRet && fDaemon)
-        return 0;
-
-    return 1;
-}
-#endif
 
 bool static InitError(const std::string &str)
 {
@@ -450,7 +347,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     //Placeholder: Load Remote CPIDs Here
 
-    nNodeLifespan = GetArg("-addrlifespan", 7);    
+    nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
@@ -836,7 +733,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         string strMatch = mapArgs["-printblock"];
         int nFound = 0;
-        for (map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
+        for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
         {
             uint256 hash = (*mi).first;
             if (strncmp(hash.ToString().c_str(), strMatch.c_str(), strMatch.size()) == 0)

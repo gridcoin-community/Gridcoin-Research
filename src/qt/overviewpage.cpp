@@ -123,6 +123,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
+    connect(ui->labelPoll, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
+
     // init "out of sync" warning labels
     ui->labelWalletStatus->setText("(" + tr("out of sync") + ")");
     ui->labelTransactionsStatus->setText("(" + tr("out of sync") + ")");
@@ -139,6 +141,12 @@ void OverviewPage::handleTransactionClicked(const QModelIndex &index)
         emit transactionClicked(filter->mapToSource(index));
 }
 
+void OverviewPage::handlePollLabelClicked()
+{
+    emit pollLabelClicked();
+}
+
+
 void OverviewPage::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
@@ -152,7 +160,7 @@ void OverviewPage::showEvent(QShowEvent *event)
 }
 
 void OverviewPage::updateTransactions()
-{    
+{
     if(filter)
     {
         // Show the maximum number of transactions the transaction list widget
@@ -222,7 +230,7 @@ void OverviewPage::setModel(WalletModel *model)
 
         ui->listTransactions->setModel(filter);
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
-        
+
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));

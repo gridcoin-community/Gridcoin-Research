@@ -1,6 +1,7 @@
 #include "main.h"
 #include "util.h"
 #include "boinc.h"
+#include "appcache.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -12,7 +13,6 @@
 #include <numeric>
 #include <fstream>
 
-std::string GetListOf(std::string datatype);
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
@@ -271,8 +271,8 @@ void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
         char NTPMessage[48] = {0x1b, 0, 0, 0 ,0, 0, 0, 0, 0};
 
         udpSocket->writeDatagram(NTPMessage, sizeof(NTPMessage), udpSocket->peerAddress(), udpSocket->peerPort());
+        }
     }
-}
 
 void DiagnosticsDialog::clkSocketError(QAbstractSocket::SocketError error)
 {
@@ -298,17 +298,17 @@ void DiagnosticsDialog::clkFinished()
 
                 udpSocket->close();
 
-                boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
+    boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
                 boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
-                boost::posix_time::time_duration timeDiff = networkTime - localTime;
+    boost::posix_time::time_duration timeDiff = networkTime - localTime;
 
-                if(timeDiff.minutes() < 3)
-                    ui->verifyClkResultLbl->setText("Passed");
-                else
-                    ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
+    if(timeDiff.minutes() < 3)
+        ui->verifyClkResultLbl->setText("Passed");
+    else
+        ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
 
-                this->repaint();
-            }
+    this->repaint();
+}
         }
     }
 }
@@ -331,6 +331,7 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
         ui->checkClientVersionResultLbl->setText("Failed (" + reply->errorString() + ")");
         return;
     }
+
     QByteArray data;
     data = reply->readAll();
     std::string newVersionString;

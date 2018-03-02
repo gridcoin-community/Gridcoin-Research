@@ -18,13 +18,6 @@ extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
 
-typedef std::map<int, unsigned int> MapModifierCheckpoints;
-/*
-        ( 0, 0x0e00670bu )
-        ( 1600, 0x1b3404a2 )
-        ( 7000, 0x4da1176e )
-*/
-
 // Get time weight
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
 {
@@ -276,21 +269,6 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64_t& nStakeModifi
 //   a proof-of-work situation.
 //
 
-double GetMagnitudeByHashBoinc(std::string hashBoinc, int height)
-{
-    if (hashBoinc.length() > 1)
-        {
-            // block version not needed for now for mag
-            MiningCPID boincblock = DeserializeBoincBlock(hashBoinc,7);
-            if (!IsResearcher(boincblock.cpid)) return 0;
-            if (boincblock.projectname == "")   return 0;
-            if (boincblock.rac < 100)           return 0;
-            if (!IsCPIDValidv2(boincblock,height)) return 0;
-            return boincblock.Magnitude;
-        }
-        return 0;
-}
-
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 {
     //Requires Magnitude > 0, be in superblock, with a lifetime cpid paid = 0
@@ -299,7 +277,7 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
         return 0;
 
     double dWeight = 0;
-    StructCPID stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);  
+    StructCPID stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
     StructCPID stLifetime  = GetInitializedStructCPID2(cpid,mvResearchAge);
     if (stMagnitude.Magnitude > 0 && stLifetime.ResearchSubsidy == 0)
     {
@@ -311,7 +289,7 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
 
-    if (IsResearchAgeEnabled(pindexBest->nHeight) && AreBinarySuperblocksEnabled(pindexBest->nHeight)) 
+    if (IsResearchAgeEnabled(pindexBest->nHeight) && AreBinarySuperblocksEnabled(pindexBest->nHeight))
     {
             return GetRSAWeightByCPIDWithRA(cpid);
             //ToDo : During next mandatory, retire this old function.
@@ -750,15 +728,6 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
         }
     }
     return true;
-}
-
-// Check whether the coinstake timestamp meets protocol
-bool CheckCoinStakeTimestamp(int nHeight, int64_t nTimeBlock, int64_t nTimeTx)
-{
-    if (IsProtocolV2(nHeight))
-        return (nTimeBlock == nTimeTx) && ((nTimeTx & STAKE_TIMESTAMP_MASK) == 0);
-    else
-        return (nTimeBlock == nTimeTx);
 }
 
 // Get stake modifier checksum

@@ -5,16 +5,19 @@
 
 #include "base58.h"
 #include "util.h"
+#include "data/base58_encode_decode.json.h"
+#include "data/base58_keys_valid.json.h"
+#include "data/base58_keys_invalid.json.h"
 
 using namespace json_spirit;
-extern Array read_json(const std::string& filename);
+extern Array read_json(std::string& jsondata);
 
 BOOST_AUTO_TEST_SUITE(base58_tests)
 
 // Goal: test low-level base58 encoding functionality
 BOOST_AUTO_TEST_CASE(base58_EncodeBase58)
 {
-    Array tests = read_json("base58_encode_decode.json");
+    Array tests = read_json(json_tests::base58_encode_decode);
 
     for(Value& tv : tests)
     {
@@ -36,7 +39,7 @@ BOOST_AUTO_TEST_CASE(base58_EncodeBase58)
 // Goal: test low-level base58 decoding functionality
 BOOST_AUTO_TEST_CASE(base58_DecodeBase58)
 {
-    Array tests = read_json("base58_encode_decode.json");
+    Array tests = read_json(json_tests::base58_encode_decode);
     std::vector<unsigned char> result;
 
     for(Value& tv : tests)
@@ -101,14 +104,10 @@ public:
     }
 };
 
-// Gridcoin, 2017-03-18: Temporarily disable broken tests.
-// Possibly due to difference in nVersion from raw data.
-#if 0
-
 // Goal: check that parsed keys match test payload
 BOOST_AUTO_TEST_CASE(base58_keys_valid_parse)
 {
-    Array tests = read_json("base58_keys_valid.json");
+    Array tests = read_json(json_tests::base58_keys_valid);
     std::vector<unsigned char> result;
     CBitcoinSecret secret;
     CBitcoinAddress addr;
@@ -168,7 +167,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_parse)
 // Goal: check that generated keys match test vectors
 BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
 {
-    Array tests = read_json("base58_keys_valid.json");
+    Array tests = read_json(json_tests::base58_keys_valid);
     std::vector<unsigned char> result;
     // Save global state
     bool fTestNet_stored = fTestNet;
@@ -218,7 +217,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
             }
             CBitcoinAddress addrOut;
             BOOST_CHECK_MESSAGE(boost::apply_visitor(CBitcoinAddressVisitor(&addrOut), dest), "encode dest: " + strTest);
-            BOOST_CHECK_MESSAGE(addrOut.ToString() == exp_base58string, "mismatch: " + strTest);
+            BOOST_CHECK_MESSAGE(addrOut.ToString() == exp_base58string, "mismatch: " + strTest + addrOut.ToString());
         }
     }
 
@@ -231,12 +230,10 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
     fTestNet = fTestNet_stored;
 }
 
-#endif
-
 // Goal: check that base58 parsing code is robust against a variety of corrupted data
 BOOST_AUTO_TEST_CASE(base58_keys_invalid)
 {
-    Array tests = read_json("base58_keys_invalid.json"); // Negative testcases
+    Array tests = read_json(json_tests::base58_keys_invalid);
     std::vector<unsigned char> result;
     CBitcoinSecret secret;
     CBitcoinAddress addr;

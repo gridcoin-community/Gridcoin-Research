@@ -23,7 +23,7 @@
       <enum>QTabWidget::North</enum>
      </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tabMain">
       <attribute name="title">
@@ -187,7 +187,7 @@
          <item>
           <widget class="QLabel" name="proxyIpLabel">
            <property name="text">
-            <string>Proxy &amp;IP:</string>
+            <string>Pro&amp;xy IP:</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -454,12 +454,6 @@
      </item>
      <item>
       <widget class="QLabel" name="statusLabel">
-       <property name="font">
-        <font>
-         <weight>75</weight>
-         <bold>true</bold>
-        </font>
-       </property>
        <property name="text">
         <string/>
        </property>

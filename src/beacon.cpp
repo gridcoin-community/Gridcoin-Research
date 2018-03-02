@@ -3,6 +3,7 @@
 #include "uint256.h"
 #include "key.h"
 #include "main.h"
+#include "appcache.h"
 
 bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
@@ -112,8 +113,9 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
-    std::string sBeacon = mvApplicationCache["beacon;" + cpid];
-    int64_t iLocktime = mvApplicationCacheTimestamp["beacon;" + cpid];
+    const AppCacheEntry& entry =  ReadCache("beacon", cpid);
+    std::string sBeacon = entry.value;
+    int64_t iLocktime = entry.timestamp;
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
     if (fDebug10)
         printf("\r\n Beacon %s, Weight %" PRId64 ", Locktime %" PRId64 "\r\n",sBeacon.c_str(), iRSAWeight, iLocktime);
@@ -130,18 +132,17 @@ bool HasActiveBeacon(const std::string& cpid)
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
-    const std::string key = "beacon;" + cpid;
-    const std::string& value = mvApplicationCache[key];
+    const AppCacheEntry& entry = ReadCache("beacon", cpid);
 
     // Compare the age of the beacon to the age of the current block. If we have
     // no current block we assume that the beacon is valid.
     int64_t iAge = pindexBest != NULL
-          ? pindexBest->nTime - mvApplicationCacheTimestamp[key]
+          ? pindexBest->nTime - entry.timestamp
           : 0;
 
     return (iAge > iMaxSeconds)
           ? ""
-          : value;
+          : entry.value;
 }
 
 bool VerifyBeaconContractTx(const CTransaction& tx)
@@ -168,10 +169,8 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     if (tx_out_cpid.empty() || tx_out_address.empty() || tx_out_publickey.empty() || chkMessageContractCPID.empty())
         return false; // Incomplete contract
 
-    std::string chkKey = "beacon;" + chkMessageContractCPID;
-    std::string chkValue = mvApplicationCache[chkKey];
-
-    if (chkValue.empty())
+    const AppCacheEntry& beaconEntry = ReadCache("beacon", chkMessageContractCPID);
+    if (beaconEntry.value.empty())
     {
         if (fDebug10)
             printf("VBCTX : No Previous beacon found for CPID %s\n", chkMessageContractCPID.c_str());
@@ -180,7 +179,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     }
 
     int64_t chkiAge = pindexBest != NULL
-        ? tx.nLockTime - mvApplicationCacheTimestamp[chkKey]
+        ? tx.nLockTime - beaconEntry.timestamp
         : 0;
     int64_t chkSecondsBase = 60 * 24 * 30 * 60;
 
@@ -202,7 +201,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
         std::string chk_out_publickey;
 
         // Here we GetBeaconElements for the contract in the current beacon in chain
-        GetBeaconElements(chkValue, chk_out_cpid, chk_out_address, chk_out_publickey);
+        GetBeaconElements(beaconEntry.value, chk_out_cpid, chk_out_address, chk_out_publickey);
 
         if (tx_out_publickey != chk_out_publickey)
         {

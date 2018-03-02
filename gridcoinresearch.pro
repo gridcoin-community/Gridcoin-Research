@@ -121,8 +121,8 @@ contains(NO_UPGRADE, 1) {
 
 INCLUDEPATH += src/leveldb/include src/leveldb/helpers
 LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
-SOURCES += src/txdb-leveldb.cpp \ 
-    src/qt/diagnosticsdialog.cpp
+SOURCES += src/txdb-leveldb.cpp
+
 !win32 {
     # we use QMAKE_CXXFLAGS_RELEASE even without RELEASE=1 because we use RELEASE to indicate linking preferences not -O preferences
     genleveldb.commands = cd $$PWD/src/leveldb && CC=\"$$QMAKE_CC\" CXX=\"$$QMAKE_CXX\" $(MAKE) OPT=\"$$QMAKE_CXXFLAGS $$QMAKE_CXXFLAGS_RELEASE\" libleveldb.a libmemenv.a
@@ -181,7 +181,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/addressbookpage.h \
     src/qt/signverifymessagedialog.h \
     src/qt/aboutdialog.h \
-    src/qt/upgradedialog.h \
     src/qt/editaddressdialog.h \
     src/qt/bitcoinaddressvalidator.h \
     src/alert.h \
@@ -256,12 +255,14 @@ HEADERS += src/qt/bitcoingui.h \
     src/clientversion.h \
     src/threadsafety.h \
     src/cpid.h \
-    src/upgrader.h \
     src/boinc.h \
     src/qt/diagnosticsdialog.h \
     src/backup.h \
     src/appcache.h \
-    src/tally.h
+    src/tally.h \
+    src/grcrestarter.h \
+    src/neuralnet.h \
+    src/qt/clicklabel.h
 
 
 SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
@@ -274,10 +275,10 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/qt/addressbookpage.cpp \
     src/qt/signverifymessagedialog.cpp \
     src/qt/aboutdialog.cpp \
-    src/qt/upgradedialog.cpp \
     src/qt/editaddressdialog.cpp \
     src/qt/bitcoinaddressvalidator.cpp \
     src/qt/votingdialog.cpp \
+    src/qt/diagnosticsdialog.cpp \
     src/alert.cpp \
     src/block.cpp \
     src/beacon.cpp \
@@ -337,12 +338,14 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/scrypt.cpp \
     src/pbkdf2.cpp \
     src/cpid.cpp \
-    src/upgrader.cpp \
     src/boinc.cpp \
     src/allocators.cpp \
     src/backup.cpp \
     src/appcache.cpp \
-    src/tally.cpp
+    src/tally.cpp \
+    src/grcrestarter.cpp \
+    src/neuralnet.cpp \
+    src/qt/clicklabel.cpp
 
 ##
 #RC_FILE  = qaxserver.rc
@@ -357,7 +360,6 @@ FORMS += \
     src/qt/forms/addressbookpage.ui \
     src/qt/forms/signverifymessagedialog.ui \
     src/qt/forms/aboutdialog.ui \
-    src/qt/forms/upgradedialog.ui \
     src/qt/forms/editaddressdialog.ui \
     src/qt/forms/transactiondescdialog.ui \
     src/qt/forms/overviewpage.ui \

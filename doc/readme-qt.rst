@@ -15,7 +15,7 @@ distribution are installed, for Debian and Ubuntu these are:
     apt-get install qt5-default qt5-qmake qtbase5-dev-tools qttools5-dev-tools \
         build-essential libboost-dev libboost-system-dev \
         libboost-filesystem-dev libboost-program-options-dev libboost-thread-dev \
-        libssl-dev libdb++-dev libminiupnpc-dev
+        libssl-dev libdb++-dev libminiupnpc-dev libzip-dev
 
 then execute the following:
 
@@ -43,8 +43,8 @@ Windows build instructions:
 .. _`QT Windows SDK`: http://qt-project.org/downloads
 
 
-Mac OS X
---------
+MacOS
+-----
 
 - Download and install the `Qt Mac OS X SDK`_. It is recommended to also install Apple's Xcode with UNIX tools.
 
@@ -61,6 +61,15 @@ Mac OS X
 
 .. _`Qt Mac OS X SDK`: http://qt-project.org/downloads
 .. _`MacPorts`: http://www.macports.org/install.php
+
+Alternatively
+-------------
+
+- Install Qt Creator and open the makefile.am file for Auto-Tools to build for your OS.
+
+- An executable named gridcoinresearch will be built in the /src/Qt directory.
+
+- If you have used Homebrew to install dependancies earlier, no need to install MacPorts as above.
 
 
 Build configuration options

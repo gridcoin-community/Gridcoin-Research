@@ -1,9 +1,16 @@
 src/*.exe
 src/gridccoinstake
 src/gridcoinresearchd
-src/test_gridcoin
+src/test/test_gridcoin
 src/build.h
 src/obj
+src/qt/forms/*.h
+src/qt/moc_*.cpp
+src/qt/moc.*
+src/qt/*.moc
+src/qt/test/moc*.cpp
+src/qt/test/test_gridcoin-qt
+
 contrib/deprecated
 contrib/deprecated/bin
 release
@@ -24,9 +31,12 @@ release
 *.force
 *.suo
 *.scc
+*.a
 gridcoinresearch.zip
 .gridcoin
 .gridcoinresearch
+.deps
+.dirstamp
 #compilation and Qt preprocessor part
 *.qm
 Makefile
@@ -36,8 +46,54 @@ gridcoinresearch
 qrc_*.cpp
 #qt creator
 *.pro.user
+*.pro.user.*
 #mac specific
 .DS_Store
 build
+background.tiff
+background.tiff.png
+background.tiff@2x.png
+contrib/devtools/split-debug.sh
+dist/
+gridcoinresearch.app/
+gridcoinresearch.dmg
 
 !src/leveldb/Makefile
+!depends/Makefile
+!depends/patches/**/*
+!depends/packages/*
+
+# autoreconf
+Makefile.in
+src/Makefile.in
+aclocal.m4
+autom4te.cache/
+build-aux/config.guess
+build-aux/config.sub
+build-aux/depcomp
+build-aux/install-sh
+build-aux/ltmain.sh
+build-aux/m4/libtool.m4
+build-aux/m4/lt~obsolete.m4
+build-aux/m4/ltoptions.m4
+build-aux/m4/ltsugar.m4
+build-aux/m4/ltversion.m4
+build-aux/missing
+build-aux/compile
+build-aux/test-driver
+config.log
+config.status
+configure
+libtool
+src/config/gridcoin-config.h
+src/config/gridcoin-config.h.in
+src/config/stamp-h1
+share/setup.nsi
+share/qt/Info.plist
+contrib/devtools/split-debug.sh
+
+#libtool object files
+*.lo
+*.la
+
+

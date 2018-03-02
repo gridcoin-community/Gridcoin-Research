@@ -63,6 +63,7 @@ private slots:
     void coinControlClipboardPriority();
     void coinControlClipboardLowOutput();
     void coinControlClipboardChange();
+    void updateIcons();
 };
 
 #endif // SENDCOINSDIALOG_H

@@ -206,14 +206,13 @@ Value help(const Array& params, bool fHelp)
 
 Value stop(const Array& params, bool fHelp)
 {
-    printf("Stopping...");
-
     // Accept the deprecated and ignored 'detach´ boolean argument
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "stop\n"
             "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
+    printf("Stopping...\n");
     StartShutdown();
     return "Gridcoin server stopping";
 }
@@ -286,11 +285,6 @@ static const CRPCCommand vRPCCommands[] =
     { "importprivkey",          &importprivkey,          false,  false },
     { "listunspent",            &listunspent,            false,  false },
     { "list",                   &listitem,               false,  false },
-    { "upgrade",                &upgrade,                false,  false },
-    { "downloadblocks",         &downloadblocks,         false,  false },
-    { "downloadstate",          &downloadstate,          false,  false },
-    { "downloadcancel",         &downloadcancel,         false,  false },
-    { "restart",                &restart,                false,  false },
     { "execute",                &execute,                false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
@@ -298,6 +292,7 @@ static const CRPCCommand vRPCCommands[] =
     { "decodescript",           &decodescript,           false,  false },
     { "signrawtransaction",     &signrawtransaction,     false,  false },
     { "sendrawtransaction",     &sendrawtransaction,     false,  false },
+    {"burn",                    &burn,                   false,  false },
     { "getcheckpoint",          &getcheckpoint,          true,   false },
     { "reservebalance",         &reservebalance,         false,  true},
     { "checkwallet",            &checkwallet,            false,  true},
@@ -677,7 +672,7 @@ void StopRPCThreads()
         printf("RPC IO server not started\n");
         return;
     }
-    
+
     rpc_io_service->stop();
 }
 
@@ -895,7 +890,7 @@ void ThreadRPCServer2(void* parg)
 
     while (!fShutdown)
         rpc_io_service->run_one();
-    
+
     delete rpc_io_service;
     rpc_io_service = NULL;
     StopRequests();
@@ -1199,11 +1194,13 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "sendfrom"               && n > 3) ConvertTo<int64_t>(params[3]);
     if (strMethod == "listtransactions"       && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listtransactions"       && n > 2) ConvertTo<int64_t>(params[2]);
+    if (strMethod == "listtransactions"       && n > 3) ConvertTo<bool>(params[3]);
     if (strMethod == "listaccounts"           && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "walletpassphrase"       && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "walletpassphrase"       && n > 2) ConvertTo<bool>(params[2]);
     if (strMethod == "getblocktemplate"       && n > 0) ConvertTo<Object>(params[0]);
     if (strMethod == "listsinceblock"         && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "listsinceblock"         && n > 2) ConvertTo<bool>(params[2]);
 
     if (strMethod == "sendalert"              && n > 2) ConvertTo<int64_t>(params[2]);
     if (strMethod == "sendalert"              && n > 3) ConvertTo<int64_t>(params[3]);
@@ -1223,9 +1220,6 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
     if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
     if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<int64_t>(params[1]);
@@ -1234,6 +1228,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "signrawtransaction"     && n > 1) ConvertTo<Array>(params[1], true);
     if (strMethod == "signrawtransaction"     && n > 2) ConvertTo<Array>(params[2], true);
     if (strMethod == "keypoolrefill"          && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "burn"                   && n > 0) ConvertTo<double>(params[0]);
 
     return params;
 }

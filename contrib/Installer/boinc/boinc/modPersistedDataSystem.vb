@@ -197,7 +197,7 @@ Module modPersistedDataSystem
                     Dim dLocalMagnitude As Double = Val("0" + Num(cpid.Magnitude)) * dLegacyMagnitudeBoost
                     If dLocalMagnitude > 32766 Then dLocalMagnitude = 32766
 
-                    Dim sRow As String = cpid.PrimaryKey + "," + Num(dLocalMagnitude) + ";"
+                    Dim sRow As String = cpid.PrimaryKey + "," + dLocalMagnitude.ToString + ";"
                     'Zero magnitude rule (We need a placeholder because of the beacon count rule)
                     If Val(dLocalMagnitude) = 0 Then
                         sRow = "0,15;"
@@ -469,6 +469,15 @@ Module modPersistedDataSystem
     End Sub
     Private Sub ClearProjectData()
         Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+        Dim surrogatePrj As New Row
+        surrogatePrj.Database = "Project"
+        surrogatePrj.Table = "Projects"
+        Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
+        For Each prj As Row In lstProjects
+            If prj.PrimaryKey <> "" Then
+                SoftKill(sPath + prj.PrimaryKey + "CPID\*.dat")
+            End If
+        Next
         SoftKill(sPath + "db.dat")
         'Erase the projects
         SoftKill(sPath + "*master.dat")

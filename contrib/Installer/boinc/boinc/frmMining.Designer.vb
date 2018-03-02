@@ -395,7 +395,7 @@ Partial Class frmMining
         Me.TabPage1.Padding = New System.Windows.Forms.Padding(3)
         Me.TabPage1.Size = New System.Drawing.Size(1037, 357)
         Me.TabPage1.TabIndex = 2
-        Me.TabPage1.Text = "Boinc Stats"
+        Me.TabPage1.Text = "Gridcoin Website"
         Me.TabPage1.UseVisualStyleBackColor = True
         '
         'WebBrowserBoinc
@@ -407,7 +407,7 @@ Partial Class frmMining
         Me.WebBrowserBoinc.ScriptErrorsSuppressed = True
         Me.WebBrowserBoinc.Size = New System.Drawing.Size(1031, 351)
         Me.WebBrowserBoinc.TabIndex = 0
-        Me.WebBrowserBoinc.Url = New System.Uri("http://www.gridcoin.us", System.UriKind.Absolute)
+        Me.WebBrowserBoinc.Url = New System.Uri("https://gridcoin.us", System.UriKind.Absolute)
         '
         'TabPage2
         '

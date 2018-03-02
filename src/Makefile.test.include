@@ -1,0 +1,69 @@
+# Copyright (c) 2013-2016 The Bitcoin Core developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+TESTS += test/test_gridcoin
+bin_PROGRAMS += test/test_gridcoin
+TEST_SRCDIR = test
+TEST_BINARY=test/test_gridcoin$(EXEEXT)
+
+JSON_TEST_FILES = \
+  test/data/base58_keys_valid.json.h \
+  test/data/base58_encode_decode.json.h \
+  test/data/base58_keys_invalid.json.h \
+  test/data/script_valid.json.h \
+  test/data/script_invalid.json.h \
+  test/data/tx_invalid.json.h \
+  test/data/tx_valid.json.h
+
+# test_n binary #
+GRIDCOIN_TESTS =\
+  test/appcache_tests.cpp \
+  test/Checkpoints_tests.cpp \
+  test/DoS_tests.cpp \
+  test/accounting_tests.cpp \
+  test/allocator_tests.cpp \
+  test/base32_tests.cpp \
+  test/base58_tests.cpp \
+  test/base64_tests.cpp \
+  test/bignum_tests.cpp \
+  test/block_tests.cpp \
+  test/cpid_tests.cpp \
+  test/crypter_tests.cpp \
+  test/getarg_tests.cpp \
+  test/gridcoin_tests.cpp \
+  test/key_tests.cpp \
+  test/mruset_tests.cpp \
+  test/multisig_tests.cpp \
+  test/netbase_tests.cpp \
+  test/rpc_tests.cpp \
+  test/script_P2SH_tests.cpp \
+  test/script_tests.cpp \
+  test/sigopcount_tests.cpp \
+  test/test_gridcoin.cpp \
+  test/transaction_tests.cpp \
+  test/uint160_tests.cpp \
+  test/uint256_tests.cpp \
+  test/util_tests.cpp \
+  test/wallet_tests.cpp
+
+
+test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES)
+test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
+test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
+test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+
+test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS)
+test_test_gridcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+
+CLEAN_GRIDCOIN_TEST = test/*.gcda test/*.gcno
+
+CLEANFILES += $(CLEAN_GRIDCOIN_TEST)
+
+gridcoin_test: $(TEST_BINARY)
+
+gridcoin_test_check: $(TEST_BINARY) FORCE
+	$(MAKE) check-TESTS TESTS=$^
+
+gridcoin_test_clean : FORCE
+	rm -f $(CLEAN_GRIDCOIN_TEST) $(test_test_GRIDCOIN_OBJECTS) $(TEST_BINARY)

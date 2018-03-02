@@ -13,6 +13,7 @@
 #include "global_objects_noui.hpp"
 
 #include <map>
+#include <unordered_map>
 #include <set>
 
 class CWallet;
@@ -126,8 +127,6 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
 
-extern std::map<std::string, std::string> mvApplicationCache;
-extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 extern std::map<std::string, double> mvNeuralNetworkHash;
 extern std::map<std::string, double> mvCurrentNeuralNetworkHash;
 extern std::map<std::string, double> mvNeuralVersion;
@@ -142,10 +141,16 @@ extern std::map<std::string, MiningCPID> mvBlockIndex;
 typedef std::set<uint256> HashSet;
 extern std::map<std::string, HashSet> mvCPIDBlockHashes;
 
+struct BlockHasher
+{
+    size_t operator()(const uint256& hash) const { return hash.Get64(); }
+};
+
+typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
-extern std::map<uint256, CBlockIndex*> mapBlockIndex;
+extern BlockMap mapBlockIndex;
 extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
 extern CBlockIndex* pindexGenesisBlock;
 extern unsigned int nStakeMinAge;
@@ -271,7 +276,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
-std::string ReadCache(std::string section, std::string key);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string PackBinarySuperblock(std::string sBlock);
 std::string UnpackBinarySuperblock(std::string sBlock);
@@ -1700,7 +1704,7 @@ public:
 
     explicit CBlockLocator(uint256 hashBlock)
     {
-        std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi != mapBlockIndex.end())
             Set((*mi).second);
     }
@@ -1751,7 +1755,7 @@ public:
         int nStep = 1;
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
@@ -1770,7 +1774,7 @@ public:
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
@@ -1786,7 +1790,7 @@ public:
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;

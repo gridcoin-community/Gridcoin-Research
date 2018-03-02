@@ -10,11 +10,9 @@
 #include <QDoubleValidator>
 #include <QFont>
 #include <QLineEdit>
-#include <QUrl>
+//#include <QUrl>
 #include <QTextDocument> // For Qt::escape
-#if QT_VERSION >= 0x050000
-#include <QUrlQuery> // For alternative QT5 toHtmlEscaped
-#endif
+#include <QUrlQuery>
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QClipboard>
@@ -58,11 +56,7 @@ QString dateTimeStr(qint64 nTime)
 QFont bitcoinAddressFont()
 {
     QFont font("Monospace");
-#if QT_VERSION >= 0x040800
     font.setStyleHint(QFont::Monospace);
-#else
-    font.setStyleHint(QFont::TypeWriter);
-#endif
     return font;
 }
 
@@ -91,14 +85,8 @@ bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
     SendCoinsRecipient rv;
     rv.address = uri.path();
     rv.amount = 0;
-
-#if QT_VERSION < 0x050000
-    QList<QPair<QString, QString> > items = uri.queryItems();
-#else
     QUrlQuery uriQuery(uri);
     QList<QPair<QString, QString> > items = uriQuery.queryItems();
-#endif
-
     for (QList<QPair<QString, QString> >::iterator i = items.begin(); i != items.end(); i++)
     {
         bool fShouldReturnFalse = false;
@@ -144,7 +132,7 @@ bool parseBitcoinURI(QString uri, SendCoinsRecipient *out)
 
     if(uri.startsWith("gridcoin://"))
     {
-        uri.replace(0, 12, "gridcoin:");
+        uri.replace(0, 11, "gridcoin:");
     }
     QUrl uriInstance(uri);
     return parseBitcoinURI(uriInstance, out);
@@ -152,11 +140,7 @@ bool parseBitcoinURI(QString uri, SendCoinsRecipient *out)
 
 QString HtmlEscape(const QString& str, bool fMultiLine)
 {
-#if QT_VERSION < 0x050000
-    QString escaped = Qt::escape(str);
-#else
     QString escaped = str.toHtmlEscaped();
-#endif
     if(fMultiLine)
     {
         escaped = escaped.replace("\n", "<br>\n");
@@ -188,19 +172,11 @@ QString getSaveFileName(QWidget *parent, const QString &caption,
                                  QString *selectedSuffixOut)
 {
     QString selectedFilter;
-    QString myDir;
-    if(dir.isEmpty()) // Default to user documents location
-    {
-#if QT_VERSION < 0x050000
-        myDir = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
-#else
-        myDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-#endif
-    }
-    else
-    {
-        myDir = dir;
-    }
+
+    // Default to user documents location
+    QString myDir = dir.isEmpty()
+                    ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                    : dir;
     QString result = QFileDialog::getSaveFileName(parent, caption, myDir, filter, &selectedFilter);
 
     /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */

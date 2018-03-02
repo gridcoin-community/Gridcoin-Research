@@ -12,6 +12,8 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
+#include "neuralnet.h"
+#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
@@ -46,7 +48,6 @@ std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
-int RestartClient();
 extern bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 extern std::string GetBurnAddress();
@@ -63,7 +64,6 @@ bool UpdateNeuralNetworkQuorumData();
 extern Array LifetimeReport(std::string cpid);
 extern std::string AddContract(std::string sType, std::string sName, std::string sContract);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
-void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 int64_t GetEarliestWalletTransaction();
 extern bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
@@ -75,7 +75,6 @@ extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, s
 
 double Round(double d, int place);
 bool UnusualActivityReport();
-double GetCountOf(std::string datatype);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
@@ -116,18 +115,12 @@ extern Array GetJSONBeaconReport();
 
 
 void GatherNeuralHashes();
-extern std::string GetListOf(std::string datatype);
-extern std::string GetListOfWithConsensus(std::string datatype);
-
 void qtSyncWithDPORNodes(std::string data);
-std::string qtGetNeuralHash(std::string data);
-std::string qtGetNeuralContract(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
 
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
-std::string ReadCache(std::string section, std::string key);
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
@@ -137,7 +130,6 @@ double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
-int ReindexWallet();
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
@@ -151,7 +143,6 @@ std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-void ExecuteCode();
 static BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
@@ -736,7 +727,7 @@ bool TallyMagnitudesInSuperblock()
 {
     try
     {
-        std::string superblock = ReadCache("superblock","magnitudes");
+        std::string superblock = ReadCache("superblock","magnitudes").value;
         if (superblock.empty()) return false;
         std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
         double TotalNetworkMagnitude = 0;
@@ -785,13 +776,13 @@ bool TallyMagnitudesInSuperblock()
     network.NetworkMagnitude = TotalNetworkMagnitude;
     network.NetworkAvgMagnitude = NetworkAvgMagnitude;
     if (fDebug)
-       printf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries,ReadCache("superblock","block_number").c_str());
+            printf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries, ReadCache("superblock","block_number").value.c_str());
     
     double TotalProjects = 0;
     double TotalRAC = 0;
     double AVGRac = 0;
     // Load boinc project averages from neural network
-    std::string projects = ReadCache("superblock","averages");
+        std::string projects = ReadCache("superblock","averages").value;
     if (projects.empty()) return false;
     std::vector<std::string> vProjects = split(projects.c_str(),";");
     if (vProjects.size() > 0)
@@ -826,102 +817,15 @@ bool TallyMagnitudesInSuperblock()
     network.AverageRAC = AVGRac;
     network.rac = TotalRAC;
     network.NetworkProjects = TotalProjects;
-    //8-16-2015 Store the quotes
-    std::string q = ReadCache("superblock","quotes");
-    if (fDebug3) printf("q %s",q.c_str());
-    std::vector<std::string> vQ = split(q.c_str(),";");
-    if (vQ.size() > 0)
-    {
-        for (unsigned int i = 0; i < vQ.size(); i++)
-        {
-            // For each quote in the contract
-            if (vQ[i].length() > 1)
-            {
-                    std::string symbol = ExtractValue(vQ[i],",",0);
-                    double price = RoundFromString(ExtractValue("0" + vQ[i],",",1),0);
-                    
-                    WriteCache("quotes",symbol,RoundToString(price,2),GetAdjustedTime());
-                    if (fDebug3) printf("symbol %s price %f ",symbol.c_str(),price);
-            }
-        }
-    }
-
     mvNetworkCopy["NETWORK"] = network;
     if (fDebug3) printf(".TMS43.");
     return true;
     }
-    catch (std::exception &e) 
+    catch (const std::exception &e)
     {
                 printf("Error in TallySuperblock.");
                 return false;
     }
-    catch(...)
-    {
-                printf("Error in TallySuperblock");
-                return false;
-    }
-
-}
-
-double GetCountOf(std::string datatype)
-{
-    std::string data = GetListOf(datatype);
-    std::vector<std::string> vScratchPad = split(data.c_str(),"<ROW>");
-    return vScratchPad.size()+1;
-}
-
-// TODO: Make this return std::vector<std::string> instead.
-std::string GetListOf(std::string datatype)
-{
-    std::string rows;
-    for(const auto& item : AppCacheFilter(datatype))
-    {
-        const std::string& key_name = item.first;
-        const std::string& key_value = item.second;
-        const std::string& subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-        std::string row = subkey + "<COL>" + key_value;
-
-        if (datatype=="beacon" && Contains(row,"INVESTOR"))
-            continue;
-
-        if (!row.empty())
-            rows += row + "<ROW>";
-    }
-
-    return rows;
-}
-
-std::string GetListOfWithConsensus(std::string datatype)
-{
-       std::string rows = "";
-       std::string row = "";
-	   int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-       int64_t nLookback = 30 * 6 * 86400; 
-       int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-       printf(" getlistofwithconsensus startime %f , endtime %f, lookback %f \r\n ",(double)iStartTime,(double)iEndTime, (double)nLookback);
-	   for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii) 
-       {
-             std::string key_name  = (*ii).first;
-             if (key_name.length() > datatype.length())
-             {
-                 if (key_name.substr(0,datatype.length())==datatype)
-                 {
- 			           int64_t iBeaconTimestamp = mvApplicationCacheTimestamp[(*ii).first];
-				       if (iBeaconTimestamp > iStartTime && iBeaconTimestamp < iEndTime)
-					   {		
-							std::string key_value = mvApplicationCache[(*ii).first];
-							std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-							row = subkey + "<COL>" + key_value;
-							if (Contains(row,"INVESTOR") && datatype=="beacon") row = "";
-							if (row != "")
-							{
-								rows += row + "<ROW>";
-							}
-						}
-                  }
-             }
-       }
-       return rows;
 }
 
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
@@ -942,7 +846,6 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
     return (externalcpid==cpidv1);
 }
         
-
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {	
      LOCK(cs_main);
@@ -1183,24 +1086,19 @@ Value execute(const Array& params, bool fHelp)
         
     if (sItem == "restorepoint")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
+            int r= Restarter::CreateGridcoinRestorePoint();
             //We must stop the node before we can do this
-            r = CreateRestorePoint();
             //RestartGridcoin();
-            #endif 
             entry.push_back(Pair("Restore Point",r));
             results.push_back(entry);
     }
     else if (sItem == "restart")
     {
         printf("Restarting Gridcoin...");
-        int iResult = 0;
-#if defined(WIN32) && defined(QT_GUI)
-        iResult = RestartClient();
-#endif
-        entry.push_back(Pair("result", iResult));
+        int iResult = Restarter::RestartGridcoin();
+        entry.push_back(Pair("RebootClient", iResult));
         results.push_back(entry);
+
     }
     else if (sItem == "sendblock")
     {
@@ -1316,7 +1214,6 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="proveownership")
     {
-        mvCPIDCache.clear();
         HarvestCPIDs(true);
         GetNextProject(true);
         std::string email = GetArgument("email", "NA");
@@ -1550,8 +1447,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "syncdpor2")
     {
         std::string sOut = "";
-        double dBC = GetCountOf("beacon");
-        bool bFull = dBC < 50 ? true : false;
+        bool bFull = GetCountOf("beacon") < 50 ? true : false;
         LoadAdminMessages(bFull,sOut);
         FullSyncWithDPORNodes();
         entry.push_back(Pair("Syncing",1));
@@ -1603,20 +1499,18 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem=="myneuralhash")
     {
-        #if defined(WIN32) && defined(QT_GUI)
-            std::string myNeuralHash = qtGetNeuralHash("");
+        std::string myNeuralHash = NN::GetNeuralHash();
             entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
             results.push_back(entry);
-        #endif
     }
     else if (sItem == "superblockage")
     {
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+        int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+        int64_t superblock_age = GetAdjustedTime() - superblock_time;
         entry.push_back(Pair("Superblock Age",superblock_age));
-        std::string timestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-        entry.push_back(Pair("Superblock Timestamp",timestamp));
-        entry.push_back(Pair("Superblock Block Number",mvApplicationCache["superblock;block_number"]));
-        entry.push_back(Pair("Pending Superblock Height",ReadCache("neuralsecurity","pending")));
+        entry.push_back(Pair("Superblock Timestamp", TimestampToHRDate(superblock_time)));
+        entry.push_back(Pair("Superblock Block Number", ReadCache("superblock", "block_number").value));
+        entry.push_back(Pair("Pending Superblock Height", ReadCache("neuralsecurity","pending").value));
         results.push_back(entry);
     }
     else if (sItem == "unusual")
@@ -1789,13 +1683,9 @@ Value execute(const Array& params, bool fHelp)
                                 std::string cpid1 = GlobalCPUMiningCPID.cpid;
                                 std::string GRCAddress1 = DefaultWalletAddress();
                                 GetEarliestStakeTime(GRCAddress1,cpid1);
-                                int64_t nGRCTime = mvApplicationCacheTimestamp["nGRCTime"];
-                                int64_t nCPIDTime = mvApplicationCacheTimestamp["nCPIDTime"];
-                                double cpid_age = GetAdjustedTime() - nCPIDTime;
-                                double stake_age = GetAdjustedTime() - nGRCTime;
+                                double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
+                                double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
 
-                                // Phase II - Prevent Double Voting
-                                                                                                
                                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
 
                                 
@@ -2012,22 +1902,17 @@ Value execute(const Array& params, bool fHelp)
             std::string cpid = GlobalCPUMiningCPID.cpid;
             std::string GRCAddress = DefaultWalletAddress();
             GetEarliestStakeTime(GRCAddress,cpid);
-            entry.push_back(Pair("GRCTime",mvApplicationCacheTimestamp["nGRCTime"]));
-            entry.push_back(Pair("CPIDTime",mvApplicationCacheTimestamp["nCPIDTime"]));
+            entry.push_back(Pair("GRCTime", ReadCache("global", "nGRCTime").timestamp));
+            entry.push_back(Pair("CPIDTime",ReadCache("global", "nCPIDTime").timestamp));
             results.push_back(entry);
     }
     else if (sItem=="testnewcontract")
     {
-        std::string contract = "";
-        std::string myNeuralHash = "";
-        #if defined(WIN32) && defined(QT_GUI)
-            contract = qtGetNeuralContract("");
-        #endif
-        #if defined(WIN32) && defined(QT_GUI)
-            myNeuralHash = qtGetNeuralHash("");
+        std::string contract = NN::GetNeuralContract();
+        std::string myNeuralHash = NN::GetNeuralHash();
             entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
             results.push_back(entry);
-        #endif
+
         entry.push_back(Pair("Contract Test",contract));
         // Convert to Binary
         std::string sBin = PackBinarySuperblock(contract);
@@ -2223,7 +2108,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "superblockaverage")
     {
-        std::string superblock = ReadCache("superblock","all");
+        std::string superblock = ReadCache("superblock","all").value;
         double out_beacon_count = 0;
         double out_participant_count = 0;
         double out_avg = 0;
@@ -2233,7 +2118,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("average_magnitude",out_avg));
         entry.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+        int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
         entry.push_back(Pair("Superblock Age",superblock_age));
         bool bDireNeed = NeedASuperblock();
         entry.push_back(Pair("Dire Need of Superblock",bDireNeed));
@@ -2241,10 +2126,7 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "currentcontractaverage")
     {
-        std::string contract;
-        #if defined(WIN32) && defined(QT_GUI)
-                    contract = qtGetNeuralContract("");
-        #endif
+        std::string contract = NN::GetNeuralContract();
         entry.push_back(Pair("Contract",contract));
         double out_beacon_count = 0;
         double out_participant_count = 0;
@@ -2257,13 +2139,8 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("beacon_participant_count",out_participant_count));
         entry.push_back(Pair("superblock_valid",bValid));
         //Show current contract neural hash
-        std::string sNeuralHash = "";
-
-        #if defined(WIN32) && defined(QT_GUI)
-            sNeuralHash = qtGetNeuralHash("");
+        std::string sNeuralHash = NN::GetNeuralHash();
             entry.push_back(Pair(".NET Neural Hash",sNeuralHash.c_str()));
-        #endif
-    
         entry.push_back(Pair("Length",(double)contract.length()));
         std::string neural_hash = GetQuorumHash(contract);
         entry.push_back(Pair("Wallet Neural Hash",neural_hash));
@@ -2282,8 +2159,7 @@ Value execute(const Array& params, bool fHelp)
         {
             std::string sType = params[1].get_str();
             entry.push_back(Pair("Key Type",sType));
-            std::string data = GetListOf(sType);
-            entry.push_back(Pair("Data",data));
+            entry.push_back(Pair("Data", GetListOf(sType)));
             results.push_back(entry);
         }
 
@@ -2300,8 +2176,8 @@ Value execute(const Array& params, bool fHelp)
         {
             std::string sType = params[1].get_str();
             entry.push_back(Pair("Key Type",sType));
-            for(const auto& item : AppCacheFilter(sType))
-                entry.push_back(Pair(item.first, item.second));
+            for(const auto& item : ReadCacheSection(sType))
+                entry.push_back(Pair(item.first, item.second.value));
 
            results.push_back(entry);
         }
@@ -2359,23 +2235,17 @@ Value execute(const Array& params, bool fHelp)
     }
     else if (sItem == "reindex")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
-            ReindexWallet();
-            r = CreateRestorePoint();
-            #endif 
+            int r = Restarter::CreateGridcoinRestorePoint();
+            Restarter::ReindexGridcoinWallet();
             entry.push_back(Pair("Reindex Chain",r));
             results.push_back(entry);
     }
-    else if (sItem == "downloadblocks")
+    /*else if (sItem == "downloadblocks")
     {
-            int r=-1;
-            #if defined(WIN32) && defined(QT_GUI)
-                r = DownloadBlocks();
-            #endif 
+            int r=Restarter::DownloadGridcoinBlocks();
             entry.push_back(Pair("Download Blocks",r));
             results.push_back(entry);
-    }
+    }*/
     else if (sItem == "getnextproject")
     {
             GetNextProject(true);
@@ -2386,7 +2256,6 @@ Value execute(const Array& params, bool fHelp)
     {
             //Reload the config file
             ReadConfigFile(mapArgs, mapMultiArgs);
-            mvCPIDCache.clear();
             HarvestCPIDs(true);
             GetNextProject(true);
             entry.push_back(Pair("Reset",1));
@@ -2481,9 +2350,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
         entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
         entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
-        #if defined(WIN32) && defined(QT_GUI)
-        entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
-        #endif
+        //entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
         entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
         entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
         entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
@@ -2492,22 +2359,16 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
         entry.push_back(Pair("execute listpollresults <title> <true>", "Displays poll results for specified title. True is optional for expired polls"));
         entry.push_back(Pair("execute listpolls", "Displays all active polls"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
-        #endif
         entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
         entry.push_back(Pair("execute neuralreport", "Displays information of recently staked neural votes by participating nodes"));
         entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
         entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute reindex", "Reindex blockchain"));
-        #endif
         entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
         entry.push_back(Pair("execute resetcpids", "Resets wallet cpids (can be used to correct cpids after a split cpid is fixed)"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute restart", "Restarts wallet"));
         entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
-        #endif
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
         entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
         entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
@@ -2524,9 +2385,7 @@ Value execute(const Array& params, bool fHelp)
     else if (sItem == "helpdev")
     {
         entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
-        #if defined(WIN32) && defined(QT_GUI)
         entry.push_back(Pair("execute executecode", "Execute .net code"));
-        #endif
         entry.push_back(Pair("execute forcequorum", "Force quorum"));
         entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
         entry.push_back(Pair("execute getlistof <keytype>", "Get list of keytype data"));
@@ -2627,7 +2486,7 @@ Array SuperblockReport(std::string cpid)
                 double out_avg = 0;
                 // Binary Support 12-20-2015
                 std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                double avg_mag = GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
+                GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
 
                 Object c;
                 c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
@@ -2639,6 +2498,7 @@ Array SuperblockReport(std::string cpid)
                 {
                     c.push_back(Pair("Magnitude",mag));
                 }
+
 
                 results.push_back(c);
             }
@@ -2816,9 +2676,9 @@ bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, 
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
 {
-    for(const auto& item : AppCacheFilter(objecttype))
+    for(const auto& item : ReadCacheSection(objecttype))
     {
-        const std::string& contract = item.second;
+        const std::string& contract = item.second.value;
         const std::string& PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
         if(boost::iequals(PollTitle, title))
             return contract;
@@ -2915,9 +2775,9 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
     
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
-    for(const auto& item : AppCacheFilter("vote"))
+    for(const auto& item : ReadCacheSection("vote"))
     {
-        const std::string& contract = item.second;
+        const std::string& contract = item.second.value;
         const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
         const std::string& VoterAnswer = ExtractXML(contract,"<ANSWER>","</ANSWER>");
         const std::vector<std::string>& vVoterAnswers = split(VoterAnswer.c_str(),";");
@@ -3229,7 +3089,6 @@ Array GetJsonUnspentReport()
                     bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
                     entry.push_back(Pair("Magnitude Audited",fAudited));
                     results.push_back(entry);
-
                 }
             }
 
@@ -3400,9 +3259,9 @@ Array GetJsonVoteDetailsReport(std::string pollname)
     entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
 
     boost::to_lower(pollname);
-    for(const auto& item : AppCacheFilter("vote"))
+    for(const auto& item : ReadCacheSection("vote"))
     {
-        const std::string& contract = item.second;
+        const std::string& contract = item.second.value;
         const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
         if(boost::iequals(pollname, Title))
         {
@@ -3442,7 +3301,6 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
     Array results;
     Object entry;
     entry.push_back(Pair("Polls","Polls Report " + QueryByTitle));
-    std::string datatype="poll";
     std::string rows;
     std::string row;
     double iPollNumber = 0;
@@ -3453,27 +3311,18 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
     std::string sExportRow;
     out_export.clear();
 
-    for(const auto& item : AppCacheFilter(datatype))
+    for(const auto& item : ReadCacheSection("poll"))
     {
-        const std::string& key_name = item.first;
-        const std::string& contract = item.second;
-
-        // Creating polls also create additional cache instances with ";burnamount" and ";recipient"
-        // appended. Skip all keys containing those fields.
-        if(boost::iends_with(key_name, ";burnamount") ||
-           boost::iends_with(key_name, ";recipient"))
-           continue;
-
-        std::string Title = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+        const std::string& title = boost::to_lower_copy(item.first);
+        const std::string& contract = item.second.value;
         std::string Expiration = ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>");
         std::string Question = ExtractXML(contract,"<QUESTION>","</QUESTION>");
         std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
         std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
         std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-        boost::to_lower(Title);
-        if (!PollExpired(Title) || IncludeExpired)
+        if (!PollExpired(title) || IncludeExpired)
         {
-            if (QueryByTitle.empty() || QueryByTitle == Title)
+            if (QueryByTitle.empty() || QueryByTitle == title)
             {
                 iPollNumber++;
                 total_participants = 0;
@@ -3485,8 +3334,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
                                         + " (" + ExpirationDate + " ) - " + sShareType;
 
-                entry.push_back(Pair(TitleNarr,Title));
-                sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + Title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
+                entry.push_back(Pair(TitleNarr,title));
+                sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
 
                 if (bDetail)
                 {
@@ -3497,7 +3346,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                     for (const std::string& answer : vAnswers)
                     {
                         double participants=0;
-                        double dShares = VotesCount(Title, answer, RoundFromString(ShareType,0),participants);
+                        double dShares = VotesCount(title, answer, RoundFromString(ShareType,0),participants);
                         if (dShares > highest_share)
                         {
                             highest_share = dShares;
@@ -3542,17 +3391,14 @@ Array GetUpgradedBeaconReport()
     Array results;
     Object entry;
     entry.push_back(Pair("Report","Upgraded Beacon Report 1.0"));
-    std::string datatype="beacon";
     std::string rows = "";
     std::string row = "";
     int iBeaconCount = 0;
     int iUpgradedBeaconCount = 0;
-    for(const auto& item : AppCacheFilter(datatype))
+    for(const auto& item : ReadCacheSection("beacon"))
     {
-        const std::string& key_name  = item.first;
-        const std::string& key_value = item.second;
-        std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-        std::string contract = DecodeBase64(key_value);
+        const AppCacheEntry& entry = item.second;
+        std::string contract = DecodeBase64(entry.value);
         std::string cpidv2 = ExtractValue(contract,";",0);
         std::string grcaddress = ExtractValue(contract,";",2);
         std::string sPublicKey = ExtractValue(contract,";",3);
@@ -3560,8 +3406,8 @@ Array GetUpgradedBeaconReport()
         iBeaconCount++;
     }
 
-    entry.push_back(Pair("Total Beacons",(double)iBeaconCount));
-    entry.push_back(Pair("Upgraded Beacon Count",(double)iUpgradedBeaconCount));
+    entry.push_back(Pair("Total Beacons", iBeaconCount));
+    entry.push_back(Pair("Upgraded Beacon Count", iUpgradedBeaconCount));
     double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
     entry.push_back(Pair("Pct Of Upgraded Beacons",RoundToString(dPct*100,3)));
     results.push_back(entry);
@@ -3577,19 +3423,15 @@ Array GetJSONBeaconReport()
     Array results;
     Object entry;
     entry.push_back(Pair("CPID","GRCAddress"));
-    std::string datatype="beacon";
     std::string row;
-    for(const auto& item : AppCacheFilter(datatype))
+    for(const auto& item : ReadCacheSection("beacon"))
     {
-        const std::string& key_name  = item.first;
-        const std::string& key_value = item.second;
-        std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
-        row = subkey + "<COL>" + key_value;
-        //                              std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
-        std::string contract = DecodeBase64(key_value);
-        std::string cpid = subkey;
+        const std::string& key = item.first;
+        const AppCacheEntry& cache = item.second;
+        row = key + "<COL>" + cache.value;
+        std::string contract = DecodeBase64(cache.value);
         std::string grcaddress = ExtractValue(contract,";",2);
-        entry.push_back(Pair(cpid,grcaddress));
+        entry.push_back(Pair(key, grcaddress));
     }
 
     results.push_back(entry);
@@ -3662,12 +3504,12 @@ Array GetJSONNeuralNetworkReport()
                 }
       }
       // If we have a pending superblock, append it to the report:
-      std::string SuperblockHeight = ReadCache("neuralsecurity","pending");
+      std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
       if (!SuperblockHeight.empty() && SuperblockHeight != "0")
       {
           entry.push_back(Pair("Pending",SuperblockHeight));
       }
-      int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+      int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
      
       entry.push_back(Pair("Superblock Age",superblock_age));
       if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
@@ -3715,12 +3557,12 @@ Array GetJSONCurrentNeuralNetworkReport()
                 }
       }
       // If we have a pending superblock, append it to the report:
-      std::string SuperblockHeight = ReadCache("neuralsecurity","pending");
+      std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
       if (!SuperblockHeight.empty() && SuperblockHeight != "0")
       {
           entry.push_back(Pair("Pending",SuperblockHeight));
       }
-      int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+      int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
      
       entry.push_back(Pair("Superblock Age",superblock_age));
       if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
@@ -4037,18 +3879,16 @@ Value listitem(const Array& params, bool fHelp)
     }
     else if (sitem == "projects") 
     {
-        for (const auto& item : AppCacheFilter("project"))
+        for (const auto& item : ReadCacheSection("project"))
         {
             Object entry;
 
-            std::string sProjectKey = item.first;
-            std::vector<std::string> vProjectKey = split(sProjectKey, ";");
-            std::string sProjectName = ToOfficialName(vProjectKey[1]);
-            std::string sProjectURL = item.second;
-            sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
-
+            std::string sProjectName = ToOfficialName(item.first);
             if (sProjectName.empty())
                 continue;
+
+            std::string sProjectURL = item.second.value;
+            sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
 
             // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
             if (sProjectURL.find("stats/") != string::npos)

@@ -11,7 +11,7 @@
 #include <leveldb/env.h>
 #include <leveldb/cache.h>
 #include <leveldb/filter_policy.h>
-#include <memenv/memenv.h>
+#include <leveldb/helpers/memenv/memenv.h>
 
 #include "kernel.h"
 #include "txdb.h"
@@ -296,7 +296,7 @@ static CBlockIndex *InsertBlockIndex(const uint256& hash)
         return NULL;
 
     // Return existing
-    map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+    BlockMap::iterator mi = mapBlockIndex.find(hash);
     if (mi != mapBlockIndex.end())
         return (*mi).second;
 
