@@ -3577,7 +3577,7 @@ Array GetJSONBeaconReport()
     Array results;
     Object entry;
     entry.push_back(Pair("CPID","GRCAddress"));
-    std::string datatype="beacon";
+    std::string datatype="beacon;";
     std::string row;
     for(const auto& item : AppCacheFilter(datatype))
     {
