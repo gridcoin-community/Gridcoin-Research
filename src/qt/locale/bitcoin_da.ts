@@ -3906,7 +3906,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>ADVARSEL: synkroniseret checkpoint overtrædelse opdaget, men skibbet!</translation>
     </message>
     <message>

@@ -3978,7 +3978,7 @@ Si el archivo no existe, créelo con permiso de lectura solamente del propietari
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

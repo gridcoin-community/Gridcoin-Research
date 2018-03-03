@@ -3782,7 +3782,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>UYARI: senkronize edilen kontrol noktas? ihlali tespit edildi ancak atland?!</translation>
     </message>
     <message>

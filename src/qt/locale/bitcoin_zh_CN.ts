@@ -3979,7 +3979,7 @@ rpcpassword=&lt;password&gt;
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>警告：发现已同步的检查点有冲突，但已跳过！</translation>
     </message>
     <message>

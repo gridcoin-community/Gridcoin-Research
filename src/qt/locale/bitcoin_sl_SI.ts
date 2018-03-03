@@ -3814,7 +3814,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>OPOZORILO: zaznana je bila kršitev s sinhronizirami to?kami preverjanja, a je bila izpuš?ena.</translation>
     </message>
     <message>

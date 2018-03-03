@@ -3791,7 +3791,7 @@ Cela implique que des frais à hauteur d&apos;au moins %2 seront nécessaires.</
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>ATTENTION : violation du checkpoint de synchronisation, mais ignorée!</translation>
     </message>
     <message>
