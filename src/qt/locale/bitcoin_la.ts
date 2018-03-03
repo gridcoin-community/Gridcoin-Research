@@ -3959,7 +3959,7 @@ Si plica non existat, crea eam cum permissionibus ut solus eius dominus eam lege
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

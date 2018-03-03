@@ -3898,7 +3898,7 @@ Executar una ordre quan es rep un avís rellevant (%s en cmd es substitueix per 
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>ADVERTÈNCIA: violació de punt de control sincronitzat detectada, es saltarà!</translation>
     </message>
     <message>
