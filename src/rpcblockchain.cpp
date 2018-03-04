@@ -1517,7 +1517,7 @@ Value execute(const Array& params, bool fHelp)
             results.push_back(entry);
 
             return results;
-        }
+    }
 
         CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nSbHeight);
 
@@ -1525,7 +1525,7 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("ERROR", "Could not find superblock in blockindex"));
 
         else
-        {
+    {
             CBlock block;
 
             block.ReadFromDisk(pblockindex);
@@ -1714,7 +1714,7 @@ Value execute(const Array& params, bool fHelp)
                                 GetEarliestStakeTime(GRCAddress1,cpid1);
                                 double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
                                 double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
-
+                                                                                                
                                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
 
                                 
@@ -2207,10 +2207,10 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("Key Type",sType));
             for(const auto& item : ReadCacheSection(sType))
                 entry.push_back(Pair(item.first, item.second.value));
-
-           results.push_back(entry);
+    
+            results.push_back(entry);
         }
-
+    
     }
     else if (sItem == "reindex")
     {

@@ -2091,7 +2091,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+29"/>
         <source>After Fee:</source>
-        <translation>Dopo Commissione :</translation>
+        <translation>Dopo Commissione:</translation>
     </message>
     <message>
         <location line="+32"/>
@@ -3548,7 +3548,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>Rescan the block chain for missing wallet transactions</source>
-        <translation>Ripeti analisi della catena dei blocchi per cercare le transazioni mancanti dal portamonete
+        <translation>Ripeti analisi della catena dei blocchi per cercare le transazioni  mancanti dal portamonete
 </translation>
     </message>
     <message>
@@ -3796,7 +3796,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>ATTENZIONE: rilevata violazione del checkpoint sincronizzato, ma ignorata!</translation>
     </message>
     <message>

@@ -351,7 +351,7 @@ bool PushGridcoinDiagnostics()
                 if (!bGlobalcomInitialized) return false;
                 std::string errors1 = "";
                 LoadAdminMessages(false,errors1);
-                std::string cpiddata = GetListOf("beacon");
+                std::string cpiddata = GetListOf("beacon;");
                 std::string sWhitelist = GetListOf("project");
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.9.0] 2018-03-03, leisure
+### Fixed
+ - Fix issues with NN participation on Windows, #986 (@Foggyx420).
+ - Fix stray data in beaconreport RPC, #986 (@Foggyx420).
+ - Fix spelling error, #989 (@caraka).
+
 ## [3.7.8.0] 2018-03-01, mandatory
 ### Fixed
  - Move context sensitive DPoR block checks to ConnectBlock, #922 (@tomasbrod).
@@ -19,7 +25,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    (@tomasbrod).
  - Fix sync issues with incorrectly accepted v8 beacons, #979 (@tomasbrod).
 
- ### Changed
+### Changed
   - Double check PoS kernel, #958 (@tomasbrod).
   - Don't tally until V9 to speed up syncing, #943 (@denravonska).
 
