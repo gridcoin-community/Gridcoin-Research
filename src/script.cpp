@@ -1474,7 +1474,7 @@ bool Solver(const CKeyStore& keystore, const CScript& scriptPubKey, uint256 hash
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
         return false;
-        
+
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return Sign1(keyID, keystore, hash, nHashType, scriptSigRet);
@@ -1619,7 +1619,7 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     txnouttype whichType;
     if (!Solver(scriptPubKey, whichType, vSolutions))
         return false;
-    
+
     if (bOPReturnEnabled && whichType == TX_NULL_DATA)
         return true;
 
@@ -1791,7 +1791,6 @@ bool SignSignature(const CKeyStore &keystore, const CTransaction& txFrom, CTrans
     assert(nIn < txTo.vin.size());
     CTxIn& txin = txTo.vin[nIn];
     assert(txin.prevout.n < txFrom.vout.size());
-    assert(txin.prevout.hash == txFrom.GetHash());
     const CTxOut& txout = txFrom.vout[txin.prevout.n];
 
     return SignSignature(keystore, txout.scriptPubKey, txTo, nIn, nHashType);
