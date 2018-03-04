@@ -9,6 +9,8 @@
 #include "init.h"
 #include "util.h"
 #include "ui_interface.h"
+#include "tally.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
@@ -24,11 +26,10 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
 StructCPID GetStructCPID();
-void BusyWaitForTally_retired();
-void TallyNetworkAverages_v9();
+void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
-void LoadCPIDsInBackground();
+void LoadCPIDs();
 bool IsConfigFileEmpty();
 
 #ifndef WIN32
@@ -505,11 +506,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         {
             CreatePidFile(GetPidFile(), pid);
 
-            // While this is technically successful we need to return false
-            // in order to shut down the parent process. This can be improved
-            // by either returning an enum or checking if the current process
-            // is a child process.
-            return false;
+            // Now that we are forked we can request a shutdown so the parent
+            // exits while the child lives on.
+            StartShutdown();
+            return true;
         }
 
         pid_t sid = setsid();
@@ -782,7 +782,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-    if (GetBoolArg("-upgradewallet", fFirstRun))
+/*    if (GetBoolArg("-upgradewallet", fFirstRun))
     {
         int nMaxVersion = GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
@@ -796,7 +796,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nMaxVersion < pwalletMain->GetVersion())
             strErrors << _("Cannot downgrade wallet") << "\n";
         pwalletMain->SetMaxVersion(nMaxVersion);
-    }
+    }*/
 
     if (fFirstRun)
     {
@@ -888,8 +888,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
-    printf("Starting CPID thread...");
-    LoadCPIDsInBackground();  //This calls HarvesCPIDs(true)
+    LoadCPIDs();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
 
@@ -912,12 +911,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) printf("Loading network averages");
 
-    TallyNetworkAverages_v9();
+    CBlockIndex* tallyHeight = FindTallyTrigger(pindexBest);
+    if(tallyHeight)
+        TallyResearchAverages(tallyHeight);
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
-
-    BusyWaitForTally_retired();
 
     if (fServer)
         threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");

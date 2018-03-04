@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>757</width>
-    <height>388</height>
+    <height>413</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -27,7 +27,7 @@
     <number>20</number>
    </property>
    <item>
-    <layout class="QGridLayout" name="gridLayout" rowminimumheight="30,20,20,20,20,20,20,20,20,20,20">
+    <layout class="QGridLayout" name="gridLayout" rowminimumheight="30,20,20,20,20,20,20,20,20,20,20,20">
      <property name="sizeConstraint">
       <enum>QLayout::SetMinimumSize</enum>
      </property>
@@ -163,7 +163,7 @@
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QLabel" name="findCPIDReaultLbl">
+      <widget class="QLabel" name="findCPIDResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -209,7 +209,7 @@
      <item row="2" column="0">
       <widget class="QLabel" name="label_4">
        <property name="text">
-        <string>Find CPID</string>
+        <string>Find PrimaryCPID (Windows Only)</string>
        </property>
       </widget>
      </item>
@@ -279,12 +279,12 @@
      <item row="8" column="0">
       <widget class="QLabel" name="label_10">
        <property name="text">
-        <string>Verify addnode</string>
+        <string>Verify connections to seeds</string>
        </property>
       </widget>
      </item>
      <item row="8" column="1">
-      <widget class="QLabel" name="verifyAddnodeResultLbl">
+      <widget class="QLabel" name="verifySeedNodesResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -306,14 +306,14 @@
       </widget>
      </item>
      <item row="9" column="0">
-      <widget class="QLabel" name="label_11">
+      <widget class="QLabel" name="label_12">
        <property name="text">
-        <string>Verify TCP port 32749</string>
+        <string>Verify connections to network</string>
        </property>
       </widget>
      </item>
      <item row="9" column="1">
-      <widget class="QLabel" name="verifyTCPPortResultLbl">
+      <widget class="QLabel" name="verifyConnectionsResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -335,13 +335,42 @@
       </widget>
      </item>
      <item row="10" column="0">
+      <widget class="QLabel" name="label_11">
+       <property name="text">
+        <string>Verify TCP port 32749</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QLabel" name="verifyTCPPortResultLbl">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>200</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="11" column="0">
       <widget class="QLabel" name="label">
        <property name="text">
         <string>Check client version</string>
        </property>
       </widget>
      </item>
-     <item row="10" column="1">
+     <item row="11" column="1">
       <widget class="QLabel" name="checkClientVersionResultLbl">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -364,6 +393,9 @@
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
+     <property name="spacing">
+      <number>6</number>
+     </property>
      <property name="leftMargin">
       <number>550</number>
      </property>

@@ -229,7 +229,7 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
-    diagnosticsDialog = new DiagnosticsDialog(this);
+     diagnosticsDialog = new DiagnosticsDialog(this);
 
 
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
@@ -640,7 +640,7 @@ void BitcoinGUI::createActions()
     newUserWizardAction = new QAction(tr("&New User Wizard"), this);
     newUserWizardAction->setStatusTip(tr("New User Wizard"));
     newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-    
+
     foundationAction = new QAction(tr("&Foundation"), this);
     foundationAction->setStatusTip(tr("Foundation"));
     foundationAction->setMenuRole(QAction::TextHeuristicRole);
@@ -773,7 +773,7 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
-	QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+    QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 
 #ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows
     qmAdvanced->addAction(configAction);
@@ -1587,7 +1587,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
     case WalletModel::Unlocked:
         labelEncryptionIcon->show();
         labelEncryptionIcon->setPixmap(QIcon(":/icons/lock_open_"+sSheet).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>unlocked</b>"));
+        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(fWalletUnlockStakingOnly ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
@@ -1771,7 +1771,7 @@ void BitcoinGUI::timerfire()
     try
     {
         if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-        {
+        {            
             ReinstantiateGlobalcom();
             nRegVersion=9999;
 

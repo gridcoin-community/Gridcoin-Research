@@ -658,7 +658,7 @@ Value createrawtransaction(const Array& params, bool fHelp)
     set<CBitcoinAddress> setAddress;
     for (auto const& s : sendTo)
     {
-         if (s.name_ == "data")
+         if (s.name_ == "data") 
          {
             std::vector<unsigned char> data = ParseHexV(s.value_,"Data");
             CTxOut out(0, CScript() << OP_RETURN << data);

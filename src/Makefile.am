@@ -70,6 +70,7 @@ GRIDCOIN_CORE_H = \
 	serialize.h \
 	strlcpy.h \
 	sync.h \
+        tally.h \
 	threadsafety.h \
 	txdb.h \
 	txdb-leveldb.h \
@@ -113,6 +114,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
+        tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
@@ -130,11 +132,11 @@ GRIDCOIN_JSON_H = \
 	json/json_spirit_reader.cpp \
 	json/json_spirit_reader_template.h \
 	json/json_spirit_utils.h  \
-	json/json_spirit_value.h  \   
+	json/json_spirit_value.h  \
 	json/json_spirit_writer.h \
 	json/json_spirit.h \
-	json/json_spirit_reader.h \    
-	json/json_spirit_stream_reader.h \    
+	json/json_spirit_reader.h \
+	json/json_spirit_stream_reader.h \
 	json/json_spirit_writer_template.h
 
 # util: shared between all executables.
@@ -180,15 +182,7 @@ CLEANFILES = $(EXTRA_LIBRARIES)
 
 CLEANFILES += *.gcda *.gcno
 CLEANFILES += compat/*.gcda compat/*.gcno
-CLEANFILES += consensus/*.gcda consensus/*.gcno
-CLEANFILES += crypto/*.gcda crypto/*.gcno
-CLEANFILES += policy/*.gcda policy/*.gcno
-CLEANFILES += primitives/*.gcda primitives/*.gcno
-CLEANFILES += script/*.gcda script/*.gcno
-CLEANFILES += support/*.gcda support/*.gcno
-CLEANFILES += wallet/*.gcda wallet/*.gcno
-CLEANFILES += wallet/test/*.gcda wallet/test/*.gcno
-CLEANFILES = obj/build.h
+CLEANFILES += obj/build.h
 
 EXTRA_DIST = $(CTAES_DIST)
 
@@ -209,10 +203,6 @@ clean-local:
 	@test -f $(WINDRES)
 	## FIXME: How to get the appropriate modulename_CPPFLAGS in here?
 	$(AM_V_GEN) $(WINDRES) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) -DWINDRES_PREPROC -i $< -o $@
-
-.mm.o:
-	$(AM_V_CXX) $(OBJCXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
-	  $(CPPFLAGS) $(AM_CXXFLAGS) $(QT_INCLUDES) $(AM_CXXFLAGS) $(PIE_FLAGS) $(CXXFLAGS) -c -o $@ $<
 
 %.pb.cc %.pb.h: %.proto
 	@test -f $(PROTOC)

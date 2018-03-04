@@ -7,8 +7,6 @@
 extern int nBoincUtilization;
 extern std::string sRegVer;
 extern int nRegVersion;
-extern bool bCPIDsLoaded;
-extern bool bProjectsInitialized;
 extern bool bNetAveragesLoaded;
 extern bool bForceUpdate;
 extern bool bGlobalcomInitialized;

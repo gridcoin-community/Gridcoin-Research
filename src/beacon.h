@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "fwd.h"
 #include <string>
 
 //!
@@ -63,4 +64,4 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR);
 bool HasActiveBeacon(const std::string& cpid);
 
-bool VerifyBeaconContractTx(const std::string& txhashBoinc);
+bool VerifyBeaconContractTx(const CTransaction& tx);

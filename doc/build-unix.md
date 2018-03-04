@@ -110,19 +110,14 @@ Dependencies for the GUI: Ubuntu & Debian
 -----------------------------------------
 
 If you want to build gridcoinresearch, make sure that the required packages for Qt development
-are installed. Either Qt 5 or Qt 4 are necessary to build the GUI.
-If both Qt 4 and Qt 5 are installed, Qt 5 will be used. Pass `--with-gui=qt4` to configure to choose Qt4.
-To build without GUI pass `--without-gui`.
+are installed. Qt 5 is necessary to build the GUI.
+To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
     sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
 
-Alternatively, to build with Qt 4 you need the following:
-
-    sudo apt-get install libqt4-dev libprotobuf-dev protobuf-compiler
-
-libqrencode (optional) can be installed with:
+libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
     sudo apt-get install libqrencode-dev
 
@@ -171,9 +166,8 @@ Dependencies for the GUI: openSUSE
 -----------------------------------------
 
 If you want to build gridcoinresearch, make sure that the required packages for Qt development
-are installed. Either Qt 5 or Qt 4 are necessary to build the GUI.
-If both Qt 4 and Qt 5 are installed, Qt 5 will be used. Pass `--with-gui=qt4` to configure to choose Qt4.
-To build without GUI pass `--without-gui`.
+are installed. Qt 5 is necessary to build the GUI.
+To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
@@ -183,11 +177,7 @@ Additionally for Tumbleweed:
 
     sudo zypper install libQt5Charts5-designer
 
-Alternatively, to build with Qt 4 you need the following:
-
-    sudo zypper install libqt4-devel
-
-libqrencode (optional) can be installed with:
+libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
     sudo zypper install qrencode-devel
 

@@ -1,4 +1,5 @@
-Deterministic OS X Dmg Notes.
+Cross Plattform and Deterministic OS X Dmg Notes.
+================================================
 
 Working OS X DMGs are created in Linux by combining a recent clang,
 the Apple binutils (ld, ar, etc) and DMG authoring tools.
@@ -29,6 +30,21 @@ To complicate things further, all builds must target an Apple SDK. These SDKs
 are free to download, but not redistributable.
 To obtain it, register for a developer account, then download the [Xcode 7.3.1 dmg](https://developer.apple.com/devcenter/download.action?path=/Developer_Tools/Xcode_7.3.1/Xcode_7.3.1.dmg).
 
+Cross Plattform building
+------------------------
+Download and extract the SDK to depends/SDKs. Then build the dependencies from the depends directory and deploy the .dmg:
+```
+  $ cd depends
+  $ make HOST=x86_64-apple-darwin11
+  $ cd ..
+  $ ./autogen.sh # not required when building from tarball
+  $ CONFIG_SITE=$PWD/depends/x86_64-apple-darwin11/share/config.site ./configure --prefix=/
+  $ make
+  $ make deploy
+```
+
+Gitian Building
+---------------  
 This file is several gigabytes in size, but only a single directory inside is
 needed:
 ```
