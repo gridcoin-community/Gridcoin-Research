@@ -27,6 +27,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_1F7D757BF031E15D44C47B631F994972"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_2C7D9AF4C6E04C06A26314A95B1FF010"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -183,12 +189,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_DCB6C7B75CAAE08C84491F1DC516C010"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
         "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
@@ -250,25 +250,7 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_32F2DC723F30362B0B78F9A291EC0098"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -280,7 +262,25 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
+        "OwnerKey" = "8:_5644D8F767F33372E534FBD5A2384D12"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_DEB886DE05C496A5AD26B43C4B1B90B9"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_32F2DC723F30362B0B78F9A291EC0098"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_UNDEFINED"
+        "OwnerKey" = "8:_6408A3D03D15E306A4C3FC5FD95ADA69"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -428,6 +428,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_1F7D757BF031E15D44C47B631F994972"
+            {
+            "SourcePath" = "8:BoincStake.tlb"
+            "TargetName" = "8:BoincStake.tlb"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:2"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:TRUE"
+            "IsolateTo" = "8:"
+            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_2C7D9AF4C6E04C06A26314A95B1FF010"
             {
             "SourcePath" = "8:..\\..\\..\\share\\pixmaps\\GrcInstallBanner.jpg"
@@ -455,6 +475,11 @@
             "AssemblyAsmDisplayName" = "8:GRCSec, Version=1.0.0.3, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
+                    "_32F2DC723F30362B0B78F9A291EC0098"
+                    {
+                    "Name" = "8:GRCSec.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:GRCSec.dll"
             "TargetName" = "8:"
@@ -632,6 +657,11 @@
             "AssemblyAsmDisplayName" = "8:OpenPop, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
+                    "_5644D8F767F33372E534FBD5A2384D12"
+                    {
+                    "Name" = "8:openpopstake.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:openpopstake.dll"
             "TargetName" = "8:"
@@ -678,6 +708,11 @@
             "AssemblyAsmDisplayName" = "8:MySql.Data, Version=6.6.4.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL"
                 "ScatterAssemblies"
                 {
+                    "_6408A3D03D15E306A4C3FC5FD95ADA69"
+                    {
+                    "Name" = "8:MySql.Data.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:MySql.Data.dll"
             "TargetName" = "8:"
@@ -704,6 +739,11 @@
             "AssemblyAsmDisplayName" = "8:SQLite.NET, Version=0.21.1869.3794, Culture=neutral, PublicKeyToken=c273bd375e695f9c"
                 "ScatterAssemblies"
                 {
+                    "_6AEABB5004EC4B57225B51B085DB5625"
+                    {
+                    "Name" = "8:sqlitestake.net.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:sqlitestake.net.dll"
             "TargetName" = "8:"
@@ -923,26 +963,6 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_DCB6C7B75CAAE08C84491F1DC516C010"
-            {
-            "SourcePath" = "8:BoincStake.tlb"
-            "TargetName" = "8:BoincStake.tlb"
-            "Tag" = "8:"
-            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:2"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:TRUE"
-            "IsolateTo" = "8:"
-            }
             "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_DEB886DE05C496A5AD26B43C4B1B90B9"
             {
             "AssemblyRegister" = "3:1"
@@ -950,6 +970,11 @@
             "AssemblyAsmDisplayName" = "8:ICSharpCode.SharpZipLib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73"
                 "ScatterAssemblies"
                 {
+                    "_DEB886DE05C496A5AD26B43C4B1B90B9"
+                    {
+                    "Name" = "8:icsharpcode.sharpziplib.dll"
+                    "Attributes" = "3:512"
+                    }
                 }
             "SourcePath" = "8:icsharpcode.sharpziplib.dll"
             "TargetName" = "8:"
@@ -1209,19 +1234,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{2C7B21C9-4123-4AB0-A042-B6A8DAA5ADD3}"
-        "PackageCode" = "8:{441A81ED-8AC9-45C5-975C-82CC692515AF}"
+        "ProductCode" = "8:{B2697D20-8D15-4DFB-A2D6-F1E6C06AE904}"
+        "PackageCode" = "8:{C75D3EF9-D79A-4510-AB14-7A3BD4B2A8B8}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:44.7"
+        "ProductVersion" = "8:44.8"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research 44.7"
+        "Title" = "8:Gridcoin Research 44.8"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"
@@ -1332,7 +1357,7 @@
         {
             "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_4B96B46E89204F7A94D0E77AE7B0B891"
             {
-            "Name" = "8:Shortcut to gridcoinresearch.exe"
+            "Name" = "8:GridcoinResearch"
             "Arguments" = "8:"
             "Description" = "8:"
             "ShowCmd" = "3:1"
