@@ -1503,14 +1503,44 @@ Value execute(const Array& params, bool fHelp)
             entry.push_back(Pair("My Neural Hash",myNeuralHash.c_str()));
             results.push_back(entry);
     }
-    else if (sItem == "superblockage")
+    else if (sItem == "superblockinfo")
     {
-        int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
-        int64_t superblock_age = GetAdjustedTime() - superblock_time;
-        entry.push_back(Pair("Superblock Age",superblock_age));
-        entry.push_back(Pair("Superblock Timestamp", TimestampToHRDate(superblock_time)));
-        entry.push_back(Pair("Superblock Block Number", ReadCache("superblock", "block_number").value));
-        entry.push_back(Pair("Pending Superblock Height", ReadCache("neuralsecurity","pending").value));
+        std::string sSbHeight = ReadCache("superblock", "block_number").value;
+        int nSbHeight;
+
+        try
+        {
+            nSbHeight = std::stoi(sSbHeight);
+        }
+        catch (const std::exception &ex)
+        {
+            entry.push_back(Pair("ERROR", "std::exception occured ->" + std::string(ex.what())));
+            results.push_back(entry);
+
+            return results;
+        }
+
+        CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nSbHeight);
+
+        if (pblockindex == NULL)
+            entry.push_back(Pair("ERROR", "Could not find superblock in blockindex"));
+
+        else
+        {
+            CBlock block;
+
+            block.ReadFromDisk(pblockindex);
+
+            MiningCPID sbi = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+
+            entry.push_back(Pair("age", GetAdjustedTime() - pblockindex->GetBlockTime()));
+            entry.push_back(Pair("time", pblockindex->GetBlockTime()));
+            entry.push_back(Pair("height", nSbHeight));
+            entry.push_back(Pair("hash", pblockindex->GetBlockHash().ToString()));
+            entry.push_back(Pair("neural_hash", sbi.NeuralHash));
+            entry.push_back(Pair("CPID", sbi.cpid));
+            entry.push_back(Pair("client_version", sbi.clientversion));
+        }
         results.push_back(entry);
     }
     else if (sItem == "unusual")
@@ -2370,7 +2400,7 @@ Value execute(const Array& params, bool fHelp)
         entry.push_back(Pair("execute restart", "Restarts wallet"));
         entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
         entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
-        entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
+        entry.push_back(Pair("execute superblockinfo", "Displays information and age about current superblock"));
         entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
         entry.push_back(Pair("execute tally", "Tallys research averages"));
         entry.push_back(Pair("execute tallyneural", "Tally neural quorum data"));
