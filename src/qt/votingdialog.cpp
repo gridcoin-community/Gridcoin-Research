@@ -407,9 +407,10 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableView_->verticalHeader()->hide();
 
     tableView_->setModel(proxyModel_);
-    tableView_->setFont(QFont("Arial", 8));
+    tableView_->setFont(QFont("Arial", 10));
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_BestAnswer);
+    tableView_->verticalHeader()->setDefaultSectionSize(40);
 
     groupboxvlayout->addWidget(tableView_);
 

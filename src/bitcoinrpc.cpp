@@ -206,14 +206,13 @@ Value help(const Array& params, bool fHelp)
 
 Value stop(const Array& params, bool fHelp)
 {
-    printf("Stopping...");
-
     // Accept the deprecated and ignored 'detach´ boolean argument
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "stop\n"
             "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
+    printf("Stopping...\n");
     StartShutdown();
     return "Gridcoin server stopping";
 }

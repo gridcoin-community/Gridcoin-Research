@@ -70,6 +70,7 @@ GRIDCOIN_CORE_H = \
 	serialize.h \
 	strlcpy.h \
 	sync.h \
+        tally.h \
 	threadsafety.h \
 	txdb.h \
 	txdb-leveldb.h \
@@ -113,6 +114,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
+        tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
@@ -201,10 +203,6 @@ clean-local:
 	@test -f $(WINDRES)
 	## FIXME: How to get the appropriate modulename_CPPFLAGS in here?
 	$(AM_V_GEN) $(WINDRES) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) -DWINDRES_PREPROC -i $< -o $@
-
-.mm.o:
-	$(AM_V_CXX) $(OBJCXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
-	  $(CPPFLAGS) $(AM_CXXFLAGS) $(QT_INCLUDES) $(AM_CXXFLAGS) $(PIE_FLAGS) $(CXXFLAGS) -c -o $@ $<
 
 %.pb.cc %.pb.h: %.proto
 	@test -f $(PROTOC)

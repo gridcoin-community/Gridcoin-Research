@@ -50,6 +50,13 @@ qrc_*.cpp
 #mac specific
 .DS_Store
 build
+background.tiff
+background.tiff.png
+background.tiff@2x.png
+contrib/devtools/split-debug.sh
+dist/
+gridcoinresearch.app/
+gridcoinresearch.dmg
 
 !src/leveldb/Makefile
 !depends/Makefile
@@ -83,6 +90,7 @@ src/config/gridcoin-config.h.in
 src/config/stamp-h1
 share/setup.nsi
 share/qt/Info.plist
+contrib/devtools/split-debug.sh
 
 #libtool object files
 *.lo

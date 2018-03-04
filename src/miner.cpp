@@ -35,7 +35,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
-std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 
 
 // Some explaining would be appreciated
@@ -633,8 +633,15 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
     if (!PublicKey.empty())
     {
-        BoincData.BoincSignature = SignBlockWithCPID(
-            GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
+        std::string sBoincSignature;
+        std::string sError;
+        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sBoincSignature, sError);
+        if (!bResult)
+        {
+            if (fDebug2) printf("SignStakeBlock: Failed to sign block -> %s\n", sError.c_str());
+            return false;
+        }
+        BoincData.BoincSignature = sBoincSignature;
         if(fDebug2) printf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\r\n",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.lastblockhash.c_str(),BoincData.BoincSignature.c_str());
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
@@ -661,13 +668,16 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
 }
 
 int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
-{    
+{
     if(OutOfSyncByAge())
         return printf("AddNeuralContractOrVote: Out Of Sync\n");
 
     /* Retrive the neural Contract */
     const std::string& sb_contract = NN::GetNeuralContract();
     const std::string& sb_hash = GetQuorumHash(sb_contract);
+
+    if(sb_contract.empty())
+        return printf("AddNeuralContractOrVote: Local Contract Empty\n");
 
     /* To save network bandwidth, start posting the neural hashes in the
        CurrentNeuralHash field, so that out of sync neural network nodes can
@@ -676,9 +686,6 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
        Note: CurrentNeuralHash is not actually used for sb validity
     */
     bb.CurrentNeuralHash = sb_hash;
-
-    if(sb_contract.empty())
-        return printf("AddNeuralContractOrVote: Local Contract Empty\n");
 
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
         return printf("AddNeuralContractOrVote: Not Participating\n");
@@ -813,7 +820,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     }
 
     if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
-        (!fTestNet&& (vNodes.size() < 3 || nBestHeight < GetNumBlocksOfPeers()))
+        (!fTestNet&& vNodes.size() < 3)
         )
     {
         LOCK(MinerStatus.lock);
@@ -834,7 +841,6 @@ void StakeMiner(CWallet *pwallet)
 
     while (!fShutdown)
     {
-
         //wait for next round
         MilliSleep(nMinerSleep);
 
@@ -861,6 +867,10 @@ void StakeMiner(CWallet *pwallet)
             MinerStatus.Clear();
             continue;
         }
+
+        // Lock main lock since GetNextProject and subsequent calls
+        // require the state to be static.
+        LOCK(cs_main);
 
         GetNextProject(true);
 
@@ -902,7 +912,6 @@ void StakeMiner(CWallet *pwallet)
         }
 
         // * delegate to ProcessBlock
-        LOCK(cs_main);
         if (!ProcessBlock(NULL, &StakeBlock, true))
         {
             error("StakeMiner: Block vehemently rejected");

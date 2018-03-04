@@ -16,13 +16,7 @@ using namespace std;
 
 int64_t GetCoinYearReward(int64_t nTime);
 
-//CCriticalSection cs_main;
-//static boost::thread_group* postThreads = NULL;
-
 double GRCMagnitudeUnit(int64_t locktime);
-//std::string qtGetNeuralHash(std::string data);
-bool bCPIDsLoaded;
-bool bProjectsInitialized;
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 int64_t GetRSAWeightByCPID(std::string cpid);

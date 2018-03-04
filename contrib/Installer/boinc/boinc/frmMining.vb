@@ -786,7 +786,7 @@ Refresh:
 
     Private Sub TabControl1_Click(sender As System.Object, e As System.EventArgs) Handles TabControl1.Click
         If TabControl1.SelectedIndex = 1 Then
-            WebBrowserBoinc.Navigate("http://boincstats.com/en/stats/-1/team/detail/118094994/overview")
+            WebBrowserBoinc.Navigate("https://gridcoin.us")
         End If
 
         ' If TabControl1.SelectedIndex = 2 Then
