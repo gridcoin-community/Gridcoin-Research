@@ -38,12 +38,7 @@ std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
 
 extern std::string GetCommandNonce(std::string command);
-extern std::string DefaultOrg();
-extern std::string DefaultOrgKey(int key_length);
-extern std::string DefaultBlockKey(int key_length);
 
-extern std::string OrgId();
-std::string DefaultBoincHashArgs();
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);

@@ -140,11 +140,7 @@ int64_t nCPIDsLoaded = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
-
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
-
-std::string DefaultOrg();
-std::string DefaultOrgKey(int key_length);
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
