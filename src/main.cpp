@@ -138,11 +138,7 @@ int64_t nLastLoadAdminMessages = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
-
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
-
-std::string DefaultOrg();
-std::string DefaultOrgKey(int key_length);
 
 double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
@@ -6151,54 +6147,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 }
 
 
-bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
-{
-    std::vector<std::string> vCommand = split(acid,",");
-    if (vCommand.size() >= 6)
-    {
-        std::string sboinchashargs = DefaultOrgKey(12);  //Use 12 characters for inter-client communication
-        std::string nonce =          vCommand[0];
-        std::string command =        vCommand[1];
-        std::string hash =           vCommand[2];
-        std::string org =            vCommand[3];
-        std::string pub_key_prefix = vCommand[4];
-        std::string bhrn =           vCommand[5];
-        std::string grid_pass =      vCommand[6];
-        std::string grid_pass_decrypted = AdvancedDecryptWithSalt(grid_pass,sboinchashargs);
-
-        if (grid_pass_decrypted != bhrn+nonce+org+pub_key_prefix)
-        {
-            if (fDebug10) printf("Decrypted gridpass != hashed message");
-            nonce.clear();
-            command.clear();
-        }
-
-        std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
-
-        if (precommand=="aries")
-        {
-            //pfrom->securityversion = pw1;
-        }
-        if (fDebug10) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
-        if (false && hash != pw1)
-        {
-            //2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows          if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
-            double punishment = GetArg("-punishment", 10);
-            pfrom->Misbehaving(punishment);
-            return false;
-        }
-        return true;
-    }
-    else
-    {
-        if (fDebug2) printf("Message corrupted. Node %s partially banned.",NodeAddress(pfrom).c_str());
-        pfrom->Misbehaving(1);
-        return false;
-    }
-    return true;
-}
-
-
 
 
 // The message start string is designed to be unlikely to occur in normal data.
@@ -6252,7 +6200,7 @@ bool VerifyExplainMagnitudeResponse()
         msNeuralResponse.clear();
 
     return dMag != 0;
-            }
+}
 
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
@@ -6264,7 +6212,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 {
     RandAddSeedPerfmon();
     if (fDebug10)
-        printf("received: %s (%" PRIszu " bytes)\n", strCommand.c_str(), vRecv.size());
+        printf("received: %s from %s (%" PRIszu " bytes)\n", strCommand.c_str(), pfrom->addrName.c_str(), vRecv.size());
     if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
     {
         printf("dropmessagestest DROPPING RECV MESSAGE\n");
@@ -6300,40 +6248,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         std::string acid = "";
         vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
 
-        
-        //Halford - 12-26-2014 - Thwart Hackers
-        bool ver_valid = AcidTest(strCommand,acid,pfrom);
-        if (fDebug10) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
-        if (!ver_valid)
-        {
-            pfrom->Misbehaving(100);
-            pfrom->fDisconnect = true;
-            return false;
-        }
+        if (fDebug10)
+            printf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ...\n"
+            ,pfrom->nVersion, pfrom->boinchashnonce.c_str(), pfrom->boinchashpw.c_str()
+            ,pfrom->cpid.c_str(), pfrom->enccpid.c_str(), acid.c_str());
 
-        bool unauthorized = false;
         double timedrift = std::abs(GetAdjustedTime() - nTime);
 
-        if (true)
+        if (timedrift > (8*60))
         {
-            if (timedrift > (8*60))
-            {
-                if (fDebug10) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
-                unauthorized = true;
-            }
-        }
-        else
-        {
-            if (timedrift > (10*60) && LessVerbose(500))
-            {
-                if (fDebug10) printf("Disconnecting authorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
-                unauthorized = true;
-            }
-        }
-
-        if (unauthorized)
-        {
-            if (fDebug10) printf("  Disconnected unauthorized peer.         ");
+            if (fDebug10) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\n",(double)timedrift);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;
@@ -6393,25 +6317,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
                 
                 // Note: Hacking attempts start in this area
-                if (false && pfrom->nStartingHeight < (nBestHeight/2) && LessVerbose(1) && !fTestNet)
-                {
-                    if (fDebug3) printf("Node with low height");
-                    pfrom->fDisconnect=true;
-                    return false;
-                }
-                /*
-                
-                if (pfrom->nStartingHeight < 1 && LessVerbose(980) && !fTestNet)
-                {
-                    pfrom->Misbehaving(100);
-                    if (fDebug3) printf("Disconnecting possible hacker node.  Banned for 24 hours.\r\n");
-                    pfrom->fDisconnect=true;
-                    return false;
-                }
-                */
-
-
-                // End of critical Section
 
                 if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
                 {
@@ -6478,7 +6383,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
             {
-                if (SecurityTest(pfrom,ver_valid))
+                if (SecurityTest(pfrom,true))
                 {
                     //Dont store the peer unless it passes the test
                     addrman.Add(addrFrom, addrFrom);
@@ -6881,15 +6786,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> block >> acid;
         uint256 hashBlock = block.GetHash();
 
-        bool block_valid = AcidTest(strCommand,acid,pfrom);
-        if (!block_valid) 
-        {   
-            printf("\r\n Acid test failed for block %s \r\n",hashBlock.ToString().c_str());
-            return false;
-        }
-
-        if (fDebug10) printf("Acid %s, Validity %s ",acid.c_str(),YesNo(block_valid).c_str());
-
         printf(" Received block %s; ", hashBlock.ToString().c_str());
         if (fDebug10) block.print();
 
@@ -6995,8 +6891,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             uint64_t nonce = 0;
             vRecv >> nonce >> acid;
-            bool pong_valid = AcidTest(strCommand,acid,pfrom);
-            if (!pong_valid) return false;
             //if (fDebug10) printf("pong valid %s",YesNo(pong_valid).c_str());
 
             // Echo the message back with the nonce. This allows for two useful features:
@@ -7314,8 +7208,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     int subsidy_places= BlockVersion<8 ? 2 : 8;
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
-        mcpid.Organization = DefaultOrg();
-        mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
+        mcpid.Organization = GetArg("-org", "windows");
+        mcpid.OrganizationKey = "12345678"; //Only reveal 8 characters
     }
     else
     {
