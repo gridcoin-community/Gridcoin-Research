@@ -233,11 +233,7 @@ bool bStakeMinerOutOfSyncWithNetwork = false;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
-
-
-extern void ThreadCPIDs();
 extern void GetGlobalStatus();
-
 extern bool ProjectIsValid(std::string project);
 
 double GetNetworkAvgByProject(std::string projectname);
@@ -247,8 +243,6 @@ extern std::string getfilecontents(std::string filename);
 extern bool LessVerbose(int iMax1000);
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
-
-static boost::thread_group* cpidThreads = NULL;
 
 ///////////////////////////////
 // Standard Boinc Projects ////
