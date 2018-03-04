@@ -221,7 +221,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
                             else if (vTxNormalInfo.second == "Text Message")
                             {
-                                OutputDebugStringF("1337133713771377");
                                 sub.type = TransactionRecord::SendMessage;
                                 break;
                             }
