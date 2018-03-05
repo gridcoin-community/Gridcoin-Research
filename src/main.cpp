@@ -3098,7 +3098,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
 							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
 				}
-				
+
                 if (IsResearchAgeEnabled(pindex->nHeight)
                     && (BlockNeedsChecked(nTime) || nVersion>=9))
                 {
@@ -3109,7 +3109,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         if( bb.Magnitude > 0
                             && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
                             && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
-                {
+                        {
                             return DoS(20, error(
                                 "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
                                 bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
@@ -3139,15 +3139,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else printf("WARNING: ignoring invalid hashBoinc signature on block %s\n", pindex->GetBlockHash().ToString().c_str());
                         }
 
-						// Mitigate DPOR Relay attack 
-						// bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
-						if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-						{
-							std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
+                        // Mitigate DPOR Relay attack 
+                        // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
+                        if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                        {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+                            printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
                             if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
                         }
-				
+
                         if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
@@ -3167,31 +3167,31 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         //Approve first coinstake in DPOR block
-        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(),15) && !IsResearchAgeEnabled(pindex->nHeight))
+        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
         {
+            if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
+            {
                 if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
                 {
-                        if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
+                    StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
+                    if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
+                    {
+                        double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
+                        if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
                         {
-                            StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
-                            if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
-                            {
-                                double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
-                                if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
-                                {
-                                        printf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                         deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                            printf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                   deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                                   OUT_POR, vtx[0].hashBoinc.c_str());
+                        }
+                        else
+                        {
+                            return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                         bb.cpid.c_str(), bb.ResearchSubsidy,
                                          OUT_POR, vtx[0].hashBoinc.c_str());
-                                }
-                                else
-                                {
-                                    return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                        bb.cpid.c_str(), bb.ResearchSubsidy,
-                                        OUT_POR, vtx[0].hashBoinc.c_str());
-                                }
-                            }
+                        }
                     }
                 }
+            }
         }
     }
 
@@ -3219,7 +3219,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if ((IsLockTimeWithinMinutes(GetBlockTime(),15) || nVersion>=9) && !fColdBoot)
+            if ((IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) || nVersion>=9) && !fColdBoot)
             {
                 // Let this take effect together with stakev8
                 if (nVersion>=8)
@@ -3274,22 +3274,22 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
             if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
             {
-                    if (bb.superblock.length() > 20)
+                if (bb.superblock.length() > 20)
+                {
+                    std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                    if (VerifySuperblock(superblock, pindex))
                     {
-                            std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                            if (VerifySuperblock(superblock, pindex))
-                            {
-                                        LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
-                                        if (fDebug)
-                                            printf("ConnectBlock(): Superblock Loaded %d\n", pindex->nHeight);
+                        LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
+                        if (fDebug)
+                            printf("ConnectBlock(): Superblock Loaded %d\n", pindex->nHeight);
 
                         TallyResearchAverages(pindexBest);
-                            }
-                            else
-                            {
-                                if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %d\r\n", pindex->nHeight);
-                            }
                     }
+                    else
+                    {
+                        if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %d\r\n", pindex->nHeight);
+                    }
+                }
             }
             /*
                 -- Normal Superblocks are loaded during Tally
@@ -4169,7 +4169,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(),600) || nHeight >= 999000))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 600) || nHeight >= 999000))
                     {
                         return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
                     }
@@ -4192,11 +4192,11 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
     if(nVersion<9)
     {
-    // Verify proof of research.
-    if(!CheckProofOfResearch(pindexPrev, *this))
-    {
-        return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
-    }
+        // Verify proof of research.
+        if(!CheckProofOfResearch(pindexPrev, *this))
+        {
+            return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+        }
     }
     /*else Do not check v9 rewards here as context here is insufficient and it is
       checked again in ConnectBlock */
@@ -4576,7 +4576,7 @@ void GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
+    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 2)) return true;
     nLastAskedForBlocks = GetAdjustedTime();
         
     int iAsked = 0;
@@ -4625,7 +4625,7 @@ void ClearOrphanBlocks()
 
 void CleanInboundConnections(bool bClearAll)
 {
-        if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
+        if (IsLockTimeWithinMinutes(nLastCleaned, GetAdjustedTime(), 10)) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
         for(CNode* pNode : vNodes)
@@ -5337,7 +5337,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 
 bool BlockNeedsChecked(int64_t BlockTime)
 {
-    if (IsLockTimeWithin14days(BlockTime))
+    if (IsLockTimeWithin14days(BlockTime, GetAdjustedTime()))
     {
         if (fColdBoot) return false;
         bool fOut = OutOfSyncByAge();
@@ -5420,9 +5420,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         return true;
     }
 
-    int64_t nGRCTime = ReadCache("global", "nGRCTime").timestamp;
-    int64_t nCPIDTime = ReadCache("global", "nCPIDTime").timestamp;
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) &&
+    if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
         (nGRCTime > 0 || nCPIDTime > 0))
         return true;
 
@@ -5544,20 +5542,20 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
             stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
             if(pblockindex->nHeight > stCPID.LastBlock)
             {
-            stCPID.LastBlock = pblockindex->nHeight;
-            stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
-        }
+                stCPID.LastBlock = pblockindex->nHeight;
+                stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+            }
 
-        if (pblockindex->nMagnitude > 0)
-        {
+            if (pblockindex->nMagnitude > 0)
+            {
                 stCPID.Accuracy++;
-            stCPID.TotalMagnitude += pblockindex->nMagnitude;
-            stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-        }
+                stCPID.TotalMagnitude += pblockindex->nMagnitude;
+                stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+            }
 
-        if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
-        if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
-    }
+            if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
+            if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        }
     }
 
     // Save updated CPID data holder.
@@ -5719,96 +5717,96 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
     double NetworkPayments = 0;
     double NetworkInterest = 0;
     
-                        //Consensus Start/End block:
+    //Consensus Start/End block:
     int nMaxDepth = (index->nHeight - CONSENSUS_LOOKBACK) - ( (index->nHeight - CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-                        int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
+    int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
     int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % TALLY_GRANULARITY);
     if (fDebug3) printf("START BLOCK %d, END BLOCK %d", nMaxDepth, nMinDepth);
-                        if (nMinDepth < 2)              nMinDepth = 2;
+    if (nMinDepth < 2)              nMinDepth = 2;
     if(fDebug) printf("TallyResearchAverages_retired: beginning start %d end %d\n",nMaxDepth,nMinDepth);
-                        mvMagnitudesCopy.clear();
-                        int iRow = 0;
+    mvMagnitudesCopy.clear();
+    int iRow = 0;
 
     CBlockIndex* pblockindex = index;
-                        while (pblockindex->nHeight > nMaxDepth)
-                        {
-                            if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;
-                            pblockindex = pblockindex->pprev;
-                        }
+    while (pblockindex->nHeight > nMaxDepth)
+    {
+        if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;
+        pblockindex = pblockindex->pprev;
+    }
 
-                        if (fDebug3) printf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
-                        nStart=GetTimeMillis();
+    if (fDebug3) printf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
+    nStart=GetTimeMillis();
 
 
-                        // Headless critical section ()
-        try
+    // Headless critical section ()
+    try
+    {
+        while (pblockindex->nHeight > nMinDepth)
         {
-                        while (pblockindex->nHeight > nMinDepth)
-                        {
-                            if (!pblockindex || !pblockindex->pprev) return false;
-                            pblockindex = pblockindex->pprev;
-                            if (pblockindex == pindexGenesisBlock) return false;
-                            if (!pblockindex->IsInMainChain()) continue;
-                            NetworkPayments += pblockindex->nResearchSubsidy;
-                            NetworkInterest += pblockindex->nInterestSubsidy;
-                            AddResearchMagnitude(pblockindex);
+            if (!pblockindex || !pblockindex->pprev) return false;
+            pblockindex = pblockindex->pprev;
+            if (pblockindex == pindexGenesisBlock) return false;
+            if (!pblockindex->IsInMainChain()) continue;
+            NetworkPayments += pblockindex->nResearchSubsidy;
+            NetworkInterest += pblockindex->nInterestSubsidy;
+            AddResearchMagnitude(pblockindex);
 
-                            iRow++;
-                            if (IsSuperBlock(pblockindex) && !superblockloaded)
-                            {
-                                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-                                if (bb.superblock.length() > 20)
-                                {
-                                        std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        if (VerifySuperblock(superblock, pblockindex))
-                                        {
-                                                LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
-                                                superblockloaded=true;
-                                                if (fDebug)
-                                                   printf("TallyResearchAverages_retired: Superblock Loaded {%s %i}\n", pblockindex->GetBlockHash().GetHex().c_str(),pblockindex->nHeight);
-                                        }
-                                }
-                            }
-                        }
-                        // End of critical section
-
-                        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
-                        nStart=GetTimeMillis();
-
-                        if (pblockindex)
-                        {
-                            if (fDebug3)
-                               printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
-
-                            StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
-                            network.projectname="NETWORK";
-                            network.payments = NetworkPayments;
-                            network.InterestSubsidy = NetworkInterest;
-                            mvNetworkCopy["NETWORK"] = network;
-                            if(fDebug3) printf(" TMIS1 ");
-                            TallyMagnitudesInSuperblock();
-                        }
-                        // 11-19-2015 Copy dictionaries to live RAM
-                        mvDPOR = mvDPORCopy;
-                        mvMagnitudes = mvMagnitudesCopy;
-                        mvNetwork = mvNetworkCopy;
-                        bNetAveragesLoaded = true;
-                        return true;
+            iRow++;
+            if (IsSuperBlock(pblockindex) && !superblockloaded)
+            {
+                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+                if (bb.superblock.length() > 20)
+                {
+                    std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                    if (VerifySuperblock(superblock, pblockindex))
+                    {
+                        LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
+                        superblockloaded=true;
+                        if (fDebug)
+                            printf("TallyResearchAverages_retired: Superblock Loaded {%s %i}\n", pblockindex->GetBlockHash().GetHex().c_str(),pblockindex->nHeight);
+                    }
+                }
+            }
         }
-        catch (bad_alloc ba)
+        // End of critical section
+
+        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
+        nStart=GetTimeMillis();
+
+        if (pblockindex)
         {
-            printf("Bad Alloc while tallying network averages. [1]\r\n");
-            bNetAveragesLoaded=true;
+            if (fDebug3)
+                printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
+
+            StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
+            network.projectname="NETWORK";
+            network.payments = NetworkPayments;
+            network.InterestSubsidy = NetworkInterest;
+            mvNetworkCopy["NETWORK"] = network;
+            if(fDebug3) printf(" TMIS1 ");
+            TallyMagnitudesInSuperblock();
         }
-
-        if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
-
+        // 11-19-2015 Copy dictionaries to live RAM
+        mvDPOR = mvDPORCopy;
+        mvMagnitudes = mvMagnitudesCopy;
+        mvNetwork = mvNetworkCopy;
+        bNetAveragesLoaded = true;
+        return true;
+    }
+    catch (bad_alloc ba)
+    {
+        printf("Bad Alloc while tallying network averages. [1]\r\n");
         bNetAveragesLoaded=true;
-        return false;
+    }
+
+    if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
+
+    bNetAveragesLoaded=true;
+    return false;
 }
 
 bool TallyResearchAverages_v9(CBlockIndex* index)
-{
+{    
     if(!IsV9Enabled_Tally(index->nHeight))
         return error("TallyResearchAverages_v9: called while V9 tally disabled\n");
 
@@ -6194,7 +6192,7 @@ bool VerifyExplainMagnitudeResponse()
         msNeuralResponse.clear();
 
     return dMag != 0;
-}
+        }
 
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
@@ -6214,9 +6212,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
     // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup,15))
+    if (!IsLockTimeWithinMinutes(nBootup, GetAdjustedTime(), 15))
     {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks,5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
+        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
             if(fDebug) printf("\r\nBootup\r\n");
             AskForOutstandingBlocks(uint256(0));
@@ -6246,11 +6244,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             printf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ...\n"
             ,pfrom->nVersion, pfrom->boinchashnonce.c_str(), pfrom->boinchashpw.c_str()
             ,pfrom->cpid.c_str(), pfrom->enccpid.c_str(), acid.c_str());
-
+        
         double timedrift = std::abs(GetAdjustedTime() - nTime);
 
-        if (timedrift > (8*60))
-        {
+            if (timedrift > (8*60))
+            {
             if (fDebug10) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\n",(double)timedrift);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
@@ -7062,7 +7060,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 // requires LOCK(cs_vRecvMsg)
 bool ProcessMessages(CNode* pfrom)
-{    
+{
     //
     // Message format
     //  (4) message start
@@ -7130,7 +7128,7 @@ bool ProcessMessages(CNode* pfrom)
         bool fRet = false;
         try
         {
-           fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
+            fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
             if (fShutdown)
                 break;
         }
@@ -8364,7 +8362,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
             // Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
             int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
-            if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
+            if (IsLockTimeWithinMinutes(iBeaconTimestamp, pindexBest->GetBlockTime(), 60*24*30*6))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
@@ -8499,7 +8497,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
     int nMaxDepth = nBestHeight;
     int nMinDepth = fTestNet ? 1 : 164618;
-    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*6);
+    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*12);
     if (nMinDepth < 2) nMinDepth=2;
     if (!bFullTableScan) nMinDepth = nMaxDepth-6;
     if (nMaxDepth < nMinDepth) return false;

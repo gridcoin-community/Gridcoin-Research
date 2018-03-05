@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.10.0] 2018-03-05, leisure
+### Fixed
+ - Fix sync issues due to beacon age checks, #1003 (@denravonska).
+
 ## [3.7.9.0] 2018-03-03, leisure
 ### Fixed
  - Fix issues with NN participation on Windows, #986 (@Foggyx420).
