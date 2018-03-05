@@ -5419,6 +5419,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         WriteCache("global", "nCPIDTime", "", GetAdjustedTime());
         return true;
     }
+    int64_t nGRCTime = 0;
+    int64_t nCPIDTime = 0;
 
     if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
         (nGRCTime > 0 || nCPIDTime > 0))
