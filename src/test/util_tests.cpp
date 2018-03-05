@@ -329,23 +329,21 @@ BOOST_AUTO_TEST_CASE(util_VerifyIsLockTimeWithin14days)
 {
     int64_t now = 1494060475;
     int64_t twoWeeksInSeconds = 1209600;
+    int64_t time = now - twoWeeksInSeconds;
 
-    SetMockTime(now);
-    BOOST_CHECK(IsLockTimeWithin14days(now) == true);
-    BOOST_CHECK(IsLockTimeWithin14days(now - twoWeeksInSeconds) == true);
-    BOOST_CHECK(IsLockTimeWithin14days(now - twoWeeksInSeconds - 1) == false);
+    BOOST_CHECK(IsLockTimeWithin14days(time, now) == true);
+    BOOST_CHECK(IsLockTimeWithin14days(time - 1, now) == false);
 }
 
 BOOST_AUTO_TEST_CASE(util_IsLockTimeWithinMinutes)
-{
+{    
     int64_t now = 1494060475;
     int64_t minutes = 6;
     int64_t minutesInSeconds = minutes * 60;
+    int64_t time = now - minutesInSeconds;
 
-    SetMockTime(now);
-    BOOST_CHECK(IsLockTimeWithinMinutes(now, minutes) == true);
-    BOOST_CHECK(IsLockTimeWithinMinutes(now - minutesInSeconds, minutes) == true);
-    BOOST_CHECK(IsLockTimeWithinMinutes(now - minutesInSeconds - 1, minutes) == false);
+    BOOST_CHECK(IsLockTimeWithinMinutes(time, now, minutes) == true);
+    BOOST_CHECK(IsLockTimeWithinMinutes(time - 1, now, minutes) == false);
 }
 
 BOOST_AUTO_TEST_CASE(util_VerifyRound)

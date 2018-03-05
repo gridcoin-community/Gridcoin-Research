@@ -3205,7 +3205,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         //Approve first coinstake in DPOR block
-        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(),15) && !IsResearchAgeEnabled(pindex->nHeight))
+        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
         {
             if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
             {
@@ -3257,7 +3257,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if ((IsLockTimeWithinMinutes(GetBlockTime(),15) || nVersion>=9) && !fColdBoot)
+            if ((IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) || nVersion>=9) && !fColdBoot)
             {
                 // Let this take effect together with stakev8
                 if (nVersion>=8)
@@ -4207,7 +4207,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(),600) || nHeight >= 999000))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 600) || nHeight >= 999000))
                     {
                         return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
                     }
@@ -4616,7 +4616,7 @@ void GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
+    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 2)) return true;
     nLastAskedForBlocks = GetAdjustedTime();
         
     int iAsked = 0;
@@ -4665,7 +4665,7 @@ void ClearOrphanBlocks()
 
 void CleanInboundConnections(bool bClearAll)
 {
-        if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
+        if (IsLockTimeWithinMinutes(nLastCleaned, GetAdjustedTime(), 10)) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
         for(CNode* pNode : vNodes)
@@ -5373,7 +5373,7 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
 
 bool BlockNeedsChecked(int64_t BlockTime)
 {
-    if (IsLockTimeWithin14days(BlockTime))
+    if (IsLockTimeWithin14days(BlockTime, GetAdjustedTime()))
     {
         if (fColdBoot) return false;
         bool fOut = OutOfSyncByAge();
@@ -5455,7 +5455,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         return true;
     }
 
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
+    if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
 		 mvApplicationCacheTimestamp["nCPIDTime"] > 0))  return true;
 
     nLastGRCtallied = GetAdjustedTime();
@@ -6326,9 +6326,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
     // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup,15))
+    if (!IsLockTimeWithinMinutes(nBootup, GetAdjustedTime(), 15))
     {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks,5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
+        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
             if(fDebug) printf("\r\nBootup\r\n");
             AskForOutstandingBlocks(uint256(0));
@@ -8669,16 +8669,16 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
         if(fDebug && !bVerifyingBlock) printf("CRE: No prior block exists...\n");
         if (!AreBinarySuperblocksEnabled(pindexLast->nHeight))
         {
-                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, Binary SB not enabled, "
-                    "dCurrentMagnitude= %.1f\n", dCurrentMagnitude);
-                return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
+            if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, Binary SB not enabled, "
+                                                  "dCurrentMagnitude= %.1f\n", dCurrentMagnitude);
+            return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
         }
         else
         {
             // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
             // Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
             int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
-            if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
+            if (IsLockTimeWithinMinutes(iBeaconTimestamp, pindexBest->GetBlockTime(), 60*24*30*6))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
@@ -8813,7 +8813,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
     int nMaxDepth = nBestHeight;
     int nMinDepth = fTestNet ? 1 : 164618;
-    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*6);
+    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*12);
     if (nMinDepth < 2) nMinDepth=2;
     if (!bFullTableScan) nMinDepth = nMaxDepth-6;
     if (nMaxDepth < nMinDepth) return false;
