@@ -8813,7 +8813,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
     int nMaxDepth = nBestHeight;
     int nMinDepth = fTestNet ? 1 : 164618;
-    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*6);
+    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*12);
     if (nMinDepth < 2) nMinDepth=2;
     if (!bFullTableScan) nMinDepth = nMaxDepth-6;
     if (nMaxDepth < nMinDepth) return false;
