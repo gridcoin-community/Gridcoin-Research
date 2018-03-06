@@ -3474,11 +3474,30 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
         std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
         std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
         std::string sURL = ExtractXML(contract,"<URL>","</URL>");
+
         boost::to_lower(Title);
         if (!PollExpired(Title) || IncludeExpired)
         {
             if (QueryByTitle.empty() || QueryByTitle == Title)
             {
+
+                if( (Title.length()>128) &&
+                    (Expiration.length()>64) &&
+                    (Question.length()>4096) &&
+                    (Answers.length()>8192) &&
+                    (ShareType.length()>64) &&
+                    (sURL.length()>256)  )
+                    continue;
+
+                const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
+
+                std::__cxx11::basic_string<char>::size_type longestanswer = 0;
+                for (const std::string& answer : vAnswers)
+                    longestanswer = std::max( longestanswer, answer.length() );
+
+                if( longestanswer>128 )
+                    continue;
+
                 iPollNumber++;
                 total_participants = 0;
                 total_shares=0;
@@ -3495,7 +3514,6 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 if (bDetail)
                 {
                     entry.push_back(Pair("Question",Question));
-                    const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
                     sExportRow += "<ARRAYANSWERS>";
                     size_t i = 0;
                     for (const std::string& answer : vAnswers)
