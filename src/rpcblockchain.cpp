@@ -3491,7 +3491,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 
                 const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
 
-                std::__cxx11::basic_string<char>::size_type longestanswer = 0;
+                std::string::size_type longestanswer = 0;
                 for (const std::string& answer : vAnswers)
                     longestanswer = std::max( longestanswer, answer.length() );
 
