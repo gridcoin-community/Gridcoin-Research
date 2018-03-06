@@ -5419,6 +5419,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
         WriteCache("global", "nCPIDTime", "", GetAdjustedTime());
         return true;
     }
+    int64_t nGRCTime = 0;
+    int64_t nCPIDTime = 0;
 
     int64_t nGRCTime = ReadCache("global", "nGRCTime").timestamp;
     int64_t nCPIDTime = ReadCache("global", "nCPIDTime").timestamp;
