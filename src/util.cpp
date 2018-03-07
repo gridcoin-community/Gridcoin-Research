@@ -214,31 +214,25 @@ uint256 GetRandHash()
     return hash;
 }
 
-
-
-
-
-
-
-int LogPrint(const char* category, const char* pszFormat, ...)
+bool LogAcceptCategory(const char* category)
 {
     if (category != NULL)
     {
-        if (!fDebug) return 0;
+        if (!fDebug) return false;
         const vector<string>& categories = mapMultiArgs["-debug"];
         if (find(categories.begin(), categories.end(), string(category)) == categories.end())
-            return 0;
+            return false;
     }
+    return true;
+}
 
+int LogPrintStr(const std::string &str)
+{
     int ret = 0;
     if (fPrintToConsole)
     {
         // print to console
-        va_list arg_ptr;
-        va_start(arg_ptr, pszFormat);
-        ret = vfprintf(stdout, pszFormat, arg_ptr);
-        fflush(stdout);
-        va_end(arg_ptr);
+        ret = fwrite(str.data(), 1, str.size(), stdout);
     }
     //else
     if (!fPrintToDebugger)
@@ -275,20 +269,17 @@ int LogPrint(const char* category, const char* pszFormat, ...)
             // Debug print useful for profiling
             if (fLogTimestamps && fStartedNewLine)
                 fprintf(fileout, "%s ", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()).c_str());
-            if (pszFormat[strlen(pszFormat) - 1] == '\n')
+            if (!str.empty() && str[str.size() - 1] == '\n')
                 fStartedNewLine = true;
             else
                 fStartedNewLine = false;
 
-            va_list arg_ptr;
-            va_start(arg_ptr, pszFormat);
-            ret = vfprintf(fileout, pszFormat, arg_ptr);
+            ret = fwrite(str.data(), 1, str.size(), fileout);
             fflush(fileout);
-            va_end(arg_ptr);
         }
     }
 
-#ifdef WIN32
+/*#ifdef WIN32
     if (fPrintToDebugger)
     {
         static CCriticalSection cs_OutputDebugStringF;
@@ -299,8 +290,8 @@ int LogPrint(const char* category, const char* pszFormat, ...)
             static std::string buffer;
 
             va_list arg_ptr;
-            va_start(arg_ptr, pszFormat);
-            buffer += vstrprintf(pszFormat, arg_ptr);
+            va_start(arg_ptr, str.c_str());
+            buffer += vstrprintf(str.c_str(), arg_ptr);
             va_end(arg_ptr);
 
             int line_start = 0, line_end;
@@ -312,53 +303,8 @@ int LogPrint(const char* category, const char* pszFormat, ...)
             buffer.erase(0, line_start);
         }
     }
-#endif
+#endif */
     return ret;
-}
-
-string vstrprintf(const char *format, va_list ap)
-{
-    char buffer[50000];
-    char* p = buffer;
-    int limit = sizeof(buffer);
-    int ret;
-    while (true)
-    {
-        va_list arg_ptr;
-        va_copy(arg_ptr, ap);
-        ret = vsnprintf(p, limit, format, arg_ptr);
-        va_end(arg_ptr);
-        if (ret >= 0 && ret < limit)
-            break;
-        if (p != buffer)
-            delete[] p;
-        limit *= 2;
-        p = new char[limit];
-        if (p == NULL)
-            throw std::bad_alloc();
-    }
-    string str(p, p+ret);
-    if (p != buffer)
-        delete[] p;
-    return str;
-}
-
-string real_strprintf(const char *format, int dummy, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, dummy);
-    string str = vstrprintf(format, arg_ptr);
-    va_end(arg_ptr);
-    return str;
-}
-
-string real_strprintf(const std::string &format, int dummy, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, dummy);
-    string str = vstrprintf(format.c_str(), arg_ptr);
-    va_end(arg_ptr);
-    return str;
 }
 
 int GetDayOfYear(int64_t timestamp)
@@ -376,18 +322,6 @@ int GetDayOfYear(int64_t timestamp)
         return 0;
     }
 }
-
-
-bool error(const char *format, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, format);
-    std::string str = vstrprintf(format, arg_ptr);
-    va_end(arg_ptr);
-    LogPrintf("ERROR: %s\n", str.c_str());
-    return false;
-}
-
 
 void ParseString(const string& str, char c, vector<string>& v)
 {
@@ -1037,6 +971,12 @@ static std::string FormatException(std::exception* pex, const char* pszThread)
             "UNKNOWN EXCEPTION       \n%s in %s       \n", pszModule, pszThread);
 }
 
+void LogException(std::exception* pex, const char* pszThread)
+{
+    std::string message = FormatException(pex, pszThread);
+    LogPrintf("\n%s", message.c_str());
+}
+
 void PrintException(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
@@ -1123,7 +1063,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     //2-25-2015
     fs::path &path = pathCached[fNetSpecific];
 
-    // This can be called during exceptions by printf, so we cache the
+    // This can be called during exceptions by LogPrintf, so we cache the
     // value so we don't have to do memory allocations after that.
     if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
     {
@@ -1164,13 +1104,13 @@ boost::filesystem::path GetProgramDir()
 
     if (mapArgs.count("-programdir"))
     {
-        // printf("Acquiring program directory from conf file\n");
+        // LogPrintf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
 
         if (!boost::filesystem::is_directory(path))
         {
             path = "";
-            printf("Invalid path stated in gridcoinresearch.conf\n");
+            LogPrintf("Invalid path stated in gridcoinresearch.conf\n");
         }
         else
         {
@@ -1189,14 +1129,14 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        // printf("Checking for %s \r\n", (boost::filesystem::current_path() / list[i]).c_str());
+        // LogPrintf("Checking for %s \r\n", (boost::filesystem::current_path() / list[i]).c_str());
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             return boost::filesystem::current_path();
         }
     }
 
-        printf("Please specify program directory in config file using the 'programdir' argument\n");
+        LogPrintf("Please specify program directory in config file using the 'programdir' argument\n");
         path = "";
         return path;
 
