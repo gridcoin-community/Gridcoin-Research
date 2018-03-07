@@ -2892,6 +2892,7 @@ Value addpoll(const Array& params, bool fHelp)
 
     return res;
 }
+
 Value askforoutstandingblocks(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -2908,6 +2909,30 @@ Value askforoutstandingblocks(const Array& params, bool fHelp)
 
     return res;
 }
+
+Value getblockchaininfo(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getblockchaininfo\n"
+                "\n"
+                "Displays data on current blockchain\n");
+
+    LOCK(cs_main);
+
+    Object res, diff;
+
+    res.push_back(Pair("blocks",          nBestHeight));
+    res.push_back(Pair("moneysupply",     ValueFromAmount(pindexBest->nMoneySupply)));
+    diff.push_back(Pair("proof-of-work",  GetDifficulty()));
+    diff.push_back(Pair("proof-of-stake", GetDifficulty(GetLastBlockIndex(pindexBest, true))));
+    res.push_back(Pair("difficulty",      diff));
+    res.push_back(Pair("testnet",         fTestNet));
+    res.push_back(Pair("errors",          GetWarnings("statusbar")));
+
+    return res;
+}
+
 
 Value currenttime(const Array& params, bool fHelp)
 {

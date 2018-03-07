@@ -141,6 +141,30 @@ Value getinfo(const Array& params, bool fHelp)
     return obj;
 }
 
+Value getwalletinfo(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getwalletinfo\n"
+                "\n"
+                "Displays information about the wallet\n");
+
+    LOCK(pwalletMain->cs_wallet);
+
+    Object res;
+
+    res.push_back(Pair("walletversion", pwalletMain->GetVersion()));
+    res.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
+    res.push_back(Pair("newmint",       ValueFromAmount(pwalletMain->GetNewMint())));
+    res.push_back(Pair("stake",         ValueFromAmount(pwalletMain->GetStake())));
+    res.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
+    res.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
+
+    if (pwalletMain->IsCrypted())
+        res.push_back(Pair("unlocked_until", nWalletUnlockTime / 1000));
+
+    return res;
+}
 
 Value getnewpubkey(const Array& params, bool fHelp)
 {

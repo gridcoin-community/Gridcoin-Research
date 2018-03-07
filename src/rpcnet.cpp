@@ -471,3 +471,34 @@ Value sendalert2(const Array& params, bool fHelp)
     result.push_back(Pair("Success", true));
     return result;
 }
+
+
+Value getnetworkinfo(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getnetworkinfo\n"
+                "\n"
+                "Displays network related information\n");
+
+    Object res;
+
+    proxyType proxy;
+    GetProxy(NET_IPV4, proxy);
+
+    LOCK(cs_main);
+
+    res.push_back(Pair("version",         FormatFullVersion()));
+    res.push_back(Pair("minor_version",   CLIENT_VERSION_MINOR));
+    res.push_back(Pair("protocolversion", PROTOCOL_VERSION));
+    res.push_back(Pair("timeoffset",      GetTimeOffset()));
+    res.push_back(Pair("connections",     (int)vNodes.size()));
+    res.push_back(Pair("paytxfee",        ValueFromAmount(nTransactionFee)));
+    res.push_back(Pair("mininput",        ValueFromAmount(nMinimumInputValue)));
+    res.push_back(Pair("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string())));
+    res.push_back(Pair("ip",              addrSeenByPeer.ToStringIP()));
+    res.push_back(Pair("localaddresses",  mapresults));
+    res.push_back(Pair("errors",          GetWarnings("statusbar")));
+
+    return res;
+}
