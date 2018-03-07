@@ -590,11 +590,11 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                         // Ensure this Proof Of Stake Coinbase was Just Generated before sending the reward (prevent rescans from sending rewards):
                         LogPrintf("reward locktime %f curr time %f",(double)wtxIn.nTime,(double)GetAdjustedTime());
                         LogPrintf(" reward shared %f",(double)dRewardShare);
-                        LogPrintf(" addr %s",sRewardAddress.c_str());
+                        LogPrintf(" addr %s",sRewardAddress);
                         if (IsLockTimeWithinMinutes(wtxIn.nTime, GetAdjustedTime(), 10))
                         {
                             std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
-                            LogPrintf("\r\nIssuing Reward Share of %f GRC to %s. Response: %s\r\n",dRewardShare,sRewardAddress.c_str(),sResult.c_str());
+                            LogPrintf("\r\nIssuing Reward Share of %f GRC to %s. Response: %s\r\n",dRewardShare,sRewardAddress, sResult);
                         }
                     }
                 }
@@ -602,7 +602,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         }
         else
         {
-            // printf("\r\nNot CoinBase Or CoinStake\r\n");
+            // LogPrintf("\r\nNot CoinBase Or CoinStake\r\n");
         }
 
         if (!strCmd.empty())
@@ -1088,7 +1088,7 @@ void CWallet::ReacceptWalletTransactions()
                 }
                 if (fUpdated)
                 {
-                    LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s\n", FormatMoney(wtx.GetCredit()).c_str(), wtx.GetHash().ToString().c_str());
+                    LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s\n", FormatMoney(wtx.GetCredit()).c_str(), wtx.GetHash().ToString());
                     wtx.MarkDirty();
                     wtx.WriteToDisk();
                 }
@@ -1881,7 +1881,7 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
     {
         string strError;
         if (nValue + nFeeRequired > GetBalance())
-            strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  "), FormatMoney(nFeeRequired).c_str());
+            strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  "), FormatMoney(nFeeRequired));
         else
             strError = _("Error: Transaction creation failed  ");
         LogPrintf("SendMoney() : %s", strError);
@@ -2505,7 +2505,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
-                    printf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\r\n", address.ToString());
+                    LogPrintf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\r\n", address.ToString());
                 }
                 else
                 {

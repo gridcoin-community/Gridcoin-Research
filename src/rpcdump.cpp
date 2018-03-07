@@ -308,10 +308,10 @@ Value dumpwallet(const Array& params, bool fHelp)
     std::sort(vKeyBirth.begin(), vKeyBirth.end());
 
     // produce output
-    file << strprintf("# Wallet dump created by Gridcoin %s (%s)\n", CLIENT_BUILD.c_str(), CLIENT_DATE.c_str());
-    file << strprintf("# * Created on %s\n", EncodeDumpTime(GetTime()).c_str());
-    file << strprintf("# * Best block at time of backup was %i (%s),\n", nBestHeight, hashBestChain.ToString().c_str());
-    file << strprintf("#   mined on %s\n", EncodeDumpTime(pindexBest->nTime).c_str());
+    file << strprintf("# Wallet dump created by Gridcoin %s (%s)\n", CLIENT_BUILD, CLIENT_DATE);
+    file << strprintf("# * Created on %s\n", EncodeDumpTime(GetTime()));
+    file << strprintf("# * Best block at time of backup was %i (%s),\n", nBestHeight, hashBestChain.ToString());
+    file << strprintf("#   mined on %s\n", EncodeDumpTime(pindexBest->nTime));
     file << "\n";
     for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
         const CKeyID &keyid = it->second;
@@ -323,13 +323,13 @@ Value dumpwallet(const Array& params, bool fHelp)
         if (pwalletMain->GetKey(keyid, key)) {
             if (pwalletMain->mapAddressBook.count(keyid)) {
                 CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString().c_str(), strTime.c_str(), EncodeDumpString(pwalletMain->mapAddressBook[keyid]).c_str(), strAddr.c_str());
+                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid]), strAddr);
             } else if (setKeyPool.count(keyid)) {
                 CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString().c_str(), strTime.c_str(), strAddr.c_str());
+                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, strAddr);
             } else {
                 CSecret secret = key.GetSecret(IsCompressed);
-                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString().c_str(), strTime.c_str(), strAddr.c_str());
+                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, IsCompressed).ToString(), strTime, strAddr);
             }
         }
     }

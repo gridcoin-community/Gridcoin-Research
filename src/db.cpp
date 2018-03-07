@@ -123,7 +123,7 @@ void CDBEnv::MakeMock()
     if (fShutdown)
         throw runtime_error("CDBEnv::MakeMock(): during shutdown");
 
-    LogPrint("CDBEnv::MakeMock()\n");
+    LogPrint("db", "CDBEnv::MakeMock()\n");
 
     dbenv.set_cachesize(1, 0, 1);
     dbenv.set_lg_bsize(10485760*4);
@@ -454,12 +454,12 @@ void CDBEnv::Flush(bool fShutdown)
             {
                 // Move log data to the dat file
                 CloseDb(strFile);
-                LogPrint("%s checkpoint\n", strFile);
+                LogPrint("db", "%s checkpoint\n", strFile);
                 dbenv.txn_checkpoint(0, 0, 0);
-                LogPrint("%s detach\n", strFile);
+                LogPrint("db", "%s detach\n", strFile);
                 if (!fMockDb)
                     dbenv.lsn_reset(strFile.c_str(), 0);
-                LogPrint("%s closed\n", strFile);
+                LogPrint("db", "%s closed\n", strFile);
                 mapFileUseCount.erase(mi++);
             }
             else

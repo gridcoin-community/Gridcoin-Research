@@ -57,10 +57,10 @@ void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
     }
 
     filesystem::create_directory(directory);
-    LogPrintf("Opening LevelDB in %s\n", directory.string().c_str());
+    LogPrintf("Opening LevelDB in %s\n", directory.string());
     leveldb::Status status = leveldb::DB::Open(options, directory.string(), &txdb);
     if (!status.ok()) {
-        throw runtime_error(strprintf("init_blockindex(): error opening database environment %s", status.ToString().c_str()));
+        throw runtime_error(strprintf("init_blockindex(): error opening database environment %s", status.ToString()));
     }
 }
 
@@ -454,8 +454,8 @@ bool CTxDB::LoadBlockIndex()
     nBestChainTrust = pindexBest->nChainTrust;
 
     LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s\n",
-      hashBestChain.ToString().substr(0,20).c_str(), nBestHeight, CBigNum(nBestChainTrust).ToString().c_str(),
-      DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+      hashBestChain.ToString().substr(0,20), nBestHeight, CBigNum(nBestChainTrust).ToString(),
+      DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 
     // Load bnBestInvalidTrust, OK if it doesn't exist
     CBigNum bnBestInvalidTrust;

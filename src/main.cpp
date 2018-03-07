@@ -606,7 +606,7 @@ MiningCPID GetNextProject(bool bForce)
 
     if (IsInitialBlockDownload() && !bForce)
     {
-        if (LessVerbose(100)) Log Printf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
+        if (LessVerbose(100)) LogPrintf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
         MilliSleep(1);
         return GlobalCPUMiningCPID;
     }
@@ -695,13 +695,13 @@ MiningCPID GetNextProject(bool bForce)
 #                                       if 0
                                         if (!bResult)
                                         {
-                                            printf("GetNextProject: failed to sign block with cpid -> %s\n", sError.c_str());
+                                            LogPrintf("GetNextProject: failed to sign block with cpid -> %s\n", sError.c_str());
                                             continue;
                                         }
                                         GlobalCPUMiningCPID.BoincSignature = sSignature;
                                         if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
                                         {
-                                            printf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
+                                            LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
                                             continue;
                                         }
 #                                       endif
@@ -876,7 +876,7 @@ bool AddOrphanTx(const CTransaction& tx)
 
     if (nSize > 5000)
     {
-        LogPrintf("mempool", "ignoring large orphan tx (size: %" PRIszu ", hash: %s)\n", nSize, hash.ToString().substr(0,10));
+        LogPrint("mempool", "ignoring large orphan tx (size: %" PRIszu ", hash: %s)\n", nSize, hash.ToString().substr(0,10));
         return false;
     }
 
@@ -884,7 +884,7 @@ bool AddOrphanTx(const CTransaction& tx)
     for (auto const& txin : tx.vin)
         mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
 
-    LogPrintf("mempool", "stored orphan tx %s (mapsz %" PRIszu ")\n", hash.ToString().substr(0,10), mapOrphanTransactions.size());
+    LogPrint("mempool", "stored orphan tx %s (mapsz %" PRIszu ")\n", hash.ToString().substr(0,10), mapOrphanTransactions.size());
     return true;
 }
 
@@ -1462,7 +1462,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         LOCK(pool.cs);
         if (ptxOld)
         {
-            LogPrintf("mempool", "AcceptToMemoryPool : replacing tx %s with new version\n", ptxOld->GetHash().ToString();
+            LogPrintf("mempool", "AcceptToMemoryPool : replacing tx %s with new version\n", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
         pool.addUnchecked(hash, tx);
@@ -2729,7 +2729,7 @@ std::string UnpackBinarySuperblock(std::string sBlock)
             double dMagnitude = ConvertHexToDouble("0x" + sHexMagnitude);
             std::string sRow = sCPID + "," + RoundToString(dMagnitude,0) + ";";
             sReconstructedMagnitudes += sRow;
-            // if (fDebug3) printf("\r\n HEX CPID %s, HEX MAG %s, dMag %f, Row %s   ",sCPID.c_str(),sHexMagnitude.c_str(),dMagnitude,sRow.c_str());
+            // if (fDebug3) LogPrintf("\r\n HEX CPID %s, HEX MAG %s, dMag %f, Row %s   ",sCPID.c_str(),sHexMagnitude.c_str(),dMagnitude,sRow.c_str());
         }
     }
     // Append zero magnitude researchers so the beacon count matches
@@ -2767,7 +2767,7 @@ std::string PackBinarySuperblock(std::string sBlock)
                 std::string sHexMagnitude = DoubleToHexStr(magnitude,4);
                 std::string sBinaryMagnitude = ConvertHexToBin(sHexMagnitude);
                 std::string sBinaryEntry  = sBinaryCPID+sBinaryMagnitude;
-                // if (fDebug3) printf("\r\n PackBinarySuperblock: DecMag %f HEX MAG %s bin_cpid_len %f bm_len %f be_len %f,",  magnitude,sHexMagnitude.c_str(),(double)sBinaryCPID.length(),(double)sBinaryMagnitude.length(),(double)sBinaryEntry.length());
+                // if (fDebug3) LogPrintf("\r\n PackBinarySuperblock: DecMag %f HEX MAG %s bin_cpid_len %f bm_len %f be_len %f,",  magnitude,sHexMagnitude.c_str(),(double)sBinaryCPID.length(),(double)sBinaryMagnitude.length(),(double)sBinaryEntry.length());
                 if (sCPID=="00000000000000000000000000000000")
                 {
                     dZeroMagCPIDCount += 1;
@@ -4091,7 +4091,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
         return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
 
-    //if (fDebug3) printf(".EOCB.");
+    //if (fDebug3) LogPrintf(".EOCB.");
     return true;
 }
 
@@ -4325,7 +4325,7 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
     if (!bPassed)
     {
         if (fDebug) LogPrintf(" Verification of Superblock Failed ");
-        //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+        //if (fDebug3) LogPrintf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
     }
 
     return bPassed;
@@ -4427,7 +4427,7 @@ void GridcoinServices()
             if (IsV9Enabled(nBestHeight) && (nBestHeight % nTallyGranularity) == 0)
             {
                 if (fDebug) LogPrintf("SVC: set off Tally (v3 C) height %d\n",nBestHeight);
-                if (fDebug3) Logprintf("TIB1 ");
+                if (fDebug3) LogPrintf("TIB1 ");
                 TallyResearchAverages(pindexBest);
             }
 
@@ -4556,13 +4556,13 @@ void GridcoinServices()
     {
         nLastCheckedForUpdate = GetAdjustedTime();
 
-        if (fDebug3) printf("Checking for upgrade...");
+        if (fDebug3) LogPrintf("Checking for upgrade...");
         if(Restarter::IsUpgradeAvailable())
         {
-            printf("Upgrade available.");
+            LogPrintf("Upgrade available.");
             if(GetBoolArg("-autoupgrade", false))
             {
-                printf("Upgrading client.");
+                LogPrintf("Upgrading client.");
                 Restarter::UpgradeClient();
             }
         }
@@ -6885,7 +6885,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             uint64_t nonce = 0;
             vRecv >> nonce >> acid;
-            //if (fDebug10) printf("pong valid %s",YesNo(pong_valid).c_str());
+            //if (fDebug10) LogPrintf("pong valid %s",YesNo(pong_valid).c_str());
 
             // Echo the message back with the nonce. This allows for two useful features:
             //
@@ -7083,7 +7083,7 @@ bool ProcessMessages(CNode* pfrom)
         CNetMessage& msg = *it;
 
         //if (fDebug10)
-        //    printf("ProcessMessages(message %u msgsz, %zu bytes, complete:%s)\n",
+        //    LogPrintf("ProcessMessages(message %u msgsz, %zu bytes, complete:%s)\n",
         //            msg.hdr.nMessageSize, msg.vRecv.size(),
         //            msg.complete() ? "Y" : "N");
 
@@ -8566,7 +8566,7 @@ std::string CPIDHash(double dMagIn, std::string sCPID)
     std::string sMagComponent1 = RoundToString(dMagIn/(dExponent+.01),0);
     std::string sSuffix = RoundToString(dMagLength * dExponent, 0);
     std::string sHash = sCPID + sMagComponent1 + sSuffix;
-    //  printf("%s, %s, %f, %f, %s\r\n",sCPID.c_str(), sMagComponent1.c_str(),dMagLength,dExponent,sSuffix.c_str());
+    //  LogPrintf("%s, %s, %f, %f, %s\r\n",sCPID.c_str(), sMagComponent1.c_str(),dMagLength,dExponent,sSuffix.c_str());
     return sHash;
 }
 
@@ -8669,7 +8669,7 @@ std::string getHardDriveSerial()
         cmd1 = "ls /dev/disk/by-uuid";
     #endif
     std::string result = SystemCommand(cmd1.c_str());
-    //if (fDebug3) printf("result %s",result.c_str());
+    //if (fDebug3) LogPrintf("result %s",result.c_str());
     msHDDSerial = result;
     return result;
 }
@@ -8710,8 +8710,8 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
         uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
     uint256 uADH = uint256("0x" + address_day_hash);
-    //printf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
-    //printf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());
+    //LogPrintf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
+    //LogPrintf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());
     return (uADH < uRef);
 }
 

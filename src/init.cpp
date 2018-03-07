@@ -60,7 +60,7 @@ bool ShutdownRequested()
 void StartShutdown()
 {
 
-    printf("Calling start shutdown...\r\n");
+    LogPrintf("Calling start shutdown...\r\n");
 
 #ifdef QT_GUI
     // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
@@ -91,7 +91,7 @@ void Shutdown(void* parg)
     static bool fExit;
     if (fFirstThread)
     {
-         printf("gridcoinresearch exiting...\r\n");
+         LogPrintf("gridcoinresearch exiting...\r\n");
 
         fShutdown = true;
         bitdb.Flush(false);
@@ -106,7 +106,7 @@ void Shutdown(void* parg)
         // lock file.
         //CTxDB().Close();
         MilliSleep(50);
-        printf("Gridcoin exited\n\n");
+        LogPrintf("Gridcoin exited\n\n");
         fExit = true;
     }
     else
@@ -267,9 +267,9 @@ void ThreadAppInit2(ThreadHandlerPtr th)
     // Make this thread recognisable
     RenameThread("grc-appinit2");
     bGridcoinGUILoaded=false;
-    printf("Initializing GUI...");
+    LogPrintf("Initializing GUI...");
     AppInit2(th);
-    printf("GUI Loaded...");
+    LogPrintf("GUI Loaded...");
     bGridcoinGUILoaded = true;
 }
 
@@ -343,7 +343,7 @@ bool AppInit2(ThreadHandlerPtr threads)
           << BOOST_VERSION % 100                // patch level
           << "\r\n";
 
-    printf("\r\nBoost Version: %s",s.str().c_str());
+    LogPrintf("\r\nBoost Version: %s",s.str());
 
     //Placeholder: Load Remote CPIDs Here
 
@@ -394,7 +394,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // Verify testnet is using the testnet directory for the config file:
     std::string sTestNetSpecificArg = GetArgument("testnetarg","default");
-    printf("Using specific arg %s",sTestNetSpecificArg.c_str());
+    LogPrintf("Using specific arg %s",sTestNetSpecificArg);
 
 
     // ********************************************************* Step 3: parameter-to-internal-flags
@@ -409,7 +409,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug", "false")=="true")
     {
             fDebug = true;
-            printf("Entering debug mode.\r\n");
+            LogPrintf("Entering debug mode.\r\n");
     }
 
     fDebug2 = false;
@@ -417,14 +417,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug2", "false")=="true")
     {
             fDebug2 = true;
-            printf("Entering GRC debug mode.\r\n");
+            LogPrintf("Entering GRC debug mode 2.\r\n");
     }
 
     fDebug3 = false;
     if (GetArg("-debug3", "false")=="true")
     {
             fDebug3 = true;
-            printf("Entering GRC debug mode.\r\n");
+            LogPrintf("Entering GRC debug mode 3.\r\n");
     }
     fDebug10= (GetArg("-debug10","false")=="true");
 
@@ -458,7 +458,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (mapArgs.count("-paytxfee"))
     {
         if (!ParseMoney(mapArgs["-paytxfee"], nTransactionFee))
-            return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), mapArgs["-paytxfee"].c_str()));
+            return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), mapArgs["-paytxfee"]));
         if (nTransactionFee > 0.25 * COIN)
             InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
     }
@@ -469,7 +469,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (mapArgs.count("-mininput"))
     {
         if (!ParseMoney(mapArgs["-mininput"], nMinimumInputValue))
-            return InitError(strprintf(_("Invalid amount for -mininput=<amount>: '%s'"), mapArgs["-mininput"].c_str()));
+            return InitError(strprintf(_("Invalid amount for -mininput=<amount>: '%s'"), mapArgs["-mininput"]));
     }
 
     // ********************************************************* Step 4: application initialization: dir lock, daemonize, pidfile, debug log
@@ -482,7 +482,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // strWalletFileName must be a plain filename without a directory
     if (strWalletFileName != boost::filesystem::basename(strWalletFileName) + boost::filesystem::extension(strWalletFileName))
-        return InitError(strprintf(_("Wallet %s resides outside data directory %s."), strWalletFileName.c_str(), strDataDir.c_str()));
+        return InitError(strprintf(_("Wallet %s resides outside data directory %s."), strWalletFileName, strDataDir));
 
     // Make sure only a single Bitcoin process is using the data directory.
     boost::filesystem::path pathLockFile = GetDataDir() / ".lock";
@@ -490,7 +490,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (file) fclose(file);
     static boost::interprocess::file_lock lock(pathLockFile.string().c_str());
     if (!lock.try_lock())
-        return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir.c_str()));
+        return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
 
 #if !defined(WIN32) && !defined(QT_GUI)
     if (fDaemon)
@@ -541,7 +541,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     if (fDaemon)
-        LogPrintf(stdout, "Gridcoin server starting\n");
+        fprintf(stdout, "Gridcoin server starting\n");
 
     int64_t nStart;
 
@@ -551,22 +551,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (!bitdb.Open(GetDataDir()))
     {
-		 // try moving the database env out of the way
-		 boost::filesystem::path pathDatabase = GetDataDir() / "database";
-		 boost::filesystem::path pathDatabaseBak = GetDataDir() / strprintf("database.%"PRId64".bak", GetTime());
-		 try {
-			 boost::filesystem::rename(pathDatabase, pathDatabaseBak);
-+                LogPrintf("Moved old %s to %s. Retrying.\n", pathDatabase.string(), pathDatabaseBak.string());
-		 } catch(boost::filesystem::filesystem_error &error) {
-			  // failure is ok (well, not really, but it's not worse than what we started with)
-		 }
-
-		 // try again
-		 if (!bitdb.Open(GetDataDir())) {
-			 // if it still fails, it probably means we can't even create the database env
-+                string msg = strprintf(_("Error initializing wallet database environment %s!"), strDataDir);
-			 return InitError(msg);
-		 }
+         string msg = strprintf(_("Error initializing database environment %s!"
+                                 " To recover, BACKUP THAT DIRECTORY, then remove"
+                                 " everything from it except for wallet.dat."), strDataDir);
+        return InitError(msg);
     }
 
     if (GetBoolArg("-salvagewallet"))
@@ -798,12 +786,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         int nMaxVersion = GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
         {
-            printf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
+            LogPrintf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
             nMaxVersion = CLIENT_VERSION;
             pwalletMain->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
         }
         else
-            printf("Allowing wallet upgrade up to %i\n", nMaxVersion);
+            LogPrintf("Allowing wallet upgrade up to %i\n", nMaxVersion);
         if (nMaxVersion < pwalletMain->GetVersion())
             strErrors << _("Cannot downgrade wallet") << "\n";
         pwalletMain->SetMaxVersion(nMaxVersion);
@@ -876,7 +864,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 10: load peers
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    if (fDebug10) printf("Loading addresses...\n");
+    if (fDebug10) LogPrintf("Loading addresses...\n");
     nStart = GetTimeMillis();
 
     {
@@ -892,9 +880,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
     //
     std::string sOut = "";
-    if (fDebug3) printf("Loading admin Messages");
+    if (fDebug3) LogPrintf("Loading admin Messages");
     LoadAdminMessages(true,sOut);
-    printf("Done loading Admin messages");
+    LogPrintf("Done loading Admin messages");
 
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
@@ -920,7 +908,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
 
     uiInterface.InitMessage(_("Loading Network Averages..."));
-    if (fDebug3) printf("Loading network averages");
+    if (fDebug3) LogPrintf("Loading network averages");
 
     CBlockIndex* tallyHeight = FindTallyTrigger(pindexBest);
     if(tallyHeight)
