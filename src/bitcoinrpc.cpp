@@ -1333,11 +1333,10 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
 
             printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
-
-            return result;
         }
 
-        result = pcmd->actor(params, false);
+        else
+            result = pcmd->actor(params, false);
 
         return result;
     }
