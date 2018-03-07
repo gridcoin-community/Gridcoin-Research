@@ -182,7 +182,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug10) printf("RandAddSeed() %lu bytes\n", nSize);
+        if (fDebug10) LogPrint("rand", "RandAddSeed() %lu bytes\n", nSize);
     }
 #endif
 }
@@ -220,9 +220,16 @@ uint256 GetRandHash()
 
 
 
-
-inline int OutputDebugStringF(const char* pszFormat, ...)
+int LogPrint(const char* category, const char* pszFormat, ...)
 {
+    if (category != NULL)
+    {
+        if (!fDebug) return 0;
+        const vector<string>& categories = mapMultiArgs["-debug"];
+        if (find(categories.begin(), categories.end(), string(category)) == categories.end())
+            return 0;
+    }
+
     int ret = 0;
     if (fPrintToConsole)
     {
@@ -377,7 +384,7 @@ bool error(const char *format, ...)
     va_start(arg_ptr, format);
     std::string str = vstrprintf(format, arg_ptr);
     va_end(arg_ptr);
-    printf("ERROR: %s\n", str.c_str());
+    LogPrintf("ERROR: %s\n", str.c_str());
     return false;
 }
 
@@ -1033,7 +1040,7 @@ static std::string FormatException(std::exception* pex, const char* pszThread)
 void PrintException(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
-    printf("\n\n************************\n%s\n", message.c_str());
+    LogPrintf("\n\n************************\n%s\n", message);
     fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
     strMiscWarning = message;
     throw;
@@ -1042,7 +1049,7 @@ void PrintException(std::exception* pex, const char* pszThread)
 void PrintExceptionContinue(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
-    printf("\n\n************************\n%s\n", message.c_str());
+    LogPrintf("\n\n************************\n%s\n", message);
     fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
     strMiscWarning = message;
 }
@@ -1366,7 +1373,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug10) printf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         int64_t nMedian = vTimeOffsets.median();
@@ -1394,17 +1401,17 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                     fDone = true;
                     string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
-                    printf("*** %s\n", strMessage.c_str());
+                    LogPrintf("*** %s\n", strMessage);
                     uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
                 }
             }
         }
         if (fDebug10) {
             for (auto const& n : vSorted)
-                printf("%+" PRId64 "  ", n);
-            printf("|  ");
+                LogPrintf("%+" PRId64 "  ", n);
+            LogPrintf("|  ");
         }
-        if (fDebug10) printf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)\n", nTimeOffset, nTimeOffset/60);
+        if (fDebug10) LogPrintf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)\n", nTimeOffset, nTimeOffset/60);
     }
 }
 
@@ -1537,7 +1544,7 @@ boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
         return fs::path(pszPath);
     }
 
-    printf("SHGetSpecialFolderPathA() failed, could not obtain requested path.\n");
+    LogPrintf("SHGetSpecialFolderPathA() failed, could not obtain requested path.\n");
     return fs::path("");
 }
 #endif
@@ -1546,7 +1553,7 @@ void runCommand(std::string strCommand)
 {
     int nErr = ::system(strCommand.c_str());
     if (nErr)
-        printf("runCommand error: system(%s) returned %d\n", strCommand.c_str(), nErr);
+        LogPrintf("runCommand error: system(%s) returned %d\n", strCommand, nErr);
 }
 
 void RenameThread(const char* name)
@@ -1576,7 +1583,7 @@ bool NewThread(void(*pfn)(void*), void* parg)
     {
         boost::thread(pfn, parg); // thread detaches when out of scope
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s\n", e.what());
         return false;
     }
     return true;
@@ -1606,7 +1613,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
     }
     catch (...)
     {
-        printf("Exception occurred in MakeSafeMessage. Returning an empty message.\n");
+        LogPrintf("Exception occurred in MakeSafeMessage. Returning an empty message.\n");
         safemessage = "";
     }
     return safemessage;
@@ -1620,7 +1627,7 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s\n", e.what());
         return false;
     }
     return true;
@@ -1634,7 +1641,7 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s\n", e.what());
         return false;
     }
     return true;
@@ -1666,7 +1673,7 @@ void ThreadHandler::removeByName(const std::string tname)
 
 void ThreadHandler::removeAll()
 {
-    printf("Wait for %d threads to join.\n",numThreads());
+    LogPrintf("Wait for %d threads to join.\n",numThreads());
     threadGroup.join_all();
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {

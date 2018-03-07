@@ -31,7 +31,7 @@ static const int LAST_POW_BLOCK = 2050;
 extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
-static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;   
+static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 
 static const double NeuralNetworkMultiplier = 115000;
 
@@ -76,14 +76,14 @@ static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c261479
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-inline bool IsProtocolV2(int nHeight) 
-{ 
-	return (fTestNet ?  nHeight > 2060 : nHeight > 85400); 
+inline bool IsProtocolV2(int nHeight)
+{
+	return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
 }
 
 inline bool IsResearchAgeEnabled(int nHeight)
 {
-	return (fTestNet ?  nHeight > 0 : nHeight > 364500); 
+	return (fTestNet ?  nHeight > 0 : nHeight > 364500);
 }
 
 // TODO: Move this and the other height thresholds to their own files.
@@ -109,9 +109,9 @@ inline int GetSuperblockAgeSpacing(int nHeight)
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
-inline bool AreBinarySuperblocksEnabled(int nHeight) 
-{ 
-	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
+inline bool AreBinarySuperblocksEnabled(int nHeight)
+{
+	return (fTestNet ? nHeight > 10000 : nHeight > 725000);
 }
 
 inline bool IsV9Enabled_Tally(int nHeight)
@@ -357,7 +357,7 @@ public:
 
     void print() const
     {
-        printf("%s", ToString().c_str());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -408,12 +408,12 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10).c_str(), n);
+        return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10), n);
     }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -485,9 +485,9 @@ public:
         str += "CTxIn(";
         str += prevout.ToString();
         if (prevout.IsNull())
-            str += strprintf(", coinbase %s", HexStr(scriptSig).c_str());
+            str += strprintf(", coinbase %s", HexStr(scriptSig));
         else
-            str += strprintf(", scriptSig=%s", scriptSig.ToString().substr(0,24).c_str());
+            str += strprintf(", scriptSig=%s", scriptSig.ToString().substr(0,24));
         if (nSequence != std::numeric_limits<unsigned int>::max())
             str += strprintf(", nSequence=%u", nSequence);
         str += ")";
@@ -496,7 +496,7 @@ public:
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -575,12 +575,12 @@ public:
     std::string ToString() const
     {
         if (IsEmpty()) return "CTxOut(empty)";
-        return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue).c_str(), scriptPubKey.ToString().c_str());
+        return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue).c_str(), scriptPubKey.ToString());
     }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -728,7 +728,7 @@ public:
         return nValueOut;
     }
 
-	
+
 
 
 
@@ -797,7 +797,7 @@ public:
         std::string str;
         str += IsCoinBase()? "Coinbase" : (IsCoinStake()? "Coinstake" : "CTransaction");
         str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%" PRIszu ", vout.size=%" PRIszu ", nLockTime=%d)\n",
-            GetHash().ToString().substr(0,10).c_str(),
+            GetHash().ToString().substr(0,10),
             nTime,
             nVersion,
             vin.size(),
@@ -812,7 +812,7 @@ public:
 
     void print() const
     {
-        printf("%s", ToString().c_str());
+        LogPrintf("%s", ToString());
     }
 
 
@@ -1002,7 +1002,7 @@ public:
     unsigned int nBits;
 
     unsigned int nNonce;
-	
+
     // network and disk
     std::vector<CTransaction> vtx;
 
@@ -1021,8 +1021,8 @@ public:
 
 	//Gridcoin - 7/27/2014
 	/////////////////////////////////////////
-	
-	
+
+
     CBlock()
     {
         SetNull();
@@ -1031,7 +1031,7 @@ public:
     IMPLEMENT_SERIALIZE
     (
 		//Gridcoin
-	   
+
 	    //
 
 
@@ -1042,7 +1042,7 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
-	
+
 
         // ConnectBlock depends on vtx following header to generate CDiskTxPos
         if (!(nType & (SER_GETHASH|SER_BLOCKHEADERONLY)))
@@ -1052,7 +1052,7 @@ public:
             READWRITE(vchBlockSig);
 
 			/*
-			
+
 			*/
 
 
@@ -1251,23 +1251,23 @@ public:
 
     void print() const
     {
-        printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
-            GetHash().ToString().c_str(),
+        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
+            GetHash().ToString(),
             nVersion,
-            hashPrevBlock.ToString().c_str(),
-            hashMerkleRoot.ToString().c_str(),
+            hashPrevBlock.ToString(),
+            hashMerkleRoot.ToString(),
             nTime, nBits, nNonce,
             vtx.size(),
-            HexStr(vchBlockSig.begin(), vchBlockSig.end()).c_str());
+            HexStr(vchBlockSig.begin(), vchBlockSig.end());
         for (unsigned int i = 0; i < vtx.size(); i++)
         {
-            printf("  ");
+            LogPrintf("  ");
             vtx[i].print();
         }
-        printf("  vMerkleTree: ");
+        LogPrintf("  vMerkleTree: ");
         for (unsigned int i = 0; i < vMerkleTree.size(); i++)
-            printf("%s ", vMerkleTree[i].ToString().substr(0,10).c_str());
-        printf("\n");
+            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10).c_str());
+        LogPrintf("\n");
     }
 
 
@@ -1318,7 +1318,7 @@ public:
 	unsigned int nIsContract;
 
     unsigned int nFlags;  // ppcoin: block index flags
-    enum  
+    enum
     {
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY  = (1 << 1), // entropy bit for stake modifier
@@ -1486,7 +1486,7 @@ public:
     }
 
     bool IsUserCPID() const
-    {        
+    {
         return !(nFlags & (INVESTOR_CPID | EMPTY_CPID));
     }
 
@@ -1545,16 +1545,16 @@ public:
             pprev, pnext, nFile, nBlockPos, nHeight,
             FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
-            nStakeModifier, nStakeModifierChecksum, 
+            nStakeModifier, nStakeModifierChecksum,
             hashProof.ToString().c_str(),
             prevoutStake.ToString().c_str(), nStakeTime,
             hashMerkleRoot.ToString().c_str(),
             GetBlockHash().ToString().c_str());
-    }    
+    }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -1621,7 +1621,7 @@ public:
         READWRITE(cpid_hex);
         if(fRead)
             const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
-            
+
 		READWRITE(nResearchSubsidy);
 		READWRITE(nInterestSubsidy);
 		READWRITE(nMagnitude);
@@ -1675,7 +1675,7 @@ public:
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 

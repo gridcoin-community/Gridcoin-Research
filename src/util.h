@@ -115,7 +115,11 @@ extern bool fDevbuildCripple;
 
 void RandAddSeed();
 void RandAddSeedPerfmon();
-int ATTR_WARN_PRINTF(1,2) OutputDebugStringF(const char* pszFormat, ...);
+
+// Print to debug.log if -debug=category switch is given OR category is NULL.
+int ATTR_WARN_PRINTF(2,3) LogPrint(const char* category, const char* pszFormat, ...);
+#define LogPrintf(...) LogPrint(NULL, __VA_ARGS__)
+
 
 /*
   Rationale for the real_strprintf / strprintf construction:
@@ -134,18 +138,6 @@ std::string real_strprintf(const std::string &format, int dummy, ...);
 std::string vstrprintf(const char *format, va_list ap);
 
 bool ATTR_WARN_PRINTF(1,2) error(const char *format, ...);
-
-/* Redefine printf so that it directs output to debug.log
- *
- * Do this *after* defining the other printf-like functions, because otherwise the
- * __attribute__((format(printf,X,Y))) gets expanded to __attribute__((format(OutputDebugStringF,X,Y)))
- * which confuses gcc.
- */
-
-#ifndef UPGRADERFLAG
-#define printf OutputDebugStringF
-#endif
-
 
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);

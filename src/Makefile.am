@@ -70,8 +70,9 @@ GRIDCOIN_CORE_H = \
 	serialize.h \
 	strlcpy.h \
 	sync.h \
-        tally.h \
+    tally.h \
 	threadsafety.h \
+	tinyformat.h \
 	txdb.h \
 	txdb-leveldb.h \
 	ui_interface.h \
