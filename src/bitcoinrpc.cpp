@@ -268,7 +268,9 @@ Value stop(const Array& params, bool fHelp)
 static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 safemd  category
   //  ------------------------  -----------------------  ------  -----------------
+    { "list",                    &listitem,                true,   cat_null          },
     { "help",                    &help,                    true,   cat_null          },
+    { "execute",                 &execute,                 true,   cat_null          },
 
   // Wallet commands
     { "addmultisigaddress",      &addmultisigaddress,      false,  cat_wallet        },
@@ -344,6 +346,7 @@ static const CRPCCommand vRPCCommands[] =
     { "neuralhash",              &neuralhash,              false,  cat_mining        },
 #endif
     { "proveownership",          &proveownership,          false,  cat_mining        },
+    { "resetcpids",              &resetcpids,              false,  cat_mining        },
     { "rsa",                     &rsa,                     false,  cat_mining        },
     { "rsaweight",               &rsaweight,               false,  cat_mining        },
     { "staketime",               &staketime,               false,  cat_mining        },
@@ -385,6 +388,7 @@ static const CRPCCommand vRPCCommands[] =
     { "seefile",                 &seefile,                 false,  cat_developer     },
     { "sendalert",               &sendalert,               false,  cat_developer     },
     { "sendalert2",              &sendalert2,              false,  cat_developer     },
+    { "sendblock",               &sendblock,               false,  cat_developer     },
     { "sendrawcontract",         &sendrawcontract,         false,  cat_developer     },
     { "superblockaverage",       &superblockaverage,       false,  cat_developer     },
     { "tally",                   &tally,                   false,  cat_developer     },
@@ -412,21 +416,30 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockbynumber",        &getblockbynumber,        true,   cat_network       },
     { "getblockcount",           &getblockcount,           true,   cat_network       },
     { "getblockhash",            &getblockhash,            true,   cat_network       },
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-    {},
-
+    { "getcheckpoint",           &getcheckpoint,           true,   cat_network       },
+    { "getconnectioncount",      &getconnectioncount,      true,   cat_network       },
+    { "getdifficulty",           &getdifficulty,           true,   cat_network       },
+    { "getinfo",                 &getinfo,                 true,   cat_network       },
+    { "getnettotals",            &getnettotals,            true,   cat_network       },
+    { "getpeerinfo",             &getpeerinfo,             true,   cat_network       },
+    { "getrawmempool",           &getrawmempool,           true,   cat_network       },
+    { "listallpolls",            &listallpolls,            true,   cat_network       },
+    { "listallpolldetails",      &listallpolldetails,      true,   cat_network       },
+    { "listpolldetails",         &listpolldetails,         true,   cat_network       },
+    { "listpollresults",         &listpollresults,         true,   cat_network       },
+    { "listpolls",               &listpolls,               true,   cat_network       },
+    { "memorypool",              &memorypool,              true,   cat_network       },
+    { "networktime",             &networktime,             true,   cat_network       },
+    { "ping",                    &ping,                    true,   cat_network       },
+#ifdef WIN32
+    { "reindex",                 &reindex,                 true,   cat_network       },
+    { "restart",                 &restart,                 true,   cat_network       },
+    { "restorepoint",            &restorepoint,            true,   cat_network       },
+#endif
+    { "showblock",               &showblock,               true,   cat_network       },
+    { "stop",                    &stop,                    true,   cat_network       },
+    { "vote",                    &vote,                    false,  cat_network       },
+    { "votedetails",             &votedetails,             true,   cat_network       }
 };
 
 template<typename T>
@@ -536,7 +549,8 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "getblockbynumber"       && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "getblockbynumber"       && n > 1) ConvertTo<bool>(params[1]);
     if (strMethod == "getblockhash"           && n > 0) ConvertTo<int64_t>(params[0]);
-
+    if (strMethod == "listpollresults"        && n > 1) ConvertTo<bool>(params[1]);
+    if (strMethod == "showblock"              && n > 0) ConvertTo<int64_t>(params[0]);
     return params;
 }
 

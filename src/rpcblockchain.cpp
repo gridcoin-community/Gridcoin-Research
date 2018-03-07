@@ -370,6 +370,9 @@ Value showblock(const Array& params, bool fHelp)
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
+
+    LOCK(cs_main);
+
     CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(nHeight);
 
     if (pblockindex==NULL)
@@ -470,6 +473,7 @@ Value getblockhash(const Array& params, bool fHelp)
     LOCK(cs_main);
 
     CBlockIndex* RPCpblockindex = RPCBlockFinder.FindByHeight(nHeight);
+
     return RPCpblockindex->phashBlock->GetHex();
 }
 
@@ -1801,6 +1805,24 @@ Value proveownership(const Array& params, bool fHelp)
     return res;
 }
 
+Value resetcpids(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "resetcpids\n"
+                "\n"
+                "Reloads cpids\n");
+
+    Object res;
+
+    ReadConfigFile(mapArgs, mapMultiArgs);
+    HarvestCPIDs(true);
+    GetNextProject(true);
+    res.push_back(Pair("Reset", 1));
+
+    return res;
+}
+
 Value rsa(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -2557,6 +2579,26 @@ Value refhash(const Array& params, bool fHelp)
 }
 #endif
 
+Value sendblock(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "sendblock <blockhash>\n"
+                "\n"
+                "<blockhash> Blockhash of block to send to network\n"
+                "Sends a block to the network\n");
+
+    Object res;
+
+    std::string sHash = params[0].get_str();
+    uint256 hash = uint256(sHash);
+    bool fResult = AskForOutstandingBlocks(hash);
+
+    res.push_back(Pair("Requesting", hash.ToString()));
+    res.push_back(Pair("Result", fResult));
+
+    return res;
+}
 Value sendrawcontract(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2820,67 +2862,50 @@ Value addpoll(const Array& params, bool fHelp)
     double sharetype = Round(params[4].get_real(), 0);
     std::string sURL = params[5].get_str();
 
-    if (Title.empty() || Question.empty() || Answers.empty())
+    if (Title.empty() || Question.empty() || Answers.empty() || sURL.empty())
     {
-        res.push_back(Pair("Error", "You must specify a Poll Title, Poll Question and Poll Answers."));
+        res.push_back(Pair("Error", "Must specify a poll title, question, answers, and URL\n"));
 
         return res;
     }
 
+    if (days < 7)
+        res.push_back(Pair("Error", "Minimum duration is 7 days; please specify a longer poll duration."));
+
     else
     {
-        if (days < 7)
-        {
-            res.push_back(Pair("Error", "Minimum duration is 7 days; please specify a longer poll duration."));
 
-            return res;
-        }
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        double nBalance = GetTotalBalance();
+
+        if (nBalance < 100000)
+            res.push_back(Pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
 
         else
         {
-            double nBalance = GetTotalBalance();
-
-            if (nBalance < 100000)
-            {
-                res.push_back(Pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
-
-                return res;;
-            }
+            if (days < 0 || days == 0)
+                res.push_back(Pair("Error", "You must specify a positive value for days for the expiration date."));
 
             else
             {
-                if (days < 0 || days == 0)
-                {
-                    res.push_back(Pair("Error", "You must specify a positive value for days for the expiration date."));
-
-                    return res;
-                }
+                if (sharetype != 1 && sharetype != 2 && sharetype != 3 && sharetype != 4 && sharetype != 5)
+                    res.push_back(Pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sharetype."));
 
                 else
                 {
-                    if (sharetype != 1 && sharetype != 2 && sharetype != 3 && sharetype != 4 && sharetype != 5)
-                    {
-                        res.push_back(Pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sharetype."));
+                    std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
+                    std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + days + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + sharetype + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
+                    std::string result = AddContract("poll",Title,contract);
 
-                        return res;
-                    }
-
-                    else
-                    {
-                        std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
-                        std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + days + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + sharetype + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                        std::string result = AddContract("poll",Title,contract);
-
-                        res.push_back(Pair("Success", "Your poll has been added: " + result));
-
-                        return res;
-                    }
+                    res.push_back(Pair("Success", "Your poll has been added: " + result));
                 }
             }
         }
     }
-}
 
+    return res;
+}
 Value askforoutstandingblocks(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -2975,345 +3000,332 @@ Value encryptphrase(const Array& params, bool fHelp)
     return res;
 }
 
-Value execute(const Array& params, bool fHelp)
+Value listallpolls(const Array& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
+    if (fHelp || params.size() != 0)
         throw runtime_error(
-        "execute <string::itemname> <string::parameter> \r\n"
-        "Executes an arbitrary command by name.\n"
-        "execute help\n"
-        "Displays help on various available execute commands.\n");
+                "listallpolls\n"
+                "\n"
+                "Lists all polls\n");
 
-    std::string sItem = params[0].get_str();
+    LOCK(cs_main);
 
-    if (sItem=="") throw runtime_error("Item invalid.");
+    std::string out1;
+    Array res = GetJSONPollsReport(false, "", out1, true);
 
-    Array results;
-    Object oOut;
-    oOut.push_back(Pair("Command",sItem));
-    results.push_back(oOut);
-    Object entry;
+    return res;
+}
 
-    if (sItem == "restorepoint")
+Value listallpolldetails(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listallpolldetails\n"
+                "\n"
+                "Lists all polls with details\n");
+
+    LOCK(cs_main);
+
+    std::string out1;
+    Array res = GetJSONPollsReport(true, "", out1, true);
+
+    return res;
+}
+
+Value listpolldetails(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listpolldetails\n"
+                "\n"
+                "Lists poll details\n");
+
+    LOCK(cs_main);
+
+    std::string out1;
+    Array res = GetJSONPollsReport(true, "", out1, false);
+
+    return res;
+}
+
+Value listpollresults(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2 || params.size() < 1)
+        throw runtime_error(
+                "listpollresults <pollname> [bool:showexpired]\n"
+                "\n"
+                "<pollname> ----> name of the poll\n"
+                "[showexpired] -> Optional; Default false\n"
+                "Displays results for specified poll\n");
+
+    LOCK(cs_main);
+
+    Object res;
+    bool bIncExpired = false;
+
+    if (params.size() == 2)
+        bIncExpired = params[1].get_bool();
+
+    std::string Title1 = params[0].get_str();
+
+    if (!PollExists(Title1))
     {
-            int r= Restarter::CreateGridcoinRestorePoint();
-            //We must stop the node before we can do this
-            //RestartGridcoin();
-            entry.push_back(Pair("Restore Point",r));
-            results.push_back(entry);
+        res.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+
+        return res
     }
-    else if (sItem == "restart")
-    {
-        printf("Restarting Gridcoin...");
-        int iResult = Restarter::RestartGridcoin();
-        entry.push_back(Pair("RebootClient", iResult));
-        results.push_back(entry);
 
-    }
-    else if (sItem == "sendblock")
+    else
     {
-            if (params.size() != 2)
-            {
-                entry.push_back(Pair("Error","You must specify the block hash to send."));
-                results.push_back(entry);
-            }
-            std::string sHash = params[1].get_str();
-            uint256 hash = uint256(sHash);
-            bool fResult = AskForOutstandingBlocks(hash);
-            entry.push_back(Pair("Requesting",hash.ToString()));
-            entry.push_back(Pair("Result",fResult));
-            results.push_back(entry);
+        std::string Title = params[0].get_str();
+        std::string out1 = "";
+        Array myPolls = GetJSONPollsReport(true, Title, out1, bIncExpired);
+        res.push_back(myPolls);
     }
-    else if (sItem == "vote")
+
+    return res;
+}
+
+Value listpolls(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listpolls\n"
+                "\n"
+                "Lists polls\n");
+
+    LOCK(cs_main);
+
+    std::string out1;
+    Array res = GetJSONPollsReport(false, "", out1, false);
+
+    return res;
+}
+
+Value memorypool(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "memorypool\n"
+                "\n"
+                "Displays included and excluded memory pool txs\n");
+
+    Object res;
+
+    res.push_back(Pair("Excluded Tx", msMiningErrorsExcluded));
+    res.push_back(Pair("Included Tx", msMiningErrorsIncluded));
+
+    return res;
+}
+
+Value networktime(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "networktime\n"
+                "\n"
+                "Displays current network time\n");
+
+    Object res;
+
+    res.push_back(Pair("Network Time", GetAdjustedTime()));
+
+    return res;
+}
+
+#ifdef WIN32
+Value reindex(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "reindex\n"
+                "\n"
+                "Re-index the block chain\n");
+
+    Object res;
+
+    int r = Restarter::CreateGridcoinRestorePoint();
+    Restarter::ReindexGridcoinWallet();
+    res.push_back(Pair("Reindex Chain", r));
+
+    return res;
+}
+
+Value restart(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "restart\n"
+                "\n"
+                "Restarts the wallet\n");
+
+    Object res;
+
+    printf("Restarting Gridcoin...");
+    int iResult = Restarter::RestartGridcoin();
+    res.push_back(Pair("RebootClient", iResult));
+
+    return res;
+}
+
+Value restorepoint(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "restorepoint\n"
+                "\n"
+                "Create a restore point\n");
+
+    Object res;
+
+    int r= Restarter::CreateGridcoinRestorePoint();
+    //We must stop the node before we can do this
+    //RestartGridcoin();
+    res.push_back(Pair("Restore Point", r));
+
+    return res;
+}
+#endif
+
+Value vote(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size != 2)
+        throw runtime_error(
+                "vote <title> <answers>\n"
+                "\n"
+                "<title -> Title of poll being voted on\n"
+                "<answers> -> Answers chosen for specified poll seperated by ;\n"
+                "Vote on a specific poll with specified answers\n");
+
+    Object res;
+
+    std::string Title = params[0].get_str();
+    std::string Answer = params[1].get_str();
+
+    if (Title.empty() || Answer.empty())
     {
-        if (params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify the Poll Title, and the Answer.  For example: execute vote gender male."));
-            results.push_back(entry);
-        }
+        res.push_back(Pair("Error", "Must specify a poll title and answers\n"));
+
+        return res;
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    //Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
+    //If polltype == 1, use magnitude, if 2 use Balance, if 3 use hybrid:
+    //6-20-2015
+    double nBalance = GetTotalBalance();
+    uint256 hashRand = GetRandHash();
+    std::string email = GetArgument("email", "NA");
+    boost::to_lower(email);
+    GlobalCPUMiningCPID.email = email;
+    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
+    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
+
+    if (!PollExists(Title))
+        res.push_back(Pair("Error", "Poll does not exist."));
+
+    else
+    {
+        if (PollExpired(Title))
+            res.push_back(Pair("Error", "Sorry, Poll is already expired."));
+
         else
         {
-                std::string Title = params[1].get_str();
-                std::string Answer = params[2].get_str();
-                if (Title=="" || Answer == "" )
-                {
-                            entry.push_back(Pair("Error","You must specify both the answer and the title."));
-                            results.push_back(entry);
+            if (!PollAcceptableAnswer(Title, Answer))
+            {
+                std::string acceptable_answers = PollAnswers(Title);
+                res.push_back(Pair("Error", "Sorry, Answer " + Answer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'."));
+            }
 
-                }
+            else
+            {
+                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID, pindexBest->nVersion);
+                std::string GRCAddress = DefaultWalletAddress();
+                StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
+                double dmag = structMag.Magnitude;
+                double poll_duration = PollDuration(Title) * 86400;
+
+                // Prevent Double Voting
+                std::string cpid1 = GlobalCPUMiningCPID.cpid;
+                std::string GRCAddress1 = DefaultWalletAddress();
+                GetEarliestStakeTime(GRCAddress1, cpid1);
+                double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
+                double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
+
+                StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
+
+                printf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
+
+                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title, "<SHARETYPE>", "</SHARETYPE>"), 0);
+
+                // Share Type 1 == "Magnitude"
+                // Share Type 2 == "Balance"
+                // Share Type 3 == "Both"
+                if (cpid_age < poll_duration) dmag = 0;
+
+                if (stake_age < poll_duration) nBalance = 0;
+
+                if ((dShareType == 1) && cpid_age < poll_duration)
+                    res.push_back(Pair("Error", "Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
+
+                else if (dShareType == 2 && stake_age < poll_duration)
+                    res.push_back(Pair("Error", "Sorry, When voting in a Balance poll, your stake age must be older than the poll duration."));
+
+                else if (dShareType == 3 && stake_age < poll_duration && cpid_age < poll_duration)
+                    res.push_back(Pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration."));
+
                 else
                 {
-                    //Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
-                    //If polltype == 1, use magnitude, if 2 use Balance, if 3 use hybrid:
-                    //6-20-2015
-                    double nBalance = GetTotalBalance();
-                    uint256 hashRand = GetRandHash();
-                    std::string email = GetArgument("email", "NA");
-                    boost::to_lower(email);
-                    GlobalCPUMiningCPID.email=email;
-                    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
-                    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
+                    std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
+                            + GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
+                            + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
+                            + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
+                    // Add the provable balance and the provable magnitude - this goes into effect July 1 2017
+                    voter += GetProvableVotingWeightXML();
+                    std::string pk = Title + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
+                    std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
+                    std::string result = AddContract("vote",pk,contract);
+                    std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
 
-                    if (!PollExists(Title))
-                    {
-                            entry.push_back(Pair("Error","Poll does not exist."));
-                            results.push_back(entry);
-
-                    }
-                    else
-                    {
-                        if (PollExpired(Title))
-                        {
-                            entry.push_back(Pair("Error","Sorry, Poll is already expired."));
-                            results.push_back(entry);
-                        }
-                        else
-                        {
-                            if (!PollAcceptableAnswer(Title,Answer))
-                            {
-                                std::string acceptable_answers = PollAnswers(Title);
-                                entry.push_back(Pair("Error","Sorry, Answer " + Answer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'."));
-                                results.push_back(entry);
-                            }
-                            else
-                            {
-                                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
-                                std::string GRCAddress = DefaultWalletAddress();
-                                StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
-                                double dmag = structMag.Magnitude;
-                                double poll_duration = PollDuration(Title)*86400;
-
-                                // Prevent Double Voting
-                                std::string cpid1 = GlobalCPUMiningCPID.cpid;
-                                std::string GRCAddress1 = DefaultWalletAddress();
-                                GetEarliestStakeTime(GRCAddress1,cpid1);
-                                double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
-                                double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
-
-                                StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
-
-
-                                printf("CPIDAge %f,StakeAge %f,Poll Duration %f \r\n",cpid_age,stake_age,poll_duration);
-
-                                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
-
-                                // Share Type 1 == "Magnitude"
-                                // Share Type 2 == "Balance"
-                                // Share Type 3 == "Both"
-                                if (cpid_age < poll_duration) dmag = 0;
-                                if (stake_age < poll_duration) nBalance = 0;
-
-                                if ((dShareType == 1) && cpid_age < poll_duration)
-                                {
-                                    entry.push_back(Pair("Error","Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
-                                    results.push_back(entry);
-                                }
-                                else if (dShareType == 2 && stake_age < poll_duration)
-                                {
-                                    entry.push_back(Pair("Error","Sorry, When voting in a Balance poll, your stake age must be older than the poll duration."));
-                                    results.push_back(entry);
-                                }
-                                else if (dShareType == 3 && stake_age < poll_duration && cpid_age < poll_duration)
-                                {
-                                    entry.push_back(Pair("Error","Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration."));
-                                    results.push_back(entry);
-                                }
-                                else
-                                {
-                                    std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
-										+ GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
-										+ hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
-										+ "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
-									// Add the provable balance and the provable magnitude - this goes into effect July 1 2017
-									voter += GetProvableVotingWeightXML();
-									std::string pk = Title + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
-									std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
-									std::string result = AddContract("vote",pk,contract);
-									std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
-									entry.push_back(Pair("Success",narr + " " + "Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
-									results.push_back(entry);
-                                }
-                            }
-                        }
-                    }
-
-               }
-          }
-
-    }
-    else if (sItem == "votedetails")
-    {
-        if (params.size() != 2)
-        {
-            entry.push_back(Pair("Error","You must specify the Poll Title."));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string Title1 = params[1].get_str();
-
-            if (!PollExists(Title1))
-            {
-                entry.push_back(Pair("Error","Poll does not exist.  Please execute listpolls."));
-                results.push_back(entry);
-
-            }
-            else
-            {
-                std::string Title = params[1].get_str();
-                Array myVotes = GetJsonVoteDetailsReport(Title);
-                results.push_back(myVotes);
-            }
-        }
-    }
-    else if (sItem == "listpolls")
-    {
-            std::string out1;
-            Array myPolls = GetJSONPollsReport(false,"",out1,false);
-            results.push_back(myPolls);
-    }
-    else if (sItem == "listallpolls")
-    {
-            std::string out1;
-            Array myPolls = GetJSONPollsReport(false,"",out1,true);
-            results.push_back(myPolls);
-    }
-    else if (sItem == "listallpolldetails")
-    {
-            std::string out1;
-            Array myPolls = GetJSONPollsReport(true,"",out1,true);
-            results.push_back(myPolls);
-
-    }
-    else if (sItem=="listpolldetails")
-    {
-        std::string out1;
-        Array myPolls = GetJSONPollsReport(true,"",out1,false);
-        results.push_back(myPolls);
-    }
-    else if (sItem=="listpollresults")
-    {
-        bool bIncExpired = false;
-        if (params.size() == 3)
-        {
-            std::string include_expired = params[2].get_str();
-            if (include_expired=="true") bIncExpired=true;
-        }
-
-        if (params.size() != 2 && params.size() != 3)
-        {
-            entry.push_back(Pair("Error","You must specify the Poll Title.  Example: listpollresults pollname.  You may also specify execute listpollresults pollname true if you want to see expired polls."));
-            results.push_back(entry);
-        }
-        else
-        {
-            std::string Title1 = params[1].get_str();
-
-            if (!PollExists(Title1))
-            {
-                entry.push_back(Pair("Error","Poll does not exist.  Please execute listpolls."));
-                results.push_back(entry);
-
-            }
-            else
-            {
-                std::string Title = params[1].get_str();
-                std::string out1 = "";
-                Array myPolls = GetJSONPollsReport(true,Title,out1,bIncExpired);
-                results.push_back(myPolls);
+                    res.push_back(Pair("Success", narr + " " + "Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
+                }
             }
         }
     }
 
-    else if (sItem == "reindex")
-    {
-            int r = Restarter::CreateGridcoinRestorePoint();
-            Restarter::ReindexGridcoinWallet();
-            entry.push_back(Pair("Reindex Chain",r));
-            results.push_back(entry);
-    }
-    else if (sItem == "resetcpids")
-    {
-            //Reload the config file
-            ReadConfigFile(mapArgs, mapMultiArgs);
-            HarvestCPIDs(true);
-            GetNextProject(true);
-            entry.push_back(Pair("Reset",1));
-            results.push_back(entry);
-    }
-    else if (sItem == "help")
-    {
-        entry.push_back(Pair("execute addpoll <title> <days> <question> <answers> <sharetype> <url>", "Add a poll (Requires minimum 100000 GRC balance)"));
-        entry.push_back(Pair("execute advertisebeacon", "Advertise a beacon (Requires wallet to be fully unlocked)"));
-        entry.push_back(Pair("execute askforoutstandingblocks", "Asks nodes for outstanding blocks"));
-        entry.push_back(Pair("execute backupprivatekeys", "Backup private keys (Wallet must be fully unlocked"));
-        entry.push_back(Pair("execute beaconreport", "Displays information about current active beacons in the network"));
-        entry.push_back(Pair("execute beaconstatus", "Displays information about your beacon"));
-        entry.push_back(Pair("execute burn <burnaddress> <burnamount> <burnkey> <burndetail>", "Burn coins for contract"));
-        entry.push_back(Pair("execute cleanchain", "Cleans current chain and attempts to reorganize"));
-        entry.push_back(Pair("execute currentneuralhash", "Displays the popular hash in current neural report from all neural nodes"));
-        entry.push_back(Pair("execute currentneuralreport", "Displays all hashes staked recently by neural nodes"));
-        entry.push_back(Pair("execute debug <true/false>", "Turn on/off debug messages on the fly"));
-        entry.push_back(Pair("execute debug2 <true/false>", "Turn on/off debug2 messages on the fly"));
-        entry.push_back(Pair("execute debug3 <true/false>", "Turn on/off debug3 messages on the fly"));
-        entry.push_back(Pair("execute debug10 <true/false>", "Turn on/off debug10 messages on the fly"));
-        entry.push_back(Pair("execute debugnew <true/false>", "Turn on/off debugnet messages on the fly"));
-        entry.push_back(Pair("execute decryptphrase <phrase>", "Decrypt an encrypted phrase"));
-        //entry.push_back(Pair("execute downloadblocks", "Download blocks from blockchain"));
-        entry.push_back(Pair("execute dportally", "Tally magnitudes in superblock"));
-        entry.push_back(Pair("execute encrypt <phrase>", "Encrypt a wallet pass phrase (autounlock feature)"));
-        entry.push_back(Pair("execute encryptphrase <phrase>", "Encrypt a phrase or message"));
-        entry.push_back(Pair("execute listallpolldetails", "Displays all polls past and present with details"));
-        entry.push_back(Pair("execute listallpolls", "Displays all polls past and present"));
-        entry.push_back(Pair("execute listpolldetails", "Displays all active polls details"));
-        entry.push_back(Pair("execute listpollresults <title> <true>", "Displays poll results for specified title. True is optional for expired polls"));
-        entry.push_back(Pair("execute listpolls", "Displays all active polls"));
-        entry.push_back(Pair("execute myneuralhash", "Displays your current neural hash from contract"));
-        entry.push_back(Pair("execute neuralhash", "Displays the network popular hash in neural report (Participating nodes)"));
-        entry.push_back(Pair("execute neuralreport", "Displays information of recently staked neural votes by participating nodes"));
-        entry.push_back(Pair("execute neuralresponse", "Requests a response from neural network"));
-        entry.push_back(Pair("execute rain <raindata>", "Sends rain to specified users. Format Address<COL>Amount<ROW>..."));
-        entry.push_back(Pair("execute reindex", "Reindex blockchain"));
-        entry.push_back(Pair("execute resendwallettx", "Resends a wallet tx"));
-        entry.push_back(Pair("execute resetcpids", "Resets wallet cpids (can be used to correct cpids after a split cpid is fixed)"));
-        entry.push_back(Pair("execute restart", "Restarts wallet"));
-        entry.push_back(Pair("execute restorepoint", "Creates a restore point for wallet"));
-        entry.push_back(Pair("execute staketime", "Displays unix timestamp based on stake gric time and cpid time"));
-        entry.push_back(Pair("execute superblockage", "Displays information and age about current superblock"));
-        entry.push_back(Pair("execute syncdpor2", "Synchronize with neural network"));
-        entry.push_back(Pair("execute tally", "Tallys research averages"));
-        entry.push_back(Pair("execute tallyneural", "Tally neural quorum data"));
-        entry.push_back(Pair("execute unspentreport", "Displays unspent wallet information"));
-        entry.push_back(Pair("execute upgradedbeaconreport", "Displays information about upgraded beacons"));
-        entry.push_back(Pair("execute updatequorumdata", "Updates neural quorum data"));
-        entry.push_back(Pair("execute versionreport", "Displays information about client versions that staked the last 100 blocks"));
-        entry.push_back(Pair("execute vote <title> <answer>", "Casts a vote for a specific poll with chosen answer"));
-        entry.push_back(Pair("execute votedetails <title>", "Displays information on a specified poll's votes"));
-        results.push_back(entry);
-    }
-    else if (sItem == "helpdev")
-    {
-        entry.push_back(Pair("execute addkey <add_or_delete> <keytype> <projectname> <value>", "Add or delete key to network"));
-        entry.push_back(Pair("execute executecode", "Excute .net code"));
-        entry.push_back(Pair("execute forcequorum", "Force quorum"));
-        entry.push_back(Pair("execute gatherneuralhashes", "Gather neural hashes"));
-        entry.push_back(Pair("execute getlistof <keytype>", "Get list of keytype data"));
-        entry.push_back(Pair("execute listdata <keytype>", "List data in a keytype"));
-        entry.push_back(Pair("execute memorizekeys", "Memorize keys from admin messages"));
-        entry.push_back(Pair("execute readdata <key> <value>", "Display value from a keys data"));
-        entry.push_back(Pair("execute refhash <grcaddress>", "Check if a grc address is a neural node participant as well as you"));
-        entry.push_back(Pair("execute sendblock <hash>", "Send a block to network"));
-        entry.push_back(Pair("execute testnewcontract", "Test current neural contract"));
-        entry.push_back(Pair("execute writedata <key> <value>", "Write data to a key with value"));
-        results.push_back(entry);
-    }
-else
-    {
-            entry.push_back(Pair("Command " + sItem + " not found.",-1));
-            results.push_back(entry);
-    }
-    return results;
+    return res;
+}
 
+Value votedetails(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "votedetails <pollname>]n"
+                "\n"
+                "<pollname> Specified poll name\n"
+                "Displays vote details of a specified poll\n");
+
+    Object res;
+
+    std::string Title = params[0].get_str();
+
+    if (!PollExists(Title))
+        res.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+
+    else
+    {
+        Array myVotes = GetJsonVoteDetailsReport(Title);
+
+        res.push_back(myVotes);
+    }
+
+    return res;
+}
+
+Value execute(const Array& params, bool fHelp)
+{
+    throw runtime_error("execute function has been deprecated; run the command as previously done so but without execute\n");
 }
 >>>>>>> latest changes
 
@@ -4583,69 +4595,11 @@ std::string YesNo(bool f)
 {
     return f ? "Yes" : "No";
 }
-/*
+
 Value listitem(const Array& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 1 && params.size() != 2 && params.size() != 3 && params.size() != 4))
-        throw runtime_error(
-        "list <string::itemname>\n"
-        "Returns details of a given item by name.\n"
-        "list help\n"
-        "Displays help on various available list commands.\n");
-
-    std::string sitem = params[0].get_str();
-
-    std::string args = "";
-    if (params.size()==2)
-    {
-        args=params[1].get_str();
-    }
-
-
-    Array results;
-    Object e2;
-    e2.push_back(Pair("Command",sitem));
-    results.push_back(e2);
-    if (sitem == "networktime")
-    {
-            Object entry;
-            entry.push_back(Pair("Network Time",GetAdjustedTime()));
-            results.push_back(entry);
-    }
-    else if (sitem == "memorypool")
-    {
-        Object entry;
-        entry.push_back(Pair("Excluded Tx",msMiningErrorsExcluded));
-        entry.push_back(Pair("Included Tx",msMiningErrorsIncluded));
-        results.push_back(entry);
-    }
-    else if (sitem == "help")
-    {
-        Object entry;
-        entry.push_back(Pair("list cpids", "Displays information on cpids and the projects they are associated with"));
-        entry.push_back(Pair("list currenttime", "Displays current unix time as well as UTC time and date"));
-        entry.push_back(Pair("list explainmagnitude <true>", "Displays information about your magnitude from NN; Optional true to force response"));
-        entry.push_back(Pair("list lifetime", "Displays information on the life time of your cpid"));
-        entry.push_back(Pair("list magnitude <cpid>", "Displays information on magnitude. cpid is optional."));
-        entry.push_back(Pair("list memorypool", "Displays information currently on Txs in memory pool"));
-        entry.push_back(Pair("list network", "Displays detailed information on the network"));
-        entry.push_back(Pair("list projects", "Displays information on whitelisted projects on the network"));
-        entry.push_back(Pair("list rsa", "Displays information on your RSA/CPID history"));
-        entry.push_back(Pair("list rsaweight", "Displays information on RSA Weight"));
-        entry.push_back(Pair("list staking", "Displays information on your staking"));
-        entry.push_back(Pair("list superblocks", "Displays information on superblocks over last 14 days. cpid optional"));
-        entry.push_back(Pair("list validcpids", "Displays information on your valid cpid"));
-        results.push_back(entry);
-    }
-    else
-    {
-        throw runtime_error("Item invalid.");
-    }
-    return results;
-
+    throw runtime_error("list is deprecated; Please run the command the same as previously without list\n");
 }
-*/
-
 
 // ppcoin: get information of sync-checkpoint
 Value getcheckpoint(const Array& params, bool fHelp)
@@ -4656,6 +4610,9 @@ Value getcheckpoint(const Array& params, bool fHelp)
                 "Show info of synchronized checkpoint.\n");
 
     Object result;
+
+    LOCK(cs_main);
+
     const CBlockIndex* pindexCheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
     if(pindexCheckpoint != NULL)
     {

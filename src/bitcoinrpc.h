@@ -152,6 +152,10 @@ extern std::vector<unsigned char> ParseHexV(const json_spirit::Value& v, std::st
 
 // Rpc reordered by category
 
+// Deprecated
+extern json_spirit::Value listitem(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
+
 // Wallet
 extern json_spirit::Value addmultisigaddress(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value addredeemscript(const json_spirit::Array& params, bool fHelp);
@@ -228,6 +232,7 @@ extern json_spirit::Value neuralhash(const json_spirit::Array& params, bool fHel
 #endif
 extern json_spirit::Value neuralreport(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value proveownership(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value resetcpids(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value rsa(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value rsaweight(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value staketime(const json_spirit::Array& params, bool fHelp);
@@ -269,6 +274,7 @@ extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool 
 extern json_spirit::Value seefile(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert2(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value sendblock(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendrawcontract(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value superblockaverage(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value tally(const json_spirit::Array& params, bool fHelp);
@@ -296,29 +302,40 @@ extern json_spirit::Value getblock(const json_spirit::Array& params, bool fHelp)
 extern json_spirit::Value getblockbynumber(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getblockcount(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getblockhash(const json_spirit::Array& params, bool fHelp);
-
-
-extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp); // in rpcnet.cpp
-extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
-
-extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
-
-
-extern json_spirit::Value getinfo(const json_spirit::Array& params, bool fHelp);
-
-
-extern json_spirit::Value getdifficulty(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value getrawmempool(const json_spirit::Array& params, bool fHelp);
-
-
-
 extern json_spirit::Value getcheckpoint(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getconnectioncount(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getdifficulty(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getinfo(const json_spirit::Array& params, bool fHelp); // To Be Deprecated --> getblockchaininfo getnetworkinfo getwalletinfo
+extern json_spirit::Value getnettotals(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getpeerinfo(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value getrawmempool(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value listallpolls(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value listallpolldetails(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value listpolldetails(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value listpollresults(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value listpolls(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value memorypool(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value networktime(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value ping(const json_spirit::Array& params, bool fHelp);
+#ifdef WIN32
+extern json_spirit::Value reindex(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value restart(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value restorepoint(const json_spirit::Array& params, bool fHelp);
+#endif
+extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value vote(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value votedetails(const json_spirit::Array& params, bool fHelp);
+
+
+
+
+
+
+
+
 
 //Gridcoin RPC Commands:
-extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value listitem(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
+
 
 // Brod
 

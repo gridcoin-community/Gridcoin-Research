@@ -26,6 +26,7 @@ Value getconnectioncount(const Array& params, bool fHelp)
             "Returns the number of connections to other nodes.");
 
     LOCK(cs_vNodes);
+
     return (int)vNodes.size();
 }
 
@@ -283,6 +284,8 @@ Value getpeerinfo(const Array& params, bool fHelp)
         throw runtime_error(
             "getpeerinfo\n"
             "Returns data about each connected network node.");
+
+    LOCK(cs_vNodes);
 
     vector<CNodeStats> vstats;
     CopyNodeStats(vstats);

@@ -108,6 +108,9 @@ Value getinfo(const Array& params, bool fHelp)
     GetProxy(NET_IPV4, proxy);
 
     Object obj, diff;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     obj.push_back(Pair("version",       FormatFullVersion()));
     obj.push_back(Pair("minor_version", CLIENT_VERSION_MINOR));
 
