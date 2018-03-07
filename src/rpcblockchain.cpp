@@ -1391,11 +1391,7 @@ Value beaconreport(const Array& params, bool fHelp)
                 "\n"
                 "Displays list of valid beacons in the network\n");
 
-    Object res;
-
-    Array myBeaconJSONReport = GetJSONBeaconReport();
-
-    res.push_back(myBeaconJSONReport);
+    Array res = GetJSONBeaconReport();
 
     return res;
 }
@@ -1498,7 +1494,7 @@ Value cpids(const Array& params, bool fHelp)
     if (mvCPIDs.size() < 1)
         HarvestCPIDs(false);
 
-    printf ("generating cpid report %s\n",sitem.c_str());
+    printf ("generating cpid report\n");
 
     for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
     {
@@ -1552,11 +1548,7 @@ Value currentneuralreport(const Array& params, bool fHelp)
                 "\n"
                 "Displays information for the current neural hashes in network\n");
 
-    Object res;
-
-    Array myNeuralJSON = GetJSONCurrentNeuralNetworkReport();
-
-    res.push_back(myNeuralJSON);
+    Array res = GetJSONCurrentNeuralNetworkReport();
 
     return res;
 }
@@ -1603,8 +1595,6 @@ Value explainmagnitude(const Array& params, bool fHelp)
     else
         res.push_back(Pair("Neural Response", "false; Try again at a later time"));
 
-    res.push_back(entry);
-
     return res;
 }
 
@@ -1623,7 +1613,7 @@ Value lifetime(const Array& params, bool fHelp)
     std::string cpid = msPrimaryCPID;
     std::string Narr = ToString(GetAdjustedTime());
 
-    c.push_back(Pair("Lifetime Payments Report",Narr));
+    c.push_back(Pair("Lifetime Payments Report", Narr));
     results.push_back(c);
 
     CBlockIndex* pindex = pindexGenesisBlock;
@@ -1639,12 +1629,12 @@ Value lifetime(const Array& params, bool fHelp)
             break;
 
         if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
-            res.push_back(Pair(pindex->nHeight, RoundToString(pindex->nResearchSubsidy,2)));
+            res.push_back(Pair(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2)));
     }
     //8-14-2015
-    StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
+    StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
 
-    res.push_back(Pair("Average Magnitude",stCPID.ResearchAverageMagnitude));
+    res.push_back(Pair("Average Magnitude", stCPID.ResearchAverageMagnitude));
     results.push_back(res);
 
     return results;
@@ -1754,11 +1744,7 @@ Value neuralreport(const Array& params, bool fHelp)
                 "\n"
                 "Displays neural report for the network\n");
 
-    Object res;
-
-    Array myNeuralJSON = GetJSONNeuralNetworkReport();
-
-    res.push_back(myNeuralJSON);
+    Array res = GetJSONNeuralNetworkReport();
 
     return res;
 }
@@ -1831,7 +1817,7 @@ Value rsa(const Array& params, bool fHelp)
                 "\n"
                 "Displays RSA report for your CPID\n");
 
-    Object res;
+    Array res;
 
     if (msPrimaryCPID.empty() || msPrimaryCPID == "INVESTOR")
         throw runtime_error(
@@ -1905,7 +1891,7 @@ Value superblockage(const Array& params, bool fHelp)
     return res;
 }
 
-Value superblocks(const Array& params, fHelp)
+Value superblocks(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -1914,7 +1900,7 @@ Value superblocks(const Array& params, fHelp)
                 "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
                 "Display data on recent superblocks\n");
 
-    Object res;
+    Array res;
 
     std::string cpid = "";
 
@@ -1969,7 +1955,7 @@ Value validcpids(const Array& params, bool fHelp)
                 "\n"
                 "Displays information about valid CPIDs collected from BOINC\n");
 
-    Object res;
+    Array res;
 
     //Dump vectors:
     if (mvCPIDs.size() < 1)
@@ -2388,7 +2374,7 @@ Value network(const Array& params, bool fHelp)
                 "\n"
                 "Display information about the network health\n");
 
-    Object res;
+    Array res;
 
     for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii)
     {
@@ -2451,7 +2437,7 @@ Value projects(const Array& params, bool fHelp)
                 "\n"
                 "Displays information on projects in the network\n");
 
-    Object res;
+    Array res;
 
     for (const auto& item : ReadCacheSection("project"))
     {
@@ -2895,8 +2881,8 @@ Value addpoll(const Array& params, bool fHelp)
                 else
                 {
                     std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
-                    std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + days + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + sharetype + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                    std::string result = AddContract("poll",Title,contract);
+                    std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + RoundToString(days, 0) + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + ToString(sharetype) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
+                    std::string result = AddContract("poll", Title,contract);
 
                     res.push_back(Pair("Success", "Your poll has been added: " + result));
                 }
@@ -3060,7 +3046,7 @@ Value listpollresults(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Object res;
+    Array res;
     bool bIncExpired = false;
 
     if (params.size() == 2)
@@ -3070,11 +3056,11 @@ Value listpollresults(const Array& params, bool fHelp)
 
     if (!PollExists(Title1))
     {
-        res.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+        Object result;
 
-        return res
+        result.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+        res.push_back(result);
     }
-
     else
     {
         std::string Title = params[0].get_str();
@@ -3189,7 +3175,7 @@ Value restorepoint(const Array& params, bool fHelp)
 
 Value vote(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size != 2)
+    if (fHelp || params.size() != 2)
         throw runtime_error(
                 "vote <title> <answers>\n"
                 "\n"
@@ -3306,12 +3292,17 @@ Value votedetails(const Array& params, bool fHelp)
                 "<pollname> Specified poll name\n"
                 "Displays vote details of a specified poll\n");
 
-    Object res;
+    Array res;
 
     std::string Title = params[0].get_str();
 
     if (!PollExists(Title))
-        res.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+    {
+        Object results;
+
+        results.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+        res.push_back(results);
+    }
 
     else
     {
