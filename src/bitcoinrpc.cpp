@@ -366,6 +366,7 @@ static const CRPCCommand vRPCCommands[] =
     { "debug10",                 &debug10,                 true,   cat_developer     },
     { "debug2",                  &debug2,                  true,   cat_developer     },
     { "debug3",                  &debug3,                  true,   cat_developer     },
+    { "debug4",                  &debug4,                  true,   cat_developer     },
     { "debugnet",                &debugnet,                true,   cat_developer     },
     { "dportally",               &dportally,               false,  cat_developer     },
     { "forcequorom",             &forcequorom,             false,  cat_developer     },
@@ -532,6 +533,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "debug10"                && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "debug2"                 && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "debug3"                 && n > 0) ConvertTo<bool>(params[0]);
+    if (strMethod == "debug4"                 && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "debugnet"               && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "getblockstats"          && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "getblockstats"          && n > 1) ConvertTo<int64_t>(params[1]);

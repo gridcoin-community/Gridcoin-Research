@@ -252,6 +252,7 @@ extern json_spirit::Value debug(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value debug10(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value debug2(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value debug3(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value debug4(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value debugnet(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value dportally(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value forcequorom(const json_spirit::Array& params, bool fHelp);

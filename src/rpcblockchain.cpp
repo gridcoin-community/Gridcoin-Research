@@ -2156,6 +2156,23 @@ Value debug3(const Array& params, bool fHelp)
     return res;
 }
 
+Value debug4(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "debug4 <bool>\n"
+                "\n"
+                "<bool> -> Specify true or false\n"
+                "Enable or disable debug mode on the fly\n");
+
+    Object res;
+
+    fDebug4 = params[0].get_bool();
+
+    res.push_back(Pair("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode."));
+
+    return res;
+}
 Value debugnet(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
