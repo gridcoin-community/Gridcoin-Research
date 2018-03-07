@@ -1431,7 +1431,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 if (dFreeCount > GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
                     return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
                 if (fDebug)
-                    LogPrintf("mempool", "Rate limit dFreeCount: %g => %g\n", dFreeCount, dFreeCount+nSize);
+                    LogPrint("mempool", "Rate limit dFreeCount: %g => %g\n", dFreeCount, dFreeCount+nSize);
                 dFreeCount += nSize;
             }
         }
@@ -1462,7 +1462,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         LOCK(pool.cs);
         if (ptxOld)
         {
-            LogPrintf("mempool", "AcceptToMemoryPool : replacing tx %s with new version\n", ptxOld->GetHash().ToString());
+            LogPrint("mempool", "AcceptToMemoryPool : replacing tx %s with new version\n", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
         pool.addUnchecked(hash, tx);
@@ -1472,7 +1472,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // If updated, erase old tx from wallet
     if (ptxOld)
         EraseFromWallets(ptxOld->GetHash());
-    if (fDebug)     LogPrintf("mempool", "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")\n",           hash.ToString(), pool.mapTx.size());
+    if (fDebug)     LogPrint("mempool", "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")\n",           hash.ToString(), pool.mapTx.size());
     return true;
 }
 

@@ -81,12 +81,12 @@ void RPCTypeCheck(const Object& o,
     {
         const Value& v = find_value(o, t.first);
         if (!fAllowNull && v.type() == null_type)
-            throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Missing %s", t.first.c_str()));
+            throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Missing %s", t.first));
 
         if (!((v.type() == t.second) || (fAllowNull && (v.type() == null_type))))
         {
             string err = strprintf("Expected type %s for %s, got %s",
-                                   Value_type_name[t.second], t.first.c_str(), Value_type_name[v.type()]);
+                                   Value_type_name[t.second], t.first, Value_type_name[v.type()]);
             throw JSONRPCError(RPC_TYPE_ERROR, err);
         }
     }
@@ -181,7 +181,7 @@ string CRPCTable::help(string strCommand) const
         }
     }
     if (strRet == "")
-        strRet = strprintf("help: unknown command: %s\n", strCommand.c_str());
+        strRet = strprintf("help: unknown command: %s\n", strCommand);
     strRet = strRet.substr(0,strRet.size()-1);
     return strRet;
 }
@@ -209,7 +209,7 @@ Value stop(const Array& params, bool fHelp)
             "stop\n"
             "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
-    printf("Stopping...\n");
+    LogPrintf("Stopping...\n");
     StartShutdown();
     return "Gridcoin server stopping";
 }
@@ -396,11 +396,11 @@ static string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
             "%s",
         nStatus,
         cStatus,
-        rfc1123Time().c_str(),
+        rfc1123Time(),
         keepalive ? "keep-alive" : "close",
         strMsg.size(),
-        FormatFullVersion().c_str(),
-        strMsg.c_str());
+        FormatFullVersion(),
+        strMsg);
 }
 
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
@@ -663,10 +663,10 @@ void ServiceConnection(AcceptedConnection *conn);
 
 void StopRPCThreads()
 {
-    printf("Stop RPC IO service\n");
+    LogPrintf("Stop RPC IO service\n");
     if(!rpc_io_service)
     {
-        printf("RPC IO server not started\n");
+        LogPrintf("RPC IO server not started\n");
         return;
     }
 
@@ -688,10 +688,10 @@ void ThreadRPCServer(void* parg)
     }
     catch (boost::thread_interrupted&)
     {
-            printf("ThreadRPCServer exited (interrupt)\r\n");
+            LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
             return;
     }
-    printf("ThreadRPCServer exited\n");
+    LogPrintf("ThreadRPCServer exited\n");
 }
 
 // Forward declaration required for RPCListen
@@ -785,9 +785,9 @@ void ThreadRPCServer2(void* parg)
               "If the file does not exist, create it with owner-readable-only file permissions.\n"
               "It is also recommended to set alertnotify so you are notified of problems;\n"
               "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
-                strWhatAmI.c_str(),
-                GetConfigFile().string().c_str(),
-                EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32).c_str()),
+                strWhatAmI,
+                GetConfigFile().string(),
+                EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
             _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
@@ -806,12 +806,12 @@ void ThreadRPCServer2(void* parg)
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
         if (filesystem::exists(pathCertFile)) context.use_certificate_chain_file(pathCertFile.string());
-        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string().c_str());
+        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
         if (filesystem::exists(pathPKFile)) context.use_private_key_file(pathPKFile.string(), ssl::context::pem);
-        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string().c_str());
+        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
         SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
@@ -994,7 +994,7 @@ void ServiceConnection(AcceptedConnection *conn)
         }
         if (!HTTPAuthorized(mapHeaders))
         {
-            LogPrint("ThreadRPCServer incorrect password attempt from %s\n", conn->peer_address_to_string());
+            LogPrintf("ThreadRPCServer incorrect password attempt from %s\n", conn->peer_address_to_string());
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
@@ -1087,7 +1087,7 @@ Object CallRPC(const string& strMethod, const Array& params)
         throw runtime_error(strprintf(
             _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
               "If the file does not exist, create it with owner-readable-only file permissions."),
-                GetConfigFile().string().c_str()));
+                GetConfigFile().string()));
 
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");

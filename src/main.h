@@ -9,6 +9,7 @@
 #include "net.h"
 #include "script.h"
 #include "scrypt.h"
+#include "util.h"
 
 #include "global_objects_noui.hpp"
 
@@ -476,7 +477,7 @@ public:
 
     std::string ToStringShort() const
     {
-        return strprintf(" %s %d", prevout.hash.ToString().c_str(), prevout.n);
+        return strprintf(" %s %d", prevout.hash.ToString(), prevout.n);
     }
 
     std::string ToString() const
@@ -569,13 +570,13 @@ public:
 
     std::string ToStringShort() const
     {
-        return strprintf(" out %s %s", FormatMoney(nValue).c_str(), scriptPubKey.ToString(true).c_str());
+        return strprintf(" out %s %s", FormatMoney(nValue), scriptPubKey.ToString(true));
     }
 
     std::string ToString() const
     {
         if (IsEmpty()) return "CTxOut(empty)";
-        return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue).c_str(), scriptPubKey.ToString());
+        return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue), scriptPubKey.ToString());
     }
 
     void print() const
@@ -788,7 +789,7 @@ public:
     std::string ToStringShort() const
     {
         std::string str;
-        str += strprintf("%s %s", GetHash().ToString().c_str(), IsCoinBase()? "base" : (IsCoinStake()? "stake" : "user"));
+        str += strprintf("%s %s", GetHash().ToString(), IsCoinBase()? "base" : (IsCoinStake()? "stake" : "user"));
         return str;
     }
 
@@ -1115,7 +1116,7 @@ public:
         // Take last bit of block hash as entropy bit
         unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
         if (fDebug && GetBoolArg("-printstakemodifier"))
-            printf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString().c_str(), nEntropyBit);
+            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString(), nEntropyBit);
         return nEntropyBit;
     }
 
@@ -1258,7 +1259,7 @@ public:
             hashMerkleRoot.ToString(),
             nTime, nBits, nNonce,
             vtx.size(),
-            HexStr(vchBlockSig.begin(), vchBlockSig.end());
+            HexStr(vchBlockSig.begin(), vchBlockSig.end()));
         for (unsigned int i = 0; i < vtx.size(); i++)
         {
             LogPrintf("  ");
@@ -1266,7 +1267,7 @@ public:
         }
         LogPrintf("  vMerkleTree: ");
         for (unsigned int i = 0; i < vMerkleTree.size(); i++)
-            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10).c_str());
+            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10));
         LogPrintf("\n");
     }
 
@@ -1543,13 +1544,13 @@ public:
     {
         return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
-            FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
+            FormatMoney(nMint), FormatMoney(nMoneySupply),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
             nStakeModifier, nStakeModifierChecksum,
-            hashProof.ToString().c_str(),
-            prevoutStake.ToString().c_str(), nStakeTime,
-            hashMerkleRoot.ToString().c_str(),
-            GetBlockHash().ToString().c_str());
+            hashProof.ToString(),
+            prevoutStake.ToString(), nStakeTime,
+            hashMerkleRoot.ToString(),
+            GetBlockHash().ToString());
     }
 
     void print() const
@@ -1667,9 +1668,9 @@ public:
         std::string str = "CDiskBlockIndex(";
         str += CBlockIndex::ToString();
         str += strprintf("\n                hashBlock=%s, hashPrev=%s, hashNext=%s)",
-            GetBlockHash().ToString().c_str(),
-            hashPrev.ToString().c_str(),
-            hashNext.ToString().c_str());
+            GetBlockHash().ToString(),
+            hashPrev.ToString(),
+            hashNext.ToString());
         return str;
     }
 
