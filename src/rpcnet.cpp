@@ -497,7 +497,6 @@ Value getnetworkinfo(const Array& params, bool fHelp)
     res.push_back(Pair("mininput",        ValueFromAmount(nMinimumInputValue)));
     res.push_back(Pair("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string())));
     res.push_back(Pair("ip",              addrSeenByPeer.ToStringIP()));
-    res.push_back(Pair("localaddresses",  mapresults));
     res.push_back(Pair("errors",          GetWarnings("statusbar")));
 
     return res;

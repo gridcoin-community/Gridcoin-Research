@@ -365,11 +365,14 @@ Value showblock(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "showblock <index>\n"
-            "Returns all information about the block at <index>.");
+            "\n"
+            "<index> Block number\n"
+            "\n"
+            "Returns all information about the block at <index>");
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range.");
+        throw runtime_error("Block number out of range\n");
 
     LOCK(cs_main);
 
@@ -391,7 +394,8 @@ Value getbestblockhash(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getbestblockhash\n"
-            "Returns the hash of the best block in the longest block chain.\n");
+            "\n"
+            "Returns the hash of the best block in the longest block chain\n");
 
     LOCK(cs_main);
 
@@ -403,7 +407,8 @@ Value getblockcount(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getblockcount\n"
-            "Returns the number of blocks in the longest block chain.\n");
+            "\n"
+            "Returns the number of blocks in the longest block chain\n");
 
     LOCK(cs_main);
 
@@ -416,7 +421,8 @@ Value getdifficulty(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getdifficulty\n"
-            "Returns the difficulty as a multiple of the minimum difficulty.\n");
+            "\n"
+            "Returns the difficulty as a multiple of the minimum difficulty\n");
 
     LOCK(cs_main);
 
@@ -432,7 +438,10 @@ Value settxfee(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < MIN_TX_FEE)
         throw runtime_error(
             "settxfee <amount>\n"
-            "<amount> is a real and is rounded to the nearest 0.01\n");
+            "\n"
+            "<amount> is a real and is rounded to the nearest 0.01\n"
+            "\n"
+            "Sets the txfee for transactions\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -447,7 +456,8 @@ Value getrawmempool(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getrawmempool\n"
-            "Returns all transaction ids in memory pool.");
+            "\n"
+            "Returns all transaction ids in memory pool\n");
 
     vector<uint256> vtxid;
     mempool.queryHashes(vtxid);
@@ -464,7 +474,10 @@ Value getblockhash(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getblockhash <index>\n"
-            "Returns hash of block in best-block-chain at <index>.\n");
+            "\n"
+            "<index> Block number for requested hash\n"
+            "\n"
+            "Returns hash of block in best-block-chain at <index>\n");
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
@@ -481,9 +494,11 @@ Value getblock(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getblock <hash> [txinfo]\n"
-            "txinfo optional to print more detailed tx info\n"
-            "Returns details of a block with given block-hash.\n");
+            "getblock <hash> [bool:txinfo]\n"
+            "\n"
+            "[bool:txinfo] optional to print more detailed tx info\n"
+            "\n"
+            "Returns details of a block with given block-hash\n");
 
     std::string strHash = params[0].get_str();
     uint256 hash(strHash);
@@ -504,15 +519,17 @@ Value getblockbynumber(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getblockbynumber <number> [txinfo]\n"
-            "txinfo optional to print more detailed tx info\n"
-            "Returns details of a block with given block-number.\n");
+            "getblockbynumber <number> [bool:txinfo]\n"
+            "\n"
+            "[bool:txinfo] optional to print more detailed tx info\n"
+            "\n"
+            "Returns details of a block with given block-number\n");
 
     LOCK(cs_main);
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range.");
+        throw runtime_error("Block number out of range");
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hashBestChain];
@@ -1117,7 +1134,9 @@ Value burn2(const Array& params, bool fHelp)
                 "<burnaddress> -> Address where the coins will be burned\n"
                 "<burnamount>  -> Amount of coins to be burned\n"
                 "<burnaddress> -> Burn key to be used\n"
-                "<burndetails> -> Details of the burn\n");
+                "<burndetails> -> Details of the burn\n"
+                "\n"
+                "Burn coins on the network\n");
 
     Object res;
     std::string sAddress = params[0].get_str();
@@ -1129,30 +1148,30 @@ Value burn2(const Array& params, bool fHelp)
 
     if (!isValid)
     {
-        res.push_back(Pair("Error","Invalid GRC Burn Address."));
+        res.push_back(Pair("Error", "Invalid GRC Burn Address"));
 
         return res;
     }
 
     if (dAmount == 0 || dAmount < 0)
     {
-        res.push_back(Pair("Error","Burn amount must be > 0."));
+        res.push_back(Pair("Error", "Burn amount must be > 0"));
 
         return res;
     }
 
     if (sKey.empty() || sDetail.empty())
     {
-        res.push_back(Pair("Error","Burn Key and Burn Detail must be populated."));
+        res.push_back(Pair("Error", "Burn Key and Burn Detail must be populated"));
 
         return res;
     }
 
     std::string sContract = "<KEY>" + sKey + "</KEY><DETAIL>" + sDetail + "</DETAIL>";
 
-    std::string sResult = BurnCoinsWithNewContract(true,"burn",sKey,sContract,AmountFromValue(1),dAmount,"",sAddress);
+    std::string sResult = BurnCoinsWithNewContract(true, "burn", sKey, sContract, AmountFromValue(1), dAmount, "", sAddress);
 
-    res.push_back(Pair("Burn_Response",sResult));
+    res.push_back(Pair("Burn_Response", sResult));
 
     return res;
 }
@@ -1163,7 +1182,9 @@ Value encrypt(const Array& params, bool fHelp)
         throw runtime_error(
                 "encrypt <walletpassphrase>\n"
                 "\n"
-                "<walletpassphrase> -> The password of your encrypted wallet\n");
+                "<walletpassphrase> -> The password of your encrypted wallet\n"
+                "\n"
+                "Encrypts a walletpassphrase\n");
 
     Object res;
     //Encrypt a phrase
@@ -1182,7 +1203,9 @@ Value newburnaddress(const Array& params, bool fHelp)
         throw runtime_error(
                 "newburnaddress [burntemplate]\n"
                 "\n"
-                "[burntemplate] -> Allow a vanity burn address\n");
+                "[burntemplate] -> Allow a vanity burn address\n"
+                "\n"
+                "Creates a new burn address\n");
 
     Object res;
 
@@ -1238,7 +1261,9 @@ Value rain(const json_spirit::Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-                "rain Address<COL>Amount<ROW>...\n"
+                "rain [Array]\n"
+                "\n"
+                "[Array] -> Address<COL>Amount<ROW>...\n"
                 "\n"
                 "rains coins on the network\n");
 
@@ -1352,8 +1377,7 @@ Value advertisebeacon(const json_spirit::Array& params, bool fHelp)
         throw runtime_error(
                 "advertisebeacon\n"
                 "\n"
-                "Advertise a beacon\n"
-                "Requires wallet to be fully unlocked\n");
+                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
 
     Object res;
 
@@ -1401,7 +1425,8 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
         throw runtime_error(
                 "beaconstatus [cpid]\n"
                 "\n"
-                "[beacon]    -> Optional parameter of cpid\n"
+                "[cpid] -> Optional parameter of cpid\n"
+                "\n"
                 "Displays status of your beacon or specified beacon on the network\n");
 
     Object res;
@@ -1559,6 +1584,7 @@ Value explainmagnitude(const Array& params, bool fHelp)
                 "explainmagnitude [bool:force]\n"
                 "\n"
                 "[force] -> Optional: Force a response (excessive requests can result in temporary ban from neural reponses)\n"
+                "\n"
                 "Displays information for the current neural hashes in network\n");
 
     Object res;
@@ -1646,6 +1672,7 @@ Value magnitude(const json_spirit::Array& params, bool fHelp)
                 "magnitude <cpid>\n"
                 "\n"
                 "<cpid> -> Required to be used on mainnet\n"
+                "\n"
                 "Displays information for the magnitude of all cpids or specified in the network\n");
 
     Array results;
@@ -1897,6 +1924,7 @@ Value superblocks(const Array& params, bool fHelp)
                 "superblocks [cpid]\n"
                 "\n"
                 "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
+                "\n"
                 "Display data on recent superblocks\n");
 
     Array res;
@@ -2004,6 +2032,7 @@ Value addkey(const Array& params, bool fHelp)
                 "<keytype> --> Specify keytype ex: project\n"
                 "<keyname> --> Specify keyname ex: milky\n"
                 "<keyvalue> -> Specify keyvalue ex: 1\n"
+                "\n"
                 "Add a key to the network\n");
 
     Object res;
@@ -2090,6 +2119,7 @@ Value debug(const Array& params, bool fHelp)
                 "debug <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
+                "\n"
                 "Enable or disable debug mode on the fly\n");
 
     Object res;
@@ -2126,6 +2156,7 @@ Value debug2(const Array& params, bool fHelp)
                 "debug2 <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
+                "\n"
                 "Enable or disable debug mode on the fly\n");
 
     Object res;
@@ -2144,6 +2175,7 @@ Value debug3(const Array& params, bool fHelp)
                 "debug3 <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
+                "\n"
                 "Enable or disable debug mode on the fly\n");
 
     Object res;
@@ -2162,6 +2194,7 @@ Value debug4(const Array& params, bool fHelp)
                 "debug4 <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
+                "\n"
                 "Enable or disable debug mode on the fly\n");
 
     Object res;
@@ -2179,6 +2212,7 @@ Value debugnet(const Array& params, bool fHelp)
                 "debugnet <bool>\n"
                 "\n"
                 "<bool> -> Specify true or false\n"
+                "\n"
                 "Enable or disable debug mode on the fly\n");
 
     Object res;
@@ -2279,8 +2313,9 @@ Value genorgkey(const Array& params, bool fHelp)
         throw runtime_error(
                 "genorgkey <passphrase> <orgranization>\n"
                 "\n"
-                "<passphrase> -> Set passphrase to be used\n"
+                "<passphrase> ----> Set passphrase to be used\n"
                 "<orgranization> -> Set orgranization name to be used\n"
+                "\n"
                 "Generates an Org key\n");
 
     Object res;
@@ -2313,6 +2348,7 @@ Value getlistof(const Array& params, bool fHelp)
                 "getlistof <keytype>\n"
                 "\n"
                 "<keytype> -> key of requested data\n"
+                "\n"
                 "Displays data associated to a specified key type\n");
 
     Object res;
@@ -2349,6 +2385,7 @@ Value listdata(const Array& params, bool fHelp)
                 "listdata <keytype>\n"
                 "\n"
                 "<keytype> -> key in cache\n"
+                "\n"
                 "Displays data associated to a key stored in cache\n");
 
     Object res;
@@ -2507,6 +2544,7 @@ Value readdata(const Array& params, bool fHelp)
                 "readdata <key>\n"
                 "\n"
                 "<key> -> generic key\n"
+                "\n"
                 "Reads generic data from disk from a specified key\n");
 
     Object res;
@@ -2565,6 +2603,7 @@ Value refhash(const Array& params, bool fHelp)
                 "refhash <walletaddress>\n"
                 "\n"
                 "<walletaddress> -> GRC address to test against\n"
+                "\n"
                 "Tests to see if a GRC Address is a participant in neural network along with default wallet address\n");
 
     Object res;
@@ -2588,6 +2627,7 @@ Value sendblock(const Array& params, bool fHelp)
                 "sendblock <blockhash>\n"
                 "\n"
                 "<blockhash> Blockhash of block to send to network\n"
+                "\n"
                 "Sends a block to the network\n");
 
     Object res;
@@ -2608,6 +2648,7 @@ Value sendrawcontract(const Array& params, bool fHelp)
                 "sendrawcontract <contract>\n"
                 "\n"
                 "<contract> -> custom contract\n"
+                "\n"
                 "Send a raw contract in a transaction on the network\n");
 
     Object res;
@@ -2747,6 +2788,7 @@ Value testorgkey(const Array& params, bool fHelp)
                 "\n"
                 "<organization> -> Organization name\n"
                 "<publickey> ----> Public key for testing\n"
+                "\n"
                 "Test a orgkey created by genorgkey\n");
 
     Object res;
@@ -2817,6 +2859,7 @@ Value writedata(const Array& params, bool fHelp)
                 "\n"
                 "<key> ---> Key where value will be written\n"
                 "<value> -> Value to be written to specified key\n"
+                "\n"
                 "Writes a value to specified key\n");
 
     Object res;
@@ -2853,6 +2896,7 @@ Value addpoll(const Array& params, bool fHelp)
                 "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to seperate answers\n"
                 "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
                 "<url> -------> The corresponding url for the poll\n"
+                "\n"
                 "Add a poll to the network; Requires 100K GRC balance\n");
 
     Object res;
@@ -2973,6 +3017,7 @@ Value decryptphrase(const Array& params, bool fHelp)
                 "decryptphrase <phrase>\n"
                 "\n"
                 "<phrase> -> Encrypted phrase to decrypt\n"
+                "\n"
                 "Decrypts an encrypted phrase\n");
 
     Object res;
@@ -3014,6 +3059,7 @@ Value encryptphrase(const Array& params, bool fHelp)
                 "encryptphrase <phrase>\n"
                 "\n"
                 "<phrase> Phase you wish to encrypt\n"
+                "\n"
                 "Encrypt a phrase\n");
 
     Object res;
@@ -3083,6 +3129,7 @@ Value listpollresults(const Array& params, bool fHelp)
                 "\n"
                 "<pollname> ----> name of the poll\n"
                 "[showexpired] -> Optional; Default false\n"
+                "\n"
                 "Displays results for specified poll\n");
 
     LOCK(cs_main);
@@ -3222,6 +3269,7 @@ Value vote(const Array& params, bool fHelp)
                 "\n"
                 "<title -> Title of poll being voted on\n"
                 "<answers> -> Answers chosen for specified poll seperated by ;\n"
+                "\n"
                 "Vote on a specific poll with specified answers\n");
 
     Object res;
@@ -3331,6 +3379,7 @@ Value votedetails(const Array& params, bool fHelp)
                 "votedetails <pollname>]n"
                 "\n"
                 "<pollname> Specified poll name\n"
+                "\n"
                 "Displays vote details of a specified poll\n");
 
     Array res;

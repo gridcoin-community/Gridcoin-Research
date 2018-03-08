@@ -162,8 +162,17 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         if (strMethod.find("label") != string::npos)
             continue;
         // Refactored rules for supporting of subcategories
+        if (pcmd->category == cat_null)
+            continue;
+
+        if (strCommand.empty() && pcmd->category != category)
+            continue;
+
+        if (!strCommand.empty() && pcmd->category != category)
+            continue;
+/*
         if (       strCommand.empty()
-                && (   (pcmd->category != cat_null && pcmd->category != category)
+                && (   (pcmd->category == cat_null && pcmd->category != category)
                     || (category != cat_null && strMethod == "help")
                    )
            )
@@ -174,6 +183,7 @@ string CRPCTable::help(string strCommand, rpccategory category) const
                    )
            )
             continue;
+*/
         try
         {
             Array params;

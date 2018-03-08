@@ -107,8 +107,12 @@ Value importprivkey(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
-        "importprivkey <gridcoinprivkey> [label] [rescan=true]\n"
-            "Adds a private key (as returned by dumpprivkey) to your wallet.\n");
+        "importprivkey <gridcoinprivkey> [label] [bool:rescan]\n"
+        "\n"
+        "[label] -----> Label for imported address\n"
+        "[bool:rescan] -> Optional; Default true\n"
+        "\n"
+        "Adds a private key (as returned by dumpprivkey) to your wallet\n");
 
     string strSecret = params[0].get_str();
     string strLabel = "";
@@ -165,7 +169,10 @@ Value importwallet(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "importwallet <filename>\n"
-            "Imports keys from a wallet dump file (see dumpwallet).\n");
+            "\n"
+            "<filename> -> filename of the wallet to import\n"
+            "\n"
+            "Imports keys from a wallet dump file (see dumpwallet)\n");
 
     ifstream file;
     file.open(params[0].get_str().c_str());
@@ -255,7 +262,9 @@ Value dumpprivkey(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "dumpprivkey <gridcoinaddress>\n"
-            "Reveals the private key corresponding to <gridcoinaddress>.");
+            "<gridcoinaddress> -> Address of requested key\n"
+            "\n"
+            "Reveals the private key corresponding to <gridcoinaddress>");
 
     EnsureWalletIsUnlocked();
 
@@ -283,7 +292,9 @@ Value dumpwallet(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "dumpwallet <filename>\n"
-            "Dumps all wallet keys in a human-readable format.\n");
+            "<filename> -> filename to dump wallet to\n"
+            "\n"
+            "Dumps all wallet keys in a human-readable format\n");
 
     EnsureWalletIsUnlocked();
 
