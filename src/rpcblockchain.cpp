@@ -3357,7 +3357,7 @@ Value votedetails(const Array& params, bool fHelp)
 
 Value execute(const Array& params, bool fHelp)
 {
-    throw runtime_error("execute function has been deprecated; run the command as previously done so but without execute\n");
+    throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
 }
 >>>>>>> latest changes
 
@@ -4630,7 +4630,7 @@ std::string YesNo(bool f)
 
 Value listitem(const Array& params, bool fHelp)
 {
-    throw runtime_error("list is deprecated; Please run the command the same as previously without list\n");
+    throw JSONRPCError(RPC_DEPRECATED, "list is deprecated; Please run the command the same as previously without list");
 }
 
 // ppcoin: get information of sync-checkpoint
