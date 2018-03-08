@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
         guiref = &window;
 
 		QTimer *timer = new QTimer(guiref);
-		LogPrintf("\r\nStarting Gridcoin\r\n");
+		LogPrintf("\nStarting Gridcoin\n");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
 
@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-			LogPrintf("\r\nbitcoin.cpp:main calling Shutdown...\r\n");
+			LogPrintf("\nbitcoin.cpp:main calling Shutdown...\n");
             Shutdown(NULL);
         }
 
@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
     // use exit codes to trigger restart of the wallet
     if(currentExitCode == EXIT_CODE_REBOOT)
     {
-        LogPrintf("Restarting wallet...\r\n");
+        LogPrintf("Restarting wallet...\n");
         QStringList args = QApplication::arguments();
         args.removeFirst();
         QProcess::startDetached(QApplication::applicationFilePath(), args);

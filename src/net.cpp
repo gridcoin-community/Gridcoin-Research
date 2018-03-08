@@ -917,14 +917,14 @@ void ThreadSocketHandler(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadSocketHandler exited (interrupt)\r\n");
+        LogPrintf("ThreadSocketHandler exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         throw; // support pthread_cancel()
     }
-    LogPrintf("ThreadSocketHandler exited\r\n");
+    LogPrintf("ThreadSocketHandler exited\n");
 }
 
 void ThreadSocketHandler2(void* parg)
@@ -1104,7 +1104,7 @@ void ThreadSocketHandler2(void* parg)
             else if (nInbound >= GetArg("-maxconnections", 250) - MAX_OUTBOUND_CONNECTIONS)
             {
                 if (fDebug10)
-                    LogPrintf("\r\n Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
+                    LogPrintf("\n Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
@@ -1222,7 +1222,7 @@ void ThreadSocketHandler2(void* parg)
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     if (fDebug10)
-                        LogPrintf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. \r\n", NodeAddress(pnode), vNodes.size());
+                        LogPrintf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. \n", NodeAddress(pnode), vNodes.size());
                     pnode->fDisconnect = true;
             }
 
@@ -1275,14 +1275,14 @@ void ThreadMapPort(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadMapPort exited (interrupt)\r\n");
+        LogPrintf("ThreadMapPort exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         PrintException(NULL, "ThreadMapPort()");
     }
-    LogPrintf("ThreadMapPort exited\r\n");
+    LogPrintf("ThreadMapPort exited\n");
 }
 
 void ThreadMapPort2(void* parg)
@@ -1328,7 +1328,7 @@ void ThreadMapPort2(void* parg)
                     AddLocal(CNetAddr(externalIPAddress), LOCAL_UPNP);
                 }
                 else
-                    LogPrintf("UPnP: GetExternalIPAddress not successful.\r\n");
+                    LogPrintf("UPnP: GetExternalIPAddress not successful.\n");
             }
         }
 
@@ -1399,7 +1399,7 @@ void MapPort()
     if (fUseUPnP && !netThreads->threadExists("ThreadMapPort"))
     {
         if (!netThreads->createThread(ThreadMapPort,NULL,"ThreadMapPort"))
-            LogPrintf("Error: createThread(ThreadMapPort) failed\r\n");
+            LogPrintf("Error: createThread(ThreadMapPort) failed\n");
     }
 }
 #else
@@ -1438,14 +1438,14 @@ void ThreadDNSAddressSeed(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        if (fDebug10) LogPrintf("ThreadDNSAddressSeed exited (interrupt)\r\n");
+        if (fDebug10) LogPrintf("ThreadDNSAddressSeed exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         throw; // support pthread_cancel()
     }
-    if (fDebug10) LogPrintf("ThreadDNSAddressSeed exited\r\n");
+    if (fDebug10) LogPrintf("ThreadDNSAddressSeed exited\n");
 }
 
 void ThreadDNSAddressSeed2(void* parg)
@@ -1535,14 +1535,14 @@ void ThreadDumpAddress(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadDumpAddress exited (interrupt)\r\n");
+        LogPrintf("ThreadDumpAddress exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         PrintException(NULL, "ThreadDumpAddress");
     }
-    LogPrintf("ThreadDumpAddress exited\r\n");
+    LogPrintf("ThreadDumpAddress exited\n");
 }
 
 void ThreadOpenConnections(void* parg)
@@ -1560,14 +1560,14 @@ void ThreadOpenConnections(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadOpenConnections exited (interrupt)\r\n");
+        LogPrintf("ThreadOpenConnections exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         PrintException(NULL, "ThreadOpenConnections()");
     }
-    LogPrintf("ThreadOpenConnections exited\r\n");
+    LogPrintf("ThreadOpenConnections exited\n");
 }
 
 void static ProcessOneShot()
@@ -1603,14 +1603,14 @@ void static ThreadStakeMiner(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadStakeMiner exited (interrupt)\r\n");
+        LogPrintf("ThreadStakeMiner exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         PrintException(NULL, "ThreadStakeMiner()");
     }
-    LogPrintf("ThreadStakeMiner exited\r\n");
+    LogPrintf("ThreadStakeMiner exited\n");
 }
 
 
@@ -1767,14 +1767,14 @@ void ThreadOpenAddedConnections(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadOpenAddedConnections exited (interrupt)\r\n");
+        LogPrintf("ThreadOpenAddedConnections exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         PrintException(NULL, "ThreadOpenAddedConnections()");
     }
-    LogPrintf("ThreadOpenAddedConnections exited\r\n");
+    LogPrintf("ThreadOpenAddedConnections exited\n");
 }
 
 void ThreadOpenAddedConnections2(void* parg)
@@ -1889,14 +1889,14 @@ void ThreadMessageHandler(void* parg)
     }
     catch(boost::thread_interrupted&)
     {
-        LogPrintf("ThreadMessageHandler exited (interrupt)\r\n");
+        LogPrintf("ThreadMessageHandler exited (interrupt)\n");
         return;
     }
     catch (...)
     {
         PrintException(NULL, "ThreadMessageHandler()");
     }
-    LogPrintf("ThreadMessageHandler exited\r\n");
+    LogPrintf("ThreadMessageHandler exited\n");
 }
 
 void ThreadMessageHandler2(void* parg)
@@ -2142,7 +2142,7 @@ void StartNode(void* parg)
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    LogPrintf("\r\nUsing %i OutboundConnections with a MaxConnections of %" PRId64 "\r\n", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
+    LogPrintf("\nUsing %i OutboundConnections with a MaxConnections of %" PRId64 "\n", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));
@@ -2154,10 +2154,10 @@ void StartNode(void* parg)
     //
 
     if (!GetBoolArg("-dnsseed", true))
-        LogPrintf("DNS seeding disabled\r\n");
+        LogPrintf("DNS seeding disabled\n");
     else
         if (!netThreads->createThread(ThreadDNSAddressSeed,NULL,"ThreadDNSAddressSeed"))
-            LogPrintf("Error: createThread(ThreadDNSAddressSeed) failed\r\n");
+            LogPrintf("Error: createThread(ThreadDNSAddressSeed) failed\n");
 
     // Map ports with UPnP
     if (fUseUPnP)
@@ -2165,15 +2165,15 @@ void StartNode(void* parg)
 
     // Send and receive from sockets, accept connections
     if (!netThreads->createThread(ThreadSocketHandler,NULL,"ThreadSocketHandler"))
-        LogPrintf("Error: createThread(ThreadSocketHandler) failed\r\n");
+        LogPrintf("Error: createThread(ThreadSocketHandler) failed\n");
 
     // Initiate outbound connections from -addnode
     if (!netThreads->createThread(ThreadOpenAddedConnections,NULL,"ThreadOpenAddedConnections"))
-        LogPrintf("Error: createThread(ThreadOpenAddedConnections) failed\r\n");
+        LogPrintf("Error: createThread(ThreadOpenAddedConnections) failed\n");
 
     // Initiate outbound connections
     if (!netThreads->createThread(ThreadOpenConnections,NULL,"ThreadOpenConnections"))
-        LogPrintf("Error: createThread(ThreadOpenConnections) failed\r\n");
+        LogPrintf("Error: createThread(ThreadOpenConnections) failed\n");
 
     // Process messages
     if (!netThreads->createThread(ThreadMessageHandler,NULL,"ThreadMessageHandler"))
@@ -2181,14 +2181,14 @@ void StartNode(void* parg)
 
     // Dump network addresses
     if (!netThreads->createThread(ThreadDumpAddress,NULL,"ThreadDumpAddress"))
-        LogPrintf("Error: createThread(ThreadDumpAddress) failed\r\n");
+        LogPrintf("Error: createThread(ThreadDumpAddress) failed\n");
 
     // Mine proof-of-stake blocks in the background
     if (!GetBoolArg("-staking", true))
-        LogPrintf("Staking disabled\r\n");
+        LogPrintf("Staking disabled\n");
     else
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
-            LogPrintf("Error: createThread(ThreadStakeMiner) failed\r\n");
+            LogPrintf("Error: createThread(ThreadStakeMiner) failed\n");
 }
 
 bool StopNode()

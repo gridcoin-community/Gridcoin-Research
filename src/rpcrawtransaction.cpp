@@ -420,7 +420,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
     /*
         if (tx.hashBoinc=="code")
         {
-            LogPrintf("Executing .net code\r\n");
+            LogPrintf("Executing .net code\n");
             ExecuteCode();
         }
     */

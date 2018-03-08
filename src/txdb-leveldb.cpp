@@ -57,7 +57,7 @@ void init_blockindex(leveldb::Options& options, bool fRemoveOld = false) {
     }
 
     filesystem::create_directory(directory);
-    LogPrintf("Opening LevelDB in %s\n", directory.string());
+    LogPrintf("Opening LevelDB in %s", directory.string());
     leveldb::Status status = leveldb::DB::Open(options, directory.string(), &txdb);
     if (!status.ok()) {
         throw runtime_error(strprintf("init_blockindex(): error opening database environment %s", status.ToString()));
@@ -89,11 +89,11 @@ CTxDB::CTxDB(const char* pszMode)
     if (Exists(string("version")))
     {
         ReadVersion(nVersion);
-        LogPrintf("Transaction index version is %d\n", nVersion);
+        LogPrintf("Transaction index version is %d", nVersion);
 
         if (nVersion < DATABASE_VERSION)
         {
-            LogPrintf("Required index version is %d, removing old database\n", DATABASE_VERSION);
+            LogPrintf("Required index version is %d, removing old database", DATABASE_VERSION);
 
             // Leveldb instance destruction
             delete txdb;
@@ -335,7 +335,7 @@ bool CTxDB::LoadBlockIndex()
     int nLoaded = 0;
 
     // Now read each entry.
-    LogPrintf("Loading DiskIndex %d\n",nHighest);
+    LogPrintf("Loading DiskIndex %d",nHighest);
     while (iterator->Valid())
     {
         // Unpack keys and values.
@@ -409,7 +409,7 @@ bool CTxDB::LoadBlockIndex()
     delete iterator;
 
 
-    LogPrintf("Time to memorize diskindex containing %i blocks : %15" PRId64 "ms\r\n", nBlockCount, GetTimeMillis() - nStart);
+    LogPrintf("Time to memorize diskindex containing %i blocks : %15" PRId64 "ms", nBlockCount, GetTimeMillis() - nStart);
     nStart = GetTimeMillis();
 
 
@@ -436,7 +436,7 @@ bool CTxDB::LoadBlockIndex()
     }
 
 
-    LogPrintf("Time to calculate Chain Trust %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    LogPrintf("Time to calculate Chain Trust %15" PRId64 "ms", GetTimeMillis() - nStart);
     nStart = GetTimeMillis();
 
 
@@ -453,7 +453,7 @@ bool CTxDB::LoadBlockIndex()
     nBestHeight = pindexBest->nHeight;
     nBestChainTrust = pindexBest->nChainTrust;
 
-    LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s\n",
+    LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s",
       hashBestChain.ToString().substr(0,20), nBestHeight, CBigNum(nBestChainTrust).ToString(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 
@@ -471,7 +471,7 @@ bool CTxDB::LoadBlockIndex()
         nCheckDepth = 1000000000; // suffices until the year 19000
     if (nCheckDepth > nBestHeight)
         nCheckDepth = nBestHeight;
-    LogPrintf("Verifying last %i blocks at level %i\n", nCheckDepth, nCheckLevel);
+    LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
     CBlockIndex* pindexFork = NULL;
     map<pair<unsigned int, unsigned int>, CBlockIndex*> mapBlockPos;
     for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
@@ -595,7 +595,7 @@ bool CTxDB::LoadBlockIndex()
 
 
 
-    LogPrintf("Time to Verify Blocks %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    LogPrintf("Time to Verify Blocks %15" PRId64 "ms", GetTimeMillis() - nStart);
 
     if (pindexFork && !fRequestShutdown)
     {
@@ -666,7 +666,7 @@ bool CTxDB::LoadBlockIndex()
         }
     }
 
-    LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    LogPrintf("RA Complete - RA Time %15" PRId64 "ms", GetTimeMillis() - nStart);
 
     return true;
 }

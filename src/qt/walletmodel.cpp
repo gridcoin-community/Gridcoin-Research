@@ -230,7 +230,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         int64_t nFeeRequired = 0;
 		if (!msAttachmentGuid.empty())
 		{
-				printf("Adding attachment to tx %s",wtx.hashBoinc.c_str());
+				LogPrintf("Adding attachment to tx %s",wtx.hashBoinc);
 				wtx.hashBoinc += "<ATTACHMENT><TXID>" + wtx.GetHash().ToString() + "</TXID><ATTACHMENTGUID>" + msAttachmentGuid + "</ATTACHMENTGUID></ATTACHMENT>";
 		}
 		wtx.hashBoinc += messages;

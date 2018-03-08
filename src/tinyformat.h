@@ -670,8 +670,10 @@ inline const char* FormatIterator::streamStateFromFormat(std::ostream& out,
                                                          int variableWidth,
                                                          int variablePrecision)
 {
+    //std::cout << "Terrible error" << extraFlags << fmtStart << variableWidth << variablePrecision;
     if(*fmtStart != '%')
     {
+        //std::cout << "Terrible error" << extraFlags << fmtStart << variableWidth << variablePrecision;
         TINYFORMAT_ERROR("tinyformat: Not enough conversion specifiers in format string");
         return fmtStart;
     }

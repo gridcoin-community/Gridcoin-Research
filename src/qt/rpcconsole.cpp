@@ -183,7 +183,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (json_spirit::Object& objError)
     {
-		printf("gridcoinresearch:  Handling Error [Request %s]...\r\n",command.toStdString().c_str());
+		LogPrintf("gridcoinresearch:  Handling Error [Request %s]...\n",command.toStdString());
 
         try // Nice formatting for standard-format error
         {
@@ -198,7 +198,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (std::exception& e)
     {
-		printf("gridcoinresearch:  Handling Error[2]...\r\n");
+		LogPrintf("gridcoinresearch:  Handling Error[2]...\n");
 
         emit reply(RPCConsole::CMD_ERROR, QString("Error: ") + QString::fromStdString(e.what()));
     }

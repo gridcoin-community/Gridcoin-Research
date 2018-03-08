@@ -470,7 +470,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     }
     BalanceToStake -= nReserveBalance;
 
-    if(fDebug2) LogPrintf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u\n",
+    if(fDebug2) LogPrintf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
 
     for(const auto& pcoin : CoinsToStake)
@@ -642,10 +642,10 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
             return false;
         }
         BoincData.BoincSignature = sBoincSignature;
-        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\r\n", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
+        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\n", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
-    //if (fDebug2)  LogPrintf("SignStakeBlock: %s\r\n",SerializedBoincData.c_str());
+    //if (fDebug2)  LogPrintf("SignStakeBlock: %s\n",SerializedBoincData.c_str());
 
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -779,7 +779,7 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     double PORDiff = GetBlockDifficulty(blocknew.nBits);
     double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
 
-    LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f \r\n",
+    LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f \n",
         miningcpid.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 
     //INVESTORS

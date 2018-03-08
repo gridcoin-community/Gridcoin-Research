@@ -571,7 +571,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 
         if (wtxIn.IsCoinBase() || wtxIn.IsCoinStake())
         {
-            if (fDebug10) LogPrintf("\r\nCoinBase:CoinStake\r\n");
+            if (fDebug10) LogPrintf("\nCoinBase:CoinStake\n");
             CBlockIndex* pBlk = mapBlockIndex[wtxIn.hashBlock];
             CBlock blk;
             bool r = blk.ReadFromDisk(pBlk);
@@ -594,7 +594,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                         if (IsLockTimeWithinMinutes(wtxIn.nTime, GetAdjustedTime(), 10))
                         {
                             std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
-                            LogPrintf("\r\nIssuing Reward Share of %f GRC to %s. Response: %s\r\n",dRewardShare,sRewardAddress, sResult);
+                            LogPrintf("\nIssuing Reward Share of %f GRC to %s. Response: %s\n",dRewardShare,sRewardAddress, sResult);
                         }
                     }
                 }
@@ -602,7 +602,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         }
         else
         {
-            // LogPrintf("\r\nNot CoinBase Or CoinStake\r\n");
+            // LogPrintf("\nNot CoinBase Or CoinStake\n");
         }
 
         if (!strCmd.empty())
@@ -2497,7 +2497,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             CKeyID keyID;
             if (!address.GetKeyID(keyID))
             {
-                LogPrintf("GetAllPrivateKeys: During private key backup, Address %s does not refer to a key\r\n", address.ToString());
+                LogPrintf("GetAllPrivateKeys: During private key backup, Address %s does not refer to a key\n", address.ToString());
             }
             else
             {
@@ -2505,7 +2505,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
-                    LogPrintf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\r\n", address.ToString());
+                    LogPrintf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\n", address.ToString());
                 }
                 else
                 {
@@ -2530,7 +2530,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
 
         if (!HaveKey(keyID))
         {
-            LogPrintf("GetAllPrivateKeys: Unknown key in key pool\r\n");
+            LogPrintf("GetAllPrivateKeys: Unknown key in key pool\n");
         }
         else
         {
@@ -2539,7 +2539,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
             {
-                LogPrintf("GetAllPrivateKeys: During Private Key Backup, Private key for address %s is not known\r\n", keyID.ToString());
+                LogPrintf("GetAllPrivateKeys: During Private Key Backup, Private key for address %s is not known\n", keyID.ToString());
             }
             else
             {

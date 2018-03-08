@@ -789,7 +789,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 

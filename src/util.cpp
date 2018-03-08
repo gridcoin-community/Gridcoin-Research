@@ -1129,7 +1129,7 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        // LogPrintf("Checking for %s \r\n", (boost::filesystem::current_path() / list[i]).c_str());
+        // LogPrintf("Checking for %s \n", (boost::filesystem::current_path() / list[i]).c_str());
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             return boost::filesystem::current_path();
@@ -1613,7 +1613,7 @@ void ThreadHandler::removeByName(const std::string tname)
 
 void ThreadHandler::removeAll()
 {
-    LogPrintf("Wait for %d threads to join.\n",numThreads());
+    LogPrintf("Wait for %d threads to join.",numThreads());
     threadGroup.join_all();
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {

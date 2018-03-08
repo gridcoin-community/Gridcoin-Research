@@ -60,7 +60,7 @@ bool ShutdownRequested()
 void StartShutdown()
 {
 
-    LogPrintf("Calling start shutdown...\r\n");
+    LogPrintf("Calling start shutdown...\n");
 
 #ifdef QT_GUI
     // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
@@ -91,7 +91,7 @@ void Shutdown(void* parg)
     static bool fExit;
     if (fFirstThread)
     {
-         LogPrintf("gridcoinresearch exiting...\r\n");
+         LogPrintf("gridcoinresearch exiting...\n");
 
         fShutdown = true;
         bitdb.Flush(false);
@@ -331,7 +331,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (IsConfigFileEmpty())
     {
            uiInterface.ThreadSafeMessageBox(
-                 "Configuration file empty.  \r\n" + _("Please wait for new user wizard to start..."), "", 0);
+                 "Configuration file empty.  \n" + _("Please wait for new user wizard to start..."), "", 0);
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
@@ -341,9 +341,9 @@ bool AppInit2(ThreadHandlerPtr threads)
           << BOOST_VERSION / 100000     << "."  // major version
           << BOOST_VERSION / 100 % 1000 << "."  // minior version
           << BOOST_VERSION % 100                // patch level
-          << "\r\n";
+          << "\n";
 
-    LogPrintf("\r\nBoost Version: %s",s.str());
+    LogPrintf("\nBoost Version: %s",s.str());
 
     //Placeholder: Load Remote CPIDs Here
 
@@ -409,7 +409,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug", "false")=="true")
     {
             fDebug = true;
-            LogPrintf("Entering debug mode.\r\n");
+            LogPrintf("Entering debug mode.\n");
     }
 
     fDebug2 = false;
@@ -417,14 +417,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug2", "false")=="true")
     {
             fDebug2 = true;
-            LogPrintf("Entering GRC debug mode 2.\r\n");
+            LogPrintf("Entering GRC debug mode 2.\n");
     }
 
     fDebug3 = false;
     if (GetArg("-debug3", "false")=="true")
     {
             fDebug3 = true;
-            LogPrintf("Entering GRC debug mode 3.\r\n");
+            LogPrintf("Entering GRC debug mode 3.\n");
     }
     fDebug10= (GetArg("-debug10","false")=="true");
 
@@ -520,14 +520,14 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     ShrinkDebugFile();
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("***************************************** GRIDCOIN RESEARCH ***************************************************\r\n");
+    LogPrintf("***************************************** GRIDCOIN RESEARCH ***************************************************\n");
 
-    LogPrintf("Gridcoin version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
-    LogPrintf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
+    LogPrintf("Gridcoin version %s (%s)", FormatFullVersion(), CLIENT_DATE);
+    LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
-        LogPrintf("Startup time: %s\n", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
-    LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
-    LogPrintf("Used data directory %s\n", strDataDir);
+        LogPrintf("Startup time: %s", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
+    LogPrintf("Default data directory %s", GetDefaultDataDir().string());
+    LogPrintf("Used data directory %s", strDataDir);
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;
@@ -535,7 +535,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         fDevbuildCripple = true;
         LogPrintf("WARNING: Running development version outside of testnet!\n"
-               "Staking and sending transactions will be disabled.\n");
+               "Staking and sending transactions will be disabled.");
         if( (GetArg("-devbuild", "") == "override") && fDebug )
             fDevbuildCripple = false;
     }
@@ -873,7 +873,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogPrintf("Invalid or missing peers.dat; recreating\n");
     }
 
-    LogPrintf("Loaded %i addresses from peers.dat  %" PRId64 "ms\n",  addrman.size(), GetTimeMillis() - nStart);
+    LogPrintf("Loaded %i addresses from peers.dat  %" PRId64 "ms",  addrman.size(), GetTimeMillis() - nStart);
 
 
     // ********************************************************* Step 11: start node
@@ -899,11 +899,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     //// debug print
     if (fDebug)
     {
-        LogPrintf("mapBlockIndex.size() = %" PRIszu "\n",   mapBlockIndex.size());
-        LogPrintf("nBestHeight = %d\n",            nBestHeight);
-        LogPrintf("setKeyPool.size() = %" PRIszu "\n",      pwalletMain->setKeyPool.size());
-        LogPrintf("mapWallet.size() = %" PRIszu "\n",       pwalletMain->mapWallet.size());
-        LogPrintf("mapAddressBook.size() = %" PRIszu "\n",  pwalletMain->mapAddressBook.size());
+        LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
+        LogPrintf("nBestHeight = %d",            nBestHeight);
+        LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
+        LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());
+        LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
     }
 
 

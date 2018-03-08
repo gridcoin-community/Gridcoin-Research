@@ -679,7 +679,7 @@ void GetSuperblockProjectCount(std::string data, double& out_project_count, doub
        std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
        double avg_of_projects = GetAverageInList(avgs, out_project_count);
        out_whitelist_count = GetCountOf("project");
-	   if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  \r\n",(double)out_project_count,(double)out_whitelist_count);
+	   if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  \n",(double)out_project_count,(double)out_whitelist_count);
 }
 
 
@@ -703,7 +703,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (avg_of_projects   < 050000)  return -3;
 		// Note bIgnoreBeacons is passed in when the chain is syncing from 0 (this is because the lists of beacons and projects are not full at that point)
         if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
-		if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f \r\n",(double)avg_count,(double)out_project_count,(double)nHeight);
+		if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f \n",(double)avg_count,(double)out_project_count,(double)nHeight);
 		if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }
@@ -775,7 +775,7 @@ bool TallyMagnitudesInSuperblock()
     network.NetworkMagnitude = TotalNetworkMagnitude;
     network.NetworkAvgMagnitude = NetworkAvgMagnitude;
     if (fDebug)
-            LogPrintf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s\n", TotalNetworkEntries, ReadCache("superblock","block_number").value);
+            LogPrintf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s", TotalNetworkEntries, ReadCache("superblock","block_number").value);
 
     double TotalProjects = 0;
     double TotalRAC = 0;
@@ -906,7 +906,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             std::string GRCAddress = DefaultWalletAddress();
             // Public Signing Key is stored in Beacon
             std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
-            LogPrintf("\r\n Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
+            LogPrintf("\n Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
             std::string sBase = EncodeBase64(contract);
             std::string sAction = "add";
             std::string sType = "beacon";
@@ -963,7 +963,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      params.push_back(arg5);
      params.push_back(arg6);
 
-     LogPrintf("Executing method %s\r\n",method);
+     LogPrintf("Executing method %s\n",method);
      Value vResult;
      try
      {
@@ -971,7 +971,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      }
      catch (std::exception& e)
      {
-         LogPrintf("Std exception %s \r\n",method);
+         LogPrintf("Std exception %s \n",method);
 
          std::string caught = e.what();
          return "Exception " + caught;
@@ -979,7 +979,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      }
      catch (...)
      {
-            LogPrintf("Generic exception (Please try unlocking the wallet) %s \r\n",method);
+            LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
             return "Generic Exception (Please try unlocking the wallet).";
      }
      std::string sResult = "";
@@ -998,7 +998,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      params.push_back(arg4);
      params.push_back(arg5);
 
-     LogPrintf("Executing method %s\r\n",method);
+     LogPrintf("Executing method %s\n",method);
      Value vResult;
      try
      {
@@ -1006,7 +1006,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      }
      catch (std::exception& e)
      {
-         LogPrintf("Std exception %s \r\n",method);
+         LogPrintf("Std exception %s \n",method);
 
          std::string caught = e.what();
          return "Exception " + caught;
@@ -1014,7 +1014,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      }
      catch (...)
      {
-            LogPrintf("Generic exception (Please try unlocking the wallet) %s \r\n",method);
+            LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
             return "Generic Exception (Please try unlocking the wallet).";
      }
      std::string sResult = "";
@@ -1030,7 +1030,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      params.push_back(method);
      params.push_back(arg1);
      params.push_back(arg2);
-     LogPrintf("Executing method %s\r\n",method);
+     LogPrintf("Executing method %s\n",method);
      Value vResult;
      try
      {
@@ -1038,7 +1038,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      }
      catch (std::exception& e)
      {
-         LogPrintf("Std exception %s \r\n",method);
+         LogPrintf("Std exception %s \n",method);
 
          std::string caught = e.what();
          return "Exception " + caught;
@@ -1046,7 +1046,7 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      }
      catch (...)
      {
-            LogPrintf("Generic exception (Please try unlocking the wallet). %s \r\n",method);
+            LogPrintf("Generic exception (Please try unlocking the wallet). %s \n",method);
             return "Generic Exception (Please try unlocking the wallet).";
      }
      std::string sResult = "";
@@ -1068,7 +1068,7 @@ Value execute(const Array& params, bool fHelp)
 {
     if (fHelp || (params.size() != 1 && params.size() != 2  && params.size() != 3 && params.size() != 4 && params.size() != 5 && params.size() != 6 && params.size() != 7))
         throw runtime_error(
-        "execute <string::itemname> <string::parameter> \r\n"
+        "execute <string::itemname> <string::parameter> \n"
         "Executes an arbitrary command by name.\n"
         "execute help\n"
         "Displays help on various available execute commands.\n");
@@ -1718,7 +1718,7 @@ Value execute(const Array& params, bool fHelp)
                                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress,mvMagnitudes);
 
 
-                                LogPrintf("CPIDAge %f,StakeAge %f,Poll Duration %f \r\n",cpid_age,stake_age,poll_duration);
+                                LogPrintf("CPIDAge %f,StakeAge %f,Poll Duration %f \n",cpid_age,stake_age,poll_duration);
 
                                 double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title,"<SHARETYPE>","</SHARETYPE>"),0);
 
@@ -2008,7 +2008,7 @@ Value execute(const Array& params, bool fHelp)
 
         //block version not needed for keys for now
         std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
-        if (fDebug3) LogPrintf("GenBoincKey: Utilizing email %s with %s for  %s \r\n",GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, sParam);
+        if (fDebug3) LogPrintf("GenBoincKey: Utilizing email %s with %s for  %s \n",GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, sParam);
         std::string sBase = EncodeBase64(sParam);
         entry.push_back(Pair("[Specify in config file without quotes] boinckey=",sBase));
         results.push_back(entry);
@@ -2593,7 +2593,7 @@ Array MagnitudeReport(std::string cpid)
             }
             catch(...)
             {
-                LogPrintf("\r\nError in Magnitude Report \r\n ");
+                LogPrintf("\nError in Magnitude Report \n ");
                 return results;
             }
 
@@ -2932,7 +2932,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
 	double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
 	double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
 
-	if (fDebug10) LogPrintf(" \r\n Total Voted Balance %f, Legacy Balance %f \r\n",(float)dTotalVotedBalance,(float)dLegacyBalance);
+	if (fDebug10) LogPrintf(" \n Total Voted Balance %f, Legacy Balance %f \n",(float)dTotalVotedBalance,(float)dLegacyBalance);
 
 	if (!bCreatedAfterSecurityUpgrade) return dLegacyBalance;
 
@@ -3461,7 +3461,7 @@ Array GetJSONNeuralNetworkReport()
       Array results;
       //Returns a report of the networks neural hashes in order of popularity
       std::string neural_hash = "";
-      std::string report = "Neural_hash, Popularity\r\n";
+      std::string report = "Neural_hash, Popularity\n";
       std::string row = "";
       double pct = 0;
       Object entry;
@@ -3477,7 +3477,7 @@ Array GetJSONNeuralNetworkReport()
                 if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
                 {
                     row = neural_hash + "," + RoundToString(popularity,0);
-                    report += row + "\r\n";
+                    report += row + "\n";
                     pct = (((double)popularity)/(votes+.01))*100;
                     entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
                 }
@@ -3514,7 +3514,7 @@ Array GetJSONCurrentNeuralNetworkReport()
       Array results;
       //Returns a report of the networks neural hashes in order of popularity
       std::string neural_hash = "";
-      std::string report = "Neural_hash, Popularity\r\n";
+      std::string report = "Neural_hash, Popularity\n";
       std::string row = "";
       double pct = 0;
       Object entry;
@@ -3530,7 +3530,7 @@ Array GetJSONCurrentNeuralNetworkReport()
                 if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
                 {
                     row = neural_hash + "," + RoundToString(popularity,0);
-                    report += row + "\r\n";
+                    report += row + "\n";
                     pct = (((double)popularity)/(votes+.01))*100;
                     entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
                 }
@@ -3567,7 +3567,7 @@ Array GetJSONVersionReport()
       Array results;
       //Returns a report of the GRC Version staking blocks over the last 100 blocks
       std::string neural_ver = "";
-      std::string report = "Version, Popularity\r\n";
+      std::string report = "Version, Popularity\n";
       std::string row = "";
       double pct = 0;
       Object entry;
@@ -3585,7 +3585,7 @@ Array GetJSONVersionReport()
                 if (popularity > 0)
                 {
                     row = neural_ver + "," + RoundToString(popularity,0);
-                    report += row + "\r\n";
+                    report += row + "\n";
                     pct = popularity/(votes+.01)*100;
                     entry.push_back(Pair(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
                 }

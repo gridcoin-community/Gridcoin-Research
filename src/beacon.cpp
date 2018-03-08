@@ -42,7 +42,7 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
         fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
         if (fResult)
         {
-            LogPrintf("\r\nGenerateNewKeyPair::Current keypair is valid.\r\n");
+            LogPrintf("\nGenerateNewKeyPair::Current keypair is valid.\n");
             return false;
         }
     }
@@ -118,7 +118,7 @@ int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
     int64_t iLocktime = entry.timestamp;
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
     if (fDebug10)
-        LogPrintf("\r\n Beacon %s, Weight %" PRId64 ", Locktime %" PRId64 "\r\n",sBeacon, iRSAWeight, iLocktime);
+        LogPrintf("\n Beacon %s, Weight %" PRId64 ", Locktime %" PRId64 "\n",sBeacon, iRSAWeight, iLocktime);
     if (bZeroOutAfterPOR && iRSAWeight==0)
         iLocktime = 0;
     return iLocktime;

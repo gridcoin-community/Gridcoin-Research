@@ -91,11 +91,11 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
                     #else
                         filesystem::copy_file(WalletSource, WalletTarget);
                     #endif
-                    LogPrintf("BackupWallet: Copied wallet.dat to %s\r\n", WalletTarget.string());
+                    LogPrintf("BackupWallet: Copied wallet.dat to %s\n", WalletTarget.string());
                     return true;
                 }
                 catch(const filesystem::filesystem_error &e) {
-                    LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\r\n", WalletTarget.string(), e.what());
+                    LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\n", WalletTarget.string(), e.what());
                     return false;
                 }
             }
@@ -127,7 +127,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
         }
         myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
     }
-    LogPrintf("BackupPrivateKeys: Backup made to %s\r\n", PrivateKeysTarget.string());
+    LogPrintf("BackupPrivateKeys: Backup made to %s\n", PrivateKeysTarget.string());
     myBackup.close();
     return true;
 }
