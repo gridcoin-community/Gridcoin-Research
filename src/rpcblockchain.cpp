@@ -1089,8 +1089,7 @@ Value backupprivatekeys(const Array& params, bool fHelp)
         throw runtime_error(
                 "backupprivatekeys\n"
                 "\n"
-                "Backup wallet private keys to file\n"
-                "Wallet must be fully unlocked!\n");
+                "Backup wallet private keys to file (Wallet must be fully unlocked!)\n");
 
     string sErrors;
     string sTarget;

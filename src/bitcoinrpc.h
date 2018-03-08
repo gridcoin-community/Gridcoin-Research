@@ -330,20 +330,4 @@ extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value vote(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value votedetails(const json_spirit::Array& params, bool fHelp);
 
-
-
-
-
-
-
-
-
-//Gridcoin RPC Commands:
-
-
-// Brod
-
-// iFoggz
-//extern json_spirit::Value blockchain(const json_spirit::Array& params, bool fHelp);
-
 #endif
