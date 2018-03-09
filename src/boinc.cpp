@@ -39,7 +39,7 @@ std::string GetBoincDataDir(){
             if (boost::filesystem::exists(path)){
                 return path;
             } else {
-                printf("Cannot find BOINC data dir %s.\n", path.c_str());
+                LogPrintf("Cannot find BOINC data dir %s.\n", path);
             }
         }
         RegCloseKey(hKey);
@@ -65,6 +65,6 @@ std::string GetBoincDataDir(){
     }
     #endif
 
-    printf("ERROR: Cannot find BOINC data dir\n");
+    LogPrintf("ERROR: Cannot find BOINC data dir\n");
     return "";
 }

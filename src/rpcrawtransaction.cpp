@@ -420,7 +420,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
     /*
         if (tx.hashBoinc=="code")
         {
-            printf("Executing .net code\r\n");
+            LogPrintf("Executing .net code\n");
             ExecuteCode();
         }
     */
@@ -658,7 +658,7 @@ Value createrawtransaction(const Array& params, bool fHelp)
     set<CBitcoinAddress> setAddress;
     for (auto const& s : sendTo)
     {
-         if (s.name_ == "data") 
+         if (s.name_ == "data")
          {
             std::vector<unsigned char> data = ParseHexV(s.value_,"Data");
             CTxOut out(0, CScript() << OP_RETURN << data);

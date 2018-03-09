@@ -284,7 +284,7 @@ int CreateRestorePoint()
 
 int DownloadBlocks()
 {
-    printf("Download blocks.");
+    LogPrintf("Download blocks.");
 
     // Instantiate globalcom if not created.
     if (!bGlobalcomInitialized)
@@ -382,11 +382,11 @@ void qtSyncWithDPORNodes(std::string data)
         if (!bGlobalcomInitialized) return;
         int result = 0;
         QString qsData = ToQstring(data);
-        if (fDebug3) printf("FullSyncWDporNodes");
+        if (fDebug3) LogPrintf("FullSyncWDporNodes");
         std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
         double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
         result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-        printf("Done syncing. %f %f\r\n",function_call,(double)result);
+        LogPrintf("Done syncing. %f %f\n",function_call,(double)result);
     #endif
 }
 
@@ -407,7 +407,7 @@ std::string qtGetNeuralContract(std::string data)
     {
         if (!bGlobalcomInitialized) return "NA";
         QString qsData = ToQstring(data);
-        //if (fDebug3) printf("GNC# ");
+        //if (fDebug3) LogPrintf("GNC# ");
         QString sResult = globalcom->dynamicCall("GetNeuralContract()").toString();
         std::string result = FromQString(sResult);
         return result;
@@ -455,7 +455,7 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
         std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
         QString qsSession = ToQstring(session);
         result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
-        printf("rs%f",(double)result);
+        LogPrintf("rs%f",(double)result);
     #endif
 }
 
@@ -490,7 +490,7 @@ int64_t IsNeural()
     }
     catch(...)
     {
-        printf("Exception\r\n");
+        LogPrintf("Exception\n");
         return 0;
     }
 }
@@ -502,7 +502,7 @@ int UpgradeClient()
     if (!bGlobalcomInitialized)
         return 0;
 
-    printf("Executing upgrade");
+    LogPrintf("Executing upgrade");
 
 #ifdef WIN32
     globalcom->dynamicCall(fTestNet
@@ -1252,7 +1252,7 @@ void BitcoinGUI::NewUserWizard()
         std::string sBoincNarr = "";
         if (sout == "-1")
         {
-            printf("Boinc not installed in default location! \r\n");
+            LogPrintf("Boinc not installed in default location! \n");
             //BoincInstalled=false;
             std::string nicePath = GetBoincDataDir();
             sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
@@ -1267,7 +1267,7 @@ void BitcoinGUI::NewUserWizard()
         {
             std::string new_email = tostdstring(boincemail);
             boost::to_lower(new_email);
-            printf("User entered %s \r\n",new_email.c_str());
+            LogPrintf("User entered %s \n",new_email);
             //Create Config File
             CreateNewConfigFile(new_email);
             QString strMessage = tr("Created new Configuration File Successfully. ");
@@ -1340,13 +1340,13 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
 
 void BitcoinGUI::rebuildClicked()
 {
-    printf("Rebuilding...");
+    LogPrintf("Rebuilding...");
     ReindexWallet();
 }
 
 void BitcoinGUI::upgradeClicked()
 {
-    printf("Upgrading Gridcoin...");
+    LogPrintf("Upgrading Gridcoin...");
     UpgradeClient();
 }
 
@@ -1751,15 +1751,15 @@ void ReinstantiateGlobalcom()
     // Note, on Windows, if the performance counters are corrupted, rebuild them
     // by going to an elevated command prompt and issue the command: lodctr /r
     // (to rebuild the performance counters in the registry)
-    printf("Instantiating globalcom for Windows %f",(double)0);
+    LogPrintf("Instantiating globalcom for Windows %f",(double)0);
     try
     {
         globalcom = new QAxObject("BoincStake.Utilization");
-        printf("Instantiated globalcom for Windows");
+        LogPrintf("Instantiated globalcom for Windows");
     }
     catch(...)
     {
-        printf("Failed to instantiate globalcom.");
+        LogPrintf("Failed to instantiate globalcom.");
     }
 
     bGlobalcomInitialized = true;
@@ -1771,7 +1771,7 @@ void BitcoinGUI::timerfire()
     try
     {
         if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-        {            
+        {
             ReinstantiateGlobalcom();
             nRegVersion=9999;
 
@@ -1827,7 +1827,7 @@ void BitcoinGUI::timerfire()
                         else if (RPCCommand == "addattachment")
                         {
                             msAttachmentGuid = Argument1;
-                            printf("\r\n attachment added %s \r\n",msAttachmentGuid.c_str());
+                            LogPrintf("\n attachment added %s \n",msAttachmentGuid);
                         }
 
                     }
@@ -1851,7 +1851,7 @@ void BitcoinGUI::timerfire()
     }
     catch(std::runtime_error &e)
     {
-            printf("GENERAL RUNTIME ERROR!");
+            LogPrintf("GENERAL RUNTIME ERROR!");
     }
 
 
@@ -1910,7 +1910,7 @@ void BitcoinGUI::updateStakingIcon()
 
     if (staking)
     {
-        if (fDebug10) printf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \r\n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
+        if (fDebug10) LogPrintf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")

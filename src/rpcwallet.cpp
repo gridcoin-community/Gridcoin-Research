@@ -884,11 +884,11 @@ Value addmultisigaddress(const Array& params, bool fHelp)
             CKeyID keyID;
             if (!address.GetKeyID(keyID))
                 throw runtime_error(
-                    strprintf("%s does not refer to a key",ks.c_str()));
+                    strprintf("%s does not refer to a key",ks));
             CPubKey vchPubKey;
             if (!pwalletMain->GetPubKey(keyID, vchPubKey))
                 throw runtime_error(
-                    strprintf("no full public key for address %s",ks.c_str()));
+                    strprintf("no full public key for address %s",ks));
             if (!vchPubKey.IsValid() || !pubkeys[i].SetPubKey(vchPubKey))
                 throw runtime_error(" Invalid public key: "+ks);
         }
@@ -1033,7 +1033,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
         std::string sKey = "";
         std::string sContract = "";
         std::string sDetail = "";
-        
+
         int nConf = std::numeric_limits<int>::max();
         bool fIsWatchonly = false;
         if (it != mapTally.end())
@@ -1181,7 +1181,7 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
     bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
-   
+
     // R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
     // Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
 
@@ -1612,7 +1612,7 @@ Value listsinceblock(const Array& params, bool fHelp)
     ret.push_back(Pair("lastblock", lastblock.GetHex()));
 
     return ret;
-    
+
 }
 
 Value gettransaction(const Array& params, bool fHelp)

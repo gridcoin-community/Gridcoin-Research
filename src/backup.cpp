@@ -52,12 +52,12 @@ bool BackupConfigFile(const std::string& strDest)
         #else
             filesystem::copy_file(ConfigSource, ConfigTarget);
         #endif
-        printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
+        LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string());
         return true;
     }
     catch(const filesystem::filesystem_error &e)
     {
-        printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
+        LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string(), e.what());
         return false;
     }
     return false;
@@ -91,11 +91,11 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
                     #else
                         filesystem::copy_file(WalletSource, WalletTarget);
                     #endif
-                    printf("BackupWallet: Copied wallet.dat to %s\r\n", WalletTarget.string().c_str());
+                    LogPrintf("BackupWallet: Copied wallet.dat to %s\n", WalletTarget.string());
                     return true;
                 }
                 catch(const filesystem::filesystem_error &e) {
-                    printf("BackupWallet: Error copying wallet.dat to %s - %s\r\n", WalletTarget.string().c_str(), e.what());
+                    LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\n", WalletTarget.string(), e.what());
                     return false;
                 }
             }
@@ -127,7 +127,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
         }
         myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
     }
-    printf("BackupPrivateKeys: Backup made to %s\r\n", PrivateKeysTarget.string().c_str());
+    LogPrintf("BackupPrivateKeys: Backup made to %s\n", PrivateKeysTarget.string());
     myBackup.close();
     return true;
 }
