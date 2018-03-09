@@ -233,9 +233,9 @@ void CDBEnv::CheckpointLSN(std::string strFile)
     //dbenv.lsn_reset(strFile.c_str(), 0);
 }
 
-void CDBEnv::lsn_reset(std::string strFile)
+void CDBEnv::lsn_reset(const std::string& strFile)
 {
-dbenv.lsn_reset(strFile.c_str(),0);
+    dbenv.lsn_reset(strFile.c_str(),0);
 }                                                                                                                                                    
 
 CDB::CDB(const char *pszFile, const char* pszMode) :
