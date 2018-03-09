@@ -1665,7 +1665,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>Durum:</translation>
     </message>
     <message>
         <location line="+223"/>
@@ -1711,7 +1711,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
-        <translation>eşleşme dışı</translation>
+        <translation>Eşleşme Dışı</translation>
     </message>
 </context>
 <context>
@@ -3491,7 +3491,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Send trace/debug info to debugger</source>
-        <translation>Hata ayıklayıcıya takip etme/hata ayıklama bilgisi gönder</translation>
+        <translation>Hata ayıklayıcıya hata ayıklama bilgisi gönder</translation>
     </message>
     <message>
         <location line="+3"/>
