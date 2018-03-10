@@ -4497,10 +4497,7 @@ void GridcoinServices()
 
     //Backup the wallet once per 900 blocks or as specified in config:
     int nWBI = GetArg("-walletbackupinterval", 900);
-    if (nWBI == 0)
-        nWBI = 900;
-
-   if (TimerMain("backupwallet", nWBI))
+    if (nWBI && TimerMain("backupwallet", nWBI))
     {
         bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
         bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
