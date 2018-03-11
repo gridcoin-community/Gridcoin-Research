@@ -23,7 +23,8 @@ Value getconnectioncount(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getconnectioncount\n"
-            "Returns the number of connections to other nodes.");
+            "\n"
+            "Returns the number of connections to other node\n.");
 
     LOCK(cs_vNodes);
 
@@ -91,10 +92,11 @@ Value addnode(const Array& params, bool fHelp)
     if (params.size() == 2)
         strCommand = params[1].get_str();
     if (fHelp || params.size() != 2 ||
-        (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
+            (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
         throw runtime_error(
-            "addnode <node> <add|remove|onetry>\n"
-            "Attempts add or remove <node> from the addnode list or try a connection to <node> once.\n");
+                "addnode <node> <add|remove|onetry>\n"
+                "\n"
+                "Attempts add or remove <node> from the addnode list or try a connection to <node> once\n");
 
     string strNode = params[0].get_str();
 
@@ -131,11 +133,12 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getaddednodeinfo <dns> [node]\n"
-            "Returns information about the given added node, or all added nodes\n"
-            "(note that onetry addnodes are not listed here)\n"
-            "If dns is false, only a list of added nodes will be provided,\n"
-            "otherwise connected information will also be available.");
+                "getaddednodeinfo <dns> [node]\n"
+                "\n"
+                "Returns information about the given added node, or all added nodes\n"
+                "(note that onetry addnodes are not listed here)\n"
+                "If dns is false, only a list of added nodes will be provided,\n"
+                "otherwise connected information will also be available\n");
 
     bool fDns = params[0].get_bool();
 
@@ -245,16 +248,15 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
     return true;
 }
 
-
-
 Value ping(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "ping\n"
-            "Requests that a ping be sent to all other nodes, to measure ping time.\n"
-            "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
-            "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping.");
+                "ping\n"
+                "\n"
+                "Requests that a ping be sent to all other nodes, to measure ping time.\n"
+                "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
+                "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping\n");
 
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
@@ -282,8 +284,9 @@ Value getpeerinfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getpeerinfo\n"
-            "Returns data about each connected network node.");
+                "getpeerinfo\n"
+                "\n"
+                "Returns data about each connected network node.");
 
     LOCK(cs_vNodes);
 
@@ -329,15 +332,14 @@ Value getpeerinfo(const Array& params, bool fHelp)
     return ret;
 }
 
-
-
 Value getnettotals(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "getnettotals\n"
-            "Returns information about network traffic, including bytes in, bytes out,\n"
-            "and current time.");
+                "getnettotals\n"
+                "\n"
+                "Returns information about network traffic, including bytes in, bytes out,\n"
+                "and current time\n");
 
     Object obj;
     obj.push_back(Pair("totalbytesrecv", CNode::GetTotalBytesRecv()));
@@ -357,14 +359,16 @@ Value sendalert(const Array& params, bool fHelp)
     if (fHelp || params.size() < 6)
         throw runtime_error(
             "sendalert <message> <privatekey> <minver> <maxver> <priority> <id> [cancelupto]\n"
-            "<message> is the alert text message\n"
-            "<privatekey> is hex string of alert master private key\n"
-            "<minver> is the minimum applicable internal client version\n"
-            "<maxver> is the maximum applicable internal client version\n"
-            "<priority> is integer priority number\n"
-            "<id> is the alert id\n"
-            "[cancelupto] cancels all alert id's up to this number\n"
-            "Returns true or false.");
+            "\n"
+            "<message> ----> is the alert text message\n"
+            "<privatekey> -> is hex string of alert master private key\n"
+            "<minver> -----> is the minimum applicable internal client version\n"
+            "<maxver> -----> is the maximum applicable internal client version\n"
+            "<priority> ---> is integer priority number\n"
+            "<id> ---------> is the alert id\n"
+            "[cancelupto] -> cancels all alert id's up to this number\n"
+            "\n"
+            "Returns true or false\n");
 
     CAlert alert;
     CKey key;
@@ -417,13 +421,15 @@ Value sendalert2(const Array& params, bool fHelp)
         throw runtime_error(
             //          0            1    2            3            4        5          6
             "sendalert <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
-            "<message> is the alert text message\n"
-            "<privatekey> is hex string of alert master private key\n"
-            "<subverlist> comma separated list of versions warning applies to\n"
-            "<priority> integer, >1000->visible\n"
-            "<id> is the unique alert number\n"
-            "<cancellist> comma separated ids of alerts to cancel\n"
-            "<expire> alert expiration in days\n"
+            "\n"
+            "<message> ---->is the alert text message\n"
+            "<privatekey> -> is hex string of alert master private key\n"
+            "<subverlist> -> comma separated list of versions warning applies to\n"
+            "<priority> ---> integer, >1000->visible\n"
+            "<id> ---------> is the unique alert number\n"
+            "<cancellist> -> comma separated ids of alerts to cancel\n"
+            "<expire> -----> alert expiration in days\n"
+            "\n"
             "Returns true or false.");
 
     CAlert alert;
@@ -471,7 +477,6 @@ Value sendalert2(const Array& params, bool fHelp)
     result.push_back(Pair("Success", true));
     return result;
 }
-
 
 Value getnetworkinfo(const Array& params, bool fHelp)
 {

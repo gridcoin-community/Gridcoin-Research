@@ -170,20 +170,6 @@ string CRPCTable::help(string strCommand, rpccategory category) const
 
         if (!strCommand.empty() && pcmd->category != category)
             continue;
-/*
-        if (       strCommand.empty()
-                && (   (pcmd->category == cat_null && pcmd->category != category)
-                    || (category != cat_null && strMethod == "help")
-                   )
-           )
-            continue;
-        if (       !strCommand.empty()
-                && (    pcmd->category == cat_null
-                    ||  strMethod != strCommand
-                   )
-           )
-            continue;
-*/
         try
         {
             Array params;

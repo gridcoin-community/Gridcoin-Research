@@ -109,7 +109,7 @@ Value importprivkey(const Array& params, bool fHelp)
         throw runtime_error(
         "importprivkey <gridcoinprivkey> [label] [bool:rescan]\n"
         "\n"
-        "[label] -----> Label for imported address\n"
+        "[label] -------> Optional; Label for imported address\n"
         "[bool:rescan] -> Optional; Default true\n"
         "\n"
         "Adds a private key (as returned by dumpprivkey) to your wallet\n");
@@ -264,7 +264,7 @@ Value dumpprivkey(const Array& params, bool fHelp)
             "dumpprivkey <gridcoinaddress>\n"
             "<gridcoinaddress> -> Address of requested key\n"
             "\n"
-            "Reveals the private key corresponding to <gridcoinaddress>");
+            "Reveals the private key corresponding to <gridcoinaddress>\n");
 
     EnsureWalletIsUnlocked();
 
@@ -292,6 +292,7 @@ Value dumpwallet(const Array& params, bool fHelp)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "dumpwallet <filename>\n"
+            "\n"
             "<filename> -> filename to dump wallet to\n"
             "\n"
             "Dumps all wallet keys in a human-readable format\n");

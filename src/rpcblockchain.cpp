@@ -368,7 +368,7 @@ Value showblock(const Array& params, bool fHelp)
             "\n"
             "<index> Block number\n"
             "\n"
-            "Returns all information about the block at <index>");
+            "Returns all information about the block at <index>\n");
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
@@ -384,10 +384,6 @@ Value showblock(const Array& params, bool fHelp)
     block.ReadFromDisk(pblockindex);
     return blockToJSON(block, pblockindex, false);
 }
-
-
-
-
 
 Value getbestblockhash(const Array& params, bool fHelp)
 {
@@ -415,7 +411,6 @@ Value getblockcount(const Array& params, bool fHelp)
     return nBestHeight;
 }
 
-
 Value getdifficulty(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -431,7 +426,6 @@ Value getdifficulty(const Array& params, bool fHelp)
     obj.push_back(Pair("proof-of-stake",       GetDifficulty(GetLastBlockIndex(pindexBest, true))));
     return obj;
 }
-
 
 Value settxfee(const Array& params, bool fHelp)
 {
@@ -543,9 +537,6 @@ Value getblockbynumber(const Array& params, bool fHelp)
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
-
-
-
 
 void filecopy(FILE *dest, FILE *src)
 {

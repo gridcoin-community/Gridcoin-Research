@@ -101,8 +101,9 @@ Value getinfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getinfo\n"
-            "Returns an object containing various state info.");
+                "getinfo\n"
+                "\n"
+                "Returns an object containing various state info.");
 
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
@@ -170,8 +171,9 @@ Value getnewpubkey(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "getnewpubkey [account]\n"
-            "Returns new public key for coinbase generation.\n");
+                "getnewpubkey [account]\n"
+                "\n"
+                "Returns new public key for coinbase generation.\n");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -200,10 +202,11 @@ Value getnewaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "getnewaddress [account]\n"
-            "Returns a new Gridcoin address for receiving payments.  "
-            "If [account] is specified, it is added to the address book "
-            "so payments received with the address will be credited to [account].\n");
+                "getnewaddress [account]\n"
+                "\n"
+                "Returns a new Gridcoin address for receiving payments.  "
+                "If [account] is specified, it is added to the address book "
+                "so payments received with the address will be credited to [account].\n");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -269,8 +272,9 @@ Value getaccountaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "getaccountaddress <account>\n"
-            "Returns the current Gridcoin address for receiving payments to this account.\n");
+                "getaccountaddress <account>\n"
+                "\n"
+                "Returns the current Gridcoin address for receiving payments to this account.\n");
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
@@ -290,8 +294,9 @@ Value setaccount(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "setaccount <gridcoinaddress> <account>\n"
-            "Sets the account associated with the given address.\n");
+                "setaccount <gridcoinaddress> <account>\n"
+                "\n"
+                "Sets the account associated with the given address.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -321,8 +326,9 @@ Value getaccount(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "getaccount <gridcoinaddress>\n"
-            "Returns the account associated with the given address.\n");
+                "getaccount <gridcoinaddress>\n"
+                "\n"
+                "Returns the account associated with the given address.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -343,8 +349,9 @@ Value getaddressesbyaccount(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "getaddressesbyaccount <account>\n"
-            "Returns the list of addresses for the given account.\n");
+                "getaddressesbyaccount <account>\n"
+                "\n"
+                "Returns the list of addresses for the given account.\n");
 
     string strAccount = AccountFromValue(params[0]);
 
@@ -367,9 +374,10 @@ Value sendtoaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
-            "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to]\n"
-            "<amount> is a real and is rounded to the nearest 0.000001\n"
-            + HelpRequiringPassphrase());
+                "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to]\n"
+                "\n"
+                "<amount> is a real and is rounded to the nearest 0.000001\n"
+                + HelpRequiringPassphrase());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -401,10 +409,11 @@ Value listaddressgroupings(const Array& params, bool fHelp)
 {
     if (fHelp)
         throw runtime_error(
-            "listaddressgroupings\n"
-            "Lists groups of addresses which have had their common ownership\n"
-            "made public by common use as inputs or as the resulting change\n"
-            "in past transactions\n");
+                "listaddressgroupings\n"
+                "\n"
+                "Lists groups of addresses which have had their common ownership\n"
+                "made public by common use as inputs or as the resulting change\n"
+                "in past transactions\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -433,8 +442,9 @@ Value signmessage(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw runtime_error(
-            "signmessage <Gridcoinaddress> <message>\n"
-            "Sign a message with the private key of an address\n");
+                "signmessage <Gridcoinaddress> <message>\n"
+                "\n"
+                "Sign a message with the private key of an address\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -470,8 +480,9 @@ Value verifymessage(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 3)
         throw runtime_error(
-            "verifymessage <Gridcoinaddress> <signature> <message>\n"
-            "Verify a signed message\n");
+                "verifymessage <Gridcoinaddress> <signature> <message>\n"
+                "\n"
+                "Verify a signed message\n");
 
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();
@@ -509,8 +520,9 @@ Value getreceivedbyaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getreceivedbyaddress <Gridcoinaddress> [minconf=1]\n"
-            "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.\n");
+                "getreceivedbyaddress <Gridcoinaddress> [minconf=1]\n"
+                "\n"
+                "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -561,8 +573,9 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getreceivedbyaccount <account> [minconf=1]\n"
-            "Returns the total amount received by addresses with <account> in transactions with at least [minconf] confirmations.\n");
+                "getreceivedbyaccount <account> [minconf=1]\n"
+                "\n"
+                "Returns the total amount received by addresses with <account> in transactions with at least [minconf] confirmations.\n");
 
     accountingDeprecationCheck();
 
@@ -662,24 +675,25 @@ Value getbalance(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 3)
          throw runtime_error(
-            "getbalance ( \"account\" minconf includeWatchonly )\n"
-            "\nIf account is not specified, returns the server's total available balance.\n"
-            "If account is specified, returns the balance in the account.\n"
-            "Note that the account \"\" is not the same as leaving the parameter out.\n"
-            "The server total may be different to the balance in the default \"\" account.\n"
-            "\nArguments:\n"
-            "1. \"account\"      (string, optional) The selected account, or \"*\" for entire wallet. It may be the default account using \"\".\n"
-            "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
-            "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
-            "\nResult:\n"
-            "amount              (numeric) The total amount in btc received for this account.\n"
-            "\nExamples:\n"
-            "\nThe total amount in the server across all accounts\n"
-            "\nThe total amount in the server across all accounts, with at least 5 confirmations\n"
-            "\nThe total amount in the default account with at least 1 confirmation\n"
-            "\nThe total amount in the account named tabby with at least 6 confirmations\n"
-            "\nAs a json rpc call\n"
-        );
+                "getbalance ( \"account\" minconf includeWatchonly )\n"
+                "\n"
+                "\nIf account is not specified, returns the server's total available balance.\n"
+                "If account is specified, returns the balance in the account.\n"
+                "Note that the account \"\" is not the same as leaving the parameter out.\n"
+                "The server total may be different to the balance in the default \"\" account.\n"
+                "\nArguments:\n"
+                "1. \"account\"      (string, optional) The selected account, or \"*\" for entire wallet. It may be the default account using \"\".\n"
+                "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
+                "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
+                "\nResult:\n"
+                "amount              (numeric) The total amount in btc received for this account.\n"
+                "\nExamples:\n"
+                "\nThe total amount in the server across all accounts\n"
+                "\nThe total amount in the server across all accounts, with at least 5 confirmations\n"
+                "\nThe total amount in the default account with at least 1 confirmation\n"
+                "\nThe total amount in the account named tabby with at least 6 confirmations\n"
+                "\nAs a json rpc call\n"
+                );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -740,8 +754,9 @@ Value movecmd(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 3 || params.size() > 5)
         throw runtime_error(
-            "move <fromaccount> <toaccount> <amount> [minconf=1] [comment]\n"
-            "Move from one account in your wallet to another.\n");
+                "move <fromaccount> <toaccount> <amount> [minconf=1] [comment]\n"
+                "\n"
+                "Move from one account in your wallet to another.\n");
 
     accountingDeprecationCheck();
 
@@ -795,9 +810,10 @@ Value sendfrom(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 3 || params.size() > 6)
         throw runtime_error(
-            "sendfrom <fromaccount> <toGridcoinaddress> <amount> [minconf=1] [comment] [comment-to]\n"
-            "<amount> is a real and is rounded to the nearest 0.000001\n"
-            + HelpRequiringPassphrase());
+                "sendfrom <fromaccount> <toGridcoinaddress> <amount> [minconf=1] [comment] [comment-to]\n"
+                "\n"
+                "<amount> is a real and is rounded to the nearest 0.000001\n"
+                + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
 
@@ -839,9 +855,10 @@ Value sendmany(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
-            "sendmany <fromaccount> {address:amount,...} [minconf=1] [comment]\n"
-            "amounts are double-precision floating point numbers\n"
-            + HelpRequiringPassphrase());
+                "sendmany <fromaccount> {address:amount,...} [minconf=1] [comment]\n"
+                "\n"
+                "amounts are double-precision floating point numbers\n"
+                + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
     Object sendTo = params[1].get_obj();
@@ -907,10 +924,10 @@ Value addmultisigaddress(const Array& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 3)
     {
         string msg = "addmultisigaddress <nrequired> <'[\"key\",\"key\"]'> [account]\n"
-            "\n"
-            "Add a nrequired-to-sign multisignature address to the wallet\n"
-            "each key is a Gridcoin address or hex-encoded public key\n"
-            "If [account] is specified, assign address to [account].\n";
+                     "\n"
+                     "Add a nrequired-to-sign multisignature address to the wallet\n"
+                     "each key is a Gridcoin address or hex-encoded public key\n"
+                     "If [account] is specified, assign address to [account].\n";
         throw runtime_error(msg);
     }
 
@@ -984,9 +1001,9 @@ Value addredeemscript(const Array& params, bool fHelp)
     if (fHelp || params.size() < 1 || params.size() > 2)
     {
         string msg = "addredeemscript <redeemScript> [account]\n"
-            "\n"
-            "Add a P2SH address with a specified redeemScript to the wallet.\n"
-            "If [account] is specified, assign address to [account].\n";
+                     "\n"
+                     "Add a P2SH address with a specified redeemScript to the wallet.\n"
+                     "If [account] is specified, assign address to [account].\n";
         throw runtime_error(msg);
     }
 
@@ -1176,21 +1193,21 @@ Value listreceivedbyaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 3)
         throw runtime_error(
-            "listreceivedbyaddress ( minconf includeempty includeWatchonly)\n"
-              "\nList balances by receiving address.\n"
-              "\nArguments:\n"
-              "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-              "2. includeempty  (numeric, optional, dafault=false) Whether to include addresses that haven't received any payments.\n"
-              "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
-              "\nResult:\n"
-              "[\n"
-              "  {\n"
-              "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
-              "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
-              "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
-              "    \"amount\" : x.xxx,                  (numeric) The total amount in btc received by the address\n"
-              "\nExamples:\n"
-            );
+                "listreceivedbyaddress ( minconf includeempty includeWatchonly)\n"
+                "\nList balances by receiving address.\n"
+                "\nArguments:\n"
+                "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
+                "2. includeempty  (numeric, optional, dafault=false) Whether to include addresses that haven't received any payments.\n"
+                "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
+                "\nResult:\n"
+                "[\n"
+                "  {\n"
+                "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
+                "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
+                "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
+                "    \"amount\" : x.xxx,                  (numeric) The total amount in btc received by the address\n"
+                "\nExamples:\n"
+                );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1201,20 +1218,20 @@ Value listreceivedbyaccount(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 3)
         throw runtime_error(
-        "listreceivedbyaccount ( minconf includeempty includeWatchonly)\n"
-        "\nList balances by account.\n"
-        "\nArguments:\n"
-        "1. minconf      (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-        "2. includeempty (boolean, optional, default=false) Whether to include accounts that haven't received any payments.\n"
-        "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
-        "\nResult:\n"
-        "[\n"
-        "  {\n"
-        "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
-        "    \"account\" : \"accountname\",  (string) The account name of the receiving account\n"
-        "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
-        "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
-        );
+                "listreceivedbyaccount ( minconf includeempty includeWatchonly)\n"
+                "\nList balances by account.\n"
+                "\nArguments:\n"
+                "1. minconf      (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
+                "2. includeempty (boolean, optional, default=false) Whether to include accounts that haven't received any payments.\n"
+                "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
+                "\nResult:\n"
+                "[\n"
+                "  {\n"
+                "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
+                "    \"account\" : \"accountname\",  (string) The account name of the receiving account\n"
+                "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
+                "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
+                );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1432,60 +1449,60 @@ Value listtransactions(const Array& params, bool fHelp)
 {
       if (fHelp || params.size() > 4)
         throw runtime_error(
-            "listtransactions ( \"account\" count from includeWatchonly)\n"
-            "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
-            "\nArguments:\n"
-            "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
-            "                                     If \"\" is set, it will list transactions for the default account.\n"
-            "2. count          (numeric, optional, default=10) The number of transactions to return\n"
-            "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
-            "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
-            "                                     If \"\" is set true, it will list sent transactions as well\n"
-            "\nResult:\n"
-            "[\n"
-            "  {\n"
-            "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
-            "                                                It will be \"\" for the default account.\n"
-            "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
-            "                                                move transactions (category = move).\n"
-            "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
-            "                                                transaction between accounts, and not associated with an address,\n"
-            "                                                transaction id or block. 'send' and 'receive' transactions are \n"
-            "                                                associated with an address, transaction id and block details\n"
-            "    \"amount\": x.xxx,          (numeric) The amount in btc. This is negative for the 'send' category, and for the\n"
-            "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
-            "                                         and for the 'move' category for inbound funds.\n"
-            "    \"fee\": x.xxx,             (numeric) The amount of the fee in btc. This is negative and only available for the \n"
-            "                                         'send' category of transactions.\n"
-            "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
-            "                                         'receive' category of transactions.\n"
-            "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
-            "                                          category of transactions.\n"
-            "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
-            "                                          category of transactions.\n"
-            "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
-            "    \"walletconflicts\" : [\n"
-            "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
-            "    ],\n"
-            "    \"respendsobserved\" : [\n"
-            "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
-            "    ],\n"
-            "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
-            "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
-            "                                          for 'send' and 'receive' category of transactions.\n"
-            "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
-            "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
-            "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
-            "                                          negative amounts).\n"
-            "  }\n"
-            "]\n"
+                  "listtransactions ( \"account\" count from includeWatchonly)\n"
+                  "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
+                  "\nArguments:\n"
+                  "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
+                  "                                     If \"\" is set, it will list transactions for the default account.\n"
+                  "2. count          (numeric, optional, default=10) The number of transactions to return\n"
+                  "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
+                  "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
+                  "                                     If \"\" is set true, it will list sent transactions as well\n"
+                  "\nResult:\n"
+                  "[\n"
+                  "  {\n"
+                  "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
+                  "                                                It will be \"\" for the default account.\n"
+                  "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
+                  "                                                move transactions (category = move).\n"
+                  "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
+                  "                                                transaction between accounts, and not associated with an address,\n"
+                  "                                                transaction id or block. 'send' and 'receive' transactions are \n"
+                  "                                                associated with an address, transaction id and block details\n"
+                  "    \"amount\": x.xxx,          (numeric) The amount in btc. This is negative for the 'send' category, and for the\n"
+                  "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
+                  "                                         and for the 'move' category for inbound funds.\n"
+                  "    \"fee\": x.xxx,             (numeric) The amount of the fee in btc. This is negative and only available for the \n"
+                  "                                         'send' category of transactions.\n"
+                  "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
+                  "                                         'receive' category of transactions.\n"
+                  "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
+                  "                                          category of transactions.\n"
+                  "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
+                  "                                          category of transactions.\n"
+                  "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
+                  "    \"walletconflicts\" : [\n"
+                  "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
+                  "    ],\n"
+                  "    \"respendsobserved\" : [\n"
+                  "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
+                  "    ],\n"
+                  "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
+                  "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
+                  "                                          for 'send' and 'receive' category of transactions.\n"
+                  "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
+                  "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
+                  "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
+                  "                                          negative amounts).\n"
+                  "  }\n"
+                  "]\n"
 
-            "\nExamples:\n"
-            "\nList the most recent 10 transactions in the systems\n"
-            "\nList the most recent 10 transactions for the tabby account\n"
-            "\nList transactions 100 to 120 from the tabby account\n"
-            "\nAs a json rpc call\n"
-        );
+                  "\nExamples:\n"
+                  "\nList the most recent 10 transactions in the systems\n"
+                  "\nList the most recent 10 transactions for the tabby account\n"
+                  "\nList transactions 100 to 120 from the tabby account\n"
+                  "\nAs a json rpc call\n"
+                  );
 
     string strAccount = "*";
     int nCount = 10;
@@ -1556,14 +1573,15 @@ Value listaccounts(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
         throw runtime_error(
-          "listaccounts ( minconf includeWatchonly)\n"
-             "Returns Object that has account names as keys, account balances as values."
-             "1. minconf          (numeric, optional, default=1) Only onclude transactions with at least this many confirmations\n"
-             "2. includeWatchonly (bool, optional, default=false) Include balances in watchonly addresses (see 'importaddress')\n"
-             "\nResult:\n"
-             "{                      (json object where keys are account names, and values are numeric balances\n"
-             "  \"account\": x.xxx,  (numeric) The property name is the account name, and the value is the total balance for the account.\n"
-             );
+                "listaccounts ( minconf includeWatchonly)\n"
+                "\n"
+                "Returns Object that has account names as keys, account balances as values."
+                "1. minconf          (numeric, optional, default=1) Only onclude transactions with at least this many confirmations\n"
+                "2. includeWatchonly (bool, optional, default=false) Include balances in watchonly addresses (see 'importaddress')\n"
+                "\nResult:\n"
+                "{                      (json object where keys are account names, and values are numeric balances\n"
+                "  \"account\": x.xxx,  (numeric) The property name is the account name, and the value is the total balance for the account.\n"
+                );
 
     accountingDeprecationCheck();
 
@@ -1625,16 +1643,16 @@ Value listsinceblock(const Array& params, bool fHelp)
 {
     if (fHelp)
         throw runtime_error(
-            "listsinceblock ( \"blockhash\" target-confirmations includeWatchonly)\n"
-            "\nGet all transactions in blocks since block [blockhash], or all transactions if omitted\n"
-            "\nArguments:\n"
-            "1. \"blockhash\"   (string, optional) The block hash to list transactions since\n"
-            "2. target-confirmations:    (numeric, optional) The confirmations required, must be 1 or more\n"
-            "3. includeWatchonly:        (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')"
-            "\nResult:\n"
-            "{\n"
-            "  \"transactions\": [\n"
-            );
+                "listsinceblock ( \"blockhash\" target-confirmations includeWatchonly)\n"
+                "\nGet all transactions in blocks since block [blockhash], or all transactions if omitted\n"
+                "\nArguments:\n"
+                "1. \"blockhash\"   (string, optional) The block hash to list transactions since\n"
+                "2. target-confirmations:    (numeric, optional) The confirmations required, must be 1 or more\n"
+                "3. includeWatchonly:        (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')"
+                "\nResult:\n"
+                "{\n"
+                "  \"transactions\": [\n"
+                );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1695,15 +1713,15 @@ Value gettransaction(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-        "gettransaction \"txid\"\n"
-              "\nGet detailed information about in-wallet transaction <txid>\n"
-              "\nArguments:\n"
-              "1. \"txid\"    (string, required) The transaction id\n"
-              "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
-              "\nResult:\n"
-              "{\n"
-              "  \"amount\" : x.xxx,        (numeric) The transaction amount in grc\n"
-            );
+                "gettransaction \"txid\"\n"
+                "\nGet detailed information about in-wallet transaction <txid>\n"
+                "\nArguments:\n"
+                "1. \"txid\"    (string, required) The transaction id\n"
+                "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
+                "\nResult:\n"
+                "{\n"
+                "  \"amount\" : x.xxx,        (numeric) The transaction amount in grc\n"
+                );
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -1771,9 +1789,9 @@ Value backupwallet(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "backupwallet\n"
-            "\n"
-            "Backup your wallet and config files.\n");
+                "backupwallet\n"
+                "\n"
+                "Backup your wallet and config files.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1790,9 +1808,9 @@ Value keypoolrefill(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "keypoolrefill [new-size]\n"
-            "Fills the keypool.\n"
-            + HelpRequiringPassphrase());
+                "keypoolrefill [new-size]\n"
+                "Fills the keypool.\n"
+                + HelpRequiringPassphrase());
 
     unsigned int nSize = max(GetArg("-keypool", 100), (int64_t)0);
     if (params.size() > 0) {
@@ -1870,9 +1888,10 @@ Value walletpassphrase(const Array& params, bool fHelp)
 {
     if (pwalletMain->IsCrypted() && (fHelp || params.size() < 2 || params.size() > 3))
         throw runtime_error(
-            "walletpassphrase <passphrase> <timeout> [stakingonly]\n"
-            "Stores the wallet decryption key in memory for <timeout> seconds.\n"
-            "if [stakingonly] is true sending functions are disabled.\n");
+                "walletpassphrase <passphrase> <timeout> [stakingonly]\n"
+                "\n"
+                "Stores the wallet decryption key in memory for <timeout> seconds.\n"
+                "if [stakingonly] is true sending functions are disabled.\n");
     if (fHelp)
         return true;
 
@@ -1923,8 +1942,9 @@ Value walletpassphrasechange(const Array& params, bool fHelp)
 {
     if (pwalletMain->IsCrypted() && (fHelp || params.size() != 2))
         throw runtime_error(
-            "walletpassphrasechange <oldpassphrase> <newpassphrase>\n"
-            "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>.\n");
+                "walletpassphrasechange <oldpassphrase> <newpassphrase>\n"
+                "\n"
+                "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>.\n");
     if (fHelp)
         return true;
 
@@ -1959,10 +1979,11 @@ Value walletlock(const Array& params, bool fHelp)
 {
     if (pwalletMain->IsCrypted() && (fHelp || params.size() != 0))
         throw runtime_error(
-            "walletlock\n"
-            "Removes the wallet encryption key from memory, locking the wallet.\n"
-            "After calling this method, you will need to call walletpassphrase again\n"
-            "before being able to call any methods which require the wallet to be unlocked.\n");
+                "walletlock\n"
+                "\n"
+                "Removes the wallet encryption key from memory, locking the wallet.\n"
+                "After calling this method, you will need to call walletpassphrase again\n"
+                "before being able to call any methods which require the wallet to be unlocked.\n");
     if (fHelp)
         return true;
 
@@ -1985,8 +2006,9 @@ Value encryptwallet(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "encryptwallet <passphrase>\n"
-            "Encrypts the wallet with <passphrase>.\n");
+                "encryptwallet <passphrase>\n"
+                "\n"
+                "Encrypts the wallet with <passphrase>.\n");
 
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
@@ -2054,8 +2076,9 @@ Value validateaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "validateaddress <gridcoinaddress>\n"
-            "Return information about <gridcoinaddress>.\n");
+                "validateaddress <gridcoinaddress>\n"
+                "\n"
+                "Return information about <gridcoinaddress>.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2085,8 +2108,9 @@ Value validatepubkey(const Array& params, bool fHelp)
 {
     if (fHelp || !params.size() || params.size() > 2)
         throw runtime_error(
-            "validatepubkey <gridcoinpubkey>\n"
-            "Return information about <gridcoinpubkey>.\n");
+                "validatepubkey <gridcoinpubkey>\n"
+                "\n"
+                "Return information about <gridcoinpubkey>.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2126,11 +2150,12 @@ Value reservebalance(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
         throw runtime_error(
-            "reservebalance [<reserve> [amount]]\n"
-            "<reserve> is true or false to turn balance reserve on or off.\n"
-            "<amount> is a real and rounded to cent.\n"
-            "Set reserve amount not participating in network protection.\n"
-            "If no parameters provided current setting is printed.\n");
+                "reservebalance [<reserve> [amount]]\n"
+                "\n"
+                "<reserve> is true or false to turn balance reserve on or off.\n"
+                "<amount> is a real and rounded to cent.\n"
+                "Set reserve amount not participating in network protection.\n"
+                "If no parameters provided current setting is printed.\n");
 
     if (params.size() > 0)
     {
@@ -2165,8 +2190,9 @@ Value checkwallet(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "checkwallet\n"
-            "Check wallet for integrity.\n");
+                "checkwallet\n"
+                "\n"
+                "Check wallet for integrity.\n");
 
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
@@ -2188,8 +2214,9 @@ Value repairwallet(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "repairwallet\n"
-            "Repair wallet if checkwallet reports any problem.\n");
+                "repairwallet\n"
+                "\n"
+                "Repair wallet if checkwallet reports any problem.\n");
 
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
@@ -2210,9 +2237,10 @@ Value resendtx(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "resendtx\n"
-            "Re-send unconfirmed transactions.\n"
-        );
+                "resendtx\n"
+                "\n"
+                "Re-send unconfirmed transactions.\n"
+                );
 
     ResendWalletTransactions(true);
 
@@ -2224,9 +2252,10 @@ Value makekeypair(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "makekeypair [prefix]\n"
-            "Make a public/private key pair.\n"
-            "[prefix] is optional preferred prefix for the public key.\n");
+                "makekeypair [prefix]\n"
+                "\n"
+                "Make a public/private key pair.\n"
+                "[prefix] is optional preferred prefix for the public key.\n");
 
     string strPrefix = "";
     if (params.size() > 0)
@@ -2246,10 +2275,10 @@ Value burn(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "burn <amount> [hex string]\n"
-            "\n"
-            "<amount> is a real and is rounded to the nearest 0.00000001\n"
-            + HelpRequiringPassphrase());
+                "burn <amount> [hex string]\n"
+                "\n"
+                "<amount> is a real and is rounded to the nearest 0.00000001\n"
+                + HelpRequiringPassphrase());
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
