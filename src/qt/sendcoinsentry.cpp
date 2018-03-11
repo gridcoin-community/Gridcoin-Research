@@ -194,6 +194,6 @@ void SendCoinsEntry::updateIcons()
 {
     if(model && model->getOptionsModel())
     {
-        ui->addressBookButton->setIcon(QIcon(":/icons/send_"+model->getOptionsModel()->getCurrentStyle()));
+        ui->addressBookButton->setIcon(QIcon(":/icons/address-book_"+model->getOptionsModel()->getCurrentStyle()));
     }
 }
