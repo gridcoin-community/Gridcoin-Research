@@ -354,13 +354,13 @@ QListWidget{
 } 
 
 QRadioButton{
-color: white;
-background-color:rgb(49,54,59);
+    color: white;
+    background-color:rgb(49,54,59);
 }
 
 QCheckBox{
-color: white;
-background-color:rgb(49,54,59);
+    color: white;
+    background-color:rgb(49,54,59);
 }
 
 /* Main Window*/
