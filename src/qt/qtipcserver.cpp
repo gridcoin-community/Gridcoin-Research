@@ -57,7 +57,7 @@ static bool ipcScanCmd(int argc, char *argv[], bool fRelay)
                 // the first start of the first instance
                 if (ex.get_error_code() != boost::interprocess::not_found_error || !fRelay)
                 {
-                    printf("main() - boost interprocess exception #%d: %s\n", ex.get_error_code(), ex.what());
+                    LogPrintf("main() - boost interprocess exception #%d: %s\n", ex.get_error_code(), ex.what());
                     break;
                 }
             }
@@ -76,7 +76,7 @@ static void ipcThread(void* pArg)
 {
     // Make this thread recognisable as the GUI-IPC thread
     RenameThread("grc-gui-ipc");
-	
+
     try
     {
         ipcThread2(pArg);
@@ -86,12 +86,12 @@ static void ipcThread(void* pArg)
     } catch (...) {
         PrintExceptionContinue(NULL, "ipcThread()");
     }
-    printf("ipcThread exited\n");
+    LogPrintf("ipcThread exited\n");
 }
 
 static void ipcThread2(void* pArg)
 {
-    if (fDebug) printf("ipcThread started\n");
+    if (fDebug) LogPrintf("ipcThread started\n");
 
     message_queue* mq = (message_queue*)pArg;
     char buffer[MAX_URI_LENGTH + 1] = "";
@@ -146,7 +146,7 @@ void ipcInit(int argc, char *argv[])
         mq = new message_queue(open_or_create, BITCOINURI_QUEUE_NAME, 2, MAX_URI_LENGTH);
     }
     catch (interprocess_exception &ex) {
-        printf("ipcInit() - boost interprocess exception #%d: %s\n", ex.get_error_code(), ex.what());
+        LogPrintf("ipcInit() - boost interprocess exception #%d: %s\n", ex.get_error_code(), ex.what());
         return;
     }
 

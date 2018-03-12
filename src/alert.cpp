@@ -20,7 +20,8 @@ using namespace std;
 map<uint256, CAlert> mapAlerts;
 CCriticalSection cs_mapAlerts;
 
-static const char* pszMainKey = "0486bce1bac0d543f104cbff2bd23680056a3b9ea05e1137d2ff90eeb5e08472eb500322593a2cb06fbf8297d7beb6cd30cb90f98153b5b7cce1493749e41e0284";
+// same as master project key now
+static const char* pszMainKey = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 
 // TestNet alerts pubKey
 static const char* pszTestKey = "0471dc165db490094d35cde15b1f5d755fa6ad6f2b5ed0f340e3f17f57389c3c2af113a8cbcc885bde73305a553b5640c83021128008ddf882e856336269080496";
@@ -74,18 +75,18 @@ std::string CUnsignedAlert::ToString() const
         nExpiration,
         nID,
         nCancel,
-        strSetCancel.c_str(),
+        strSetCancel,
         nMinVer,
         nMaxVer,
-        strSetSubVer.c_str(),
+        strSetSubVer,
         nPriority,
-        strComment.c_str(),
-        strStatusBar.c_str());
+        strComment,
+        strStatusBar);
 }
 
 void CUnsignedAlert::print() const
 {
-    printf("%s", ToString().c_str());
+    LogPrintf("%s", ToString());
 }
 
 void CAlert::SetNull()
@@ -211,13 +212,13 @@ bool CAlert::ProcessAlert(bool fThread)
             const CAlert& alert = (*mi).second;
             if (Cancels(alert))
             {
-                printf("cancelling alert %d\n", alert.nID);
+                LogPrint("alert", "cancelling alert %d\n", alert.nID);
                 uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
             else if (!alert.IsInEffect())
             {
-                printf("expiring alert %d\n", alert.nID);
+                LogPrint("alert", "expiring alert %d\n", alert.nID);
                 uiInterface.NotifyAlertChanged((*mi).first, CT_DELETED);
                 mapAlerts.erase(mi++);
             }
@@ -231,7 +232,7 @@ bool CAlert::ProcessAlert(bool fThread)
             const CAlert& alert = item.second;
             if (alert.Cancels(*this))
             {
-                printf("alert already cancelled by %d\n", alert.nID);
+                LogPrint("alert", "alert already cancelled by %d\n", alert.nID);
                 return false;
             }
         }
@@ -250,8 +251,8 @@ bool CAlert::ProcessAlert(bool fThread)
                 // the whole string before passing it to the shell:
                 std::string singleQuote("'");
                 // safeChars chosen to allow simple messages/URLs/email addresses, but avoid anything
-                // even possibly remotely dangerous like & or >
-                std::string safeChars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890 .,;_/:?@");
+                // even possibly remotely dangerous like & ; $ or >
+                std::string safeChars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890 .,_/:?@");
                 std::string safeStatus;
                 for (std::string::size_type i = 0; i < strStatusBar.size(); i++)
                 {
@@ -269,6 +270,6 @@ bool CAlert::ProcessAlert(bool fThread)
         }
     }
 
-    printf("accepted alert %d, AppliesToMe()=%d\n", nID, AppliesToMe());
+    LogPrint("alert", "accepted alert %d, AppliesToMe()=%d\n", nID, AppliesToMe());
     return true;
 }

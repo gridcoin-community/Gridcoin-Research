@@ -32,7 +32,7 @@ class TxViewDelegate : public QAbstractItemDelegate
 {
     Q_OBJECT
 public:
-    TxViewDelegate(): QAbstractItemDelegate(), unit(BitcoinUnits::BTC)
+    TxViewDelegate(QObject *parent=nullptr): QAbstractItemDelegate(parent), unit(BitcoinUnits::BTC)
     {
 
     }
@@ -110,8 +110,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     currentStake(0),
     currentUnconfirmedBalance(-1),
     currentImmatureBalance(-1),
-    txdelegate(new TxViewDelegate()),
-    filter(0)
+    txdelegate(new TxViewDelegate(this))
 {
     ui->setupUi(this);
 
@@ -122,6 +121,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
     updateTransactions();
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
+
+    connect(ui->labelPoll, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
 
     // init "out of sync" warning labels
     ui->labelWalletStatus->setText("(" + tr("out of sync") + ")");
@@ -139,6 +140,12 @@ void OverviewPage::handleTransactionClicked(const QModelIndex &index)
         emit transactionClicked(filter->mapToSource(index));
 }
 
+void OverviewPage::handlePollLabelClicked()
+{
+    emit pollLabelClicked();
+}
+
+
 void OverviewPage::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
@@ -152,7 +159,7 @@ void OverviewPage::showEvent(QShowEvent *event)
 }
 
 void OverviewPage::updateTransactions()
-{    
+{
     if(filter)
     {
         // Show the maximum number of transactions the transaction list widget
@@ -213,16 +220,16 @@ void OverviewPage::setModel(WalletModel *model)
     if(model && model->getOptionsModel())
     {
         // Set up transaction list
-        filter = new TransactionFilterProxy();
+        filter.reset(new TransactionFilterProxy());
         filter->setSourceModel(model->getTransactionTableModel());
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
         filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
 
-        ui->listTransactions->setModel(filter);
+        ui->listTransactions->setModel(filter.get());
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
-        
+
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
         connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));

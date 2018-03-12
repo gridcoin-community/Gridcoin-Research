@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <sstream>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -15,8 +16,10 @@
 #include "main.h"
 #include "wallet.h"
 
-#include <cstdint>
+#include "data/script_valid.json.h"
+#include "data/script_invalid.json.h"
 
+#include <cstdint>
 
 using namespace std;
 using namespace json_spirit;
@@ -24,6 +27,7 @@ using namespace boost::algorithm;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn, int nHashType);
+extern Array read_json(std::string& jsondata);
 
 CScript
 ParseScript(string s)
@@ -81,43 +85,35 @@ ParseScript(string s)
         {
             BOOST_ERROR("Parse error: " << s);
             return CScript();
-        }                        
+        }
     }
 
     return result;
 }
 
 Array
-read_json(const std::string& filename)
+read_json(std::string& content)
 {
-    namespace fs = boost::filesystem;
-    fs::path testFile = fs::current_path() / "test" / "data" / filename;
-
-#ifdef TEST_DATA_DIR
-    if (!fs::exists(testFile))
-    {
-        testFile = fs::path(BOOST_PP_STRINGIZE(TEST_DATA_DIR)) / filename;
-    }
-#endif
-
-    ifstream ifs(testFile.string().c_str(), ifstream::in);
+    std::stringstream ss;
+    ss.str(content);
+    //ifstream ifs(testFile.string().c_str(), ifstream::in);
     Value v;
-    if (!read_stream(ifs, v))
+    if (!read_stream(ss, v))
     {
-        if (ifs.fail())
-            BOOST_ERROR("Cound not find/open " << filename);
-        else
-            BOOST_ERROR("JSON syntax error in " << filename);
+        //if (ifs.fail())
+        //    BOOST_ERROR("Cound not find/open " << filename);
+        BOOST_ERROR("JSON syntax error in " << "Some file.");
         return Array();
     }
     if (v.type() != array_type)
     {
-        BOOST_ERROR(filename << " does not contain a json array");
+        BOOST_ERROR("Some file" << " does not contain a json array");
         return Array();
     }
 
     return v.get_array();
 }
+
 
 BOOST_AUTO_TEST_SUITE(script_tests)
 
@@ -128,7 +124,7 @@ BOOST_AUTO_TEST_CASE(script_valid)
     // Inner arrays are [ "scriptSig", "scriptPubKey" ]
     // ... where scriptSig and scriptPubKey are stringified
     // scripts.
-    Array tests = read_json("script_valid.json");
+    Array tests = read_json(json_tests::script_valid);
 
     BOOST_FOREACH(Value& tv, tests)
     {
@@ -152,7 +148,7 @@ BOOST_AUTO_TEST_CASE(script_valid)
 BOOST_AUTO_TEST_CASE(script_invalid)
 {
     // Scripts that should evaluate as invalid
-    Array tests = read_json("script_invalid.json");
+    Array tests = read_json(json_tests::script_invalid);
 
     BOOST_FOREACH(Value& tv, tests)
     {
@@ -328,10 +324,7 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.clear(); // Must have signatures
     CScript badsig6 = sign_multisig(scriptPubKey23, keys, txTo23);
     BOOST_CHECK(!VerifyScript(badsig6, scriptPubKey23, txTo23, 0, 0));
-}    
-
-// Gridcoin, 2017-03-18: Temporarily disable broken tests.
-#if 0
+}
 
 BOOST_AUTO_TEST_CASE(script_combineSigs)
 {
@@ -446,6 +439,5 @@ BOOST_AUTO_TEST_CASE(script_combineSigs)
     combined = CombineSignatures(scriptPubKey, txTo, 0, partial3b, partial3a);
     BOOST_CHECK(combined == partial3c);
 }
-#endif
 
 BOOST_AUTO_TEST_SUITE_END()

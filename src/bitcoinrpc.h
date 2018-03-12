@@ -202,6 +202,7 @@ extern json_spirit::Value decoderawtransaction(const json_spirit::Array& params,
 extern json_spirit::Value decodescript(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value signrawtransaction(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendrawtransaction(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value burn(const json_spirit::Array& params, bool fHelp);
 
 extern json_spirit::Value getbestblockhash(const json_spirit::Array& params, bool fHelp); // in rpcblockchain.cpp
 extern json_spirit::Value getblockcount(const json_spirit::Array& params, bool fHelp); // in rpcblockchain.cpp
@@ -219,14 +220,6 @@ extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value listitem(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value execute(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
-
-//Upgrader RPC Commands:
-
- extern json_spirit::Value upgrade(const json_spirit::Array& params, bool fHelp);
- extern json_spirit::Value downloadblocks(const json_spirit::Array& params, bool fHelp);
- extern json_spirit::Value downloadstate(const json_spirit::Array& params, bool fHelp);
- extern json_spirit::Value downloadcancel(const json_spirit::Array& params, bool fHelp);
- extern json_spirit::Value restart(const json_spirit::Array& params, bool fHelp);
 
 // Brod
 extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);

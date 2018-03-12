@@ -11,7 +11,6 @@
 #include "bitcoinrpc.h"
 #include "db.h"
 
-#undef printf
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
 #include <boost/bind.hpp>
@@ -25,8 +24,6 @@
 #include <list>
 
 #include <memory>
-
-#define printf OutputDebugStringF
 
 using namespace std;
 using namespace boost;
@@ -84,12 +81,12 @@ void RPCTypeCheck(const Object& o,
     {
         const Value& v = find_value(o, t.first);
         if (!fAllowNull && v.type() == null_type)
-            throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Missing %s", t.first.c_str()));
+            throw JSONRPCError(RPC_TYPE_ERROR, strprintf("Missing %s", t.first));
 
         if (!((v.type() == t.second) || (fAllowNull && (v.type() == null_type))))
         {
             string err = strprintf("Expected type %s for %s, got %s",
-                                   Value_type_name[t.second], t.first.c_str(), Value_type_name[v.type()]);
+                                   Value_type_name[t.second], t.first, Value_type_name[v.type()]);
             throw JSONRPCError(RPC_TYPE_ERROR, err);
         }
     }
@@ -184,7 +181,7 @@ string CRPCTable::help(string strCommand) const
         }
     }
     if (strRet == "")
-        strRet = strprintf("help: unknown command: %s\n", strCommand.c_str());
+        strRet = strprintf("help: unknown command: %s\n", strCommand);
     strRet = strRet.substr(0,strRet.size()-1);
     return strRet;
 }
@@ -206,14 +203,13 @@ Value help(const Array& params, bool fHelp)
 
 Value stop(const Array& params, bool fHelp)
 {
-    printf("Stopping...");
-
     // Accept the deprecated and ignored 'detach´ boolean argument
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "stop\n"
             "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
+    LogPrintf("Stopping...\n");
     StartShutdown();
     return "Gridcoin server stopping";
 }
@@ -286,11 +282,6 @@ static const CRPCCommand vRPCCommands[] =
     { "importprivkey",          &importprivkey,          false,  false },
     { "listunspent",            &listunspent,            false,  false },
     { "list",                   &listitem,               false,  false },
-    { "upgrade",                &upgrade,                false,  false },
-    { "downloadblocks",         &downloadblocks,         false,  false },
-    { "downloadstate",          &downloadstate,          false,  false },
-    { "downloadcancel",         &downloadcancel,         false,  false },
-    { "restart",                &restart,                false,  false },
     { "execute",                &execute,                false,  false },
     { "getrawtransaction",      &getrawtransaction,      false,  false },
     { "createrawtransaction",   &createrawtransaction,   false,  false },
@@ -298,6 +289,7 @@ static const CRPCCommand vRPCCommands[] =
     { "decodescript",           &decodescript,           false,  false },
     { "signrawtransaction",     &signrawtransaction,     false,  false },
     { "sendrawtransaction",     &sendrawtransaction,     false,  false },
+    {"burn",                    &burn,                   false,  false },
     { "getcheckpoint",          &getcheckpoint,          true,   false },
     { "reservebalance",         &reservebalance,         false,  true},
     { "checkwallet",            &checkwallet,            false,  true},
@@ -404,11 +396,11 @@ static string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
             "%s",
         nStatus,
         cStatus,
-        rfc1123Time().c_str(),
+        rfc1123Time(),
         keepalive ? "keep-alive" : "close",
         strMsg.size(),
-        FormatFullVersion().c_str(),
-        strMsg.c_str());
+        FormatFullVersion(),
+        strMsg);
 }
 
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
@@ -671,13 +663,13 @@ void ServiceConnection(AcceptedConnection *conn);
 
 void StopRPCThreads()
 {
-    printf("Stop RPC IO service\n");
+    LogPrintf("Stop RPC IO service\n");
     if(!rpc_io_service)
     {
-        printf("RPC IO server not started\n");
+        LogPrintf("RPC IO server not started\n");
         return;
     }
-    
+
     rpc_io_service->stop();
 }
 
@@ -696,10 +688,10 @@ void ThreadRPCServer(void* parg)
     }
     catch (boost::thread_interrupted&)
     {
-            printf("ThreadRPCServer exited (interrupt)\r\n");
+            LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
             return;
     }
-    printf("ThreadRPCServer exited\n");
+    LogPrintf("ThreadRPCServer exited\n");
 }
 
 // Forward declaration required for RPCListen
@@ -748,7 +740,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 
     // TODO : Actually handle errors
     if (!error)
-    {        
+    {
         // Restrict callers by IP.  It is important to
         // do this before starting client thread, to filter out
         // certain DoS and misbehaving clients.
@@ -762,7 +754,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
         else
             ServiceConnection(conn);
 
-        conn->close();        
+        conn->close();
     }
 
     delete conn;
@@ -770,7 +762,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 
 void ThreadRPCServer2(void* parg)
 {
-    if (fDebug10) printf("ThreadRPCServer started\n");
+    if (fDebug10) LogPrintf("ThreadRPCServer started\n");
 
     strRPCUserColonPass = mapArgs["-rpcuser"] + ":" + mapArgs["-rpcpassword"];
     if ((mapArgs["-rpcpassword"] == "") ||
@@ -793,9 +785,9 @@ void ThreadRPCServer2(void* parg)
               "If the file does not exist, create it with owner-readable-only file permissions.\n"
               "It is also recommended to set alertnotify so you are notified of problems;\n"
               "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
-                strWhatAmI.c_str(),
-                GetConfigFile().string().c_str(),
-                EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32).c_str()),
+                strWhatAmI,
+                GetConfigFile().string(),
+                EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
             _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
@@ -814,12 +806,12 @@ void ThreadRPCServer2(void* parg)
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
         if (filesystem::exists(pathCertFile)) context.use_certificate_chain_file(pathCertFile.string());
-        else printf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string().c_str());
+        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
         if (filesystem::exists(pathPKFile)) context.use_private_key_file(pathPKFile.string(), ssl::context::pem);
-        else printf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string().c_str());
+        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
         SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
@@ -895,7 +887,7 @@ void ThreadRPCServer2(void* parg)
 
     while (!fShutdown)
         rpc_io_service->run_one();
-    
+
     delete rpc_io_service;
     rpc_io_service = NULL;
     StopRequests();
@@ -930,7 +922,7 @@ void JSONRequest::parse(const Value& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Method must be a string");
     strMethod = valMethod.get_str();
     if (strMethod != "getwork" && strMethod != "getblocktemplate")
-        if (fDebug10) printf("ThreadRPCServer method=%s\n", strMethod.c_str());
+        if (fDebug10) LogPrintf("ThreadRPCServer method=%s\n", strMethod);
 
     // Parse params
     Value valParams = find_value(request, "params");
@@ -1002,7 +994,7 @@ void ServiceConnection(AcceptedConnection *conn)
         }
         if (!HTTPAuthorized(mapHeaders))
         {
-            printf("ThreadRPCServer incorrect password attempt from %s\n", conn->peer_address_to_string().c_str());
+            LogPrintf("ThreadRPCServer incorrect password attempt from %s\n", conn->peer_address_to_string());
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
@@ -1095,7 +1087,7 @@ Object CallRPC(const string& strMethod, const Array& params)
         throw runtime_error(strprintf(
             _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
               "If the file does not exist, create it with owner-readable-only file permissions."),
-                GetConfigFile().string().c_str()));
+                GetConfigFile().string()));
 
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");
@@ -1199,11 +1191,13 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "sendfrom"               && n > 3) ConvertTo<int64_t>(params[3]);
     if (strMethod == "listtransactions"       && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listtransactions"       && n > 2) ConvertTo<int64_t>(params[2]);
+    if (strMethod == "listtransactions"       && n > 3) ConvertTo<bool>(params[3]);
     if (strMethod == "listaccounts"           && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "walletpassphrase"       && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "walletpassphrase"       && n > 2) ConvertTo<bool>(params[2]);
     if (strMethod == "getblocktemplate"       && n > 0) ConvertTo<Object>(params[0]);
     if (strMethod == "listsinceblock"         && n > 1) ConvertTo<int64_t>(params[1]);
+    if (strMethod == "listsinceblock"         && n > 2) ConvertTo<bool>(params[2]);
 
     if (strMethod == "sendalert"              && n > 2) ConvertTo<int64_t>(params[2]);
     if (strMethod == "sendalert"              && n > 3) ConvertTo<int64_t>(params[3]);
@@ -1223,9 +1217,6 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "addmultisigaddress"     && n > 1) ConvertTo<Array>(params[1]);
     if (strMethod == "listunspent"            && n > 0) ConvertTo<int64_t>(params[0]);
     if (strMethod == "upgrade"                && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadblocks"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadstate"          && n > 0) ConvertTo<boost::int64_t>(params[0]);
-    if (strMethod == "downloadcancel"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "listunspent"            && n > 1) ConvertTo<int64_t>(params[1]);
     if (strMethod == "listunspent"            && n > 2) ConvertTo<Array>(params[2]);
     if (strMethod == "getrawtransaction"      && n > 1) ConvertTo<int64_t>(params[1]);
@@ -1234,6 +1225,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "signrawtransaction"     && n > 1) ConvertTo<Array>(params[1], true);
     if (strMethod == "signrawtransaction"     && n > 2) ConvertTo<Array>(params[2], true);
     if (strMethod == "keypoolrefill"          && n > 0) ConvertTo<int64_t>(params[0]);
+    if (strMethod == "burn"                   && n > 0) ConvertTo<double>(params[0]);
 
     return params;
 }
@@ -1321,7 +1313,7 @@ int main(int argc, char *argv[])
     {
         if (argc >= 2 && string(argv[1]) == "-server")
         {
-            printf("server ready\n");
+            LogPrintf("server ready\n");
             ThreadRPCServer(NULL);
         }
         else

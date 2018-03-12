@@ -31,7 +31,7 @@ void TransactionDescDialog::on_btnViewAttachment_clicked()
 {
     //9-19-2015
     std::string sTXID = ExtractXML(msHashBoinc,"<ATTACHMENTGUID>","</ATTACHMENTGUID>");
-    printf("View attachment %s",sTXID.c_str());
+    LogPrintf("View attachment %s",sTXID);
 
     if (sTXID.empty())
     {

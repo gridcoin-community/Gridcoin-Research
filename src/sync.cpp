@@ -13,8 +13,8 @@
 #ifdef DEBUG_LOCKCONTENTION
 void PrintLockContention(const char* pszName, const char* pszFile, int nLine)
 {
-    printf("LOCKCONTENTION: %s\n", pszName);
-    printf("Locker: %s:%d\n", pszFile, nLine);
+    LogPrintf("LOCKCONTENTION: %s\n", pszName);
+    LogPrintf("Locker: %s:%d\n", pszFile, nLine);
 }
 #endif /* DEBUG_LOCKCONTENTION */
 
@@ -73,26 +73,26 @@ boost::thread_specific_ptr<LockStack> lockstack;
 
 static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch, const LockStack& s1, const LockStack& s2)
 {
-    printf("POTENTIAL DEADLOCK DETECTED\n");
-    printf("Previous lock order was:\n");
+    LogPrintf("POTENTIAL DEADLOCK DETECTED\n");
+    LogPrintf("Previous lock order was:\n");
     for (const std::pair<void*, CLockLocation> & i : s2) {
         if (i.first == mismatch.first) {
-            printf(" (1)");
+            LogPrintf(" (1)");
         }
         if (i.first == mismatch.second) {
-            printf(" (2)");
+            LogPrintf(" (2)");
         }
-        printf(" %s\n", i.second.ToString().c_str());
+        LogPrintf(" %s\n", i.second.ToString());
     }
-    printf("Current lock order is:\n");
+    LogPrintf("Current lock order is:\n");
     for (const std::pair<void*, CLockLocation> & i : s1) {
         if (i.first == mismatch.first) {
-            printf(" (1)");
+            LogPrintf(" (1)");
         }
         if (i.first == mismatch.second) {
-            printf(" (2)");
+            LogPrintf(" (2)");
         }
-        printf(" %s\n", i.second.ToString().c_str());
+        LogPrintf(" %s\n", i.second.ToString());
     }
     assert(false);
 }
@@ -150,7 +150,7 @@ void AssertLockHeldInternal(const char* pszName, const char* pszFile, int nLine,
     for (const std::pair<void*, CLockLocation> & i : *lockstack)
         if (i.first == cs)
             return;
-    fprintf(stderr, "Assertion failed: lock %s not held in %s:%i; locks held:\n%s", pszName, pszFile, nLine, LocksHeld().c_str());
+    fprintf(stderr, "Assertion failed: lock %s not held in %s:%i; locks held:\n%s", pszName, pszFile, nLine, LocksHeld());
     abort();
 }
 

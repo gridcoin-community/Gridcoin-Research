@@ -38,10 +38,10 @@ std::string NeuralRequest(std::string MyNeuralRequest)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
-            //printf("Node is a neural participant \r\n");
+            //LogPrintf("Node is a neural participant \n");
             std::string reqid = "reqid";
             pNode->PushMessage("neural", MyNeuralRequest, reqid);
-            if (fDebug3) printf(" PUSH ");
+            if (fDebug3) LogPrintf(" PUSH ");
         }
     }
     return "";
@@ -59,7 +59,7 @@ void GatherNeuralHashes()
             std::string reqid = "reqid";
             std::string command_name="neural_hash";
             pNode->PushMessage("neural", command_name, reqid);
-            if (fDebug10) printf(" Pushed ");
+            if (fDebug10) LogPrintf(" Pushed ");
         }
     }
 }
@@ -71,7 +71,7 @@ bool RequestSupermajorityNeuralData()
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
     std::string reqid = DefaultWalletAddress();
-            
+
     for (auto const& pNode : vNodes)
     {
         if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
@@ -231,14 +231,14 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
         {
             std::string reqid = cpid;
             pNode->PushMessage("neural", command_name, reqid);
-            //if (fDebug3) printf("Requested command %s \r\n",command_name.c_str());
+            //if (fDebug3) LogPrintf("Requested command %s \n",command_name.c_str());
             iContactCount++;
             if (iContactCount >= NodeLimit) return true;
         }
     }
-    if (iContactCount==0) 
+    if (iContactCount==0)
     {
-        printf("No neural network nodes online.");
+        LogPrintf("No neural network nodes online.");
         return false;
     }
     return true;
@@ -289,7 +289,7 @@ Value getpeerinfo(const Array& params, bool fHelp)
 
     Array ret;
     GatherNeuralHashes();
-    
+
     for (auto const& stats : vstats) {
         Object obj;
 
@@ -345,7 +345,7 @@ Value getnettotals(const Array& params, bool fHelp)
 
 
 
-// ppcoin: send alert.  
+// ppcoin: send alert.
 // There is a known deadlock situation with ThreadMessageHandler
 // ThreadMessageHandler: holds cs_vSend and acquiring cs_main in SendMessages()
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
@@ -385,8 +385,8 @@ Value sendalert(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert
@@ -452,8 +452,8 @@ Value sendalert2(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert

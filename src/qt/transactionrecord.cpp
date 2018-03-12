@@ -8,7 +8,7 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
-	
+
 	std::string ShowOrphans = GetArg("-showorphans", "false");
 
 	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
@@ -17,7 +17,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	       //Orphaned tx
 		   return (ShowOrphans=="true" ? true : false);
     }
-	
+
     if (wtx.IsCoinBase())
     {
         // Ensures we show generated coins / mined transactions at depth 1
@@ -93,7 +93,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                         continue; // last coinstake output
 
 					if (wtx.vout.size()==2)
-					{  
+					{
 						//Standard POR CoinStake
 						sub.type = TransactionRecord::Generated;
 						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
@@ -112,7 +112,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 						{
 							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
 						}
-							
+
 						hashPrev = hash;
 					}
                 }
@@ -204,7 +204,7 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
 
     // Find the block the tx is in
     CBlockIndex* pindex = NULL;
-    std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(wtx.hashBlock);
+    BlockMap::iterator mi = mapBlockIndex.find(wtx.hashBlock);
     if (mi != mapBlockIndex.end())
         pindex = (*mi).second;
 

@@ -2,7 +2,7 @@
 #define OVERVIEWPAGE_H
 
 #include <QWidget>
-
+#include <memory>
 
 #ifdef WIN32
 #include <QAxObject>
@@ -38,14 +38,15 @@ public slots:
 
 signals:
     void transactionClicked(const QModelIndex &index);
+    void pollLabelClicked();
 
 protected:
     void resizeEvent(QResizeEvent *event);
     void showEvent(QShowEvent *event);
-    
+
 private:
     void updateTransactions();
-    
+
     Ui::OverviewPage *ui;
     WalletModel *model;
     qint64 currentBalance;
@@ -54,11 +55,12 @@ private:
     qint64 currentImmatureBalance;
 
     TxViewDelegate *txdelegate;
-    TransactionFilterProxy *filter;
+    std::unique_ptr<TransactionFilterProxy> filter;
 
 private slots:
     void updateDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
+    void handlePollLabelClicked();
 };
 
 #endif // OVERVIEWPAGE_H

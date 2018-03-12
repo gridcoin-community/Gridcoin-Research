@@ -24,11 +24,6 @@ SendCoinsEntry::SendCoinsEntry(QWidget *parent) :
 #ifdef Q_OS_MAC
     ui->payToLayout->setSpacing(4);
 #endif
-#if QT_VERSION >= 0x040700
-    /* Do not move this to the XML file, Qt before 4.7 will choke on it */
-    ui->addAsLabel->setPlaceholderText(tr("Enter a label for this address to add it to your address book"));
-    ui->payTo->setPlaceholderText(tr("Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)"));
-#endif
     setFocusPolicy(Qt::TabFocus);
     setFocusProxy(ui->payTo);
 
@@ -87,8 +82,12 @@ void SendCoinsEntry::setModel(WalletModel *model)
     this->model = model;
 
     if(model && model->getOptionsModel())
+    {
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
-
+        connect(model->getOptionsModel(),SIGNAL(walletStylesheetChanged(QString)), this, SLOT(updateIcons()));
+        // set the icons according to the style options
+        updateIcons();
+    }
     connect(ui->payAmount, SIGNAL(textChanged()), this, SIGNAL(payAmountChanged()));
 
     clear();
@@ -188,5 +187,13 @@ void SendCoinsEntry::updateDisplayUnit()
     {
         // Update payAmount with the current unit
         ui->payAmount->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
+    }
+}
+
+void SendCoinsEntry::updateIcons()
+{
+    if(model && model->getOptionsModel())
+    {
+        ui->addressBookButton->setIcon(QIcon(":/icons/address-book_"+model->getOptionsModel()->getCurrentStyle()));
     }
 }

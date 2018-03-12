@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "version.h"
 #include "txdb.h"
 #include "wallet.h"
 #include "walletdb.h"
@@ -108,7 +109,7 @@ Value getinfo(const Array& params, bool fHelp)
 
     Object obj, diff;
     obj.push_back(Pair("version",       FormatFullVersion()));
-    obj.push_back(Pair("minor_version",   MINOR_VERSION));
+    obj.push_back(Pair("minor_version", CLIENT_VERSION_MINOR));
 
     obj.push_back(Pair("protocolversion", PROTOCOL_VERSION));
     obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
@@ -883,11 +884,11 @@ Value addmultisigaddress(const Array& params, bool fHelp)
             CKeyID keyID;
             if (!address.GetKeyID(keyID))
                 throw runtime_error(
-                    strprintf("%s does not refer to a key",ks.c_str()));
+                    strprintf("%s does not refer to a key",ks));
             CPubKey vchPubKey;
             if (!pwalletMain->GetPubKey(keyID, vchPubKey))
                 throw runtime_error(
-                    strprintf("no full public key for address %s",ks.c_str()));
+                    strprintf("no full public key for address %s",ks));
             if (!vchPubKey.IsValid() || !pubkeys[i].SetPubKey(vchPubKey))
                 throw runtime_error(" Invalid public key: "+ks);
         }
@@ -1032,7 +1033,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
         std::string sKey = "";
         std::string sContract = "";
         std::string sDetail = "";
-        
+
         int nConf = std::numeric_limits<int>::max();
         bool fIsWatchonly = false;
         if (it != mapTally.end())
@@ -1061,7 +1062,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
             obj.push_back(Pair("account",       strAccount));
             obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
-            obj.push_back(Pair("tx_count", (*it).second.sContracts.size()));
+            obj.push_back(Pair("tx_count",      (uint64_t) it->second.sContracts.size()));
 
             // Add support for contract or message information appended to the TX itself
             Object oTX;
@@ -1180,7 +1181,7 @@ static void MaybePushAddress(Object & entry, const CTxDestination &dest)
 
     bool fAllAccounts = (strAccount == string("*") || strAccount.empty());
     bool involvesWatchonly = wtx.IsFromMe(MINE_WATCH_ONLY);
-   
+
     // R Halford - Upgrade Bitcoin's ListTransactions to work with Gridcoin
     // Ensure CoinStake addresses are deserialized, convert CoinStake split stake rewards to subsidies, Show POR vs Interest breakout
 
@@ -1370,6 +1371,7 @@ Value listtransactions(const Array& params, bool fHelp)
             "2. count          (numeric, optional, default=10) The number of transactions to return\n"
             "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
             "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
+            "                                     If \"\" is set true, it will list sent transactions as well\n"
             "\nResult:\n"
             "[\n"
             "  {\n"
@@ -1568,7 +1570,7 @@ Value listsinceblock(const Array& params, bool fHelp)
         uint256 blockId = 0;
 
         blockId.SetHex(params[0].get_str());
-        std::map<uint256, CBlockIndex*>::iterator it = mapBlockIndex.find(blockId);
+        BlockMap::iterator it = mapBlockIndex.find(blockId);
         if (it != mapBlockIndex.end())
             pindex = it->second;
 
@@ -1610,7 +1612,7 @@ Value listsinceblock(const Array& params, bool fHelp)
     ret.push_back(Pair("lastblock", lastblock.GetHex()));
 
     return ret;
-    
+
 }
 
 Value gettransaction(const Array& params, bool fHelp)
@@ -1668,7 +1670,7 @@ Value gettransaction(const Array& params, bool fHelp)
             else
             {
                 entry.push_back(Pair("blockhash", hashBlock.GetHex()));
-                map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+                BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
                 if (mi != mapBlockIndex.end() && (*mi).second)
                 {
                     CBlockIndex* pindex = (*mi).second;
@@ -2140,4 +2142,36 @@ Value makekeypair(const Array& params, bool fHelp)
     result.push_back(Pair("PrivateKey", HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end())));
     result.push_back(Pair("PublicKey", HexStr(key.GetPubKey().Raw())));
     return result;
+}
+
+Value burn(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+            "burn <amount> [hex string]\n"
+            "<amount> is a real and is rounded to the nearest 0.00000001"
+            + HelpRequiringPassphrase());
+
+    if (pwalletMain->IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+
+    int64_t nAmount = AmountFromValue(params[0]);
+    CScript scriptPubKey;
+
+    if (params.size() > 1)
+    {
+        vector<unsigned char> data;
+        if (params[1].get_str().size() > 0)
+            data = ParseHexV(params[1], "Data");
+        scriptPubKey = CScript() << OP_RETURN << data;
+    }
+    else
+        scriptPubKey = CScript() << OP_RETURN;
+
+    CWalletTx wtx;
+    string strError = pwalletMain->SendMoney(scriptPubKey, nAmount, wtx);
+    if (!strError.empty())
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+
+    return wtx.GetHash().GetHex();
 }

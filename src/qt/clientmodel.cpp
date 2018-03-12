@@ -89,14 +89,14 @@ void ClientModel::updateTimer()
     {
         cachedNumBlocks = newNumBlocks;
         cachedNumBlocksOfPeers = newNumBlocksOfPeers;
-		
+
         emit numBlocksChanged(newNumBlocks, newNumBlocksOfPeers);
 	}
 	if (GetArg("-suppressnetworkgraph", "false") != "true")
 	{
 		emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
 	}
-    
+
 }
 
 void ClientModel::updateNumConnections(int numConnections)
@@ -172,11 +172,10 @@ QString ClientModel::formatBoostVersion()  const
 {
 	//6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
 		std::ostringstream s;
-		s << "Using Boost "     
+		s << "Using Boost "
           << BOOST_VERSION / 100000     << "."  // major version
           << BOOST_VERSION / 100 % 1000 << "."  // minior version
-          << BOOST_VERSION % 100                // patch level
-          << "\r\n";
+          << BOOST_VERSION % 100;                // patch level
 		return QString::fromStdString(s.str());
 }
 
@@ -184,7 +183,7 @@ QString ClientModel::getDifficulty() const
 {
 	//12-2-2014;R Halford; Display POR Diff on RPC Console
 	double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-	
+
 	std::string diff = RoundToString(PORDiff,4);
 	return QString::fromStdString(diff);
 
@@ -197,19 +196,19 @@ static void NotifyBlocksChanged(ClientModel *clientmodel)
 {
     // This notification is too frequent. Don't trigger a signal.
     // Don't remove it, though, as it might be useful later.
-	
+
 }
 
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)
 {
-    // Too noisy: OutputDebugStringF("NotifyNumConnectionsChanged %i\n", newNumConnections);
+    // Too noisy: LogPrintf("NotifyNumConnectionsChanged %i\n", newNumConnections);
     QMetaObject::invokeMethod(clientmodel, "updateNumConnections", Qt::QueuedConnection,
                               Q_ARG(int, newNumConnections));
 }
 
 static void NotifyAlertChanged(ClientModel *clientmodel, const uint256 &hash, ChangeType status)
 {
-    OutputDebugStringF("NotifyAlertChanged %s status=%i\n", hash.GetHex().c_str(), status);
+    LogPrintf("NotifyAlertChanged %s status=%i\n", hash.GetHex(), status);
     QMetaObject::invokeMethod(clientmodel, "updateAlert", Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(hash.GetHex())),
                               Q_ARG(int, status));
