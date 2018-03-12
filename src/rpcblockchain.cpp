@@ -3303,6 +3303,24 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
         {
             if (QueryByTitle.empty() || QueryByTitle == title)
             {
+
+                if( (title.length()>128) &&
+                    (Expiration.length()>64) &&
+                    (Question.length()>4096) &&
+                    (Answers.length()>8192) &&
+                    (ShareType.length()>64) &&
+                    (sURL.length()>256)  )
+                    continue;
+
+                const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
+
+                std::string::size_type longestanswer = 0;
+                for (const std::string& answer : vAnswers)
+                    longestanswer = std::max( longestanswer, answer.length() );
+
+                if( longestanswer>128 )
+                    continue;
+
                 iPollNumber++;
                 total_participants = 0;
                 total_shares=0;
@@ -3319,7 +3337,6 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 if (bDetail)
                 {
                     entry.push_back(Pair("Question",Question));
-                    const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
                     sExportRow += "<ARRAYANSWERS>";
                     size_t i = 0;
                     for (const std::string& answer : vAnswers)

@@ -8163,12 +8163,12 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 {
                                         if (Contains(sMessageKey,"[Foundation"))
                                         {
-                                                msPoll = "Foundation Poll: " + sMessageKey;
+                                                msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
 
                                         }
                                         else
                                         {
-                                                msPoll = "Poll: " + sMessageKey;
+                                                msPoll = "Poll: " + sMessageKey.substr(0,80);
                                         }
                                 }
 
