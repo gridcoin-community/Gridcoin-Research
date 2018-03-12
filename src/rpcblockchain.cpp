@@ -3299,13 +3299,12 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
         std::string Answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
         std::string ShareType = ExtractXML(contract,"<SHARETYPE>","</SHARETYPE>");
         std::string sURL = ExtractXML(contract,"<URL>","</URL>");
-        boost::to_lower(Title);
-        if (!PollExpired(Title) || IncludeExpired)
+        if (!PollExpired(title) || IncludeExpired)
         {
             if (QueryByTitle.empty() || QueryByTitle == title)
             {
 
-                if( (Title.length()>128) &&
+                if( (title.length()>128) &&
                     (Expiration.length()>64) &&
                     (Question.length()>4096) &&
                     (Answers.length()>8192) &&
