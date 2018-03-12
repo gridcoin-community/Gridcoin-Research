@@ -71,7 +71,7 @@ public:
     void Close();
     void Flush(bool fShutdown);
     void CheckpointLSN(std::string strFile);
-
+    void lsn_reset(const std::string& strFile);
     void CloseDb(const std::string& strFile);
     bool RemoveDb(const std::string& strFile);
 

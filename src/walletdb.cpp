@@ -670,8 +670,11 @@ void ThreadFlushWalletDB(void* parg)
                         // Flush wallet.dat so it's self contained
                         bitdb.CloseDb(strFile);
                         bitdb.CheckpointLSN(strFile);
-
-                        bitdb.mapFileUseCount.erase(mi++);
+                        // The below line is commented out, because the above line (CheckpointLSN) should have never had
+                        // lsn_reset in it. lsn_reset should only be called on the final flush when the wallet is closed.
+                        // This is handled in CDB::Flush, which has a while loop that also does in the right place what
+                        // the intention of the below line was.
+                        // bitdb.mapFileUseCount.erase(mi++);
                         if (fDebug10) printf("Flushed wallet.dat %" PRId64 "ms\n", GetTimeMillis() - nStart);
                     }
                 }
