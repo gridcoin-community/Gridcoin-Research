@@ -300,6 +300,7 @@ static const CRPCCommand vRPCCommands[] =
     { "reorganize",             &rpc_reorganize,         false,  false},
     { "getblockstats",          &rpc_getblockstats,      false,  false},
     { "sendalert2",             &sendalert2,             false,  false},
+    { "getrecentblocks",          &rpc_getrecentblocks,  false,  false},
 };
 
 CRPCTable::CRPCTable()
