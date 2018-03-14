@@ -559,7 +559,7 @@ Value listunspent(const Array& params, bool fHelp)
 
     vector<COutput> vecOutputs;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK(pwalletMain->cs_wallet);
 
     pwalletMain->AvailableCoins(vecOutputs, false,NULL,false);
     for (auto const& out : vecOutputs)
@@ -637,8 +637,6 @@ Value createrawtransaction(const Array& params, bool fHelp)
 
     Array inputs = params[0].get_array();
     Object sendTo = params[1].get_obj();
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTransaction rawTx;
 
@@ -954,7 +952,7 @@ Value sendrawtransaction(const Array& params, bool fHelp)
 
     RPCTypeCheck(params, list_of(str_type));
 
-    LOCK(cs_main);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // parse hex string from parameter
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
