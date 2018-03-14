@@ -437,7 +437,7 @@ Value settxfee(const Array& params, bool fHelp)
             "\n"
             "Sets the txfee for transactions\n");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK(cs_main);
 
     nTransactionFee = AmountFromValue(params[0]);
     nTransactionFee = (nTransactionFee / CENT) * CENT;  // round to cent
@@ -453,8 +453,14 @@ Value getrawmempool(const Array& params, bool fHelp)
             "\n"
             "Returns all transaction ids in memory pool\n");
 
+
     vector<uint256> vtxid;
-    mempool.queryHashes(vtxid);
+
+    {
+        LOCK(mempool.cs);
+
+        mempool.queryHashes(vtxid);
+    }
 
     Array a;
     for (auto const& hash : vtxid)
@@ -474,8 +480,10 @@ Value getblockhash(const Array& params, bool fHelp)
             "Returns hash of block in best-block-chain at <index>\n");
 
     int nHeight = params[0].get_int();
-    if (nHeight < 0 || nHeight > nBestHeight)       throw runtime_error("Block number out of range.");
-    if (fDebug10)   LogPrintf("Getblockhash %f",(double)nHeight);
+    if (nHeight < 0 || nHeight > nBestHeight)
+        throw runtime_error("Block number out of range.");
+    if (fDebug10)
+        LogPrintf("Getblockhash %d", nHeight);
 
     LOCK(cs_main);
 
@@ -497,10 +505,10 @@ Value getblock(const Array& params, bool fHelp)
     std::string strHash = params[0].get_str();
     uint256 hash(strHash);
 
-    LOCK(cs_main);
-
     if (mapBlockIndex.count(hash) == 0)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+    LOCK(cs_main);
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
@@ -519,11 +527,11 @@ Value getblockbynumber(const Array& params, bool fHelp)
             "\n"
             "Returns details of a block with given block-number\n");
 
-    LOCK(cs_main);
-
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range");
+
+    LOCK(cs_main);
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hashBestChain];
@@ -1405,6 +1413,8 @@ Value beaconreport(const Array& params, bool fHelp)
                 "\n"
                 "Displays list of valid beacons in the network\n");
 
+    LOCK(cs_main);
+
     Array res = GetJSONBeaconReport();
 
     return res;
@@ -1428,6 +1438,8 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
 
     if (params.size() > 0)
         sCPID = params[0].get_str();
+
+    LOCK(cs_main);
 
     std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
     std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
@@ -1506,6 +1518,8 @@ Value cpids(const Array& params, bool fHelp)
 
     //Dump vectors:
 
+    LOCK(cs_main);
+
     if (mvCPIDs.size() < 1)
         HarvestCPIDs(false);
 
@@ -1548,6 +1562,9 @@ Value currentneuralhash(const Array& params, bool fHelp)
     Object res;
 
     double popularity = 0;
+
+    LOCK(cs_main);
+
     std::string consensus_hash = GetCurrentNeuralNetworkSupermajorityHash(popularity);
 
     res.push_back(Pair("Popular",consensus_hash));
@@ -1562,6 +1579,8 @@ Value currentneuralreport(const Array& params, bool fHelp)
                 "currentneuralreport\n"
                 "\n"
                 "Displays information for the current neural hashes in network\n");
+
+    LOCK(cs_main);
 
     Array res = GetJSONCurrentNeuralNetworkReport();
 
@@ -1584,6 +1603,8 @@ Value explainmagnitude(const Array& params, bool fHelp)
 
     if (params.size() > 0)
         bForce = params[0].get_bool();
+
+    LOCK(cs_main);
 
     if (bForce)
     {
@@ -1632,6 +1653,8 @@ Value lifetime(const Array& params, bool fHelp)
     c.push_back(Pair("Lifetime Payments Report", Narr));
     results.push_back(c);
 
+    LOCK(cs_main);
+
     CBlockIndex* pindex = pindexGenesisBlock;
 
     while (pindex->nHeight < pindexBest->nHeight)
@@ -1673,7 +1696,11 @@ Value magnitude(const json_spirit::Array& params, bool fHelp)
     if (params.size() > 1)
         cpid = params[0].get_str();
 
-    results = MagnitudeReport(cpid);
+    {
+        LOCK(cs_main);
+
+        results = MagnitudeReport(cpid);
+    }
 
     if (results.size() > 1000)
     {
@@ -1709,8 +1736,11 @@ Value mymagnitude(const Array& params, bool fHelp)
     }
 
     else
-        results = MagnitudeReport(msPrimaryCPID);
+    {
+        LOCK(cs_main);
 
+        results = MagnitudeReport(msPrimaryCPID);
+    }
     return results;
 }
 
@@ -1761,6 +1791,8 @@ Value neuralreport(const Array& params, bool fHelp)
                 "\n"
                 "Displays neural report for the network\n");
 
+    LOCK(cs_main);
+
     Array res = GetJSONNeuralNetworkReport();
 
     return res;
@@ -1775,6 +1807,8 @@ Value proveownership(const Array& params, bool fHelp)
                 "Prove ownership of your CPID\n");
 
     Object res;
+
+    LOCK(cs_main);
 
     HarvestCPIDs(true);
     GetNextProject(true);
@@ -1818,6 +1852,8 @@ Value resetcpids(const Array& params, bool fHelp)
 
     Object res;
 
+    LOCK(cs_main);
+
     ReadConfigFile(mapArgs, mapMultiArgs);
     HarvestCPIDs(true);
     GetNextProject(true);
@@ -1840,6 +1876,8 @@ Value rsa(const Array& params, bool fHelp)
         throw runtime_error(
                 "PrimaryCPID is empty or INVESTOR; No RSA available for this condition\n");
 
+    LOCK(cs_main);
+
     res = MagnitudeReport(msPrimaryCPID);
 
     return res;
@@ -1857,6 +1895,9 @@ Value rsaweight(const Array& params, bool fHelp)
 
     double out_magnitude = 0;
     double out_owed = 0;
+
+    LOCK(cs_main);
+
     int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
     out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid, out_owed);
 
@@ -1876,6 +1917,8 @@ Value staketime(const Array& params, bool fHelp)
                 "Display information about staking time\n");
 
     Object res;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     std::string cpid = GlobalCPUMiningCPID.cpid;
     std::string GRCAddress = DefaultWalletAddress();
@@ -1925,6 +1968,8 @@ Value superblocks(const Array& params, bool fHelp)
     if (params.size() > 0)
         cpid = params[0].get_str();
 
+    LOCK(cs_main);
+
     res = SuperblockReport(cpid);
 
     return res;
@@ -1941,6 +1986,8 @@ Value syncdpor2(const Array& params, bool fHelp)
     Object res;
 
     std::string sOut = "";
+
+    LOCK(cs_main);
 
     bool bFull = GetCountOf("beacon") < 50 ? true : false;
 
@@ -1960,6 +2007,8 @@ Value upgradedbeaconreport(const Array& params, bool fHelp)
                 "\n"
                 "Display upgraded beacon report of the network\n");
 
+    LOCK(cs_main);
+
     Array aUpgBR = GetUpgradedBeaconReport();
 
     return aUpgBR;
@@ -1974,6 +2023,8 @@ Value validcpids(const Array& params, bool fHelp)
                 "Displays information about valid CPIDs collected from BOINC\n");
 
     Array res;
+
+    LOCK(cs_main);
 
     //Dump vectors:
     if (mvCPIDs.size() < 1)
@@ -2225,6 +2276,8 @@ Value dportally(const Array& params, bool fHelp)
 
     Object res;
 
+    LOCK(cs_main);
+
     TallyMagnitudesInSuperblock();
 
     res.push_back(Pair("Done", "Done"));
@@ -2258,6 +2311,8 @@ Value gatherneuralhashes(const Array& params, bool fHelp)
                 "Requests neural network to gather neural hashes\n");
 
     Object res;
+
+    LOCK(cs_main);
 
     GatherNeuralHashes();
 
@@ -2347,6 +2402,9 @@ Value getlistof(const Array& params, bool fHelp)
     std::string sType = params[0].get_str();
 
     res.push_back(Pair("Key Type", sType));
+
+    LOCK(cs_main);
+
     res.push_back(Pair("Data", GetListOf(sType)));
 
     return res;
@@ -2361,6 +2419,8 @@ Value getnextproject(const Array& params, bool fHelp)
                 "Requests wallet to get next project\n");
 
     Object res;
+
+    LOCK(cs_main);
 
     GetNextProject(true);
 
@@ -2385,6 +2445,8 @@ Value listdata(const Array& params, bool fHelp)
 
     res.push_back(Pair("Key Type", sType));
 
+    LOCK(cs_main);
+
     for(const auto& item : ReadCacheSection(sType))
         res.push_back(Pair(item.first, item.second.value));
 
@@ -2403,6 +2465,8 @@ Value memorizekeys(const Array& params, bool fHelp)
 
     std::string sOut;
 
+    LOCK(cs_main);
+
     LoadAdminMessages(true, sOut);
 
     res.push_back(Pair("Results", sOut));
@@ -2419,6 +2483,8 @@ Value network(const Array& params, bool fHelp)
                 "Display information about the network health\n");
 
     Array res;
+
+    LOCK(cs_main);
 
     for(map<string,StructCPID>::iterator ii=mvNetwork.begin(); ii!=mvNetwork.end(); ++ii)
     {
@@ -2483,6 +2549,8 @@ Value projects(const Array& params, bool fHelp)
 
     Array res;
 
+    LOCK(cs_main);
+
     for (const auto& item : ReadCacheSection("project"))
     {
         Object entry;
@@ -2520,6 +2588,8 @@ Value readconfig(const Array& params, bool fHelp)
                 "Re-reads config file; Does not overwrite pre-existing loaded values\n");
 
     Object res;
+
+    LOCK(cs_main);
 
     ReadConfigFile(mapArgs, mapMultiArgs);
 
@@ -2632,6 +2702,7 @@ Value sendblock(const Array& params, bool fHelp)
 
     return res;
 }
+
 Value sendrawcontract(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2682,6 +2753,8 @@ Value superblockaverage(const Array& params, bool fHelp)
 
     Object res;
 
+    LOCK(cs_main);
+
     std::string superblock = ReadCache("superblock", "all").value;
     double out_beacon_count = 0;
     double out_participant_count = 0;
@@ -2711,6 +2784,8 @@ Value tally(const Array& params, bool fHelp)
 
     Object res;
 
+    LOCK(cs_main);
+
     bNetAveragesLoaded_retired = false;
     TallyResearchAverages_v9();
 
@@ -2728,6 +2803,8 @@ Value tallyneural(const Array& params, bool fHelp)
                 "Requests a tally of neural network\n");
 
     Object res;
+
+    LOCK(cs_main);
 
     ComputeNeuralNetworkSupermajorityHashes();
     UpdateNeuralNetworkQuorumData();
@@ -2805,6 +2882,8 @@ Value unusual(const Array& params, bool fHelp)
 
     Object res;
 
+    LOCK(cs_main);
+
     UnusualActivityReport();
 
     res.push_back(Pair("UAR", 1));
@@ -2836,6 +2915,8 @@ Value versionreport(const Array& params, bool fHelp)
                 "versionreport\n"
                 "\n"
                 "Displays a report on various versions recently stake on the network\n");
+
+    LOCK(cs_main);
 
     Array myNeuralJSON = GetJSONVersionReport();
 
@@ -2911,9 +2992,6 @@ Value addpoll(const Array& params, bool fHelp)
 
     else
     {
-
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
         double nBalance = GetTotalBalance();
 
         if (nBalance < 100000)
@@ -3275,7 +3353,7 @@ Value vote(const Array& params, bool fHelp)
         return res;
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK(cs_main, pwalletMain->cs_wallet);
 
     //Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
     //If polltype == 1, use magnitude, if 2 use Balance, if 3 use hybrid:
@@ -3387,6 +3465,8 @@ Value votedetails(const Array& params, bool fHelp)
 
     else
     {
+        LOCK(cs_main);
+
         Array myVotes = GetJsonVoteDetailsReport(Title);
 
         res.push_back(myVotes);
