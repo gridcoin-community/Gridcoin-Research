@@ -288,12 +288,15 @@ Value getpeerinfo(const Array& params, bool fHelp)
                 "\n"
                 "Returns data about each connected network node.");
 
-    LOCK(cs_vNodes);
-
     vector<CNodeStats> vstats;
-    CopyNodeStats(vstats);
-
     Array ret;
+
+    {
+        LOCK(cs_vNodes);
+
+        CopyNodeStats(vstats);
+    }
+
     GatherNeuralHashes();
 
     for (auto const& stats : vstats) {
