@@ -224,5 +224,6 @@ extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool 
 // Brod
 extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert2(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp);
 
 #endif

@@ -4086,7 +4086,8 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
 {
     if(fHelp || params.size() < 1 || params.size() > 3 )
         throw runtime_error(
-            "getblockstats mode [startheight [endheight]]\n"
+            "getblockstats 0 [startheight [endheight]]\n"
+            "getblockstats 1 [samples [endheight]]\n"
             "Show stats on what wallets and cpids staked recent blocks.\n");
     long mode= RoundFromString(params[0].get_str(),0);
     (void)mode; //TODO
@@ -4287,5 +4288,195 @@ json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHel
         }
         result1.push_back(Pair("orgs", result));
     }
+    return result1;
+}
+
+json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
+{
+    if(fHelp)
+        throw runtime_error(
+            "exportstats1 [maxblocks agregate [endblock]] \n");
+    /* count, high */
+    long endblock= INT_MAX;
+    long maxblocks= 805;
+    int  smoothing= 23;
+    if(params.size()>=2)
+    {
+        maxblocks= RoundFromString(params[0].get_str(),0);
+        smoothing= RoundFromString(params[1].get_str(),0);
+    }
+    if(params.size()>=3)
+        endblock= RoundFromString(params[2].get_str(),0);
+    if( (smoothing<1) || (smoothing%2) )
+        throw runtime_error(
+            "smoothing must be even positive\n");
+    /*
+    if( maxblocks % smoothing )
+        throw runtime_error(
+            "maxblocks not a smoothing multiple\n");
+    */
+    CBlockIndex* cur;
+    Object result1;
+    {
+        LOCK(cs_main);
+        cur= pindexBest;
+    }
+
+    double sum_diff = 0;
+    double min_diff = INT_MAX;
+    double max_diff = 0;
+    double sum_spacing = 0;
+    double min_spacing = INT_MAX;
+    double max_spacing = 0;
+    double sum_size = 0;
+    double min_size = INT_MAX;
+    double max_size = 0;
+    double sum_research = 0;
+    double max_research = 0;
+    double sum_interest = 0;
+    double max_interest = 0;
+    double sum_magnitude = 0;
+    unsigned long cnt_empty = 0;
+    unsigned long cnt_investor = 0;
+    unsigned long cnt_trans = 0;
+    unsigned long cnt_research = 0;
+    unsigned long cnt_neuralvote = 0;
+    unsigned long cnt_neuralcurr = 0;
+    unsigned long cnt_contract = 0;
+
+    int64_t blockcount = 0;
+    unsigned long points = 0;
+    double samples = 0; /* this is double for easy division */
+    std::ofstream Output;
+    boost::filesystem::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
+    boost::filesystem::create_directories(o_path.parent_path());
+    Output.open (o_path.string().c_str());
+    Output.imbue(std::locale::classic());
+    Output << std::fixed << std::setprecision(4);
+    Output << "#midheight  ave_diff min_diff max_diff  "
+    "ave_spacing min_spacing max_spacing  ave_size min_size max_size  "
+    "ave_research avenz_research max_research  ave_interest max_interest  "
+    "fra_empty cnt_empty  fra_investor cnt_investor  ave_trans avenz_trans cnt_trans  "
+    "fra_research cnt_research  fra_contract cnt_contract  "
+    "fra_neuralvote cnt_neuralvote fra_neuralcur cnt_neuralcurr  "
+    "avenz_magnitude  \n";
+
+    while( (blockcount < maxblocks) && cur && cur->pprev )
+    {
+        if(cur->nHeight>endblock)
+            continue;
+
+        double i_diff = GetDifficulty(cur);
+        sum_diff= sum_diff + i_diff;
+        min_diff=std::min(min_diff,i_diff);
+        max_diff=std::max(max_diff,i_diff);
+
+        const double i_spacing = (double)cur->nTime - (double)cur->pprev->nTime;
+        sum_spacing= sum_spacing + i_spacing;
+        min_spacing=std::min(min_spacing,i_spacing);
+        max_spacing=std::max(max_spacing,i_spacing);
+
+        cnt_investor += !! (cur->nFlags & CBlockIndex::INVESTOR_CPID);
+        cnt_contract += !! cur->nIsContract;
+
+        CBlock block;
+        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+            throw runtime_error("failed to read block");
+
+        cnt_trans += block.vtx.size()-2; /* 2 transactions are special */
+        cnt_empty += ( block.vtx.size()<=2 );
+        double i_size = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
+        sum_size= sum_size + i_size;
+        min_size=std::min(min_size,i_size);
+        max_size=std::max(max_size,i_size);
+
+        const MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+        cnt_neuralvote += (bb.NeuralHash.size()>0);
+        if( bb.CurrentNeuralHash.size()>0
+            && bb.CurrentNeuralHash != "d41d8cd98f00b204e9800998ecf8427e"
+            && bb.CurrentNeuralHash != "TOTAL_VOTES" )
+        {
+            cnt_neuralcurr += 1;
+        }
+
+        const double i_research = bb.ResearchSubsidy;
+        sum_research= sum_research + i_research;
+        max_research=std::max(max_research,i_research);
+        const double i_interest = bb.InterestSubsidy;
+        sum_interest= sum_interest + i_interest;
+        max_interest=std::max(max_interest,i_interest);
+
+        if(i_research>0)
+        {
+            const double i_magnitude = cur->nMagnitude;
+            sum_magnitude= sum_magnitude + i_magnitude;
+            cnt_research += 1;
+        }
+
+        blockcount++;
+        samples++;
+        if(samples>=smoothing)
+        {
+            int midheight = cur->nHeight + (smoothing/2);
+            double samples_w_cpid = samples - cnt_investor;
+            if(samples == cnt_investor)
+                samples_w_cpid = std::numeric_limits<double>::max();
+            double samples_w_research = cnt_research;
+            if(cnt_research==0)
+                samples_w_research = std::numeric_limits<double>::max();
+            double samples_w_trans = (samples-cnt_empty);
+            if(samples==cnt_empty)
+                samples_w_trans = std::numeric_limits<double>::max();
+            points++;
+            Output << midheight << "  ";
+
+            Output << (sum_diff / samples) << " " << min_diff << " " << max_diff << "  ";
+            Output << (sum_spacing / samples) << " " << min_spacing << " " << max_spacing << "  ";
+            Output << (sum_size / samples) << " " << min_size << " " << max_size << "  ";
+            Output << (sum_research / samples) << " " << (sum_research / samples_w_research) << " " << max_research << "  ";
+            Output << (sum_interest / samples) << " " << max_interest << "  ";
+            Output << (cnt_empty / samples) << " " << cnt_empty << "  ";
+            Output << (cnt_investor / samples) << " " << cnt_investor << "  ";
+            Output << (cnt_trans / samples) << " " << (cnt_trans / samples_w_trans) << " " << cnt_trans << "  ";
+            Output << (cnt_research / samples) << " " << cnt_research << "  ";
+            Output << (cnt_contract / samples) << " " << cnt_contract << "  ";
+            Output << (cnt_neuralvote / samples) << " " << cnt_neuralvote << "  ";
+            Output << (cnt_neuralcurr / samples) << " " << cnt_neuralcurr << "  ";
+            Output << (sum_magnitude / samples_w_cpid) << "  ";
+            // missing: trans, empty, size, neural
+
+            Output << "\n";
+            samples = 0;
+            sum_diff = 0;
+            min_diff = INT_MAX;
+            max_diff = 0;
+            cnt_empty = 0;
+            cnt_investor = 0;
+            sum_spacing = 0;
+            min_spacing = INT_MAX;
+            max_spacing = 0;
+            sum_size = 0;
+            min_size = INT_MAX;
+            max_size = 0;
+            cnt_trans = 0;
+            sum_research = 0;
+            max_research = 0;
+            sum_interest = 0;
+            max_interest = 0;
+            sum_magnitude = 0;
+            cnt_research = 0;
+            cnt_neuralvote = 0;
+            cnt_neuralcurr = 0;
+            cnt_contract = 0;
+        }
+        /* This is wery important */
+        cur = cur->pprev;
+    }
+
+    result1.push_back(Pair("file", o_path.string()));
+    result1.push_back(Pair("points",points));
+    result1.push_back(Pair("smoothing",smoothing));
+    result1.push_back(Pair("blockcount",blockcount));
+    Output.close();
     return result1;
 }
