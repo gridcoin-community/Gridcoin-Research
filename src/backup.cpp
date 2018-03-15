@@ -76,6 +76,8 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
                 // Flush log data to the dat file
                 bitdb.CloseDb(wallet.strWalletFile);
                 bitdb.CheckpointLSN(wallet.strWalletFile);
+                printf("Issuing lsn_reset for backup file portability.\n");
+                bitdb.lsn_reset(wallet.strWalletFile); 
                 bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
                 // Copy wallet.dat
