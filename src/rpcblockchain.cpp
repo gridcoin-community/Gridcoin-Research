@@ -1789,8 +1789,6 @@ Value neuralhash(const Array& params, bool fHelp)
 
     res.push_back(Pair("Popular", consensus_hash));
 
-    results.push_back(entry);
-
     return res;
 }
 #endif
@@ -2162,7 +2160,7 @@ Value currentcontractaverage(const Array& params, bool fHelp)
     res.push_back(Pair("Length", (int)contract.length()));
     res.push_back(Pair("Wallet Neural Hash", neural_hash));
 
-    results.push_back(entry);
+    return res;
 }
 #endif
 
