@@ -3612,6 +3612,10 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
                 "Please Reindex the chain and Restart.\n");
             exit(1); //todo
         }
+
+        int nMismatchSpent;
+        int64_t nBalanceInQuestion;
+        pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 
     if (fDebug && cnt_dis>0) printf("ReorganizeChain: disconnected %d blocks\n",cnt_dis);
@@ -4497,21 +4501,11 @@ void GridcoinServices()
 
     //Backup the wallet once per 900 blocks or as specified in config:
     int nWBI = GetArg("-walletbackupinterval", 900);
-    if (nWBI == 0)
-        nWBI = 900;
-
-   if (TimerMain("backupwallet", nWBI))
+    if (nWBI && TimerMain("backupwallet", nWBI))
     {
         bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
         bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
         printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
-    }
-
-    if (false && TimerMain("FixSpentCoins",60))
-    {
-            int nMismatchSpent;
-            int64_t nBalanceInQuestion;
-            pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 
     if (TimerMain("MyNeuralMagnitudeReport",30))
@@ -4528,10 +4522,6 @@ void GridcoinServices()
         catch (std::exception &e)
         {
             printf("Error in MyNeuralMagnitudeReport1.");
-        }
-        catch(...)
-        {
-            printf("Error in MyNeuralMagnitudeReport.");
         }
     }
 
