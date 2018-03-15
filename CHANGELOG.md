@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.11.0] Unreleased, leisure
+## [3.7.11.0] 2018-03-15, leisure
 ### Fixed
  - Fix wallet being locked while flushing. It now requires a clean shutdown
    or a backup to migrate the wallet.dat to a different system, #1010 (@jamescowens).
