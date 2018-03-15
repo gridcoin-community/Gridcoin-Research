@@ -1484,7 +1484,19 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
 
     if (!sPubKey.empty())
     {
-        std::string sSignature = SignBlockWithCPID(sCPID,hashBlock.GetHex());
+        bool bResult;
+        std::string sSignature;
+        std::string sError;
+
+        bResult = SignBlockWithCPID(sCPID, hashBlock.GetHex(), sSignature, sError);
+
+        if (!bResult)
+        {
+            sErr += "Failed to sign block with cpid ";
+            sErr += sError;
+            sErr += ";";
+        }
+
         bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
 
         res.push_back(Pair("Block Signing Test Results", fResult));
@@ -2353,40 +2365,6 @@ Value genboinckey(const Array& params, bool fHelp)
     return res;
 }
 
-Value genorgkey(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "genorgkey <passphrase> <orgranization>\n"
-                "\n"
-                "<passphrase> ----> Set passphrase to be used\n"
-                "<orgranization> -> Set orgranization name to be used\n"
-                "\n"
-                "Generates an Org key\n");
-
-    Object res;
-
-    std::string sParam1 = params[0].get_str();
-    std::string sParam2 = params[1].get_str();
-    std::string sboinchashargs = LegacyDefaultBoincHashArgs();
-
-    res.push_back(Pair("Passphrase", sParam1));
-    res.push_back(Pair("OrgName", sParam2));
-
-    if (sParam1 != sboinchashargs)
-        res.push_back(Pair("Error", "Admin must be logged in"));
-
-    else
-    {
-        std::string modulus = sboinchashargs.substr(0, 12);
-        std::string key = sParam2 + "," + AdvancedCryptWithSalt(modulus, sParam2);
-
-        res.push_back(Pair("OrgKey", key));
-    }
-
-    return res;
-}
-
 Value getlistof(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2787,7 +2765,8 @@ Value tally(const Array& params, bool fHelp)
     LOCK(cs_main);
 
     bNetAveragesLoaded_retired = false;
-    TallyResearchAverages_v9();
+    CBlockIndex* tallyIndex = FindTallyTrigger(pindexBest);
+    TallyResearchAverages_v9(tallyIndex);
 
     res.push_back(Pair("Tally Network Averages", 1));
 
@@ -2847,30 +2826,6 @@ Value testnewcontract(const Array& params, bool fHelp)
     return res;
 }
 #endif
-
-Value testorgkey(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "testorgkey <organization> <publickey>\n"
-                "\n"
-                "<organization> -> Organization name\n"
-                "<publickey> ----> Public key for testing\n"
-                "\n"
-                "Test a orgkey created by genorgkey\n");
-
-    Object res;
-
-    std::string sParam1 = params[0].get_str();
-    std::string sParam2 = params[1].get_str();
-    std::string key = sParam1 + "," + AdvancedDecryptWithSalt(sParam2, sParam1);
-
-    res.push_back(Pair("Org", sParam1));
-    res.push_back(Pair("Key", sParam2));
-    res.push_back(Pair("PubKey", key));
-
-    return res;
-}
 
 Value unusual(const Array& params, bool fHelp)
 {
@@ -3353,7 +3308,7 @@ Value vote(const Array& params, bool fHelp)
         return res;
     }
 
-    LOCK(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     //Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
     //If polltype == 1, use magnitude, if 2 use Balance, if 3 use hybrid:
@@ -3479,7 +3434,6 @@ Value execute(const Array& params, bool fHelp)
 {
     throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
 }
->>>>>>> latest changes
 
 Array SuperblockReport(std::string cpid)
 {

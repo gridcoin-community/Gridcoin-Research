@@ -368,7 +368,6 @@ static const CRPCCommand vRPCCommands[] =
     { "forcequorom",             &forcequorom,             false,  cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
     { "genboinckey",             &genboinckey,             false,  cat_developer     },
-    { "genorgkey",               &genorgkey,               false,  cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
     { "getlistof",               &getlistof,               false,  cat_developer     },
     { "getnextproject",          &getnextproject,          false,  cat_developer     },
@@ -394,7 +393,6 @@ static const CRPCCommand vRPCCommands[] =
 #ifdef WIN32
     { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
 #endif
-    { "testorgkey",              &testorgkey,              false,  cat_developer     },
     { "unusual",                 &unusual,                 false,  cat_developer     },
     { "updatequoromdata",        &updatequoromdata,        false,  cat_developer     },
     { "versionreport",           &versionreport,           false,  cat_developer     },
