@@ -1284,7 +1284,7 @@ Value rain(const json_spirit::Array& params, bool fHelp)
     int64_t totalAmount = 0;
     double dTotalToSend = 0;
     std::vector<std::string> vRecipients = split(sRecipients.c_str(),"<ROW>");
-    printf("Creating Rain transaction with %f recipients. ",(double)vRecipients.size());
+    LogPrintf("Creating Rain transaction with %" PRId64 " recipients. ", vRecipients.size());
 
     for (unsigned int i = 0; i < vRecipients.size(); i++)
     {
@@ -1330,7 +1330,7 @@ Value rain(const json_spirit::Array& params, bool fHelp)
     CReserveKey keyChange(pwalletMain);
     int64_t nFeeRequired = 0;
     bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired);
-    printf("Transaction Created.");
+    LogPrintf"Transaction Created.");
 
     if (!fCreated)
     {
@@ -1339,16 +1339,16 @@ Value rain(const json_spirit::Array& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
     }
 
-    printf("Committing.");
+    LogPrintf"Committing.");
     // Rain the recipients
     if (!pwalletMain->CommitTransaction(wtx, keyChange))
     {
-        printf("Commit failed.");
+        LogPrintf"Commit failed.");
 
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
     }
     std::string sNarr = "Rain successful:  Sent " + wtx.GetHash().GetHex() + ".";
-    printf("Success %s",sNarr.c_str());
+    LogPrintf"Success %s",sNarr.c_str());
 
     res.push_back(Pair("Response", sNarr));
 
@@ -1535,7 +1535,7 @@ Value cpids(const Array& params, bool fHelp)
     if (mvCPIDs.size() < 1)
         HarvestCPIDs(false);
 
-    printf ("generating cpid report\n");
+    LogPrintf("generating cpid report\n");
 
     for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
     {
@@ -2356,7 +2356,7 @@ Value genboinckey(const Array& params, bool fHelp)
     std::string sBase = EncodeBase64(sParam);
 
     if (fDebug3)
-        printf("GenBoincKey: Utilizing email %s with %s for %s\r\n", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
+        LogPrintf"GenBoincKey: Utilizing email %s with %s for %s\r\n", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
 
     res.push_back(Pair("[Specify in config file without quotes] boinckey=", sBase));
 
@@ -3257,7 +3257,7 @@ Value restart(const Array& params, bool fHelp)
 
     Object res;
 
-    printf("Restarting Gridcoin...");
+    LogPrintf"Restarting Gridcoin...");
     int iResult = Restarter::RestartGridcoin();
     res.push_back(Pair("RebootClient", iResult));
 
@@ -3352,7 +3352,7 @@ Value vote(const Array& params, bool fHelp)
 
                 StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
 
-                printf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
+                LogPrintf"CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
 
                 double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
