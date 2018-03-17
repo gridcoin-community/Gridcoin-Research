@@ -111,7 +111,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
 {
     if (wallet.IsLocked() || fWalletUnlockStakingOnly)
     {
-        sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
+        sErrors = "Wallet needs to be fully unlocked to backup private keys.";
         return false;
     }
     filesystem::path PrivateKeysTarget = GetBackupFilename("keys.dat");

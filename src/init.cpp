@@ -421,11 +421,18 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     fDebug3 = false;
+
     if (GetArg("-debug3", "false")=="true")
     {
             fDebug3 = true;
             LogPrintf("Entering GRC debug mode 3.\n");
     }
+
+    fDebug4 = GetBoolArg("-debug4");
+
+    if (fDebug4)
+        printf("Entering RPC time debug mode\r\n");
+
     fDebug10= (GetArg("-debug10","false")=="true");
 
 #if !defined(WIN32) && !defined(QT_GUI)

@@ -88,6 +88,7 @@ extern bool fDebug;
 extern bool fDebugNet;
 extern bool fDebug2;
 extern bool fDebug3;
+extern bool fDebug4;
 extern bool fDebug10;
 
 extern bool fPrintToConsole;
