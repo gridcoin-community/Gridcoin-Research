@@ -1,3 +1,4 @@
+
 // Backup related functions are placed here to keep vital sections of
 // code contained while maintaining clean code.
 
@@ -76,7 +77,7 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
                 // Flush log data to the dat file
                 bitdb.CloseDb(wallet.strWalletFile);
                 bitdb.CheckpointLSN(wallet.strWalletFile);
-                printf("Issuing lsn_reset for backup file portability.\n");
+                LogPrintf("Issuing lsn_reset for backup file portability.");
                 bitdb.lsn_reset(wallet.strWalletFile); 
                 bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
