@@ -68,43 +68,39 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
 {
     if (!wallet.fFileBacked)
         return false;
-    while (!fShutdown)
-    {
-        {
-            LOCK(bitdb.cs_db);
-            if (!bitdb.mapFileUseCount.count(wallet.strWalletFile) || bitdb.mapFileUseCount[wallet.strWalletFile] == 0)
-            {
-                // Flush log data to the dat file
-                bitdb.CloseDb(wallet.strWalletFile);
-                bitdb.CheckpointLSN(wallet.strWalletFile);
-                LogPrintf("Issuing lsn_reset for backup file portability.");
-                bitdb.lsn_reset(wallet.strWalletFile); 
-                bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
-                // Copy wallet.dat
-                filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
-                filesystem::path WalletTarget = strDest;
-                filesystem::create_directories(WalletTarget.parent_path());
-                if (filesystem::is_directory(WalletTarget))
-                    WalletTarget /= wallet.strWalletFile;
-                try
-                {
-                    #if BOOST_VERSION >= 104000
-                        filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
-                    #else
-                        filesystem::copy_file(WalletSource, WalletTarget);
-                    #endif
-                    LogPrintf("BackupWallet: Copied wallet.dat to %s\n", WalletTarget.string());
-                    return true;
-                }
-                catch(const filesystem::filesystem_error &e) {
-                    LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\n", WalletTarget.string(), e.what());
-                    return false;
-                }
-            }
+    LOCK(bitdb.cs_db);
+    if (!bitdb.mapFileUseCount.count(wallet.strWalletFile) || bitdb.mapFileUseCount[wallet.strWalletFile] == 0)
+    {
+        // Flush log data to the dat file
+        bitdb.CloseDb(wallet.strWalletFile);
+        bitdb.CheckpointLSN(wallet.strWalletFile);
+        LogPrintf("Issuing lsn_reset for backup file portability.");
+        bitdb.lsn_reset(wallet.strWalletFile);
+        bitdb.mapFileUseCount.erase(wallet.strWalletFile);
+
+        // Copy wallet.dat
+        filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
+        filesystem::path WalletTarget = strDest;
+        filesystem::create_directories(WalletTarget.parent_path());
+        if (filesystem::is_directory(WalletTarget))
+            WalletTarget /= wallet.strWalletFile;
+        try
+        {
+#if BOOST_VERSION >= 104000
+            filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
+#else
+            filesystem::copy_file(WalletSource, WalletTarget);
+#endif
+            LogPrintf("BackupWallet: Copied wallet.dat to %s\n", WalletTarget.string());
+            return true;
         }
-        MilliSleep(100);
+        catch(const filesystem::filesystem_error &e) {
+            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\n", WalletTarget.string(), e.what());
+            return false;
+        }
     }
+
     return false;
 }
 
