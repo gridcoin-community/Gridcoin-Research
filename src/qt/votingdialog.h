@@ -185,8 +185,7 @@ private:
     QLabel *question_;
     QLabel *url_;
 #ifdef QT_CHARTS_LIB
-    QTCHARTS_USE_NAMESPACE;
-    QChart *chart_;
+    QtCharts::QChart *chart_;
 #endif
     QTableWidget *answerTable_;
     QStringList answerTableHeader;
