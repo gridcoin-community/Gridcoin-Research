@@ -559,7 +559,7 @@ Value listunspent(const Array& params, bool fHelp)
 
     vector<COutput> vecOutputs;
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     pwalletMain->AvailableCoins(vecOutputs, false,NULL,false);
     for (auto const& out : vecOutputs)
