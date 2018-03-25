@@ -4954,7 +4954,7 @@ bool LoadBlockIndex(bool fAllowNew)
         block.nNonce = !fTestNet ? 130208 : 22436;
         LogPrintf("starting Genesis Check...");
         // If genesis block hash does not match, then generate new genesis hash.
-        if (block.GetHash() != hashGenesisBlock)
+        if (block.GetHash() != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
         {
             LogPrintf("Searching for genesis block...\n");
             // This will figure out a valid hash and Nonce if you're
