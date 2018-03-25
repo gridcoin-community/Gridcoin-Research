@@ -150,7 +150,7 @@ Value getwalletinfo(const Array& params, bool fHelp)
                 "\n"
                 "Displays information about the wallet\n");
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     Object res;
 
