@@ -788,7 +788,7 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-/*    if (GetBoolArg("-upgradewallet", fFirstRun))
+    if (GetBoolArg("-upgradewallet", fFirstRun))
     {
         int nMaxVersion = GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
@@ -802,7 +802,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nMaxVersion < pwalletMain->GetVersion())
             strErrors << _("Cannot downgrade wallet") << "\n";
         pwalletMain->SetMaxVersion(nMaxVersion);
-    }*/
+    }
 
     if (fFirstRun)
     {
