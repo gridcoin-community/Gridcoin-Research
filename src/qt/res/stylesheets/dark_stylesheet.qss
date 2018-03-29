@@ -512,6 +512,14 @@ QToolBar#toolbar3 QLabel{
     font-weight:bold;
 }
 
+#SendCoinsEntry {
+    background-color: rgb(49,54,59);
+}
+
+#scrollAreaWidgetContents{
+    background-color: rgb(49,54,59);
+}
+
 /* options dialog */
 
 #statusLabel{
