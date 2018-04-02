@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <set>
+#include <memory>
 
 #ifdef DEBUG_LOCKCONTENTION
 void PrintLockContention(const char* pszName, const char* pszFile, int nLine)
