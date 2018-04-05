@@ -1898,15 +1898,15 @@ void BitcoinGUI::updateStakingIcon()
     uint64_t nWeight, nLastInterval;
     std::string ReasonNotStaking;
     { LOCK(MinerStatus.lock);
-        // not using real weigh to not break calculation
-        nWeight = MinerStatus.ValueSum;
+        // not using real weight to not break calculation - fixed - but retaining GRC units for instead of internal weight units.
+        nWeight = MinerStatus.WeightSum / 80.0;
         nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
         ReasonNotStaking = MinerStatus.ReasonNotStaking;
     }
 
-    uint64_t nNetworkWeight = GetPoSKernelPS();
+    uint64_t nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
     bool staking = nLastInterval && nWeight;
-    uint64_t nEstimateTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / nWeight) : 0;
+    uint64_t nEstimateTime = GetEstimatedTimetoStake();
 
     if (staking)
     {
