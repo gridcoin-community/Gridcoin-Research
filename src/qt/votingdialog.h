@@ -22,6 +22,7 @@
 
 #ifdef QT_CHARTS_LIB
 #include <QtCharts/QChartGlobal>
+#include <QtCharts>
 QT_CHARTS_BEGIN_NAMESPACE
 class QChart;
 QT_CHARTS_END_NAMESPACE
@@ -213,7 +214,7 @@ private:
     QPushButton *voteButton;
     QString GetVoteValue(void);
     QString sVoteTitle;
-    
+
 private slots:
     void vote(void);
 };
