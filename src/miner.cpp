@@ -804,6 +804,13 @@ bool IsMiningAllowed(CWallet *pwallet)
         status=false;
     }
 
+    if(false==GetBoolArg("-staking",true))
+    {
+        LOCK(MinerStatus.lock);
+        MinerStatus.ReasonNotStaking+=_("Disabled in Config; ");
+        status=false;
+    }
+
     if(fDevbuildCripple)
     {
         LOCK(MinerStatus.lock);
