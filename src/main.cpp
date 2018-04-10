@@ -1909,9 +1909,10 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
             // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
 
+            /* Constant Block Reward */
             AppCacheEntry oCBReward= ReadCache("constblkreward","constblkreward");
             int64_t nCBReward = RoundFromString(oCBReward.value,12);
-            if(nCBReward)
+            if(nCBReward && fTestNet && GetBoolArg("-constblkreward",true))
                 nInterest= nCBReward;
 
             int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
