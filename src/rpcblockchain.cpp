@@ -4960,3 +4960,179 @@ Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
     }
     return result1;
 }
+
+json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHelp)
+{
+    if(fHelp || params.size() != 2 )
+        throw runtime_error(
+            "getsupervotes mode superblock\n"
+            "Report votes for specified superblock.\n"
+            "mode: 0=text, 1,2=json\n"
+            "superblock: block hash or last= currently active, now= ongoing sb votes.\n"
+            );
+    long mode= RoundFromString(params[0].get_str(),0);
+    CBlockIndex* pStart=NULL;
+    long nMaxDepth_weight= 0;
+    Object result1;
+    if("last"==params[1].get_str())
+    {
+        std::string sheight= ReadCache("superblock", "block_number").value;
+        long height= RoundFromString(sheight,0);
+        if(!height)
+        {
+            result1.push_back(Pair("error","No superblock loaded"));
+            return result1;
+        }
+        CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(height);
+        if(!pblockindex)
+        {
+            result1.push_back(Pair("height_cache",sheight));
+            result1.push_back(Pair("error","Superblock not found in block index"));
+            return result1;
+        }
+        if(!pblockindex->nIsSuperBlock)
+        {
+            result1.push_back(Pair("height_cache",sheight));
+            result1.push_back(Pair("block_hash",pblockindex->GetBlockHash().GetHex()));
+            result1.push_back(Pair("error","Superblock loaded not a Superblock"));
+            return result1;
+        }
+        pStart=pblockindex;
+
+        /* sb votes are evaluated on content of the previous block */
+        nMaxDepth_weight= pStart->nHeight -1;
+    }
+    else 
+    if("now"==params[1].get_str())
+    {
+        LOCK(cs_main);
+        pStart=pindexBest;
+        nMaxDepth_weight= pStart->nHeight;
+    }
+    else
+    {
+        LOCK(cs_main);
+        std::string strHash = params[1].get_str();
+        uint256 hash(strHash);
+
+        if (mapBlockIndex.count(hash) == 0)
+        {
+            result1.push_back(Pair("error","Block hash not found in block index"));
+            return result1;
+        }
+
+
+        CBlockIndex* pblockindex = mapBlockIndex[hash];
+
+        if(!pblockindex->nIsSuperBlock)
+        {
+            result1.push_back(Pair("block_hash",pblockindex->GetBlockHash().GetHex()));
+            result1.push_back(Pair("error","Requested block is not a Superblock"));
+            return result1;
+        }
+        pStart = pblockindex;
+
+        /* sb votes are evaluated on content of the previous block */
+        nMaxDepth_weight= pStart->nHeight -1;
+    }
+
+    {
+        Object info;
+        CBlock block;
+        if(!block.ReadFromDisk(pStart->nFile,pStart->nBlockPos,true))
+            throw runtime_error("failed to read block");
+        //assert(block.vtx.size() > 0);
+        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+        info.push_back(Pair("block_hash",pStart->GetBlockHash().GetHex()));
+        info.push_back(Pair("height",pStart->nHeight));
+        info.push_back(Pair("neuralhash", bb.NeuralHash ));
+        std::string superblock = UnpackBinarySuperblock(bb.superblock);
+        std::string neural_hash = GetQuorumHash(superblock);
+        info.push_back(Pair("contract_size", superblock.size() ));
+        info.push_back(Pair("packed_size", bb.superblock.size() ));
+        info.push_back(Pair("contract_hash", neural_hash ));
+        result1.push_back(Pair("info", info ));
+    }
+
+    Object votes;
+    std::map<std::string,double> tally;
+
+    long blockcount=0;
+    long maxblocks= 200;
+
+    CBlockIndex* cur = pStart;
+
+    for( ; (cur
+            &&( blockcount<maxblocks )
+        );
+        cur= cur->pprev, ++blockcount
+        )
+    {
+
+        double diff = GetDifficulty(cur);
+        signed int delta = 0;
+        if(cur->pprev)
+            delta = (cur->nTime - cur->pprev->nTime);
+
+        CBlock block;
+        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+            throw runtime_error("failed to read block");
+        //assert(block.vtx.size() > 0);
+        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+
+        if(bb.NeuralHash.empty())
+            continue;
+
+        uint64_t stakeout = 0;
+        if(block.vtx.size()>1 && block.vtx[1].vout.size()>1)
+        {
+            stakeout += block.vtx[1].vout[1].nValue;
+            if(block.vtx[1].vout.size()>2)
+                stakeout += block.vtx[1].vout[2].nValue;
+            //could have used for loop
+        }
+
+        long distance= (nMaxDepth_weight-cur->nHeight)+10;
+        double multiplier = 200;
+        if (distance < 40) multiplier = 400;
+        double weight = (1.0/distance)*multiplier;
+
+        /* Tally votes */
+        tally[bb.NeuralHash] += weight;
+
+        if(mode==0)
+        {
+            std::string line
+            =     bb.NeuralHash
+            + "|"+RoundToString(weight/10.0,5)
+            + "|"+bb.Organization
+            + "|"+bb.clientversion
+            + "|"+RoundToString(diff,3)
+            + "|"+RoundToString(delta,0)
+            + "|"+bb.cpid
+            ;
+            votes.push_back(Pair(ToString(cur->nHeight), line ));
+        }
+        else
+        {
+            Object result2;
+            result2.push_back(Pair("neuralhash", bb.NeuralHash ));
+            result2.push_back(Pair("weight", weight ));
+            result2.push_back(Pair("cpid", cur->GetCPID() ));
+            result2.push_back(Pair("organization", bb.Organization ));
+            result2.push_back(Pair("cversion", bb.clientversion ));
+            if(mode>=2)
+            {
+                result2.push_back(Pair("difficulty", diff ));
+                result2.push_back(Pair("delay", delta ));
+                result2.push_back(Pair("hash", cur->GetBlockHash().GetHex() ));
+                result2.push_back(Pair("stakeout", (double) stakeout / COIN ));
+            }
+            votes.push_back(Pair(ToString(cur->nHeight), result2 ));
+        }
+
+    }
+    result1.push_back(Pair("votes", votes ));
+
+    return result1;
+}
