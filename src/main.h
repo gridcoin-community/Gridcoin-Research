@@ -227,6 +227,8 @@ struct globalStatusType
     std::string netWeight;
     std::string coinWeight;
     std::string magnitude;
+    std::string ETTS;
+    std::string ERRperday;
     std::string project;
     std::string cpid;
     std::string status;
@@ -283,7 +285,12 @@ std::string UnpackBinarySuperblock(std::string sBlock);
 bool IsSuperBlock(CBlockIndex* pIndex);
 bool LoadSuperblock(std::string data, int64_t nTime, int height);
 
-double GetPoSKernelPS();
+double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
+double GetAverageDifficulty(unsigned int nPoSInterval = 40);
+//double GetEstimatedTimetoStake(unsigned int nPoSInterval = 40, double dConfidence = 0.8);
+// Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
+// GetAverageDifficulty(nPosInterval) = to dDiff here.
+double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);

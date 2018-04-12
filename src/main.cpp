@@ -386,10 +386,10 @@ bool FullSyncWithDPORNodes()
     const int64_t nLookback = 30 * 6 * 86400;
     const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
     std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
-		        std::string sWhitelist = GetListOf("project");
+                std::string sWhitelist = GetListOf("project");
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-				LogPrintf(" list of cpids %s \n",cpiddata);
+                LogPrintf(" list of cpids %s \n",cpiddata);
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
                 std::string sAge = ToString(superblock_age);
@@ -403,38 +403,289 @@ bool FullSyncWithDPORNodes()
             return true;
 }
 
-double GetPoSKernelPS()
+double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
 {
-    int nPoSInterval = 72;
-    double dStakeKernelsTriedAvg = 0;
-    int nStakesHandled = 0, nStakesTime = 0;
+    // The number of stakes to include in the average has been reduced to 40 (default) from 72. 72 stakes represented 1.8 hours at
+    // standard spacing. This is too long. 40 blocks is nominally 1 hour.
+    double result;
 
-    CBlockIndex* pindex = pindexBest;;
-    CBlockIndex* pindexPrevStake = NULL;
+    // The constant below comes from (MaxHash / StandardDifficultyTarget) * 16 sec / 90 sec. If you divide it by 80 to convert to GRC you
+    // get the familiar 9544517.40667
+    result = 763561392.533 * GetAverageDifficulty(nPoSInterval);
+    if (fDebug10) LogPrintf("GetEstimatedNetworkWeight debug: Network Weight = %f", result);
+    if (fDebug10) LogPrintf("GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
+
+    return result;
+}
+
+double GetAverageDifficulty(unsigned int nPoSInterval)
+{
+    /*
+     * Diff is inversely related to Target (without the coinweight multiplier), but proportional to the
+     * effective number of coins on the network. This is tricky, if you want to get the average target value
+     * used over an interval you should use a harmonic average, since target is inversely related to diff. If
+     * on the other hand, you want to average diff in a way to also determine the average coins active in
+     * the network, you should simply use an arithmetic average. See the relation between diff and estimated
+     * network weight above. We do not need to take into account the actual spacing of the blocks, because this
+     * already handled by the retargeting in GetNextTargetRequiredV2, and in fact, given the random distribution
+     * of block spacing, it would be harmful to use a spacing correction for small nPoSInterval sizes.
+     *
+     * Also... The number of stakes to include in the average has been reduced to 40 (default) from 72.
+     * 72 stakes represented 1.8 hours at standard spacing. This is too long. 40 blocks is nominally 1 hour.
+     */
+     
+    double dDiff = 1.0;
+    double dDiffSum = 0.0;
+    unsigned int nStakesHandled = 0;
+    double result;
+
+    CBlockIndex* pindex = pindexBest;
 
     while (pindex && nStakesHandled < nPoSInterval)
     {
         if (pindex->IsProofOfStake())
         {
-            dStakeKernelsTriedAvg += GetDifficulty(pindex) * 4294967296.0;
-            nStakesTime += pindexPrevStake ? (pindexPrevStake->nTime - pindex->nTime) : 0;
-            pindexPrevStake = pindex;
-            nStakesHandled++;
+            dDiff = GetDifficulty(pindex);
+            // dDiff should never be zero, but just in case, skip the block and move to the next one. 
+            if (dDiff)
+            {
+                dDiffSum += dDiff;
+                nStakesHandled++;
+                if (fDebug10) LogPrintf("GetAverageDifficulty debug: dDiff = %f", dDiff);
+                if (fDebug10) LogPrintf("GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
+            }
         }
 
         pindex = pindex->pprev;
     }
 
-    double result = 0;
+    result = nStakesHandled ? dDiffSum / nStakesHandled : 0;
+    if (fDebug10) LogPrintf("GetAverageDifficulty debug: Average dDiff = %f", result);
 
-    if (nStakesTime)
-        result = dStakeKernelsTriedAvg / nStakesTime;
-
-    if (IsProtocolV2(nBestHeight))
-        result *= STAKE_TIMESTAMP_MASK + 1;
-
-    return result/100;
+    return result;
 }
+
+double GetEstimatedTimetoStake(double dDiff, double dConfidence)
+{
+    /*
+     * The algorithm below is an attempt to come up with a more accurate way of estimating Time to Stake (ETTS) based on 
+     * the actual situation of the miner and UTXO's. A simple equation will not provide good results, because in mainnet,
+     * the cooldown period is 16 hours, and depending on how many UTXO's and where they are with respect to getting out of 
+     * cooldown has a lot to do with the expected time to stake.
+     *
+     * The way to conceptualize the approach below is to think of the UTXO's as bars on a Gantt Chart. It is a negative Gantt
+     * chart, meaning that each UTXO bar is cooldown period long, and while the current time is in that bar, the staking probability
+     * for the UTXO is zero, and UnitStakingProbability elsewhere. A timestamp mask of 16x the normal mask is used to reduce
+     * the work in the nested loop, so that a 16 hour interval will have a maximum of 225 events, and most likely far less.
+     * This is important, because the inner loop will be the number of UTXO's. A future improvement to this algorithm would 
+     * also be to quantize (group) the UTXO's themselves (the Gantt bars) so that the work would be further reduced.
+     * You will see that once the UTXO's are sorted in ascending order based on the time of the end of each of their cooldowns, this
+     * becomes a manageable algorithm to piece the probabilities together.
+     *
+     * You will note that the compound Poisson (geometric) recursive probability relation is used, since you cannot simply add
+     * the probabilities due to consideration of high confidence (CDF) values of 80% or more.
+     *
+     * Thin local data structures are used to hold the UTXO information. This minimizes the amount of time
+     * that locks on the wallet need to be held at the expense of a little memory consumption.
+     */
+
+    double result = 0.0;
+
+    // dDiff must be >= 0 and dConfidence must lie on the interval [0,1) otherwise this is an error.
+    assert(dDiff >= 0 && dConfidence >= 0 && dConfidence < 1);
+
+    // if dConfidence = 0, then the result must be 0.
+    if (!dConfidence)
+    {
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Confidence of 0 specified: ETTS = %f", result);
+        return result;
+    }
+
+    bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+    // Get out early if not staking and set return value of 0.
+    if (!staking)
+    {
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
+        return result;
+    }
+
+    int64_t nValue = 0;
+    int64_t nCurrentTime = GetAdjustedTime();
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
+    
+    CTxDB txdb("r");
+
+    // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
+    // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
+    // really expensive.
+    const int ETTS_TIMESTAMP_MASK = (16 * (STAKE_TIMESTAMP_MASK + 1)) - 1;
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
+
+    int64_t BalanceAvailForStaking = 0;
+    vector<COutput> vCoins;
+    
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        
+        BalanceAvailForStaking = pwalletMain->GetBalance() - nReserveBalance;
+
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: BalanceAvailForStaking = %u", BalanceAvailForStaking);
+        
+        // Get out early if no balance available and set return value of 0. This should already have happened above, because with no
+        // balance left after reserve, staking should be disabled; however, just to be safe...
+        if (BalanceAvailForStaking <= 0)
+        {
+            if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: No balance available: ETTS = %f", result);
+            return result;
+        }
+
+        //reminder... void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
+        pwalletMain->AvailableCoins(vCoins, true, NULL, true);
+    }
+
+    
+    // An efficient local structure to store the UTXO's with the bare minimum info we need.
+    typedef vector< std::pair<int64_t, int64_t> > vCoinsExt;
+    vCoinsExt vUTXO;
+    // A local ordered set to store the unique "bins" corresponding to the UTXO transaction times. We are going to use this
+    // for the outer loop.
+    std::set<int64_t> UniqueUTXOTimes;
+    // We want the first "event" to be the CurrentTime. This does not have to be quantized.
+    UniqueUTXOTimes.insert(nCurrentTime);
+    
+    // Debug output cooldown...
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nStakeMinAge = %i", nStakeMinAge);
+
+    // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty over the default PoSInterval of 40 blocks by calling
+    // GetAverageDifficulty(40), otherwise let supplied argument dDiff stand.
+    if (!dDiff) dDiff = GetAverageDifficulty(40);
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
+    
+    // The stake probability per "throw" of 1 weight unit = target value at diff of 1.0 / (maxhash * diff). This happens effectively every STAKE_TIMESTAMP_MASK+1 sec.
+    double dUnitStakeProbability = 1 / (4295032833.0 * dDiff);
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
+
+    
+    int64_t nTime = 0;
+    for (const auto& out : vCoins)
+    {
+        CTxIndex txindex;
+        CBlock CoinBlock; //Block which contains CoinTx
+        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex))
+            continue; //error?
+ 
+        if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+            continue;
+
+        // We are going to store as an event the time that the UTXO matures (is available for staking again.)
+        nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
+        
+        nValue = out.tx->vout[out.i].nValue;
+        
+        // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
+        // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,
+        // so eliminate UTXO's with less than 0.0125 GRC balances right here. The test with Satoshi units for that is
+        // nValue >= 1250000.
+        if(BalanceAvailForStaking >= nValue && nValue >= 1250000)
+        {     
+        vUTXO.push_back(std::pair<int64_t, int64_t>( nTime, nValue));
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
+
+        // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
+        // by the nCurrentTime record that was already injected above.
+        if(nTime > nCurrentTime) UniqueUTXOTimes.insert(nTime);
+        }
+    }
+
+    
+    int64_t nTimePrev = nCurrentTime;
+    int64_t nDeltaTime = 0;
+    int64_t nThrows = 0;
+    int64_t nCoinWeight = 0;
+    double dProbAccumulator = 0;
+    double dCumulativeProbability = 0;
+    // Note: Even though this is a compound Poisson process leading to a compound geometric distribution, and the individual probabilities are
+    // small, we are mounting to high CDFs. This means to be reasonably accurate, we cannot just add the probabilities, because the intersections
+    // become significant. The CDF of a compound geometric distribution as you do tosses with different probabilities follows the
+    // recursion relation... CDF.i = 1 - (1 - CDF.i-1)(1 - p.i). If all probabilities are the same, this reduces to the familiar
+    // CDF.k = 1 - (1 - p)^k where ^ is exponentiation.
+    for(const auto& itertime : UniqueUTXOTimes)
+    {
+        
+        nTime = itertime;
+        dProbAccumulator = 0;
+        
+        for( auto& iterUTXO : vUTXO)
+        {
+        
+            if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Unique UTXO Time: %u, vector pair <%u, %u>", nTime, iterUTXO.first, iterUTXO.second);
+             
+            // If the "negative Gantt chart bar" is ending or has ended for a UTXO, it now accumulates probability. (I.e. the event time being checked
+            // is greater than or equal to the cooldown expiration of the UTXO.)
+            // accumulation for that UTXO.
+            if(nTime >= iterUTXO.first)
+            {
+                // The below weight calculation is just like the CalculateStakeWeightV8 in kernel.cpp.
+                nCoinWeight = iterUTXO.second / 1250000;
+                
+                dProbAccumulator = 1 - ((1 - dProbAccumulator) * (1 - (dUnitStakeProbability * nCoinWeight)));
+                if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
+            }
+
+        }
+        nDeltaTime = nTime - nTimePrev;
+        nThrows = nDeltaTime / (STAKE_TIMESTAMP_MASK + 1);
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
+        dCumulativeProbability = 1 - ((1 - dCumulativeProbability) * pow((1 - dProbAccumulator), nThrows));
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
+        
+        if(dCumulativeProbability >= dConfidence)
+            break;
+        
+        nTimePrev = nTime;
+    }
+
+    // If (dConfidence - dCumulativeProbability) > 0, it means we exited the negative Gantt chart area and the desired confidence level
+    // has not been reached. All of the eligible UTXO's are contributing probability, and this is the final dProbAccumulator value.
+    // If the loop above is degenerate (i.e. only the current time pass through), then dCumulativeProbability will be zero.
+    // If it was not degenerate and the positive reqions in the Gantt chart area contributed some probability, then dCumulativeProbability will
+    // be greater than zero. We must compute the amount of time beyond nTime that is required to bridge the gap between
+    // dCumulativeProbability and dConfidence. If (dConfidence - dCumulativeProbability) <= 0 then we overshot during the Gantt chart area,
+    // and we will back off by nThrows amount, which will now be negative.
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
+    
+    // Shouldn't happen because if we are down here, we are staking, and there have to be eligible UTXO's, but just in case...
+    if (dProbAccumulator == 0.0)
+    {
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ERROR in dProbAccumulator calculations");
+        return result;
+    }
+    
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dConfidence = %f", dConfidence);
+    // If nThrows is negative, this just means we overshot in the Gantt chart loop and have to backtrack by nThrows.
+    nThrows = (int64_t)((log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator));
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
+    
+    nDeltaTime = nThrows * (STAKE_TIMESTAMP_MASK + 1);
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nDeltaTime = %i", nDeltaTime);
+    
+    // Because we are looking at the delta time required past nTime, which is where we exited the Gantt chart loop.
+    result = nDeltaTime + nTime - nCurrentTime;
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS at %d confidence = %i", dConfidence, result);
+
+    // The old calculation for comparative purposes, only done if fDebug10 set. Note that this is the "fixed" old
+    // calculation, because the old network weight calculation was wrong too...
+    if (fDebug10)
+    {
+        double oldETTS = 0;
+
+        oldETTS = GetTargetSpacing(nBestHeight) * GetEstimatedNetworkWeight(40) / MinerStatus.WeightSum;
+        LogPrintf("GetEstimatedTimetoStake debug: oldETTS = %f", oldETTS);
+    }
+
+    return result;
+}
+
 
 void GetGlobalStatus()
 {
@@ -460,10 +711,12 @@ void GetGlobalStatus()
         { LOCK(MinerStatus.lock);
         GlobalStatusStruct.blocks = ToString(nBestHeight);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS(),2);
+        GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
+        GlobalStatusStruct.ETTS = RoundToString(GetEstimatedTimetoStake()/86400.0,3);
+        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
         GlobalStatusStruct.poll = msPoll;
@@ -3098,11 +3351,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 }
 
-				if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-				{
-							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-							LogPrintf("\n ******  %s ***** \n",sNarr);
-				}
+                if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+                            LogPrintf("\n ******  %s ***** \n",sNarr);
+                }
 
                 if (IsResearchAgeEnabled(pindex->nHeight)
                     && (BlockNeedsChecked(nTime) || nVersion>=9))
@@ -5454,7 +5707,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-						    myCPID = pblockindex->GetCPID();
+                            myCPID = pblockindex->GetCPID();
                         }
                         if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
                         {
@@ -8730,3 +8983,4 @@ bool IsResearcher(const std::string& cpid)
 {
     return cpid.length() == 32;
 }
+

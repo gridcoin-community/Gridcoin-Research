@@ -35,14 +35,15 @@ Value getmininginfo(const Array& params, bool fHelp)
     int64_t nTime= GetAdjustedTime();
     pwalletMain->GetStakeWeight(nWeight);
     Object obj, diff, weight;
-    double nNetworkWeight = GetPoSKernelPS();
+    double nNetworkWeight = GetEstimatedNetworkWeight();
+    double nNetworkValue = nNetworkWeight / 80.0;
     obj.push_back(Pair("blocks",        nBestHeight));
     diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
 
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / MinerStatus.ValueSum) : 0;
+        uint64_t nExpectedTime = GetEstimatedTimetoStake();
         diff.push_back(Pair("last-search-interval", MinerStatus.nLastCoinStakeSearchInterval));
         weight.push_back(Pair("minimum",    MinerStatus.WeightMin));
         weight.push_back(Pair("maximum",    MinerStatus.WeightMax));
@@ -51,6 +52,7 @@ Value getmininginfo(const Array& params, bool fHelp)
         weight.push_back(Pair("legacy",   nWeight/(double)COIN));
         obj.push_back(Pair("stakeweight", weight));
         obj.push_back(Pair("netstakeweight", nNetworkWeight));
+        obj.push_back(Pair("netstakingGRCvalue", nNetworkValue));
         obj.push_back(Pair("staking", staking));
         obj.push_back(Pair("mining-error", MinerStatus.ReasonNotStaking));
         obj.push_back(Pair("time-to-stake_days", nExpectedTime/86400.0));
