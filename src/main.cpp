@@ -7112,7 +7112,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (neural_request=="neural_data")
             {
             neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-            pfrom->PushMessage("expmag_nresp", neural_response);
+            pfrom->PushMessage("ndata_nresp", neural_response);
             }
             else if (neural_request=="neural_hash")
             {
