@@ -115,12 +115,20 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
-        tally.cpp \
+    tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
 	wallet.cpp \
 	walletdb.cpp
+
+GRIDCOIN_CONTRACT_H = \
+    contract/polls.h \
+    contract/contract.h
+
+GRIDCOIN_CONTRACT_CPP = \
+    contract/polls.cpp \
+	contract/contract.cpp
 
 obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
@@ -144,15 +152,16 @@ GRIDCOIN_JSON_H = \
 # This library *must* be included to make sure that the glibc
 # backward-compatibility objects and their sanity checks are linked.
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
-libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
+libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS) 
+libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) $(GRIDCOIN_CONTRACT_CPP) \
     grcrestarter_stub.cpp \
     neuralnet_stub.cpp \
     json/json_spirit_reader.cpp \
     json/json_spirit_value.cpp \
     json/json_spirit_writer.cpp \
 	$(GRIDCOIN_CORE_H) \
-	$(GRIDCOIN_JSON_H)
+	$(GRIDCOIN_JSON_H) \
+	$(GRIDCOIN_CONTRACT_H)
 
 if TARGET_WINDOWS
 libgridcoin_util_a_CXXFLAGS += -DUNICODE

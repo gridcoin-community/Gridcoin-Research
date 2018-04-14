@@ -4,9 +4,8 @@
 #include "key.h"
 #include "main.h"
 #include "appcache.h"
+#include "contract/contract.h"
 
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
-extern bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 

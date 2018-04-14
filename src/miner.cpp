@@ -12,6 +12,7 @@
 #include "main.h"
 #include "appcache.h"
 #include "neuralnet.h"
+#include "contract/contract.h"
 
 #include <memory>
 
@@ -35,8 +36,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
-
 
 // Some explaining would be appreciated
 class COrphan

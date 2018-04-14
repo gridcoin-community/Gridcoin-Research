@@ -87,6 +87,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include "bitcoinrpc.h"
+#include "contract/polls.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -113,7 +114,6 @@ std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end
 
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
-json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 
 extern int64_t IsNeural();
 

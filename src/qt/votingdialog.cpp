@@ -32,9 +32,8 @@
 #include "json/json_spirit.h"
 #include "votingdialog.h"
 #include "util.h"
+#include "contract/polls.h"
 
-
-extern json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
@@ -1085,6 +1084,3 @@ void NewPollDialog::showContextMenu(const QPoint &pos)
     menu.addAction("Remove Item", this, SLOT(removeItem()));
     menu.exec(globalPos);
 }
-
-
-
