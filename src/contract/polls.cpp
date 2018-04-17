@@ -1,3 +1,5 @@
+#include <utility> //std::pair
+
 #include "main.h"
 #include "polls.h"
 #include "contract.h"
@@ -14,196 +16,44 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
-Value addpoll(const Array& params, bool fHelp)
+std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int iSharetype, std::string sURL)
 {
-    if (fHelp || params.size() != 6)
-        throw std::runtime_error(
-                "addpoll <title> <days> <question> <answers> <sharetype> <url>\n"
-                "\n"
-                "<title> -----> The title for poll with no spaces. Use _ in between words\n"
-                "<days> ------> The number of days the poll will run\n"
-                "<question> --> The question with no spaces. Use _ in between words\n"
-                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to seperate answers\n"
-                "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
-                "<url> -------> The corresponding url for the poll\n"
-                "\n"
-                "Add a poll to the network; Requires 100K GRC balance\n");
-
-    Object res;
-
-    std::string Title = params[0].get_str();
-    double days = Round(params[1].get_real(), 0);
-    std::string Question = params[2].get_str();
-    std::string Answers = params[3].get_str();
-    double sharetype = Round(params[4].get_real(), 0);
-    std::string sURL = params[5].get_str();
-
-    if (Title.empty() || Question.empty() || Answers.empty() || sURL.empty())
+    if (sTitle.empty() || sQuestion.empty() || sAnswers.empty() || sURL.empty())
     {
-        res.push_back(Pair("Error", "Must specify a poll title, question, answers, and URL\n"));
-
-        return res;
+        return std::make_pair("Error", "Must specify a poll title, question, answers, and URL\n");
     }
-
-    if (days < 7)
-        res.push_back(Pair("Error", "Minimum duration is 7 days; please specify a longer poll duration."));
-
+    else if (days < 7)
+        return std::make_pair("Error", "Minimum duration is 7 days; please specify a longer poll duration.");
     else
     {
         double nBalance = GetTotalBalance();
 
         if (nBalance < 100000)
-            res.push_back(Pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45"));
+            return std::make_pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45");
 
         else
         {
-            if (days < 0 || days == 0) //why the fuck is this here??????
-                res.push_back(Pair("Error", "You must specify a positive value for days for the expiration date."));
+            if (iSharetype != 1 && iSharetype != 2 && iSharetype != 3 && iSharetype != 4 && iSharetype != 5)
+                return std::make_pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sSharetype.");
 
             else
             {
-                if (sharetype != 1 && sharetype != 2 && sharetype != 3 && sharetype != 4 && sharetype != 5)
-                    res.push_back(Pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sharetype."));
-
-                else
-                {
-                    std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
-                    std::string contract = "<TITLE>" + Title + "</TITLE><DAYS>" + RoundToString(days, 0) + "</DAYS><QUESTION>" + Question + "</QUESTION><ANSWERS>" + Answers + "</ANSWERS><SHARETYPE>" + ToString(sharetype) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                    std::string result = AddContract("poll", Title,contract);
-                    res.push_back(Pair("Success", "Your poll has been added: " + result));
-                }
+                std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
+                std::string contract = "<TITLE>" + sTitle + "</TITLE><DAYS>" + std::to_string(days) + "</DAYS><QUESTION>" + sQuestion + "</QUESTION><ANSWERS>" + sAnswers + "</ANSWERS><SHARETYPE>" + std::to_string(iSharetype) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
+                std::string result = AddContract("poll", sTitle, contract);
+                return std::make_pair("Success",result);
             }
         }
     }
-    return res;
 }
 
-Value listallpolls(const Array& params, bool fHelp)
+std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer)
 {
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listallpolls\n"
-                "\n"
-                "Lists all polls\n");
-
-    LOCK(cs_main);
-
-    std::string out1;
-    Array res = GetJSONPollsReport(false, "", out1, true);
-
-    return res;
-}
-
-Value listallpolldetails(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listallpolldetails\n"
-                "\n"
-                "Lists all polls with details\n");
-
-    LOCK(cs_main);
-
-    std::string out1;
-    Array res = GetJSONPollsReport(true, "", out1, true);
-
-    return res;
-}
-
-Value listpolldetails(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listpolldetails\n"
-                "\n"
-                "Lists poll details\n");
-
-    LOCK(cs_main);
-
-    std::string out1;
-    Array res = GetJSONPollsReport(true, "", out1, false);
-
-    return res;
-}
-
-Value listpollresults(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() > 2 || params.size() < 1)
-        throw std::runtime_error(
-                "listpollresults <pollname> [bool:showexpired]\n"
-                "\n"
-                "<pollname> ----> name of the poll\n"
-                "[showexpired] -> Optional; Default false\n"
-                "\n"
-                "Displays results for specified poll\n");
-
-    LOCK(cs_main);
-
-    Array res;
-    bool bIncExpired = false;
-
-    if (params.size() == 2)
-        bIncExpired = params[1].get_bool();
-
-    std::string Title1 = params[0].get_str();
-
-    if (!PollExists(Title1))
+    if (sTitle.empty() || sAnswer.empty())
     {
-        Object result;
-
-        result.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
-        res.push_back(result);
+        return std::make_pair("Error", "Must specify a poll title and answers\n");
     }
-    else
-    {
-        std::string Title = params[0].get_str();
-        std::string out1 = "";
-        Array myPolls = GetJSONPollsReport(true, Title, out1, bIncExpired);
-        res.push_back(myPolls);
-    }
-
-    return res;
-}
-
-Value listpolls(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw std::runtime_error(
-                "listpolls\n"
-                "\n"
-                "Lists polls\n");
-
-    LOCK(cs_main);
-
-    std::string out1;
-    Array res = GetJSONPollsReport(false, "", out1, false);
-
-    return res;
-}
-
-Value vote(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 2)
-        throw std::runtime_error(
-                "vote <title> <answers>\n"
-                "\n"
-                "<title -> Title of poll being voted on\n"
-                "<answers> -> Answers chosen for specified poll seperated by ;\n"
-                "\n"
-                "Vote on a specific poll with specified answers\n");
-
-    Object res;
-
-    std::string Title = params[0].get_str();
-    std::string Answer = params[1].get_str();
-
-    if (Title.empty() || Answer.empty())
-    {
-        res.push_back(Pair("Error", "Must specify a poll title and answers\n"));
-
-        return res;
-    }
-
+	
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     //Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
@@ -217,20 +67,20 @@ Value vote(const Array& params, bool fHelp)
 
     GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
 
-    if (!PollExists(Title))
-        res.push_back(Pair("Error", "Poll does not exist."));
+    if (!PollExists(sTitle))
+        return std::make_pair("Error", "Poll does not exist.");
 
     else
     {
-        if (PollExpired(Title))
-            res.push_back(Pair("Error", "Sorry, Poll is already expired."));
+        if (PollExpired(sTitle))
+            return std::make_pair("Error", "Sorry, Poll is already expired.");
 
         else
         {
-            if (!PollAcceptableAnswer(Title, Answer))
+            if (!PollAcceptableAnswer(sTitle, sAnswer))
             {
-                std::string acceptable_answers = PollAnswers(Title);
-                res.push_back(Pair("Error", "Sorry, Answer " + Answer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'."));
+                std::string acceptable_answers = PollAnswers(sTitle);
+                return std::make_pair("Error", "Sorry, Answer " + sAnswer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'.");
             }
 
             else
@@ -239,7 +89,7 @@ Value vote(const Array& params, bool fHelp)
                 std::string GRCAddress = DefaultWalletAddress();
                 StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
                 double dmag = structMag.Magnitude;
-                double poll_duration = PollDuration(Title) * 86400;
+                double poll_duration = PollDuration(sTitle) * 86400;
 
                 // Prevent Double Voting
                 std::string cpid1 = GlobalCPUMiningCPID.cpid;
@@ -252,7 +102,7 @@ Value vote(const Array& params, bool fHelp)
 
                 LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
 
-                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(Title, "<SHARETYPE>", "</SHARETYPE>"), 0);
+                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
                 // Share Type 1 == "Magnitude"
                 // Share Type 2 == "Balance"
@@ -262,14 +112,11 @@ Value vote(const Array& params, bool fHelp)
                 if (stake_age < poll_duration) nBalance = 0;
 
                 if ((dShareType == 1) && cpid_age < poll_duration)
-                    res.push_back(Pair("Error", "Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration."));
-
+                    return std::make_pair("Error", "Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration.");
                 else if (dShareType == 2 && stake_age < poll_duration)
-                    res.push_back(Pair("Error", "Sorry, When voting in a Balance poll, your stake age must be older than the poll duration."));
-
+                    return std::make_pair("Error", "Sorry, When voting in a Balance poll, your stake age must be older than the poll duration.");
                 else if (dShareType == 3 && stake_age < poll_duration && cpid_age < poll_duration)
-                    res.push_back(Pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration."));
-
+                    return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
                 else
                 {
                     std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
@@ -278,52 +125,16 @@ Value vote(const Array& params, bool fHelp)
                             + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
                     // Add the provable balance and the provable magnitude - this goes into effect July 1 2017
                     voter += GetProvableVotingWeightXML();
-                    std::string pk = Title + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
-                    std::string contract = "<TITLE>" + Title + "</TITLE><ANSWER>" + Answer + "</ANSWER>" + voter;
+                    std::string pk = sTitle + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
+                    std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
                     std::string result = AddContract("vote",pk,contract);
                     std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
-
-                    res.push_back(Pair("Success", narr + " " + "Your vote has been cast for topic " + Title + ": With an Answer of " + Answer + ": " + result.c_str()));
+                    // std::pair<std::string,std::string> VoteContract = 
+                    return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
                 }
             }
         }
     }
-
-    return res;
-}
-
-Value votedetails(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw std::runtime_error(
-                "votedetails <pollname>]n"
-                "\n"
-                "<pollname> Specified poll name\n"
-                "\n"
-                "Displays vote details of a specified poll\n");
-
-    Array res;
-
-    std::string Title = params[0].get_str();
-
-    if (!PollExists(Title))
-    {
-        Object results;
-
-        results.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
-        res.push_back(results);
-    }
-
-    else
-    {
-        LOCK(cs_main);
-
-        Array myVotes = GetJsonVoteDetailsReport(Title);
-
-        res.push_back(myVotes);
-    }
-
-    return res;
 }
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title)
@@ -597,39 +408,39 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
         std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
         if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
         {
-	    if (GetTransaction(uTXID, tx2, hashBlock))
-	    {
-	        if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
-		{
-		    int64_t nValue2 = tx2.vout[iPos].nValue;
-		    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
-		    CTxDestination address2;
-		    std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
-		    std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
-		    std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
-		    double dAmount = CoinToDouble(nValue2);
-		    {
-		        if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
-			{
+	        if (GetTransaction(uTXID, tx2, hashBlock))
+	        {
+	            if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
+		        {
+		            int64_t nValue2 = tx2.vout[iPos].nValue;
+		            const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
+		            CTxDestination address2;
+		            std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
+		            std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
+		            std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
+		            double dAmount = CoinToDouble(nValue2);
+		            {
+		                if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
+		        	    {
                             Object entry;
-      			    entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
- 			    std::string sDecXmlSig = DecodeBase64(sXmlSig);
-			    CKey keyVerify;
-			    if (keyVerify.SetPubKey(ParseHex(sPubKey)))
-			    {
-			        std::vector<unsigned char> vchMsg1 = std::vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
-				std::vector<unsigned char> vchSig1 = std::vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
-				bool bValid = keyVerify.Verify(uTXID,vchSig1);
-				// Unspent Balance is proven to be owned by the voters public key, count the vote
-				if (bValid) dCounted += dAmount;
-			    }
+      	        		    entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
+ 		        	        std::string sDecXmlSig = DecodeBase64(sXmlSig);
+		        	        CKey keyVerify;
+		        	        if (keyVerify.SetPubKey(ParseHex(sPubKey)))
+		        	        {
+                                std::vector<unsigned char> vchMsg1 = std::vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
+                                std::vector<unsigned char> vchSig1 = std::vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
+                                bool bValid = keyVerify.Verify(uTXID,vchSig1);
+                                // Unspent Balance is proven to be owned by the voters public key, count the vote
+                                if(bValid) dCounted += dAmount;
+		        	        }
                         }
                     }
-	        }
+	            }
             }
-            return dCounted;
         }
     }
+    return dCounted;
 }
 
 double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade)
@@ -645,12 +456,12 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
     if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
     {
         CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
-	if (pblockindexMagnitude)
-	{
-	    bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-	    bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
-	    if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
-	}
+	    if (pblockindexMagnitude)
+	    {
+	        bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
+	        bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
+	        if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
+	    }
     }
     return 0;
 }

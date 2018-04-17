@@ -33,21 +33,9 @@ struct Poll {
     // std::map<std::string, std::vector> answers;
 };
 
-Value addpoll(const Array& params, bool fHelp);
+std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int sSharetype, std::string sURL);
 
-Value listallpolls(const Array& params, bool fHelp);
-
-Value listallpolldetails(const Array& params, bool fHelp);
-
-Value listpolldetails(const Array& params, bool fHelp);
-
-Value listpollresults(const Array& params, bool fHelp);
-
-Value listpolls(const Array& params, bool fHelp);
-
-Value vote(const Array& params, bool fHelp);
-
-Value votedetails(const Array& params, bool fHelp);
+std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer);
 
 std::string GetPollContractByTitle(std::string objecttype, std::string title);
 

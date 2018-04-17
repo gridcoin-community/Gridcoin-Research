@@ -35,8 +35,6 @@
 #include "contract/polls.h"
 
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
 
 static std::string GetFoundationGuid(const std::string &sTitle)
 {
@@ -839,19 +837,20 @@ void VotingVoteDialog::resetData(const VotingItem *item)
 
 void VotingVoteDialog::vote(void)
 {
-    QString sVoteValue = GetVoteValue();
+    QString sAnswer = GetVoteValue();
     voteNote_->setStyleSheet("QLabel { color : red; }");
 
-    if(sVoteValue.isEmpty()){
+    if(sAnswer.isEmpty()){
         voteNote_->setText(tr("Vote failed! Select one or more items to vote."));
         return;
     }
 
     // replace spaces with underscores
-    sVoteValue.replace(" ","_");
+    sAnswer.replace(" ","_");
     sVoteTitle.replace(" ","_");
 
-    const std::string &sResult = ExecuteRPCCommand("vote", sVoteTitle.toStdString(), sVoteValue.toStdString());
+    std::pair<std::string,std::string> pollCreationResult = CreateVoteContract(sVoteTitle.toStdString(), sAnswer.toStdString());
+    const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
 
     if (sResult.find("Success") != std::string::npos) {
         voteNote_->setStyleSheet("QLabel { color : green; }");
@@ -1029,7 +1028,8 @@ void NewPollDialog::createPoll(void)
     sPollUrl.replace(" ","_");
     sPollAnswers.replace(" ","_");
 
-    const std::string &sResult = ExecuteRPCCommand("addpoll", sPollTitle.toStdString(), sPollDays.toStdString(),sPollQuestion.toStdString(),sPollAnswers.toStdString(),sPollShareType.toStdString(),sPollUrl.toStdString());
+	std::pair<std::string,std::string> pollCreationResult = CreatePollContract(sPollTitle.toStdString(), sPollDays.toInt(), sPollQuestion.toStdString(), sPollAnswers.toStdString(), sPollShareType.toInt(), sPollUrl.toStdString());
+    const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
 
     if (sResult.find("Success") != std::string::npos) {
         pollNote_->setStyleSheet("QLabel { color : green; }");

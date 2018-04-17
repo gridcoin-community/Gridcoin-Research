@@ -90,7 +90,6 @@ extern bool PollAcceptableAnswer(std::string pollname, std::string answer);
 extern std::string PollAnswers(std::string pollname);
 
 extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
@@ -615,11 +614,7 @@ double GetAverageInList(std::string superblock,double& out_count)
         out_count=0;
         return 0;
     }
-
 }
-
-
-
 
 double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
 {
@@ -917,7 +912,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
      }
 }
 
-
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6)
 {
      Array params;
@@ -953,42 +947,6 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
      LogPrintf("Response %s",sResult);
      return sResult;
 }
-
-std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5)
-{
-     Array params;
-     params.push_back(method);
-     params.push_back(arg1);
-     params.push_back(arg2);
-     params.push_back(arg3);
-     params.push_back(arg4);
-     params.push_back(arg5);
-
-     LogPrintf("Executing method %s\n",method);
-     Value vResult;
-     try
-     {
-        vResult = execute(params,false);
-     }
-     catch (std::exception& e)
-     {
-         LogPrintf("Std exception %s \n",method);
-
-         std::string caught = e.what();
-         return "Exception " + caught;
-
-     }
-     catch (...)
-     {
-            LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
-            return "Generic Exception (Please try unlocking the wallet).";
-     }
-     std::string sResult = "";
-     sResult = write_string(vResult, false) + "\n";
-     LogPrintf("Response %s",sResult);
-     return sResult;
-}
-
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2)
 {

@@ -107,7 +107,6 @@ extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5);
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
