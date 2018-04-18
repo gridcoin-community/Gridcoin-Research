@@ -19,7 +19,7 @@ Value addpoll(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 6)
         throw std::runtime_error(
-                "addpoll <title> <days> <question> <answers> <sharetype> <url>\n"
+                "addpoll <title> <days> <question> <answer1;answer2...> <sharetype> <url>\n"
                 "\n"
                 "<title> -----> The title for poll with no spaces. Use _ in between words\n"
                 "<days> ------> The number of days the poll will run\n"
@@ -150,7 +150,7 @@ Value vote(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw std::runtime_error(
-                "vote <title> <answers>\n"
+                "vote <title> <answer1;answer2...>\n"
                 "\n"
                 "<title -> Title of poll being voted on\n"
                 "<answers> -> Answers chosen for specified poll seperated by ;\n"
@@ -166,7 +166,7 @@ Value vote(const Array& params, bool fHelp)
     res.push_back(Pair(std::get<0>(ResultString),std::get<1>(ResultString)));
     return res;
 
-    
+
     return res;
 }
 

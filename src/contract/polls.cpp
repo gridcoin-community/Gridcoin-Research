@@ -15,9 +15,17 @@ std::string PubKeyToAddress(const CScript& scriptPubKey);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
+bool WalletOutOfSync();
 
 std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int iSharetype, std::string sURL)
 {
+    if (pwalletMain->IsLocked())
+        return std::make_pair("Error", "Please fully unlock the wallet first.");
+    else if (fWalletUnlockStakingOnly)
+        return std::make_pair("Error", "Wallet is unlocked for staking only, needs to be fully unlocked for voting");
+    else if (WalletOutOfSync())
+        return std::make_pair("Error", "Wallet is not synced, you need to be synced in order to create a poll");
+
     if (sTitle.empty() || sQuestion.empty() || sAnswers.empty() || sURL.empty())
     {
         return std::make_pair("Error", "Must specify a poll title, question, answers, and URL\n");
@@ -53,7 +61,14 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     {
         return std::make_pair("Error", "Must specify a poll title and answers\n");
     }
-	
+
+    if (pwalletMain->IsLocked())
+        return std::make_pair("Error", "Please fully unlock the wallet first.");
+    else if (fWalletUnlockStakingOnly)
+        return std::make_pair("Error", "Wallet is unlocked for staking only, needs to be fully unlocked for voting");
+    else if (WalletOutOfSync())
+        return std::make_pair("Error", "Wallet is not synced, you need to be synced in order to place a vote");
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     //Verify the Existence of the poll, the acceptability of the answer, and the expiration of the poll: (EXIST, EXPIRED, ACCEPTABLE)
@@ -74,7 +89,6 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     {
         if (PollExpired(sTitle))
             return std::make_pair("Error", "Sorry, Poll is already expired.");
-
         else
         {
             if (!PollAcceptableAnswer(sTitle, sAnswer))
@@ -129,7 +143,6 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
                     std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
                     std::string result = AddContract("vote",pk,contract);
                     std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
-                    // std::pair<std::string,std::string> VoteContract = 
                     return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
                 }
             }
@@ -387,7 +400,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
     std::string sPayload = ExtractXML(sXML,"<PROVABLEBALANCE>","</PROVABLEBALANCE>");
     double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
     double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
-    
+
     if (fDebug10) LogPrintf(" \n Total Voted Balance %f, Legacy Balance %f \n",(float)dTotalVotedBalance,(float)dLegacyBalance);
     if (!bCreatedAfterSecurityUpgrade) return dLegacyBalance;
 

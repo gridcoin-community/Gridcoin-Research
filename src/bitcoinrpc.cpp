@@ -208,7 +208,7 @@ Value help(const Array& params, bool fHelp)
             "mining --------> Returns help for neural network/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n");
-    
+
     // Allow to process through if params size is > 0
     string strCommand;
 
@@ -542,8 +542,8 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "sendalert2"             && n > 5) ConvertTo<int64_t>(params[5]);
 
     // Network
-    if (strMethod == "addpoll"                && n > 1) ConvertTo<double>(params[1]);
-    if (strMethod == "addpoll"                && n > 4) ConvertTo<double>(params[4]);
+    if (strMethod == "addpoll"                && n > 1) ConvertTo<int>(params[1]);
+    if (strMethod == "addpoll"                && n > 4) ConvertTo<int>(params[4]);
     if (strMethod == "getaddednodeinfo"       && n > 0) ConvertTo<bool>(params[0]);
     if (strMethod == "getblock"               && n > 1) ConvertTo<bool>(params[1]);
     if (strMethod == "getblockbynumber"       && n > 0) ConvertTo<int64_t>(params[0]);

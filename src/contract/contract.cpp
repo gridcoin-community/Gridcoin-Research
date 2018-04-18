@@ -16,28 +16,28 @@ std::string GetBurnAddress() { return fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy
 
 bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string strMessagePublicKey)
 {
-     std::string strMasterPubKey = "";
-     if (messagetype=="project" || messagetype=="projectmapping")
-     {
-        strMasterPubKey= msMasterProjectPublicKey;
-     }
-     else
-     {
-         strMasterPubKey = msMasterMessagePublicKey;
-     }
+    std::string strMasterPubKey = "";
+    if (messagetype=="project" || messagetype=="projectmapping")
+    {
+       strMasterPubKey= msMasterProjectPublicKey;
+    }
+    else
+    {
+        strMasterPubKey = msMasterMessagePublicKey;
+    }
 
-     if (!strMessagePublicKey.empty()) strMasterPubKey = strMessagePublicKey;
-     if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
-	 if (sAction=="D" && messagetype=="poll")   strMasterPubKey = msMasterProjectPublicKey;
-	 if (sAction=="D" && messagetype=="vote")   strMasterPubKey = msMasterProjectPublicKey;
+    if (!strMessagePublicKey.empty()) strMasterPubKey = strMessagePublicKey;
+    if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
+    if (sAction=="D" && messagetype=="poll")   strMasterPubKey = msMasterProjectPublicKey;
+    if (sAction=="D" && messagetype=="vote")   strMasterPubKey = msMasterProjectPublicKey;
 
-     std::string db64 = DecodeBase64(sSig);
-     CKey key;
-     if (!key.SetPubKey(ParseHex(strMasterPubKey))) return false;
-     std::vector<unsigned char> vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
-     std::vector<unsigned char> vchSig = std::vector<unsigned char>(db64.begin(), db64.end());
-     if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig)) return false;
-     return true;
+    std::string db64 = DecodeBase64(sSig);
+    CKey key;
+    if (!key.SetPubKey(ParseHex(strMasterPubKey))) return false;
+    std::vector<unsigned char> vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
+    std::vector<unsigned char> vchSig = std::vector<unsigned char>(db64.begin(), db64.end());
+    if (!key.Verify(Hash(vchMsg.begin(), vchMsg.end()), vchSig)) return false;
+    return true;
 }
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
