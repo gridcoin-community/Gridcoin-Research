@@ -2,36 +2,12 @@
 
 #include "json/json_spirit_reader_template.h"
 #include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_value.h"
 #include "json/json_spirit_utils.h"
 
-#include "main.h"
-#include "bitcoinrpc.h"
-#include "init.h" // for pwalletMain
-#include "block.h"
-
-#include <boost/filesystem.hpp>
-#include <iostream>
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string.hpp>
-#include <fstream>
-#include <algorithm>
+#include <string>
+#include <utility> //std::pair
 
 using namespace json_spirit;
-
-struct Vote {
-    // uint128_t cpid;
-    std::string address;
-    double shares;
-};
-
-struct Poll {
-    std::string title;
-    std::string url;
-    // int64_t expiration;
-    // PollType type;
-    // std::map<std::string, std::vector> answers;
-};
 
 std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int sSharetype, std::string sURL);
 

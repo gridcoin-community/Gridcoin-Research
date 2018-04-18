@@ -4,12 +4,8 @@
 #include "contract/contract.h"
 #include "contract/polls.h"
 
-#include <boost/filesystem.hpp>
-#include <iostream>
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string.hpp>
-#include <fstream>
-#include <algorithm>
+#include <utility>
+#include <string>
 
 using namespace json_spirit;
 double GetTotalBalance();
@@ -38,7 +34,7 @@ Value addpoll(const Array& params, bool fHelp)
     int iShareType = params[4].get_int();
     std::string sURL = params[5].get_str();
 
-	std::pair<std::string,std::string> ResultString = CreatePollContract(sTitle, iPollDays, sQuestion, sAnswers, iShareType, sURL);
+    std::pair<std::string,std::string> ResultString = CreatePollContract(sTitle, iPollDays, sQuestion, sAnswers, iShareType, sURL);
     res.push_back(Pair(std::get<0>(ResultString),std::get<1>(ResultString)));
     return res;
 }
@@ -52,10 +48,8 @@ Value listallpolls(const Array& params, bool fHelp)
                 "Lists all polls\n");
 
     LOCK(cs_main);
-
     std::string out1;
     Array res = GetJSONPollsReport(false, "", out1, true);
-
     return res;
 }
 
@@ -68,10 +62,8 @@ Value listallpolldetails(const Array& params, bool fHelp)
                 "Lists all polls with details\n");
 
     LOCK(cs_main);
-
     std::string out1;
     Array res = GetJSONPollsReport(true, "", out1, true);
-
     return res;
 }
 
@@ -84,10 +76,8 @@ Value listpolldetails(const Array& params, bool fHelp)
                 "Lists poll details\n");
 
     LOCK(cs_main);
-
     std::string out1;
     Array res = GetJSONPollsReport(true, "", out1, false);
-
     return res;
 }
 
@@ -103,7 +93,6 @@ Value listpollresults(const Array& params, bool fHelp)
                 "Displays results for specified poll\n");
 
     LOCK(cs_main);
-
     Array res;
     bool bIncExpired = false;
 
@@ -126,7 +115,6 @@ Value listpollresults(const Array& params, bool fHelp)
         Array myPolls = GetJSONPollsReport(true, Title, out1, bIncExpired);
         res.push_back(myPolls);
     }
-
     return res;
 }
 
@@ -139,10 +127,8 @@ Value listpolls(const Array& params, bool fHelp)
                 "Lists polls\n");
 
     LOCK(cs_main);
-
     std::string out1;
     Array res = GetJSONPollsReport(false, "", out1, false);
-
     return res;
 }
 
@@ -165,9 +151,6 @@ Value vote(const Array& params, bool fHelp)
     std::pair<std::string,std::string> ResultString = CreateVoteContract(sTitle, sAnswer);
     res.push_back(Pair(std::get<0>(ResultString),std::get<1>(ResultString)));
     return res;
-
-
-    return res;
 }
 
 Value votedetails(const Array& params, bool fHelp)
@@ -181,26 +164,20 @@ Value votedetails(const Array& params, bool fHelp)
                 "Displays vote details of a specified poll\n");
 
     Array res;
-
     std::string Title = params[0].get_str();
 
     if (!PollExists(Title))
     {
         Object results;
-
         results.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
         res.push_back(results);
     }
-
     else
     {
         LOCK(cs_main);
-
         Array myVotes = GetJsonVoteDetailsReport(Title);
-
         res.push_back(myVotes);
     }
-
     return res;
 }
 

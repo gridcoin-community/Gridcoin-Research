@@ -6,20 +6,19 @@
 
 #include "json/json_spirit_reader_template.h"
 #include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_value.h"
 #include "json/json_spirit_utils.h"
 
 using namespace json_spirit;
 
 std::string GetBurnAddress() { return fTestNet ? "mk1e432zWKH1MW57ragKywuXaWAtHy1AHZ" : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
-}
+                             }
 
 bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string strMessagePublicKey)
 {
     std::string strMasterPubKey = "";
     if (messagetype=="project" || messagetype=="projectmapping")
     {
-       strMasterPubKey= msMasterProjectPublicKey;
+        strMasterPubKey= msMasterProjectPublicKey;
     }
     else
     {
@@ -47,28 +46,28 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
     if(!bValid)
         LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s\n"
-        ,sSignature, sBeaconPublicKey);
+                  ,sSignature, sBeaconPublicKey);
     return bValid;
 }
 
 std::string SignMessage(std::string sMsg, std::string sPrivateKey)
 {
-     CKey key;
-     std::vector<unsigned char> vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
-     std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
-     std::vector<unsigned char> vchSig;
-     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
-     if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
-     {
-             return "Unable to sign message, check private key.";
-     }
-     const std::string sig(vchSig.begin(), vchSig.end());
-     std::string SignedMessage = EncodeBase64(sig);
-     return SignedMessage;
+    CKey key;
+    std::vector<unsigned char> vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
+    std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
+    std::vector<unsigned char> vchSig;
+    key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
+    if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
+    {
+        return "Unable to sign message, check private key.";
+    }
+    const std::string sig(vchSig.begin(), vchSig.end());
+    std::string SignedMessage = EncodeBase64(sig);
+    return SignedMessage;
 }
 
 std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
-                    std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
+                       std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
 {
     std::string sAddress = GetBurnAddress();
     CBitcoinAddress address(sAddress);
@@ -93,9 +92,9 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, st
 
 std::string AddContract(std::string sType, std::string sName, std::string sContract)
 {
-            std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-            std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
-            return result;
+    std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+    std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
+    return result;
 }
 
 bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising=false)

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "bitcoinrpc.h"
-
 std::string AddContract(std::string sType, std::string sName, std::string sContract);
 std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
                     std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey);

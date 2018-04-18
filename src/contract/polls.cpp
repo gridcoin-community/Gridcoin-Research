@@ -1,4 +1,5 @@
-#include <utility> //std::pair
+#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/algorithm/string.hpp>
 
 #include "main.h"
 #include "polls.h"
@@ -6,6 +7,8 @@
 #include "bitcoinrpc.h"
 #include "appcache.h"
 #include "cpid.h"
+#include "init.h" // for pwalletMain
+#include "block.h"
 
 double GetTotalBalance();
 std::string TimestampToHRDate(double dtm);
@@ -35,15 +38,12 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
     else
     {
         double nBalance = GetTotalBalance();
-
         if (nBalance < 100000)
-            return std::make_pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/Erkan-Yilmaz/Gridcoin-tasks/issues/45");
-
+            return std::make_pair("Error", "You must have a balance > 100,000 GRC to create a poll.  Please post the desired poll on https://cryptocurrencytalk.com/forum/464-gridcoin-grc/ or https://github.com/gridcoin-community/Gridcoin-Tasks/issues/48, for project delisting see https://github.com/gridcoin-community/Gridcoin-Tasks/issues/194");
         else
         {
             if (iSharetype != 1 && iSharetype != 2 && iSharetype != 3 && iSharetype != 4 && iSharetype != 5)
                 return std::make_pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sSharetype.");
-
             else
             {
                 std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
@@ -58,10 +58,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer)
 {
     if (sTitle.empty() || sAnswer.empty())
-    {
         return std::make_pair("Error", "Must specify a poll title and answers\n");
-    }
-
     if (pwalletMain->IsLocked())
         return std::make_pair("Error", "Please fully unlock the wallet first.");
     else if (fWalletUnlockStakingOnly)
@@ -79,74 +76,57 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     std::string email = GetArgument("email", "NA");
     boost::to_lower(email);
     GlobalCPUMiningCPID.email = email;
-
     GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
-
     if (!PollExists(sTitle))
         return std::make_pair("Error", "Poll does not exist.");
+    if (PollExpired(sTitle))
+        return std::make_pair("Error", "Sorry, Poll is already expired.");
+    if (!PollAcceptableAnswer(sTitle, sAnswer))
+    {
+        std::string acceptable_answers = PollAnswers(sTitle);
+        return std::make_pair("Error", "Sorry, Answer " + sAnswer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'.");
+    }
+    std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID, pindexBest->nVersion);
+    std::string GRCAddress = DefaultWalletAddress();
+    StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
+    double dmag = structMag.Magnitude;
+    double poll_duration = PollDuration(sTitle) * 86400;
 
+    // Prevent Double Voting
+    std::string cpid1 = GlobalCPUMiningCPID.cpid;
+    std::string GRCAddress1 = DefaultWalletAddress();
+    GetEarliestStakeTime(GRCAddress1, cpid1);
+    double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
+    double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
+
+    StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
+    LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
+    double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
+
+    // Share Type 1 == "Magnitude"
+    // Share Type 2 == "Balance"
+    // Share Type 3 == "Both"
+    if (cpid_age < poll_duration) dmag = 0;
+    if (stake_age < poll_duration) nBalance = 0;
+    if ((dShareType == 1) && cpid_age < poll_duration)
+        return std::make_pair("Error", "Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration.");
+    else if (dShareType == 2 && stake_age < poll_duration)
+        return std::make_pair("Error", "Sorry, When voting in a Balance poll, your stake age must be older than the poll duration.");
+    else if (dShareType == 3 && stake_age < poll_duration && cpid_age < poll_duration)
+        return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
     else
     {
-        if (PollExpired(sTitle))
-            return std::make_pair("Error", "Sorry, Poll is already expired.");
-        else
-        {
-            if (!PollAcceptableAnswer(sTitle, sAnswer))
-            {
-                std::string acceptable_answers = PollAnswers(sTitle);
-                return std::make_pair("Error", "Sorry, Answer " + sAnswer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'.");
-            }
-
-            else
-            {
-                std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID, pindexBest->nVersion);
-                std::string GRCAddress = DefaultWalletAddress();
-                StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
-                double dmag = structMag.Magnitude;
-                double poll_duration = PollDuration(sTitle) * 86400;
-
-                // Prevent Double Voting
-                std::string cpid1 = GlobalCPUMiningCPID.cpid;
-                std::string GRCAddress1 = DefaultWalletAddress();
-                GetEarliestStakeTime(GRCAddress1, cpid1);
-                double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
-                double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
-
-                StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
-
-                LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
-
-                double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
-
-                // Share Type 1 == "Magnitude"
-                // Share Type 2 == "Balance"
-                // Share Type 3 == "Both"
-                if (cpid_age < poll_duration) dmag = 0;
-
-                if (stake_age < poll_duration) nBalance = 0;
-
-                if ((dShareType == 1) && cpid_age < poll_duration)
-                    return std::make_pair("Error", "Sorry, When voting in a magnitude poll, your CPID must be older than the poll duration.");
-                else if (dShareType == 2 && stake_age < poll_duration)
-                    return std::make_pair("Error", "Sorry, When voting in a Balance poll, your stake age must be older than the poll duration.");
-                else if (dShareType == 3 && stake_age < poll_duration && cpid_age < poll_duration)
-                    return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
-                else
-                {
-                    std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
-                            + GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
-                            + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
-                            + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
-                    // Add the provable balance and the provable magnitude - this goes into effect July 1 2017
-                    voter += GetProvableVotingWeightXML();
-                    std::string pk = sTitle + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
-                    std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
-                    std::string result = AddContract("vote",pk,contract);
-                    std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
-                    return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
-                }
-            }
-        }
+        std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
+                + GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
+                + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
+                + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
+        // Add the provable balance and the provable magnitude - this goes into effect July 1 2017
+        voter += GetProvableVotingWeightXML();
+        std::string pk = sTitle + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
+        std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
+        std::string result = AddContract("vote",pk,contract);
+        std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
+        return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
     }
 }
 
@@ -159,7 +139,6 @@ std::string GetPollContractByTitle(std::string objecttype, std::string title)
         if(boost::iequals(PollTitle, title))
             return contract;
     }
-
     return std::string();
 }
 
@@ -179,10 +158,10 @@ bool PollExpired(std::string pollname)
 
 bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 {
-	// If the expiration is after July 1 2017, use the new security features.
-	std::string contract = GetPollContractByTitle("poll",pollname);
-	double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
-	return (expiration > 1498867200) ? true : false;
+    // If the expiration is after July 1 2017, use the new security features.
+    std::string contract = GetPollContractByTitle("poll",pollname);
+    double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
+    return (expiration > 1498867200) ? true : false;
 }
 
 
@@ -200,7 +179,8 @@ double PollCalculateShares(std::string contract, double sharetype, double MoneyS
     double magnitude = ReturnVerifiedVotingMagnitude(contract,PollCreatedAfterSecurityUpgrade(contract));
     double balance = ReturnVerifiedVotingBalance(contract,PollCreatedAfterSecurityUpgrade(contract));
     if (VoteAnswerCount < 1) VoteAnswerCount=1;
-
+    if (sharetype==1) return magnitude/VoteAnswerCount;
+    if (sharetype==2) return balance/VoteAnswerCount;
     if (sharetype==3)
     {
         // https://github.com/gridcoin/Gridcoin-Research/issues/87#issuecomment-253999878
@@ -226,9 +206,7 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
 {
     double total_shares = 0;
     out_participants = 0;
-
     double MoneySupplyFactor = GetMoneySupplyFactor();
-
     for(const auto& item : ReadCacheSection("vote"))
     {
         const std::string& contract = item.second.value;
@@ -245,7 +223,6 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
             }
         }
     }
-
     return total_shares;
 }
 
@@ -264,7 +241,6 @@ bool PollAcceptableAnswer(std::string pollname, std::string answer)
     std::string contract = GetPollContractByTitle("poll",pollname);
     std::string answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
     std::vector<std::string> vAnswers = split(answers.c_str(),";");
-
     //Allow multiple choice voting:
     std::vector<std::string> vUserAnswers = split(answer.c_str(),";");
     for (unsigned int x = 0; x < vUserAnswers.size(); x++)
@@ -272,14 +248,14 @@ bool PollAcceptableAnswer(std::string pollname, std::string answer)
         bool bFoundAnswer = false;
         for (unsigned int i = 0; i < vAnswers.size(); i++)
         {
-                boost::to_lower(vAnswers[i]); //Contains Poll acceptable answers
-                std::string sUserAnswer = vUserAnswers[x];
-                boost::to_lower(sUserAnswer);
-                if (sUserAnswer == vAnswers[i])
-                {
-                        bFoundAnswer=true;
-                        break;
-                }
+            boost::to_lower(vAnswers[i]); //Contains Poll acceptable answers
+            std::string sUserAnswer = vUserAnswers[x];
+            boost::to_lower(sUserAnswer);
+            if (sUserAnswer == vAnswers[i])
+            {
+                bFoundAnswer=true;
+                break;
+            }
         }
         if (!bFoundAnswer) return false;
     }
@@ -376,12 +352,9 @@ std::string GetProvableVotingWeightXML()
             }
         }
     }
-
-
     sXML += "<TOTALVOTEDBALANCE>" + RoundToString(dTotal,2) + "</TOTALVOTEDBALANCE>";
     sXML += "</PROVABLEBALANCE>";
     return sXML;
-
 }
 
 std::string GetShareType(double dShareType)
@@ -421,35 +394,36 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
         std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
         if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
         {
-	        if (GetTransaction(uTXID, tx2, hashBlock))
-	        {
-	            if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
-		        {
-		            int64_t nValue2 = tx2.vout[iPos].nValue;
-		            const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
-		            CTxDestination address2;
-		            std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
-		            std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
-		            std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
-		            double dAmount = CoinToDouble(nValue2);
-		            {
-		                if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
-		        	    {
+            if (GetTransaction(uTXID, tx2, hashBlock))
+            {
+                if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
+                {
+                    int64_t nValue2 = tx2.vout[iPos].nValue;
+                    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
+                    CTxDestination address2;
+                    std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
+                    std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
+                    std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
+                    double dAmount = CoinToDouble(nValue2);
+                    if (ExtractDestination(tx2.vout[iPos].scriptPubKey, address2))
+                    {
+                        if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
+                        {
                             Object entry;
-      	        		    entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
- 		        	        std::string sDecXmlSig = DecodeBase64(sXmlSig);
-		        	        CKey keyVerify;
-		        	        if (keyVerify.SetPubKey(ParseHex(sPubKey)))
-		        	        {
+                            entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
+                            std::string sDecXmlSig = DecodeBase64(sXmlSig);
+                            CKey keyVerify;
+                            if (keyVerify.SetPubKey(ParseHex(sPubKey)))
+                            {
                                 std::vector<unsigned char> vchMsg1 = std::vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
                                 std::vector<unsigned char> vchSig1 = std::vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
                                 bool bValid = keyVerify.Verify(uTXID,vchSig1);
                                 // Unspent Balance is proven to be owned by the voters public key, count the vote
                                 if(bValid) dCounted += dAmount;
-		        	        }
+                            }
                         }
                     }
-	            }
+                }
             }
         }
     }
@@ -469,12 +443,12 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
     if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
     {
         CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
-	    if (pblockindexMagnitude)
-	    {
-	        bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-	        bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
-	        if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
-	    }
+        if (pblockindexMagnitude)
+        {
+            bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
+            bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
+            if (fAudited) return (double)pblockindexMagnitude->nMagnitude;
+        }
     }
     return 0;
 }
@@ -522,11 +496,11 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
             {
 
                 if( (title.length()>128) &&
-                    (Expiration.length()>64) &&
-                    (Question.length()>4096) &&
-                    (Answers.length()>8192) &&
-                    (ShareType.length()>64) &&
-                    (sURL.length()>256)  )
+                        (Expiration.length()>64) &&
+                        (Question.length()>4096) &&
+                        (Answers.length()>8192) &&
+                        (ShareType.length()>64) &&
+                        (sURL.length()>256)  )
                     continue;
 
                 const std::vector<std::string>& vAnswers = split(Answers.c_str(),";");
@@ -546,7 +520,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 std::string ExpirationDate = TimestampToHRDate(RoundFromString(Expiration,0));
                 std::string sShareType = GetShareType(RoundFromString(ShareType,0));
                 std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
-                                        + " (" + ExpirationDate + " ) - " + sShareType;
+                        + " (" + ExpirationDate + " ) - " + sShareType;
 
                 entry.push_back(Pair(TitleNarr,title));
                 sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
@@ -580,8 +554,8 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
 
                     entry.push_back(Pair("Best Answer",BestAnswer));
                     sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
-                                  + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
-                                  + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
+                            + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
+                            + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
 
                 }
                 sExportRow += "</POLL>";
