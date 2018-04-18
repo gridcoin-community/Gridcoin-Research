@@ -79,8 +79,6 @@ Public Class frmLiveTicker
     End Sub
     Public Function GetCryptoPrice(sSymbol As String)
         Try
-
-            'Sample Ticker Format :  {"ticker":{"high":0.00003796,"low":0.0000365,"avg":0.00003723,"lastbuy":0.0000371,"lastsell":0.00003795,"buy":0.00003794,"sell":0.00003795,"lastprice":0.00003795,"updated":1420369200}}
             Dim sSymbol1 As String
             sSymbol1 = NiceTicker(sSymbol)
             Dim ccxPage As String = ""
@@ -92,7 +90,8 @@ Public Class frmLiveTicker
             Dim sURL As String = "https://c-cex.com/t/" + ccxPage
             Dim w As New MyWebClient
             Dim sJSON As String = w.DownloadString(sURL)
-            Dim sLast As String = ExtractValue(sJSON, "lastprice", ",")
+            Dim sLast As String = ExtractValue(sJSON, "lastprice")
+            sLast = Replace(sLast, ",", ".")
             Dim dprice As Double
             dprice = CDbl(sLast)
             Dim qBitcoin As Quote
