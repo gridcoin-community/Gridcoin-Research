@@ -3587,7 +3587,7 @@ Array GetJSONBeaconReport()
     {
         const std::string& key_name  = item.first;
         const std::string& key_value = item.second;
-        std::string subkey = key_name.substr(datatype.length()+1,key_name.length()-datatype.length()-1);
+        std::string subkey = key_name.substr(datatype.length(),key_name.length()-datatype.length());
         row = subkey + "<COL>" + key_value;
         //                              std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress;
         std::string contract = DecodeBase64(key_value);
