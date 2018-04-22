@@ -774,13 +774,6 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(OutOfSyncByAge())
         return LogPrintf("AddNeuralContractOrVote: Out Of Sync\n");
 
-    /* Retrive the neural Contract */
-    const std::string& sb_contract = NN::GetNeuralContract();
-    const std::string& sb_hash = GetQuorumHash(sb_contract);
-
-    if(sb_contract.empty())
-        return LogPrintf("AddNeuralContractOrVote: Local Contract Empty\n");
-
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
         return LogPrintf("AddNeuralContractOrVote: Not Participating\n");
 
@@ -796,22 +789,46 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     int pending_height = RoundFromString(ReadCache("neuralsecurity","pending").value, 0);
 
-    /* Add our Neural Vote */
-    bb.NeuralHash = sb_hash;
-    LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s\n",sb_hash);
-
     if (pending_height>=(pindexBest->nHeight-200))
         return LogPrintf("AddNeuralContractOrVote: already Pending\n");
 
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 
-    if (consensus_hash!=sb_hash)
-        return LogPrintf("AddNeuralContractOrVote: not in Consensus\n");
+    /* Retrive the neural Contract */
+    const std::string& sb_contract = NN::GetNeuralContract();
+    const std::string& sb_hash = GetQuorumHash(sb_contract);
 
-    /* We have consensus, Add our neural contract */
-    bb.superblock = PackBinarySuperblock(sb_contract);
-    LogPrintf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")\n",bb.superblock.length());
+    if(!sb_contract.empty())
+    {
+
+        /* Add our Neural Vote */
+        bb.NeuralHash = sb_hash;
+        LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s\n",sb_hash);
+
+        if (consensus_hash!=sb_hash)
+            return LogPrintf("AddNeuralContractOrVote: not in Consensus\n");
+
+        /* We have consensus, Add our neural contract */
+        bb.superblock = PackBinarySuperblock(sb_contract);
+        LogPrintf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")\n",bb.superblock.length());
+    }
+    else
+    {
+        LogPrintf("AddNeuralContractOrVote: Local Contract Empty\n");
+
+        /* Do NOT add a Neural Vote alone, because this hash is not Trusted! */
+
+        if(!supercfwd::sBinContract.empty() && consensus_hash!=supercfwd::sCacheHash)
+        {
+            assert(GetQuorumHash(UnpackBinarySuperblock(supercfwd::sBinContract))==consensus_hash); //disable for performace
+
+            bb.NeuralHash = supercfwd::sCacheHash;
+            bb.superblock = supercfwd::sBinContract;
+            LogPrintf("AddNeuralContractOrVote: Added forwarded Superblock (size %" PRIszu ") (hash %s)\n",bb.superblock.length(),bb.NeuralHash);
+        }
+        else LogPrintf("AddNeuralContractOrVote: Forwarded Contract Empty\n");
+    }
 
     return 0;
 }
