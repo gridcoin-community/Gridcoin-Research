@@ -1362,7 +1362,7 @@ public:
         nChainTrust = 0;
         nMint = 0;
         nMoneySupply = 0;
-        nFlags = 0;
+        nFlags = EMPTY_CPID;
         nStakeModifier = 0;
         nStakeModifierChecksum = 0;
         hashProof = 0;
@@ -1393,7 +1393,7 @@ public:
         nChainTrust = 0;
         nMint = 0;
         nMoneySupply = 0;
-        nFlags = 0;
+        nFlags = EMPTY_CPID;
         nStakeModifier = 0;
         nStakeModifierChecksum = 0;
         hashProof = 0;
@@ -1540,7 +1540,7 @@ public:
     {
         if(nFlags & EMPTY_CPID)
             return "";
-        else if(nFlags == INVESTOR_CPID)
+        else if(nFlags & INVESTOR_CPID)
             return "INVESTOR";
         else
             return cpid.GetHex();
