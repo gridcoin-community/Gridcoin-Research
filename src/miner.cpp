@@ -674,12 +674,13 @@ namespace supercfwd
     std::string sCacheHash;
     std::string sBinContract;
 
-    int RequestAnyNode()
+    int RequestAnyNode(const std::string& consensus_hash)
     {
         CNode* pNode= vNodes[rand()%vNodes.size()];
 
         if(fDebug) LogPrintf("supercfwd.RequestAnyNode %s requesting neural hash",pNode->addrName);
-        pNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("neural_hash"), /*reqid*/std::string("supercfwd.rqa"));
+        pNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("neural_hash"),
+            /*reqid*/std::string("supercfwd.rqa"), consensus_hash);
 
         return true;
     }
@@ -704,7 +705,7 @@ namespace supercfwd
             return false;
 
         if(fDebug2) LogPrintf("supercfwd.MaybeRequestHash: requesting");
-        RequestAnyNode();
+        RequestAnyNode(consensus_hash);
         return true;
     }
 
@@ -766,6 +767,24 @@ namespace supercfwd
             else if(fDebug) LogPrintf("%s %s already cached",logprefix,sCacheHash);
         }
         //else if(fDebug10) LogPrintf("%s invalid data",logprefix);
+    }
+    void SendResponse(CNode* fromNode, const std::string& req_hash)
+    {
+        const std::string nn_hash(NN::GetNeuralHash());
+        if(req_hash==sCacheHash)
+        {
+            fromNode->PushMessage("neural", std::string("supercfwdr"),
+                sBinContract);
+        }
+        else if(req_hash==nn_hash)
+        {
+            fromNode->PushMessage("neural", std::string("supercfwdr"),
+                PackBinarySuperblock(NN::GetNeuralContract()));
+        }
+        else
+        {
+            fromNode->PushMessage("hash_nresp", nn_hash, std::string());
+        }
     }
 }
 

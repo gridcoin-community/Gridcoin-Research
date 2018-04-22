@@ -7116,6 +7116,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             else if (neural_request=="neural_hash")
             {
+            if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
+            {
+                std::string r_hash;  vRecv >> r_hash;
+                supercfwd::SendResponse(pfrom,r_hash);
+            }
+            else
             pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
             }
             else if (neural_request=="explainmag")
@@ -7129,6 +7135,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 std::string contract = "";
             NN::SetTestnetFlag(fTestNet);
             pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
+            }
+            else if (neural_request=="supercfwdr")
+            {
+                // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
+                supercfwd::QuorumResponseHook(pfrom,neural_request_id);
             }
     }
     else if (strCommand == "ping")
