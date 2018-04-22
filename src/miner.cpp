@@ -714,7 +714,7 @@ namespace supercfwd
         assert(fromNode);
         if(neural_response.length() != 32)
             return;
-        const std::string logprefix = "supercfwd.HashResponseHook: from "+fromNode->addrName;
+        const std::string logprefix = "supercfwd.HashResponseHook: from "+fromNode->addrName+" hash "+neural_response;
 
         if(neural_response!=sCacheHash)
         {
@@ -723,16 +723,16 @@ namespace supercfwd
 
             if(neural_response==consensus_hash)
             {
-                if(fDebug) LogPrintf("%s %s requesting contract data",logprefix,neural_response);
+                if(fDebug) LogPrintf("%s requesting contract data",logprefix);
                 fromNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("quorum"), /*reqid*/std::string("supercfwd.hrh"));
             }
             else
             {
-                if(fDebug) LogPrintf("%s %s not matching consensus",logprefix,neural_response);
+                if(fDebug) LogPrintf("%s not matching consensus",logprefix);
                 //TODO: try another peer faster
             }
         }
-        else if(fDebug) LogPrintf("%s %s already cached",logprefix,sCacheHash);
+        else if(fDebug) LogPrintf("%s already cached",logprefix);
     }
 
     void QuorumResponseHook(CNode* fromNode, const std::string& neural_response)
@@ -742,9 +742,9 @@ namespace supercfwd
 
         if(resp_length >= 10)
         {
-            const std::string logprefix = "supercfwd.QuorumResponseHook: from "+fromNode->addrName;
             const std::string rcvd_contract= UnpackBinarySuperblock(std::move(neural_response));
             const std::string rcvd_hash = GetQuorumHash(rcvd_contract);
+            const std::string logprefix = "supercfwd.QuorumResponseHook: from "+fromNode->addrName + " hash "+rcvd_hash;
 
             if(rcvd_hash!=sCacheHash)
             {
@@ -753,36 +753,41 @@ namespace supercfwd
 
                 if(rcvd_hash==consensus_hash)
                 {
-                    if(fDebug) LogPrintf("%s good contract save, hash %s",logprefix,rcvd_hash);
+                    if(fDebug) LogPrintf("%s good contract save",logprefix);
                     sBinContract= PackBinarySuperblock(std::move(rcvd_contract));
                     sCacheHash= std::move(rcvd_hash);
                     //TODO: push hash_nresp to all peers
                 }
                 else
                 {
-                    if(fDebug) LogPrintf("%s %s not matching consensus, bs %d [%s]",logprefix,rcvd_hash,resp_length,rcvd_contract);
+                    if(fDebug) LogPrintf("%s not matching consensus, (size %d)",logprefix,resp_length);
                     //TODO: try another peer faster
                 }
             }
-            else if(fDebug) LogPrintf("%s %s already cached",logprefix,sCacheHash);
+            else if(fDebug) LogPrintf("%s already cached",logprefix);
         }
         //else if(fDebug10) LogPrintf("%s invalid data",logprefix);
     }
     void SendResponse(CNode* fromNode, const std::string& req_hash)
     {
         const std::string nn_hash(NN::GetNeuralHash());
+        const bool& fDebug10= fDebug; //temporary
         if(req_hash==sCacheHash)
         {
+            if(fDebug10) LogPrint("supercfwd.SendResponse: %s requested %s, sending forwarded binary contract (size %d)",fromNode->addrName,req_hash,sBinContract.length());
             fromNode->PushMessage("neural", std::string("supercfwdr"),
                 sBinContract);
         }
         else if(req_hash==nn_hash)
         {
+            std::string nn_data= PackBinarySuperblock(NN::GetNeuralContract());
+            if(fDebug10) LogPrint("supercfwd.SendResponse: %s requested %s, sending our nn binary contract (size %d)",fromNode->addrName,req_hash,nn_data.length());
             fromNode->PushMessage("neural", std::string("supercfwdr"),
-                PackBinarySuperblock(NN::GetNeuralContract()));
+                std::move(nn_data));
         }
         else
         {
+            if(fDebug10) LogPrint("supercfwd.SendResponse: to %s don't have %s, sending %s",fromNode->addrName,req_hash,nn_hash);
             fromNode->PushMessage("hash_nresp", nn_hash, std::string());
         }
     }
