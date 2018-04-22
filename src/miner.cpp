@@ -690,8 +690,8 @@ namespace supercfwd
         if(OutOfSyncByAge() || pindexBest->nVersion < 9)
             return false;
 
-        //if(!NeedASuperblock())
-            //return false;
+        if(!NeedASuperblock())
+            return false;
 
         /*
         if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
@@ -774,20 +774,20 @@ namespace supercfwd
         const bool& fDebug10= fDebug; //temporary
         if(req_hash==sCacheHash)
         {
-            if(fDebug10) LogPrint("supercfwd.SendResponse: %s requested %s, sending forwarded binary contract (size %d)",fromNode->addrName,req_hash,sBinContract.length());
+            if(fDebug10) LogPrintf("supercfwd.SendResponse: %s requested %s, sending forwarded binary contract (size %d)",fromNode->addrName,req_hash,sBinContract.length());
             fromNode->PushMessage("neural", std::string("supercfwdr"),
                 sBinContract);
         }
         else if(req_hash==nn_hash)
         {
             std::string nn_data= PackBinarySuperblock(NN::GetNeuralContract());
-            if(fDebug10) LogPrint("supercfwd.SendResponse: %s requested %s, sending our nn binary contract (size %d)",fromNode->addrName,req_hash,nn_data.length());
+            if(fDebug10) LogPrintf("supercfwd.SendResponse: %s requested %s, sending our nn binary contract (size %d)",fromNode->addrName,req_hash,nn_data.length());
             fromNode->PushMessage("neural", std::string("supercfwdr"),
                 std::move(nn_data));
         }
         else
         {
-            if(fDebug10) LogPrint("supercfwd.SendResponse: to %s don't have %s, sending %s",fromNode->addrName,req_hash,nn_hash);
+            if(fDebug10) LogPrintf("supercfwd.SendResponse: to %s don't have %s, sending %s",fromNode->addrName,req_hash,nn_hash);
             fromNode->PushMessage("hash_nresp", nn_hash, std::string());
         }
     }
