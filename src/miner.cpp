@@ -826,6 +826,14 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(!sb_contract.empty())
     {
 
+        /* To save network bandwidth, start posting the neural hashes in the
+           CurrentNeuralHash field, so that out of sync neural network nodes can
+           request neural data from those that are already synced and agree with the
+           supermajority over the last 24 hrs
+           Note: CurrentNeuralHash is not actually used for sb validity
+        */
+        bb.CurrentNeuralHash = sb_hash;
+
         /* Add our Neural Vote */
         bb.NeuralHash = sb_hash;
         LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s\n",sb_hash);
