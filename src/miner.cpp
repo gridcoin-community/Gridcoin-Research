@@ -679,14 +679,6 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     if(sb_contract.empty())
         return LogPrintf("AddNeuralContractOrVote: Local Contract Empty\n");
 
-    /* To save network bandwidth, start posting the neural hashes in the
-       CurrentNeuralHash field, so that out of sync neural network nodes can
-       request neural data from those that are already synced and agree with the
-       supermajority over the last 24 hrs
-       Note: CurrentNeuralHash is not actually used for sb validity
-    */
-    bb.CurrentNeuralHash = sb_hash;
-
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
         return LogPrintf("AddNeuralContractOrVote: Not Participating\n");
 
