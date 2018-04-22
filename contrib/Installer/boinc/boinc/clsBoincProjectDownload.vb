@@ -154,6 +154,8 @@ Public Class clsBoincProjectDownload
                             ExtractGZipInnerArchive(sTeamEtagFilePath, GetGridFolder() + "NeuralNetwork\")
                         Catch ex As Exception
                             Log("Error while processing master team gz file for " + sProject + " : " + ex.Message + ", Skipping project.")
+                            Log("Deleting master team gz file for " + sProject)
+                            File.Delete(sTeamEtagFilePath)
                             Continue For
                         End Try
                     End If
@@ -175,6 +177,8 @@ Public Class clsBoincProjectDownload
                         Catch ex As Exception
                             Dim sMsg As String = ex.Message
                             Log("Error while processing master project rac gz file for " + sProject + " : " + ex.Message + ", Skipping project.")
+                            Log("Deleting master project gz file for " + sProject)
+                            File.Delete(sRacEtagFilePath)
                             Continue For
                         End Try
                     End If
