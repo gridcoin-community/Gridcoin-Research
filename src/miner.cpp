@@ -667,6 +667,108 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
+
+/* Super Contract Forwarding */
+namespace supercfwd
+{
+    std::string sCacheHash;
+    std::string sBinContract;
+
+    int RequestAnyNode()
+    {
+        CNode* pNode= vNodes[rand()%vNodes.size()];
+
+        if(fDebug) LogPrintf("supercfwd.RequestAnyNode %s requesting neural hash",pNode->addrName);
+        pNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("neural_hash"), /*reqid*/std::string("supercfwd.rqa"));
+
+        return true;
+    }
+
+    int MaybeRequest()
+    {
+        if(OutOfSyncByAge() || pindexBest->nVersion < 9)
+            return false;
+
+        //if(!NeedASuperblock())
+            //return false;
+
+        /*
+        if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
+           return false;
+        */
+
+        double popularity = 0;
+        std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+
+        if(consensus_hash==sCacheHash && !sBinContract.empty())
+            return false;
+
+        if(fDebug2) LogPrintf("supercfwd.MaybeRequestHash: requesting");
+        RequestAnyNode();
+        return true;
+    }
+
+    void HashResponseHook(CNode* fromNode, const std::string& neural_response)
+    {
+        assert(fromNode);
+        if(neural_response.length() != 32)
+            return;
+        const std::string logprefix = "supercfwd.HashResponseHook: from "+fromNode->addrName;
+
+        if(neural_response!=sCacheHash)
+        {
+            double popularity = 0;
+            const std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+
+            if(neural_response==consensus_hash)
+            {
+                if(fDebug) LogPrintf("%s %s requesting contract data",logprefix,neural_response);
+                fromNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("quorum"), /*reqid*/std::string("supercfwd.hrh"));
+            }
+            else
+            {
+                if(fDebug) LogPrintf("%s %s not matching consensus",logprefix,neural_response);
+                //TODO: try another peer faster
+            }
+        }
+        else if(fDebug) LogPrintf("%s %s already cached",logprefix,sCacheHash);
+    }
+
+    void QuorumResponseHook(CNode* fromNode, const std::string& neural_response)
+    {
+        assert(fromNode);
+        const auto resp_length= neural_response.length();
+
+        if(resp_length >= 10)
+        {
+            const std::string logprefix = "supercfwd.QuorumResponseHook: from "+fromNode->addrName;
+            const std::string rcvd_contract= UnpackBinarySuperblock(std::move(neural_response));
+            const std::string rcvd_hash = GetQuorumHash(rcvd_contract);
+
+            if(rcvd_hash!=sCacheHash)
+            {
+                double popularity = 0;
+                const std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+
+                if(rcvd_hash==consensus_hash)
+                {
+                    if(fDebug) LogPrintf("%s good contract save, hash %s",logprefix,rcvd_hash);
+                    sBinContract= PackBinarySuperblock(std::move(rcvd_contract));
+                    sCacheHash= std::move(rcvd_hash);
+                    //TODO: push hash_nresp to all peers
+                }
+                else
+                {
+                    if(fDebug) LogPrintf("%s %s not matching consensus, bs %d [%s]",logprefix,rcvd_hash,resp_length,rcvd_contract);
+                    //TODO: try another peer faster
+                }
+            }
+            else if(fDebug) LogPrintf("%s %s already cached",logprefix,sCacheHash);
+        }
+        //else if(fDebug10) LogPrintf("%s invalid data",logprefix);
+    }
+}
+
 int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 {
     if(OutOfSyncByAge())
@@ -859,6 +961,8 @@ void StakeMiner(CWallet *pwallet)
             MinerStatus.Clear();
             continue;
         }
+
+        supercfwd::MaybeRequest();
 
         // Lock main lock since GetNextProject and subsequent calls
         // require the state to be static.
