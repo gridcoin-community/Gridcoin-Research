@@ -8399,12 +8399,6 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                         WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
                     }
 
-                    // Ensure we have the TXID of the contract in memory
-                    if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
-                    {
-                        WriteCache(sMessageType,sMessageKey+";Recipient",sRecipient,nTime);
-                        WriteCache(sMessageType,sMessageKey+";BurnAmount",RoundToString(dAmount,2),nTime);
-                    }
                     WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
                     if(fDebug10 && sMessageType=="beacon" ){
                         LogPrintf("BEACON add %s %s %s\n", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
