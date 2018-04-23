@@ -103,8 +103,13 @@ Value addnode(const Array& params, bool fHelp)
     if (strCommand == "onetry")
     {
         CAddress addr;
-        ConnectNode(addr, strNode.c_str());
-        return Value::null;
+        CNode* pnode= ConnectNode(addr, strNode.c_str());
+        if(!pnode)
+            throw JSONRPCError(-23, "Error: Node connection failed");
+        //FIXME: should not the connection be release()d?
+        Object result;
+        result.push_back(Pair("result", "ok"));
+        return result;
     }
 
     LOCK(cs_vAddedNodes);
@@ -126,7 +131,9 @@ Value addnode(const Array& params, bool fHelp)
         vAddedNodes.erase(it);
     }
 
-    return Value::null;
+    Object result;
+    result.push_back(Pair("result", "ok"));
+    return result;
 }
 
 Value getaddednodeinfo(const Array& params, bool fHelp)
