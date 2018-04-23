@@ -284,7 +284,6 @@ extern json_spirit::Value tallyneural(const json_spirit::Array& params, bool fHe
 #ifdef WIN32
 extern json_spirit::Value testnewcontract(const json_spirit::Array& params, bool fHelp);
 #endif
-extern json_spirit::Value unusual(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value updatequoromdata(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value versionreport(const json_spirit::Array& params, bool fhelp);
 extern json_spirit::Value writedata(const json_spirit::Array& params, bool fHelp);
