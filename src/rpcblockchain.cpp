@@ -73,7 +73,6 @@ std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 
 double Round(double d, int place);
-bool UnusualActivityReport();
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
 extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
@@ -2825,25 +2824,6 @@ Value testnewcontract(const Array& params, bool fHelp)
     return res;
 }
 #endif
-
-Value unusual(const Array& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "unusual\n"
-                "\n"
-                "Displays report on unusual network activity in debug.log\n");
-
-    Object res;
-
-    LOCK(cs_main);
-
-    UnusualActivityReport();
-
-    res.push_back(Pair("UAR", 1));
-
-    return res;
-}
 
 Value updatequoromdata(const Array& params, bool fHelp)
 {
