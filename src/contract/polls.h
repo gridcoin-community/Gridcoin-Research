@@ -56,8 +56,6 @@ std::string PollAnswers(std::string pollname);
 
 std::string GetProvableVotingWeightXML();
 
-std::string GetShareType(double dShareType);
-
 double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 
 double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade);
