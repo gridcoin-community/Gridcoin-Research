@@ -45,6 +45,8 @@ GRIDCOIN_CORE_H = \
 	checkpoints.h \
 	coincontrol.h \
 	compat.h \
+	contract/polls.h \
+	contract/contract.h \
 	cpid.h \
 	crypter.h \
 	db.h \
@@ -70,7 +72,7 @@ GRIDCOIN_CORE_H = \
 	serialize.h \
 	strlcpy.h \
 	sync.h \
-    tally.h \
+	tally.h \
 	threadsafety.h \
 	tinyformat.h \
 	txdb.h \
@@ -92,6 +94,8 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	block.cpp \
 	boinc.cpp \
 	checkpoints.cpp \
+	contract/polls.cpp \
+	contract/contract.cpp \
 	cpid.cpp \
 	crypter.cpp \
 	db.cpp \
@@ -107,6 +111,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	pbkdf2.cpp \
 	protocol.cpp \
 	rpcblockchain.cpp \
+	contract/rpccontract.cpp \
 	rpcdump.cpp \
 	rpcmining.cpp \
 	rpcnet.cpp \
@@ -115,12 +120,13 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
-        tally.cpp \
+    tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
 	wallet.cpp \
 	walletdb.cpp
+
 
 obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
