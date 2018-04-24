@@ -21,15 +21,6 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 bool WalletOutOfSync();
 
-/*std::map<int,std::string> ShareType =
-{
-    std::pair <int, std::string> (1,"Magnitude"),
-    std::pair <int, std::string> (2,"Balance"),
-    std::pair <int, std::string> (3,"Mangitude+Balance")
-    std::pair <int, std::string> (4,"CPID Count")
-    std::pair <int, std::string> (5,"Participants")
-};*/
-
 std::string GetShareType(double dShareType)
 {
     if (dShareType == 1) return "Magnitude";
@@ -175,7 +166,6 @@ bool PollExpired(std::string pollname)
     return (expiration < (double)GetAdjustedTime()) ? true : false;
 }
 
-
 bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 {
     // If the expiration is after July 1 2017, use the new security features.
@@ -183,7 +173,6 @@ bool PollCreatedAfterSecurityUpgrade(std::string pollname)
     double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
     return (expiration > 1498867200) ? true : false;
 }
-
 
 double PollDuration(std::string pollname)
 {
@@ -221,7 +210,6 @@ double PollCalculateShares(std::string contract, double sharetype, double MoneyS
     return 0;
 }
 
-
 double VotesCount(std::string pollname, std::string answer, double sharetype, double& out_participants)
 {
     double total_shares = 0;
@@ -246,15 +234,12 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
     return total_shares;
 }
 
-
-
 std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2)
 {
     std::string contract = GetPollContractByTitle("poll",pollname);
     std::string sElement = ExtractXML(contract,XMLElement1,XMLElement2);
     return sElement;
 }
-
 
 bool PollAcceptableAnswer(std::string pollname, std::string answer)
 {
@@ -377,7 +362,6 @@ std::string GetProvableVotingWeightXML()
     return sXML;
 }
 
-
 double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade)
 {
     std::string sPayload = ExtractXML(sXML,"<PROVABLEBALANCE>","</PROVABLEBALANCE>");
@@ -450,7 +434,7 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
     std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
     std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
     std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
-    if (!sXmlBlockHeight.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
+    if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
     {
         CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
         if (pblockindexMagnitude)
@@ -477,13 +461,12 @@ double GetMoneySupplyFactor()
 
 UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
 {
-    UniValue aPolls(UniValue::VARR);
-    UniValue oPoll(UniValue::VOBJ);
-    UniValue oAnswer(UniValue::VOBJ);
-    UniValue aAnswer(UniValue::VARR);
+    UniValue aPolls;
     std::vector<polling::Poll> vPolls = GetPolls(bDetail, includeExpired, byTitle);
     for(const auto& iterPoll: vPolls)
     {
+        UniValue oPoll(UniValue::VOBJ);
+        UniValue aAnswer(UniValue::VARR);
         oPoll.push_back(Pair("title", iterPoll.title));
         oPoll.push_back(Pair("pollnumber", iterPoll.pollnumber));
         oPoll.push_back(Pair("question", iterPoll.question));
@@ -494,12 +477,11 @@ UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
         {
             for(const auto& iterAnswer: iterPoll.answers)
             {
+                UniValue oAnswer(UniValue::VOBJ);
                 oAnswer.push_back(Pair("answer", iterAnswer.answer));
                 oAnswer.push_back(Pair("shares", iterAnswer.shares));
                 oAnswer.push_back(Pair("participants", iterAnswer.participants));
                 aAnswer.push_back(oAnswer);
-                oAnswer.clear();
-                oAnswer.shrink_to_fit();
             }
             oPoll.push_back(Pair("bestAnswer", iterPoll.best_answer));
             oPoll.push_back(Pair("totalShares", iterPoll.total_shares));
@@ -508,8 +490,6 @@ UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
             oPoll.push_back(Pair("answers", aAnswer));
         }
         aPolls.push_back(oPoll);
-        oPoll.clear();
-        oPoll.shrink_to_fit();
     }
     return aPolls;
 }
@@ -518,15 +498,14 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
 {
     std::vector<polling::Poll> vPolls;
     std::string::size_type longestanswer = 0;
-    polling::Poll poll;
     polling::Vote vote;
-    double iPollNumber = 0;
-    poll.pollnumber = 0;
+    std::vector<std::string> vAnswers;
     boost::to_lower(byTitle);
-    double dShares=0;
 
     for( const auto& item: ReadCacheSection("poll"))
     {
+        polling::Poll poll;
+        poll.pollnumber = 0;
         poll.title = boost::to_lower_copy(item.first);
         if (PollExpired(poll.title) && !includeExpired) continue;
         if (!byTitle.empty() && byTitle != poll.title) continue;
@@ -545,7 +524,7 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
                 (poll.url.length()>256)  )
             continue;
 
-        const std::vector<std::string>& vAnswers = split(poll.sAnswers.c_str(),";");
+        vAnswers = split(poll.sAnswers.c_str(),";");
 
         for (const std::string& answer : vAnswers)
             longestanswer = std::max( longestanswer, answer.length() );
@@ -553,17 +532,13 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
         if( longestanswer>128 )
             continue;
 
-        iPollNumber++;
         poll.pollnumber++;
         poll.total_participants = 0;
         poll.total_shares=0;
         poll.highest_share = 0;
         poll.expiration = TimestampToHRDate(RoundFromString(poll.expiration,0));
-        poll.sharetype = GetShareType(RoundFromString(poll.sharetype,0));
-
         if (bDetail)
         {
-            size_t i = 0;
             for (const std::string& answer : vAnswers)
             {
                 vote.answer = answer;
@@ -576,12 +551,14 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
 
                 poll.total_participants += vote.participants;
                 poll.total_shares += vote.shares;
+                poll.answers.push_back(vote);
             }
             if (poll.total_participants < 3) poll.best_answer = "";
-
-            poll.answers.push_back(vote);
-            vPolls.push_back(poll);
         }
+        poll.sharetype = GetShareType(RoundFromString(poll.sharetype,0));
+        vPolls.push_back(poll);
+        poll.answers.clear();
+        poll.answers.shrink_to_fit();
     }
     return vPolls;
 }

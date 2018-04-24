@@ -251,34 +251,17 @@ void VotingTableModel::resetData(bool history)
     // retrieve data
     std::vector<VotingItem *> items;
     std::string sVotingPayload;
-    //GetJSONPollsReport(true, "", sVotingPayload, history);
     Polls = GetPolls(true, history, "");
 
     //time_t now = time(NULL); // needed if history should be limited
 
-    //std::vector<std::string> vPolls = split(sVotingPayload, "<POLL>");
     for(const auto& iterPoll: Polls)
     {
-
-    //for(size_t y=0; y < vPolls.size(); y++) {
-        // replace underscores with spaces
-        //for(size_t nPos=0; (nPos=vPolls[y].find('_', nPos)) != std::string::npos; )
-          //  vPolls[y][nPos] = ' ';
-
         std::string sTitle = iterPoll.title;
         std::string sId = GetFoundationGuid(sTitle);
         if (sTitle.size() && (sId.empty()))
         {
             QString sExpiration = QString::fromStdString(iterPoll.expiration);
-            //std::string sShareType = ExtractXML(vPolls[y], "<SHARETYPE>", "</SHARETYPE>");
-            //std::string sQuestion = ExtractXML(vPolls[y], "<QUESTION>", "</QUESTION>");
-            //std::string sAnswers = ExtractXML(vPolls[y], "<ANSWERS>", "</ANSWERS>");
-            //std::string sArrayOfAnswers = ExtractXML(vPolls[y], "<ARRAYANSWERS>", "</ARRAYANSWERS>");
-            //std::string sTotalParticipants = ExtractXML(vPolls[y], "<TOTALPARTICIPANTS>", "</TOTALPARTICIPANTS>");
-            //std::string sTotalShares = ExtractXML(vPolls[y], "<TOTALSHARES>", "</TOTALSHARES>");
-            //std::string sUrl = ExtractXML(vPolls[y], "<URL>", "</URL>");
-            //std::string sBestAnswer = ExtractXML(vPolls[y], "<BESTANSWER>", "</BESTANSWER>");
-
             VotingItem *item = new VotingItem;
             item->rowNumber_ = items.size() + 1;
             item->title_ = QString::fromStdString(iterPoll.title);
@@ -714,7 +697,7 @@ void VotingChartDialog::resetData(const VotingItem *item)
     answer_->setText(item->bestAnswer_);
 
     std::vector<polling::Vote> vectorOfAnswers = item->vectorOfAnswers_;
-    answerTable_->setRowCount(vectorOfAnswers.size()-1);
+    answerTable_->setRowCount(vectorOfAnswers.size());
     std::vector<int> iShares;
     std::vector<QString> sAnswerNames;
     int sharesSum = 0;
