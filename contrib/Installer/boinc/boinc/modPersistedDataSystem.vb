@@ -849,7 +849,8 @@ Module modPersistedDataSystem
         Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
         Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
         Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
-
+        Dim MaxWitnessLoopCount As Integer = 5
+        Dim CurrentWitnessLoopCount As Integer = 0
         For z As Integer = 1 To 5
             Dim iRow As Long = 0
 
@@ -914,7 +915,9 @@ ThreadSleep:
                 'If Queue is greater then 0 then handle this situation properly! This means there is still Threads for CPIDs in queue or running.
             ElseIf mlQueueCopy > 0 Then
                 If lNoWitnesses = 0 Then
-                    Log("No CPIDs remaining with no witness, but mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to try rectify problem.")
+                    If CurrentWitnessLoopCount >= MaxWitnessLoopCount Then Exit For
+                    CurrentWitnessLoopCount += 1
+                    Log("No CPIDs remaining with no witness, but mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to try rectify problem. Attempt " + Trim(CurrentWitnessLoopCount) + "/" + Trim(MaxWitnessLoopCount))
                     GoTo ThreadSleep
                 Else
                     Log(Trim(lNoWitnesses) + " CPIDs remaining with no witness and mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to allow completion of threads")
