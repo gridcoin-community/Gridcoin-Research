@@ -676,6 +676,7 @@ namespace supercfwd
 
     int RequestAnyNode(const std::string& consensus_hash)
     {
+        LOCK(cs_vNodes);
         CNode* pNode= vNodes[rand()%vNodes.size()];
 
         if(fDebug) LogPrintf("supercfwd.RequestAnyNode %s requesting neural hash",pNode->addrName);
@@ -711,6 +712,7 @@ namespace supercfwd
 
     int SendOutRcvdHash()
     {
+        LOCK(cs_vNodes);
         for (auto const& pNode : vNodes)
         {
             const bool bNeural= Contains(pNode->strSubVer, "1999");
