@@ -714,6 +714,8 @@ namespace supercfwd
         assert(fromNode);
         if(neural_response.length() != 32)
             return;
+        if("d41d8cd98f00b204e9800998ecf8427e"==neural_response)
+            return;
         const std::string logprefix = "supercfwd.HashResponseHook: from "+fromNode->addrName+" hash "+neural_response;
 
         if(neural_response!=sCacheHash)
@@ -851,7 +853,7 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
         /* Do NOT add a Neural Vote alone, because this hash is not Trusted! */
 
-        if(!supercfwd::sBinContract.empty() && consensus_hash!=supercfwd::sCacheHash)
+        if(!supercfwd::sBinContract.empty() && consensus_hash==supercfwd::sCacheHash)
         {
             assert(GetQuorumHash(UnpackBinarySuperblock(supercfwd::sBinContract))==consensus_hash); //disable for performace
 
@@ -859,7 +861,7 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
             bb.superblock = supercfwd::sBinContract;
             LogPrintf("AddNeuralContractOrVote: Added forwarded Superblock (size %" PRIszu ") (hash %s)\n",bb.superblock.length(),bb.NeuralHash);
         }
-        else LogPrintf("AddNeuralContractOrVote: Forwarded Contract Empty\n");
+        else LogPrintf("AddNeuralContractOrVote: Forwarded Contract Empty or not in Consensus\n");
     }
 
     return 0;
