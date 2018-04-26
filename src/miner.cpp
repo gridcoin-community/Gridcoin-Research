@@ -677,10 +677,11 @@ namespace supercfwd
 
     int RequestAnyNode(const std::string& consensus_hash)
     {
+        const bool& fDebug10= fDebug; //temporary
         LOCK(cs_vNodes);
         CNode* pNode= vNodes[rand()%vNodes.size()];
 
-        if(fDebug) LogPrintf("supercfwd.RequestAnyNode %s requesting neural hash",pNode->addrName);
+        if(fDebug10) LogPrintf("supercfwd.RequestAnyNode %s requesting neural hash",pNode->addrName);
         pNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("neural_hash"),
             /*reqid*/std::string("supercfwd.rqa"), consensus_hash);
 
@@ -779,7 +780,7 @@ namespace supercfwd
 
                 if(rcvd_hash==consensus_hash)
                 {
-                    if(fDebug) LogPrintf("%s good contract save",logprefix);
+                    LogPrintf("%s good contract save",logprefix);
                     sBinContract= PackBinarySuperblock(std::move(rcvd_contract));
                     sCacheHash= std::move(rcvd_hash);
 
