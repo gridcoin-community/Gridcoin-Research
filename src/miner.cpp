@@ -709,6 +709,22 @@ namespace supercfwd
         return true;
     }
 
+    int SendOutRcvdHash()
+    {
+        for (auto const& pNode : vNodes)
+        {
+            const bool bNeural= Contains(pNode->strSubVer, "1999");
+            const bool bParticip= IsNeuralNodeParticipant(pNode->sGRCAddress, GetAdjustedTime());
+            if(bParticip && !bNeural)
+            {
+                if(fDebug) LogPrintf("supercfwd.SendOutRcvdHash to %s",pNode->addrName);
+                pNode->PushMessage("hash_nresp", sCacheHash, std::string("supercfwd.sorh"));
+                //pNode->PushMessage("neural", std::string("supercfwdr"), sBinContract);
+            }
+        }
+        return true;
+    }
+
     void HashResponseHook(CNode* fromNode, const std::string& neural_response)
     {
         assert(fromNode);
@@ -758,7 +774,9 @@ namespace supercfwd
                     if(fDebug) LogPrintf("%s good contract save",logprefix);
                     sBinContract= PackBinarySuperblock(std::move(rcvd_contract));
                     sCacheHash= std::move(rcvd_hash);
-                    //TODO: push hash_nresp to all peers
+
+                    if(!fNoListen)
+                        SendOutRcvdHash();
                 }
                 else
                 {
