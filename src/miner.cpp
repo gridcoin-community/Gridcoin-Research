@@ -673,6 +673,7 @@ namespace supercfwd
 {
     std::string sCacheHash;
     std::string sBinContract;
+    bool fEnable(false);
 
     int RequestAnyNode(const std::string& consensus_hash)
     {
@@ -688,6 +689,9 @@ namespace supercfwd
 
     int MaybeRequest()
     {
+        if(!fEnable)
+            return false;
+
         if(OutOfSyncByAge() || pindexBest->nVersion < 9)
             return false;
 
@@ -730,6 +734,8 @@ namespace supercfwd
     void HashResponseHook(CNode* fromNode, const std::string& neural_response)
     {
         assert(fromNode);
+        if(!fEnable)
+            return;
         if(neural_response.length() != 32)
             return;
         if("d41d8cd98f00b204e9800998ecf8427e"==neural_response)
@@ -760,7 +766,7 @@ namespace supercfwd
         assert(fromNode);
         const auto resp_length= neural_response.length();
 
-        if(resp_length >= 10)
+        if(fEnable && resp_length >= 10)
         {
             const std::string rcvd_contract= UnpackBinarySuperblock(std::move(neural_response));
             const std::string rcvd_hash = GetQuorumHash(rcvd_contract);
@@ -1003,6 +1009,9 @@ void StakeMiner(CWallet *pwallet)
     RenameThread("grc-stake-miner");
 
     MinerAutoUnlockFeature(pwallet);
+
+    supercfwd::fEnable= GetBoolArg("-supercfwd",true);
+    if(fDebug) LogPrintf("supercfwd::fEnable= %d",supercfwd::fEnable);
 
     while (!fShutdown)
     {
