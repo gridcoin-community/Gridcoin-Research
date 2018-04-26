@@ -710,6 +710,9 @@ namespace supercfwd
         if(consensus_hash==sCacheHash && !sBinContract.empty())
             return false;
 
+        if(popularity<=0)
+            return false;
+
         if(fDebug2) LogPrintf("supercfwd.MaybeRequestHash: requesting");
         RequestAnyNode(consensus_hash);
         return true;
