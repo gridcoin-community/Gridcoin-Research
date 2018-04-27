@@ -125,7 +125,7 @@ std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
-static BlockFinder RPCBlockFinder;
+BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
 {
