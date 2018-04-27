@@ -423,17 +423,17 @@ Value sendalert2(const Array& params, bool fHelp)
     if (fHelp || params.size() != 7)
         throw runtime_error(
             //          0            1    2            3            4        5          6
-            "sendalert <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
+            "sendalert2 <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
             "\n"
-            "<message> ---->is the alert text message\n"
             "<privatekey> -> is hex string of alert master private key\n"
-            "<subverlist> -> comma separated list of versions warning applies to\n"
-            "<priority> ---> integer, >1000->visible\n"
             "<id> ---------> is the unique alert number\n"
+            "<subverlist> -> comma separated list of versions warning applies to\n"
             "<cancellist> -> comma separated ids of alerts to cancel\n"
             "<expire> -----> alert expiration in days\n"
+            "<priority> ---> integer, >1000->visible\n"
+            "<message> ---->is the alert text message\n"
             "\n"
-            "Returns true or false.");
+            "Returns summary of what was done.");
 
     CAlert alert;
     CKey key;
