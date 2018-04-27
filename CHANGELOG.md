@@ -4,7 +4,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.7.0]
+## [3.7.11.0] 2018-03-15, leisure
+### Fixed
+ - Fix wallet being locked while flushing. It now requires a clean shutdown
+   or a backup to migrate the wallet.dat to a different system, #1010 (@jamescowens).
+
+### Changed
+ - Automatic backups can now be disabled by using `-walletbackupinterval=0`,
+  #1018 (@denravonska).
+ - Trigger a fix spent coins check on start and after block disconnect, #1018 (@denravonska).
+
+## [3.7.10.0] 2018-03-05, leisure
+### Fixed
+ - Fix sync issues due to beacon age checks, #1003 (@denravonska).
+
+## [3.7.9.0] 2018-03-03, leisure
+### Fixed
+ - Fix issues with NN participation on Windows, #986 (@Foggyx420).
+ - Fix stray data in beaconreport RPC, #986 (@Foggyx420).
+ - Fix spelling error, #989 (@caraka).
+
+## [3.7.8.0] 2018-03-01, mandatory
+### Fixed
+ - Move context sensitive DPoR block checks to ConnectBlock, #922 (@tomasbrod).
+ - Check incoming blocks for malformed DPoR signature, #922.
+ - Corect tally height on init, #917 (@denravonska).
+ - Prevent staking of a block with a failed signature, #948 (@Foggyx420).
+ - Fix UI and RPC slowdown regression, #961 (@denravonska).
+ - Fix Debian lint errors, #886, #885, #884, #883 (@caraka).
+ - Fix fork issue due to research age calculation inconsistencies, #939
+   (@denravonska).
+ - Fix crashes when tallying, #934 (@denravonska).
+ - Revert reorganize of the chain trust becomes less than what it was, #957
+   (@tomasbrod).
+ - Fix sync issues with incorrectly accepted v8 beacons, #979 (@tomasbrod).
+
+### Changed
+  - Double check PoS kernel, #958 (@tomasbrod).
+  - Don't tally until V9 to speed up syncing, #943 (@denravonska).
+
+## [3.7.7.0] 2018-02-02
 ### Fixed
  - Beacon validation are now done when accepting blocks, not when receiving,
    #899 (@denravonska).

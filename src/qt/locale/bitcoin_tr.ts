@@ -225,7 +225,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+46"/>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>Uyarı: Eğer cüzdanınızı şifreleyip parolanızı kaybederseniz, &lt;b&gt; TÜM COINLERİNİZİ KAYBEDECEKSİNİZ&lt;/b&gt;!</translation>
+        <translation>Uyarı: Eğer cüzdanınızı şifreldikten sonra parolanızı kaybederseniz, &lt;b&gt; TÜM COINLERİNİZİ KAYBEDECEKSİNİZ&lt;/b&gt;!</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -695,7 +695,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+8"/>
         <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation>Boinc ile hesaplamaya başlamak için, boinc istemcisini çalıştırın, projelerinizi ekleyin daha sonra %appdata%\GridcoinResearch konumundaki gridcoinresearch.conf dosyasına e-mail adresinizi girin. Bu sihirbazı tekrar çalıştırmak için gridcoinresearch.conf dosyasını silin. </translation>
+        <translation>Boinc ile hesaplamaya başlamak için, BOINC istemcisini çalıştırın, projelerinizi ekleyin daha sonra %appdata%\GridcoinResearch konumundaki gridcoinresearch.conf dosyasına e-mail adresinizi girin. Bu sihirbazı tekrar çalıştırmak için gridcoinresearch.conf dosyasını silin. </translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1665,7 +1665,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+7"/>
         <source>Status:</source>
-        <translation type="unfinished"></translation>
+        <translation>Durum:</translation>
     </message>
     <message>
         <location line="+223"/>
@@ -1711,7 +1711,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location filename="../overviewpage.cpp" line="+132"/>
         <location line="+1"/>
         <source>out of sync</source>
-        <translation>eşleşme dışı</translation>
+        <translation>Eşleşme Dışı</translation>
     </message>
 </context>
 <context>
@@ -2832,7 +2832,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Offline</source>
-        <translation>Çevrimdışı</translation>
+        <translation>Çevrim dışı</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3074,17 +3074,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../forms/upgradedialog.ui" line="+14"/>
         <source>Gridcoin Upgrading Facility</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin Güncelleme</translation>
     </message>
     <message>
         <location line="+65"/>
         <source>Retry Download</source>
-        <translation type="unfinished"></translation>
+        <translation>Tekrar indirmeyi dene</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Upgrade</source>
-        <translation type="unfinished"></translation>
+        <translation>Güncelle</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -3097,7 +3097,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location filename="../votingdialog.cpp" line="-374"/>
         <source>Poll Results</source>
-        <translation type="unfinished"></translation>
+        <translation>Poll Sonuçları</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -3158,7 +3158,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+37"/>
         <source>...loading data!</source>
-        <translation type="unfinished"></translation>
+        <translation>...veri yükleniyor!</translation>
     </message>
 </context>
 <context>
@@ -3171,7 +3171,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Title</source>
-        <translation type="unfinished"></translation>
+        <translation>Başlık</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3186,7 +3186,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Question</source>
-        <translation type="unfinished"></translation>
+        <translation>Soru</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3227,7 +3227,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Expiration.</source>
-        <translation type="unfinished"></translation>
+        <translation>Bitiş Zamanı</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3290,7 +3290,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+37"/>
         <source>Vote failed! Select one or more items to vote.</source>
-        <translation type="unfinished"></translation>
+        <translation>Oylama başarısız! Oylamak için bir ya da daha çok seçim yapın.</translation>
     </message>
 </context>
 <context>
@@ -3316,7 +3316,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
+        <translation>Yapılandırma dosyası belirtin (varsayılan: gridcoin.conf)</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3491,7 +3491,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>Send trace/debug info to debugger</source>
-        <translation>Hata ayıklayıcıya takip etme/hata ayıklama bilgisi gönder</translation>
+        <translation>Hata ayıklayıcıya hata ayıklama bilgisi gönder</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3782,7 +3782,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation>UYARI: Senkronize edilen kontrol noktası ihlali tespit edildi ancak atlandı!</translation>
     </message>
     <message>

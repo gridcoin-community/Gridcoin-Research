@@ -12,6 +12,7 @@
 
 #include "crypter.h"
 #include "scrypt.h"
+#include "util.h"
 
 
 unsigned char chKeyGridcoin[256];
@@ -110,7 +111,7 @@ bool CCrypter::Decrypt(const std::vector<unsigned char>& vchCiphertext, CKeyingM
     EVP_CIPHER_CTX *ctx= EVP_CIPHER_CTX_new();
     if(!ctx)
         throw std::runtime_error("Error allocating cipher context");
- 
+
     if (fOk) fOk = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKey, chIV);
     if (fOk) fOk = EVP_DecryptUpdate(ctx, &vchPlaintext[0], &nPLen, &vchCiphertext[0], nLen);
     if (fOk) fOk = EVP_DecryptFinal_ex(ctx, (&vchPlaintext[0])+nPLen, &nFLen);
@@ -157,7 +158,7 @@ bool LoadGridKey(std::string gridkey, std::string salt)
     OPENSSL_cleanse(chKeyGridcoin, sizeof(chKeyGridcoin));
     OPENSSL_cleanse(chIVGridcoin, sizeof(chIVGridcoin));
     EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(),(unsigned char *)chSalt,
-        (unsigned char *)chGridKey, 
+        (unsigned char *)chGridKey,
         strlen(chGridKey), 1,
         chKeyGridcoin, chIVGridcoin);
     fKeySetGridcoin = true;
@@ -224,7 +225,7 @@ bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<un
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if(!ctx)
         throw std::runtime_error("Error allocating cipher context");
-   
+
     if (fOk) fOk = EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKeyGridcoin, chIVGridcoin);
     if (fOk) fOk = EVP_EncryptUpdate(ctx, &vchCiphertext[0], &nCLen, &vchPlaintext[0], nLen);
     if (fOk) fOk = EVP_EncryptFinal_ex(ctx, (&vchCiphertext[0])+nCLen, &nFLen);
@@ -251,7 +252,7 @@ bool GridDecryptWithSalt(const std::vector<unsigned char>& vchCiphertext,std::ve
     if(!ctx)
         throw std::runtime_error("Error allocating cipher context");
 
-    if (fOk) fOk = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKeyGridcoin, chIVGridcoin);    
+    if (fOk) fOk = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKeyGridcoin, chIVGridcoin);
     if (fOk) fOk = EVP_DecryptUpdate(ctx, &vchPlaintext[0], &nPLen, &vchCiphertext[0], nLen);
     if (fOk) fOk = EVP_DecryptFinal_ex(ctx, (&vchPlaintext[0])+nPLen, &nFLen);
     EVP_CIPHER_CTX_free(ctx);
@@ -283,25 +284,25 @@ std::string UnsignedVectorToString(std::vector< unsigned char > v)
 std::string AdvancedCrypt(std::string boinchash)
 {
 
-    try 
+    try
     {
        std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
        std::vector<unsigned char> vchCryptedSecret;
        GridEncrypt(vchSecret, vchCryptedSecret);
        std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
        return encrypted;
-    } 
-    catch (std::exception &e) 
+    }
+    catch (std::exception &e)
     {
-        printf("Error while encrypting %s",boinchash.c_str());
+        LogPrintf("Error while encrypting %s",boinchash);
         return "";
     }
     catch(...)
     {
-        printf("Error while encrypting 2.");
+        LogPrintf("Error while encrypting 2.");
         return "";
     }
-              
+
 }
 
 std::string AdvancedDecrypt(std::string boinchash_encrypted)
@@ -313,18 +314,18 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
        GridDecrypt(vchCryptedSecret,vchPlaintext);
        std::string decrypted = UnsignedVectorToString(vchPlaintext);
        return decrypted;
-    } catch (std::exception &e) 
+    } catch (std::exception &e)
     {
-        printf("Error while decrypting %s",boinchash_encrypted.c_str());
+        LogPrintf("Error while decrypting %s",boinchash_encrypted);
         return "";
     }
     catch(...)
     {
-        printf("Error while decrypting 2.");
+        LogPrintf("Error while decrypting 2.");
         return "";
     }
 }
-     
+
 
 std::string AdvancedCryptWithHWID(std::string data)
 {
@@ -355,7 +356,7 @@ std::string AdvancedDecryptWithHWID(std::string data)
 
 std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
 {
-    try 
+    try
     {
        std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
        std::vector<unsigned char> vchCryptedSecret;
@@ -363,9 +364,9 @@ std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
        std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
 
        return encrypted;
-    } catch (std::exception &e) 
+    } catch (std::exception &e)
     {
-        printf("Error while encrypting %s",boinchash.c_str());
+        LogPrintf("Error while encrypting %s",boinchash);
         return "";
     }
 }
@@ -379,9 +380,9 @@ std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string
        GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
        std::string decrypted = UnsignedVectorToString(vchPlaintext);
        return decrypted;
-    } catch (std::exception &e) 
+    } catch (std::exception &e)
     {
-        printf("Error while decrypting %s",boinchash_encrypted.c_str());
+        LogPrintf("Error while decrypting %s",boinchash_encrypted);
         return "";
     }
 }

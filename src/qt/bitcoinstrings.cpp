@@ -219,5 +219,10 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Wallet %s resides outside data directory %s."
 QT_TRANSLATE_NOOP("bitcoin-core", "Wallet needed to be rewritten: restart Gridcoin to complete"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Warning: Disk space is low!"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Warning: This version is obsolete, upgrade required!"),
+QT_TRANSLATE_NOOP("bitcoin-core", "WARNING: synchronized checkpoint violation detected, but skipped!"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Warning: Disk space is low!"),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"WARNING: Invalid checkpoint found! Displayed transactions may not be "
+"correct! You may need to upgrade, or notify developers."),
 QT_TRANSLATE_NOOP("bitcoin-core", "wallet.dat corrupt, salvage failed"),
 };

@@ -27,12 +27,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_1F7D757BF031E15D44C47B631F994972"
-        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_2C7D9AF4C6E04C06A26314A95B1FF010"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -123,12 +117,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_7036BA35EE5B4040AC0EDFF0795D1A28"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_72361ADBD1844A9DBB53F7419E3C74D2"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -142,6 +130,12 @@
         "Entry"
         {
         "MsmKey" = "8:_904FCF94002645E093A198249583B43E"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_981616F6B95B4E16879442AEB14E0D79"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -185,6 +179,12 @@
         {
         "MsmKey" = "8:_D8E8325777D94A708487A0229ED6230E"
         "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_DCB6C7B75CAAE08C84491F1DC516C010"
+        "OwnerKey" = "8:_7A0EA93E644A4D9E8037FBB3C062DD65"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -426,26 +426,6 @@
             "Register" = "3:1"
             "Exclude" = "11:FALSE"
             "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_1F7D757BF031E15D44C47B631F994972"
-            {
-            "SourcePath" = "8:BoincStake.tlb"
-            "TargetName" = "8:BoincStake.tlb"
-            "Tag" = "8:"
-            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:2"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:TRUE"
             "IsolateTo" = "8:"
             }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_2C7D9AF4C6E04C06A26314A95B1FF010"
@@ -743,26 +723,6 @@
             "IsDependency" = "11:TRUE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_7036BA35EE5B4040AC0EDFF0795D1A28"
-            {
-            "SourcePath" = "8:..\\..\\..\\share\\pixmaps\\bitcoin.ico"
-            "TargetName" = "8:bitcoin.ico"
-            "Tag" = "8:"
-            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_72361ADBD1844A9DBB53F7419E3C74D2"
             {
             "SourcePath" = "8:..\\..\\..\\share\\pixmaps\\splash.png"
@@ -787,6 +747,26 @@
             {
             "SourcePath" = "8:..\\..\\..\\release\\msvcp100d.dll"
             "TargetName" = "8:msvcp100d.dll"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_981616F6B95B4E16879442AEB14E0D79"
+            {
+            "SourcePath" = "8:..\\..\\..\\share\\pixmaps\\bitcoin.ico"
+            "TargetName" = "8:bitcoin.ico"
             "Tag" = "8:"
             "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
             "Condition" = "8:"
@@ -941,6 +921,26 @@
             "Register" = "3:1"
             "Exclude" = "11:FALSE"
             "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_DCB6C7B75CAAE08C84491F1DC516C010"
+            {
+            "SourcePath" = "8:BoincStake.tlb"
+            "TargetName" = "8:BoincStake.tlb"
+            "Tag" = "8:"
+            "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:2"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:TRUE"
             "IsolateTo" = "8:"
             }
             "{9F6F8455-1EF1-4B85-886A-4223BCC8E7F7}:_DEB886DE05C496A5AD26B43C4B1B90B9"
@@ -1209,25 +1209,25 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:Gridcoin Research"
-        "ProductCode" = "8:{EF6BE97A-94D3-431D-BD50-AC0AB701824E}"
-        "PackageCode" = "8:{222FA3F8-30CD-4B7A-A530-56A36A016834}"
+        "ProductCode" = "8:{2C7B21C9-4123-4AB0-A042-B6A8DAA5ADD3}"
+        "PackageCode" = "8:{441A81ED-8AC9-45C5-975C-82CC692515AF}"
         "UpgradeCode" = "8:{9617E9EA-252F-43CE-B53E-B48C85F71192}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:FALSE"
         "InstallAllUsers" = "11:TRUE"
-        "ProductVersion" = "8:44.5"
+        "ProductVersion" = "8:44.7"
         "Manufacturer" = "8:GridcoinResearch"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"
-        "Title" = "8:Gridcoin Research 44.5"
+        "Title" = "8:Gridcoin Research 44.7"
         "Subject" = "8:"
         "ARPCONTACT" = "8:The Gridcoin Developers"
         "Keywords" = "8:Gridcoin Research"
         "ARPCOMMENTS" = "8:Gridcoin Research"
         "ARPURLINFOABOUT" = "8:http://www.gridcoin.us"
-        "ARPPRODUCTICON" = "8:_7036BA35EE5B4040AC0EDFF0795D1A28"
+        "ARPPRODUCTICON" = "8:_981616F6B95B4E16879442AEB14E0D79"
         "ARPIconIndex" = "3:0"
         "SearchPath" = "8:..\\..\\..\\release"
         "UseSystemSearchPath" = "11:TRUE"
@@ -1330,6 +1330,20 @@
         }
         "Shortcut"
         {
+            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_4B96B46E89204F7A94D0E77AE7B0B891"
+            {
+            "Name" = "8:Shortcut to gridcoinresearch.exe"
+            "Arguments" = "8:"
+            "Description" = "8:"
+            "ShowCmd" = "3:1"
+            "IconIndex" = "3:0"
+            "Transitive" = "11:FALSE"
+            "Target" = "8:_9F6E75783FB64ED5B71D35B382CF1AE0"
+            "Folder" = "8:_459FE8815A7D45FB9F04152262ADA3AF"
+            "WorkingFolder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
+            "Icon" = "8:_981616F6B95B4E16879442AEB14E0D79"
+            "Feature" = "8:"
+            }
             "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_627A66B53B164972A5B620DCF425473A"
             {
             "Name" = "8:Shortcut to gridcoinresearch.exe"
@@ -1341,49 +1355,7 @@
             "Target" = "8:_9F6E75783FB64ED5B71D35B382CF1AE0"
             "Folder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
             "WorkingFolder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Icon" = "8:_7036BA35EE5B4040AC0EDFF0795D1A28"
-            "Feature" = "8:"
-            }
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_BBFE45ECE16C451D8013DF0A477CD303"
-            {
-            "Name" = "8:Shortcut to grcdownloadblocks.bat"
-            "Arguments" = "8:"
-            "Description" = "8:"
-            "ShowCmd" = "3:1"
-            "IconIndex" = "3:0"
-            "Transitive" = "11:FALSE"
-            "Target" = "8:_3B989343668A4550BFA1D876B98BC1FB"
-            "Folder" = "8:_459FE8815A7D45FB9F04152262ADA3AF"
-            "WorkingFolder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
             "Icon" = "8:"
-            "Feature" = "8:"
-            }
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_C5905013C1134CBC8CA1B925C555B9B4"
-            {
-            "Name" = "8:Shortcut to grcupgrade.bat"
-            "Arguments" = "8:"
-            "Description" = "8:"
-            "ShowCmd" = "3:1"
-            "IconIndex" = "3:0"
-            "Transitive" = "11:FALSE"
-            "Target" = "8:_17E5B66FC3C04557B8113C101EEA6BDF"
-            "Folder" = "8:_459FE8815A7D45FB9F04152262ADA3AF"
-            "WorkingFolder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Icon" = "8:"
-            "Feature" = "8:"
-            }
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_D53097EB38864204967F7FB81829161C"
-            {
-            "Name" = "8:Shortcut to gridcoinresearch.exe"
-            "Arguments" = "8:"
-            "Description" = "8:"
-            "ShowCmd" = "3:1"
-            "IconIndex" = "3:0"
-            "Transitive" = "11:FALSE"
-            "Target" = "8:_9F6E75783FB64ED5B71D35B382CF1AE0"
-            "Folder" = "8:_459FE8815A7D45FB9F04152262ADA3AF"
-            "WorkingFolder" = "8:_A31B68165F144F3EBC3FF86D68C9E31B"
-            "Icon" = "8:_7036BA35EE5B4040AC0EDFF0795D1A28"
             "Feature" = "8:"
             }
         }

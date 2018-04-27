@@ -139,7 +139,7 @@ install necessary parts of boost:
 
 Tumbleweed:
 
-        sudo zypper install libboost_system1_64_0-devel libboost_filesystem1_64_0-devel libboost_chrono1_64_0-devel libboost_program_options1_64_0-devel libboost_test1_64_0-devel libboost_thread1_64_0-devel
+        sudo zypper install libboost_system1_*_0-devel libboost_filesystem1_*_0-devel libboost_chrono1_*_0-devel libboost_program_options1_*_0-devel libboost_test1_*_0-devel libboost_thread1_*_0-devel
         
 Leap:
 
@@ -147,9 +147,6 @@ Leap:
 
 2. If that doesn't work, you can install all boost development packages with:
 
-Tumbleweed:
-
-        sudo zypper install boost_1_64-devel
 Leap:
 
         sudo zypper install boost_1_61-devel

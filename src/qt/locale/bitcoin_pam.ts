@@ -3949,7 +3949,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
     </message>
     <message>
         <location line="+1"/>
-        <source>WARNING: syncronized checkpoint violation detected, but skipped!</source>
+        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
