@@ -440,6 +440,7 @@ static const CRPCCommand vRPCCommands[] =
     { "vote",                    &vote,                    false,  cat_network       },
     { "votedetails",             &votedetails,             true,   cat_network       },
     { "getsupervotes",          &rpc_getsupervotes,        false,  cat_developer     },
+    { "getrecentblocks",         &rpc_getrecentblocks,     false,  cat_developer     },
 };
 
 template<typename T>
