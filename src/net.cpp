@@ -666,8 +666,7 @@ void CNode::CloseSocketDisconnect()
 
 void CNode::PushVersion()
 {
-    /// when NTP implemented, change to just nTime = GetAdjustedTime()
-    int64_t nTime = (fInbound ? GetAdjustedTime() : GetAdjustedTime());
+    int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
