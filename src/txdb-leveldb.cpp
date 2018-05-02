@@ -388,7 +388,8 @@ bool CTxDB::LoadBlockIndex()
         // Watch for genesis block
         if (pindexGenesisBlock == NULL && blockHash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
             pindexGenesisBlock = pindexNew;
-        #ifdef QT_GUI
+        if(fQtActive)
+        {
             if ((pindexNew->nHeight % 10000) == 0)
             {
                 nLoaded +=10000;
@@ -398,7 +399,7 @@ bool CTxDB::LoadBlockIndex()
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
-        #endif
+        }
 
         // NovaCoin: build setStakeSeen
         if (pindexNew->IsProofOfStake())
@@ -484,7 +485,8 @@ bool CTxDB::LoadBlockIndex()
         // check level 1: verify block validity
         // check level 7: verify block signature too
 
-        #ifdef QT_GUI
+        if(fQtActive)
+        {
             if ((pindex->nHeight % 1000) == 0)
             {
                 nLoaded +=1000;
@@ -493,8 +495,7 @@ bool CTxDB::LoadBlockIndex()
                 std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Verified";
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
-        #endif
-
+        }
 
         if (nCheckLevel>0 && !block.CheckBlock("LoadBlockIndex", pindex->nHeight,pindex->nMint, true, true, (nCheckLevel>6), true))
         {
@@ -625,16 +626,17 @@ bool CTxDB::LoadBlockIndex()
             if (pindex == pindexBest) break;
             if (pindex==NULL || !pindex->IsInMainChain()) continue;
 
-#ifdef QT_GUI
-            if ((pindex->nHeight % 10000) == 0)
+            if(fQtActive)
             {
-                nLoaded +=10000;
-                if (nLoaded > nHighest) nHighest=nLoaded;
-                if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
-                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+                if ((pindex->nHeight % 10000) == 0)
+                {
+                    nLoaded +=10000;
+                    if (nLoaded > nHighest) nHighest=nLoaded;
+                    if (nHighest < nGrandfather) nHighest=nGrandfather;
+                    std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
+                    uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+                }
             }
-#endif
 
             if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
             {

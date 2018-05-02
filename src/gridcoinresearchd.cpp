@@ -121,6 +121,9 @@ int main(int argc, char* argv[])
 {
     bool fRet = false;
 
+    // Set global boolean to indicate intended absence of GUI to core...
+    fQtActive = false;
+
     // Connect bitcoind signal handlers
     noui_connect();
 
