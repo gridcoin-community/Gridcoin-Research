@@ -229,6 +229,7 @@ bool bNetAveragesLoaded = false;
 bool bForceUpdate = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
+bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
@@ -4609,14 +4610,15 @@ void GridcoinServices()
 {
 
     //Dont do this on headless - SeP
-    #if defined(QT_GUI)
+    if(fQtActive)
+    {
        if ((nBestHeight % 125) == 0)
        {
             GetGlobalStatus();
             bForceUpdate=true;
             uiInterface.NotifyBlocksChanged();
        }
-    #endif
+    }
 
     // Services thread activity
 

@@ -165,6 +165,9 @@ int main(int argc, char *argv[])
 {
     // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
     int currentExitCode = 0;
+ 
+    // Set global boolean to indicate intended presence of GUI to core.
+    fQtActive = true;
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
