@@ -18,7 +18,7 @@ Then install [Homebrew](https://brew.sh).
 Dependencies
 ------------
 
-    brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt
+    brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt libqrencode
 
 To build .app and .dmg files with, make deploy, you will need RSVG installed.
 
