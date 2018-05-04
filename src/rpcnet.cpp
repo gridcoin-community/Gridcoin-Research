@@ -3,7 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "net.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
 #include "alert.h"
 #include "wallet.h"
 #include "db.h"

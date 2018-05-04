@@ -4,7 +4,8 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "main.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcprotocol.h"
 #include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
