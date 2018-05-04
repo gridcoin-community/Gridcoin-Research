@@ -28,9 +28,10 @@
 #include <fstream>
 #include <algorithm>
 
+#include <univalue.h>
+
 
 bool TallyResearchAverages_v9(CBlockIndex* index);
-using namespace json_spirit;
 using namespace std;
 extern std::string YesNo(bool bin);
 extern double DoubleFromAmount(int64_t amount);
@@ -43,8 +44,8 @@ bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 extern std::string SuccessFail(bool f);
-extern Array GetUpgradedBeaconReport();
-extern Array MagnitudeReport(std::string cpid);
+extern UniValue GetUpgradedBeaconReport();
+extern UniValue MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 extern std::vector<unsigned char> readFileToVector(std::string filename);
@@ -52,7 +53,7 @@ bool bNetAveragesLoaded_retired;
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
-extern Array SuperblockReport(std::string cpid);
+extern UniValue SuperblockReport(std::string cpid);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
@@ -77,11 +78,11 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
 std::string GetNeuralNetworkReport();
-Array GetJSONNeuralNetworkReport();
-Array GetJSONCurrentNeuralNetworkReport();
+UniValue GetJSONNeuralNetworkReport();
+UniValue GetJSONCurrentNeuralNetworkReport();
 
-extern Array GetJSONVersionReport();
-extern Array GetJsonUnspentReport();
+extern UniValue GetJSONVersionReport();
+extern UniValue GetJsonUnspentReport();
 
 extern bool PollExists(std::string pollname);
 extern bool PollExpired(std::string pollname);
@@ -96,7 +97,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
 
-extern Array GetJSONBeaconReport();
+extern UniValue GetJSONBeaconReport();
 
 void GatherNeuralHashes();
 void qtSyncWithDPORNodes(std::string data);
@@ -112,7 +113,7 @@ extern std::string TimestampToHRDate(double dtm);
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, json_spirit::Object& entry);
+extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 std::string getfilecontents(std::string filename);
 int CreateRestorePoint();
 int DownloadBlocks();
@@ -239,30 +240,30 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
-Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
+UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
-    Object result;
-    result.push_back(Pair("hash", block.GetHash().GetHex()));
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("hash", block.GetHash().GetHex());
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
-    result.push_back(Pair("confirmations", txGen.GetDepthInMainChain()));
-    result.push_back(Pair("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION)));
-    result.push_back(Pair("height", blockindex->nHeight));
-    result.push_back(Pair("version", block.nVersion));
-    result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
+    result.pushKV("confirmations", txGen.GetDepthInMainChain());
+    result.pushKV("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION));
+    result.pushKV("height", blockindex->nHeight);
+    result.pushKV("version", block.nVersion);
+    result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
     double mint = CoinToDouble(blockindex->nMint);
-    result.push_back(Pair("mint", mint));
-    result.push_back(Pair("MoneySupply", blockindex->nMoneySupply));
-    result.push_back(Pair("time", block.GetBlockTime()));
-    result.push_back(Pair("nonce", (int)block.nNonce));
-    result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
-    result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
-    result.push_back(Pair("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0')));
-    result.push_back(Pair("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0')));
+    result.pushKV("mint", mint);
+    result.pushKV("MoneySupply", blockindex->nMoneySupply);
+    result.pushKV("time", block.GetBlockTime());
+    result.pushKV("nonce", (int)block.nNonce);
+    result.pushKV("bits", strprintf("%08x", block.nBits));
+    result.pushKV("difficulty", GetDifficulty(blockindex));
+    result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
+    result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
     if (blockindex->pprev)
-        result.push_back(Pair("previousblockhash", blockindex->pprev->GetBlockHash().GetHex()));
+        result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
     if (blockindex->pnext)
-        result.push_back(Pair("nextblockhash", blockindex->pnext->GetBlockHash().GetHex()));
+        result.pushKV("nextblockhash", blockindex->pnext->GetBlockHash().GetHex());
     MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
     uint256 blockhash = block.GetPoWHash();
     std::string sblockhash = blockhash.GetHex();
@@ -270,20 +271,20 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
     IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
     std::string PoRNarr = "";
     if (IsPoR) PoRNarr = "proof-of-research";
-    result.push_back(Pair("flags",
-                          strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr        )       );
-    result.push_back(Pair("proofhash", blockindex->hashProof.GetHex()));
-    result.push_back(Pair("entropybit", (int)blockindex->GetStakeEntropyBit()));
-    result.push_back(Pair("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier)));
-    result.push_back(Pair("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum)));
-    Array txinfo;
+    result.pushKV("flags",
+        strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr);
+    result.pushKV("proofhash", blockindex->hashProof.GetHex());
+    result.pushKV("entropybit", (int)blockindex->GetStakeEntropyBit());
+    result.pushKV("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier));
+    result.pushKV("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum));
+    UniValue txinfo(UniValue::VARR);
     for (auto const& tx : block.vtx)
     {
         if (fPrintTransactionDetail)
         {
-            Object entry;
+            UniValue entry(UniValue::VOBJ);
 
-            entry.push_back(Pair("txid", tx.GetHash().GetHex()));
+            entry.pushKV("txid", tx.GetHash().GetHex());
             TxToJSON(tx, 0, entry);
 
             txinfo.push_back(entry);
@@ -292,65 +293,65 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPri
             txinfo.push_back(tx.GetHash().GetHex());
     }
 
-    result.push_back(Pair("tx", txinfo));
+    result.pushKV("tx", txinfo);
     if (block.IsProofOfStake())
-        result.push_back(Pair("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end())));
-    result.push_back(Pair("CPID", bb.cpid));
+        result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
+    result.pushKV("CPID", bb.cpid);
     if (!IsResearchAgeEnabled(blockindex->nHeight))
     {
-        result.push_back(Pair("ProjectName", bb.projectname));
-        result.push_back(Pair("RAC", bb.rac));
-        result.push_back(Pair("NetworkRAC", bb.NetworkRAC));
-        result.push_back(Pair("RSAWeight",bb.RSAWeight));
+        result.pushKV("ProjectName", bb.projectname);
+        result.pushKV("RAC", bb.rac);
+        result.pushKV("NetworkRAC", bb.NetworkRAC);
+        result.pushKV("RSAWeight",bb.RSAWeight);
     }
 
-    result.push_back(Pair("Magnitude", bb.Magnitude));
-    if (fDebug3) result.push_back(Pair("BoincHash",block.vtx[0].hashBoinc));
-    result.push_back(Pair("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime)));
+    result.pushKV("Magnitude", bb.Magnitude);
+    if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
+    result.pushKV("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime));
 
-    result.push_back(Pair("ResearchSubsidy",bb.ResearchSubsidy));
-    result.push_back(Pair("ResearchAge",bb.ResearchAge));
-    result.push_back(Pair("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit));
-    result.push_back(Pair("ResearchAverageMagnitude",bb.ResearchAverageMagnitude));
-    result.push_back(Pair("LastPORBlockHash",bb.LastPORBlockHash));
-    result.push_back(Pair("Interest",bb.InterestSubsidy));
-    result.push_back(Pair("GRCAddress",bb.GRCAddress));
+    result.pushKV("ResearchSubsidy",bb.ResearchSubsidy);
+    result.pushKV("ResearchAge",bb.ResearchAge);
+    result.pushKV("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit);
+    result.pushKV("ResearchAverageMagnitude",bb.ResearchAverageMagnitude);
+    result.pushKV("LastPORBlockHash",bb.LastPORBlockHash);
+    result.pushKV("Interest",bb.InterestSubsidy);
+    result.pushKV("GRCAddress",bb.GRCAddress);
     if (!bb.BoincPublicKey.empty())
     {
-        result.push_back(Pair("BoincPublicKey",bb.BoincPublicKey));
-        result.push_back(Pair("BoincSignature",bb.BoincSignature));
+        result.pushKV("BoincPublicKey",bb.BoincPublicKey);
+        result.pushKV("BoincSignature",bb.BoincSignature);
         bool fValidSig = VerifyCPIDSignature(bb.cpid, bb.lastblockhash, bb.BoincSignature);
-        result.push_back(Pair("SignatureValid",fValidSig));
+        result.pushKV("SignatureValid",fValidSig);
     }
-    result.push_back(Pair("ClientVersion",bb.clientversion));
+    result.pushKV("ClientVersion",bb.clientversion);
 
-    if (!bb.cpidv2.empty())     result.push_back(Pair("CPIDv2",bb.cpidv2.substr(0,32)));
+    if (!bb.cpidv2.empty())     result.pushKV("CPIDv2",bb.cpidv2.substr(0,32));
     bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
-    result.push_back(Pair("CPIDValid",IsCPIDValid2));
+    result.pushKV("CPIDValid",IsCPIDValid2);
 
-    result.push_back(Pair("NeuralHash",bb.NeuralHash));
+    result.pushKV("NeuralHash",bb.NeuralHash);
     if (bb.superblock.length() > 20)
     {
         //12-20-2015 Support for Binary Superblocks
         std::string superblock=UnpackBinarySuperblock(bb.superblock);
         std::string neural_hash = GetQuorumHash(superblock);
-        result.push_back(Pair("SuperblockHash", neural_hash));
-        result.push_back(Pair("SuperblockUnpackedLength", (int)superblock.length()));
-        result.push_back(Pair("SuperblockLength", (int)bb.superblock.length()));
+        result.pushKV("SuperblockHash", neural_hash);
+        result.pushKV("SuperblockUnpackedLength", (int)superblock.length());
+        result.pushKV("SuperblockLength", (int)bb.superblock.length());
         bool bIsBinary = Contains(bb.superblock,"<BINARY>");
-        result.push_back(Pair("IsBinary",bIsBinary));
+        result.pushKV("IsBinary",bIsBinary);
         if(fPrintTransactionDetail)
         {
-            result.push_back(Pair("SuperblockContents", superblock));
+            result.pushKV("SuperblockContents", superblock);
         }
     }
-    result.push_back(Pair("IsSuperBlock", (int)blockindex->nIsSuperBlock));
-    result.push_back(Pair("IsContract", (int)blockindex->nIsContract));
+    result.pushKV("IsSuperBlock", (int)blockindex->nIsSuperBlock);
+    result.pushKV("IsContract", (int)blockindex->nIsContract);
     return result;
 }
 
 
-Value showblock(const Array& params, bool fHelp)
+UniValue showblock(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -375,7 +376,7 @@ Value showblock(const Array& params, bool fHelp)
     return blockToJSON(block, pblockindex, false);
 }
 
-Value getbestblockhash(const Array& params, bool fHelp)
+UniValue getbestblockhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -388,7 +389,7 @@ Value getbestblockhash(const Array& params, bool fHelp)
     return hashBestChain.GetHex();
 }
 
-Value getblockcount(const Array& params, bool fHelp)
+UniValue getblockcount(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -401,7 +402,7 @@ Value getblockcount(const Array& params, bool fHelp)
     return nBestHeight;
 }
 
-Value getdifficulty(const Array& params, bool fHelp)
+UniValue getdifficulty(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -411,13 +412,13 @@ Value getdifficulty(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Object obj;
-    obj.push_back(Pair("proof-of-work",        GetDifficulty()));
-    obj.push_back(Pair("proof-of-stake",       GetDifficulty(GetLastBlockIndex(pindexBest, true))));
+    UniValue obj(UniValue::VOBJ);
+    obj.pushKV("proof-of-work",        GetDifficulty());
+    obj.pushKV("proof-of-stake",       GetDifficulty(GetLastBlockIndex(pindexBest, true)));
     return obj;
 }
 
-Value settxfee(const Array& params, bool fHelp)
+UniValue settxfee(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < MIN_TX_FEE)
         throw runtime_error(
@@ -435,7 +436,7 @@ Value settxfee(const Array& params, bool fHelp)
     return true;
 }
 
-Value getrawmempool(const Array& params, bool fHelp)
+UniValue getrawmempool(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -452,14 +453,14 @@ Value getrawmempool(const Array& params, bool fHelp)
         mempool.queryHashes(vtxid);
     }
 
-    Array a;
+    UniValue a(UniValue::VARR);
     for (auto const& hash : vtxid)
         a.push_back(hash.ToString());
 
     return a;
 }
 
-Value getblockhash(const Array& params, bool fHelp)
+UniValue getblockhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -482,7 +483,7 @@ Value getblockhash(const Array& params, bool fHelp)
     return RPCpblockindex->phashBlock->GetHex();
 }
 
-Value getblock(const Array& params, bool fHelp)
+UniValue getblock(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
@@ -507,7 +508,7 @@ Value getblock(const Array& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-Value getblockbynumber(const Array& params, bool fHelp)
+UniValue getblockbynumber(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
@@ -873,15 +874,13 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string sName = GlobalCPUMiningCPID.cpid;
         try
         {
-
             // Backup config with old keys like a normal backup
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf")))
             {
                 sError = "Failed to backup old configuration file. Beacon not sent.";
-                return false;
+                return true;
             }
-
-            // Backup config with new keys with beacon suffix
+                        // Backup config with new keys with beacon suffix
             StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
             {
@@ -898,9 +897,9 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
             return true;
         }
-        catch(Object& objError)
+        catch(UniValue& objError)
         {
-            sError = "Error: Unable to send beacon::"+json_spirit::write_string(json_spirit::Value(objError),true);
+            sError = "Error: Unable to send beacon::"+objError.write();
             return false;
         }
         catch (std::exception &e)
@@ -913,69 +912,68 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6)
 {
-    Array params;
-    params.push_back(method);
-    params.push_back(arg1);
-    params.push_back(arg2);
-    params.push_back(arg3);
-    params.push_back(arg4);
-    params.push_back(arg5);
-    params.push_back(arg6);
+     UniValue params(UniValue::VARR);
+     params.push_back(method);
+     params.push_back(arg1);
+     params.push_back(arg2);
+     params.push_back(arg3);
+     params.push_back(arg4);
+     params.push_back(arg5);
+     params.push_back(arg6);
 
-    LogPrintf("Executing method %s\n",method);
-    Value vResult;
-    try
-    {
+     LogPrintf("Executing method %s\n",method);
+     UniValue vResult(UniValue::VSTR);
+     try
+     {
         vResult = execute(params,false);
-    }
-    catch (std::exception& e)
-    {
-        LogPrintf("Std exception %s \n",method);
+     }
+     catch (std::exception& e)
+     {
+         LogPrintf("Std exception %s \n",method);
 
-        std::string caught = e.what();
-        return "Exception " + caught;
-
-    }
-    catch (...)
-    {
-        LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
-        return "Generic Exception (Please try unlocking the wallet).";
-    }
-    std::string sResult = "";
-    sResult = write_string(vResult, false) + "\n";
-    LogPrintf("Response %s",sResult);
-    return sResult;
+         std::string caught = e.what();
+         return "Exception " + caught;
+     }
+     catch (...)
+     {
+            LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
+            return "Generic Exception (Please try unlocking the wallet).";
+     }
+     std::string sResult = "";
+     sResult = vResult.write() + "\n";
+     LogPrintf("Response %s",sResult);
+     return sResult;
 }
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2)
 {
-    Array params;
-    params.push_back(method);
-    params.push_back(arg1);
-    params.push_back(arg2);
-    LogPrintf("Executing method %s\n",method);
-    Value vResult;
-    try
-    {
+     UniValue params(UniValue::VARR);
+     params.push_back(method);
+     params.push_back(arg1);
+     params.push_back(arg2);
+     LogPrintf("Executing method %s\n",method);
+     UniValue vResult(UniValue::VSTR);
+     try
+     {
         vResult = execute(params,false);
-    }
-    catch (std::exception& e)
-    {
-        LogPrintf("Std exception %s \n",method);
+     }
+     catch (std::exception& e)
+     {
+         LogPrintf("Std exception %s \n",method);
 
-        std::string caught = e.what();
-        return "Exception " + caught;
+         std::string caught = e.what();
+         return "Exception " + caught;
 
-    }
-    catch (...)
-    {
-        LogPrintf("Generic exception (Please try unlocking the wallet). %s \n",method);
-        return "Generic Exception (Please try unlocking the wallet).";
-    }
-    std::string sResult = "";
-    sResult = write_string(vResult, false) + "\n";
-    LogPrintf("Response %s",sResult);
-    return sResult;
+     }
+     catch (...)
+     {
+            LogPrintf("Generic exception (Please try unlocking the wallet). %s \n",method);
+            return "Generic Exception (Please try unlocking the wallet).";
+     }
+     std::string sResult = "";
+     sResult = vResult.write() + "\n";
+     LogPrintf("Response %s",sResult);
+     return sResult;
 }
 
 int64_t AmountFromDouble(double dAmount)
@@ -988,7 +986,7 @@ int64_t AmountFromDouble(double dAmount)
 
 // Rpc
 
-Value backupprivatekeys(const Array& params, bool fHelp)
+UniValue backupprivatekeys(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -998,22 +996,22 @@ Value backupprivatekeys(const Array& params, bool fHelp)
 
     string sErrors;
     string sTarget;
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     bool bBackupPrivateKeys = BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
 
     if (!bBackupPrivateKeys)
-        res.push_back(Pair("error", sErrors));
+        res.pushKV("error", sErrors);
 
     else
-        res.push_back(Pair("location", sTarget));
+        res.pushKV("location", sTarget);
 
-    res.push_back(Pair("result", bBackupPrivateKeys));
+    res.pushKV("result", bBackupPrivateKeys);
 
     return res;
 }
 
-Value burn2(const Array& params, bool fHelp)
+UniValue burn2(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 4)
         throw runtime_error(
@@ -1026,7 +1024,7 @@ Value burn2(const Array& params, bool fHelp)
                 "\n"
                 "Burn coins on the network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
     std::string sAddress = params[0].get_str();
     double dAmount  = Round(params[1].get_real(), 6);
     std::string sKey     = params[2].get_str();
@@ -1036,21 +1034,21 @@ Value burn2(const Array& params, bool fHelp)
 
     if (!isValid)
     {
-        res.push_back(Pair("Error", "Invalid GRC Burn Address"));
+        res.pushKV("Error", "Invalid GRC Burn Address");
 
         return res;
     }
 
     if (dAmount == 0 || dAmount < 0)
     {
-        res.push_back(Pair("Error", "Burn amount must be > 0"));
+        res.pushKV("Error", "Burn amount must be > 0");
 
         return res;
     }
 
     if (sKey.empty() || sDetail.empty())
     {
-        res.push_back(Pair("Error", "Burn Key and Burn Detail must be populated"));
+        res.pushKV("Error", "Burn Key and Burn Detail must be populated");
 
         return res;
     }
@@ -1059,12 +1057,12 @@ Value burn2(const Array& params, bool fHelp)
 
     std::string sResult = BurnCoinsWithNewContract(true, "burn", sKey, sContract, AmountFromValue(1), dAmount, "", sAddress);
 
-    res.push_back(Pair("Burn_Response", sResult));
+    res.pushKV("Burn_Response", sResult);
 
     return res;
 }
 
-Value encrypt(const Array& params, bool fHelp)
+UniValue encrypt(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -1074,18 +1072,18 @@ Value encrypt(const Array& params, bool fHelp)
                 "\n"
                 "Encrypts a walletpassphrase\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
     //Encrypt a phrase
     std::string sParam = params[0].get_str();
     std::string encrypted = AdvancedCryptWithHWID(sParam);
 
-    res.push_back(Pair("Passphrase",encrypted));
-    res.push_back(Pair("[Specify in config file] autounlock=",encrypted));
+    res.pushKV("Passphrase",encrypted);
+    res.pushKV("[Specify in config file] autounlock=",encrypted);
 
     return res;
 }
 
-Value newburnaddress(const Array& params, bool fHelp)
+UniValue newburnaddress(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -1095,7 +1093,7 @@ Value newburnaddress(const Array& params, bool fHelp)
                 "\n"
                 "Creates a new burn address\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     //3-12-2016 - R Halford - Allow the user to make vanity GRC Burn Addresses that have no corresponding private key
     std::string sBurnTemplate = "GRCBurnAddressGRCBurnAddressGRCBurnAddress";
@@ -1131,31 +1129,31 @@ Value newburnaddress(const Array& params, bool fHelp)
     std::string encoded1 = EncodeBase58(v);
     std::string encoded2 = EncodeBase58Check(vchDecoded30);
 
-    res.push_back(Pair("CombinedHex",combined));
+    res.pushKV("CombinedHex",combined);
 
     if (encoded2.length() != 34)
     {
-        res.push_back(Pair("Burn Address Creation failed","NOTE: the input phrase must not include zeroes, or nonbase58 characters."));
+        res.pushKV("Burn Address Creation failed","NOTE: the input phrase must not include zeroes, or nonbase58 characters.");
 
         return res;
     }
     // Give the user the new vanity burn address
-    res.push_back(Pair("Burn Address",encoded2));
+    res.pushKV("Burn Address",encoded2);
 
     return res;
 }
 
-Value rain(const json_spirit::Array& params, bool fHelp)
+UniValue rain(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-                "rain [Array]\n"
+                "rain [UniValue](UniValue::VARR)\n"
                 "\n"
-                "[Array] -> Address<COL>Amount<ROW>...\n"
+                "[UniValue] -> Address<COL>Amount<ROW>...(UniValue::VARR)\n"
                 "\n"
                 "rains coins on the network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain";
@@ -1239,12 +1237,12 @@ Value rain(const json_spirit::Array& params, bool fHelp)
     std::string sNarr = "Rain successful:  Sent " + wtx.GetHash().GetHex() + ".";
     LogPrintf("Success %s",sNarr.c_str());
 
-    res.push_back(Pair("Response", sNarr));
+    res.pushKV("Response", sNarr);
 
     return res;
 }
 
-Value unspentreport(const json_spirit::Array& params, bool fHelp)
+UniValue unspentreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1254,12 +1252,12 @@ Value unspentreport(const json_spirit::Array& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    Array aUnspentReport = GetJsonUnspentReport();
+    UniValue aUnspentReport = GetJsonUnspentReport();
 
     return aUnspentReport;
 }
 
-Value advertisebeacon(const json_spirit::Array& params, bool fHelp)
+UniValue advertisebeacon(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1267,7 +1265,7 @@ Value advertisebeacon(const json_spirit::Array& params, bool fHelp)
                 "\n"
                 "Advertise a beacon (Requires wallet to be fully unlocked)\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sOutPubKey = "";
     std::string sOutPrivKey = "";
@@ -1275,26 +1273,27 @@ Value advertisebeacon(const json_spirit::Array& params, bool fHelp)
     std::string sMessage = "";
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
-    res.push_back(Pair("Result",SuccessFail(fResult)));
-    res.push_back(Pair("CPID",GlobalCPUMiningCPID.cpid.c_str()));
-    res.push_back(Pair("Message",sMessage.c_str()));
+    res.pushKV("Result",SuccessFail(fResult));
+    res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
+    res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
+    res.pushKV("Message",sMessage.c_str());
 
     if (!sError.empty())
-        res.push_back(Pair("Errors",sError));
+        res.pushKV("Errors",sError);
 
     if (!fResult)
-        res.push_back(Pair("FAILURE","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>'."));
+        res.pushKV("FAILURE","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>'.");
 
     else
     {
-        res.push_back(Pair("Public Key",sOutPubKey.c_str()));
-        res.push_back(Pair("Warning!","Your public and private research keys have been stored in gridcoinresearch.conf.  Do not lose your private key (It is non-recoverable).  It is recommended that you back up your gridcoinresearch.conf file on a regular basis."));
+        res.pushKV("Public Key",sOutPubKey.c_str());
+        res.pushKV("Warning!","Your public and private research keys have been stored in gridcoinresearch.conf.  Do not lose your private key (It is non-recoverable).  It is recommended that you back up your gridcoinresearch.conf file on a regular basis.");
     }
 
     return res;
 }
 
-Value beaconreport(const Array& params, bool fHelp)
+UniValue beaconreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1304,12 +1303,12 @@ Value beaconreport(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Array res = GetJSONBeaconReport();
+    UniValue res = GetJSONBeaconReport();
 
     return res;
 }
 
-Value beaconstatus(const json_spirit::Array& params, bool fHelp)
+UniValue beaconstatus(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -1319,7 +1318,7 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
                 "\n"
                 "Displays status of your beacon or specified beacon on the network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     // Search for beacon, and report on beacon status.
 
@@ -1336,11 +1335,11 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
     std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
     bool hasBeacon = HasActiveBeacon(sCPID);
 
-    res.push_back(Pair("CPID", sCPID));
-    res.push_back(Pair("Beacon Exists",YesNo(hasBeacon)));
-    res.push_back(Pair("Beacon Timestamp",timestamp.c_str()));
-    res.push_back(Pair("Public Key", sPubKey.c_str()));
-    res.push_back(Pair("Private Key", sPrivKey.c_str()));
+    res.pushKV("CPID", sCPID);
+    res.pushKV("Beacon Exists",YesNo(hasBeacon));
+    res.pushKV("Beacon Timestamp",timestamp.c_str());
+    res.pushKV("Public Key", sPubKey.c_str());
+    res.pushKV("Private Key", sPrivKey.c_str());
 
     std::string sErr = "";
 
@@ -1352,7 +1351,7 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
     // Verify the users Local Public Key matches the Beacon Public Key
     std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
 
-    res.push_back(Pair("Local Configuration Public Key", sLocalPubKey.c_str()));
+    res.pushKV("Local Configuration Public Key", sLocalPubKey.c_str());
 
     if (sLocalPubKey.empty())
         sErr += "Local configuration file Public Key missing. ";
@@ -1363,10 +1362,10 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
     // Prior superblock Magnitude
     double dMagnitude = GetMagnitudeByCpidFromLastSuperblock(sCPID);
 
-    res.push_back(Pair("Magnitude (As of last superblock)", dMagnitude));
+    res.pushKV("Magnitude (As of last superblock)", dMagnitude);
 
     if (dMagnitude==0)
-        res.push_back(Pair("Warning","Your magnitude is 0 as of the last superblock: this may keep you from staking POR blocks."));
+        res.pushKV("Warning","Your magnitude is 0 as of the last superblock: this may keep you from staking POR blocks.");
 
     // Staking Test 10-15-2016 - Simulate signing an actual block to verify this CPID keypair will work.
     uint256 hashBlock = GetRandHash();
@@ -1388,7 +1387,7 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
 
         bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
 
-        res.push_back(Pair("Block Signing Test Results", fResult));
+        res.pushKV("Block Signing Test Results", fResult);
 
         if (!fResult)
             sErr += "Failed to sign POR block.  This can happen if your keypair is invalid.  Check walletbackups for the correct keypair, or request that your beacon is deleted. ";
@@ -1396,18 +1395,18 @@ Value beaconstatus(const json_spirit::Array& params, bool fHelp)
 
     if (!sErr.empty())
     {
-        res.push_back(Pair("Errors", sErr));
-        res.push_back(Pair("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon."));
-        res.push_back(Pair("Configuration Status","FAIL"));
+        res.pushKV("Errors", sErr);
+        res.pushKV("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon.");
+        res.pushKV("Configuration Status","FAIL");
     }
 
     else
-        res.push_back(Pair("Configuration Status", "SUCCESSFUL"));
+        res.pushKV("Configuration Status", "SUCCESSFUL");
 
     return res;
 }
 
-Value cpids(const Array& params, bool fHelp)
+UniValue cpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1415,7 +1414,7 @@ Value cpids(const Array& params, bool fHelp)
                 "\n"
                 "Displays information on your cpids\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     //Dump vectors:
 
@@ -1437,13 +1436,13 @@ Value cpids(const Array& params, bool fHelp)
                  structcpid.cpid == GlobalCPUMiningCPID.cpid)
                 || !IsResearcher(structcpid.cpid) || !IsResearcher(GlobalCPUMiningCPID.cpid))
             {
-                res.push_back(Pair("Project",structcpid.projectname));
-                res.push_back(Pair("CPID",structcpid.cpid));
-                res.push_back(Pair("RAC",structcpid.rac));
-                res.push_back(Pair("Team",structcpid.team));
-                res.push_back(Pair("CPID Link",structcpid.link));
-                res.push_back(Pair("Debug Info",structcpid.errors));
-                res.push_back(Pair("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid));
+                res.pushKV("Project",structcpid.projectname);
+                res.pushKV("CPID",structcpid.cpid);
+                res.pushKV("RAC",structcpid.rac);
+                res.pushKV("Team",structcpid.team);
+                res.pushKV("CPID Link",structcpid.link);
+                res.pushKV("Debug Info",structcpid.errors);
+                res.pushKV("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid);
 
             }
         }
@@ -1452,7 +1451,7 @@ Value cpids(const Array& params, bool fHelp)
     return res;
 }
 
-Value currentneuralhash(const Array& params, bool fHelp)
+UniValue currentneuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1460,7 +1459,7 @@ Value currentneuralhash(const Array& params, bool fHelp)
                 "\n"
                 "Displays information for the current popular neural hash in network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     double popularity = 0;
 
@@ -1468,12 +1467,12 @@ Value currentneuralhash(const Array& params, bool fHelp)
 
     std::string consensus_hash = GetCurrentNeuralNetworkSupermajorityHash(popularity);
 
-    res.push_back(Pair("Popular",consensus_hash));
+    res.pushKV("Popular",consensus_hash);
 
     return res;
 }
 
-Value currentneuralreport(const Array& params, bool fHelp)
+UniValue currentneuralreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1483,12 +1482,12 @@ Value currentneuralreport(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Array res = GetJSONCurrentNeuralNetworkReport();
+    UniValue res = GetJSONCurrentNeuralNetworkReport();
 
     return res;
 }
 
-Value explainmagnitude(const Array& params, bool fHelp)
+UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -1498,7 +1497,7 @@ Value explainmagnitude(const Array& params, bool fHelp)
                 "\n"
                 "Displays information for the current neural hashes in network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     bool bForce = false;
 
@@ -1511,8 +1510,8 @@ Value explainmagnitude(const Array& params, bool fHelp)
     {
         if (msNeuralResponse.length() < 25)
         {
-            res.push_back(Pair("Neural Response", "Empty; Requesting a response.."));
-            res.push_back(Pair("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses"));
+            res.pushKV("Neural Response", "Empty; Requesting a response..");
+            res.pushKV("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses");
 
             msNeuralResponse = "";
 
@@ -1522,21 +1521,21 @@ Value explainmagnitude(const Array& params, bool fHelp)
 
     if (msNeuralResponse.length() > 25)
     {
-        res.push_back(Pair("Neural Response", "true"));
+        res.pushKV("Neural Response", "true");
 
         std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
 
         for (unsigned int i = 0; i < vMag.size(); i++)
-            res.push_back(Pair(RoundToString(i+1,0),vMag[i].c_str()));
+            res.pushKV(RoundToString(i+1,0),vMag[i].c_str());
     }
 
     else
-        res.push_back(Pair("Neural Response", "false; Try again at a later time"));
+        res.pushKV("Neural Response", "false; Try again at a later time");
 
     return res;
 }
 
-Value lifetime(const Array& params, bool fHelp)
+UniValue lifetime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1544,14 +1543,14 @@ Value lifetime(const Array& params, bool fHelp)
                 "\n"
                 "Displays information for the lifetime of your cpid in the network\n");
 
-    Array results;
-    Object c;
-    Object res;
+    UniValue results(UniValue::VARR);
+    UniValue c(UniValue::VOBJ);
+    UniValue res(UniValue::VOBJ);
 
     std::string cpid = msPrimaryCPID;
     std::string Narr = ToString(GetAdjustedTime());
 
-    c.push_back(Pair("Lifetime Payments Report", Narr));
+    c.pushKV("Lifetime Payments Report", Narr);
     results.push_back(c);
 
     LOCK(cs_main);
@@ -1569,18 +1568,18 @@ Value lifetime(const Array& params, bool fHelp)
             break;
 
         if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
-            res.push_back(Pair(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2)));
+            res.pushKV(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2));
     }
     //8-14-2015
     StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
 
-    res.push_back(Pair("Average Magnitude", stCPID.ResearchAverageMagnitude));
+    res.pushKV("Average Magnitude", stCPID.ResearchAverageMagnitude);
     results.push_back(res);
 
     return results;
 }
 
-Value magnitude(const json_spirit::Array& params, bool fHelp)
+UniValue magnitude(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -1590,7 +1589,7 @@ Value magnitude(const json_spirit::Array& params, bool fHelp)
                 "\n"
                 "Displays information for the magnitude of all cpids or specified in the network\n");
 
-    Array results;
+    UniValue results(UniValue::VARR);
 
     std::string cpid = "";
 
@@ -1607,9 +1606,9 @@ Value magnitude(const json_spirit::Array& params, bool fHelp)
     {
         results.clear();
 
-        Object entry;
+        UniValue entry(UniValue::VOBJ);
 
-        entry.push_back(Pair("Error","Magnitude report too large; try specifying the cpid : magnitude <cpid>."));
+        entry.pushKV("Error","Magnitude report too large; try specifying the cpid : magnitude <cpid>.");
 
         results.push_back(entry);
     }
@@ -1617,7 +1616,7 @@ Value magnitude(const json_spirit::Array& params, bool fHelp)
     return results;
 }
 
-Value mymagnitude(const Array& params, bool fHelp)
+UniValue mymagnitude(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1625,13 +1624,13 @@ Value mymagnitude(const Array& params, bool fHelp)
                 "\n"
                 "Displays information for your magnitude in the network\n");
 
-    Array results;
+    UniValue results(UniValue::VARR);
 
     if (msPrimaryCPID.empty())
     {
-        Object res;
+        UniValue res(UniValue::VOBJ);
 
-        res.push_back(Pair("Error", "Your CPID appears to be empty"));
+        res.pushKV("Error", "Your CPID appears to be empty");
 
         results.push_back(res);
     }
@@ -1646,7 +1645,7 @@ Value mymagnitude(const Array& params, bool fHelp)
 }
 
 #ifdef WIN32
-Value myneuralhash(const Array& params, bool fHelp)
+UniValue myneuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1654,16 +1653,16 @@ Value myneuralhash(const Array& params, bool fHelp)
                 "\n"
                 "Displays information about your neural networks client current hash\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string myNeuralHash = NN::GetNeuralHash();
 
-    res.push_back(Pair("My Neural Hash", myNeuralHash.c_str()));
+    res.pushKV("My Neural Hash", myNeuralHash.c_str());
 
     return res;
 }
 
-Value neuralhash(const Array& params, bool fHelp)
+UniValue neuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1671,18 +1670,18 @@ Value neuralhash(const Array& params, bool fHelp)
                 "\n"
                 "Displays information about the popular\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 
-    res.push_back(Pair("Popular", consensus_hash));
+    res.pushKV("Popular", consensus_hash);
 
     return res;
 }
 #endif
 
-Value neuralreport(const Array& params, bool fHelp)
+UniValue neuralreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1692,12 +1691,12 @@ Value neuralreport(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Array res = GetJSONNeuralNetworkReport();
+    UniValue res = GetJSONNeuralNetworkReport();
 
     return res;
 }
 
-Value proveownership(const Array& params, bool fHelp)
+UniValue proveownership(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1705,7 +1704,7 @@ Value proveownership(const Array& params, bool fHelp)
                 "\n"
                 "Prove ownership of your CPID\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
@@ -1719,13 +1718,13 @@ Value proveownership(const Array& params, bool fHelp)
     std::string sEmailMD5 = RetrieveMd5(email);
     std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
 
-    res.push_back(Pair("Boinc E-Mail", email));
-    res.push_back(Pair("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey));
-    res.push_back(Pair("CPID", GlobalCPUMiningCPID.cpid));
-    res.push_back(Pair("Computed Email Hash", sEmailMD5));
-    res.push_back(Pair("Computed BPK", sBPKMD5));
-    res.push_back(Pair("Computed CPID", sLongCPID));
-    res.push_back(Pair("Computed Short CPID", sShortCPID));
+    res.pushKV("Boinc E-Mail", email);
+    res.pushKV("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey);
+    res.pushKV("CPID", GlobalCPUMiningCPID.cpid);
+    res.pushKV("Computed Email Hash", sEmailMD5);
+    res.pushKV("Computed BPK", sBPKMD5);
+    res.pushKV("Computed CPID", sLongCPID);
+    res.pushKV("Computed Short CPID", sShortCPID);
 
     bool fResult = CPID_IsCPIDValid(sShortCPID, sLongCPID, 1);
 
@@ -1733,15 +1732,15 @@ Value proveownership(const Array& params, bool fHelp)
     {
         fResult = false;
 
-        res.push_back(Pair("Error", "Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location."));
+        res.pushKV("Error", "Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location.");
     }
 
-    res.push_back(Pair("CPID Valid", fResult));
+    res.pushKV("CPID Valid", fResult);
 
     return res;
 }
 
-Value resetcpids(const Array& params, bool fHelp)
+UniValue resetcpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1749,19 +1748,19 @@ Value resetcpids(const Array& params, bool fHelp)
                 "\n"
                 "Reloads cpids\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     ReadConfigFile(mapArgs, mapMultiArgs);
     HarvestCPIDs(true);
     GetNextProject(true);
-    res.push_back(Pair("Reset", 1));
+    res.pushKV("Reset", 1);
 
     return res;
 }
 
-Value rsa(const Array& params, bool fHelp)
+UniValue rsa(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1769,7 +1768,7 @@ Value rsa(const Array& params, bool fHelp)
                 "\n"
                 "Displays RSA report for your CPID\n");
 
-    Array res;
+    UniValue res(UniValue::VARR);
 
     if (msPrimaryCPID.empty() || msPrimaryCPID == "INVESTOR")
         throw runtime_error(
@@ -1782,7 +1781,7 @@ Value rsa(const Array& params, bool fHelp)
     return res;
 }
 
-Value rsaweight(const Array& params, bool fHelp)
+UniValue rsaweight(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1790,7 +1789,7 @@ Value rsaweight(const Array& params, bool fHelp)
                 "\n"
                 "Display Rsaweight for your CPID\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     double out_magnitude = 0;
     double out_owed = 0;
@@ -1800,14 +1799,14 @@ Value rsaweight(const Array& params, bool fHelp)
     int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
     out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid, out_owed);
 
-    res.push_back(Pair("RSA Weight", RSAWEIGHT));
-    res.push_back(Pair("Magnitude", out_magnitude));
-    res.push_back(Pair("RSA Owed", out_owed));
+    res.pushKV("RSA Weight", RSAWEIGHT);
+    res.pushKV("Magnitude", out_magnitude);
+    res.pushKV("RSA Owed", out_owed);
 
     return res;
 }
 
-Value staketime(const Array& params, bool fHelp)
+UniValue staketime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1815,7 +1814,7 @@ Value staketime(const Array& params, bool fHelp)
                 "\n"
                 "Display information about staking time\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1823,13 +1822,13 @@ Value staketime(const Array& params, bool fHelp)
     std::string GRCAddress = DefaultWalletAddress();
     GetEarliestStakeTime(GRCAddress, cpid);
 
-    res.push_back(Pair("GRCTime", ReadCache("global", "nGRCTime").timestamp));
-    res.push_back(Pair("CPIDTime", ReadCache("global", "nCPIDTime").timestamp));
+    res.pushKV("GRCTime", ReadCache("global", "nGRCTime").timestamp);
+    res.pushKV("CPIDTime", ReadCache("global", "nCPIDTime").timestamp);
 
     return res;
 }
 
-Value superblockage(const Array& params, bool fHelp)
+UniValue superblockage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1837,20 +1836,20 @@ Value superblockage(const Array& params, bool fHelp)
                 "\n"
                 "Display information regarding superblock age\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
 
-    res.push_back(Pair("Superblock Age", superblock_age));
-    res.push_back(Pair("Superblock Timestamp", TimestampToHRDate(superblock_time)));
-    res.push_back(Pair("Superblock Block Number", ReadCache("superblock", "block_number").value));
-    res.push_back(Pair("Pending Superblock Height", ReadCache("neuralsecurity", "pending").value));
+    res.pushKV("Superblock Age", superblock_age);
+    res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock_time));
+    res.pushKV("Superblock Block Number", ReadCache("superblock", "block_number").value);
+    res.pushKV("Pending Superblock Height", ReadCache("neuralsecurity", "pending").value);
 
     return res;
 }
 
-Value superblocks(const Array& params, bool fHelp)
+UniValue superblocks(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
@@ -1860,7 +1859,7 @@ Value superblocks(const Array& params, bool fHelp)
                 "\n"
                 "Display data on recent superblocks\n");
 
-    Array res;
+    UniValue res(UniValue::VARR);
 
     std::string cpid = "";
 
@@ -1874,7 +1873,7 @@ Value superblocks(const Array& params, bool fHelp)
     return res;
 }
 
-Value syncdpor2(const Array& params, bool fHelp)
+UniValue syncdpor2(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1882,7 +1881,7 @@ Value syncdpor2(const Array& params, bool fHelp)
                 "\n"
                 "Synchronize with the neural network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sOut = "";
 
@@ -1893,12 +1892,12 @@ Value syncdpor2(const Array& params, bool fHelp)
     LoadAdminMessages(bFull, sOut);
     FullSyncWithDPORNodes();
 
-    res.push_back(Pair("Syncing", 1));
+    res.pushKV("Syncing", 1);
 
     return res;
 }
 
-Value upgradedbeaconreport(const Array& params, bool fHelp)
+UniValue upgradedbeaconreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1908,12 +1907,12 @@ Value upgradedbeaconreport(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Array aUpgBR = GetUpgradedBeaconReport();
+    UniValue aUpgBR = GetUpgradedBeaconReport();
 
     return aUpgBR;
 }
 
-Value validcpids(const Array& params, bool fHelp)
+UniValue validcpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -1921,7 +1920,7 @@ Value validcpids(const Array& params, bool fHelp)
                 "\n"
                 "Displays information about valid CPIDs collected from BOINC\n");
 
-    Array res;
+    UniValue res(UniValue::VARR);
 
     LOCK(cs_main);
 
@@ -1939,20 +1938,20 @@ Value validcpids(const Array& params, bool fHelp)
             {
                 if (structcpid.verifiedteam == "gridcoin")
                 {
-                    Object entry;
+                    UniValue entry(UniValue::VOBJ);
 
-                    entry.push_back(Pair("Project", structcpid.projectname));
-                    entry.push_back(Pair("CPID", structcpid.cpid));
-                    entry.push_back(Pair("CPIDhash", structcpid.cpidhash));
-                    entry.push_back(Pair("Email", structcpid.emailhash));
-                    entry.push_back(Pair("UTC", structcpid.utc));
-                    entry.push_back(Pair("RAC", structcpid.rac));
-                    entry.push_back(Pair("Team", structcpid.team));
-                    entry.push_back(Pair("RecTime", structcpid.rectime));
-                    entry.push_back(Pair("Age", structcpid.age));
-                    entry.push_back(Pair("Is my CPID Valid?", structcpid.Iscpidvalid));
-                    entry.push_back(Pair("CPID Link", structcpid.link));
-                    entry.push_back(Pair("Errors", structcpid.errors));
+                    entry.pushKV("Project", structcpid.projectname);
+                    entry.pushKV("CPID", structcpid.cpid);
+                    entry.pushKV("CPIDhash", structcpid.cpidhash);
+                    entry.pushKV("Email", structcpid.emailhash);
+                    entry.pushKV("UTC", structcpid.utc);
+                    entry.pushKV("RAC", structcpid.rac);
+                    entry.pushKV("Team", structcpid.team);
+                    entry.pushKV("RecTime", structcpid.rectime);
+                    entry.pushKV("Age", structcpid.age);
+                    entry.pushKV("Is my CPID Valid?", structcpid.Iscpidvalid);
+                    entry.pushKV("CPID Link", structcpid.link);
+                    entry.pushKV("Errors", structcpid.errors);
 
                     res.push_back(entry);
                 }
@@ -1963,7 +1962,7 @@ Value validcpids(const Array& params, bool fHelp)
     return res;
 }
 
-Value addkey(const Array& params, bool fHelp)
+UniValue addkey(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 4)
         throw runtime_error(
@@ -1976,7 +1975,7 @@ Value addkey(const Array& params, bool fHelp)
                 "\n"
                 "Add a key to the network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     //To whitelist a project:
     //execute addkey add project projectname 1
@@ -2005,21 +2004,21 @@ Value addkey(const Array& params, bool fHelp)
 
     sPass = (sType == "project" || sType == "projectmapping" || (sType == "beacon" && sAction == "delete")) ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
 
-    res.push_back(Pair("Action", sAction));
-    res.push_back(Pair("Type", sType));
-    res.push_back(Pair("Passphrase", sPass));
-    res.push_back(Pair("Name", sName));
-    res.push_back(Pair("Value", sValue));
+    res.pushKV("Action", sAction);
+    res.pushKV("Type", sType);
+    res.pushKV("Passphrase", sPass);
+    res.pushKV("Name", sName);
+    res.pushKV("Value", sValue);
 
     std::string result = AddMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
 
-    res.push_back(Pair("Results", result));
+    res.pushKV("Results", result);
 
     return res;
 }
 
 #ifdef WIN32
-Value currentcontractaverage(const Array& params, bool fHelp)
+UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2027,7 +2026,7 @@ Value currentcontractaverage(const Array& params, bool fHelp)
                 "\n"
                 "Displays information on your current contract average with regards to superblock contract\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string contract = NN::GetNeuralContract();
     double out_beacon_count = 0;
@@ -2039,21 +2038,21 @@ Value currentcontractaverage(const Array& params, bool fHelp)
     std::string sNeuralHash = NN::GetNeuralHash();
     std::string neural_hash = GetQuorumHash(contract);
 
-    res.push_back(Pair("Contract", contract));
-    res.push_back(Pair("avg", avg));
-    res.push_back(Pair("beacon_count", out_beacon_count));
-    res.push_back(Pair("avg_mag", out_avg));
-    res.push_back(Pair("beacon_participant_count", out_participant_count));
-    res.push_back(Pair("superblock_valid", bValid));
-    res.push_back(Pair(".NET Neural Hash", sNeuralHash.c_str()));
-    res.push_back(Pair("Length", (int)contract.length()));
-    res.push_back(Pair("Wallet Neural Hash", neural_hash));
+    res.pushKV("Contract", contract);
+    res.pushKV("avg", avg);
+    res.pushKV("beacon_count", out_beacon_count);
+    res.pushKV("avg_mag", out_avg);
+    res.pushKV("beacon_participant_count", out_participant_count);
+    res.pushKV("superblock_valid", bValid);
+    res.pushKV(".NET Neural Hash", sNeuralHash.c_str());
+    res.pushKV("Length", (int)contract.length());
+    res.pushKV("Wallet Neural Hash", neural_hash);
 
     return res;
 }
 #endif
 
-Value debug(const Array& params, bool fHelp)
+UniValue debug(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2063,16 +2062,16 @@ Value debug(const Array& params, bool fHelp)
                 "\n"
                 "Enable or disable debug mode on the fly\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     fDebug = params[0].get_bool();
 
-    res.push_back(Pair("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode."));
+    res.pushKV("Debug", fDebug ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }
 
-Value debug10(const Array& params, bool fHelp)
+UniValue debug10(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2081,16 +2080,16 @@ Value debug10(const Array& params, bool fHelp)
                 "<bool> -> Specify true or false\n"
                 "Enable or disable debug mode on the fly\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     fDebug10 = params[0].get_bool();
 
-    res.push_back(Pair("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode."));
+    res.pushKV("Debug10", fDebug10 ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }
 
-Value debug2(const Array& params, bool fHelp)
+UniValue debug2(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2100,16 +2099,16 @@ Value debug2(const Array& params, bool fHelp)
                 "\n"
                 "Enable or disable debug mode on the fly\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     fDebug2 = params[0].get_bool();
 
-    res.push_back(Pair("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode."));
+    res.pushKV("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }
 
-Value debug3(const Array& params, bool fHelp)
+UniValue debug3(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2119,16 +2118,16 @@ Value debug3(const Array& params, bool fHelp)
                 "\n"
                 "Enable or disable debug mode on the fly\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     fDebug3 = params[0].get_bool();
 
-    res.push_back(Pair("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode."));
+    res.pushKV("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }
 
-Value debug4(const Array& params, bool fHelp)
+UniValue debug4(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2138,15 +2137,15 @@ Value debug4(const Array& params, bool fHelp)
                 "\n"
                 "Enable or disable debug mode on the fly\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     fDebug4 = params[0].get_bool();
 
-    res.push_back(Pair("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode."));
+    res.pushKV("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }
-Value debugnet(const Array& params, bool fHelp)
+UniValue debugnet(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2156,16 +2155,16 @@ Value debugnet(const Array& params, bool fHelp)
                 "\n"
                 "Enable or disable debug mode on the fly\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     fDebugNet = params[0].get_bool();
 
-    res.push_back(Pair("DebugNet", fDebugNet ? "Entering debug mode." : "Exiting debug mode."));
+    res.pushKV("DebugNet", fDebugNet ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }
 
-Value dportally(const Array& params, bool fHelp)
+UniValue dportally(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2173,18 +2172,18 @@ Value dportally(const Array& params, bool fHelp)
                 "\n"
                 "Request a tally of DPOR in superblock\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     TallyMagnitudesInSuperblock();
 
-    res.push_back(Pair("Done", "Done"));
+    res.pushKV("Done", "Done");
 
     return res;
 }
 
-Value forcequorum(const Array& params, bool fHelp)
+UniValue forcequorom(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2192,16 +2191,16 @@ Value forcequorum(const Array& params, bool fHelp)
                 "\n"
                 "Requests neural network for force a quorum among nodes\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     AsyncNeuralRequest("quorum", "gridcoin", 10);
 
-    res.push_back(Pair("Requested a quorum - waiting for resolution.", 1));
+    res.pushKV("Requested a quorum - waiting for resolution.", 1);
 
     return res;
 }
 
-Value gatherneuralhashes(const Array& params, bool fHelp)
+UniValue gatherneuralhashes(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2209,18 +2208,18 @@ Value gatherneuralhashes(const Array& params, bool fHelp)
                 "\n"
                 "Requests neural network to gather neural hashes\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     GatherNeuralHashes();
 
-    res.push_back(Pair("Sent", "."));
+    res.pushKV("Sent", ".");
 
     return res;
 }
 
-Value genboinckey(const Array& params, bool fHelp)
+UniValue genboinckey(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2228,7 +2227,7 @@ Value genboinckey(const Array& params, bool fHelp)
                 "\n"
                 "Generates a boinc key\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
     GetNextProject(false);
@@ -2247,12 +2246,12 @@ Value genboinckey(const Array& params, bool fHelp)
     if (fDebug3)
         LogPrintf("GenBoincKey: Utilizing email %s with %s for %s\r\n", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
 
-    res.push_back(Pair("[Specify in config file without quotes] boinckey=", sBase));
+    res.pushKV("[Specify in config file without quotes] boinckey=", sBase);
 
     return res;
 }
 
-Value getlistof(const Array& params, bool fHelp)
+UniValue getlistof(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2262,20 +2261,20 @@ Value getlistof(const Array& params, bool fHelp)
                 "\n"
                 "Displays data associated to a specified key type\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sType = params[0].get_str();
 
-    res.push_back(Pair("Key Type", sType));
+    res.pushKV("Key Type", sType);
 
     LOCK(cs_main);
 
-    res.push_back(Pair("Data", GetListOf(sType)));
+    res.pushKV("Data", GetListOf(sType));
 
     return res;
 }
 
-Value getnextproject(const Array& params, bool fHelp)
+UniValue getnextproject(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2283,18 +2282,18 @@ Value getnextproject(const Array& params, bool fHelp)
                 "\n"
                 "Requests wallet to get next project\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     GetNextProject(true);
 
-    res.push_back(Pair("GetNext", 1));
+    res.pushKV("GetNext", 1);
 
     return res;
 }
 
-Value listdata(const Array& params, bool fHelp)
+UniValue listdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2304,21 +2303,21 @@ Value listdata(const Array& params, bool fHelp)
                 "\n"
                 "Displays data associated to a key stored in cache\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sType = params[0].get_str();
 
-    res.push_back(Pair("Key Type", sType));
+    res.pushKV("Key Type", sType);
 
     LOCK(cs_main);
 
     for(const auto& item : ReadCacheSection(sType))
-        res.push_back(Pair(item.first, item.second.value));
+        res.pushKV(item.first, item.second.value);
 
     return res;
 }
 
-Value memorizekeys(const Array& params, bool fHelp)
+UniValue memorizekeys(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2326,7 +2325,7 @@ Value memorizekeys(const Array& params, bool fHelp)
                 "\n"
                 "Runs a full table scan of Load Admin Messages\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sOut;
 
@@ -2334,12 +2333,12 @@ Value memorizekeys(const Array& params, bool fHelp)
 
     LoadAdminMessages(true, sOut);
 
-    res.push_back(Pair("Results", sOut));
+    res.pushKV("Results", sOut);
 
     return res;
 }
 
-Value network(const Array& params, bool fHelp)
+UniValue network(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2347,7 +2346,7 @@ Value network(const Array& params, bool fHelp)
                 "\n"
                 "Display information about the network health\n");
 
-    Array res;
+    UniValue res(UniValue::VARR);
 
     LOCK(cs_main);
 
@@ -2357,10 +2356,10 @@ Value network(const Array& params, bool fHelp)
 
         if (stNet.initialized)
         {
-            Object results;
+            UniValue results(UniValue::VOBJ);
 
-            results.push_back(Pair("Project", stNet.projectname));
-            results.push_back(Pair("Avg RAC", stNet.AverageRAC));
+            results.pushKV("Project", stNet.projectname);
+            results.pushKV("Avg RAC", stNet.AverageRAC);
 
             if (stNet.projectname == "NETWORK")
             {
@@ -2369,15 +2368,15 @@ Value network(const Array& params, bool fHelp)
                 double iPct = ( (stNet.InterestSubsidy/14) * 365 / (MoneySupply+.01));
                 double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
 
-                results.push_back(Pair("Network Total Magnitude", stNet.NetworkMagnitude));
-                results.push_back(Pair("Network Average Magnitude", stNet.NetworkAvgMagnitude));
-                results.push_back(Pair("Network Avg Daily Payments", stNet.payments/14));
-                results.push_back(Pair("Network Max Daily Payments", MaximumEmission));
-                results.push_back(Pair("Network Interest Paid (14 days)", stNet.InterestSubsidy));
-                results.push_back(Pair("Network Avg Daily Interest", stNet.InterestSubsidy/14));
-                results.push_back(Pair("Total Money Supply", MoneySupply));
-                results.push_back(Pair("Network Interest %", iPct));
-                results.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
+                results.pushKV("Network Total Magnitude", stNet.NetworkMagnitude);
+                results.pushKV("Network Average Magnitude", stNet.NetworkAvgMagnitude);
+                results.pushKV("Network Avg Daily Payments", stNet.payments/14);
+                results.pushKV("Network Max Daily Payments", MaximumEmission);
+                results.pushKV("Network Interest Paid (14 days)", stNet.InterestSubsidy);
+                results.pushKV("Network Avg Daily Interest", stNet.InterestSubsidy/14);
+                results.pushKV("Total Money Supply", MoneySupply);
+                results.pushKV("Network Interest %", iPct);
+                results.pushKV("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit);
             }
 
             res.push_back(results);
@@ -2387,7 +2386,7 @@ Value network(const Array& params, bool fHelp)
     return res;
 }
 
-Value neuralrequest(const Array& params, bool fHelp)
+UniValue neuralrequest(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2395,16 +2394,16 @@ Value neuralrequest(const Array& params, bool fHelp)
                 "\n"
                 "Sends a request to neural network and displays response\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string response = NeuralRequest("REQUEST");
 
-    res.push_back(Pair("Response", response));
+    res.pushKV("Response", response);
 
     return res;
 }
 
-Value projects(const Array& params, bool fHelp)
+UniValue projects(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2412,13 +2411,13 @@ Value projects(const Array& params, bool fHelp)
                 "\n"
                 "Displays information on projects in the network\n");
 
-    Array res;
+    UniValue res(UniValue::VARR);
 
     LOCK(cs_main);
 
     for (const auto& item : ReadCacheSection("project"))
     {
-        Object entry;
+        UniValue entry(UniValue::VOBJ);
 
         std::string sProjectName = ToOfficialName(item.first);
 
@@ -2435,8 +2434,8 @@ Value projects(const Array& params, bool fHelp)
             sProjectURL.erase(tFound, sProjectURL.length());
         }
 
-        entry.push_back(Pair("Project", sProjectName));
-        entry.push_back(Pair("URL", sProjectURL));
+        entry.pushKV("Project", sProjectName);
+        entry.pushKV("URL", sProjectURL);
 
         res.push_back(entry);
     }
@@ -2444,7 +2443,7 @@ Value projects(const Array& params, bool fHelp)
     return res;
 }
 
-Value readconfig(const Array& params, bool fHelp)
+UniValue readconfig(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2452,18 +2451,18 @@ Value readconfig(const Array& params, bool fHelp)
                 "\n"
                 "Re-reads config file; Does not overwrite pre-existing loaded values\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     ReadConfigFile(mapArgs, mapMultiArgs);
 
-    res.push_back(Pair("readconfig", 1));
+    res.pushKV("readconfig", 1);
 
     return res;
 }
 
-Value readdata(const Array& params, bool fHelp)
+UniValue readdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2473,7 +2472,7 @@ Value readdata(const Array& params, bool fHelp)
                 "\n"
                 "Reads generic data from disk from a specified key\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sKey = params[0].get_str();
     std::string sValue = "?";
@@ -2483,18 +2482,18 @@ Value readdata(const Array& params, bool fHelp)
 
     if (!txdb.ReadGenericData(sKey, sValue))
     {
-        res.push_back(Pair("Error", sValue));
+        res.pushKV("Error", sValue);
 
         sValue = "Failed to read from disk.";
     }
 
-    res.push_back(Pair("Key", sKey));
-    res.push_back(Pair("Result", sValue));
+    res.pushKV("Key", sKey);
+    res.pushKV("Result", sValue);
 
     return res;
 }
 
-Value seefile(const Array& params, bool fHelp)
+UniValue seefile(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2502,26 +2501,26 @@ Value seefile(const Array& params, bool fHelp)
                 "\n"
                 "Unit test for sending a file from node to node\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     // This is a unit test to prove viability of transmitting a file from node to node
     std::string sFile = "C:\\test.txt";
     std::vector<unsigned char> v = readFileToVector(sFile);
 
-    res.push_back(Pair("byte1", v[1]));
-    res.push_back(Pair("bytes", (int)v.size()));
+    res.pushKV("byte1", v[1]);
+    res.pushKV("bytes", (int)v.size());
 
     for (unsigned int i = 0; i < v.size(); i++)
-        res.push_back(Pair("bytes", v[i]));
+        res.pushKV("bytes", v[i]);
 
     std::string sManifest = FileManifest();
 
-    res.push_back(Pair("manifest", sManifest));
+    res.pushKV("manifest", sManifest);
 
     return res;
 }
 
-Value refhash(const Array& params, bool fHelp)
+UniValue refhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2531,20 +2530,20 @@ Value refhash(const Array& params, bool fHelp)
                 "\n"
                 "Tests to see if a GRC Address is a participant in neural network along with default wallet address\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string rh = params[0].get_str();
     bool r1 = StrLessThanReferenceHash(rh);
     bool r2 = IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime());
 
-    res.push_back(Pair("<Ref Hash", r1));
+    res.pushKV("<Ref Hash", r1);
 
-    res.push_back(Pair("WalletAddress<Ref Hash", r2));
+    res.pushKV("WalletAddress<Ref Hash", r2);
 
     return res;
 }
 
-Value sendblock(const Array& params, bool fHelp)
+UniValue sendblock(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2554,19 +2553,19 @@ Value sendblock(const Array& params, bool fHelp)
                 "\n"
                 "Sends a block to the network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sHash = params[0].get_str();
     uint256 hash = uint256(sHash);
     bool fResult = AskForOutstandingBlocks(hash);
 
-    res.push_back(Pair("Requesting", hash.ToString()));
-    res.push_back(Pair("Result", fResult));
+    res.pushKV("Requesting", hash.ToString());
+    res.pushKV("Result", fResult);
 
     return res;
 }
 
-Value sendrawcontract(const Array& params, bool fHelp)
+UniValue sendrawcontract(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2576,7 +2575,7 @@ Value sendrawcontract(const Array& params, bool fHelp)
                 "\n"
                 "Send a raw contract in a transaction on the network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -2599,14 +2598,14 @@ Value sendrawcontract(const Array& params, bool fHelp)
     if (!strError.empty())
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
-    res.push_back(Pair("Contract", sContract));
-    res.push_back(Pair("Recipient", sAddress));
-    res.push_back(Pair("TrxID", wtx.GetHash().GetHex()));
+    res.pushKV("Contract", sContract);
+    res.pushKV("Recipient", sAddress);
+    res.pushKV("TrxID", wtx.GetHash().GetHex());
 
     return res;
 }
 
-Value superblockaverage(const Array& params, bool fHelp)
+UniValue superblockaverage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2614,7 +2613,7 @@ Value superblockaverage(const Array& params, bool fHelp)
                 "\n"
                 "Displays average information for current superblock\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
@@ -2626,18 +2625,18 @@ Value superblockaverage(const Array& params, bool fHelp)
     int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
     bool bDireNeed = NeedASuperblock();
 
-    res.push_back(Pair("avg", avg));
-    res.push_back(Pair("beacon_count", out_beacon_count));
-    res.push_back(Pair("beacon_participant_count", out_participant_count));
-    res.push_back(Pair("average_magnitude", out_avg));
-    res.push_back(Pair("superblock_valid", VerifySuperblock(superblock, pindexBest)));
-    res.push_back(Pair("Superblock Age", superblock_age));
-    res.push_back(Pair("Dire Need of Superblock", bDireNeed));
+    res.pushKV("avg", avg);
+    res.pushKV("beacon_count", out_beacon_count);
+    res.pushKV("beacon_participant_count", out_participant_count);
+    res.pushKV("average_magnitude", out_avg);
+    res.pushKV("superblock_valid", VerifySuperblock(superblock, pindexBest));
+    res.pushKV("Superblock Age", superblock_age);
+    res.pushKV("Dire Need of Superblock", bDireNeed);
 
     return res;
 }
 
-Value tally(const Array& params, bool fHelp)
+UniValue tally(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2645,7 +2644,7 @@ Value tally(const Array& params, bool fHelp)
                 "\n"
                 "Requests a tally of research averages\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
@@ -2653,12 +2652,12 @@ Value tally(const Array& params, bool fHelp)
     CBlockIndex* tallyIndex = FindTallyTrigger(pindexBest);
     TallyResearchAverages_v9(tallyIndex);
 
-    res.push_back(Pair("Tally Network Averages", 1));
+    res.pushKV("Tally Network Averages", 1);
 
     return res;
 }
 
-Value tallyneural(const Array& params, bool fHelp)
+UniValue tallyneural(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2666,20 +2665,20 @@ Value tallyneural(const Array& params, bool fHelp)
                 "\n"
                 "Requests a tally of neural network\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     ComputeNeuralNetworkSupermajorityHashes();
     UpdateNeuralNetworkQuorumData();
 
-    res.push_back(Pair("Ready", "."));
+    res.pushKV("Ready", ".");
 
     return res;
 }
 
 #ifdef WIN32
-Value testnewcontract(const Array& params, bool fHelp)
+UniValue testnewcontract(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2687,7 +2686,7 @@ Value testnewcontract(const Array& params, bool fHelp)
                 "\n"
                 "Tests current local neural contract\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string contract = NN::GetNeuralContract();
     std::string myNeuralHash = NN::GetNeuralHash();
@@ -2698,21 +2697,21 @@ Value testnewcontract(const Array& params, bool fHelp)
     std::string neural_hash = GetQuorumHash(contract);
     std::string binary_neural_hash = GetQuorumHash(sUnpacked);
 
-    res.push_back(Pair("My Neural Hash", myNeuralHash));
-    res.push_back(Pair("Contract Test", contract));
-    res.push_back(Pair("Contract Length", (int)contract.length()));
-    res.push_back(Pair("Binary Length", (int)sBin.length()));
-    res.push_back(Pair("Unpacked length", (int)sUnpacked.length()));
-    res.push_back(Pair("Unpacked", sUnpacked));
-    res.push_back(Pair("Local Core Quorum Hash", neural_hash));
-    res.push_back(Pair("Binary Local Core Quorum Hash", binary_neural_hash));
-    res.push_back(Pair("Neural Network Live Quorum Hash", myNeuralHash));
+    res.pushKV("My Neural Hash", myNeuralHash);
+    res.pushKV("Contract Test", contract);
+    res.pushKV("Contract Length", (int)contract.length());
+    res.pushKV("Binary Length", (int)sBin.length());
+    res.pushKV("Unpacked length", (int)sUnpacked.length());
+    res.pushKV("Unpacked", sUnpacked);
+    res.pushKV("Local Core Quorum Hash", neural_hash);
+    res.pushKV("Binary Local Core Quorum Hash", binary_neural_hash);
+    res.pushKV("Neural Network Live Quorum Hash", myNeuralHash);
 
     return res;
 }
 #endif
 
-Value updatequorumdata(const Array& params, bool fHelp)
+UniValue updatequoromdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2720,16 +2719,16 @@ Value updatequorumdata(const Array& params, bool fHelp)
                 "\n"
                 "Requests update of neural network quorum data\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     UpdateNeuralNetworkQuorumData();
 
-    res.push_back(Pair("Updated.", ""));
+    res.pushKV("Updated.", "");
 
     return res;
 }
 
-Value versionreport(const Array& params, bool fHelp)
+UniValue versionreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2739,12 +2738,12 @@ Value versionreport(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Array myNeuralJSON = GetJSONVersionReport();
+    UniValue myNeuralJSON = GetJSONVersionReport();
 
     return myNeuralJSON;
 }
 
-Value writedata(const Array& params, bool fHelp)
+UniValue writedata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw runtime_error(
@@ -2755,7 +2754,7 @@ Value writedata(const Array& params, bool fHelp)
                 "\n"
                 "Writes a value to specified key\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sKey = params[0].get_str();
     std::string sValue = params[1].get_str();
@@ -2770,14 +2769,14 @@ Value writedata(const Array& params, bool fHelp)
     if (!txdb.TxnCommit())
         result = "Unable to Commit.";
 
-    res.push_back(Pair("Result", result));
+    res.pushKV("Result", result);
 
     return res;
 }
 
 // Network RPC commands
 
-Value askforoutstandingblocks(const Array& params, bool fHelp)
+UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2785,16 +2784,16 @@ Value askforoutstandingblocks(const Array& params, bool fHelp)
                 "\n"
                 "Requests network for outstanding blocks\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     bool fResult = AskForOutstandingBlocks(uint256(0));
 
-    res.push_back(Pair("Sent.", fResult));
+    res.pushKV("Sent.", fResult);
 
     return res;
 }
 
-Value getblockchaininfo(const Array& params, bool fHelp)
+UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2804,21 +2803,21 @@ Value getblockchaininfo(const Array& params, bool fHelp)
 
     LOCK(cs_main);
 
-    Object res, diff;
+    UniValue res, diff(UniValue::VOBJ);
 
-    res.push_back(Pair("blocks",          nBestHeight));
-    res.push_back(Pair("moneysupply",     ValueFromAmount(pindexBest->nMoneySupply)));
-    diff.push_back(Pair("proof-of-work",  GetDifficulty()));
-    diff.push_back(Pair("proof-of-stake", GetDifficulty(GetLastBlockIndex(pindexBest, true))));
-    res.push_back(Pair("difficulty",      diff));
-    res.push_back(Pair("testnet",         fTestNet));
-    res.push_back(Pair("errors",          GetWarnings("statusbar")));
+    res.pushKV("blocks",          nBestHeight);
+    res.pushKV("moneysupply",     ValueFromAmount(pindexBest->nMoneySupply));
+    diff.pushKV("proof-of-work",  GetDifficulty());
+    diff.pushKV("proof-of-stake", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    res.pushKV("difficulty",      diff);
+    res.pushKV("testnet",         fTestNet);
+    res.pushKV("errors",          GetWarnings("statusbar"));
 
     return res;
 }
 
 
-Value currenttime(const Array& params, bool fHelp)
+UniValue currenttime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2826,15 +2825,15 @@ Value currenttime(const Array& params, bool fHelp)
                 "\n"
                 "Displays UTC Unix time as well as date and time in UTC\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
-    res.push_back(Pair("Unix", GetAdjustedTime()));
-    res.push_back(Pair("UTC", TimestampToHRDate(GetAdjustedTime())));
+    res.pushKV("Unix", GetAdjustedTime());
+    res.pushKV("UTC", TimestampToHRDate(GetAdjustedTime()));
 
     return res;
 }
 
-Value decryptphrase(const Array& params, bool fHelp)
+UniValue decryptphrase(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2844,20 +2843,20 @@ Value decryptphrase(const Array& params, bool fHelp)
                 "\n"
                 "Decrypts an encrypted phrase\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sParam1 = params[0].get_str();
     std::string test = AdvancedDecrypt(sParam1);
 
-    res.push_back(Pair("Phrase", sParam1));
-    res.push_back(Pair("Decrypted Phrase", test));
+    res.pushKV("Phrase", sParam1);
+    res.pushKV("Decrypted Phrase", test);
 
     return res;
 }
 
 /*
 #ifdef WIN32
-Value downloadblocks(const Array& params, bool fHelp)
+UniValue downloadblocks(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2865,18 +2864,18 @@ Value downloadblocks(const Array& params, bool fHelp)
                 "\n"
                 "Download blocks from a snapshot\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     int r = Restarter::DownloadGridcoinBlocks();
 
-    res.push_back(Pair("Download Blocks", r));
+    res.pushKV("Download Blocks", r);
 
     return res;
 }
 #endif
 */
 
-Value encryptphrase(const Array& params, bool fHelp)
+UniValue encryptphrase(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -2886,18 +2885,18 @@ Value encryptphrase(const Array& params, bool fHelp)
                 "\n"
                 "Encrypt a phrase\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sParam1 = params[0].get_str();
     std::string test = AdvancedCrypt(sParam1);
 
-    res.push_back(Pair("Phrase", sParam1));
-    res.push_back(Pair("Encrypted Phrase", test));
+    res.pushKV("Phrase", sParam1);
+    res.pushKV("Encrypted Phrase", test);
 
     return res;
 }
 
-Value memorypool(const Array& params, bool fHelp)
+UniValue memorypool(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2905,15 +2904,15 @@ Value memorypool(const Array& params, bool fHelp)
                 "\n"
                 "Displays included and excluded memory pool txs\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
-    res.push_back(Pair("Excluded Tx", msMiningErrorsExcluded));
-    res.push_back(Pair("Included Tx", msMiningErrorsIncluded));
+    res.pushKV("Excluded Tx", msMiningErrorsExcluded);
+    res.pushKV("Included Tx", msMiningErrorsIncluded);
 
     return res;
 }
 
-Value networktime(const Array& params, bool fHelp)
+UniValue networktime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2921,15 +2920,15 @@ Value networktime(const Array& params, bool fHelp)
                 "\n"
                 "Displays current network time\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
-    res.push_back(Pair("Network Time", GetAdjustedTime()));
+    res.pushKV("Network Time", GetAdjustedTime());
 
     return res;
 }
 
 #ifdef WIN32
-Value reindex(const Array& params, bool fHelp)
+UniValue reindex(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2937,16 +2936,16 @@ Value reindex(const Array& params, bool fHelp)
                 "\n"
                 "Re-index the block chain\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     int r = Restarter::CreateGridcoinRestorePoint();
     Restarter::ReindexGridcoinWallet();
-    res.push_back(Pair("Reindex Chain", r));
+    res.pushKV("Reindex Chain", r);
 
     return res;
 }
 
-Value restart(const Array& params, bool fHelp)
+UniValue restart(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2954,16 +2953,16 @@ Value restart(const Array& params, bool fHelp)
                 "\n"
                 "Restarts the wallet\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     LogPrintf("Restarting Gridcoin...");
     int iResult = Restarter::RestartGridcoin();
-    res.push_back(Pair("RebootClient", iResult));
+    res.pushKV("RebootClient", iResult);
 
     return res;
 }
 
-Value restorepoint(const Array& params, bool fHelp)
+UniValue restorepoint(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
@@ -2971,29 +2970,29 @@ Value restorepoint(const Array& params, bool fHelp)
                 "\n"
                 "Create a restore point\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     int r= Restarter::CreateGridcoinRestorePoint();
     //We must stop the node before we can do this
     //RestartGridcoin();
-    res.push_back(Pair("Restore Point", r));
+    res.pushKV("Restore Point", r);
 
     return res;
 }
 #endif
 
-Value execute(const Array& params, bool fHelp)
+UniValue execute(const UniValue& params, bool fHelp)
 {
     throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
 }
 
-Array SuperblockReport(std::string cpid)
+UniValue SuperblockReport(std::string cpid)
 {
-    Array results;
-    Object c;
+    UniValue results(UniValue::VARR);
+    UniValue c(UniValue::VOBJ);
     std::string Narr = ToString(GetAdjustedTime());
-    c.push_back(Pair("SuperBlock Report (14 days)",Narr));
-    if (!cpid.empty())      c.push_back(Pair("CPID",cpid));
+    c.pushKV("SuperBlock Report (14 days)",Narr);
+    if (!cpid.empty())      c.pushKV("CPID",cpid);
 
     results.push_back(c);
 
@@ -3026,15 +3025,15 @@ Array SuperblockReport(std::string cpid)
                 std::string superblock = UnpackBinarySuperblock(bb.superblock);
                 GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
 
-                Object c;
-                c.push_back(Pair("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex()));
-                c.push_back(Pair("Date",TimestampToHRDate(pblockindex->nTime)));
-                c.push_back(Pair("Average Mag",out_avg));
-                c.push_back(Pair("Wallet Version",bb.clientversion));
+                UniValue c(UniValue::VOBJ);
+                c.pushKV("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex());
+                c.pushKV("Date",TimestampToHRDate(pblockindex->nTime));
+                c.pushKV("Average Mag",out_avg);
+                c.pushKV("Wallet Version",bb.clientversion);
                 double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
                 if (!cpid.empty())
                 {
-                    c.push_back(Pair("Magnitude",mag));
+                    c.pushKV("Magnitude",mag);
                 }
 
 
@@ -3046,12 +3045,12 @@ Array SuperblockReport(std::string cpid)
     return results;
 }
 
-Array MagnitudeReport(std::string cpid)
+UniValue MagnitudeReport(std::string cpid)
 {
-    Array results;
-    Object c;
+    UniValue results(UniValue::VARR);
+    UniValue c(UniValue::VOBJ);
     std::string Narr = ToString(GetAdjustedTime());
-    c.push_back(Pair("RSA Report",Narr));
+    c.pushKV("RSA Report",Narr);
     results.push_back(c);
     double total_owed = 0;
     double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
@@ -3072,67 +3071,66 @@ Array MagnitudeReport(std::string cpid)
             {
                 if (cpid.empty() || (Contains(structMag.cpid,cpid)))
                 {
-                    Object entry;
+                    UniValue entry(UniValue::VOBJ);
                     if (IsResearchAgeEnabled(pindexBest->nHeight))
                     {
 
                         StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
                         double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
-                        entry.push_back(Pair("CPID",structMag.cpid));
+                        entry.pushKV("CPID",structMag.cpid);
                         StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
-                        entry.push_back(Pair("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime)));
-                        entry.push_back(Pair("Magnitude (Last Superblock)", structMag.Magnitude));
-                        entry.push_back(Pair("Research Payments (14 days)",structMag.payments));
-                        entry.push_back(Pair("Daily Paid",structMag.payments/14));
+                        entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
+                        entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
+                        entry.pushKV("Research Payments (14 days)",structMag.payments);
+                        entry.pushKV("Daily Paid",structMag.payments/14);
                         // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                         double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
-                        entry.push_back(Pair("Expected Earnings (14 days)", dExpected14));
-                        entry.push_back(Pair("Expected Earnings (Daily)", dExpected14/14));
+                        entry.pushKV("Expected Earnings (14 days)", dExpected14);
+                        entry.pushKV("Expected Earnings (Daily)", dExpected14/14);
 
                         // Fulfillment %
                         double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
-                        entry.push_back(Pair("Fulfillment %", fulfilled));
+                        entry.pushKV("Fulfillment %", fulfilled);
 
-                        entry.push_back(Pair("CPID Lifetime Interest Paid", stCPID.InterestSubsidy));
-                        entry.push_back(Pair("CPID Lifetime Research Paid", stCPID.ResearchSubsidy));
-                        entry.push_back(Pair("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude));
+                        entry.pushKV("CPID Lifetime Interest Paid", stCPID.InterestSubsidy);
+                        entry.pushKV("CPID Lifetime Research Paid", stCPID.ResearchSubsidy);
+                        entry.pushKV("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude);
 
-                        entry.push_back(Pair("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01)));
-                        entry.push_back(Pair("Last Blockhash Paid", stCPID.BlockHash));
-                        entry.push_back(Pair("Last Block Paid",stCPID.LastBlock));
-                        entry.push_back(Pair("Tx Count",(int)stCPID.Accuracy));
+                        entry.pushKV("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01));
+                        entry.pushKV("Last Blockhash Paid", stCPID.BlockHash);
+                        entry.pushKV("Last Block Paid",stCPID.LastBlock);
+                        entry.pushKV("Tx Count",(int)stCPID.Accuracy);
 
                         results.push_back(entry);
                     }
                     else
                     {
-                        entry.push_back(Pair("CPID",structMag.cpid));
-                        entry.push_back(Pair("Last Block Paid",structMag.LastBlock));
-                        entry.push_back(Pair("DPOR Magnitude",  structMag.Magnitude));
-                        entry.push_back(Pair("Payment Magnitude",structMag.PaymentMagnitude));
-                        entry.push_back(Pair("Payment Timespan (Days)",structMag.PaymentTimespan));
-                        entry.push_back(Pair("Total Earned (14 days)",structMag.totalowed));
-                        entry.push_back(Pair("DPOR Payments (14 days)",structMag.payments));
+                        entry.pushKV("CPID",structMag.cpid);
+                        entry.pushKV("Last Block Paid",structMag.LastBlock);
+                        entry.pushKV("DPOR Magnitude",  structMag.Magnitude);
+                        entry.pushKV("Payment Magnitude",structMag.PaymentMagnitude);
+                        entry.pushKV("Payment Timespan (Days)",structMag.PaymentTimespan);
+                        entry.pushKV("Total Earned (14 days)",structMag.totalowed);
+                        entry.pushKV("DPOR Payments (14 days)",structMag.payments);
                         double outstanding = Round(structMag.totalowed - structMag.payments,2);
                         total_owed += outstanding;
-                        entry.push_back(Pair("Outstanding Owed (14 days)",outstanding));
-                        entry.push_back(Pair("InterestPayments (14 days)",structMag.interestPayments));
-                        entry.push_back(Pair("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime)));
-                        entry.push_back(Pair("Owed",structMag.owed));
-                        entry.push_back(Pair("Daily Paid",structMag.payments/14));
-                        entry.push_back(Pair("Daily Owed",structMag.totalowed/14));
+                        entry.pushKV("Outstanding Owed (14 days)",outstanding);
+                        entry.pushKV("InterestPayments (14 days)",structMag.interestPayments);
+                        entry.pushKV("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime));
+                        entry.pushKV("Owed",structMag.owed);
+                        entry.pushKV("Daily Paid",structMag.payments/14);
+                        entry.pushKV("Daily Owed",structMag.totalowed/14);
                         results.push_back(entry);
                     }
                 }
             }
-
         }
 
         if (fDebug3) LogPrintf("MR8");
 
-        Object entry2;
-        entry2.push_back(Pair("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit));
-        if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.push_back(Pair("Grand Total Outstanding Owed",total_owed));
+        UniValue entry2(UniValue::VOBJ);
+        entry2.pushKV("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit);
+        if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.pushKV("Grand Total Outstanding Owed",total_owed);
         results.push_back(entry2);
 
         int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
@@ -3140,11 +3138,10 @@ Array MagnitudeReport(std::string cpid)
         int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
         if (cpid.empty())
         {
-            Object entry3;
-            entry3.push_back(Pair("Start Block",nMinDepth));
-            entry3.push_back(Pair("End Block",nMaxDepth));
+            UniValue entry3(UniValue::VOBJ);
+            entry3.pushKV("Start Block",nMinDepth);
+            entry3.pushKV("End Block",nMaxDepth);
             results.push_back(entry3);
-
         }
         if (fDebug3) LogPrintf("*MR5*");
 
@@ -3173,20 +3170,20 @@ double DoubleFromAmount(int64_t amount)
     return (double)amount / (double)COIN;
 }
 
-Array GetJsonUnspentReport()
+UniValue GetJsonUnspentReport()
 {
     // The purpose of this report is to list the details of unspent coins in the wallet, create a signed XML payload and then audit those coins as a third party
     // Written on 5-28-2017 - R HALFORD
     // We can use this as the basis for proving the total coin balance, and the current researcher magnitude in the voting system.
-    Array results;
+    UniValue results(UniValue::VARR);
 
     //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
         StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
         CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
-        Object entry1;
-        entry1.push_back(Pair("Researcher Magnitude",pHistorical->nMagnitude));
+        UniValue entry1(UniValue::VOBJ);
+        entry1.pushKV("Researcher Magnitude",pHistorical->nMagnitude);
         results.push_back(entry1);
 
         // Create the XML Magnitude Payload
@@ -3208,10 +3205,10 @@ Array GetJsonUnspentReport()
             std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
             std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
             std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
-            Object entry;
-            entry.push_back(Pair("CPID Signature", sSignature));
-            entry.push_back(Pair("Historical Magnitude Block #", pHistorical->nHeight));
-            entry.push_back(Pair("Historical Blockhash", sBlockhash));
+            UniValue entry(UniValue::VOBJ);
+            entry.pushKV("CPID Signature", sSignature);
+            entry.pushKV("Historical Magnitude Block #", pHistorical->nHeight);
+            entry.pushKV("Historical Blockhash", sBlockhash);
             // Prove the magnitude from a 3rd party standpoint:
             if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
             {
@@ -3219,10 +3216,10 @@ Array GetJsonUnspentReport()
                 if (pblockindexMagnitude)
                 {
                     bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-                    entry.push_back(Pair("Historical Magnitude",pblockindexMagnitude->nMagnitude));
-                    entry.push_back(Pair("Signature Valid",fResult));
+                    entry.pushKV("Historical Magnitude",pblockindexMagnitude->nMagnitude);
+                    entry.pushKV("Signature Valid",fResult);
                     bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
-                    entry.push_back(Pair("Magnitude Audited",fAudited));
+                    entry.pushKV("Magnitude Audited",fAudited);
                     results.push_back(entry);
                 }
             }
@@ -3248,16 +3245,16 @@ Array GetJsonUnspentReport()
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        Object entry;
+        UniValue entry(UniValue::VOBJ);
         CTxDestination address;
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
             if (CoinToDouble(nValue) > dBloatThreshhold)
             {
-                entry.push_back(Pair("TXID", out.tx->GetHash().GetHex()));
-                entry.push_back(Pair("Address", CBitcoinAddress(address).ToString()));
+                entry.pushKV("TXID", out.tx->GetHash().GetHex());
+                entry.pushKV("Address", CBitcoinAddress(address).ToString());
                 std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
-                entry.push_back(Pair("Amount",ValueFromAmount(nValue)));
+                entry.pushKV("Amount",ValueFromAmount(nValue));
                 std::string strAddress=CBitcoinAddress(address).ToString();
                 CKeyID keyID;
                 const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
@@ -3300,86 +3297,85 @@ Array GetJsonUnspentReport()
 
     // Now we will need to go back through the XML and Audit the claimed vote weight balance as a 3rd party
 
-    double dCounted = 0;
+	double dCounted = 0;
 
-    std::vector<std::string> vXML= split(sXML.c_str(),"<ROW>");
-    for (unsigned int x = 0; x < vXML.size(); x++)
-    {
-        // Prove the contents of the XML as a 3rd party
-        CTransaction tx2;
-        uint256 hashBlock = 0;
-        uint256 uTXID(ExtractXML(vXML[x],"<TXID>","</TXID>"));
-        std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
-        std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
-        std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
-        std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
-        std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
+	std::vector<std::string> vXML= split(sXML.c_str(),"<ROW>");
+	for (unsigned int x = 0; x < vXML.size(); x++)
+	{
+		// Prove the contents of the XML as a 3rd party
+		CTransaction tx2;
+		uint256 hashBlock = 0;
+		uint256 uTXID(ExtractXML(vXML[x],"<TXID>","</TXID>"));
+		std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
+		std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
+		std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
+		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
+		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
 
-        int32_t iPos = RoundFromString(sPos,0);
-        std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
+		int32_t iPos = RoundFromString(sPos,0);
+		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 
-        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
-        {
+		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
+		{
 
-            if (GetTransaction(uTXID, tx2, hashBlock))
-            {
-                if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
-                {
-                    int64_t nValue2 = tx2.vout[iPos].nValue;
-                    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
-                    CTxDestination address2;
-                    std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
-                    std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
-                    std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
-                    double dAmount = CoinToDouble(nValue2);
-                    if (ExtractDestination(tx2.vout[iPos].scriptPubKey, address2))
-                    {
-                        if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
-                        {
-                            Object entry;
-                            entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
-                            std::string sDecXmlSig = DecodeBase64(sXmlSig);
-                            CKey keyVerify;
-                            if (keyVerify.SetPubKey(ParseHex(sPubKey)))
-                            {
-                                std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
-                                std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
-                                bool bValid = keyVerify.Verify(uTXID,vchSig1);
-                                // Unspent Balance is proven to be owned by the voters public key, count the vote
-                                if (bValid) dCounted += dAmount;
-                                entry.push_back(Pair("Verified",bValid));
-                            }
+			if (GetTransaction(uTXID, tx2, hashBlock))
+			{
+				if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
+				{
+					    int64_t nValue2 = tx2.vout[iPos].nValue;
+					    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
+					    CTxDestination address2;
+						std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
+						std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
+						std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
+						double dAmount = CoinToDouble(nValue2);
+						if (ExtractDestination(tx2.vout[iPos].scriptPubKey, address2))
+						{
+							if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
+							{
+								UniValue entry(UniValue::VOBJ);
+      					   		entry.pushKV("Audited Amount",ValueFromAmount(nValue2));
+ 						    	std::string sDecXmlSig = DecodeBase64(sXmlSig);
+							    CKey keyVerify;
+							    if (keyVerify.SetPubKey(ParseHex(sPubKey)))
+								{
+									  	std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
+										std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
+										bool bValid = keyVerify.Verify(uTXID,vchSig1);
+										// Unspent Balance is proven to be owned by the voters public key, count the vote
+										if (bValid) dCounted += dAmount;
+										entry.pushKV("Verified",bValid);
+								}
 
-                            results.push_back(entry);
-                        }
-                    }
-                }
-            }
-        }
-    }
+	  							results.push_back(entry);
+							}
+					}
+				}
+			}
+		}
+	}
 
-    Object entry;
-    // Note that the voter needs to have the wallet at least unlocked for staking in order for the coins to be signed, otherwise the coins-owned portion of the vote balance will be 0.
-    // In simpler terms: The wallet must be unlocked to cast a provable vote.
+	UniValue entry(UniValue::VOBJ);
+	// Note that the voter needs to have the wallet at least unlocked for staking in order for the coins to be signed, otherwise the coins-owned portion of the vote balance will be 0.
+	// In simpler terms: The wallet must be unlocked to cast a provable vote.
 
-    entry.push_back(Pair("Total Voting Balance Weight", dTotal));
-    entry.push_back(Pair("Grand Verified Amount",dCounted));
+	entry.pushKV("Total Voting Balance Weight", dTotal);
+    entry.pushKV("Grand Verified Amount",dCounted);
 
-    std::string sBalCheck2 = GetProvableVotingWeightXML();
-    double dVerifiedBalance = ReturnVerifiedVotingBalance(sBalCheck2,true);
-    double dVerifiedMag = ReturnVerifiedVotingMagnitude(sBalCheck2, true);
-    entry.push_back(Pair("Balance check",dVerifiedBalance));
-    entry.push_back(Pair("Mag check",dVerifiedMag));
-    results.push_back(entry);
-
+	std::string sBalCheck2 = GetProvableVotingWeightXML();
+	double dVerifiedBalance = ReturnVerifiedVotingBalance(sBalCheck2,true);
+	double dVerifiedMag = ReturnVerifiedVotingMagnitude(sBalCheck2, true);
+	entry.pushKV("Balance check",dVerifiedBalance);
+	entry.pushKV("Mag check",dVerifiedMag);
+	results.push_back(entry);
     return results;
 }
 
-Array GetUpgradedBeaconReport()
+UniValue GetUpgradedBeaconReport()
 {
-    Array results;
-    Object entry;
-    entry.push_back(Pair("Report","Upgraded Beacon Report 1.0"));
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("Report","Upgraded Beacon Report 1.0");
     std::string rows = "";
     std::string row = "";
     int iBeaconCount = 0;
@@ -3395,19 +3391,19 @@ Array GetUpgradedBeaconReport()
         iBeaconCount++;
     }
 
-    entry.push_back(Pair("Total Beacons", iBeaconCount));
-    entry.push_back(Pair("Upgraded Beacon Count", iUpgradedBeaconCount));
+    entry.pushKV("Total Beacons", iBeaconCount);
+    entry.pushKV("Upgraded Beacon Count", iUpgradedBeaconCount);
     double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
-    entry.push_back(Pair("Pct Of Upgraded Beacons",RoundToString(dPct*100,3)));
+    entry.pushKV("Pct Of Upgraded Beacons",RoundToString(dPct*100,3));
     results.push_back(entry);
     return results;
 }
 
-Array GetJSONBeaconReport()
+UniValue GetJSONBeaconReport()
 {
-    Array results;
-    Object entry;
-    entry.push_back(Pair("CPID","GRCAddress"));
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("CPID","GRCAddress");
     std::string row;
     for(const auto& item : ReadCacheSection("beacon"))
     {
@@ -3416,7 +3412,7 @@ Array GetJSONBeaconReport()
         row = key + "<COL>" + cache.value;
         std::string contract = DecodeBase64(cache.value);
         std::string grcaddress = ExtractValue(contract,";",2);
-        entry.push_back(Pair(key, grcaddress));
+        entry.pushKV(key, grcaddress);
     }
 
     results.push_back(entry);
@@ -3462,41 +3458,41 @@ double GetTotalCurrentNeuralNetworkHashVotes()
 }
 
 
-Array GetJSONNeuralNetworkReport()
+UniValue GetJSONNeuralNetworkReport()
 {
-    Array results;
+    UniValue results(UniValue::VARR);
     //Returns a report of the networks neural hashes in order of popularity
     std::string neural_hash = "";
     std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
     double pct = 0;
-    Object entry;
-    entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("Neural Hash","Popularity,Percent %");
     double votes = GetTotalNeuralNetworkHashVotes();
 
     for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
     {
-        double popularity = mvNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
+              double popularity = mvNeuralNetworkHash[(*ii).first];
+              neural_hash = (*ii).first;
 
-        //If the hash != empty_hash: >= .01
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
-        {
-            row = neural_hash + "," + RoundToString(popularity,0);
-            report += row + "\n";
-            pct = (((double)popularity)/(votes+.01))*100;
-            entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
-        }
+              //If the hash != empty_hash: >= .01
+              if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+              {
+                  row = neural_hash + "," + RoundToString(popularity,0);
+                  report += row + "\n";
+                  pct = (((double)popularity)/(votes+.01))*100;
+                  entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+              }
     }
     // If we have a pending superblock, append it to the report:
     std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
     if (!SuperblockHeight.empty() && SuperblockHeight != "0")
     {
-        entry.push_back(Pair("Pending",SuperblockHeight));
+        entry.pushKV("Pending",SuperblockHeight);
     }
     int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
 
-    entry.push_back(Pair("Superblock Age",superblock_age));
+    entry.pushKV("Superblock Age",superblock_age);
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
     {
         int iRoot = 30;
@@ -3506,50 +3502,50 @@ Array GetJSONNeuralNetworkReport()
         int iNextNeuralSync = iLastNeuralSync + iRoot;
         int iLastQuorum = nBestHeight - iQuorumModifier;
         int iNextQuorum = iLastQuorum + 10;
-        entry.push_back(Pair("Last Sync", iLastNeuralSync));
-        entry.push_back(Pair("Next Sync", iNextNeuralSync));
-        entry.push_back(Pair("Next Quorum", iNextQuorum));
+        entry.pushKV("Last Sync", iLastNeuralSync);
+        entry.pushKV("Next Sync", iNextNeuralSync);
+        entry.pushKV("Next Quorum", iNextQuorum);
     }
     results.push_back(entry);
     return results;
 }
 
 
-Array GetJSONCurrentNeuralNetworkReport()
+UniValue GetJSONCurrentNeuralNetworkReport()
 {
-    Array results;
+    UniValue results(UniValue::VARR);
     //Returns a report of the networks neural hashes in order of popularity
     std::string neural_hash = "";
     std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
     double pct = 0;
-    Object entry;
-    entry.push_back(Pair("Neural Hash","Popularity,Percent %"));
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("Neural Hash","Popularity,Percent %");
     double votes = GetTotalCurrentNeuralNetworkHashVotes();
 
     for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
     {
-        double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
+              double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+              neural_hash = (*ii).first;
 
-        //If the hash != empty_hash: >= .01
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
-        {
-            row = neural_hash + "," + RoundToString(popularity,0);
-            report += row + "\n";
-            pct = (((double)popularity)/(votes+.01))*100;
-            entry.push_back(Pair(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
-        }
+              //If the hash != empty_hash: >= .01
+              if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+              {
+                  row = neural_hash + "," + RoundToString(popularity,0);
+                  report += row + "\n";
+                  pct = (((double)popularity)/(votes+.01))*100;
+                  entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+              }
     }
     // If we have a pending superblock, append it to the report:
     std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
     if (!SuperblockHeight.empty() && SuperblockHeight != "0")
     {
-        entry.push_back(Pair("Pending",SuperblockHeight));
+        entry.pushKV("Pending",SuperblockHeight);
     }
     int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
 
-    entry.push_back(Pair("Superblock Age",superblock_age));
+    entry.pushKV("Superblock Age",superblock_age);
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
     {
         int iRoot = 30;
@@ -3559,25 +3555,25 @@ Array GetJSONCurrentNeuralNetworkReport()
         int iNextNeuralSync = iLastNeuralSync + iRoot;
         int iLastQuorum = nBestHeight - iQuorumModifier;
         int iNextQuorum = iLastQuorum + 10;
-        entry.push_back(Pair("Last Sync", iLastNeuralSync));
-        entry.push_back(Pair("Next Sync", iNextNeuralSync));
-        entry.push_back(Pair("Next Quorum", iNextQuorum));
+        entry.pushKV("Last Sync", iLastNeuralSync);
+        entry.pushKV("Next Sync", iNextNeuralSync);
+        entry.pushKV("Next Quorum", iNextQuorum);
     }
     results.push_back(entry);
     return results;
 }
 
 
-Array GetJSONVersionReport()
+UniValue GetJSONVersionReport()
 {
-    Array results;
+    UniValue results(UniValue::VARR);
     //Returns a report of the GRC Version staking blocks over the last 100 blocks
     std::string neural_ver = "";
     std::string report = "Version, Popularity\n";
     std::string row = "";
     double pct = 0;
-    Object entry;
-    entry.push_back(Pair("Version","Popularity,Percent %"));
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("Version","Popularity,Percent %");
 
     double votes = 0;
     for(auto it : mvNeuralVersion)
@@ -3585,20 +3581,19 @@ Array GetJSONVersionReport()
 
     for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii)
     {
-        double popularity = mvNeuralVersion[(*ii).first];
-        neural_ver = (*ii).first;
-        //If the hash != empty_hash:
-        if (popularity > 0)
-        {
-            row = neural_ver + "," + RoundToString(popularity,0);
-            report += row + "\n";
-            pct = popularity/(votes+.01)*100;
-            entry.push_back(Pair(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%"));
-        }
+              double popularity = mvNeuralVersion[(*ii).first];
+              neural_ver = (*ii).first;
+              //If the hash != empty_hash:
+              if (popularity > 0)
+              {
+                  row = neural_ver + "," + RoundToString(popularity,0);
+                  report += row + "\n";
+                  pct = popularity/(votes+.01)*100;
+                  entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+              }
     }
     results.push_back(entry);
     return results;
-
 }
 
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
@@ -3653,38 +3648,38 @@ std::string YesNo(bool f)
     return f ? "Yes" : "No";
 }
 
-Value listitem(const Array& params, bool fHelp)
+UniValue listitem(const UniValue& params, bool fHelp)
 {
     throw JSONRPCError(RPC_DEPRECATED, "list is deprecated; Please run the command the same as previously without list");
 }
 
 // ppcoin: get information of sync-checkpoint
-Value getcheckpoint(const Array& params, bool fHelp)
+UniValue getcheckpoint(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
                 "getcheckpoint\n"
                 "Show info of synchronized checkpoint.\n");
 
-    Object result;
+    UniValue result(UniValue::VOBJ);
 
     LOCK(cs_main);
 
     const CBlockIndex* pindexCheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
     if(pindexCheckpoint != NULL)
     {
-        result.push_back(Pair("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str()));
-        result.push_back(Pair("height", pindexCheckpoint->nHeight));
-        result.push_back(Pair("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str()));
+        result.pushKV("synccheckpoint", pindexCheckpoint->GetBlockHash().ToString().c_str());
+        result.pushKV("height", pindexCheckpoint->nHeight);
+        result.pushKV("timestamp", DateTimeStrFormat(pindexCheckpoint->GetBlockTime()).c_str());
     }
 
     return result;
 }
 
 //Brod
-Value rpc_reorganize(const Array& params, bool fHelp)
+UniValue rpc_reorganize(const UniValue& params, bool fHelp)
 {
-    Object results;
+    UniValue results(UniValue::VOBJ);
     if (fHelp || params.size() != 1)
         throw runtime_error(
                 "reorganize <hash>\n"
@@ -3695,6 +3690,6 @@ Value rpc_reorganize(const Array& params, bool fHelp)
     NewHash.SetHex(params[0].get_str());
 
     bool fResult = ForceReorganizeToHash(NewHash);
-    results.push_back(Pair("RollbackChain",fResult));
+    results.pushKV("RollbackChain",fResult);
     return results;
 }

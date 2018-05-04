@@ -309,7 +309,7 @@ std::string GetProvableVotingWeightXML()
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        Object entry;
+        UniValue entry(UniValue::VOBJ);
         CTxDestination address;
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
@@ -410,8 +410,8 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
                     {
                         if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
                         {
-                            Object entry;
-                            entry.push_back(Pair("Audited Amount",ValueFromAmount(nValue2)));
+                            UniValue entry(UniValue::VOBJ);
+                            entry.pushKV("Audited Amount",ValueFromAmount(nValue2));
                             std::string sDecXmlSig = DecodeBase64(sXmlSig);
                             CKey keyVerify;
                             if (keyVerify.SetPubKey(ParseHex(sPubKey)))
@@ -466,12 +466,12 @@ double GetMoneySupplyFactor()
     return Factor;
 }
 
-Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired)
+UniValue GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired)
 {
     //Title,ExpirationDate, Question, Answers, ShareType(1=Magnitude,2=Balance,3=Both)
-    Array results;
-    Object entry;
-    entry.push_back(Pair("Polls","Polls Report " + QueryByTitle));
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("Polls","Polls Report " + QueryByTitle);
     std::string rows;
     std::string row;
     double iPollNumber = 0;
@@ -523,12 +523,12 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                 std::string TitleNarr = "Poll #" + RoundToString((double)iPollNumber,0)
                         + " (" + ExpirationDate + " ) - " + sShareType;
 
-                entry.push_back(Pair(TitleNarr,title));
+                entry.pushKV(TitleNarr,title);
                 sExportRow = "<POLL><URL>" + sURL + "</URL><TITLE>" + title + "</TITLE><EXPIRATION>" + ExpirationDate + "</EXPIRATION><SHARETYPE>" + sShareType + "</SHARETYPE><QUESTION>" + Question + "</QUESTION><ANSWERS>"+Answers+"</ANSWERS>";
 
                 if (bDetail)
                 {
-                    entry.push_back(Pair("Question",Question));
+                    entry.pushKV("Question",Question);
                     sExportRow += "<ARRAYANSWERS>";
                     size_t i = 0;
                     for (const std::string& answer : vAnswers)
@@ -541,7 +541,7 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                             BestAnswer = answer;
                         }
 
-                        entry.push_back(Pair("#" + ToString(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares));
+                        entry.pushKV("#" + ToString(++i) + " [" + RoundToString(participants,3) + "]. " + answer,dShares);
                         total_participants += participants;
                         total_shares += dShares;
                         sExportRow += "<RESERVED></RESERVED><ANSWERNAME>" + answer + "</ANSWERNAME><PARTICIPANTS>" + RoundToString(participants,0) + "</PARTICIPANTS><SHARES>" + RoundToString(dShares,0) + "</SHARES>";
@@ -549,11 +549,11 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
                     sExportRow += "</ARRAYANSWERS>";
 
                     //Totals:
-                    entry.push_back(Pair("Participants",total_participants));
-                    entry.push_back(Pair("Total Shares",total_shares));
+                    entry.pushKV("Participants",total_participants);
+                    entry.pushKV("Total Shares",total_shares);
                     if (total_participants < 3) BestAnswer = "";
 
-                    entry.push_back(Pair("Best Answer",BestAnswer));
+                    entry.pushKV("Best Answer",BestAnswer);
                     sExportRow += "<TOTALPARTICIPANTS>" + RoundToString(total_participants,0)
                             + "</TOTALPARTICIPANTS><TOTALSHARES>" + RoundToString(total_shares,0)
                             + "</TOTALSHARES><BESTANSWER>" + BestAnswer + "</BESTANSWER>";
@@ -570,19 +570,19 @@ Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& ou
     return results;
 }
 
-Array GetJsonVoteDetailsReport(std::string pollname)
+UniValue GetJsonVoteDetailsReport(std::string pollname)
 {
     double total_shares = 0;
     double participants = 0;
     double MoneySupplyFactor = GetMoneySupplyFactor();
 
-    Array results;
-    Object entry;
-    entry.push_back(Pair("Votes","Votes Report " + pollname));
-    entry.push_back(Pair("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2)));
+    UniValue results(UniValue::VARR);
+    UniValue entry(UniValue::VOBJ);
+    entry.pushKV("Votes","Votes Report " + pollname);
+    entry.pushKV("MoneySupplyFactor",RoundToString(MoneySupplyFactor,2));
 
     // Add header
-    entry.push_back(Pair("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares"));
+    entry.pushKV("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares");
 
     boost::to_lower(pollname);
     for(const auto& item : ReadCacheSection("vote"))
@@ -610,12 +610,12 @@ Array GetJsonVoteDetailsReport(std::string pollname)
                 total_shares += shares;
                 participants += 1.0 / vVoterAnswers.size();
                 const std::string& voter = GRCAddress + "," + CPID + "," + Question + "," + answer + "," + sShareType + "," + sURL;
-                entry.push_back(Pair(voter,RoundToString(shares,0)));
+                entry.pushKV(voter,RoundToString(shares,0));
             }
         }
     }
 
-    entry.push_back(Pair("Total Participants",RoundToString(participants,2)));
+    entry.pushKV("Total Participants",RoundToString(participants,2));
     results.push_back(entry);
     return results;
 }

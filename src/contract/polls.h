@@ -1,13 +1,9 @@
 #pragma once
 
-#include "json/json_spirit_reader_template.h"
-#include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_utils.h"
+#include <univalue.h>
 
 #include <string>
 #include <utility> //std::pair
-
-using namespace json_spirit;
 
 std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int sSharetype, std::string sURL);
 
@@ -43,7 +39,7 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 
 double GetMoneySupplyFactor();
 
-Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
+UniValue GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
 
-Array GetJsonVoteDetailsReport(std::string pollname);
+UniValue GetJsonVoteDetailsReport(std::string pollname);
 

@@ -1,7 +1,6 @@
 #include <map>
 #include <string>
 #include <boost/test/unit_test.hpp>
-#include "json/json_spirit_writer_template.h"
 
 #include "main.h"
 #include "wallet.h"
@@ -9,11 +8,12 @@
 #include "data/tx_valid.json.h"
 #include "data/tx_invalid.json.h"
 
+#include <univalue.h>
+
 using namespace std;
-using namespace json_spirit;
 
 // In script_tests.cpp
-extern Array read_json(std::string& filename);
+extern UniValue read_json(std::string& filename);
 extern CScript ParseScript(string s);
 
 // Gridcoin, 2017-03-18: Temporarily disable broken tests.
