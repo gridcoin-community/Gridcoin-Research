@@ -1,6 +1,7 @@
 #include "appcache.h"
 #include "main.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "contract/contract.h"
 #include "contract/polls.h"
 

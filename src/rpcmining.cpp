@@ -8,7 +8,7 @@
 #include "txdb.h"
 #include "init.h"
 #include "miner.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
 #include "neuralnet.h"
 #include "global_objects_noui.hpp"
 using namespace json_spirit;

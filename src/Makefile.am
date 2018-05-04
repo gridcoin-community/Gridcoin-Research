@@ -39,7 +39,6 @@ GRIDCOIN_CORE_H = \
 	base58.h \
 	beacon.h \
 	bignum.h \
-	bitcoinrpc.h \
 	block.h \
 	boinc.h \
 	checkpoints.h \
@@ -67,6 +66,9 @@ GRIDCOIN_CORE_H = \
 	net.h \
 	pbkdf2.h \
 	protocol.h \
+	rpcclient.h \
+	rpcprotocol.h \
+	rpcserver.h \
 	script.h \
 	scrypt.h \
 	serialize.h \
@@ -90,7 +92,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	appcache.cpp \
 	backup.cpp \
 	beacon.cpp \
-	bitcoinrpc.cpp \
 	block.cpp \
 	boinc.cpp \
 	checkpoints.cpp \
@@ -110,12 +111,15 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	noui.cpp \
 	pbkdf2.cpp \
 	protocol.cpp \
-	rpcblockchain.cpp \
 	contract/rpccontract.cpp \
+	rpcblockchain.cpp \
+	rpcclient.cpp \
 	rpcdump.cpp \
 	rpcmining.cpp \
 	rpcnet.cpp \
+	rpcprotocol.cpp \
 	rpcrawtransaction.cpp \
+	rpcserver.cpp \
 	rpcwallet.cpp \
 	rpcdataacq.cpp \
 	script.cpp \

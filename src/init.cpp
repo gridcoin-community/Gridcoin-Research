@@ -4,7 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "txdb.h"
 #include "walletdb.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
 #include "net.h"
 #include "init.h"
 #include "util.h"
