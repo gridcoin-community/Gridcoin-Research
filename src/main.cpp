@@ -322,60 +322,60 @@ bool TimerMain(std::string timer_name, int max_ms)
 
 bool UpdateNeuralNetworkQuorumData()
 {
-                if (!bGlobalcomInitialized) return false;
+    if (!bGlobalcomInitialized) return false;
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-                std::string myNeuralHash = "";
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
+    std::string myNeuralHash = "";
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
     std::string sBlock = ReadCache("superblock", "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
-                std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-                std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+    std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
+    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
     NN::SetTestnetFlag(fTestNet);
     NN::ExecuteDotNetStringFunction("SetQuorumData",data);
-                return true;
+    return true;
 }
 
 bool FullSyncWithDPORNodes()
 {
     if(!NN::IsEnabled())
         return false;
-                // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
-                // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
-                double dCurrentPopularity = 0;
-                std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-                std::string sMyNeuralHash = "";
+    // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
+    // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
+    double dCurrentPopularity = 0;
+    std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
+    std::string sMyNeuralHash = "";
     sMyNeuralHash = NN::GetNeuralHash();
-                if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
-                {
-                    bool bNodeOnline = RequestSupermajorityNeuralData();
-                    if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
-                }
-                std::string errors1;
-                LoadAdminMessages(false,errors1);
+    if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+    {
+        bool bNodeOnline = RequestSupermajorityNeuralData();
+        if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+    }
+    std::string errors1;
+    LoadAdminMessages(false,errors1);
 
     const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
     const int64_t nLookback = 30 * 6 * 86400;
     const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
     std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
-                std::string sWhitelist = GetListOf("project");
+    std::string sWhitelist = GetListOf("project");
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-                LogPrintf(" list of cpids %s \n",cpiddata);
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
+    LogPrintf(" list of cpids %s \n",cpiddata);
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
     std::string sBlock = ReadCache("superblock", "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
-                std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                    + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
+    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
+                       + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
     NN::SetTestnetFlag(fTestNet);
     NN::SynchronizeDPOR(data);
-            return true;
+    return true;
 }
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
