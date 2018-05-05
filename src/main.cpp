@@ -8939,17 +8939,23 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
     int address_day = GetDayOfYear(locktime);
     std::string address_tohash = addr + "_" + ToString(address_day);
     std::string address_day_hash = RetrieveMd5(address_tohash);
+
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
     uint256 uRef;
     if (IsResearchAgeEnabled(pindexBest->nHeight))
     {
-        uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+        uRef = fTestNet
+               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
     else
     {
-        uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+        uRef = fTestNet
+               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
+
     uint256 uADH = uint256("0x" + address_day_hash);
     //LogPrintf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
     //LogPrintf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());
