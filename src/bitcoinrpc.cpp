@@ -198,16 +198,16 @@ Value help(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() == 0 || params.size() > 1)
         throw runtime_error(
-            "help [command/category]\n"
-            "Returns help on a specific command or category you request\n"
-            "\n"
-            "help command --> Returns help for specified command; ex. help backupwallet\n"
-            "\n"
-            "Categories:\n"
-            "wallet --------> Returns help for blockchain related commands\n"
-            "mining --------> Returns help for neural network/cpid/beacon related commands\n"
-            "developer -----> Returns help for developer commands\n"
-            "network -------> Returns help for network related commands\n");
+                "help [command/category]\n"
+                "Returns help on a specific command or category you request\n"
+                "\n"
+                "help command --> Returns help for specified command; ex. help backupwallet\n"
+                "\n"
+                "Categories:\n"
+                "wallet --------> Returns help for blockchain related commands\n"
+                "mining --------> Returns help for neural network/cpid/beacon related commands\n"
+                "developer -----> Returns help for developer commands\n"
+                "network -------> Returns help for network related commands\n");
     
     // Allow to process through if params size is > 0
     string strCommand;
@@ -244,8 +244,8 @@ Value stop(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "stop\n"
-            "Stop Gridcoin server.\n");
+                "stop\n"
+                "Stop Gridcoin server.\n");
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...\n");
     StartShutdown();
@@ -265,180 +265,180 @@ Value stop(const Array& params, bool fHelp)
 static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 safemd  category
   //  ------------------------  -----------------------  ------  -----------------
-    { "list",                    &listitem,                true,   cat_null          },
-    { "help",                    &help,                    true,   cat_null          },
-    { "execute",                 &execute,                 true,   cat_null          },
+  { "list",                    &listitem,                true,   cat_null          },
+  { "help",                    &help,                    true,   cat_null          },
+  { "execute",                 &execute,                 true,   cat_null          },
 
   // Wallet commands
-    { "addmultisigaddress",      &addmultisigaddress,      false,  cat_wallet        },
-    { "addredeemscript",         &addredeemscript,         false,  cat_wallet        },
-    { "backupprivatekeys",       &backupprivatekeys,       false,  cat_wallet        },
-    { "backupwallet",            &backupwallet,            true,   cat_wallet        },
-    { "burn",                    &burn,                    false,  cat_wallet        },
-    { "burn2",                   &burn2,                   false,  cat_wallet        },
-    { "checkwallet",             &checkwallet,             false,  cat_wallet        },
-    { "createrawtransaction",    &createrawtransaction,    false,  cat_wallet        },
-    { "decoderawtransaction",    &decoderawtransaction,    false,  cat_wallet        },
-    { "decodescript",            &decodescript,            false,  cat_wallet        },
-    { "dumpprivkey",             &dumpprivkey,             false,  cat_wallet        },
-    { "dumpwallet",              &dumpwallet,              true,   cat_wallet        },
-    { "encrypt",                 &encrypt,                 false,  cat_wallet        },
-    { "encryptwallet",           &encryptwallet,           false,  cat_wallet        },
-    { "getaccount",              &getaccount,              false,  cat_wallet        },
-    { "getaccountaddress",       &getaccountaddress,       true,   cat_wallet        },
-    { "getaddressesbyaccount",   &getaddressesbyaccount,   true,   cat_wallet        },
-    { "getbalance",              &getbalance,              false,  cat_wallet        },
-    { "getnewaddress",           &getnewaddress,           true,   cat_wallet        },
-    { "getnewpubkey",            &getnewpubkey,            true,   cat_wallet        },
-    { "getrawtransaction",       &getrawtransaction,       false,  cat_wallet        },
-    { "getreceivedbyaccount",    &getreceivedbyaccount,    false,  cat_wallet        },
-    { "getreceivedbyaddress",    &getreceivedbyaddress,    false,  cat_wallet        },
-    { "gettransaction",          &gettransaction,          false,  cat_wallet        },
-    { "getwalletinfo",           &getwalletinfo,           true,   cat_wallet        },
-    { "importprivkey",           &importprivkey,           false,  cat_wallet        },
-    { "importwallet",            &importwallet,            false,  cat_wallet        },
-    { "keypoolrefill",           &keypoolrefill,           true,   cat_wallet        },
-    { "listaccounts",            &listaccounts,            false,  cat_wallet        },
-    { "listaddressgroupings",    &listaddressgroupings,    false,  cat_wallet        },
-    { "listreceivedbyaccount",   &listreceivedbyaccount,   false,  cat_wallet        },
-    { "listreceivedbyaddress",   &listreceivedbyaddress,   false,  cat_wallet        },
-    { "listsinceblock",          &listsinceblock,          false,  cat_wallet        },
-    { "listtransactions",        &listtransactions,        false,  cat_wallet        },
-    { "listunspent",             &listunspent,             false,  cat_wallet        },
-    { "makekeypair",             &makekeypair,             false,  cat_wallet        },
-    { "move",                    &movecmd,                 false,  cat_wallet        },
-    { "newburnaddress",          &newburnaddress,          false,  cat_wallet        },
-    { "rain",                    &rain,                    false,  cat_wallet        },
-    { "repairwallet",            &repairwallet,            false,  cat_wallet        },
-    { "resendtx",                &resendtx,                false,  cat_wallet        },
-    { "reservebalance",          &reservebalance,          false,  cat_wallet        },
-    { "sendfrom",                &sendfrom,                false,  cat_wallet        },
-    { "sendrawtransaction",      &sendrawtransaction,      false,  cat_wallet        },
-    { "sendtoaddress",           &sendtoaddress,           false,  cat_wallet        },
-    { "setaccount",              &setaccount,              true,   cat_wallet        },
-    { "settxfee",                &settxfee,                false,  cat_wallet        },
-    { "signmessage",             &signmessage,             false,  cat_wallet        },
-    { "signrawtransaction",      &signrawtransaction,      false,  cat_wallet        },
-    { "unspentreport",           &unspentreport,           false,  cat_wallet        },
-    { "validateaddress",         &validateaddress,         true,   cat_wallet        },
-    { "validatepubkey",          &validatepubkey,          true,   cat_wallet        },
-    { "verifymessage",           &verifymessage,           false,  cat_wallet        },
-    { "walletlock",              &walletlock,              true,   cat_wallet        },
-    { "walletpassphrase",        &walletpassphrase,        true,   cat_wallet        },
-    { "walletpassphrasechange",  &walletpassphrasechange,  false,  cat_wallet        },
+  { "addmultisigaddress",      &addmultisigaddress,      false,  cat_wallet        },
+  { "addredeemscript",         &addredeemscript,         false,  cat_wallet        },
+  { "backupprivatekeys",       &backupprivatekeys,       false,  cat_wallet        },
+  { "backupwallet",            &backupwallet,            true,   cat_wallet        },
+  { "burn",                    &burn,                    false,  cat_wallet        },
+  { "burn2",                   &burn2,                   false,  cat_wallet        },
+  { "checkwallet",             &checkwallet,             false,  cat_wallet        },
+  { "createrawtransaction",    &createrawtransaction,    false,  cat_wallet        },
+  { "decoderawtransaction",    &decoderawtransaction,    false,  cat_wallet        },
+  { "decodescript",            &decodescript,            false,  cat_wallet        },
+  { "dumpprivkey",             &dumpprivkey,             false,  cat_wallet        },
+  { "dumpwallet",              &dumpwallet,              true,   cat_wallet        },
+  { "encrypt",                 &encrypt,                 false,  cat_wallet        },
+  { "encryptwallet",           &encryptwallet,           false,  cat_wallet        },
+  { "getaccount",              &getaccount,              false,  cat_wallet        },
+  { "getaccountaddress",       &getaccountaddress,       true,   cat_wallet        },
+  { "getaddressesbyaccount",   &getaddressesbyaccount,   true,   cat_wallet        },
+  { "getbalance",              &getbalance,              false,  cat_wallet        },
+  { "getnewaddress",           &getnewaddress,           true,   cat_wallet        },
+  { "getnewpubkey",            &getnewpubkey,            true,   cat_wallet        },
+  { "getrawtransaction",       &getrawtransaction,       false,  cat_wallet        },
+  { "getreceivedbyaccount",    &getreceivedbyaccount,    false,  cat_wallet        },
+  { "getreceivedbyaddress",    &getreceivedbyaddress,    false,  cat_wallet        },
+  { "gettransaction",          &gettransaction,          false,  cat_wallet        },
+  { "getwalletinfo",           &getwalletinfo,           true,   cat_wallet        },
+  { "importprivkey",           &importprivkey,           false,  cat_wallet        },
+  { "importwallet",            &importwallet,            false,  cat_wallet        },
+  { "keypoolrefill",           &keypoolrefill,           true,   cat_wallet        },
+  { "listaccounts",            &listaccounts,            false,  cat_wallet        },
+  { "listaddressgroupings",    &listaddressgroupings,    false,  cat_wallet        },
+  { "listreceivedbyaccount",   &listreceivedbyaccount,   false,  cat_wallet        },
+  { "listreceivedbyaddress",   &listreceivedbyaddress,   false,  cat_wallet        },
+  { "listsinceblock",          &listsinceblock,          false,  cat_wallet        },
+  { "listtransactions",        &listtransactions,        false,  cat_wallet        },
+  { "listunspent",             &listunspent,             false,  cat_wallet        },
+  { "makekeypair",             &makekeypair,             false,  cat_wallet        },
+  { "move",                    &movecmd,                 false,  cat_wallet        },
+  { "newburnaddress",          &newburnaddress,          false,  cat_wallet        },
+  { "rain",                    &rain,                    false,  cat_wallet        },
+  { "repairwallet",            &repairwallet,            false,  cat_wallet        },
+  { "resendtx",                &resendtx,                false,  cat_wallet        },
+  { "reservebalance",          &reservebalance,          false,  cat_wallet        },
+  { "sendfrom",                &sendfrom,                false,  cat_wallet        },
+  { "sendrawtransaction",      &sendrawtransaction,      false,  cat_wallet        },
+  { "sendtoaddress",           &sendtoaddress,           false,  cat_wallet        },
+  { "setaccount",              &setaccount,              true,   cat_wallet        },
+  { "settxfee",                &settxfee,                false,  cat_wallet        },
+  { "signmessage",             &signmessage,             false,  cat_wallet        },
+  { "signrawtransaction",      &signrawtransaction,      false,  cat_wallet        },
+  { "unspentreport",           &unspentreport,           false,  cat_wallet        },
+  { "validateaddress",         &validateaddress,         true,   cat_wallet        },
+  { "validatepubkey",          &validatepubkey,          true,   cat_wallet        },
+  { "verifymessage",           &verifymessage,           false,  cat_wallet        },
+  { "walletlock",              &walletlock,              true,   cat_wallet        },
+  { "walletpassphrase",        &walletpassphrase,        true,   cat_wallet        },
+  { "walletpassphrasechange",  &walletpassphrasechange,  false,  cat_wallet        },
 
   // Mining commands
-    { "advertisebeacon",         &advertisebeacon,         false,  cat_mining        },
-    { "beaconreport",            &beaconreport,            false,  cat_mining        },
-    { "beaconstatus",            &beaconstatus,            false,  cat_mining        },
-    { "cpids",                   &cpids,                   false,  cat_mining        },
-    { "currentneuralhash",       &currentneuralhash,       false,  cat_mining        },
-    { "currentneuralreport",     &currentneuralreport,     false,  cat_mining        },
-    { "explainmagnitude",        &explainmagnitude,        false,  cat_mining        },
-    { "getmininginfo",           &getmininginfo,           false,  cat_mining        },
-    { "lifetime",                &lifetime,                false,  cat_mining        },
-    { "magnitude",               &magnitude,               false,  cat_mining        },
-    { "mymagnitude",             &mymagnitude,             false,  cat_mining        },
-#ifdef WIN32
-    { "myneuralhash",            &myneuralhash,            false,  cat_mining        },
-    { "neuralhash",              &neuralhash,              false,  cat_mining        },
-#endif
-    { "proveownership",          &proveownership,          false,  cat_mining        },
-    { "resetcpids",              &resetcpids,              false,  cat_mining        },
-    { "rsa",                     &rsa,                     false,  cat_mining        },
-    { "rsaweight",               &rsaweight,               false,  cat_mining        },
-    { "staketime",               &staketime,               false,  cat_mining        },
-    { "superblockage",           &superblockage,           false,  cat_mining        },
-    { "superblocks",             &superblocks,             false,  cat_mining        },
-    { "syncdpor2",               &syncdpor2,               false,  cat_mining        },
-    { "upgradedbeaconreport",    &upgradedbeaconreport,    false,  cat_mining        },
-    { "validcpids",              &validcpids,              false,  cat_mining        },
+  { "advertisebeacon",         &advertisebeacon,         false,  cat_mining        },
+  { "beaconreport",            &beaconreport,            false,  cat_mining        },
+  { "beaconstatus",            &beaconstatus,            false,  cat_mining        },
+  { "cpids",                   &cpids,                   false,  cat_mining        },
+  { "currentneuralhash",       &currentneuralhash,       false,  cat_mining        },
+  { "currentneuralreport",     &currentneuralreport,     false,  cat_mining        },
+  { "explainmagnitude",        &explainmagnitude,        false,  cat_mining        },
+  { "getmininginfo",           &getmininginfo,           false,  cat_mining        },
+  { "lifetime",                &lifetime,                false,  cat_mining        },
+  { "magnitude",               &magnitude,               false,  cat_mining        },
+  { "mymagnitude",             &mymagnitude,             false,  cat_mining        },
+  #ifdef WIN32
+  { "myneuralhash",            &myneuralhash,            false,  cat_mining        },
+  { "neuralhash",              &neuralhash,              false,  cat_mining        },
+  #endif
+  { "proveownership",          &proveownership,          false,  cat_mining        },
+  { "resetcpids",              &resetcpids,              false,  cat_mining        },
+  { "rsa",                     &rsa,                     false,  cat_mining        },
+  { "rsaweight",               &rsaweight,               false,  cat_mining        },
+  { "staketime",               &staketime,               false,  cat_mining        },
+  { "superblockage",           &superblockage,           false,  cat_mining        },
+  { "superblocks",             &superblocks,             false,  cat_mining        },
+  { "syncdpor2",               &syncdpor2,               false,  cat_mining        },
+  { "upgradedbeaconreport",    &upgradedbeaconreport,    false,  cat_mining        },
+  { "validcpids",              &validcpids,              false,  cat_mining        },
 
   // Developer commands
-    { "addkey",                  &addkey,                  false,  cat_developer     },
-#ifdef WIN32
-    { "currentcontractaverage",  &currentcontractaverage,  false,  cat_developer     },
-#endif
-    { "debug",                   &debug,                   true,   cat_developer     },
-    { "debug10",                 &debug10,                 true,   cat_developer     },
-    { "debug2",                  &debug2,                  true,   cat_developer     },
-    { "debug3",                  &debug3,                  true,   cat_developer     },
-    { "debug4",                  &debug4,                  true,   cat_developer     },
-    { "debugnet",                &debugnet,                true,   cat_developer     },
-    { "dportally",               &dportally,               false,  cat_developer     },
-    { "forcequorom",             &forcequorom,             false,  cat_developer     },
-    { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
-    { "genboinckey",             &genboinckey,             false,  cat_developer     },
-    { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
-    { "getlistof",               &getlistof,               false,  cat_developer     },
-    { "getnextproject",          &getnextproject,          false,  cat_developer     },
-    { "listdata",                &listdata,                false,  cat_developer     },
-    { "memorizekeys",            &memorizekeys,            false,  cat_developer     },
-    { "network",                 &network,                 false,  cat_developer     },
-    { "neuralrequest",           &neuralrequest,           false,  cat_developer     },
-    { "projects",                &projects,                false,  cat_developer     },
-    { "readconfig",              &readconfig,              false,  cat_developer     },
-    { "readdata",                &readdata,                false,  cat_developer     },
-#ifdef WIN32
-    { "refhash",                 &refhash,                 false,  cat_developer     },
-#endif
-    { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
-    { "seefile",                 &seefile,                 false,  cat_developer     },
-    { "sendalert",               &sendalert,               false,  cat_developer     },
-    { "sendalert2",              &sendalert2,              false,  cat_developer     },
-    { "sendblock",               &sendblock,               false,  cat_developer     },
-    { "sendrawcontract",         &sendrawcontract,         false,  cat_developer     },
-    { "superblockaverage",       &superblockaverage,       false,  cat_developer     },
-    { "tally",                   &tally,                   false,  cat_developer     },
-    { "tallyneural",             &tallyneural,             false,  cat_developer     },
-#ifdef WIN32
-    { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
-#endif
-    { "unusual",                 &unusual,                 false,  cat_developer     },
-    { "updatequoromdata",        &updatequoromdata,        false,  cat_developer     },
-    { "versionreport",           &versionreport,           false,  cat_developer     },
-    { "writedata",               &writedata,               false,  cat_developer     },
+  { "addkey",                  &addkey,                  false,  cat_developer     },
+  #ifdef WIN32
+  { "currentcontractaverage",  &currentcontractaverage,  false,  cat_developer     },
+  #endif
+  { "debug",                   &debug,                   true,   cat_developer     },
+  { "debug10",                 &debug10,                 true,   cat_developer     },
+  { "debug2",                  &debug2,                  true,   cat_developer     },
+  { "debug3",                  &debug3,                  true,   cat_developer     },
+  { "debug4",                  &debug4,                  true,   cat_developer     },
+  { "debugnet",                &debugnet,                true,   cat_developer     },
+  { "dportally",               &dportally,               false,  cat_developer     },
+  { "forcequorom",             &forcequorom,             false,  cat_developer     },
+  { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
+  { "genboinckey",             &genboinckey,             false,  cat_developer     },
+  { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
+  { "getlistof",               &getlistof,               false,  cat_developer     },
+  { "getnextproject",          &getnextproject,          false,  cat_developer     },
+  { "listdata",                &listdata,                false,  cat_developer     },
+  { "memorizekeys",            &memorizekeys,            false,  cat_developer     },
+  { "network",                 &network,                 false,  cat_developer     },
+  { "neuralrequest",           &neuralrequest,           false,  cat_developer     },
+  { "projects",                &projects,                false,  cat_developer     },
+  { "readconfig",              &readconfig,              false,  cat_developer     },
+  { "readdata",                &readdata,                false,  cat_developer     },
+  #ifdef WIN32
+  { "refhash",                 &refhash,                 false,  cat_developer     },
+  #endif
+  { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
+  { "seefile",                 &seefile,                 false,  cat_developer     },
+  { "sendalert",               &sendalert,               false,  cat_developer     },
+  { "sendalert2",              &sendalert2,              false,  cat_developer     },
+  { "sendblock",               &sendblock,               false,  cat_developer     },
+  { "sendrawcontract",         &sendrawcontract,         false,  cat_developer     },
+  { "superblockaverage",       &superblockaverage,       false,  cat_developer     },
+  { "tally",                   &tally,                   false,  cat_developer     },
+  { "tallyneural",             &tallyneural,             false,  cat_developer     },
+  #ifdef WIN32
+  { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
+  #endif
+  { "unusual",                 &unusual,                 false,  cat_developer     },
+  { "updatequoromdata",        &updatequoromdata,        false,  cat_developer     },
+  { "versionreport",           &versionreport,           false,  cat_developer     },
+  { "writedata",               &writedata,               false,  cat_developer     },
 
   // Network commands
-    { "addnode",                 &addnode,                 false,  cat_network       },
-    { "addpoll",                 &addpoll,                 false,  cat_network       },
-    { "askforoutstandingblocks", &askforoutstandingblocks, false,  cat_network       },
-    { "getblockchaininfo",       &getblockchaininfo,       true,   cat_network       },
-    { "getnetworkinfo",          &getnetworkinfo,          true,   cat_network       },
-    { "currenttime",             &currenttime,             false,  cat_network       },
-    { "decryptphrase",           &decryptphrase,           false,  cat_network       },
-//  { "downloadblocks",          &downloadblocks,          false,  cat_network       },
-    { "encryptphrase",           &encryptphrase,           false,  cat_network       },
-    { "getaddednodeinfo",        &getaddednodeinfo,        true,   cat_network       },
-    { "getbestblockhash",        &getbestblockhash,        true,   cat_network       },
-    { "getblock",                &getblock,                true,   cat_network       },
-    { "getblockbynumber",        &getblockbynumber,        true,   cat_network       },
-    { "getblockcount",           &getblockcount,           true,   cat_network       },
-    { "getblockhash",            &getblockhash,            true,   cat_network       },
-    { "getcheckpoint",           &getcheckpoint,           true,   cat_network       },
-    { "getconnectioncount",      &getconnectioncount,      true,   cat_network       },
-    { "getdifficulty",           &getdifficulty,           true,   cat_network       },
-    { "getinfo",                 &getinfo,                 true,   cat_network       },
-    { "getnettotals",            &getnettotals,            true,   cat_network       },
-    { "getpeerinfo",             &getpeerinfo,             true,   cat_network       },
-    { "getrawmempool",           &getrawmempool,           true,   cat_network       },
-    { "listallpolls",            &listallpolls,            true,   cat_network       },
-    { "listallpolldetails",      &listallpolldetails,      true,   cat_network       },
-    { "listpolldetails",         &listpolldetails,         true,   cat_network       },
-    { "listpollresults",         &listpollresults,         true,   cat_network       },
-    { "listpolls",               &listpolls,               true,   cat_network       },
-    { "memorypool",              &memorypool,              true,   cat_network       },
-    { "networktime",             &networktime,             true,   cat_network       },
-    { "ping",                    &ping,                    true,   cat_network       },
-#ifdef WIN32
-    { "reindex",                 &reindex,                 true,   cat_network       },
-    { "restart",                 &restart,                 true,   cat_network       },
-    { "restorepoint",            &restorepoint,            true,   cat_network       },
-#endif
-    { "showblock",               &showblock,               true,   cat_network       },
-    { "stop",                    &stop,                    true,   cat_network       },
-    { "vote",                    &vote,                    false,  cat_network       },
-    { "votedetails",             &votedetails,             true,   cat_network       }
+  { "addnode",                 &addnode,                 false,  cat_network       },
+  { "addpoll",                 &addpoll,                 false,  cat_network       },
+  { "askforoutstandingblocks", &askforoutstandingblocks, false,  cat_network       },
+  { "getblockchaininfo",       &getblockchaininfo,       true,   cat_network       },
+  { "getnetworkinfo",          &getnetworkinfo,          true,   cat_network       },
+  { "currenttime",             &currenttime,             false,  cat_network       },
+  { "decryptphrase",           &decryptphrase,           false,  cat_network       },
+  //  { "downloadblocks",          &downloadblocks,          false,  cat_network       },
+  { "encryptphrase",           &encryptphrase,           false,  cat_network       },
+  { "getaddednodeinfo",        &getaddednodeinfo,        true,   cat_network       },
+  { "getbestblockhash",        &getbestblockhash,        true,   cat_network       },
+  { "getblock",                &getblock,                true,   cat_network       },
+  { "getblockbynumber",        &getblockbynumber,        true,   cat_network       },
+  { "getblockcount",           &getblockcount,           true,   cat_network       },
+  { "getblockhash",            &getblockhash,            true,   cat_network       },
+  { "getcheckpoint",           &getcheckpoint,           true,   cat_network       },
+  { "getconnectioncount",      &getconnectioncount,      true,   cat_network       },
+  { "getdifficulty",           &getdifficulty,           true,   cat_network       },
+  { "getinfo",                 &getinfo,                 true,   cat_network       },
+  { "getnettotals",            &getnettotals,            true,   cat_network       },
+  { "getpeerinfo",             &getpeerinfo,             true,   cat_network       },
+  { "getrawmempool",           &getrawmempool,           true,   cat_network       },
+  { "listallpolls",            &listallpolls,            true,   cat_network       },
+  { "listallpolldetails",      &listallpolldetails,      true,   cat_network       },
+  { "listpolldetails",         &listpolldetails,         true,   cat_network       },
+  { "listpollresults",         &listpollresults,         true,   cat_network       },
+  { "listpolls",               &listpolls,               true,   cat_network       },
+  { "memorypool",              &memorypool,              true,   cat_network       },
+  { "networktime",             &networktime,             true,   cat_network       },
+  { "ping",                    &ping,                    true,   cat_network       },
+  #ifdef WIN32
+  { "reindex",                 &reindex,                 true,   cat_network       },
+  { "restart",                 &restart,                 true,   cat_network       },
+  { "restorepoint",            &restorepoint,            true,   cat_network       },
+  #endif
+  { "showblock",               &showblock,               true,   cat_network       },
+  { "stop",                    &stop,                    true,   cat_network       },
+  { "vote",                    &vote,                    false,  cat_network       },
+  { "votedetails",             &votedetails,             true,   cat_network       }
 };
 
 template<typename T>
@@ -615,44 +615,44 @@ static string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
 {
     if (nStatus == HTTP_UNAUTHORIZED)
         return strprintf("HTTP/1.0 401 Authorization Required\r\n"
-            "Date: %s\r\n"
-            "Server: gridcoin-json-rpc/%s\r\n"
-            "WWW-Authenticate: Basic realm=\"jsonrpc\"\r\n"
-            "Content-Type: text/html\r\n"
-            "Content-Length: 296\r\n"
-            "\r\n"
-            "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\r\n"
-            "\"http://www.w3.org/TR/1999/REC-html401-19991224/loose.dtd\">\r\n"
-            "<HTML>\r\n"
-            "<HEAD>\r\n"
-            "<TITLE>Error</TITLE>\r\n"
-            "<META HTTP-EQUIV='Content-Type' CONTENT='text/html; charset=ISO-8859-1'>\r\n"
-            "</HEAD>\r\n"
-            "<BODY><H1>401 Unauthorized.</H1></BODY>\r\n"
-            "</HTML>\r\n", rfc1123Time().c_str(), FormatFullVersion().c_str());
+                         "Date: %s\r\n"
+                         "Server: gridcoin-json-rpc/%s\r\n"
+                         "WWW-Authenticate: Basic realm=\"jsonrpc\"\r\n"
+                         "Content-Type: text/html\r\n"
+                         "Content-Length: 296\r\n"
+                         "\r\n"
+                         "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\r\n"
+                         "\"http://www.w3.org/TR/1999/REC-html401-19991224/loose.dtd\">\r\n"
+                         "<HTML>\r\n"
+                         "<HEAD>\r\n"
+                         "<TITLE>Error</TITLE>\r\n"
+                         "<META HTTP-EQUIV='Content-Type' CONTENT='text/html; charset=ISO-8859-1'>\r\n"
+                         "</HEAD>\r\n"
+                         "<BODY><H1>401 Unauthorized.</H1></BODY>\r\n"
+                         "</HTML>\r\n", rfc1123Time().c_str(), FormatFullVersion().c_str());
     const char *cStatus;
-         if (nStatus == HTTP_OK) cStatus = "OK";
+    if (nStatus == HTTP_OK) cStatus = "OK";
     else if (nStatus == HTTP_BAD_REQUEST) cStatus = "Bad Request";
     else if (nStatus == HTTP_FORBIDDEN) cStatus = "Forbidden";
     else if (nStatus == HTTP_NOT_FOUND) cStatus = "Not Found";
     else if (nStatus == HTTP_INTERNAL_SERVER_ERROR) cStatus = "Internal Server Error";
     else cStatus = "";
     return strprintf(
-            "HTTP/1.1 %d %s\r\n"
-            "Date: %s\r\n"
-            "Connection: %s\r\n"
-            "Content-Length: %" PRIszu "\r\n"
-            "Content-Type: application/json\r\n"
-            "Server: gridcoin-json-rpc/%s\r\n"
-            "\r\n"
-            "%s",
-        nStatus,
-        cStatus,
-        rfc1123Time(),
-        keepalive ? "keep-alive" : "close",
-        strMsg.size(),
-        FormatFullVersion(),
-        strMsg);
+                "HTTP/1.1 %d %s\r\n"
+                "Date: %s\r\n"
+                "Connection: %s\r\n"
+                "Content-Length: %" PRIszu "\r\n"
+                                           "Content-Type: application/json\r\n"
+                                           "Server: gridcoin-json-rpc/%s\r\n"
+                                           "\r\n"
+                                           "%s",
+                nStatus,
+                cStatus,
+                rfc1123Time(),
+                keepalive ? "keep-alive" : "close",
+                strMsg.size(),
+                FormatFullVersion(),
+                strMsg);
 }
 
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
@@ -792,15 +792,15 @@ bool ClientAllowed(const boost::asio::ip::address& address)
 {
     // Make sure that IPv4-compatible and IPv4-mapped IPv6 addresses are treated as IPv4 addresses
     if (address.is_v6()
-     && (address.to_v6().is_v4_compatible()
-      || address.to_v6().is_v4_mapped()))
+        && (address.to_v6().is_v4_compatible()
+            || address.to_v6().is_v4_mapped()))
         return ClientAllowed(address.to_v6().to_v4());
 
     if (address == asio::ip::address_v4::loopback()
-     || address == asio::ip::address_v6::loopback()
-     || (address.is_v4()
-         // Check whether IPv4 addresses match 127.0.0.0/8 (loopback subnet)
-      && (address.to_v4().to_ulong() & 0xff000000) == 0x7f000000))
+        || address == asio::ip::address_v6::loopback()
+        || (address.is_v4()
+            // Check whether IPv4 addresses match 127.0.0.0/8 (loopback subnet)
+            && (address.to_v4().to_ulong() & 0xff000000) == 0x7f000000))
         return true;
 
     const string strAddress = address.to_string();
@@ -940,8 +940,8 @@ void ThreadRPCServer(void* parg)
     }
     catch (boost::thread_interrupted&)
     {
-            LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
-            return;
+        LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
+        return;
     }
     LogPrintf("ThreadRPCServer exited\n");
 }
@@ -959,21 +959,21 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
  */
 template <typename Protocol>
 static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                   ssl::context& context,
-                   const bool fUseSSL)
+                      ssl::context& context,
+                      const bool fUseSSL)
 {
     // Accept connection
     AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(acceptor->get_io_service(), context, fUseSSL);
 
     acceptor->async_accept(
-            conn->sslStream.lowest_layer(),
-            conn->peer,
-            boost::bind(&RPCAcceptHandler<Protocol>,
-                acceptor,
-                boost::ref(context),
-                fUseSSL,
-                conn,
-                boost::asio::placeholders::error));
+                conn->sslStream.lowest_layer(),
+                conn->peer,
+                boost::bind(&RPCAcceptHandler<Protocol>,
+                            acceptor,
+                            boost::ref(context),
+                            fUseSSL,
+                            conn,
+                            boost::asio::placeholders::error));
 }
 
 /**
@@ -1028,19 +1028,19 @@ void ThreadRPCServer2(void* parg)
         else if (mapArgs.count("-daemon"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-daemon\"");
         uiInterface.ThreadSafeMessageBox(strprintf(
-            _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
-              "It is recommended you use the following random password:\n"
-              "rpcuser=gridcoinrpc\n"
-              "rpcpassword=%s\n"
-              "(you do not need to remember this password)\n"
-              "The username and password MUST NOT be the same.\n"
-              "If the file does not exist, create it with owner-readable-only file permissions.\n"
-              "It is also recommended to set alertnotify so you are notified of problems;\n"
-              "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
-                strWhatAmI,
-                GetConfigFile().string(),
-                EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
-            _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+                                             _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
+                                               "It is recommended you use the following random password:\n"
+                                               "rpcuser=gridcoinrpc\n"
+                                               "rpcpassword=%s\n"
+                                               "(you do not need to remember this password)\n"
+                                               "The username and password MUST NOT be the same.\n"
+                                               "If the file does not exist, create it with owner-readable-only file permissions.\n"
+                                               "It is also recommended to set alertnotify so you are notified of problems;\n"
+                                               "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
+                                             strWhatAmI,
+                                             GetConfigFile().string(),
+                                             EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
+                _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
@@ -1094,8 +1094,8 @@ void ThreadRPCServer2(void* parg)
         RPCListen(acceptor, context, fUseSSL);
         // Cancel outstanding listen-requests for this acceptor when shutting down
         StopRequests.connect(signals2::slot<void ()>(
-                    static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                .track(acceptor));
+                                 static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
+                             .track(acceptor));
 
         fListening = true;
     }
@@ -1104,7 +1104,8 @@ void ThreadRPCServer2(void* parg)
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s"), endpoint.port(), e.what());
     }
 
-    try {
+    try
+    {
         // If dual IPv6/IPv4 failed (or we're opening loopback interfaces only), open IPv4 separately
         if (!fListening || loopback || v6_only_error)
         {
@@ -1120,8 +1121,8 @@ void ThreadRPCServer2(void* parg)
             RPCListen(acceptor, context, fUseSSL);
             // Cancel outstanding listen-requests for this acceptor when shutting down
             StopRequests.connect(signals2::slot<void ()>(
-                        static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                    .track(acceptor));
+                                     static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
+                                 .track(acceptor));
 
             fListening = true;
         }
@@ -1131,7 +1132,8 @@ void ThreadRPCServer2(void* parg)
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
     }
 
-    if (!fListening) {
+    if (!fListening)
+    {
         uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
@@ -1186,15 +1188,13 @@ void JSONRequest::parse(const Value& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Params must be an array");
 }
 
-
-
-
 static Object JSONRPCExecOne(const Value& req)
 {
     Object rpc_result;
 
     JSONRequest jreq;
-    try {
+    try
+    {
         jreq.parse(req);
 
         Value result = tableRPC.execute(jreq.strMethod, jreq.params);
@@ -1231,7 +1231,7 @@ void ServiceConnection(AcceptedConnection *conn)
     while (true)
     {
         if (fShutdown || !fRun)
-           break;
+            break;
 
         map<string, string> mapHeaders;
         string strRequest;
@@ -1278,7 +1278,7 @@ void ServiceConnection(AcceptedConnection *conn)
                 // Send reply
                 strReply = JSONRPCReply(result, Value::null, jreq.id);
 
-            // array of requests
+                // array of requests
             } else if (valRequest.type() == array_type)
                 strReply = JSONRPCExecBatch(valRequest.get_array());
             else
@@ -1322,15 +1322,10 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
         {
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;
-
             nRPCtimebegin = GetTimeMillis();
-
             result = pcmd->actor(params, false);
-
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-
             printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
-        }
 
         else
             result = pcmd->actor(params, false);
@@ -1347,9 +1342,9 @@ Object CallRPC(const string& strMethod, const Array& params)
 {
     if (mapArgs["-rpcuser"] == "" && mapArgs["-rpcpassword"] == "")
         throw runtime_error(strprintf(
-            _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
-              "If the file does not exist, create it with owner-readable-only file permissions."),
-                GetConfigFile().string()));
+                                _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
+                                  "If the file does not exist, create it with owner-readable-only file permissions."),
+                                GetConfigFile().string()));
 
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");
