@@ -48,7 +48,6 @@ extern bool WriteKey(std::string sKey, std::string sValue);
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising = false);
 extern void CleanInboundConnections(bool bClearAll);
-extern bool PushGridcoinDiagnostics();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
@@ -337,30 +336,6 @@ bool UpdateNeuralNetworkQuorumData()
                 std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
     NN::SetTestnetFlag(fTestNet);
     NN::ExecuteDotNetStringFunction("SetQuorumData",data);
-                return true;
-}
-
-bool PushGridcoinDiagnostics()
-{
-                if (!bGlobalcomInitialized) return false;
-                std::string errors1 = "";
-                LoadAdminMessages(false,errors1);
-                std::string cpiddata = GetListOf("beacon;");
-                std::string sWhitelist = GetListOf("project");
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-                LogPrintf("Pushing diagnostic data...");
-                double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-                std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                    + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(PreviousBlockAge()) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
-    NN::SetTestnetFlag(fTestNet);
-    Restarter::PushGridcoinDiagnosticData(data);
                 return true;
 }
 
