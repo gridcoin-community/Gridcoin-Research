@@ -779,7 +779,7 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(miningAction);
 //	qmAdvanced->addAction(newUserWizardAction);
     qmAdvanced->addSeparator();
-    qmAdvanced->addAction(faqAction);
+//  qmAdvanced->addAction(faqAction);
     qmAdvanced->addAction(foundationAction);
 //	qmAdvanced->addAction(diagnosticsAction);
      qmAdvanced->addAction(downloadAction);
