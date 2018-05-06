@@ -31,7 +31,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
+<<<<<<< HEAD
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
+=======
+>>>>>>> 311e9fcd40701a76c7521d6c8b12801b7c8f4034
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
@@ -8191,6 +8194,56 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
+<<<<<<< HEAD
+=======
+
+
+std::string ReadCache(std::string section, std::string key)
+{
+    if (section.empty() || key.empty())
+        return "";
+
+    auto item = mvApplicationCache.find(section + ";" + key);
+    return item != mvApplicationCache.end()
+                   ? item->second
+                   : "";
+}
+
+
+void WriteCache(std::string section, std::string key, std::string value, int64_t locktime)
+{
+    if (section.empty() || key.empty())
+        return;
+
+    mvApplicationCache[section + ";" + key] = value;
+    mvApplicationCacheTimestamp[section+ ";" + key] = locktime;
+}
+
+
+void ClearCache(std::string section)
+{
+    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
+    {
+        const std::string& key_section = (*ii).first;
+        if (section.find(key_section))
+        {
+            mvApplicationCache[key_section]="";
+            mvApplicationCacheTimestamp[key_section]=1;
+        }
+    }
+}
+
+
+void DeleteCache(std::string section, std::string keyname)
+{
+    std::string pk = section + ";" +keyname;
+    mvApplicationCache.erase(pk);
+    mvApplicationCacheTimestamp.erase(pk);
+}
+
+
+
+>>>>>>> 311e9fcd40701a76c7521d6c8b12801b7c8f4034
 void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
     if (NeuralHash.length() < 5) return;
