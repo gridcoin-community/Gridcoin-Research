@@ -31,10 +31,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
-<<<<<<< HEAD
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
-=======
->>>>>>> 311e9fcd40701a76c7521d6c8b12801b7c8f4034
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
@@ -8194,9 +8190,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-<<<<<<< HEAD
-=======
-
 
 std::string ReadCache(std::string section, std::string key)
 {
@@ -8242,8 +8235,6 @@ void DeleteCache(std::string section, std::string keyname)
 }
 
 
-
->>>>>>> 311e9fcd40701a76c7521d6c8b12801b7c8f4034
 void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
     if (NeuralHash.length() < 5) return;
