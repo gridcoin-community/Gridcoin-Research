@@ -28,7 +28,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
@@ -8227,7 +8226,7 @@ void ClearCache(std::string section)
     for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
     {
         const std::string& key_section = (*ii).first;
-        if (boost::algorithm::starts_with(key_section, section))
+        if (section.find(key_section))
         {
             mvApplicationCache[key_section]="";
             mvApplicationCacheTimestamp[key_section]=1;
