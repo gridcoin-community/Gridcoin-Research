@@ -596,12 +596,11 @@ Value listunspent(const Array& params, bool fHelp)
 
             if (item != pwalletMain->mapAddressBook.end())
             {
-                if (!GetBoolArg("-enableaccounts", false))
-                    entry.push_back(Pair("label", item->second));
+                entry.push_back(Pair("label", item->second));
 
-                else
+                if (GetBoolArg("-enableaccounts", false))
                     entry.push_back(Pair("account", item->second));
-            }
+                }
         }
         entry.push_back(Pair("scriptPubKey", HexStr(pk.begin(), pk.end())));
         entry.push_back(Pair("amount", ValueFromAmount(nValue)));
