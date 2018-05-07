@@ -373,6 +373,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
     { "getlistof",               &getlistof,               false,  cat_developer     },
     { "getnextproject",          &getnextproject,          false,  cat_developer     },
+    { "getrecentblocks",         &rpc_getrecentblocks,     false,  cat_developer     },
+    { "getsupervotes",           &rpc_getsupervotes,       false,  cat_developer     },
     { "listdata",                &listdata,                false,  cat_developer     },
     { "memorizekeys",            &memorizekeys,            false,  cat_developer     },
     { "network",                 &network,                 false,  cat_developer     },
@@ -439,8 +441,6 @@ static const CRPCCommand vRPCCommands[] =
     { "stop",                    &stop,                    true,   cat_network       },
     { "vote",                    &vote,                    false,  cat_network       },
     { "votedetails",             &votedetails,             true,   cat_network       },
-    { "getsupervotes",          &rpc_getsupervotes,        false,  cat_developer     },
-    { "getrecentblocks",         &rpc_getrecentblocks,     false,  cat_developer     },
 };
 
 template<typename T>

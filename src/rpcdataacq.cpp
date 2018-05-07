@@ -8,18 +8,11 @@
 #include "bitcoinrpc.h"
 #include "cpid.h"
 #include "kernel.h"
-#include "init.h" // for pwalletMain
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
 #include "util.h"
-#include "neuralnet.h"
-#include "grcrestarter.h"
-#include "backup.h"
 #include "appcache.h"
-#include "tally.h"
-#include "contract/polls.h"
-#include "contract/contract.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
