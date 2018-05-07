@@ -61,6 +61,7 @@
         <file alias="history_dark">res/icons/icons_dark/transactions.svg</file>
         <file alias="history_light">res/icons/icons_light/transactions.svg</file>
         <file alias="history_native">res/icons/icons_native/transactions.svg</file>
+        <file alias="tx_vote">res/icons/tx_vote.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

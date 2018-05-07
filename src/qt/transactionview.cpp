@@ -75,6 +75,12 @@ TransactionView::TransactionView(QWidget *parent) :
                                   TransactionFilterProxy::TYPE(TransactionRecord::SendToOther));
     typeWidget->addItem(tr("To yourself"), TransactionFilterProxy::TYPE(TransactionRecord::SendToSelf));
     typeWidget->addItem(tr("Mined"), TransactionFilterProxy::TYPE(TransactionRecord::Generated));
+    typeWidget->addItem(tr("Vote"), TransactionFilterProxy::TYPE(TransactionRecord::Vote));
+    typeWidget->addItem(tr("Beacon"), TransactionFilterProxy::TYPE(TransactionRecord::Beacon));
+    typeWidget->addItem(tr("Sent message"), TransactionFilterProxy::TYPE(TransactionRecord::SendMessage));
+    typeWidget->addItem(tr("Received message"), TransactionFilterProxy::TYPE(TransactionRecord::RecvMessage));
+    typeWidget->addItem(tr("Sent rain"), TransactionFilterProxy::TYPE(TransactionRecord::SendRain));
+    typeWidget->addItem(tr("Received rain"), TransactionFilterProxy::TYPE(TransactionRecord::RecvRain));
     typeWidget->addItem(tr("Other"), TransactionFilterProxy::TYPE(TransactionRecord::Other));
 
     hlayout->addWidget(typeWidget);

@@ -70,7 +70,13 @@ public:
         SendToOther,
         RecvWithAddress,
         RecvFromOther,
-        SendToSelf
+        SendToSelf,
+        Vote,
+        Beacon,
+        SendMessage,
+        SendRain,
+        RecvMessage,
+        RecvRain
     };
 
     /** Number of confirmation recommended for accepting a transaction */

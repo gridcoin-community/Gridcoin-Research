@@ -85,7 +85,7 @@ QT_FORMS_UI = \
   qt/forms/transactiondescdialog.ui \
   qt/forms/askpassphrasedialog.ui \
   qt/forms/sendcoinsentry.ui
-  
+
 QT_MOC_CPP = \
   qt/moc_aboutdialog.cpp \
   qt/moc_addressbookpage.cpp \
@@ -269,6 +269,7 @@ RES_ICONS = \
   qt/res/icons/tx_mined.svg \
   qt/res/icons/tx_output.svg \
   qt/res/icons/tx_por.svg \
+  qt/res/icons/tx_vote.svg \
   qt/res/icons/icons_native/overview.svg \
   qt/res/icons/icons_light/overview.svg \
   qt/res/icons/icons_dark/overview.svg \
@@ -400,7 +401,7 @@ CLEANFILES += $(CLEAN_QT)
 gridcoinresearch_clean: FORCE
 	rm -f $(CLEAN_QT) $(qt_gridcoinresearch_OBJECTS) qt/gridcoinresearch$(EXEEXT)
 
-gridcoinresearch: 
+gridcoinresearch:
 	@echo "$(ZIP_LIBS)"
 	qt/gridcoinresearch$(EXEEXT)
 

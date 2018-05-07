@@ -2,8 +2,9 @@
 #include "wallet.h"
 #include "base58.h"
 
+std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype, double& out_rac);
-
+std::string GetBurnAddress();
 
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
@@ -71,9 +72,33 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 sub.credit = txout.nValue;
                 if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
                 {
-                    // Received by Bitcoin Address
-                    sub.type = TransactionRecord::RecvWithAddress;
+                    // Received by Gridcoin Address
                     sub.address = CBitcoinAddress(address).ToString();
+                    std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
+                    for (const auto& vTxNormalInfo : vTxNormalInfoIn)
+                    {
+                        if (vTxNormalInfo.first == "Message Type")
+                        {
+                            if (vTxNormalInfo.second == "Text Message")
+                            {
+                                sub.type = TransactionRecord::RecvMessage;
+                                break;
+                            }
+
+                            else if(vTxNormalInfo.second == "Text Rain Message")
+                            {
+                                sub.type = TransactionRecord::RecvRain;
+                                break;
+                            }
+
+                            else
+                            {
+                                sub.type = TransactionRecord::RecvWithAddress;
+                                break;
+                            }
+
+                          }
+                      }
                 }
                 else
                 {
@@ -162,9 +187,55 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 CTxDestination address;
                 if (ExtractDestination(txout.scriptPubKey, address))
                 {
-                    // Sent to Bitcoin Address
-                    sub.type = TransactionRecord::SendToAddress;
+                    // Sent to Gridcoin Address
                     sub.address = CBitcoinAddress(address).ToString();
+
+                    std::vector<std::pair<std::string, std::string>> vTxNormalInfoIn = GetTxNormalBoincHashInfo(wtx);
+                    for (const auto& vTxNormalInfo : vTxNormalInfoIn)
+                    {
+                        if (vTxNormalInfo.first == "Message Type")
+                        {
+                            // Sent to mainnet / testnet burn address
+                            if(sub.address == GetBurnAddress())
+                            {
+                                if (vTxNormalInfo.second == "Vote" || vTxNormalInfo.second == "Add Poll")
+                                {
+                                    if (fDebug)
+                                        LogPrintf("Vote/Add Poll\n");
+
+                                    sub.type = TransactionRecord::Vote;
+                                    break;
+                                }
+
+                                else if (vTxNormalInfo.second == "Add Beacon Contract")
+                                {
+                                    sub.type = TransactionRecord::Beacon;
+                                    break;
+                                }
+                                else
+                                {
+                                    sub.type = TransactionRecord::SendToAddress;
+                                    break;
+                                }
+                            }
+
+                            else if (vTxNormalInfo.second == "Text Message")
+                            {
+                                sub.type = TransactionRecord::SendMessage;
+                                break;
+                            }
+                            else if (vTxNormalInfo.second == "Text Rain Message")
+                            {
+                                sub.type = TransactionRecord::SendRain;
+                                break;
+                            }
+                            else
+                            {
+                                sub.type = TransactionRecord::SendToAddress;
+                                break;
+                            }
+                        }
+                    }
                 }
                 else
                 {
@@ -292,5 +363,3 @@ std::string TransactionRecord::getTxID()
 {
     return hash.ToString() + strprintf("-%03d", idx);
 }
-
-
