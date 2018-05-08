@@ -62,13 +62,12 @@ void StartShutdown()
 
     LogPrintf("Calling start shutdown...\n");
 
-#ifdef QT_GUI
-    // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
-    uiInterface.QueueShutdown();
-#else
-    // Without UI, shutdown is initiated and shutdown() is called in AppInit
-    fRequestShutdown = true;
-#endif
+    if(fQtActive)
+        // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
+        uiInterface.QueueShutdown();
+    else
+        // Without UI, shutdown is initiated and shutdown() is called in AppInit
+        fRequestShutdown = true;
 }
 
 void Shutdown(void* parg)
@@ -193,13 +192,16 @@ std::string HelpMessage()
 #endif
 #endif
         "  -paytxfee=<amt>        " + _("Fee per KB to add to transactions you send") + "\n" +
-        "  -mininput=<amt>        " + _("When creating transactions, ignore inputs with value less than this (default: 0.01)") + "\n" +
-#ifdef QT_GUI
-        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n" +
+        "  -mininput=<amt>        " + _("When creating transactions, ignore inputs with value less than this (default: 0.01)") + "\n";
+	if(fQtActive)
+		strUsage +=
+        "  -server                " + _("Accept command line and JSON-RPC commands") + "\n";
+#if !defined(WIN32)
+    if(!fQtActive)
+		strUsage +=
+        "  -daemon                " + _("Run in the background as a daemon and accept commands") + "\n";
 #endif
-#if !defined(WIN32) && !defined(QT_GUI)
-        "  -daemon                " + _("Run in the background as a daemon and accept commands") + "\n" +
-#endif
+    strUsage +=
         "  -testnet               " + _("Use the test network") + "\n" +
         "  -debug                 " + _("Output extra debugging information. Implies all other -debug* options") + "\n" +
         "  -debugnet              " + _("Output extra network debugging information") + "\n" +
@@ -335,6 +337,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
+	//5-04-2018: J Owens: Boost now needs to be 1.65 or higher to avoid thread sleep problems with system clock resets.
     std::string boost_version = "";
     std::ostringstream s;
     s << boost_version  << "Using Boost "
@@ -435,10 +438,13 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     fDebug10= (GetArg("-debug10","false")=="true");
 
-#if !defined(WIN32) && !defined(QT_GUI)
-    fDaemon = GetBoolArg("-daemon");
-#else
+#if defined(WIN32)
     fDaemon = false;
+#else
+    if(fQtActive)
+        fDaemon = false;
+    else
+        fDaemon = GetBoolArg("-daemon");
 #endif
 
     if (fDaemon)
@@ -447,9 +453,9 @@ bool AppInit2(ThreadHandlerPtr threads)
         fServer = GetBoolArg("-server");
 
     /* force fServer when running without GUI */
-#if !defined(QT_GUI)
-    fServer = true;
-#endif
+    if(!fQtActive)
+        fServer = true;
+
     fPrintToConsole = GetBoolArg("-printtoconsole");
     fPrintToDebugger = GetBoolArg("-printtodebugger");
     fLogTimestamps = GetBoolArg("-logtimestamps");
@@ -499,7 +505,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!lock.try_lock())
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
 
-#if !defined(WIN32) && !defined(QT_GUI)
+#if !defined(WIN32) 
     if (fDaemon)
     {
         // Daemonize
