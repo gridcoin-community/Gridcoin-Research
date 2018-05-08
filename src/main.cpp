@@ -682,6 +682,9 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
+        // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
+        // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
+        double dETTS = GetEstimatedTimetoStake()/86400.0;
         LOCK(GlobalStatusStruct.lock);
         { LOCK(MinerStatus.lock);
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -690,7 +693,7 @@ void GetGlobalStatus()
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
-        GlobalStatusStruct.ETTS = RoundToString(GetEstimatedTimetoStake()/86400.0,3);
+        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
