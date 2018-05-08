@@ -599,7 +599,7 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
     }
 
     result1.push_back(Pair("file", o_path.string()));
-    result1.push_back(Pair("points",points));
+    result1.push_back(Pair("points",(uint64_t)points));
     result1.push_back(Pair("smoothing",smoothing));
     result1.push_back(Pair("blockcount",blockcount));
     Output.close();
@@ -647,7 +647,7 @@ json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fH
         */
     
         double diff = GetDifficulty(cur);
-        unsigned int delta = 0;
+        signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);
 
@@ -679,10 +679,10 @@ json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fH
         {
             result2.push_back(Pair("hash", line ));
             result2.push_back(Pair("difficulty", diff ));
-            result2.push_back(Pair("deltatime", delta ));
-            result2.push_back(Pair("issuperblock", cur->nIsSuperBlock ));
-            result2.push_back(Pair("iscontract", cur->nIsContract ));
-            result2.push_back(Pair("ismodifier", cur->GeneratedStakeModifier() ));
+            result2.push_back(Pair("deltatime", (int64_t)delta ));
+            result2.push_back(Pair("issuperblock", (bool)cur->nIsSuperBlock ));
+            result2.push_back(Pair("iscontract", (bool)cur->nIsContract ));
+            result2.push_back(Pair("ismodifier", (bool)cur->GeneratedStakeModifier() ));
             result2.push_back(Pair("cpid", cur->GetCPID() ));
             result2.push_back(Pair("research", cur->nResearchSubsidy ));
             result2.push_back(Pair("interest", cur->nInterestSubsidy ));
