@@ -31,13 +31,14 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <openssl/md5.h>
+
+#include <string>
+#include <algorithm>
 #include <ctime>
 #include <math.h>
 
@@ -851,7 +852,7 @@ MiningCPID GetNextProject(bool bForce)
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
     std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
+    std::transform(email.begin(), email.end(), email.begin(), ::tolower);
 
 
 
@@ -5314,7 +5315,7 @@ bool WriteKey(std::string sKey, std::string sValue)
     boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
     if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
     if (!filesystem::exists(pathConfigFile))  return false; 
-    boost::to_lower(sKey);
+    std::transform(sKey.begin(), sKey.end(), sKey.begin(), ::tolower);
     std::string sLine = "";
     ifstream streamConfigFile;
     streamConfigFile.open(pathConfigFile.string().c_str());
@@ -5329,7 +5330,7 @@ bool WriteKey(std::string sKey, std::string sValue)
             {
                 std::string sSourceKey = vEntry[0];
                 std::string sSourceValue = vEntry[1];
-                boost::to_lower(sSourceKey);
+                std::transform(sSourceKey.begin(), sSourceKey.end(), sSourceKey.begin(), ::tolower);
 
                 if (sSourceKey==sKey) 
                 {
@@ -7507,7 +7508,7 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
     {
         surrogate.cpid = s[0];
         surrogate.projectname = s[1];
-        boost::to_lower(surrogate.projectname);
+        std::transform(surrogate.projectname.begin(), surrogate.projectname.end(), surrogate.projectname.begin(), ::tolower);
         surrogate.aesskein = s[2];
         surrogate.rac = RoundFromString(s[3],0);
         surrogate.pobdifficulty = RoundFromString(s[4],6);
@@ -7618,7 +7619,7 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
 void InitializeProjectStruct(StructCPID& project)
 {
     std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
+    std::transform(email.begin(), email.end(), email.begin(), ::tolower);
 
     project.email = email;
     std::string cpid_non = project.cpidhash+email;
@@ -7640,7 +7641,7 @@ bool ProjectIsValid(std::string sProject)
     if (sProject.empty())
         return false;
 
-    boost::to_lower(sProject);
+    std::transform(sProject.begin(), sProject.end(), sProject.begin(), ::tolower);
 
     for (const auto& item : ReadCacheSection("project"))
     {
@@ -7666,7 +7667,7 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 
 std::string LowerUnderscore(std::string data)
 {
-    boost::to_lower(data);
+    std::transform(data.begin(), data.end(), data.begin(), ::tolower);
     data = strReplace(data,"_"," ");
     return data;
 }
@@ -7776,7 +7777,7 @@ void HarvestCPIDs(bool cleardata)
         mvCPIDs.clear();
     }
     std::string email = GetArgument("email","");
-    boost::to_lower(email);
+    std::transform(email.begin(), email.end(), email.begin(), ::tolower);
 
     int iRow = 0;
     std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
@@ -7802,19 +7803,19 @@ void HarvestCPIDs(bool cleardata)
                     std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
                     std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
 
-                    boost::to_lower(proj);
+                    std::transform(proj.begin(), proj.end(), proj.begin(), ::tolower);
                     proj = ToOfficialName(proj);
                     ProjectIsValid(proj);
                     int64_t nStart = GetTimeMillis();
                     if (cpidhash.length() > 5 && proj.length() > 3)
                     {
                         std::string cpid_non = cpidhash+email;
-                        to_lower(cpid_non);
+                        std::transform(cpid_non.begin(), cpid_non.end(), cpid_non.begin(), ::tolower);
                         StructCPID structcpid = GetInitializedStructCPID2(proj,mvCPIDs);
                         iRow++;
                         structcpid.cpidhash = cpidhash;
                         structcpid.projectname = proj;
-                        boost::to_lower(team);
+                        std::transform(team.begin(), team.end(), team.begin(), ::tolower);
                         structcpid.team = team;
                         InitializeProjectStruct(structcpid);
                         int64_t elapsed = GetTimeMillis()-nStart;
@@ -8188,6 +8189,51 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
     return true;
 }
+
+
+std::string ReadCache(std::string section, std::string key)
+{
+    if (section.empty() || key.empty())
+        return "";
+
+    auto item = mvApplicationCache.find(section + ";" + key);
+    return item != mvApplicationCache.end()
+                   ? item->second
+                   : "";
+}
+
+
+void WriteCache(std::string section, std::string key, std::string value, int64_t locktime)
+{
+    if (section.empty() || key.empty())
+        return;
+
+    mvApplicationCache[section + ";" + key] = value;
+    mvApplicationCacheTimestamp[section+ ";" + key] = locktime;
+}
+
+
+void ClearCache(std::string section)
+{
+    for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
+    {
+        const std::string& key_section = (*ii).first;
+        if (section.find(key_section))
+        {
+            mvApplicationCache[key_section]="";
+            mvApplicationCacheTimestamp[key_section]=1;
+        }
+    }
+}
+
+
+void DeleteCache(std::string section, std::string keyname)
+{
+    std::string pk = section + ";" +keyname;
+    mvApplicationCache.erase(pk);
+    mvApplicationCacheTimestamp.erase(pk);
+}
+
 
 void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
