@@ -805,8 +805,43 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
     return (externalcpid==cpidv1);
 }
 
+bool ImportBeaconKeysFromConfig()
+{
+    string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,false);
+    string sCPID(msPrimaryCPID);
+    string strSecret= GetArgument("privatekey" + sCPID + (fTestNet ? "testnet" : ""), "");
+    if(strSecret.empty())
+        return false;
+    auto vecsecret = ParseHex(strSecret);
+
+    CKey key;
+    if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
+        return error("ImportBeaconKeysFromConfig: Invalid private key");
+    CKeyID vchAddress = key.GetPubKey().GetID();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Don't throw error in case a key is already there
+    if (!pwalletMain->HaveKey(vchAddress))
+    {
+        if (pwalletMain->IsLocked())
+            return error("ImportBeaconKeysFromConfig: Wallet locked!");
+
+        pwalletMain->MarkDirty();
+
+        pwalletMain->mapKeyMetadata[vchAddress].nCreateTime = 0;
+
+        if (!pwalletMain->AddKey(key))
+            return error("ImportBeaconKeysFromConfig: failed to add key to wallet");
+
+        pwalletMain->SetAddressBookName(vchAddress, "DPoR Beacon CPID "+sCPID+" imported");
+    }
+    return true;
+}
+
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {
+    sOutPrivKey = "BUG! deprecated field used";
     LOCK(cs_main);
     {
         GetNextProject(false);
@@ -815,6 +850,9 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             sError = "INVESTORS_CANNOT_SEND_BEACONS";
             return false;
         }
+
+        // here try to import keys from config
+        ImportBeaconKeysFromConfig();
 
         //If beacon is already in the chain, exit early
         std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
@@ -834,6 +872,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             sError = _("A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.");
             return false;
         }
+
         uint256 hashRand = GetRandHash();
         std::string email = GetArgument("email", "NA");
         boost::to_lower(email);
@@ -854,12 +893,15 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             return false;
         }
 
-        GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
-        if (sOutPrivKey.empty() || sOutPubKey.empty())
+        CKey keyBeacon;
+        if(!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, keyBeacon))
         {
-            sError = "Keypair is empty.";
+            sError = "GEN_KEY_FAIL";
             return false;
         }
+
+        // Convert the new pubkey into legacy hex format
+        sBeaconPublicKey= HexStr(keyBeacon.GetPubKey().Raw());
 
         GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
         std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
@@ -874,25 +916,17 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         try
         {
             // Backup config with old keys like a normal backup
+            // not needed, but extra backup does not hurt
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf")))
             {
                 sError = "Failed to backup old configuration file. Beacon not sent.";
                 return true;
-            }
-            // Backup config with new keys with beacon suffix
-            StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
-            if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
-            {
-                sError = "Failed to back up configuration file. Beacon not sent, please manually roll back to previous configuration.";
-                return false;
             }
 
             // Send the beacon transaction
             sMessage = AddContract(sType,sName,sBase);
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
-            // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
-            ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
 
             return true;
         }
@@ -1172,7 +1206,6 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
-    std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
     int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
     std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
     bool hasBeacon = HasActiveBeacon(sCPID);
@@ -1181,25 +1214,12 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     res.pushKV("Beacon Exists",YesNo(hasBeacon));
     res.pushKV("Beacon Timestamp",timestamp.c_str());
     res.pushKV("Public Key", sPubKey.c_str());
-    res.pushKV("Private Key", sPrivKey.c_str());
+    res.pushKV("Private Key", "not-shown"); //TODO: show the key?
 
     std::string sErr = "";
 
     if (sPubKey.empty())
         sErr += "Public Key Missing. ";
-    if (sPrivKey.empty())
-        sErr += "Private Key Missing. ";
-
-    // Verify the users Local Public Key matches the Beacon Public Key
-    std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
-
-    res.pushKV("Local Configuration Public Key", sLocalPubKey.c_str());
-
-    if (sLocalPubKey.empty())
-        sErr += "Local configuration file Public Key missing. ";
-
-    if (sLocalPubKey != sPubKey && !sPubKey.empty())
-        sErr += "Local configuration public key does not match beacon public key.  This can happen if you copied the wrong public key into your configuration file.  Please request that your beacon is deleted, or look into walletbackups for the correct keypair. ";
 
     // Prior superblock Magnitude
     double dMagnitude = GetMagnitudeByCpidFromLastSuperblock(sCPID);

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "fwd.h"
+#include "key.h"
 #include <string>
 
 //!
@@ -14,38 +15,22 @@
 //! new ones if the old ones are invalid. If the old pair is valid
 //! they are returned.
 //!
+//! Generated key is stored in wallet.
+//!
 //! \param cpid CPID to generate keys for.
-//! \param sOutPubKey Public key destination.
-//! \param sOutPrivKey Private key destination.
-//! \return \c true if a new beacon was generated, or \c false if the previous
-//! beacon keys were reused.
+//! \param outPrivPubKey Generated or reused Private+public key
+//! \return \c false on failure
 //!
-bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey);
+bool GenerateBeaconKeys(const std::string &cpid, CKey outPrivPubKey);
 
-//!
-//! \brief Store beacon keys in permanent storage.
-//! \param cpid CPID tied to the keys.
-//! \param pubKey Beacon public key.
-//! \param privKey Beacon private key.
-//!
-void StoreBeaconKeys(
-        const std::string &cpid,
-        const std::string &pubKey,
-        const std::string &privKey);
 
 //!
 //! \brief Get beacon private key from permanent storage.
 //! \param cpid CPID tied to the private key.
-//! \return Stored beacon private key if available, otherwise an empty string.
+//! \param outPrivPubKey Stored beacon private key if available, otherwise an empty string.
+//! \return true on success
 //!
-std::string GetStoredBeaconPrivateKey(const std::string& cpid);
-
-//!
-//! \brief Get beacon public key from permanent storage.
-//! \param cpid CPID tied to the public key.
-//! \return Stored beacon public key if available, otherwise an empty string.
-//!
-std::string GetStoredBeaconPublicKey(const std::string& cpid);
+bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey);
 
 // Push new beacon keys into memory as this process is not automatic and currently requires a restart of client to do so.
 // This corrects issues where users who have deleted beacons and then advertise new ones.
