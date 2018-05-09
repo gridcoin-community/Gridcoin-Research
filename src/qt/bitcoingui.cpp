@@ -648,10 +648,6 @@ void BitcoinGUI::createActions()
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
 
-    faqAction = new QAction(tr("FA&Q"), this);
-    faqAction->setStatusTip(tr("Interactive FAQ"));
-    faqAction->setMenuRole(QAction::TextHeuristicRole);
-
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
@@ -693,7 +689,6 @@ void BitcoinGUI::createActions()
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
     connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
-    connect(faqAction, SIGNAL(triggered()), this, SLOT(faqClicked()));
     connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
@@ -725,7 +720,6 @@ void BitcoinGUI::setIcons()
     newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
     foundationAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
-    faqAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
     backupWalletAction->setIcon(QPixmap(":/icons/filesave"));
@@ -779,7 +773,6 @@ void BitcoinGUI::createMenuBar()
     qmAdvanced->addAction(miningAction);
 //	qmAdvanced->addAction(newUserWizardAction);
     qmAdvanced->addSeparator();
-    qmAdvanced->addAction(faqAction);
     qmAdvanced->addAction(foundationAction);
 //	qmAdvanced->addAction(diagnosticsAction);
      qmAdvanced->addAction(downloadAction);
@@ -1389,18 +1382,6 @@ void BitcoinGUI::foundationClicked()
     globalcom->dynamicCall("ShowFoundation()");
 #endif
 }
-
-
-void BitcoinGUI::faqClicked()
-{
-#ifdef WIN32
-    if (!bGlobalcomInitialized) return;
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-    globalcom->dynamicCall("ShowFAQ()");
-#endif
-}
-
 
 void BitcoinGUI::newUserWizardClicked()
 {
