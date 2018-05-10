@@ -113,8 +113,7 @@ private:
     QAction *votingAction;
 
 	QAction *newUserWizardAction;
-	QAction *foundationAction;
-	QAction *faqAction;
+    QAction *foundationAction;
 	QAction *diagnosticsAction;
 
     QAction *verifyMessageAction;
@@ -224,9 +223,8 @@ private slots:
 	void upgradeClicked();
 	void downloadClicked();
 	void configClicked();
-	void miningClicked();
+    void miningClicked();
 
-	void faqClicked();
     void diagnosticsClicked();
 	
 	void newUserWizardClicked();
