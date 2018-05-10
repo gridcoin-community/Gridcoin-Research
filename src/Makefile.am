@@ -117,6 +117,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	rpcnet.cpp \
 	rpcrawtransaction.cpp \
 	rpcwallet.cpp \
+	rpcdataacq.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \

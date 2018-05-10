@@ -1622,3 +1622,11 @@ void ThreadHandler::removeAll()
     }
     threadMap.clear();
 }
+
+std::string TimestampToHRDate(double dtm)
+{
+    if (dtm == 0) return "1-1-1970 00:00:00";
+    if (dtm > 9888888888) return "1-1-2199 00:00:00";
+    std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
+    return sDt;
+}

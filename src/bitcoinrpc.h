@@ -328,4 +328,8 @@ extern json_spirit::Value showblock(const json_spirit::Array& params, bool fHelp
 extern json_spirit::Value vote(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value votedetails(const json_spirit::Array& params, bool fHelp);
 
+extern json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fHelp);
+
 #endif
