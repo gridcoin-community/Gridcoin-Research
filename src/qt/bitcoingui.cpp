@@ -793,10 +793,11 @@ void BitcoinGUI::createMenuBar()
     help->addAction(diagnosticsAction);
     help->addSeparator();
     help->addAction(aboutAction);
-#ifdef WIN32
-    help->addSeparator();
-    help->addAction(upgradeAction);
-#endif
+// The below is commented out until the upgrader is repaired.
+//#ifdef WIN32
+//    help->addSeparator();
+//    help->addAction(upgradeAction);
+//#endif
 
 }
 
