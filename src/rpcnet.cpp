@@ -446,14 +446,19 @@ Value sendalert2(const Array& params, bool fHelp)
     alert.nVersion = PROTOCOL_VERSION;
     alert.nRelayUntil = alert.nExpiration = GetAdjustedTime() + 24*60*60*params[4].get_int();
 
-    std::vector<std::string> split_subver = split(params[2].get_str(), ",");
-    alert.setSubVer.insert(split_subver.begin(),split_subver.end());
-
-    std::vector<std::string> split_cancel = split(params[3].get_str(), ",");
-    for(std::string &s : split_cancel)
+    if(params[2].get_str().length())
     {
-        int aver = RoundFromString(s, 0);
-        alert.setCancel.insert(aver);
+        std::vector<std::string> split_subver = split(params[2].get_str(), ",");
+        alert.setSubVer.insert(split_subver.begin(),split_subver.end());
+    }
+
+    if(params[3].get_str().length())
+    {
+        for(std::string &s : split(params[3].get_str(), ","))
+        {
+            int aver = RoundFromString(s, 0);
+            alert.setCancel.insert(aver);
+        }
     }
 
     CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
