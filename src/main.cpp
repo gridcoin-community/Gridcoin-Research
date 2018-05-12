@@ -48,7 +48,6 @@ extern bool WalletOutOfSync();
 extern bool WriteKey(std::string sKey, std::string sValue);
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern void CleanInboundConnections(bool bClearAll);
-extern bool PushGridcoinDiagnostics();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
@@ -339,30 +338,6 @@ bool UpdateNeuralNetworkQuorumData()
                 return true;
 }
 
-bool PushGridcoinDiagnostics()
-{
-                if (!bGlobalcomInitialized) return false;
-                std::string errors1 = "";
-                LoadAdminMessages(false,errors1);
-                std::string cpiddata = GetListOf("beacon;");
-                std::string sWhitelist = GetListOf("project");
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-                LogPrintf("Pushing diagnostic data...");
-                double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-                std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                    + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(PreviousBlockAge()) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
-    NN::SetTestnetFlag(fTestNet);
-    Restarter::PushGridcoinDiagnosticData(data);
-                return true;
-}
-
 bool FullSyncWithDPORNodes()
 {
     if(!NN::IsEnabled())
@@ -385,10 +360,10 @@ bool FullSyncWithDPORNodes()
     const int64_t nLookback = 30 * 6 * 86400;
     const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
     std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
-                std::string sWhitelist = GetListOf("project");
+		        std::string sWhitelist = GetListOf("project");
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-                LogPrintf(" list of cpids %s \n",cpiddata);
+				LogPrintf(" list of cpids %s \n",cpiddata);
                 double popularity = 0;
                 std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
                 std::string sAge = ToString(superblock_age);
@@ -449,10 +424,10 @@ double GetAverageDifficulty(unsigned int nPoSInterval)
             if (dDiff)
             {
                 dDiffSum += dDiff;
-                nStakesHandled++;
+            nStakesHandled++;
                 if (fDebug10) LogPrintf("GetAverageDifficulty debug: dDiff = %f", dDiff);
                 if (fDebug10) LogPrintf("GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
-            }
+        }
         }
 
         pindex = pindex->pprev;
@@ -706,6 +681,9 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
+        // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
+        // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
+        double dETTS = GetEstimatedTimetoStake()/86400.0;
         LOCK(GlobalStatusStruct.lock);
         { LOCK(MinerStatus.lock);
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -714,7 +692,7 @@ void GetGlobalStatus()
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
-        GlobalStatusStruct.ETTS = RoundToString(GetEstimatedTimetoStake()/86400.0,3);
+        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
@@ -3350,11 +3328,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 }
 
-                if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-                {
-                            std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-                            LogPrintf("\n ******  %s ***** \n",sNarr);
-                }
+				if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+				{
+							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+							LogPrintf("\n ******  %s ***** \n",sNarr);
+				}
 
                 if (IsResearchAgeEnabled(pindex->nHeight)
                     && (BlockNeedsChecked(nTime) || nVersion>=9))
@@ -5707,7 +5685,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-                            myCPID = pblockindex->GetCPID();
+						    myCPID = pblockindex->GetCPID();
                         }
                         if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
                         {
@@ -8358,88 +8336,88 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 {
     const std::string &msg = tx.hashBoinc;
     const int64_t &nTime = tx.nTime;
-    if (msg.empty()) return false;
-    bool fMessageLoaded = false;
+          if (msg.empty()) return false;
+          bool fMessageLoaded = false;
 
-    if (Contains(msg,"<MT>"))
-    {
-        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
-        {
-            sMessageValue="";
-        }
+          if (Contains(msg,"<MT>"))
+          {
+              std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
+              std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
+              std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
+              std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
+              std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
+              std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
+              if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
+              {
+                    sMessageValue="";
+              }
 
-        if (sMessageType=="superblock")
-        {
-            // Deny access to superblock processing runtime data
-            sMessageValue="";
-        }
+              if (sMessageType=="superblock")
+              {
+                  // Deny access to superblock processing runtime data
+                  sMessageValue="";
+              }
 
-        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
-        {
-            //Verify sig first
-            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                                                  sSignature,sMessagePublicKey);
+              if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
+              {
+                  //Verify sig first
+                  bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
+                      sSignature,sMessagePublicKey);
 
-            if (Verified)
-            {
-                if (sMessageAction=="A")
-                {
-                    /* With this we allow verifying blocks with stupid beacon */
-                    if("beacon"==sMessageType)
-                    {
-                        std::string out_cpid = "";
-                        std::string out_address = "";
-                        std::string out_publickey = "";
-                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                        WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                    }
-
-                    WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                    if(fDebug10 && sMessageType=="beacon" ){
-                        LogPrintf("BEACON add %s %s %s\n", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                    }
-                    fMessageLoaded = true;
-                    if (sMessageType=="poll")
-                    {
-                        if (Contains(sMessageKey,"[Foundation"))
+                  if (Verified)
+                  {
+                        if (sMessageAction=="A")
                         {
-                            msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
-                        }
-                        else
-                        {
-                            msPoll = "Poll: " + sMessageKey.substr(0,80);
-                        }
-                    }
-                }
-                else if(sMessageAction=="D")
-                {
-                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s\n", sMessageType, sMessageKey, sMessageValue);
-                    if(fDebug10 && sMessageType=="beacon" ){
-                        LogPrintf("BEACON DEL %s - %s\n", sMessageKey, TimestampToHRDate(nTime));
-                    }
-                    DeleteCache(sMessageType,sMessageKey);
-                    fMessageLoaded = true;
-                }
-                // If this is a boinc project, load the projects into the coin:
-                if (sMessageType=="project" || sMessageType=="projectmapping")
-                {
-                    //Reserved
-                    fMessageLoaded = true;
-                }
+                                /* With this we allow verifying blocks with stupid beacon */
+                                if("beacon"==sMessageType)
+                                {
+                                    std::string out_cpid = "";
+                                    std::string out_address = "";
+                                    std::string out_publickey = "";
+                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                                    WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
+                                }
 
-                if(fDebug)
-                    WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
+                                WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
+                                if(fDebug10 && sMessageType=="beacon" ){
+                                    LogPrintf("BEACON add %s %s %s\n", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
+                                }
+                                fMessageLoaded = true;
+                                if (sMessageType=="poll")
+                                {
+                                        if (Contains(sMessageKey,"[Foundation"))
+                                        {
+                                                msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
+                                        }
+                                        else
+                                        {
+                                                msPoll = "Poll: " + sMessageKey.substr(0,80);
+                                        }
+                                }
+                        }
+                        else if(sMessageAction=="D")
+                        {
+                                if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s\n", sMessageType, sMessageKey, sMessageValue);
+                                if(fDebug10 && sMessageType=="beacon" ){
+                                    LogPrintf("BEACON DEL %s - %s\n", sMessageKey, TimestampToHRDate(nTime));
+                                }
+                                DeleteCache(sMessageType,sMessageKey);
+                                fMessageLoaded = true;
+                        }
+                        // If this is a boinc project, load the projects into the coin:
+                        if (sMessageType=="project" || sMessageType=="projectmapping")
+                        {
+                            //Reserved
+                            fMessageLoaded = true;
+                        }
+
+                        if(fDebug)
+                            WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
             }
-        }
-    }
+                  }
+                }
 
-    return fMessageLoaded;
+   return fMessageLoaded;
 }
 
 double GRCMagnitudeUnit(int64_t locktime)
@@ -8834,17 +8812,23 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
     int address_day = GetDayOfYear(locktime);
     std::string address_tohash = addr + "_" + ToString(address_day);
     std::string address_day_hash = RetrieveMd5(address_tohash);
+
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
     uint256 uRef;
     if (IsResearchAgeEnabled(pindexBest->nHeight))
     {
-        uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+        uRef = fTestNet
+               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
     else
     {
-        uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+        uRef = fTestNet
+               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
+
     uint256 uADH = uint256("0x" + address_day_hash);
     //LogPrintf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
     //LogPrintf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());

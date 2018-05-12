@@ -208,7 +208,7 @@ Value help(const Array& params, bool fHelp)
             "mining --------> Returns help for neural network/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n");
-
+    
     // Allow to process through if params size is > 0
     string strCommand;
 
@@ -343,6 +343,7 @@ static const CRPCCommand vRPCCommands[] =
     { "myneuralhash",            &myneuralhash,            false,  cat_mining        },
     { "neuralhash",              &neuralhash,              false,  cat_mining        },
 #endif
+    { "neuralreport",            &neuralreport,            false,  cat_mining        },
     { "proveownership",          &proveownership,          false,  cat_mining        },
     { "resetcpids",              &resetcpids,              false,  cat_mining        },
     { "rsa",                     &rsa,                     false,  cat_mining        },
@@ -1106,7 +1107,8 @@ void ThreadRPCServer2(void* parg)
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s"), endpoint.port(), e.what());
     }
 
-    try {
+    try
+    {
         // If dual IPv6/IPv4 failed (or we're opening loopback interfaces only), open IPv4 separately
         if (!fListening || loopback || v6_only_error)
         {
@@ -1133,7 +1135,8 @@ void ThreadRPCServer2(void* parg)
         strerr = strprintf(_("An error occurred while setting up the RPC port %u for listening on IPv4: %s"), endpoint.port(), e.what());
     }
 
-    if (!fListening) {
+    if (!fListening)
+    {
         uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
@@ -1188,15 +1191,13 @@ void JSONRequest::parse(const Value& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Params must be an array");
 }
 
-
-
-
 static Object JSONRPCExecOne(const Value& req)
 {
     Object rpc_result;
 
     JSONRequest jreq;
-    try {
+    try
+    {
         jreq.parse(req);
 
         Value result = tableRPC.execute(jreq.strMethod, jreq.params);
@@ -1324,16 +1325,11 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
         {
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;
-
             nRPCtimebegin = GetTimeMillis();
-
             result = pcmd->actor(params, false);
-
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-
             printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
         }
-
         else
             result = pcmd->actor(params, false);
 

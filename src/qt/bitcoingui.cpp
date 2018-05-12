@@ -100,7 +100,6 @@ extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, do
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string getMacAddress();
-extern bool PushGridcoinDiagnostics();
 extern double qtPushGridcoinDiagnosticData(std::string data);
 
 extern std::string FromQString(QString qs);

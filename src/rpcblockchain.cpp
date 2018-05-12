@@ -549,7 +549,6 @@ void filecopy(FILE *dest, FILE *src)
     fflush(dest);
 }
 
-
 void fileopen_and_copy(std::string src, std::string dest)
 {
     FILE * infile  = fopen(src.c_str(),  "rb");
