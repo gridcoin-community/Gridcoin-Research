@@ -374,4 +374,21 @@ BOOST_AUTO_TEST_CASE(util_VerifySplit)
     BOOST_CHECK_EQUAL("",       res[3]);
 }
 
+BOOST_AUTO_TEST_CASE(util_VerifySplit2)
+{
+    const std::string str(";;");
+    const auto res = split(str, ";;");
+    BOOST_CHECK(res.size() == 2);
+    BOOST_CHECK_EQUAL("",       res[0]);
+    BOOST_CHECK_EQUAL("",       res[1]);
+}
+
+BOOST_AUTO_TEST_CASE(util_VerifySplit3)
+{
+    const std::string str("");
+    const auto res = split(str, ";;");
+    BOOST_CHECK(res.size() == 1);
+    BOOST_CHECK_EQUAL("",       res[0]);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
