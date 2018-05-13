@@ -638,8 +638,7 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sBoincSignature, sError);
         if (!bResult)
         {
-            if (fDebug2) LogPrintf("SignStakeBlock: Failed to sign block -> %s\n", sError);
-            return false;
+            return error("SignStakeBlock: Failed to sign boinchash -> %s\n", sError);
         }
         BoincData.BoincSignature = sBoincSignature;
         if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\n", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
