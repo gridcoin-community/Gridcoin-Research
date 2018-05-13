@@ -559,11 +559,7 @@ Value listunspent(const Array& params, bool fHelp)
 
     vector<COutput> vecOutputs;
 
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-
-        pwalletMain->AvailableCoins(vecOutputs, false, NULL, false);
-    }
+    pwalletMain->AvailableCoins(vecOutputs, false, NULL, false);
 
     LOCK(pwalletMain->cs_wallet);
 
@@ -600,7 +596,7 @@ Value listunspent(const Array& params, bool fHelp)
 
                 if (GetBoolArg("-enableaccounts", false))
                     entry.push_back(Pair("account", item->second));
-                }
+            }
         }
         entry.push_back(Pair("scriptPubKey", HexStr(pk.begin(), pk.end())));
         entry.push_back(Pair("amount", ValueFromAmount(nValue)));
