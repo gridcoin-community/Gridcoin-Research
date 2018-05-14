@@ -3472,7 +3472,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     }
                     catch (...)
                     {
-                        return error("ConnectBlock[] : Superblock stake check caused unknwon exception with GRC address %s", bb.GRCAddress.c_str());
+                        return error("ConnectBlock[] : Superblock stake check caused unknown exception with GRC address %s", bb.GRCAddress.c_str());
                     }
                 }
                 if (!VerifySuperblock(superblock, pindex))
