@@ -4421,7 +4421,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         //must be proof of stake
         //no grandfather exceptions
         //if (IsProofOfStake())
-        LogPrintf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
+        LogPrintf("AcceptBlock: Proof Of Stake V8 %d",nVersion);
         if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
         {
             error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
