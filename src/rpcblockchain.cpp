@@ -1597,7 +1597,7 @@ Value explainmagnitude(const Array& params, bool fHelp)
         throw runtime_error(
                 "explainmagnitude [bool:force]\n"
                 "\n"
-                "[force] -> Optional: Force a response (excessive requests can result in temporary ban from neural reponses)\n"
+                "[force] -> Optional: Force a response (excessive requests can result in temporary ban from neural responses)\n"
                 "\n"
                 "Displays information for the current neural hashes in network\n");
 
@@ -1983,7 +1983,7 @@ Value syncdpor2(const Array& params, bool fHelp)
         throw runtime_error(
                 "syncdpor2\n"
                 "\n"
-                "Syncronize with the neural network\n");
+                "Synchronize with the neural network\n");
 
     Object res;
 
@@ -2293,7 +2293,7 @@ Value forcequorom(const Array& params, bool fHelp)
         throw runtime_error(
                 "forcequorom\n"
                 "\n"
-                "Requests neural network for force a quorom amoung nodes\n");
+                "Requests neural network for force a quorom among nodes\n");
 
     Object res;
 
@@ -2842,7 +2842,7 @@ Value updatequoromdata(const Array& params, bool fHelp)
         throw runtime_error(
                 "updatequoromdata\n"
                 "\n"
-                "Rquests update of neural network quorom data\n");
+                "Requests update of neural network quorom data\n");
 
     Object res;
 
@@ -2910,7 +2910,7 @@ Value addpoll(const Array& params, bool fHelp)
                 "<title> -----> The title for poll with no spaces. Use _ in between words\n"
                 "<days> ------> The number of days the poll will run\n"
                 "<question> --> The question with no spaces. Use _ in between words\n"
-                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to seperate answers\n"
+                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to separate answers\n"
                 "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
                 "<url> -------> The corresponding url for the poll\n"
                 "\n"
@@ -3282,7 +3282,7 @@ Value vote(const Array& params, bool fHelp)
                 "vote <title> <answers>\n"
                 "\n"
                 "<title -> Title of poll being voted on\n"
-                "<answers> -> Answers chosen for specified poll seperated by ;\n"
+                "<answers> -> Answers chosen for specified poll separated by ;\n"
                 "\n"
                 "Vote on a specific poll with specified answers\n");
 
