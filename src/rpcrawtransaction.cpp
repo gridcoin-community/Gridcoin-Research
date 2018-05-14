@@ -559,9 +559,10 @@ Value listunspent(const Array& params, bool fHelp)
 
     vector<COutput> vecOutputs;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    pwalletMain->AvailableCoins(vecOutputs, false, NULL, false);
 
-    pwalletMain->AvailableCoins(vecOutputs, false,NULL,false);
+    LOCK(pwalletMain->cs_wallet);
+
     for (auto const& out : vecOutputs)
     {
         if (out.nDepth < nMinDepth || out.nDepth > nMaxDepth)
@@ -586,12 +587,20 @@ Value listunspent(const Array& params, bool fHelp)
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
             entry.push_back(Pair("address", CBitcoinAddress(address).ToString()));
-            if (pwalletMain->mapAddressBook.count(address))
-                entry.push_back(Pair("account", pwalletMain->mapAddressBook[address]));
+
+            auto item = pwalletMain->mapAddressBook.find(address);
+
+            if (item != pwalletMain->mapAddressBook.end())
+            {
+                entry.push_back(Pair("label", item->second));
+
+                if (GetBoolArg("-enableaccounts", false))
+                    entry.push_back(Pair("account", item->second));
+            }
         }
         entry.push_back(Pair("scriptPubKey", HexStr(pk.begin(), pk.end())));
-        entry.push_back(Pair("amount",ValueFromAmount(nValue)));
-        entry.push_back(Pair("confirmations",out.nDepth));
+        entry.push_back(Pair("amount", ValueFromAmount(nValue)));
+        entry.push_back(Pair("confirmations", out.nDepth));
         results.push_back(entry);
     }
 
