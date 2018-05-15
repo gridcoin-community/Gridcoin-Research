@@ -20,7 +20,7 @@ Value addpoll(const Array& params, bool fHelp)
                 "<title> -----> The title for poll with no spaces. Use _ in between words\n"
                 "<days> ------> The number of days the poll will run\n"
                 "<question> --> The question with no spaces. Use _ in between words\n"
-                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to seperate answers\n"
+                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to separate answers\n"
                 "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
                 "<url> -------> The corresponding url for the poll\n"
                 "\n"
@@ -139,7 +139,7 @@ Value vote(const Array& params, bool fHelp)
                 "vote <title> <answer1;answer2...>\n"
                 "\n"
                 "<title -> Title of poll being voted on\n"
-                "<answers> -> Answers chosen for specified poll seperated by ;\n"
+                "<answers> -> Answers chosen for specified poll separated by ;\n"
                 "\n"
                 "Vote on a specific poll with specified answers\n");
 
