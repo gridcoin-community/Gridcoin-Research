@@ -57,6 +57,9 @@ std::string GetBoincDataDir(){
     if (boost::filesystem::exists("/var/lib/boinc-client/")){
         return "/var/lib/boinc-client/";
     }
+    else if (boost::filesystem::exists("/var/lib/boinc/")){
+        return "/var/lib/boinc/";
+    }
     #endif
 
     #ifdef __APPLE__
