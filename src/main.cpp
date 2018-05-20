@@ -365,7 +365,6 @@ bool FullSyncWithDPORNodes()
     std::string sWhitelist = GetListOf("project");
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    LogPrintf(" list of cpids %s \n",cpiddata);
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
