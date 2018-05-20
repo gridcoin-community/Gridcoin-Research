@@ -7085,8 +7085,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             if (neural_request=="neural_data")
             {
-            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-            pfrom->PushMessage("ndata_nresp", neural_response);
+                NN::SetTestnetFlag(fTestNet);
+                pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
             }
             else if (neural_request=="neural_hash")
             {
@@ -7099,10 +7099,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             else if (neural_request=="quorum")
             {
-            // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
-                std::string contract = "";
-            NN::SetTestnetFlag(fTestNet);
-            pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
+                // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
+                NN::SetTestnetFlag(fTestNet);
+                pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
             }
     }
     else if (strCommand == "ping")
