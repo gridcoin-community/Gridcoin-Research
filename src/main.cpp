@@ -7094,9 +7094,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             else if (neural_request=="explainmag")
             {
-            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-            pfrom->PushMessage("expmag_nresp", neural_response);   pfrom->PushMessage("expmag_nresp", neural_response);
-                }
+                neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+                pfrom->PushMessage("expmag_nresp", neural_response);
+            }
             else if (neural_request=="quorum")
             {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
