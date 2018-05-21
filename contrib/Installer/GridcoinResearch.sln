@@ -6,8 +6,6 @@ Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "GridcoinResearch", "Gridcoi
 EndProject
 Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "boincstake", "boinc\boinc\boincstake.vbproj", "{359913F7-DF2D-4632-9A0C-52E9FD0D4ED9}"
 EndProject
-Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "GridcoinRDTestHarness", "GridcoinRDTestHarness\GridcoinRDTestHarness\GridcoinRDTestHarness.vbproj", "{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}"
-EndProject
 Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "ucGridcoinProgressBar", "ucGridcoinProgressBar\ucGridcoinProgressBar.vbproj", "{3E0975C0-22ED-4B0A-ACE4-CF5E6FA09A25}"
 EndProject
 Global
@@ -52,18 +50,6 @@ Global
 		{359913F7-DF2D-4632-9A0C-52E9FD0D4ED9}.Release|x64.ActiveCfg = Release|x64
 		{359913F7-DF2D-4632-9A0C-52E9FD0D4ED9}.Release|x64.Build.0 = Release|x64
 		{359913F7-DF2D-4632-9A0C-52E9FD0D4ED9}.Release|x86.ActiveCfg = Release|Any CPU
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Debug|Any CPU.ActiveCfg = Debug|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Debug|Mixed Platforms.Build.0 = Debug|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Debug|x64.ActiveCfg = Debug|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Debug|x86.ActiveCfg = Debug|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Debug|x86.Build.0 = Debug|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Release|Any CPU.ActiveCfg = Release|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Release|Mixed Platforms.ActiveCfg = Release|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Release|Mixed Platforms.Build.0 = Release|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Release|x64.ActiveCfg = Release|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Release|x86.ActiveCfg = Release|x86
-		{4BC8C393-8CD6-4AF3-BFEE-EAA1CA10255B}.Release|x86.Build.0 = Release|x86
 		{3E0975C0-22ED-4B0A-ACE4-CF5E6FA09A25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{3E0975C0-22ED-4B0A-ACE4-CF5E6FA09A25}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3E0975C0-22ED-4B0A-ACE4-CF5E6FA09A25}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
