@@ -753,30 +753,6 @@ Module modGRC
         System.Threading.Thread.Sleep(500)
     End Sub
 
-    Public Sub InstallGalaza()
-        Dim sDestDir As String = GetGRCAppDir() + "\Galaza\"
-     
-        Try
-            System.IO.Directory.CreateDirectory(sDestDir)
-        Catch ex As Exception
-
-        End Try
-        Try
-            DownloadFile("galaza.zip", "modules/")
-        Catch ex As Exception
-            MsgBox("Unable to download Galaza " + ex.Message, MsgBoxStyle.Critical)
-            Exit Sub
-        End Try
-        Try
-            ExtractZipFile(GetGRCAppDir() + "\galaza.zip", sDestDir)
-            UpdateKey("galazaenabled", "true")
-            MsgBox("Installed Gridcoin Galaza Successfully! (Next time you restart gridcoin, Galaza will be on the Advanced menu)", MsgBoxStyle.Information)
-        Catch ex As Exception
-            Log("Error while installing Galaza " + ex.Message)
-            MsgBox("Error while installing Galaza " + ex.Message, MsgBoxStyle.Critical)
-        End Try
-    End Sub
-
     Public Function ConfigPath() As String
         Dim sFolder As String
         sFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch"

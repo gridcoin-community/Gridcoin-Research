@@ -87,10 +87,6 @@ Public Class Utilization
         thWireFrame.Priority = Threading.ThreadPriority.Lowest
         thWireFrame.Start()
     End Sub
-    Public Sub StartGalaza()
-        Dim p As New Process
-        p = Process.Start(GetGRCAppDir() + "\Galaza\GridcoinGalaza.exe")
-    End Sub
     Public Sub StopWireFrameRenderer()
         If Not mfrmWireFrame Is Nothing Then
             mfrmWireFrame.EndWireFrame()

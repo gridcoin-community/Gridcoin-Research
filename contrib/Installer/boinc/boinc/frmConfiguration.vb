@@ -2,11 +2,6 @@
 
 Public Class frmConfiguration
 
-
-    Private Sub InstallGridcoinGalazaToolStripMenuItem1_Click(sender As System.Object, e As System.EventArgs) Handles InstallGridcoinGalazaToolStripMenuItem1.Click
-        InstallGalaza()
-    End Sub
-
     Private Sub btnSave_Click(sender As System.Object, e As System.EventArgs) Handles btnSave.Click
         WriteSetting(chkSpeech, "enablespeech")
         MsgBox("Configuration Updated.", MsgBoxStyle.Information, "Configuration")

@@ -27,7 +27,6 @@ Partial Class frmConfiguration
         Me.FileToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.HideToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.OptionalModulesToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.InstallGridcoinGalazaToolStripMenuItem1 = New System.Windows.Forms.ToolStripMenuItem()
         Me.lblTestnet = New System.Windows.Forms.Label()
         Me.GroupBox1.SuspendLayout()
         Me.MenuStrip1.SuspendLayout()
@@ -97,19 +96,10 @@ Partial Class frmConfiguration
         'OptionalModulesToolStripMenuItem
         '
         Me.OptionalModulesToolStripMenuItem.BackColor = System.Drawing.Color.Black
-        Me.OptionalModulesToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.InstallGridcoinGalazaToolStripMenuItem1})
         Me.OptionalModulesToolStripMenuItem.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
         Me.OptionalModulesToolStripMenuItem.Name = "OptionalModulesToolStripMenuItem"
         Me.OptionalModulesToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
         Me.OptionalModulesToolStripMenuItem.Text = "Optional Modules"
-        '
-        'InstallGridcoinGalazaToolStripMenuItem1
-        '
-        Me.InstallGridcoinGalazaToolStripMenuItem1.BackColor = System.Drawing.Color.Black
-        Me.InstallGridcoinGalazaToolStripMenuItem1.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
-        Me.InstallGridcoinGalazaToolStripMenuItem1.Name = "InstallGridcoinGalazaToolStripMenuItem1"
-        Me.InstallGridcoinGalazaToolStripMenuItem1.Size = New System.Drawing.Size(190, 22)
-        Me.InstallGridcoinGalazaToolStripMenuItem1.Text = "Install Gridcoin Galaza"
         '
         'lblTestnet
         '
@@ -148,7 +138,6 @@ Partial Class frmConfiguration
     Friend WithEvents FileToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents HideToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents OptionalModulesToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents InstallGridcoinGalazaToolStripMenuItem1 As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents chkSpeech As System.Windows.Forms.CheckBox
     Friend WithEvents lblTestnet As System.Windows.Forms.Label
 
