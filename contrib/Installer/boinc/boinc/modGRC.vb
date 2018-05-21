@@ -37,7 +37,6 @@ Module modGRC
 
     Public mfrmTicketList As frmTicketList
     Public mfrmLogin As frmLogin
-    Public mfrmTicker As frmLiveTicker
     Public mfrmWireFrame As frmGRCWireFrameCanvas
     Public mfrmLeaderboard As frmLeaderboard
     Public MerkleRoot As String = "0xda43abf15a2fcd57ceae9ea0b4e0d872981e2c0b72244466650ce6010a14efb8"

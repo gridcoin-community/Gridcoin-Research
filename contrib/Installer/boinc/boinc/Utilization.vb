@@ -19,12 +19,6 @@ Public Class Utilization
     End Property
 
     Private lfrmMiningCounter As Long = 0
-    Public Function cGetCryptoPrice(sSymbol As String) As Double
-        Return GetCryptoPrice(sSymbol).Price
-    End Function
-    Public Function cqGetCryptoPrice(sSymbol As String) As Quote
-        Return GetCryptoPrice(sSymbol)
-    End Function
     Public Function SetQuorumData(sData As String) As String
         Dim sQuorumData As String = ExtractXML(sData, "<QUORUMDATA>")
         Dim sAge As String = ExtractXML(sQuorumData, "<AGE>")
@@ -255,15 +249,6 @@ Public Class Utilization
             mfrmTicketList.Show()
         Catch ex As Exception
             Log("Error while transitioning to frmTicketList" + ex.Message)
-        End Try
-        Return 1
-    End Function
-    Public Function ShowTicker() As Double
-        Try
-            mfrmTicker = New frmLiveTicker
-            mfrmTicker.Show()
-        Catch ex As Exception
-            Log("Error while booting ticker " + ex.Message)
         End Try
         Return 1
     End Function
