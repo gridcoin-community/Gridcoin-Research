@@ -102,35 +102,7 @@ Public Class Utilization
     Public Function TestnetGetGenericRPCValue() As String
         Return ""
     End Function
-    Public ReadOnly Property ClientNeedsUpgrade As Double
-        Get
-            Dim bNeedsUp As Boolean = NeedsUpgrade()
-            If bNeedsUp Then
-                Log("Client outdated; needs upgraded[2].")
-                Dim sLastUpgraded As String = KeyValue("AutoUpgrade")
-                If Len(sLastUpgraded) > 0 Then
-                    Log("Found key AutoUpgrade " + Trim(sLastUpgraded))
 
-                    Dim dDiff As Long
-                    dDiff = DateDiff(DateInterval.Day, Now, CDate(sLastUpgraded))
-                    If Math.Abs(dDiff) < 1 Then
-                        Log("Upgraded too recently. Aborting. " + Trim(dDiff))
-                        Return 0
-                    End If
-                End If
-                Log("Ready for upgrade")
-                If KeyValue("suppressupgrade") = "true" Then
-                    Log("Client needs upgraded; Not upgrading due to key.")
-                    Return 0
-                End If
-                'Set a key to prevent multiple upgrades
-                UpdateKey("AutoUpgrade", Trim(Now))
-                Return 1
-            End If
-            Log("Client up to date")
-            Return 0
-        End Get
-    End Property
     Public Function NeuralNetwork() As Double
         Return 1999
     End Function
@@ -160,40 +132,7 @@ Public Class Utilization
     Sub New(bLoadMiningConsole As Boolean)
         If bLoadMiningConsole Then ShowMiningConsole()
     End Sub
-    Public Sub RestartWallet()
-        Call RestartWallet1("")
-    End Sub
-    Public Sub UpgradeWallet()
-        Call RestartWallet1("upgrade")
-    End Sub
-    Public Sub UpgradeWalletTestnet()
-        Call RestartWallet1("testnetupgrade")
-    End Sub
-    Public Sub ReindexWallet()
-        Call RestartWallet1("reindex")
-    End Sub
-    Public Sub RebootClient()
-        Call RestartWallet1("reboot")
-    End Sub
-    Public Sub DownloadBlocks()
-        If mbTestNet Then
-            Call RestartWallet1("downloadblocks testnet")
-        Else
-            Call RestartWallet1("downloadblocks")
-        End If
-    End Sub
-    Public Sub ReindexWalletTestNet()
-        Call RestartWallet1("reindextestnet")
-    End Sub
-    Public Sub RestoreSnapshot()
-        Call RestartWallet1("restoresnapshot")
-    End Sub
-    Public Sub CreateRestorePoint()
-        Call RestartWallet1("createrestorepoint")
-    End Sub
-    Public Sub CreateRestorePointTestNet()
-        Call RestartWallet1("createrestorepointtestnet")
-    End Sub
+
     Public Function cGetMd5(sData As String) As String
         Return GetMd5String(sData)
     End Function

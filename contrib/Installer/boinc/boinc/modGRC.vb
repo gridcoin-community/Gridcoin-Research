@@ -57,28 +57,6 @@ Module modGRC
         If Len(Trim(sId)) <> 36 Then Return ""
         Return sId
     End Function
-    Public Function NeedsUpgrade() As Boolean
-        Try
-            Dim sLocalPath As String = GetGRCAppDir() + "\"
-            Dim dr As SqlClient.SqlDataReader
-            Dim oGrcData As New GRCSec.GridcoinData
-            dr = oGrcData.mGetUpgradeFiles
-            Dim bNeedsUpgraded As Boolean = False
-            Do While dr.Read
-                Dim sFile As String = LCase("" & dr("filename"))
-                If sFile Like "*gridcoinresearch.exe*" Or sFile Like "*boincstake.dll*" Then
-                    'Get local hash
-                    Dim sLocalHash As String = GetMd5OfFile(sLocalPath + sFile)
-                    Dim sRemoteHash As String = dr("Hash")
-                    Dim bNeeds As Boolean = sLocalHash <> sRemoteHash
-                    If bNeeds Then bNeedsUpgraded = True
-                End If
-            Loop
-            Return bNeedsUpgraded
-        Catch ex As Exception
-            Return False
-        End Try
-    End Function
 
     Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String, sURL As String) As String
         Dim sReply As String = ""
@@ -799,17 +777,6 @@ Module modGRC
         End Try
     End Sub
 
-    Public Function RestartWallet1(sParams As String)
-        Dim p As Process = New Process()
-        Dim pi As ProcessStartInfo = New ProcessStartInfo()
-        pi.WorkingDirectory = GetGRCAppDir()
-        pi.UseShellExecute = True
-        Log("Restarting wallet with params " + sParams)
-        pi.Arguments = sParams
-        pi.FileName = Trim("GRCRestarter.exe")
-        p.StartInfo = pi
-        p.Start()
-    End Function
     Public Function ConfigPath() As String
         Dim sFolder As String
         sFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch"
