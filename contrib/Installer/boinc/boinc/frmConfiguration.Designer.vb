@@ -21,7 +21,6 @@ Partial Class frmConfiguration
     Private Sub InitializeComponent()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmConfiguration))
         Me.GroupBox1 = New System.Windows.Forms.GroupBox()
-        Me.chkUpgrade = New System.Windows.Forms.CheckBox()
         Me.chkSpeech = New System.Windows.Forms.CheckBox()
         Me.btnSave = New System.Windows.Forms.Button()
         Me.MenuStrip1 = New System.Windows.Forms.MenuStrip()
@@ -37,7 +36,6 @@ Partial Class frmConfiguration
         'GroupBox1
         '
         Me.GroupBox1.BackColor = System.Drawing.Color.Black
-        Me.GroupBox1.Controls.Add(Me.chkUpgrade)
         Me.GroupBox1.Controls.Add(Me.chkSpeech)
         Me.GroupBox1.ForeColor = System.Drawing.Color.Lime
         Me.GroupBox1.Location = New System.Drawing.Point(25, 36)
@@ -46,16 +44,6 @@ Partial Class frmConfiguration
         Me.GroupBox1.TabIndex = 3
         Me.GroupBox1.TabStop = False
         Me.GroupBox1.Text = "Configuration:"
-        '
-        'chkUpgrade
-        '
-        Me.chkUpgrade.AutoSize = True
-        Me.chkUpgrade.Location = New System.Drawing.Point(32, 57)
-        Me.chkUpgrade.Name = "chkUpgrade"
-        Me.chkUpgrade.Size = New System.Drawing.Size(139, 17)
-        Me.chkUpgrade.TabIndex = 2
-        Me.chkUpgrade.Text = "Suppress Auto Upgrade"
-        Me.chkUpgrade.UseVisualStyleBackColor = True
         '
         'chkSpeech
         '
@@ -162,7 +150,6 @@ Partial Class frmConfiguration
     Friend WithEvents OptionalModulesToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents InstallGridcoinGalazaToolStripMenuItem1 As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents chkSpeech As System.Windows.Forms.CheckBox
-    Friend WithEvents chkUpgrade As System.Windows.Forms.CheckBox
     Friend WithEvents lblTestnet As System.Windows.Forms.Label
 
 End Class
