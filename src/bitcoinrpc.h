@@ -256,7 +256,7 @@ extern json_spirit::Value debug3(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value debug4(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value debugnet(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value dportally(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value forcequorom(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value forcequorum(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value gatherneuralhashes(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value genboinckey(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp);
@@ -285,7 +285,7 @@ extern json_spirit::Value tallyneural(const json_spirit::Array& params, bool fHe
 extern json_spirit::Value testnewcontract(const json_spirit::Array& params, bool fHelp);
 #endif
 extern json_spirit::Value unusual(const json_spirit::Array& params, bool fHelp);
-extern json_spirit::Value updatequoromdata(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value updatequorumdata(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value versionreport(const json_spirit::Array& params, bool fhelp);
 extern json_spirit::Value writedata(const json_spirit::Array& params, bool fHelp);
 
