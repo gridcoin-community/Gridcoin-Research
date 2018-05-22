@@ -26,19 +26,9 @@ Module modGRC
     Public msRPCReply As String = ""
     Public mclsUtilization As Utilization
     Public mfrmMining As frmMining
-    Public mfrmProjects As frmNewUserWizard
-    Public mfrmSql As frmSQL
-    Public mfrmFAQ As frmFAQ
     Public mfrmConfig As frmConfiguration
 
-    Public mfrmTicketAdd As frmTicketAdd
-    Public mfrmFoundation As frmFoundation
-    Public mFrmDiagnostics As frmDiagnostics
-
-    Public mfrmTicketList As frmTicketList
-    Public mfrmLogin As frmLogin
     Public mfrmWireFrame As frmGRCWireFrameCanvas
-    Public mfrmLeaderboard As frmLeaderboard
     Public MerkleRoot As String = "0xda43abf15a2fcd57ceae9ea0b4e0d872981e2c0b72244466650ce6010a14efb8"
     Public merkleroot2 As String = "0xda43abf15abcdefghjihjklmnopq872981e2c0b72244466650ce6010a14efb8"
 
@@ -887,20 +877,6 @@ Module modGRC
 
         End Try
     End Sub
-
-
-    Public Function GetNewId(sTable As String, mData As Sql) As Long
-        Try
-            Dim sql As String
-            sql = "Select max(id) as maxid from " + sTable
-            Dim vID As Long
-            vID = Val(mData.QueryFirstRow(sql, "maxid")) + 1
-            Return vID
-        Catch ex As Exception
-            Log("getnewid:" + ex.Message)
-        End Try
-    End Function
-
 
     Public Function RetrieveSiteSecurityInformation(sURL As String) As String
         Dim u As New Uri(sURL)

@@ -260,7 +260,6 @@ Public Class frmMining
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         dgv.ReadOnly = True
-        Dim grr As New GridcoinReader.GridcoinRow
         Dim vHeading() As String = Split(sHeader, ",")
         PopulateHeadings(vHeading, dgv, False)
         dgv.Columns(2).Visible = False
@@ -369,7 +368,6 @@ Refresh:
         dgv.ForeColor = Drawing.Color.Lime
         dgv.ReadOnly = True
 
-        Dim grr As New GridcoinReader.GridcoinRow
         Dim vHeading() As String = Split(sHeader, ",")
 
         PopulateHeadings(vHeading, dgv, False)
