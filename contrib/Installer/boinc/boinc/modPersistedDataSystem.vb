@@ -45,8 +45,6 @@ Module modPersistedDataSystem
         Public Witnesses As Double
         Public Updated As DateTime
     End Structure
-    Public mdictNeuralNetworkQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
-    Public mdictNeuralNetworkAdditionalQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
     Public Structure Row
         Public Database As String
         Public Table As String
@@ -80,13 +78,6 @@ Module modPersistedDataSystem
         Return sOut
     End Function
     Public Sub TestPDS1()
-    End Sub
-    Public Sub ReconnectToNeuralNetwork()
-        Try
-            mGRCData = New GRCSec.GridcoinData
-        Catch ex As Exception
-            Log("Unable to connect to neural network.")
-        End Try
     End Sub
     Public Function ConstructTargetFileName(sEtag As String) As String
         Dim sFilename = sEtag + ".gz"
@@ -783,21 +774,6 @@ Module modPersistedDataSystem
         CountOfAllProjects = lstProjects1.Count
         Return lstWhitelist
     End Function
-    Private Function GetConsensusData()
-        For x As Integer = 1 To 3
-            Try
-                ReconnectToNeuralNetwork()
-                mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
-                mdictNeuralNetworkAdditionalQuorumData = mGRCData.GetNeuralNetworkQuorumData3("quorumconsensusdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
-                If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
-                    Return True
-                End If
-            Catch ex As Exception
-                Dim sErr As String = ex.Message
-            End Try
-        Next x
-        Return False
-    End Function
     Public Function GuiDoEvents()
         Try
             If Not mfrmMining Is Nothing Then
@@ -844,9 +820,7 @@ Module modPersistedDataSystem
         Dim WhitelistedProjects As Double = 0
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
-        Dim bConsensus As Boolean = False
-        bConsensus = GetConsensusData()
-        Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
+        Log("Updating Magnitudes..")
         Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
         Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
         Dim MaxWitnessLoopCount As Integer = 5
@@ -990,8 +964,6 @@ ThreadSleep:
                 mlPercentComplete = p + 90
                 If mlPercentComplete > 99 Then mlPercentComplete = 99
             Next
-
-            mGRCData.FinishSync(mbTestNet)
 
             mlPercentComplete = 0
             Return True
@@ -1171,41 +1143,6 @@ ThreadStarted:
             mlQueue -= 1
         End SyncLock
     End Sub
-    Public Function GetSupermajorityVoteStatus(sCPID As String, lMinimumWitnessesRequired As Long) As Boolean
-        If mdictNeuralNetworkQuorumData Is Nothing Then Return False
-        Try
-            For Each NS In mdictNeuralNetworkQuorumData
-                If NS.Value.CPID = sCPID Then
-                    If NS.Value.Witnesses > (NS.Value.Participants * 0.51) And NS.Value.Witnesses > lMinimumWitnessesRequired Then
-                        Return True
-                    End If
-                End If
-            Next
-            Return False
-        Catch ex As Exception
-            Return False
-        End Try
-        Return False
-    End Function
-    Public Function GetSupermajorityVoteStatusForResearcher(sCPID As String, lMinimumWitnessesRequired As Long, ByRef ResearcherMagnitude As Double) As Boolean
-        Return False
-        If mdictNeuralNetworkAdditionalQuorumData Is Nothing Then Return False
-        Try
-            If mdictNeuralNetworkAdditionalQuorumData.ContainsKey(sCPID) Then
-                Dim NS As GRCSec.GridcoinData.NeuralStructure = mdictNeuralNetworkAdditionalQuorumData(sCPID)
-                If NS.Witnesses > (NS.Participants * 0.51) And NS.Witnesses > lMinimumWitnessesRequired Then
-                    ResearcherMagnitude = NS.Magnitude
-                    Return True
-                End If
-                Return False
-            Else
-                Return False
-            End If
-        Catch ex As Exception
-            Return False
-        End Try
-        Return False
-    End Function
     Public Function GetRAC(sCPID As String) As String
         'First try the project database:
         Dim sData As String
@@ -1243,32 +1180,6 @@ ThreadStarted:
 Retry:
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
-        Dim lFailCount As Long = 0
-        If 1 = 0 Then
-            Try
-                'If more than 51% of the network voted on this CPIDs projects today, use that value
-                If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
-                    'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
-                    Dim lWitnesses As Long = 0
-                    For Each nNeuralStructure In mdictNeuralNetworkQuorumData
-                        If nNeuralStructure.Value.CPID = sCPID Then
-                            If nNeuralStructure.Value.RAC > 10 Then PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
-                            TotalRAC += nNeuralStructure.Value.RAC
-                            If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
-                        End If
-                    Next
-                    UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
-                    Return True
-                End If
-            Catch ex As Exception
-                lFailCount += 1
-                If lFailCount < 12 Then
-                    Threading.Thread.Sleep(400)
-                    GoTo Retry
-                End If
-                Log("Error while updating CPID  (Attempts: 12) - Resorting to gather online rac for " + sCPID)
-            End Try
-        End If
 
         Try
             Dim sData As String = GetRAC(sCPID)
@@ -1355,11 +1266,6 @@ Retry:
         ' (Infinity Error)
         If Not d.Found Then
             Store(d)
-            'Vote on the RAC for the project for the CPID (Once we verify > 51% of the NN agrees (by distinct IP-CPID per vote), the nodes can use this project RAC for the day to increase performance)
-            Try
-                If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
-            Catch ex As Exception
-            End Try
         End If
         Return True
     End Function
@@ -1682,7 +1588,6 @@ Retry:
             Dim sReportRow As String = ""
             Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid,Witnesses"
             sReport += sHeader + vbCrLf
-            Dim grr As New GridcoinReader.GridcoinRow
             Dim sHeading As String = "CPID;LocalMagnitude;NeuralMagnitude;TotalRAC;Synced Til;Address;CPID_Valid;Witnesses"
             Dim vHeading() As String = Split(sHeading, ";")
             Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()

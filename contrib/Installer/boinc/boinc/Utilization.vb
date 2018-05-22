@@ -157,11 +157,6 @@ Public Class Utilization
         Dim sContract As String = GetMagnitudeContract()
         Return sContract
     End Function
-    Public Function ShowVotingConsole() As Double
-        Dim fmVoting As New frmVoting
-        fmVoting.Show()
-        Return 1
-    End Function
     Public Function ShowForm(sFormName As String) As String
         Try
             Dim vFormName() As String
@@ -187,11 +182,6 @@ Public Class Utilization
         End Try
 
     End Function
-    Public Function ShowNewUserWizard() As Double
-        Dim fNUW As New frmNewUserWizard
-        fNUW.Show()
-        Return 1
-    End Function
     Public Function ShowConfig() As Double
         Try
             mfrmConfig = New frmConfiguration
@@ -201,61 +191,8 @@ Public Class Utilization
         End Try
         Return 1
     End Function
-    Public Function ShowFAQ() As Double
-        Try
-            mfrmFAQ = New frmFAQ
-            mfrmFAQ.Show()
-
-        Catch ex As Exception
-            Log("Error:FAQ")
-        End Try
-        Return 1
-    End Function
-    Public Function ShowTicketAdd() As Double
-        Try
-            mfrmTicketAdd = New frmTicketAdd
-            mfrmTicketAdd.Show()
-        Catch ex As Exception
-            Log("Error while transitioning to frmTicketAdd" + ex.Message)
-        End Try
-        Return 1
-    End Function
-    Public Function ShowDiagnostics() As Double
-        Try
-            mFrmDiagnostics = New frmDiagnostics
-            mFrmDiagnostics.Show()
-        Catch ex As Exception
-            Log("Error while showing Diagnostics" + ex.Message)
-        End Try
-        Return 1
-    End Function
     Public Function muFileToBytes(SourceFile As String) As Byte()
         Return FileToBytes(SourceFile)
-    End Function
-    Public Function ShowFoundation() As Double
-        Try
-            mfrmFoundation = New frmFoundation
-            mfrmFoundation.Show()
-        Catch ex As Exception
-            Log("Error while showing frmFoundation " + ex.Message)
-        End Try
-        Return 1
-    End Function
-    Public Function ShowTicketList() As Double
-        Try
-            mGRCData = New GRCSec.GridcoinData
-            mfrmLogin = New frmLogin
-            mfrmTicketList = New frmTicketList
-            mfrmTicketList.Show()
-        Catch ex As Exception
-            Log("Error while transitioning to frmTicketList" + ex.Message)
-        End Try
-        Return 1
-    End Function
-    Public Function ShowLeaderboard() As Double
-        mfrmLeaderboard = New frmLeaderboard
-        mfrmLeaderboard.Show()
-        Return 1
     End Function
     Public Function ShowMiningConsole() As Double
         Try
@@ -292,12 +229,6 @@ Public Class Utilization
         Dim S As New SpeechSynthesis
         S.Speak(msSentence)
     End Sub
-    Public Function UpdateConfirm(sTxId As String) As String
-        msTXID = sTxId
-        Dim thUpdate As New System.Threading.Thread(AddressOf mUpdateConfirmAsync)
-        thUpdate.Start()
-        Return "1"
-    End Function
     Public Function GRCCodeExecutionSubsystem(sCommand As String) As String
         'Generic interface to execute approved signed safe code at runtime
         Dim sResult As String = "FAIL"
@@ -313,30 +244,6 @@ Public Class Utilization
         If sResult = "" Then sResult = "SUCCESS"
         Return sResult
 
-    End Function
-    Public Function TrackConfirm(sTXID As String) As String
-        Log("Tracking " + Trim(sTXID))
-        Try
-            Dim lOut As Double = mTrackConfirm(sTXID)
-            Log("Returning " + Trim(lOut))
-            Return Trim(lOut)
-        Catch ex As Exception
-            Log("ERROR" + ex.Message)
-            Return "0"
-        End Try
-        'Return a 0 or 1
-    End Function
-    Public Function InsertConfirm(sConfirm As String) As Double
-        Log(sConfirm)
-        Dim vConfirm() As String
-        vConfirm = Split(sConfirm, "<COL>")
-        Dim dAmt As Double = vConfirm(0)
-        Dim sFrom As String = vConfirm(1)
-        Dim sTo As String = vConfirm(2)
-        Dim sTXID As String = vConfirm(3)
-        Dim sOut As String = mInsertConfirm(dAmt, sFrom, sTo, sTXID)
-        Log("Inserted " + Trim(sOut))
-        Return 1
     End Function
     Public Function SetDebugMode(bMode) As Boolean
         mbDebugging = bMode
@@ -451,15 +358,6 @@ Public Class Utilization
     Public Function GetLanIP() As String
         Return GetLocalLanIP1()
     End Function
-    Public Sub clsLogOff()
-        If mGRCData Is Nothing Then mGRCData = New GRCSec.GridcoinData
-        mGRCData.LogOff(GetSessionGuid)
-    End Sub
-    Public Sub ShowEmailModule()
-        Dim e As New frmMail
-        e.Show()
-        e.RetrievePop3Emails()
-    End Sub
     Protected Overrides Sub Finalize()
         Try
             MyBase.Finalize()
