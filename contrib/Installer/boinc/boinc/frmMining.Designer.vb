@@ -56,7 +56,6 @@ Partial Class frmMining
         Me.ConfigurationToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.ContractDetailsToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.TabControl1 = New System.Windows.Forms.TabControl()
-        Me.TabOverview = New System.Windows.Forms.TabPage()
         Me.GroupBox4 = New System.Windows.Forms.GroupBox()
         Me.GroupBox3 = New System.Windows.Forms.GroupBox()
         Me.RichTextBox1 = New System.Windows.Forms.RichTextBox()
@@ -92,7 +91,6 @@ Partial Class frmMining
         CType(Me.chtCurCont, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.MenuStrip1.SuspendLayout()
         Me.TabControl1.SuspendLayout()
-        Me.TabOverview.SuspendLayout()
         Me.GroupBox3.SuspendLayout()
         Me.GroupBox2.SuspendLayout()
         CType(Me.ChartHashRate, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -273,7 +271,6 @@ Partial Class frmMining
         '
         'TabControl1
         '
-        Me.TabControl1.Controls.Add(Me.TabOverview)
         Me.TabControl1.Controls.Add(Me.TabPage1)
         Me.TabControl1.Controls.Add(Me.TabPage2)
         Me.TabControl1.Location = New System.Drawing.Point(14, 39)
@@ -281,21 +278,6 @@ Partial Class frmMining
         Me.TabControl1.SelectedIndex = 0
         Me.TabControl1.Size = New System.Drawing.Size(1045, 383)
         Me.TabControl1.TabIndex = 53
-        '
-        'TabOverview
-        '
-        Me.TabOverview.Controls.Add(Me.GroupBox4)
-        Me.TabOverview.Controls.Add(Me.GroupBox3)
-        Me.TabOverview.Controls.Add(Me.GroupBox2)
-        Me.TabOverview.Controls.Add(Me.GroupBox1)
-        Me.TabOverview.Controls.Add(Me.pbCgminer)
-        Me.TabOverview.Location = New System.Drawing.Point(4, 22)
-        Me.TabOverview.Name = "TabOverview"
-        Me.TabOverview.Padding = New System.Windows.Forms.Padding(3)
-        Me.TabOverview.Size = New System.Drawing.Size(1037, 357)
-        Me.TabOverview.TabIndex = 0
-        Me.TabOverview.Text = "Overview"
-        Me.TabOverview.UseVisualStyleBackColor = True
         '
         'GroupBox4
         '
@@ -753,7 +735,6 @@ Partial Class frmMining
         Me.MenuStrip1.ResumeLayout(False)
         Me.MenuStrip1.PerformLayout()
         Me.TabControl1.ResumeLayout(False)
-        Me.TabOverview.ResumeLayout(False)
         Me.GroupBox3.ResumeLayout(False)
         Me.GroupBox2.ResumeLayout(False)
         CType(Me.ChartHashRate, System.ComponentModel.ISupportInitialize).EndInit()
@@ -779,7 +760,6 @@ Partial Class frmMining
     Friend WithEvents HideToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents ConfigurationToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents TabControl1 As System.Windows.Forms.TabControl
-    Friend WithEvents TabOverview As System.Windows.Forms.TabPage
     Friend WithEvents pbCgminer As System.Windows.Forms.PictureBox
     Friend WithEvents GroupBox3 As System.Windows.Forms.GroupBox
     Friend WithEvents RichTextBox1 As System.Windows.Forms.RichTextBox
