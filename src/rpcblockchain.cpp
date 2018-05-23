@@ -2520,7 +2520,6 @@ Value seefile(const Array& params, bool fHelp)
     return res;
 }
 
-#ifdef WIN32
 Value refhash(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2543,7 +2542,6 @@ Value refhash(const Array& params, bool fHelp)
 
     return res;
 }
-#endif
 
 Value sendblock(const Array& params, bool fHelp)
 {

@@ -383,9 +383,7 @@ static const CRPCCommand vRPCCommands[] =
     { "projects",                &projects,                false,  cat_developer     },
     { "readconfig",              &readconfig,              false,  cat_developer     },
     { "readdata",                &readdata,                false,  cat_developer     },
-#ifdef WIN32
     { "refhash",                 &refhash,                 false,  cat_developer     },
-#endif
     { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
     { "seefile",                 &seefile,                 false,  cat_developer     },
     { "sendalert",               &sendalert,               false,  cat_developer     },
