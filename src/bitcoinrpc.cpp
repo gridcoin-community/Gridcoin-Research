@@ -368,7 +368,7 @@ static const CRPCCommand vRPCCommands[] =
     { "debugnet",                &debugnet,                true,   cat_developer     },
     { "dportally",               &dportally,               false,  cat_developer     },
     { "exportstats1",            &rpc_exportstats,         false,  cat_developer     },
-    { "forcequorom",             &forcequorom,             false,  cat_developer     },
+    { "forcequorum",             &forcequorum,             false,  cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
     { "genboinckey",             &genboinckey,             false,  cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
@@ -398,7 +398,7 @@ static const CRPCCommand vRPCCommands[] =
 #ifdef WIN32
     { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
 #endif
-    { "updatequoromdata",        &updatequoromdata,        false,  cat_developer     },
+    { "updatequorumdata",        &updatequorumdata,        false,  cat_developer     },
     { "versionreport",           &versionreport,           false,  cat_developer     },
     { "writedata",               &writedata,               false,  cat_developer     },
 
