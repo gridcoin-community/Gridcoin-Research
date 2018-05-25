@@ -1539,7 +1539,7 @@ Value lifetime(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "lifttime\n"
+                "lifetime\n"
                 "\n"
                 "Displays information for the lifetime of your cpid in the network\n");
 
@@ -2183,13 +2183,13 @@ Value dportally(const Array& params, bool fHelp)
     return res;
 }
 
-Value forcequorom(const Array& params, bool fHelp)
+Value forcequorum(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "forcequorom\n"
+                "forcequorum\n"
                 "\n"
-                "Requests neural network for force a quorom among nodes\n");
+                "Requests neural network for force a quorum among nodes\n");
 
     Object res;
 
@@ -2711,13 +2711,13 @@ Value testnewcontract(const Array& params, bool fHelp)
 }
 #endif
 
-Value updatequoromdata(const Array& params, bool fHelp)
+Value updatequorumdata(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "updatequoromdata\n"
+                "updatequorumdata\n"
                 "\n"
-                "Requests update of neural network quorom data\n");
+                "Requests update of neural network quorum data\n");
 
     Object res;
 
@@ -2823,7 +2823,7 @@ Value currenttime(const Array& params, bool fHelp)
         throw runtime_error(
                 "currenttime\n"
                 "\n"
-                "Displays UTC unix time as well as date and time in UTC\n");
+                "Displays UTC Unix time as well as date and time in UTC\n");
 
     Object res;
 
