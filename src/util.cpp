@@ -34,6 +34,8 @@ namespace boost {
 #include <openssl/rand.h>
 #include <cstdarg>
 
+#include "neuralnet.h"
+
 #ifdef WIN32
 #ifdef _MSC_VER
 #pragma warning(disable:4786)
@@ -67,6 +69,7 @@ bool fDebug = false;
 bool fDebugNet = false;
 bool fDebug2 = false;
 bool fDebug3 = false;
+bool fDebug4 = false;
 bool fDebug10 = false;
 
 bool fPrintToConsole = false;
@@ -86,7 +89,7 @@ std::string GetNeuralVersion();
 
 bool fDevbuildCripple;
 
-int64_t IsNeural();
+//int64_t IsNeural();
 
 void MilliSleep(int64_t n)
 {
@@ -180,7 +183,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug10) printf("RandAddSeed() %lu bytes\n", nSize);
+        if (fDebug10) LogPrint("rand", "RandAddSeed() %lu bytes\n", nSize);
     }
 #endif
 }
@@ -212,24 +215,25 @@ uint256 GetRandHash()
     return hash;
 }
 
+bool LogAcceptCategory(const char* category)
+{
+    if (category != NULL)
+    {
+        if (!fDebug) return false;
+        const vector<string>& categories = mapMultiArgs["-debug"];
+        if (find(categories.begin(), categories.end(), string(category)) == categories.end())
+            return false;
+    }
+    return true;
+}
 
-
-
-
-
-
-
-inline int OutputDebugStringF(const char* pszFormat, ...)
+int LogPrintStr(const std::string &str)
 {
     int ret = 0;
     if (fPrintToConsole)
     {
         // print to console
-        va_list arg_ptr;
-        va_start(arg_ptr, pszFormat);
-        ret = vfprintf(stdout, pszFormat, arg_ptr);
-        fflush(stdout);
-        va_end(arg_ptr);
+        ret = fwrite(str.data(), 1, str.size(), stdout);
     }
     //else
     if (!fPrintToDebugger)
@@ -266,20 +270,17 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             // Debug print useful for profiling
             if (fLogTimestamps && fStartedNewLine)
                 fprintf(fileout, "%s ", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()).c_str());
-            if (pszFormat[strlen(pszFormat) - 1] == '\n')
+            if (!str.empty() && str[str.size() - 1] == '\n')
                 fStartedNewLine = true;
             else
                 fStartedNewLine = false;
 
-            va_list arg_ptr;
-            va_start(arg_ptr, pszFormat);
-            ret = vfprintf(fileout, pszFormat, arg_ptr);
+            ret = fwrite(str.data(), 1, str.size(), fileout);
             fflush(fileout);
-            va_end(arg_ptr);
         }
     }
 
-#ifdef WIN32
+/*#ifdef WIN32
     if (fPrintToDebugger)
     {
         static CCriticalSection cs_OutputDebugStringF;
@@ -290,8 +291,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             static std::string buffer;
 
             va_list arg_ptr;
-            va_start(arg_ptr, pszFormat);
-            buffer += vstrprintf(pszFormat, arg_ptr);
+            va_start(arg_ptr, str.c_str());
+            buffer += vstrprintf(str.c_str(), arg_ptr);
             va_end(arg_ptr);
 
             int line_start = 0, line_end;
@@ -303,53 +304,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             buffer.erase(0, line_start);
         }
     }
-#endif
+#endif */
     return ret;
-}
-
-string vstrprintf(const char *format, va_list ap)
-{
-    char buffer[50000];
-    char* p = buffer;
-    int limit = sizeof(buffer);
-    int ret;
-    while (true)
-    {
-        va_list arg_ptr;
-        va_copy(arg_ptr, ap);
-        ret = vsnprintf(p, limit, format, arg_ptr);
-        va_end(arg_ptr);
-        if (ret >= 0 && ret < limit)
-            break;
-        if (p != buffer)
-            delete[] p;
-        limit *= 2;
-        p = new char[limit];
-        if (p == NULL)
-            throw std::bad_alloc();
-    }
-    string str(p, p+ret);
-    if (p != buffer)
-        delete[] p;
-    return str;
-}
-
-string real_strprintf(const char *format, int dummy, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, dummy);
-    string str = vstrprintf(format, arg_ptr);
-    va_end(arg_ptr);
-    return str;
-}
-
-string real_strprintf(const std::string &format, int dummy, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, dummy);
-    string str = vstrprintf(format.c_str(), arg_ptr);
-    va_end(arg_ptr);
-    return str;
 }
 
 int GetDayOfYear(int64_t timestamp)
@@ -367,18 +323,6 @@ int GetDayOfYear(int64_t timestamp)
         return 0;
     }
 }
-
-
-bool error(const char *format, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, format);
-    std::string str = vstrprintf(format, arg_ptr);
-    va_end(arg_ptr);
-    printf("ERROR: %s\n", str.c_str());
-    return false;
-}
-
 
 void ParseString(const string& str, char c, vector<string>& v)
 {
@@ -1028,10 +972,16 @@ static std::string FormatException(std::exception* pex, const char* pszThread)
             "UNKNOWN EXCEPTION       \n%s in %s       \n", pszModule, pszThread);
 }
 
+void LogException(std::exception* pex, const char* pszThread)
+{
+    std::string message = FormatException(pex, pszThread);
+    LogPrintf("\n%s", message.c_str());
+}
+
 void PrintException(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
-    printf("\n\n************************\n%s\n", message.c_str());
+    LogPrintf("\n\n************************\n%s\n", message);
     fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
     strMiscWarning = message;
     throw;
@@ -1040,7 +990,7 @@ void PrintException(std::exception* pex, const char* pszThread)
 void PrintExceptionContinue(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
-    printf("\n\n************************\n%s\n", message.c_str());
+    LogPrintf("\n\n************************\n%s\n", message);
     fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
     strMiscWarning = message;
 }
@@ -1114,7 +1064,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     //2-25-2015
     fs::path &path = pathCached[fNetSpecific];
 
-    // This can be called during exceptions by printf, so we cache the
+    // This can be called during exceptions by LogPrintf, so we cache the
     // value so we don't have to do memory allocations after that.
     if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
     {
@@ -1155,13 +1105,13 @@ boost::filesystem::path GetProgramDir()
 
     if (mapArgs.count("-programdir"))
     {
-        // printf("Acquiring program directory from conf file\n");
+        // LogPrintf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
 
         if (!boost::filesystem::is_directory(path))
         {
             path = "";
-            printf("Invalid path stated in gridcoinresearch.conf\n");
+            LogPrintf("Invalid path stated in gridcoinresearch.conf\n");
         }
         else
         {
@@ -1180,14 +1130,14 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        // printf("Checking for %s \r\n", (boost::filesystem::current_path() / list[i]).c_str());
+        // LogPrintf("Checking for %s \n", (boost::filesystem::current_path() / list[i]).c_str());
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             return boost::filesystem::current_path();
         }
     }
 
-        printf("Please specify program directory in config file using the 'programdir' argument\n");
+        LogPrintf("Please specify program directory in config file using the 'programdir' argument\n");
         path = "";
         return path;
 
@@ -1364,7 +1314,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug10) printf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         int64_t nMedian = vTimeOffsets.median();
@@ -1392,17 +1342,17 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                     fDone = true;
                     string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
-                    printf("*** %s\n", strMessage.c_str());
+                    LogPrintf("*** %s\n", strMessage);
                     uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
                 }
             }
         }
         if (fDebug10) {
             for (auto const& n : vSorted)
-                printf("%+" PRId64 "  ", n);
-            printf("|  ");
+                LogPrintf("%+" PRId64 "  ", n);
+            LogPrintf("|  ");
         }
-        if (fDebug10) printf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)\n", nTimeOffset, nTimeOffset/60);
+        if (fDebug10) LogPrintf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)\n", nTimeOffset, nTimeOffset/60);
     }
 }
 
@@ -1501,16 +1451,10 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 
 std::string GetNeuralVersion()
 {
-
     std::string neural_v = "0";
-
-    #if defined(WIN32) && defined(QT_GUI)
-        int64_t neural_id = IsNeural();
-        neural_v = ToString(MINOR_VERSION) + "." + ToString(neural_id);
-    #endif
-
+    int64_t neural_id = NN::IsNeuralNet();
+    neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
     return neural_v;
-
 }
 
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
@@ -1541,7 +1485,7 @@ boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
         return fs::path(pszPath);
     }
 
-    printf("SHGetSpecialFolderPathA() failed, could not obtain requested path.\n");
+    LogPrintf("SHGetSpecialFolderPathA() failed, could not obtain requested path.\n");
     return fs::path("");
 }
 #endif
@@ -1550,7 +1494,7 @@ void runCommand(std::string strCommand)
 {
     int nErr = ::system(strCommand.c_str());
     if (nErr)
-        printf("runCommand error: system(%s) returned %d\n", strCommand.c_str(), nErr);
+        LogPrintf("runCommand error: system(%s) returned %d\n", strCommand, nErr);
 }
 
 void RenameThread(const char* name)
@@ -1580,7 +1524,7 @@ bool NewThread(void(*pfn)(void*), void* parg)
     {
         boost::thread(pfn, parg); // thread detaches when out of scope
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s\n", e.what());
         return false;
     }
     return true;
@@ -1610,7 +1554,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
     }
     catch (...)
     {
-        printf("Exception occurred in MakeSafeMessage. Returning an empty message.\n");
+        LogPrintf("Exception occurred in MakeSafeMessage. Returning an empty message.\n");
         safemessage = "";
     }
     return safemessage;
@@ -1624,7 +1568,7 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s\n", e.what());
         return false;
     }
     return true;
@@ -1638,7 +1582,7 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s\n", e.what());
         return false;
     }
     return true;
@@ -1670,7 +1614,7 @@ void ThreadHandler::removeByName(const std::string tname)
 
 void ThreadHandler::removeAll()
 {
-    printf("Wait for %d threads to join.\n",numThreads());
+    LogPrintf("Wait for %d threads to join.",numThreads());
     threadGroup.join_all();
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {

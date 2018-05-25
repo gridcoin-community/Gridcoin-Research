@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>948</width>
-    <height>520</height>
+    <height>559</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -66,15 +66,7 @@
              <number>7</number>
             </property>
             <item>
-             <widget class="QLabel" name="label_5">
-              <property name="font">
-               <font>
-                <family>Open Sans,sans-serif</family>
-                <pointsize>16</pointsize>
-                <weight>75</weight>
-                <bold>true</bold>
-               </font>
-              </property>
+             <widget class="QLabel" name="labelOverviewWallet">
               <property name="text">
                <string>Wallet</string>
               </property>
@@ -87,9 +79,6 @@
              <widget class="QLabel" name="labelWalletStatus">
               <property name="toolTip">
                <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">color: #d31360;</string>
               </property>
               <property name="text">
                <string notr="true">(out of sync)</string>
@@ -126,13 +115,7 @@
              <number>12</number>
             </property>
             <item row="0" column="0">
-             <widget class="QLabel" name="label">
-              <property name="font">
-               <font>
-                <weight>75</weight>
-                <bold>true</bold>
-               </font>
-              </property>
+             <widget class="QLabel" name="labelAvailable">
               <property name="text">
                <string>Available:</string>
               </property>
@@ -140,11 +123,6 @@
             </item>
             <item row="0" column="1">
              <widget class="QLabel" name="labelBalance">
-              <property name="font">
-               <font>
-                <family>Open Sans,sans-serif</family>
-               </font>
-              </property>
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -168,11 +146,6 @@
             </item>
             <item row="1" column="1">
              <widget class="QLabel" name="labelStake">
-              <property name="font">
-               <font>
-                <family>Open Sans,sans-serif</family>
-               </font>
-              </property>
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -196,11 +169,6 @@
             </item>
             <item row="2" column="1">
              <widget class="QLabel" name="labelUnconfirmed">
-              <property name="font">
-               <font>
-                <family>Open Sans,sans-serif</family>
-               </font>
-              </property>
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -217,12 +185,6 @@
             </item>
             <item row="3" column="0">
              <widget class="QLabel" name="labelImmatureText">
-              <property name="font">
-               <font>
-                <weight>75</weight>
-                <bold>true</bold>
-               </font>
-              </property>
               <property name="text">
                <string>Immature:</string>
               </property>
@@ -230,11 +192,6 @@
             </item>
             <item row="3" column="1">
              <widget class="QLabel" name="labelImmature">
-              <property name="font">
-               <font>
-                <family>Open Sans,sans-serif</family>
-               </font>
-              </property>
               <property name="toolTip">
                <string>Total mined coins that have not yet matured.</string>
               </property>
@@ -250,13 +207,13 @@
              <widget class="Line" name="line">
               <property name="sizePolicy">
                <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-                <horstretch>140</horstretch>
+                <horstretch>0</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
               <property name="maximumSize">
                <size>
-                <width>300</width>
+                <width>16777215</width>
                 <height>16777215</height>
                </size>
               </property>
@@ -266,13 +223,7 @@
              </widget>
             </item>
             <item row="5" column="0">
-             <widget class="QLabel" name="label_6">
-              <property name="font">
-               <font>
-                <weight>75</weight>
-                <bold>true</bold>
-               </font>
-              </property>
+             <widget class="QLabel" name="labelTotalBalance">
               <property name="text">
                <string>Total:</string>
               </property>
@@ -512,7 +463,7 @@
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_3">
             <item>
-             <widget class="QLabel" name="label_4">
+             <widget class="QLabel" name="labelRecentTrans">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                 <horstretch>0</horstretch>
@@ -524,13 +475,6 @@
                 <width>0</width>
                 <height>0</height>
                </size>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>16</pointsize>
-                <weight>75</weight>
-                <bold>true</bold>
-               </font>
               </property>
               <property name="text">
                <string>Recent transactions</string>
@@ -553,9 +497,6 @@
               </property>
               <property name="toolTip">
                <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">color: #dfffff;</string>
               </property>
               <property name="text">
                <string notr="true">(out of sync)</string>
@@ -637,7 +578,7 @@
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QLabel" name="labelPoll">
+      <widget class="ClickLabel" name="labelPoll">
        <property name="text">
         <string notr="true"/>
        </property>
@@ -649,7 +590,7 @@
      <item row="1" column="0">
       <widget class="QLabel" name="label_17">
        <property name="text">
-        <string>Client Messages:</string>
+        <string>Error Messages:</string>
        </property>
       </widget>
      </item>
@@ -667,6 +608,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ClickLabel</class>
+   <extends>QLabel</extends>
+   <header>clicklabel.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

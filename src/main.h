@@ -9,10 +9,12 @@
 #include "net.h"
 #include "script.h"
 #include "scrypt.h"
+#include "util.h"
 
 #include "global_objects_noui.hpp"
 
 #include <map>
+#include <unordered_map>
 #include <set>
 
 class CWallet;
@@ -30,7 +32,7 @@ static const int LAST_POW_BLOCK = 2050;
 extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
-static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;   
+static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 
 static const double NeuralNetworkMultiplier = 115000;
 
@@ -75,14 +77,14 @@ static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c261479
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-inline bool IsProtocolV2(int nHeight) 
-{ 
-	return (fTestNet ?  nHeight > 2060 : nHeight > 85400); 
+inline bool IsProtocolV2(int nHeight)
+{
+	return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
 }
 
 inline bool IsResearchAgeEnabled(int nHeight)
 {
-	return (fTestNet ?  nHeight > 0 : nHeight > 364500); 
+	return (fTestNet ?  nHeight > 0 : nHeight > 364500);
 }
 
 // TODO: Move this and the other height thresholds to their own files.
@@ -108,9 +110,9 @@ inline int GetSuperblockAgeSpacing(int nHeight)
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
-inline bool AreBinarySuperblocksEnabled(int nHeight) 
-{ 
-	return (fTestNet ? nHeight > 10000 : nHeight > 725000); 
+inline bool AreBinarySuperblocksEnabled(int nHeight)
+{
+	return (fTestNet ? nHeight > 10000 : nHeight > 725000);
 }
 
 inline bool IsV9Enabled_Tally(int nHeight)
@@ -126,8 +128,6 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
 
-extern std::map<std::string, std::string> mvApplicationCache;
-extern std::map<std::string, int64_t> mvApplicationCacheTimestamp;
 extern std::map<std::string, double> mvNeuralNetworkHash;
 extern std::map<std::string, double> mvCurrentNeuralNetworkHash;
 extern std::map<std::string, double> mvNeuralVersion;
@@ -142,10 +142,16 @@ extern std::map<std::string, MiningCPID> mvBlockIndex;
 typedef std::set<uint256> HashSet;
 extern std::map<std::string, HashSet> mvCPIDBlockHashes;
 
+struct BlockHasher
+{
+    size_t operator()(const uint256& hash) const { return hash.Get64(); }
+};
+
+typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
-extern std::map<uint256, CBlockIndex*> mapBlockIndex;
+extern BlockMap mapBlockIndex;
 extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
 extern CBlockIndex* pindexGenesisBlock;
 extern unsigned int nStakeMinAge;
@@ -221,6 +227,8 @@ struct globalStatusType
     std::string netWeight;
     std::string coinWeight;
     std::string magnitude;
+    std::string ETTS;
+    std::string ERRperday;
     std::string project;
     std::string cpid;
     std::string status;
@@ -271,14 +279,18 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
-std::string ReadCache(std::string section, std::string key);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string PackBinarySuperblock(std::string sBlock);
 std::string UnpackBinarySuperblock(std::string sBlock);
 bool IsSuperBlock(CBlockIndex* pIndex);
 bool LoadSuperblock(std::string data, int64_t nTime, int height);
 
-double GetPoSKernelPS();
+double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
+double GetAverageDifficulty(unsigned int nPoSInterval = 40);
+//double GetEstimatedTimetoStake(unsigned int nPoSInterval = 40, double dConfidence = 0.8);
+// Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
+// GetAverageDifficulty(nPosInterval) = to dDiff here.
+double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
@@ -353,7 +365,7 @@ public:
 
     void print() const
     {
-        printf("%s", ToString().c_str());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -404,12 +416,12 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10).c_str(), n);
+        return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10), n);
     }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -472,7 +484,7 @@ public:
 
     std::string ToStringShort() const
     {
-        return strprintf(" %s %d", prevout.hash.ToString().c_str(), prevout.n);
+        return strprintf(" %s %d", prevout.hash.ToString(), prevout.n);
     }
 
     std::string ToString() const
@@ -481,9 +493,9 @@ public:
         str += "CTxIn(";
         str += prevout.ToString();
         if (prevout.IsNull())
-            str += strprintf(", coinbase %s", HexStr(scriptSig).c_str());
+            str += strprintf(", coinbase %s", HexStr(scriptSig));
         else
-            str += strprintf(", scriptSig=%s", scriptSig.ToString().substr(0,24).c_str());
+            str += strprintf(", scriptSig=%s", scriptSig.ToString().substr(0,24));
         if (nSequence != std::numeric_limits<unsigned int>::max())
             str += strprintf(", nSequence=%u", nSequence);
         str += ")";
@@ -492,7 +504,7 @@ public:
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -565,18 +577,18 @@ public:
 
     std::string ToStringShort() const
     {
-        return strprintf(" out %s %s", FormatMoney(nValue).c_str(), scriptPubKey.ToString(true).c_str());
+        return strprintf(" out %s %s", FormatMoney(nValue), scriptPubKey.ToString(true));
     }
 
     std::string ToString() const
     {
         if (IsEmpty()) return "CTxOut(empty)";
-        return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue).c_str(), scriptPubKey.ToString().c_str());
+        return strprintf("CTxOut(nValue=%s, scriptPubKey=%s)", FormatMoney(nValue), scriptPubKey.ToString());
     }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -724,7 +736,7 @@ public:
         return nValueOut;
     }
 
-	
+
 
 
 
@@ -784,7 +796,7 @@ public:
     std::string ToStringShort() const
     {
         std::string str;
-        str += strprintf("%s %s", GetHash().ToString().c_str(), IsCoinBase()? "base" : (IsCoinStake()? "stake" : "user"));
+        str += strprintf("%s %s", GetHash().ToString(), IsCoinBase()? "base" : (IsCoinStake()? "stake" : "user"));
         return str;
     }
 
@@ -793,7 +805,7 @@ public:
         std::string str;
         str += IsCoinBase()? "Coinbase" : (IsCoinStake()? "Coinstake" : "CTransaction");
         str += strprintf("(hash=%s, nTime=%d, ver=%d, vin.size=%" PRIszu ", vout.size=%" PRIszu ", nLockTime=%d)\n",
-            GetHash().ToString().substr(0,10).c_str(),
+            GetHash().ToString().substr(0,10),
             nTime,
             nVersion,
             vin.size(),
@@ -808,7 +820,7 @@ public:
 
     void print() const
     {
-        printf("%s", ToString().c_str());
+        LogPrintf("%s", ToString());
     }
 
 
@@ -998,7 +1010,7 @@ public:
     unsigned int nBits;
 
     unsigned int nNonce;
-	
+
     // network and disk
     std::vector<CTransaction> vtx;
 
@@ -1017,8 +1029,8 @@ public:
 
 	//Gridcoin - 7/27/2014
 	/////////////////////////////////////////
-	
-	
+
+
     CBlock()
     {
         SetNull();
@@ -1027,7 +1039,7 @@ public:
     IMPLEMENT_SERIALIZE
     (
 		//Gridcoin
-	   
+
 	    //
 
 
@@ -1038,7 +1050,7 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
-	
+
 
         // ConnectBlock depends on vtx following header to generate CDiskTxPos
         if (!(nType & (SER_GETHASH|SER_BLOCKHEADERONLY)))
@@ -1048,7 +1060,7 @@ public:
             READWRITE(vchBlockSig);
 
 			/*
-			
+
 			*/
 
 
@@ -1111,7 +1123,7 @@ public:
         // Take last bit of block hash as entropy bit
         unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
         if (fDebug && GetBoolArg("-printstakemodifier"))
-            printf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString().c_str(), nEntropyBit);
+            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString(), nEntropyBit);
         return nEntropyBit;
     }
 
@@ -1247,23 +1259,23 @@ public:
 
     void print() const
     {
-        printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
-            GetHash().ToString().c_str(),
+        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
+            GetHash().ToString(),
             nVersion,
-            hashPrevBlock.ToString().c_str(),
-            hashMerkleRoot.ToString().c_str(),
+            hashPrevBlock.ToString(),
+            hashMerkleRoot.ToString(),
             nTime, nBits, nNonce,
             vtx.size(),
-            HexStr(vchBlockSig.begin(), vchBlockSig.end()).c_str());
+            HexStr(vchBlockSig.begin(), vchBlockSig.end()));
         for (unsigned int i = 0; i < vtx.size(); i++)
         {
-            printf("  ");
+            LogPrintf("  ");
             vtx[i].print();
         }
-        printf("  vMerkleTree: ");
+        LogPrintf("  vMerkleTree: ");
         for (unsigned int i = 0; i < vMerkleTree.size(); i++)
-            printf("%s ", vMerkleTree[i].ToString().substr(0,10).c_str());
-        printf("\n");
+            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10));
+        LogPrintf("\n");
     }
 
 
@@ -1314,7 +1326,7 @@ public:
 	unsigned int nIsContract;
 
     unsigned int nFlags;  // ppcoin: block index flags
-    enum  
+    enum
     {
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY  = (1 << 1), // entropy bit for stake modifier
@@ -1482,7 +1494,7 @@ public:
     }
 
     bool IsUserCPID() const
-    {        
+    {
         return !(nFlags & (INVESTOR_CPID | EMPTY_CPID));
     }
 
@@ -1539,18 +1551,18 @@ public:
     {
         return strprintf("CBlockIndex(nprev=%p, pnext=%p, nFile=%u, nBlockPos=%-6d nHeight=%d, nMint=%s, nMoneySupply=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016" PRIx64 ", nStakeModifierChecksum=%08x, hashProof=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
             pprev, pnext, nFile, nBlockPos, nHeight,
-            FormatMoney(nMint).c_str(), FormatMoney(nMoneySupply).c_str(),
+            FormatMoney(nMint), FormatMoney(nMoneySupply),
             GeneratedStakeModifier() ? "MOD" : "-", GetStakeEntropyBit(), IsProofOfStake()? "PoS" : "PoW",
-            nStakeModifier, nStakeModifierChecksum, 
-            hashProof.ToString().c_str(),
-            prevoutStake.ToString().c_str(), nStakeTime,
-            hashMerkleRoot.ToString().c_str(),
-            GetBlockHash().ToString().c_str());
-    }    
+            nStakeModifier, nStakeModifierChecksum,
+            hashProof.ToString(),
+            prevoutStake.ToString(), nStakeTime,
+            hashMerkleRoot.ToString(),
+            GetBlockHash().ToString());
+    }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -1617,7 +1629,7 @@ public:
         READWRITE(cpid_hex);
         if(fRead)
             const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
-            
+
 		READWRITE(nResearchSubsidy);
 		READWRITE(nInterestSubsidy);
 		READWRITE(nMagnitude);
@@ -1663,15 +1675,15 @@ public:
         std::string str = "CDiskBlockIndex(";
         str += CBlockIndex::ToString();
         str += strprintf("\n                hashBlock=%s, hashPrev=%s, hashNext=%s)",
-            GetBlockHash().ToString().c_str(),
-            hashPrev.ToString().c_str(),
-            hashNext.ToString().c_str());
+            GetBlockHash().ToString(),
+            hashPrev.ToString(),
+            hashNext.ToString());
         return str;
     }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s\n", ToString());
     }
 };
 
@@ -1700,7 +1712,7 @@ public:
 
     explicit CBlockLocator(uint256 hashBlock)
     {
-        std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi != mapBlockIndex.end())
             Set((*mi).second);
     }
@@ -1751,7 +1763,7 @@ public:
         int nStep = 1;
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
@@ -1770,7 +1782,7 @@ public:
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;
@@ -1786,7 +1798,7 @@ public:
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
         {
-            std::map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hash);
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
             if (mi != mapBlockIndex.end())
             {
                 CBlockIndex* pindex = (*mi).second;

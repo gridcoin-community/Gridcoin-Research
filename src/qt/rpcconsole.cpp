@@ -183,7 +183,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (json_spirit::Object& objError)
     {
-		printf("gridcoinresearch:  Handling Error [Request %s]...\r\n",command.toStdString().c_str());
+		LogPrintf("gridcoinresearch:  Handling Error [Request %s]...\n",command.toStdString());
 
         try // Nice formatting for standard-format error
         {
@@ -198,7 +198,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (std::exception& e)
     {
-		printf("gridcoinresearch:  Handling Error[2]...\r\n");
+		LogPrintf("gridcoinresearch:  Handling Error[2]...\n");
 
         emit reply(RPCConsole::CMD_ERROR, QString("Error: ") + QString::fromStdString(e.what()));
     }
@@ -224,6 +224,9 @@ RPCConsole::RPCConsole(QWidget *parent) :
 
     // set OpenSSL version label
     ui->openSSLVersion->setText(SSLeay_version(SSLEAY_VERSION));
+
+    // set Qt version label
+    ui->qtVersion->setText("Qt " + QString::fromLocal8Bit(qVersion()) + " (built against " + QString::fromStdString(QT_VERSION_STR) + ")");
 
     startExecutor();
 	setTrafficGraphRange(INITIAL_TRAFFIC_GRAPH_MINS);
@@ -290,7 +293,7 @@ void RPCConsole::setClientModel(ClientModel *model)
 
 
         // Provide initial values
-		QString cvi = model->formatFullVersion() + "-" + toqstring(MINOR_VERSION);
+		QString cvi = model->formatFullVersion() + "-" + toqstring(CLIENT_VERSION_MINOR);
 
 	    ui->clientVersion->setText(cvi);
         ui->clientName->setText(model->clientName());
@@ -298,7 +301,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->startupTime->setText(model->formatClientStartupTime());
 
         setNumConnections(model->getNumConnections());
-        ui->isTestNet->setChecked(model->isTestNet());
+        ui->isTestNet->setText(model->isTestNet() ? tr("Yes") : tr("No"));
 
         setNumBlocks(model->getNumBlocks(), model->getNumBlocksOfPeers());
 

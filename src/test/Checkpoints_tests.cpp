@@ -14,22 +14,20 @@ BOOST_AUTO_TEST_SUITE(Checkpoints_tests)
 
 BOOST_AUTO_TEST_CASE(sanity)
 {
-    // Gridcoin: Tests disabled due to missing functionality.
-    /*uint256 p11111 = uint256("0x0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d");
-    uint256 p134444 = uint256("0x00000000000005b12ffd4cd315cd34ffd4a594f430ac814c91184a0d42d2b0fe");
-    BOOST_CHECK(Checkpoints::CheckBlock(11111, p11111));
-    BOOST_CHECK(Checkpoints::CheckBlock(134444, p134444));
+    uint256 p40 = uint256("0x0000002c305541bceb763e6f7fce2f111cb752acf9777e64c6f02fab5ef4778c");
+    uint256 p500000 = uint256("0x3916b53eaa0eb392ce5d7e4eaf7db4f745187743f167539ffa4dc1a30c06acbd");
+    BOOST_CHECK(Checkpoints::CheckHardened(40, p40));
+    BOOST_CHECK(Checkpoints::CheckHardened(500000, p500000));
 
-    
     // Wrong hashes at checkpoints should fail:
-    BOOST_CHECK(!Checkpoints::CheckBlock(11111, p134444));
-    BOOST_CHECK(!Checkpoints::CheckBlock(134444, p11111));
+    BOOST_CHECK(!Checkpoints::CheckHardened(40, p500000));
+    BOOST_CHECK(!Checkpoints::CheckHardened(500000, p40));
 
     // ... but any hash not at a checkpoint should succeed:
-    BOOST_CHECK(Checkpoints::CheckBlock(11111+1, p134444));
-    BOOST_CHECK(Checkpoints::CheckBlock(134444+1, p11111));*/
+    BOOST_CHECK(Checkpoints::CheckHardened(40+1, p500000));
+    BOOST_CHECK(Checkpoints::CheckHardened(500000+1, p40));
 
-    BOOST_CHECK(Checkpoints::GetTotalBlocksEstimate() >= 134444);
-}    
+    BOOST_CHECK(Checkpoints::GetTotalBlocksEstimate() >= 500000);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

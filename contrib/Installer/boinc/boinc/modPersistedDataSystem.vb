@@ -197,7 +197,7 @@ Module modPersistedDataSystem
                     Dim dLocalMagnitude As Double = Val("0" + Num(cpid.Magnitude)) * dLegacyMagnitudeBoost
                     If dLocalMagnitude > 32766 Then dLocalMagnitude = 32766
 
-                    Dim sRow As String = cpid.PrimaryKey + "," + Num(dLocalMagnitude) + ";"
+                    Dim sRow As String = cpid.PrimaryKey + "," + dLocalMagnitude.ToString + ";"
                     'Zero magnitude rule (We need a placeholder because of the beacon count rule)
                     If Val(dLocalMagnitude) = 0 Then
                         sRow = "0,15;"
@@ -226,21 +226,15 @@ Module modPersistedDataSystem
             'binary superblock will diff. When the 70 average mag requirement has been lifted from the
             'C++ code this placeholder can be removed.
             '            sOut += "00000000000000000000000000000001,32767;"
-            sOut += "</MAGNITUDES><QUOTES>"
+            sOut += "</MAGNITUDES>"
 
-            surrogateRow.Database = "Prices"
-            surrogateRow.Table = "Quotes"
-            lstCPIDs = GetList(surrogateRow, "*")
+            'If total network magnitude exceeds 1% tolerance of 115000 (116150) then do not form a contract
+            If lTotal > (115000 * 1.01) Then
+                Log("Total Network Magnitude out of bounds: " + Trim(lTotal))
+                Return "<ERROR>Contract Total Network Magnitude " + Trim(lTotal) + " out of bounds</ERROR>"
+            End If
 
-            For Each cpid As Row In lstCPIDs
-                Dim dNeuralMagnitude As Double = 0
-                Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
-                lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
-                lRows = lRows + 1
-                sOut += sRow
-            Next
-
-            sOut += "</QUOTES><AVERAGES>"
+            sOut += "<AVERAGES>"
             Dim avg As Double
             avg = lTotal / (lRows + 0.01)
 
@@ -291,7 +285,7 @@ Module modPersistedDataSystem
             Return sOut
 
         Catch ex As Exception
-            Log("GetMagnitudeContract" + ex.Message)
+            Log("GetMagnitudeContract: " + ex.Message)
             Return ""
         End Try
 
@@ -469,6 +463,15 @@ Module modPersistedDataSystem
     End Sub
     Private Sub ClearProjectData()
         Dim sPath As String = GetGridFolder() + "NeuralNetwork\"
+        Dim surrogatePrj As New Row
+        surrogatePrj.Database = "Project"
+        surrogatePrj.Table = "Projects"
+        Dim lstProjects As List(Of Row) = GetList(surrogatePrj, "*")
+        For Each prj As Row In lstProjects
+            If prj.PrimaryKey <> "" Then
+                SoftKill(sPath + prj.PrimaryKey + "CPID\*.dat")
+            End If
+        Next
         SoftKill(sPath + "db.dat")
         'Erase the projects
         SoftKill(sPath + "*master.dat")
@@ -846,7 +849,8 @@ Module modPersistedDataSystem
         Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
         Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
         Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
-
+        Dim MaxWitnessLoopCount As Integer = 5
+        Dim CurrentWitnessLoopCount As Integer = 0
         For z As Integer = 1 To 5
             Dim iRow As Long = 0
 
@@ -856,6 +860,8 @@ Module modPersistedDataSystem
                 surrogateRow.Table = "CPIDS"
                 lstCPIDs = GetList(surrogateRow, "*")
                 lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+                'If Queue is <> 0 then Warn about undefined outcome. This should not occur anymore but would be a nice log catch if it does!
+                If mlQueue <> 0 Then Log("Warning: Reiterating through CPIDS due to some CPIDS having no witness; However mlQueue is not as expected " + Trim(mlQueue))
                 mlQueue = 0
                 For Each cpid As Row In lstCPIDs
                     Try
@@ -880,6 +886,7 @@ Module modPersistedDataSystem
             End Try
 
             'Thread.Join
+ThreadSleep:
             For x As Integer = 1 To 120
                 If mlQueue = 0 Then Exit For
                 GuiDoEvents()
@@ -888,7 +895,35 @@ Module modPersistedDataSystem
                 If mlPercentComplete < 10 Then mlPercentComplete = 10
             Next
             Dim lNoWitnesses As Long = CPIDCountWithNoWitnesses()
-            If mlQueue = 0 And lNoWitnesses = 0 Then Exit For Else Log(Trim(lNoWitnesses) + " CPIDs remaining with no witnesses.  Cleaning up problem.")
+            'If mlQueue = 0 And lNoWitnesses = 0 Then Exit For Else Log(Trim(lNoWitnesses) + " CPIDs remaining with no witnesses.  Cleaning up problem.")
+            'If Queue is 0 and the count in question is 0 we exit the loop as complete
+            'Decided to use small lock scope here and copy the number instead of making this area more complicated then need be.
+            Dim mlQueueCopy As Long = mlQueue
+            If mlQueueCopy = 0 And lNoWitnesses = 0 Then
+                Log("No CPIDs remain with no witness; Success")
+                Exit For
+                'If Queue is less then 0 which is a critical problem to RAC/MAG bug we handle the situation better
+                'However the locks should of taken care of this and I have not seen any of this case since
+            ElseIf mlQueueCopy < 0 Then
+                If lNoWitnesses = 0 Then
+                    Log("Warning: mlQueue is negative but no CPIDs with no witness remain! Undefined behaviour with contract possible; Continuing contract creation")
+                    Exit For
+                Else
+                    Log("Warning: mlQueue is negative but some CPIDs have no witness! Undefined behaviour with contract possible; Sleeping to try to rectify problem.")
+                    GoTo ThreadSleep
+                End If
+                'If Queue is greater then 0 then handle this situation properly! This means there is still Threads for CPIDs in queue or running.
+            ElseIf mlQueueCopy > 0 Then
+                If lNoWitnesses = 0 Then
+                    If CurrentWitnessLoopCount >= MaxWitnessLoopCount Then Exit For
+                    CurrentWitnessLoopCount += 1
+                    Log("No CPIDs remaining with no witness, but mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to try rectify problem. Attempt " + Trim(CurrentWitnessLoopCount) + "/" + Trim(MaxWitnessLoopCount))
+                    GoTo ThreadSleep
+                Else
+                    Log(Trim(lNoWitnesses) + " CPIDs remaining with no witness and mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to allow completion of threads")
+                    GoTo ThreadSleep
+                End If
+            End If
         Next z
 
         Try
@@ -904,29 +939,6 @@ Module modPersistedDataSystem
         lstWhitelist = GetWPC(WhitelistedProjects, ProjCount)
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-        'Get CryptoCurrency Quotes:
-        Dim dBTC As Double = GetCryptoPrice("BTC").Price * 100
-        Dim dGRC As Double = GetCryptoPrice("GRC").Price * 10000000000
-        '8-16-2015
-        Dim q As New Row
-        q.Database = "Prices"
-        q.Table = "Quotes"
-        q.PrimaryKey = "BTC"
-        q.Expiration = DateAdd(DateInterval.Day, 1, Now)
-        q.Synced = q.Expiration
-
-        q.Magnitude = Trim(Math.Round(dBTC, 2))
-        Log("Storing Bitcoin price quote")
-        Store(q)
-        q = New Row
-        q.Database = "Prices"
-        q.Table = "Quotes"
-        q.Expiration = DateAdd(DateInterval.Day, 1, Now)
-        q.PrimaryKey = "GRC"
-        q.Magnitude = Trim(Math.Round(dGRC, 2))
-        q.Synced = q.Expiration
-        Log("Storing Gridcoin Price Quote")
-        Store(q)
 
         'Update all researchers magnitudes (Final Calculation Phase):
         Dim surrogatePrj As New Row
@@ -1109,7 +1121,10 @@ TryAgain:
             Threading.ThreadPool.QueueUserWorkItem(AddressOf ThreadGetRac, oNeuralType)
 
 ThreadStarted:
-            mlQueue += 1
+            Dim mlLock As New Object
+            SyncLock mlLock
+                mlQueue += 1
+            End SyncLock
             If lCatastrophicFailures > 0 Then
                 Log("Successfully recovered from catastrophic failures.")
             End If
@@ -1151,7 +1166,10 @@ ThreadStarted:
                 Log("Attempt # " + Trim(x) + ": Error in ThreadGetRAC : " + ex.Message + ", Trying again.")
             End Try
         Next x
-        mlQueue -= 1
+        Dim mlLock As New Object
+        SyncLock mlLock
+            mlQueue -= 1
+        End SyncLock
     End Sub
     Public Function GetSupermajorityVoteStatus(sCPID As String, lMinimumWitnessesRequired As Long) As Boolean
         If mdictNeuralNetworkQuorumData Is Nothing Then Return False
@@ -1753,9 +1771,7 @@ Retry:
             Catch ex As Exception
 
             End Try
-            Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
-            sLast = Replace(sLast, ",", ".")
-
+            Dim sLast As String = ExtractValue(sJSON, "lastprice")
             Dim dprice As Double
             dprice = CDbl(sLast)
             Dim qBitcoin As Quote

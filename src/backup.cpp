@@ -1,3 +1,4 @@
+
 // Backup related functions are placed here to keep vital sections of
 // code contained while maintaining clean code.
 
@@ -52,12 +53,12 @@ bool BackupConfigFile(const std::string& strDest)
         #else
             filesystem::copy_file(ConfigSource, ConfigTarget);
         #endif
-        printf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string().c_str());
+        LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string());
         return true;
     }
     catch(const filesystem::filesystem_error &e)
     {
-        printf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string().c_str(), e.what());
+        LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string(), e.what());
         return false;
     }
     return false;
@@ -67,43 +68,39 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
 {
     if (!wallet.fFileBacked)
         return false;
-    while (!fShutdown)
-    {
-        {
-            LOCK(bitdb.cs_db);
-            if (!bitdb.mapFileUseCount.count(wallet.strWalletFile) || bitdb.mapFileUseCount[wallet.strWalletFile] == 0)
-            {
-                // Flush log data to the dat file
-                bitdb.CloseDb(wallet.strWalletFile);
-                bitdb.CheckpointLSN(wallet.strWalletFile);
-                printf("Issuing lsn_reset for backup file portability.\n");
-                bitdb.lsn_reset(wallet.strWalletFile); 
-                bitdb.mapFileUseCount.erase(wallet.strWalletFile);
 
-                // Copy wallet.dat
-                filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
-                filesystem::path WalletTarget = strDest;
-                filesystem::create_directories(WalletTarget.parent_path());
-                if (filesystem::is_directory(WalletTarget))
-                    WalletTarget /= wallet.strWalletFile;
-                try
-                {
-                    #if BOOST_VERSION >= 104000
-                        filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
-                    #else
-                        filesystem::copy_file(WalletSource, WalletTarget);
-                    #endif
-                    printf("BackupWallet: Copied wallet.dat to %s\r\n", WalletTarget.string().c_str());
-                    return true;
-                }
-                catch(const filesystem::filesystem_error &e) {
-                    printf("BackupWallet: Error copying wallet.dat to %s - %s\r\n", WalletTarget.string().c_str(), e.what());
-                    return false;
-                }
-            }
+    LOCK(bitdb.cs_db);
+    if (!bitdb.mapFileUseCount.count(wallet.strWalletFile) || bitdb.mapFileUseCount[wallet.strWalletFile] == 0)
+    {
+        // Flush log data to the dat file
+        bitdb.CloseDb(wallet.strWalletFile);
+        bitdb.CheckpointLSN(wallet.strWalletFile);
+        LogPrintf("Issuing lsn_reset for backup file portability.");
+        bitdb.lsn_reset(wallet.strWalletFile);
+        bitdb.mapFileUseCount.erase(wallet.strWalletFile);
+
+        // Copy wallet.dat
+        filesystem::path WalletSource = GetDataDir() / wallet.strWalletFile;
+        filesystem::path WalletTarget = strDest;
+        filesystem::create_directories(WalletTarget.parent_path());
+        if (filesystem::is_directory(WalletTarget))
+            WalletTarget /= wallet.strWalletFile;
+        try
+        {
+#if BOOST_VERSION >= 104000
+            filesystem::copy_file(WalletSource, WalletTarget, filesystem::copy_option::overwrite_if_exists);
+#else
+            filesystem::copy_file(WalletSource, WalletTarget);
+#endif
+            LogPrintf("BackupWallet: Copied wallet.dat to %s\n", WalletTarget.string());
+            return true;
         }
-        MilliSleep(100);
+        catch(const filesystem::filesystem_error &e) {
+            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\n", WalletTarget.string(), e.what());
+            return false;
+        }
     }
+
     return false;
 }
 
@@ -111,7 +108,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
 {
     if (wallet.IsLocked() || fWalletUnlockStakingOnly)
     {
-        sErrors = "Wallet needs to be fully unlocked to backup private keys. ";
+        sErrors = "Wallet needs to be fully unlocked to backup private keys.";
         return false;
     }
     filesystem::path PrivateKeysTarget = GetBackupFilename("keys.dat");
@@ -129,7 +126,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
         }
         myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
     }
-    printf("BackupPrivateKeys: Backup made to %s\r\n", PrivateKeysTarget.string().c_str());
+    LogPrintf("BackupPrivateKeys: Backup made to %s\n", PrivateKeysTarget.string());
     myBackup.close();
     return true;
 }

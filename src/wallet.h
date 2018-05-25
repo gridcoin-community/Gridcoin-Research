@@ -606,7 +606,7 @@ public:
     {
 		if (vin.empty())
             return 0;
-        
+
 		 int64_t debit = 0;
          if(filter & MINE_SPENDABLE)
          {
@@ -688,7 +688,7 @@ public:
                     std::list<std::pair<CTxDestination, int64_t> >& listSent, int64_t& nFee, std::string& strSentAccount,
 					const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
 
-	void GetAmounts2(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount, bool ismine, CTxDB& txdb, 
+	void GetAmounts2(std::list<COutputEntry>& listReceived, std::list<COutputEntry>& listSent, int64_t& nFee, std::string& strSentAccount, bool ismine, CTxDB& txdb,
 		const isminefilter& filter=(MINE_SPENDABLE|MINE_WATCH_ONLY)) const;
 
 
@@ -784,12 +784,12 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("COutput(%s, %d, %d) [%s]", tx->GetHash().ToString().substr(0,10).c_str(), i, nDepth, FormatMoney(tx->vout[i].nValue).c_str());
+        return strprintf("COutput(%s, %d, %d) [%s]", tx->GetHash().ToString().substr(0,10).c_str(), i, nDepth, FormatMoney(tx->vout[i].nValue));
     }
 
     void print() const
     {
-        printf("%s\n", ToString().c_str());
+        LogPrintf("%s", ToString());
     }
 };
 

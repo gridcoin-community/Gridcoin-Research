@@ -73,7 +73,7 @@ public:
      */
     void refreshWallet()
     {
-        if (fDebug) OutputDebugStringF("refreshWallet\n");
+        if (fDebug) LogPrintf("refreshWallet\n");
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
@@ -92,7 +92,7 @@ public:
      */
     void updateWallet(const uint256 &hash, int status)
     {
-        if (fDebug) OutputDebugStringF("updateWallet %s %i\n", hash.ToString().c_str(), status);
+        if (fDebug) LogPrintf("updateWallet %s %i\n", hash.ToString(), status);
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
@@ -122,7 +122,7 @@ public:
                     status = CT_DELETED; /* In model, but want to hide, treat as deleted */
             }
 
-            if (fDebug) OutputDebugStringF("   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i\n",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
+            if (fDebug) LogPrintf("   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i\n",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
 
 
             switch(status)
@@ -130,12 +130,12 @@ public:
             case CT_NEW:
                 if(inModel)
                 {
-                    if (fDebug) OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is already in model\n");
+                    if (fDebug) LogPrintf("Warning: updateWallet: Got CT_NEW, but transaction is already in model\n");
                     break;
                 }
                 if(!inWallet)
                 {
-                    if (fDebug) OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet\n");
+                    if (fDebug) LogPrintf("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet\n");
                     break;
                 }
                 if(showTransaction)
@@ -159,7 +159,7 @@ public:
             case CT_DELETED:
                 if(!inModel)
                 {
-                    OutputDebugStringF("Warning: updateWallet: Got CT_DELETED, but transaction is not in model\n");
+                    LogPrintf("Warning: updateWallet: Got CT_DELETED, but transaction is not in model\n");
                     break;
                 }
                 // Removed -- remove entire transaction from table
@@ -421,22 +421,14 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
 	switch(wtx->type)
     {
     case TransactionRecord::Generated:
-		    if (false && wtx->RemoteFlag==1)
-			{
-				return QIcon(":/icons/cpumined_blue");
-			}
-			else if (reward >= max*.90)
-			{
-					return QIcon(":/icons/gold_cpumined");
-			}
-         	else if (is_por)
-			{
-					return QIcon(":/icons/tx_cpumined");
-			}
-	   		else
-	   		{
-	   			return QIcon(":/icons/tx_mined");
-	   		}
+        if (is_por)
+        {
+            return QIcon(":/icons/tx_cpumined");
+        }
+        else
+        {
+            return QIcon(":/icons/tx_mined");
+        }
 
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:

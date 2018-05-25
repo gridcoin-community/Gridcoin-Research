@@ -35,6 +35,22 @@ Q_IMPORT_PLUGIN(qkrcodecs)
 Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 #endif
 
+#if defined(QT_STATICPLUGIN)
+#include <QtPlugin>
+#if QT_VERSION < 0x050400
+Q_IMPORT_PLUGIN(AccessibleFactory)
+#endif
+#if defined(QT_QPA_PLATFORM_XCB)
+Q_IMPORT_PLUGIN(QXcbIntegrationPlugin);
+#elif defined(QT_QPA_PLATFORM_WINDOWS)
+Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
+#elif defined(QT_QPA_PLATFORM_COCOA)
+Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
+#endif
+Q_IMPORT_PLUGIN(QSvgPlugin);
+Q_IMPORT_PLUGIN(QSvgIconPlugin);
+#endif
+
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
@@ -61,7 +77,7 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     }
     else
     {
-        printf("%s: %s\n", caption.c_str(), message.c_str());
+        LogPrintf("%s: %s\n", caption, message);
         fprintf(stderr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
@@ -149,19 +165,17 @@ int main(int argc, char *argv[])
 {
     // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
     int currentExitCode = 0;
+ 
+    // Set global boolean to indicate intended presence of GUI to core.
+    fQtActive = true;
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
-#if QT_VERSION < 0x050000
-    // Internal string conversion is all UTF-8
-    QTextCodec::setCodecForTr(QTextCodec::codecForName("UTF-8"));
-    QTextCodec::setCodecForCStrings(QTextCodec::codecForTr());
-#endif
-
     Q_INIT_RESOURCE(bitcoin);
+    Q_INIT_RESOURCE(bitcoin_locale);
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
@@ -266,14 +280,14 @@ int main(int argc, char *argv[])
         guiref = &window;
 
 		QTimer *timer = new QTimer(guiref);
-		printf("\r\nStarting Gridcoin\r\n");
+		LogPrintf("\nStarting Gridcoin\n");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
 
 	    //Start globalcom
         if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
 		{
-				printf("Error; NewThread(ThreadAppInit2) failed\n");
+				LogPrintf("Error; NewThread(ThreadAppInit2) failed\n");
 		        return 1;
 		}
 		else
@@ -320,7 +334,7 @@ int main(int argc, char *argv[])
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-			printf("\r\nbitcoin.cpp:main calling Shutdown...\r\n");
+			LogPrintf("\nbitcoin.cpp:main calling Shutdown...\n");
             Shutdown(NULL);
         }
 
@@ -342,7 +356,7 @@ int main(int argc, char *argv[])
     // use exit codes to trigger restart of the wallet
     if(currentExitCode == EXIT_CODE_REBOOT)
     {
-        printf("Restarting wallet...\r\n");
+        LogPrintf("Restarting wallet...\n");
         QStringList args = QApplication::arguments();
         args.removeFirst();
         QProcess::startDetached(QApplication::applicationFilePath(), args);

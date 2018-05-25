@@ -9,17 +9,14 @@
 #include "init.h"
 #include "miner.h"
 #include "bitcoinrpc.h"
+#include "neuralnet.h"
 #include "global_objects_noui.hpp"
 using namespace json_spirit;
 using namespace std;
 
 int64_t GetCoinYearReward(int64_t nTime);
 
-//CCriticalSection cs_main;
-//static boost::thread_group* postThreads = NULL;
-
 double GRCMagnitudeUnit(int64_t locktime);
-std::string qtGetNeuralHash(std::string data);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -29,21 +26,24 @@ Value getmininginfo(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getmininginfo\n"
-            "Returns an object containing mining-related information.");
+            "\n"
+            "Returns an object containing mining-related information\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     uint64_t nWeight = 0;
     int64_t nTime= GetAdjustedTime();
     pwalletMain->GetStakeWeight(nWeight);
     Object obj, diff, weight;
-    double nNetworkWeight = GetPoSKernelPS();
+    double nNetworkWeight = GetEstimatedNetworkWeight();
+    double nNetworkValue = nNetworkWeight / 80.0;
     obj.push_back(Pair("blocks",        nBestHeight));
-    diff.push_back(Pair("proof-of-work",        GetDifficulty()));
     diff.push_back(Pair("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true))));
 
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        uint64_t nExpectedTime = staking ? (GetTargetSpacing(nBestHeight) * nNetworkWeight / MinerStatus.ValueSum) : 0;
+        uint64_t nExpectedTime = GetEstimatedTimetoStake();
         diff.push_back(Pair("last-search-interval", MinerStatus.nLastCoinStakeSearchInterval));
         weight.push_back(Pair("minimum",    MinerStatus.WeightMin));
         weight.push_back(Pair("maximum",    MinerStatus.WeightMax));
@@ -52,9 +52,9 @@ Value getmininginfo(const Array& params, bool fHelp)
         weight.push_back(Pair("legacy",   nWeight/(double)COIN));
         obj.push_back(Pair("stakeweight", weight));
         obj.push_back(Pair("netstakeweight", nNetworkWeight));
+        obj.push_back(Pair("netstakingGRCvalue", nNetworkValue));
         obj.push_back(Pair("staking", staking));
         obj.push_back(Pair("mining-error", MinerStatus.ReasonNotStaking));
-        obj.push_back(Pair("mining-message", MinerStatus.Message));
         obj.push_back(Pair("time-to-stake_days", nExpectedTime/86400.0));
         obj.push_back(Pair("expectedtime", nExpectedTime));
         obj.push_back(Pair("mining-version", MinerStatus.Version));
@@ -71,7 +71,6 @@ Value getmininginfo(const Array& params, bool fHelp)
     }
 
     obj.push_back(Pair("difficulty",    diff));
-    obj.push_back(Pair("pow_reward",    GetProofOfWorkReward(0,  GetAdjustedTime(),1)/(double)COIN));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
@@ -82,9 +81,7 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("PopularNeuralHash", neural_hash));
     obj.push_back(Pair("NeuralPopularity", neural_popularity));
     //9-19-2015 - CM
-    #if defined(WIN32) && defined(QT_GUI)
-    obj.push_back(Pair("MyNeuralHash", qtGetNeuralHash("")));
-    #endif
+    obj.push_back(Pair("MyNeuralHash", NN::GetNeuralHash()));
 
     obj.push_back(Pair("CPID",msPrimaryCPID));
     obj.push_back(Pair("RSAWeight",GetRSAWeightByCPID(msPrimaryCPID)));
@@ -97,7 +94,6 @@ Value getmininginfo(const Array& params, bool fHelp)
         obj.push_back(Pair("BoincRewardPending",nBoinc/(double)COIN));
     }
 
-    obj.push_back(Pair("MiningProject",msMiningProject));
     obj.push_back(Pair("MiningInfo 1", msMiningErrors));
     obj.push_back(Pair("MiningInfo 2", msPoll));
     obj.push_back(Pair("MiningInfo 5", msMiningErrors5));

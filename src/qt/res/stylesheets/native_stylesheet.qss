@@ -1,43 +1,49 @@
-/* BEGIN Style main window*/
+/* general */
+
 QMainWindow {
-    font-family:'Open Sans,sans-serif';
+    font-family:'Open Sans';
 }
 
-#line {
-    qproperty-maximumSize: 330px 16777215px;
-}
-#line_2 {
-    qproperty-maximumSize: 330px 16777215px;
-}
+/* Main Window*/
 
 #toolbar {
-    min-width:160px;
-    max-width:160px;
+    padding-top:1.25em;
+    min-width:8em;
+    height:100%;
+}
+
+#toolbar2 {
+    border:none;
+    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127));
+    min-width:1.625em;
+    max-width:1.625em;
+}
+
+#toolbar3 {
+    border:none;
+    background-color:rgb(65,0,127);
+    min-height:3.25em;
+    max-height:3.25em;
 }
 
 QToolBar#toolbar QToolButton {
-    padding-left:20px;
-    padding-right:20px;
-    padding-top:7px;
-    padding-bottom:7px;
-    margin:3px;
+    padding-left:1em;
+    padding-right:1em;
+    padding-top:0.5em;
+    padding-bottom:0.5em;
+    margin:0.25em;
     width:100%;
 }
 
 QToolBar#toolbar2 QLabel{
     border:none;
-    padding-top:15px;
-    padding-bottom:10px;
-    padding-left:0px;
-    padding-right:0px;
-    margin:0px;
+    padding-top:1em;
+    padding-bottom:1em;
     qproperty-alignment: AlignCenter;
 }
 
 QToolBar#toolbar3 QLabel{
-    padding-top:0px;
-    padding-bottom:0px;
-    margin:1px;
+    margin:0.5em;
 }
 
 #spacer {
@@ -45,36 +51,56 @@ QToolBar#toolbar3 QLabel{
     border:none;
 }
 
-#toolbar2 {
-    border:none;
-    width:26px;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(160,175,5), stop: 1 rgb(160,175,5));
-    padding-left: 0px;
-    padding-right: 0px;
-    min-width:26px;
-    max-width:26px;
-}
-
-#toolbar3 {
-    border:none;
-    border-bottom : 2px solid rgb(160,175,5);
-    min-height:52px;
-    max-height:52px;
-}
-
-QMenuBar {
-    border-bottom : 2px solid rgb(160,175,5);
-}
-
 #listTransactions{ 
-    font-size: 12px;
     background-color:transparent;
+}
+
+#boincLogo{
+    image:url(:/images/boinc_w);
+    min-width:5.38em;
+    max-width:5.38em;
+    min-height:2.25em;
+    max-height:2.25em;
+}
+
+#gridcoinLogoHorizontal{
+    image:url(:/images/logo_hz);
+    min-width:9.225em;
+    max-width:9.225em;
+    min-height:2.25em;
+    max-height:2.25em;
+}
+
+#aboutLogoLabel{
+    image:url(:/images/about_light);
+    min-width:2.25em;
+    max-width:2.25em;
+    min-height:9.225em;
+    max-height:9.225em;
 }
 
 /* overview page */
 
-#OverviewPage{
-    font-family: "Open Sans";
+#labelOverviewWallet{
+    font-size:16pt;
+    font-weight:bold;
+}
+
+#labelAvailable{
+    font-weight:bold;
+}
+
+#labelImmatureText{
+    font-weight:bold;
+}
+
+#labelTotalBalance{
+    font-weight:bold;
+}
+
+#labelRecentTrans{
+    font-size:16pt;
+    font-weight:bold;
 }
 
 #labelWalletStatus{
@@ -86,6 +112,7 @@ QMenuBar {
 }
 
 /* coincontrol dialog*/
+
 #labelCoinControlFeatures{
     font-weight:bold;
 }
@@ -127,7 +154,30 @@ QMenuBar {
     font-weight:bold;
 }
 
+/* options dialog */
 
+#statusLabel{
+    font-weight:bold;
+}
 
+/* sign verify message dialog */
+
+#signatureOut_SM{
+    font-style: italic;
+}
+
+#statusLabel_SM{
+    font-weight:bold;
+}
+
+#statusLabel_VM{
+    font-weight:bold;
+}
+
+/* ask passphrase dialog */
+
+#capsLabel{
+    font-weight:bold;
+}
 
 

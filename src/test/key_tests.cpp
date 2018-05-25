@@ -32,20 +32,20 @@ void dumpKeyInfo(uint256 privkey)
     vector<unsigned char> sec;
     sec.resize(32);
     memcpy(&sec[0], &secret[0], 32);
-    printf("  * secret (hex): %s\n", HexStr(sec).c_str());
+    LogPrintf("  * secret (hex): %s\n", HexStr(sec));
 
     for (int nCompressed=0; nCompressed<2; nCompressed++)
     {
         bool fCompressed = nCompressed == 1;
-        printf("  * %s:\n", fCompressed ? "compressed" : "uncompressed");
+        LogPrintf("  * %s:\n", fCompressed ? "compressed" : "uncompressed");
         CBitcoinSecret bsecret;
         bsecret.SetSecret(secret, fCompressed);
-        printf("    * secret (base58): %s\n", bsecret.ToString().c_str());
+        LogPrintf("    * secret (base58): %s\n", bsecret.ToString());
         CKey key;
         key.SetSecret(secret, fCompressed);
         vector<unsigned char> vchPubKey = key.GetPubKey();
-        printf("    * pubkey (hex): %s\n", HexStr(vchPubKey).c_str());
-        printf("    * address (base58): %s\n", CBitcoinAddress(vchPubKey).ToString().c_str());
+        LogPrintf("    * pubkey (hex): %s\n", HexStr(vchPubKey));
+        LogPrintf("    * address (base58): %s\n", CBitcoinAddress(vchPubKey).ToString());
     }
 }
 #endif

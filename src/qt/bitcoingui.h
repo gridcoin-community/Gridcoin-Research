@@ -26,7 +26,6 @@ class VotingDialog;
 class SignVerifyMessageDialog;
 class Notificator;
 class RPCConsole;
-class UpgradeDialog;
 class DiagnosticsDialog;
 
 QT_BEGIN_NAMESPACE
@@ -136,12 +135,14 @@ private:
     Notificator *notificator;
     TransactionView *transactionView;
     RPCConsole *rpcConsole;
-	UpgradeDialog *upgrader;
     DiagnosticsDialog *diagnosticsDialog;
 
     QMovie *syncIconMovie;
 
     uint64_t nWeight;
+
+    // name extension to change icons according to stylesheet
+    QString sSheet;
 
     /** Create the main UI actions. */
     void createActions();
@@ -153,6 +154,8 @@ private:
     void createTrayIcon();
     /** Create system tray menu (or setup the dock menu) */
     void createTrayIconMenu();
+    /** Set Icons */
+    void setIcons();
 
 
 public slots:
@@ -195,6 +198,8 @@ private slots:
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
     void gotoSendCoinsPage();
+    /** Switch to voting page */
+    void gotoVotingPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
@@ -212,6 +217,7 @@ private slots:
 	void websiteClicked();
 	void exchangeClicked();
 	void boincClicked();
+    void boincStatsClicked();
 	void chatClicked();
 
 	void rebuildClicked();
@@ -219,7 +225,6 @@ private slots:
 	void downloadClicked();
 	void configClicked();
 	void miningClicked();
-    void votingClicked();
 
 	void faqClicked();
     void diagnosticsClicked();

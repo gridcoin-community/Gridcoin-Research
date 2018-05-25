@@ -23,9 +23,11 @@ Value getconnectioncount(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getconnectioncount\n"
-            "Returns the number of connections to other nodes.");
+            "\n"
+            "Returns the number of connections to other node\n.");
 
     LOCK(cs_vNodes);
+
     return (int)vNodes.size();
 }
 
@@ -38,10 +40,10 @@ std::string NeuralRequest(std::string MyNeuralRequest)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
-            //printf("Node is a neural participant \r\n");
+            //LogPrintf("Node is a neural participant \n");
             std::string reqid = "reqid";
             pNode->PushMessage("neural", MyNeuralRequest, reqid);
-            if (fDebug3) printf(" PUSH ");
+            if (fDebug3) LogPrintf(" PUSH ");
         }
     }
     return "";
@@ -59,7 +61,7 @@ void GatherNeuralHashes()
             std::string reqid = "reqid";
             std::string command_name="neural_hash";
             pNode->PushMessage("neural", command_name, reqid);
-            if (fDebug10) printf(" Pushed ");
+            if (fDebug10) LogPrintf(" Pushed ");
         }
     }
 }
@@ -71,7 +73,7 @@ bool RequestSupermajorityNeuralData()
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
     std::string reqid = DefaultWalletAddress();
-            
+
     for (auto const& pNode : vNodes)
     {
         if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
@@ -90,10 +92,11 @@ Value addnode(const Array& params, bool fHelp)
     if (params.size() == 2)
         strCommand = params[1].get_str();
     if (fHelp || params.size() != 2 ||
-        (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
+            (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
         throw runtime_error(
-            "addnode <node> <add|remove|onetry>\n"
-            "Attempts add or remove <node> from the addnode list or try a connection to <node> once.");
+                "addnode <node> <add|remove|onetry>\n"
+                "\n"
+                "Attempts add or remove <node> from the addnode list or try a connection to <node> once\n");
 
     string strNode = params[0].get_str();
 
@@ -130,11 +133,12 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getaddednodeinfo <dns> [node]\n"
-            "Returns information about the given added node, or all added nodes\n"
-            "(note that onetry addnodes are not listed here)\n"
-            "If dns is false, only a list of added nodes will be provided,\n"
-            "otherwise connected information will also be available.");
+                "getaddednodeinfo <dns> [node]\n"
+                "\n"
+                "Returns information about the given added node, or all added nodes\n"
+                "(note that onetry addnodes are not listed here)\n"
+                "If dns is false, only a list of added nodes will be provided,\n"
+                "otherwise connected information will also be available\n");
 
     bool fDns = params[0].get_bool();
 
@@ -231,29 +235,28 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
         {
             std::string reqid = cpid;
             pNode->PushMessage("neural", command_name, reqid);
-            //if (fDebug3) printf("Requested command %s \r\n",command_name.c_str());
+            //if (fDebug3) LogPrintf("Requested command %s \n",command_name.c_str());
             iContactCount++;
             if (iContactCount >= NodeLimit) return true;
         }
     }
-    if (iContactCount==0) 
+    if (iContactCount==0)
     {
-        printf("No neural network nodes online.");
+        LogPrintf("No neural network nodes online.");
         return false;
     }
     return true;
 }
 
-
-
 Value ping(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "ping\n"
-            "Requests that a ping be sent to all other nodes, to measure ping time.\n"
-            "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
-            "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping.");
+                "ping\n"
+                "\n"
+                "Requests that a ping be sent to all other nodes, to measure ping time.\n"
+                "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
+                "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping\n");
 
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
@@ -281,15 +284,21 @@ Value getpeerinfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getpeerinfo\n"
-            "Returns data about each connected network node.");
+                "getpeerinfo\n"
+                "\n"
+                "Returns data about each connected network node.");
 
     vector<CNodeStats> vstats;
-    CopyNodeStats(vstats);
-
     Array ret;
+
+    {
+        LOCK(cs_vNodes);
+
+        CopyNodeStats(vstats);
+    }
+
     GatherNeuralHashes();
-    
+
     for (auto const& stats : vstats) {
         Object obj;
 
@@ -326,15 +335,14 @@ Value getpeerinfo(const Array& params, bool fHelp)
     return ret;
 }
 
-
-
 Value getnettotals(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "getnettotals\n"
-            "Returns information about network traffic, including bytes in, bytes out,\n"
-            "and current time.");
+                "getnettotals\n"
+                "\n"
+                "Returns information about network traffic, including bytes in, bytes out,\n"
+                "and current time\n");
 
     Object obj;
     obj.push_back(Pair("totalbytesrecv", CNode::GetTotalBytesRecv()));
@@ -345,7 +353,7 @@ Value getnettotals(const Array& params, bool fHelp)
 
 
 
-// ppcoin: send alert.  
+// ppcoin: send alert.
 // There is a known deadlock situation with ThreadMessageHandler
 // ThreadMessageHandler: holds cs_vSend and acquiring cs_main in SendMessages()
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
@@ -354,14 +362,16 @@ Value sendalert(const Array& params, bool fHelp)
     if (fHelp || params.size() < 6)
         throw runtime_error(
             "sendalert <message> <privatekey> <minver> <maxver> <priority> <id> [cancelupto]\n"
-            "<message> is the alert text message\n"
-            "<privatekey> is hex string of alert master private key\n"
-            "<minver> is the minimum applicable internal client version\n"
-            "<maxver> is the maximum applicable internal client version\n"
-            "<priority> is integer priority number\n"
-            "<id> is the alert id\n"
-            "[cancelupto] cancels all alert id's up to this number\n"
-            "Returns true or false.");
+            "\n"
+            "<message> ----> is the alert text message\n"
+            "<privatekey> -> is hex string of alert master private key\n"
+            "<minver> -----> is the minimum applicable internal client version\n"
+            "<maxver> -----> is the maximum applicable internal client version\n"
+            "<priority> ---> is integer priority number\n"
+            "<id> ---------> is the alert id\n"
+            "[cancelupto] -> cancels all alert id's up to this number\n"
+            "\n"
+            "Returns true or false\n");
 
     CAlert alert;
     CKey key;
@@ -385,8 +395,8 @@ Value sendalert(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert
@@ -413,15 +423,17 @@ Value sendalert2(const Array& params, bool fHelp)
     if (fHelp || params.size() != 7)
         throw runtime_error(
             //          0            1    2            3            4        5          6
-            "sendalert <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
-            "<message> is the alert text message\n"
-            "<privatekey> is hex string of alert master private key\n"
-            "<subverlist> comma separated list of versions warning applies to\n"
-            "<priority> integer, >1000->visible\n"
-            "<id> is the unique alert number\n"
-            "<cancellist> comma separated ids of alerts to cancel\n"
-            "<expire> alert expiration in days\n"
-            "Returns true or false.");
+            "sendalert2 <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
+            "\n"
+            "<privatekey> -> is hex string of alert master private key\n"
+            "<id> ---------> is the unique alert number\n"
+            "<subverlist> -> comma separated list of versions warning applies to\n"
+            "<cancellist> -> comma separated ids of alerts to cancel\n"
+            "<expire> -----> alert expiration in days\n"
+            "<priority> ---> integer, >1000->visible\n"
+            "<message> ---->is the alert text message\n"
+            "\n"
+            "Returns summary of what was done.");
 
     CAlert alert;
     CKey key;
@@ -434,14 +446,19 @@ Value sendalert2(const Array& params, bool fHelp)
     alert.nVersion = PROTOCOL_VERSION;
     alert.nRelayUntil = alert.nExpiration = GetAdjustedTime() + 24*60*60*params[4].get_int();
 
-    std::vector<std::string> split_subver = split(params[2].get_str(), ",");
-    alert.setSubVer.insert(split_subver.begin(),split_subver.end());
-
-    std::vector<std::string> split_cancel = split(params[3].get_str(), ",");
-    for(std::string &s : split_cancel)
+    if(params[2].get_str().length())
     {
-        int aver = RoundFromString(s, 0);
-        alert.setCancel.insert(aver);
+        std::vector<std::string> split_subver = split(params[2].get_str(), ",");
+        alert.setSubVer.insert(split_subver.begin(),split_subver.end());
+    }
+
+    if(params[3].get_str().length())
+    {
+        for(std::string &s : split(params[3].get_str(), ","))
+        {
+            int aver = RoundFromString(s, 0);
+            alert.setCancel.insert(aver);
+        }
     }
 
     CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
@@ -452,8 +469,8 @@ Value sendalert2(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert
@@ -467,4 +484,33 @@ Value sendalert2(const Array& params, bool fHelp)
     result.push_back(Pair("Content", alert.ToString()));
     result.push_back(Pair("Success", true));
     return result;
+}
+
+Value getnetworkinfo(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getnetworkinfo\n"
+                "\n"
+                "Displays network related information\n");
+
+    Object res;
+
+    proxyType proxy;
+    GetProxy(NET_IPV4, proxy);
+
+    LOCK(cs_main);
+
+    res.push_back(Pair("version",         FormatFullVersion()));
+    res.push_back(Pair("minor_version",   CLIENT_VERSION_MINOR));
+    res.push_back(Pair("protocolversion", PROTOCOL_VERSION));
+    res.push_back(Pair("timeoffset",      GetTimeOffset()));
+    res.push_back(Pair("connections",     (int)vNodes.size()));
+    res.push_back(Pair("paytxfee",        ValueFromAmount(nTransactionFee)));
+    res.push_back(Pair("mininput",        ValueFromAmount(nMinimumInputValue)));
+    res.push_back(Pair("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string())));
+    res.push_back(Pair("ip",              addrSeenByPeer.ToStringIP()));
+    res.push_back(Pair("errors",          GetWarnings("statusbar")));
+
+    return res;
 }

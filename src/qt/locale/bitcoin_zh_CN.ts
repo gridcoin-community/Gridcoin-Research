@@ -1301,7 +1301,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+10"/>
         <source>Share Type: </source>
-        <translation>分享类型：</translation>
+        <translation>计票方式：</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -2539,17 +2539,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>%1/offline</source>
-        <translation>&gt;%1 / 离线</translation>
+        <translation>%1 / 离线</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1/unconfirmed</source>
-        <translation>%1/未确认</translation>
+        <translation>%1 / 未确认</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>%1 confirmations</source>
-        <translation>%1 已确认</translation>
+        <translation>%1 个确认</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -2602,7 +2602,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>生成的格雷德币在可以使用前必须有 %1 个成熟的区块。当您生成了此区块后，它将被广播到网络中以加入区块链。如果它未成功进入区块链，其状态将变其状态将变更为“不接受”并且不可使用。这可能偶尔会发生，如果另一个节点比你早几秒钟成功生成一个区块。 {110 ?}</translation>
+        <translation>生成的格雷德币必须经过 110 个区块的成熟期后才可以使用。区块被生成后，它将被广播到网络中以加入区块链。如果它未能进入区块链，其状态将变为“未被接受”并且不可使用。有些时候，可能会有另一个节点比你早几秒钟成功生成一个区块，此时就可能发生这种情况。</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -2639,7 +2639,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+17"/>
         <location line="+43"/>
         <source>Credit</source>
-        <translation>积分</translation>
+        <translation>收入</translation>
     </message>
     <message numerus="yes">
         <location line="-115"/>
@@ -2684,12 +2684,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Transaction ID</source>
-        <translation>转账ID</translation>
+        <translation>交易ID</translation>
     </message>
     <message>
         <location line="+31"/>
         <source>Transaction</source>
-        <translation>转账</translation>
+        <translation>交易</translation>
     </message>
     <message>
         <location line="+25"/>
@@ -3176,7 +3176,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Share Type</source>
-        <translation>分享类型</translation>
+        <translation>计票方式</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3197,7 +3197,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Total Shares</source>
-        <translation>总分享次数</translation>
+        <translation>总票数</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3227,7 +3227,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation>分享类型。</translation>
+        <translation>计票方式。</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3242,7 +3242,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+2"/>
         <source>Total Shares.</source>
-        <translation>总分享数。</translation>
+        <translation>总票数。</translation>
     </message>
     <message>
         <location line="+2"/>
