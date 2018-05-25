@@ -321,60 +321,59 @@ bool TimerMain(std::string timer_name, int max_ms)
 
 bool UpdateNeuralNetworkQuorumData()
 {
-                if (!bGlobalcomInitialized) return false;
+    if (!bGlobalcomInitialized) return false;
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-                std::string myNeuralHash = "";
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
+    std::string myNeuralHash = "";
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
     std::string sBlock = ReadCache("superblock", "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
-                std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-                std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
+    std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
+    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
     NN::SetTestnetFlag(fTestNet);
     NN::ExecuteDotNetStringFunction("SetQuorumData",data);
-                return true;
+    return true;
 }
 
 bool FullSyncWithDPORNodes()
 {
     if(!NN::IsEnabled())
         return false;
-                // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
-                // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
-                double dCurrentPopularity = 0;
-                std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-                std::string sMyNeuralHash = "";
+    // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
+    // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
+    double dCurrentPopularity = 0;
+    std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
+    std::string sMyNeuralHash = "";
     sMyNeuralHash = NN::GetNeuralHash();
-                if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
-                {
-                    bool bNodeOnline = RequestSupermajorityNeuralData();
-                    if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
-                }
-                std::string errors1;
-                LoadAdminMessages(false,errors1);
+    if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+    {
+        bool bNodeOnline = RequestSupermajorityNeuralData();
+        if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+    }
+    std::string errors1;
+    LoadAdminMessages(false,errors1);
 
     const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
     const int64_t nLookback = 30 * 6 * 86400;
     const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
     std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
-		        std::string sWhitelist = GetListOf("project");
+    std::string sWhitelist = GetListOf("project");
     int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
-				LogPrintf(" list of cpids %s \n",cpiddata);
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-                std::string sAge = ToString(superblock_age);
+    double popularity = 0;
+    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string sAge = ToString(superblock_age);
     std::string sBlock = ReadCache("superblock", "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
-                std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                    + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                    + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
+    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
+                       + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
     NN::SetTestnetFlag(fTestNet);
     NN::SynchronizeDPOR(data);
-            return true;
+    return true;
 }
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
@@ -424,10 +423,10 @@ double GetAverageDifficulty(unsigned int nPoSInterval)
             if (dDiff)
             {
                 dDiffSum += dDiff;
-            nStakesHandled++;
+                nStakesHandled++;
                 if (fDebug10) LogPrintf("GetAverageDifficulty debug: dDiff = %f", dDiff);
                 if (fDebug10) LogPrintf("GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
-        }
+            }
         }
 
         pindex = pindex->pprev;
@@ -3328,11 +3327,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 }
 
-				if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-				{
-							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-							LogPrintf("\n ******  %s ***** \n",sNarr);
-				}
+                if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+                            LogPrintf("\n ******  %s ***** \n",sNarr);
+                }
 
                 if (IsResearchAgeEnabled(pindex->nHeight)
                     && (BlockNeedsChecked(nTime) || nVersion>=9))
@@ -5685,7 +5684,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-						    myCPID = pblockindex->GetCPID();
+                            myCPID = pblockindex->GetCPID();
                         }
                         if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
                         {
@@ -7089,8 +7088,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             if (neural_request=="neural_data")
             {
-            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-            pfrom->PushMessage("ndata_nresp", neural_response);
+                NN::SetTestnetFlag(fTestNet);
+                pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
             }
             else if (neural_request=="neural_hash")
             {
@@ -7099,12 +7098,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             else if (neural_request=="explainmag")
             {
             neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-            pfrom->PushMessage("expmag_nresp", neural_response);   pfrom->PushMessage("expmag_nresp", neural_response);
+                pfrom->PushMessage("expmag_nresp", neural_response);
                 }
             else if (neural_request=="quorum")
             {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
-                std::string contract = "";
             NN::SetTestnetFlag(fTestNet);
             pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
             }
