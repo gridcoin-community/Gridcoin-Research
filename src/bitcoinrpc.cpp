@@ -367,7 +367,7 @@ static const CRPCCommand vRPCCommands[] =
   { "debug4",                  &debug4,                  true,   cat_developer     },
   { "debugnet",                &debugnet,                true,   cat_developer     },
   { "dportally",               &dportally,               false,  cat_developer     },
-  { "forcequorom",             &forcequorom,             false,  cat_developer     },
+  { "forcequorum",             &forcequorum,             false,  cat_developer     },
   { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
   { "genboinckey",             &genboinckey,             false,  cat_developer     },
   { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
@@ -396,7 +396,7 @@ static const CRPCCommand vRPCCommands[] =
   { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
   #endif
   { "unusual",                 &unusual,                 false,  cat_developer     },
-  { "updatequoromdata",        &updatequoromdata,        false,  cat_developer     },
+  { "updatequorumdata",        &updatequorumdata,        false,  cat_developer     },
   { "versionreport",           &versionreport,           false,  cat_developer     },
   { "writedata",               &writedata,               false,  cat_developer     },
 
@@ -928,7 +928,7 @@ void StopRPCThreads()
 
 void ThreadRPCServer(void* parg)
 {
-    // Make this thread recognisable as the RPC listener
+    // Make this thread recognizable as the RPC listener
     RenameThread("grc-rpclist");
 
     try
