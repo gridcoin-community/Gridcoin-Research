@@ -269,9 +269,7 @@ extern json_spirit::Value neuralrequest(const json_spirit::Array& params, bool f
 extern json_spirit::Value projects(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value readconfig(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value readdata(const json_spirit::Array& params, bool fHelp);
-#ifdef WIN32
 extern json_spirit::Value refhash(const json_spirit::Array& params, bool fHelp);
-#endif
 extern json_spirit::Value rpc_reorganize(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value seefile(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value sendalert(const json_spirit::Array& params, bool fHelp);
