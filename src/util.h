@@ -125,7 +125,7 @@ void LogPrintStr(const std::string &str);
     template<TINYFORMAT_ARGTYPES(n)>                                          \
     static inline void LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
     {                                                                         \
-        if(!LogAcceptCategory(category)) return 0;                            \
+        if(!LogAcceptCategory(category)) return;                            \
         LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
         return;                                                               \
     }                                                                         \
@@ -144,7 +144,7 @@ TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
 */
 static inline void LogPrint(const char* category, const char* format)
 {
-    if(!LogAcceptCategory(category)) return 0;
+    if(!LogAcceptCategory(category)) return;
     LogPrintStr(format);
     return;
 }
