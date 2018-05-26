@@ -229,11 +229,10 @@ bool LogAcceptCategory(const char* category)
 
 void LogPrintStr(const std::string &str)
 {
-    int ret = 0;
     if (fPrintToConsole)
     {
         // print to console
-        ret = fwrite(str.data(), 1, str.size(), stdout);
+        fwrite(str.data(), 1, str.size(), stdout);
     }
     //else
     if (!fPrintToDebugger)
@@ -275,7 +274,7 @@ void LogPrintStr(const std::string &str)
             else
                 fStartedNewLine = false;
 
-            ret = fwrite(str.data(), 1, str.size(), fileout);
+            fwrite(str.data(), 1, str.size(), fileout);
             fflush(fileout);
         }
     }
