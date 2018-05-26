@@ -227,7 +227,7 @@ bool LogAcceptCategory(const char* category)
     return true;
 }
 
-int LogPrintStr(const std::string &str)
+void LogPrintStr(const std::string &str)
 {
     int ret = 0;
     if (fPrintToConsole)
@@ -305,7 +305,7 @@ int LogPrintStr(const std::string &str)
         }
     }
 #endif */
-    return ret;
+    return;
 }
 
 int GetDayOfYear(int64_t timestamp)
