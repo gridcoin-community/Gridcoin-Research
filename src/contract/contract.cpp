@@ -1,6 +1,8 @@
 #include "cpid.h"
 #include "init.h"
-#include "bitcoinrpc.h"
+#include "rpcclient.h"
+#include "rpcserver.h"
+#include "rpcprotocol.h"
 #include "keystore.h"
 #include "beacon.h"
 

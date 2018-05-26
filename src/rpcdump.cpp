@@ -6,7 +6,8 @@
 #include <fstream>
 
 #include "init.h" // for pwalletMain
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcprotocol.h"
 #include "ui_interface.h"
 #include "base58.h"
 
