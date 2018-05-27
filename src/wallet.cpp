@@ -1163,7 +1163,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
     }
 
     // Rebroadcast any of our txes that aren't in a block yet
-    //if (fDebug10) printf("ResendWalletTransactions()\n");
+    //if (fDebug10) LogPrintf("ResendWalletTransactions()\n");
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
