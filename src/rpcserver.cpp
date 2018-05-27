@@ -914,7 +914,7 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
             nRPCtimebegin = GetTimeMillis();
             result = pcmd->actor(params, false);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-            printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
+            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
         }
         else
             result = pcmd->actor(params, false);
