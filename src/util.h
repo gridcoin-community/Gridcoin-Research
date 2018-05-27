@@ -115,7 +115,7 @@ bool LogAcceptCategory(const char* category);
 void LogPrintStr(const std::string &str);
 
 #define strprintf tfm::format
-#define LogPrintf(...) LogPrint(NULL, __VA_ARGS__)
+#define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
 
 /* When we switch to C++11, this can be switched to variadic templates instead
  * of this macro-based construction (see tinyformat.h).
