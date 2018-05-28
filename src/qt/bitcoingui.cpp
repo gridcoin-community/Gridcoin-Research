@@ -513,17 +513,9 @@ void BitcoinGUI::createActions()
     miningAction->setStatusTip(tr("Neural Network"));
     miningAction->setMenuRole(QAction::TextHeuristicRole);
 
-    configAction = new QAction(tr("&Advanced Configuration"), this);
-    configAction->setStatusTip(tr("Advanced Configuration"));
-    configAction->setMenuRole(QAction::TextHeuristicRole);
-
     newUserWizardAction = new QAction(tr("&New User Wizard"), this);
     newUserWizardAction->setStatusTip(tr("New User Wizard"));
     newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
-
-    foundationAction = new QAction(tr("&Foundation"), this);
-    foundationAction->setStatusTip(tr("Foundation"));
-    foundationAction->setMenuRole(QAction::TextHeuristicRole);
 
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
@@ -563,7 +555,6 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
     connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
@@ -1200,35 +1191,11 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
     }
 }
 
-void BitcoinGUI::configClicked()
-{
-#ifdef WIN32
-    if (!bGlobalcomInitialized) return;
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-    globalcom->dynamicCall("ShowConfig()");
-#endif
-}
-
 void BitcoinGUI::diagnosticsClicked()
 {
     diagnosticsDialog->show();
     diagnosticsDialog->raise();
     diagnosticsDialog->activateWindow();
-}
-
-void BitcoinGUI::foundationClicked()
-{
-#ifdef WIN32
-    if (!bGlobalcomInitialized) return;
-    std::string sVotingPayload = "";
-    GetJSONPollsReport(true,"",sVotingPayload,true);
-    qtExecuteGenericFunction("SetGenericVotingData",sVotingPayload);
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-    qtSetSessionInfo(DefaultWalletAddress(), GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-    globalcom->dynamicCall("ShowFoundation()");
-#endif
 }
 
 void BitcoinGUI::newUserWizardClicked()

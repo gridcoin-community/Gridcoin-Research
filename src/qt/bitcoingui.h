@@ -204,8 +204,6 @@ private slots:
     /** Show about dialog */
     void aboutClicked();
 
-	void foundationClicked();
-
 	void bxClicked();
 	void websiteClicked();
 	void exchangeClicked();
@@ -213,8 +211,6 @@ private slots:
     void boincStatsClicked();
 	void chatClicked();
 
-	void downloadClicked();
-	void configClicked();
     void miningClicked();
 
     void diagnosticsClicked();
