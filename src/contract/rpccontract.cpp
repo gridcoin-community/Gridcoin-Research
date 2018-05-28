@@ -49,7 +49,7 @@ UniValue listallpolls(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    UniValue res = GetJSONPollsReport(false, "", out1, true);
+    UniValue res = getjsonpoll(false, true, "");
     return res;
 }
 
@@ -63,7 +63,7 @@ UniValue listallpolldetails(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    UniValue res = GetJSONPollsReport(true, "", out1, true);
+    UniValue res = getjsonpoll(true, true, "");
     return res;
 }
 
@@ -77,7 +77,7 @@ UniValue listpolldetails(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    UniValue res = GetJSONPollsReport(true, "", out1, false);
+    UniValue res = getjsonpoll(true, false, "");
     return res;
 }
 
@@ -112,7 +112,7 @@ UniValue listpollresults(const UniValue& params, bool fHelp)
     {
         std::string Title = params[0].get_str();
         std::string out1 = "";
-        UniValue myPolls = GetJSONPollsReport(true, Title, out1, bIncExpired);
+        UniValue myPolls = getjsonpoll(true, bIncExpired, Title);
         res.push_back(myPolls);
     }
     return res;
@@ -128,7 +128,7 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    UniValue res = GetJSONPollsReport(false, "", out1, false);
+    UniValue res = getjsonpoll(false, false, "");
     return res;
 }
 
