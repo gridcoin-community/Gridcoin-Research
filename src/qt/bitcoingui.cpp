@@ -101,7 +101,6 @@ extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, do
 extern void qtSyncWithDPORNodes(std::string data);
 extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string getMacAddress();
-extern double qtPushGridcoinDiagnosticData(std::string data);
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
@@ -296,17 +295,6 @@ int RestartClient()
 
     StartShutdown();
     return 1;
-}
-
-double qtPushGridcoinDiagnosticData(std::string data)
-{
-    if (!bGlobalcomInitialized) return 0;
-    int result = 0;
-    #if defined(WIN32) && defined(QT_GUI)
-            QString qsData = ToQstring(data);
-            result = globalcom->dynamicCall("PushGridcoinDiagnosticData(Qstring)",qsData).toInt();
-    #endif
-    return result;
 }
 
 //R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
