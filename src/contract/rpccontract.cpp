@@ -158,7 +158,7 @@ Value votedetails(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw std::runtime_error(
-                "votedetails <pollname>]n"
+                "votedetails <pollname>\n"
                 "\n"
                 "<pollname> Specified poll name\n"
                 "\n"
