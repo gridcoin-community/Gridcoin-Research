@@ -236,7 +236,6 @@ extern UniValue addpoll(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue decryptphrase(const UniValue& params, bool fHelp);
-//extern UniValue downloadblocks(const UniValue& params, bool fHelp);
 extern UniValue encryptphrase(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);

@@ -118,8 +118,6 @@ extern int64_t IsNeural();
 std::string getfilecontents(std::string filename);
 int nRegVersion;
 
-extern int CreateRestorePoint();
-extern int DownloadBlocks();
 void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
@@ -254,28 +252,6 @@ int CreateRestorePoint()
     globalcom->dynamicCall(fTestNet
                            ? "CreateRestorePointTestNet()"
                            : "CreateRestorePoint()");
-#endif
-
-    return 1;
-}
-
-int DownloadBlocks()
-{
-    LogPrintf("Download blocks.");
-
-    // Instantiate globalcom if not created.
-    if (!bGlobalcomInitialized)
-        ReinstantiateGlobalcom();
-
-    // If it still isn't created then there's nothing we can do.
-    if (!bGlobalcomInitialized)
-        return 0;
-
-#ifdef WIN32
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-    globalcom->dynamicCall("DownloadBlocks()");
-    StartShutdown();
 #endif
 
     return 1;
@@ -1222,11 +1198,6 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                               .arg(type)
                               .arg(address), icon);
     }
-}
-
-void BitcoinGUI::downloadClicked()
-{
-    DownloadBlocks();
 }
 
 void BitcoinGUI::rebootClicked()

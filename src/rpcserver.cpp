@@ -411,7 +411,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getnetworkinfo",          &getnetworkinfo,          true,   cat_network       },
     { "currenttime",             &currenttime,             false,  cat_network       },
     { "decryptphrase",           &decryptphrase,           false,  cat_network       },
-//  { "downloadblocks",          &downloadblocks,          false,  cat_network       },
     { "encryptphrase",           &encryptphrase,           false,  cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        true,   cat_network       },
     { "getbestblockhash",        &getbestblockhash,        true,   cat_network       },
