@@ -124,7 +124,6 @@ void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
 void HarvestCPIDs(bool cleardata);
-extern int RestartClient();
 void ReinstantiateGlobalcom();
 
 #ifdef WIN32
@@ -282,21 +281,6 @@ int DownloadBlocks()
     return 1;
 }
 
-
-
-int RestartClient()
-{
-    if (!bGlobalcomInitialized)
-        return 0;
-
-#ifdef WIN32
-    globalcom->dynamicCall("RebootClient()");
-#endif
-
-    StartShutdown();
-    return 1;
-}
-
 //R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
 
 double qtExecuteGenericFunction(std::string function, std::string data)
@@ -426,23 +410,6 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
     #endif
 }
 
-bool IsUpgradeAvailable()
-{
-   if (!bGlobalcomInitialized)
-      return false;
-
-   bool upgradeAvailable = false;
-   if (!fTestNet)
-   {
-#ifdef WIN32
-      upgradeAvailable = globalcom->dynamicCall("ClientNeedsUpgrade()").toInt();
-#endif
-   }
-
-   return upgradeAvailable;
-}
-
-
 int64_t IsNeural()
 {
     if (!bGlobalcomInitialized) return 0;
@@ -461,26 +428,6 @@ int64_t IsNeural()
         return 0;
     }
 }
-
-
-
-int UpgradeClient()
-{
-    if (!bGlobalcomInitialized)
-        return 0;
-
-    LogPrintf("Executing upgrade");
-
-#ifdef WIN32
-    globalcom->dynamicCall(fTestNet
-                           ? "UpgradeWallet()"
-                           : "UpgradeWalletTestnet()");
-#endif
-
-    StartShutdown();
-    return 1;
-}
-
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
 {
@@ -582,10 +529,6 @@ void BitcoinGUI::createActions()
     downloadAction->setStatusTip(tr("Download Blocks"));
     downloadAction->setMenuRole(QAction::TextHeuristicRole);
 
-    upgradeAction = new QAction(tr("&Upgrade Client"), this);
-    upgradeAction->setStatusTip(tr("Upgrade Client"));
-    upgradeAction->setMenuRole(QAction::TextHeuristicRole);
-
     aboutAction = new QAction(tr("&About Gridcoin"), this);
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
@@ -644,7 +587,6 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
     connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
     connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
@@ -673,7 +615,6 @@ void BitcoinGUI::setIcons()
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
     downloadAction->setIcon(QPixmap(":/images/gridcoin"));
-    upgradeAction->setIcon(QPixmap(":/images/gridcoin"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
     miningAction->setIcon(QPixmap(":/images/gridcoin"));
     configAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -744,12 +685,6 @@ void BitcoinGUI::createMenuBar()
     help->addAction(diagnosticsAction);
     help->addSeparator();
     help->addAction(aboutAction);
-// The below is commented out until the upgrader is repaired.
-//#ifdef WIN32
-//    help->addSeparator();
-//    help->addAction(upgradeAction);
-//#endif
-
 }
 
 void BitcoinGUI::createToolBars()
@@ -1287,12 +1222,6 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                               .arg(type)
                               .arg(address), icon);
     }
-}
-
-void BitcoinGUI::upgradeClicked()
-{
-    LogPrintf("Upgrading Gridcoin...");
-    UpgradeClient();
 }
 
 void BitcoinGUI::downloadClicked()

@@ -2927,25 +2927,6 @@ UniValue networktime(const UniValue& params, bool fHelp)
     return res;
 }
 
-#ifdef WIN32
-UniValue restart(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "restart\n"
-                "\n"
-                "Restarts the wallet\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LogPrintf("Restarting Gridcoin...");
-    int iResult = Restarter::RestartGridcoin();
-    res.pushKV("RebootClient", iResult);
-
-    return res;
-}
-#endif
-
 UniValue execute(const UniValue& params, bool fHelp)
 {
     throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");

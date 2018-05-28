@@ -261,11 +261,6 @@ extern UniValue listpolls(const UniValue& params, bool fHelp);
 extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
-
-#ifdef WIN32
-extern UniValue restart(const UniValue& params, bool fHelp);
-#endif
-
 extern UniValue rpc_getsupervotes(const UniValue& params, bool fHelp);
 extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 extern UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);

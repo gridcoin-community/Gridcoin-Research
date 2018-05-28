@@ -434,9 +434,6 @@ static const CRPCCommand vRPCCommands[] =
     { "memorypool",              &memorypool,              true,   cat_network       },
     { "networktime",             &networktime,             true,   cat_network       },
     { "ping",                    &ping,                    true,   cat_network       },
-#ifdef WIN32
-    { "restart",                 &restart,                 true,   cat_network       },
-#endif
     { "showblock",               &showblock,               true,   cat_network       },
     { "stop",                    &stop,                    true,   cat_network       },
     { "vote",                    &vote,                    false,  cat_network       },

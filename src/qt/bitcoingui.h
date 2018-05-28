@@ -101,7 +101,6 @@ private:
 
 	QAction *miningAction;
 	QAction *emailAction;
-	QAction *upgradeAction;
 	QAction *downloadAction;
     QAction *rebootAction;
 
@@ -218,7 +217,6 @@ private slots:
     void boincStatsClicked();
 	void chatClicked();
 
-	void upgradeClicked();
 	void downloadClicked();
 	void configClicked();
     void miningClicked();
