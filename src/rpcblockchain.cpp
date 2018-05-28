@@ -114,7 +114,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 std::string getfilecontents(std::string filename);
-int CreateRestorePoint();
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
