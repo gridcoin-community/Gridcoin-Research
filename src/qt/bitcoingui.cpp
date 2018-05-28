@@ -501,10 +501,6 @@ void BitcoinGUI::createActions()
     quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     quitAction->setMenuRole(QAction::QuitRole);
 
-    downloadAction = new QAction(tr("&Download Blocks"), this);
-    downloadAction->setStatusTip(tr("Download Blocks"));
-    downloadAction->setMenuRole(QAction::TextHeuristicRole);
-
     aboutAction = new QAction(tr("&About Gridcoin"), this);
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
@@ -555,10 +551,8 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-    connect(foundationAction, SIGNAL(triggered()), this, SLOT(foundationClicked()));
     connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
@@ -581,12 +575,9 @@ void BitcoinGUI::setIcons()
     chatAction->setIcon(QPixmap(":/icons/chat"));
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
-    downloadAction->setIcon(QPixmap(":/images/gridcoin"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
     miningAction->setIcon(QPixmap(":/images/gridcoin"));
-    configAction->setIcon(QPixmap(":/images/gridcoin"));
     newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
-    foundationAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -634,16 +625,10 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
+#ifdef WIN32  // actions in this menu are on .NET dll side only show this menu for windows
     QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 
-#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows
-    qmAdvanced->addAction(configAction);
     qmAdvanced->addAction(miningAction);
-//	qmAdvanced->addAction(newUserWizardAction);
-    qmAdvanced->addSeparator();
-    qmAdvanced->addAction(foundationAction);
-//	qmAdvanced->addAction(diagnosticsAction);
-     qmAdvanced->addAction(downloadAction);
 #endif /* defined(WIN32) */
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));

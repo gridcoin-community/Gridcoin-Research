@@ -97,17 +97,10 @@ private:
 	QAction *exchangeAction;
 
 	QAction *miningAction;
-	QAction *emailAction;
-	QAction *downloadAction;
-
-	QAction *configAction;
-	QAction *leaderboardAction;
-	QAction *tickerAction;
 
     QAction *votingAction;
 
 	QAction *newUserWizardAction;
-    QAction *foundationAction;
 	QAction *diagnosticsAction;
 
     QAction *verifyMessageAction;
