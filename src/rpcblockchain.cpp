@@ -14,7 +14,6 @@
 #include "beacon.h"
 #include "util.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
