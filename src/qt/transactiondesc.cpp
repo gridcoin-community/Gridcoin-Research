@@ -15,9 +15,6 @@
 #include <QMessageBox>
 #include <string>
 
-#include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_utils.h"
-
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx);
 std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 

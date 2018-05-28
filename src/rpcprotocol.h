@@ -3,8 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef _BITCOINRPC_PROTOCOL_H_
-#define _BITCOINRPC_PROTOCOL_H_ 1
+#pragma once
 
 #include <list>
 #include <map>
@@ -15,12 +14,9 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
-#include "json/json_spirit_reader_template.h"
-#include "json/json_spirit_utils.h"
-#include "json/json_spirit_writer_template.h"
+#include <univalue.h>
 
 using namespace std;
-using namespace json_spirit;
 
 // HTTP status codes
 enum HTTPStatusCode
@@ -173,10 +169,8 @@ private:
 int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet, string& strMessageRet);
 string HTTPPost(const string& strMsg, const map<string,string>& mapRequestHeaders);
 string HTTPReply(int nStatus, const string& strMsg, bool keepalive);
-string JSONRPCRequest(const string& strMethod, const Array& params, const Value& id);
-Object JSONRPCReplyObj(const Value& result, const Value& error, const Value& id);
-string JSONRPCReply(const Value& result, const Value& error, const Value& id);
+string JSONRPCRequest(const string& strMethod, const UniValue& params, const UniValue& id);
+UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id);
+string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id);
+UniValue JSONRPCError(int code, const std::string& message);
 
-json_spirit::Object JSONRPCError(int code, const std::string& message);
-
-#endif

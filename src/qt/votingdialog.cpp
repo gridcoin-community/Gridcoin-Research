@@ -29,7 +29,6 @@
 #include <QString>
 #include <QVBoxLayout>
 
-#include "json/json_spirit.h"
 #include "votingdialog.h"
 #include "util.h"
 #include "contract/polls.h"
