@@ -31,7 +31,6 @@
 
 #include "votingdialog.h"
 #include "util.h"
-#include "contract/polls.h"
 
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
@@ -252,41 +251,29 @@ void VotingTableModel::resetData(bool history)
     // retrieve data
     std::vector<VotingItem *> items;
     std::string sVotingPayload;
-    GetJSONPollsReport(true, "", sVotingPayload, history);
+    Polls = GetPolls(true, history, "");
 
     //time_t now = time(NULL); // needed if history should be limited
 
-    std::vector<std::string> vPolls = split(sVotingPayload, "<POLL>");
-    for(size_t y=0; y < vPolls.size(); y++) {
-        // replace underscores with spaces
-        for(size_t nPos=0; (nPos=vPolls[y].find('_', nPos)) != std::string::npos; )
-            vPolls[y][nPos] = ' ';
-
-        std::string sTitle = ExtractXML(vPolls[y], "<TITLE>", "</TITLE>");
+    for(const auto& iterPoll: Polls)
+    {
+        std::string sTitle = iterPoll.title;
         std::string sId = GetFoundationGuid(sTitle);
-        if (sTitle.size() && (sId.empty())) {
-            QString sExpiration = QString::fromStdString(ExtractXML(vPolls[y], "<EXPIRATION>", "</EXPIRATION>"));
-            std::string sShareType = ExtractXML(vPolls[y], "<SHARETYPE>", "</SHARETYPE>");
-            std::string sQuestion = ExtractXML(vPolls[y], "<QUESTION>", "</QUESTION>");
-            std::string sAnswers = ExtractXML(vPolls[y], "<ANSWERS>", "</ANSWERS>");
-            std::string sArrayOfAnswers = ExtractXML(vPolls[y], "<ARRAYANSWERS>", "</ARRAYANSWERS>");
-            std::string sTotalParticipants = ExtractXML(vPolls[y], "<TOTALPARTICIPANTS>", "</TOTALPARTICIPANTS>");
-            std::string sTotalShares = ExtractXML(vPolls[y], "<TOTALSHARES>", "</TOTALSHARES>");
-            std::string sUrl = ExtractXML(vPolls[y], "<URL>", "</URL>");
-            std::string sBestAnswer = ExtractXML(vPolls[y], "<BESTANSWER>", "</BESTANSWER>");
-
+        if (sTitle.size() && (sId.empty()))
+        {
+            QString sExpiration = QString::fromStdString(iterPoll.expiration);
             VotingItem *item = new VotingItem;
             item->rowNumber_ = items.size() + 1;
-            item->title_ = QString::fromStdString(sTitle);
-            item->expiration_ = QDateTime::fromString(sExpiration, "M-d-yyyy HH:mm:ss");
-            item->shareType_ = QString::fromStdString(sShareType);
-            item->question_ = QString::fromStdString(sQuestion);
-            item->answers_ = QString::fromStdString(sAnswers);
-            item->arrayOfAnswers_ = QString::fromStdString(sArrayOfAnswers);
-            item->totalParticipants_ = std::stoul(sTotalParticipants);
-            item->totalShares_ = std::stoul(sTotalShares);
-            item->url_ = QString::fromStdString(sUrl);
-            item->bestAnswer_ = QString::fromStdString(sBestAnswer);
+            item->title_ = QString::fromStdString(iterPoll.title);
+            item->expiration_ = QDateTime::fromString(QString::fromStdString(iterPoll.expiration), "M-d-yyyy HH:mm:ss");
+            item->shareType_ = QString::fromStdString(iterPoll.sharetype);
+            item->question_ = QString::fromStdString(iterPoll.question);
+            item->answers_ = QString::fromStdString(iterPoll.sAnswers);
+            item->vectorOfAnswers_ = iterPoll.answers;
+            item->totalParticipants_ = iterPoll.total_participants;
+            item->totalShares_ = iterPoll.total_shares;
+            item->url_ = QString::fromStdString(iterPoll.url);
+            item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer);
             items.push_back(item);
         }
     }
@@ -709,19 +696,20 @@ void VotingChartDialog::resetData(const VotingItem *item)
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     answer_->setText(item->bestAnswer_);
 
-    std::string arrayOfAnswers = item->arrayOfAnswers_.toUtf8().constData();
-    std::vector<std::string> vAnswers = split(arrayOfAnswers, "<RESERVED>"); // the first entry is empty
-    answerTable_->setRowCount(vAnswers.size()-1);
+    std::vector<polling::Vote> vectorOfAnswers = item->vectorOfAnswers_;
+    answerTable_->setRowCount(vectorOfAnswers.size());
     std::vector<int> iShares;
     std::vector<QString> sAnswerNames;
     int sharesSum = 0;
-    for(size_t y=1; y < vAnswers.size(); y++) {
-        sAnswerNames.push_back(QString::fromStdString(ExtractXML(vAnswers[y], "<ANSWERNAME>", "</ANSWERNAME>")));
-        int iShare = atoi(ExtractXML(vAnswers[y], "<SHARES>", "</SHARES>").c_str());
-        iShares.push_back(iShare);
-        sharesSum += iShare;
+    //for(size_t y=1; y < vAnswers.size(); y++)
+    for(polling::Vote iterAnswer: vectorOfAnswers)
+    {
+        sAnswerNames.push_back(QString::fromStdString(iterAnswer.answer));
+        iShares.push_back(iterAnswer.shares);
+        sharesSum += iterAnswer.shares;
     }
-    for(size_t y=0; y < sAnswerNames.size(); y++) {
+    for(size_t y=0; y < sAnswerNames.size(); y++)
+    {
         answerTable_->setItem(y, 0, new QTableWidgetItem(sAnswerNames[y]));
         QTableWidgetItem *iSharesItem = new QTableWidgetItem();
         iSharesItem->setData(Qt::DisplayRole,iShares[y]);
