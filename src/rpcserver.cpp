@@ -436,7 +436,6 @@ static const CRPCCommand vRPCCommands[] =
     { "ping",                    &ping,                    true,   cat_network       },
 #ifdef WIN32
     { "restart",                 &restart,                 true,   cat_network       },
-    { "restorepoint",            &restorepoint,            true,   cat_network       },
 #endif
     { "showblock",               &showblock,               true,   cat_network       },
     { "stop",                    &stop,                    true,   cat_network       },

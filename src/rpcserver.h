@@ -264,7 +264,6 @@ extern UniValue ping(const UniValue& params, bool fHelp);
 
 #ifdef WIN32
 extern UniValue restart(const UniValue& params, bool fHelp);
-extern UniValue restorepoint(const UniValue& params, bool fHelp);
 #endif
 
 extern UniValue rpc_getsupervotes(const UniValue& params, bool fHelp);

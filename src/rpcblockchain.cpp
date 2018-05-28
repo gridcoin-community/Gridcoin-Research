@@ -2944,24 +2944,6 @@ UniValue restart(const UniValue& params, bool fHelp)
 
     return res;
 }
-
-UniValue restorepoint(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "restorepoint\n"
-                "\n"
-                "Create a restore point\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r= Restarter::CreateGridcoinRestorePoint();
-    //We must stop the node before we can do this
-    //RestartGridcoin();
-    res.pushKV("Restore Point", r);
-
-    return res;
-}
 #endif
 
 UniValue execute(const UniValue& params, bool fHelp)
