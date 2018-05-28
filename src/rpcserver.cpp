@@ -201,7 +201,7 @@ string CRPCTable::help(string strCommand, rpccategory category) const
 Value help(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() == 0 || params.size() > 1)
-        throw runtime_error(
+        return
             "help [command/category]\n"
             "Returns help on a specific command or category you request\n"
             "\n"
@@ -211,7 +211,7 @@ Value help(const Array& params, bool fHelp)
             "wallet --------> Returns help for blockchain related commands\n"
             "mining --------> Returns help for neural network/cpid/beacon related commands\n"
             "developer -----> Returns help for developer commands\n"
-            "network -------> Returns help for network related commands\n");
+            "network -------> Returns help for network related commands\n";
     
     // Allow to process through if params size is > 0
     string strCommand;
