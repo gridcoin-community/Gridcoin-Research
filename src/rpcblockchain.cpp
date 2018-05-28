@@ -2928,23 +2928,6 @@ UniValue networktime(const UniValue& params, bool fHelp)
 }
 
 #ifdef WIN32
-UniValue reindex(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "reindex\n"
-                "\n"
-                "Re-index the block chain\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r = Restarter::CreateGridcoinRestorePoint();
-    Restarter::ReindexGridcoinWallet();
-    res.pushKV("Reindex Chain", r);
-
-    return res;
-}
-
 UniValue restart(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

@@ -96,7 +96,6 @@
 #include "boinc.h"
 
 extern CWallet* pwalletMain;
-int ReindexWallet();
 extern QString ToQstring(std::string s);
 extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
 extern void qtSyncWithDPORNodes(std::string data);
@@ -127,7 +126,6 @@ void GetGlobalStatus();
 bool IsConfigFileEmpty();
 void HarvestCPIDs(bool cleardata);
 extern int RestartClient();
-extern int ReindexWallet();
 void ReinstantiateGlobalcom();
 
 #ifdef WIN32
@@ -247,25 +245,6 @@ BitcoinGUI::~BitcoinGUI()
 #ifdef Q_OS_MAC
     delete appMenuBar;
 #endif
-}
-
-
-
-
-
-int ReindexWallet()
-{
-    if (!bGlobalcomInitialized)
-        return 0;
-
-#ifdef WIN32
-    globalcom->dynamicCall(fTestNet
-                           ? "ReindexWalletTestNet()"
-                           : "ReindexWallet()");
-#endif
-
-    StartShutdown();
-    return 1;
 }
 
 int CreateRestorePoint()
@@ -611,12 +590,6 @@ void BitcoinGUI::createActions()
     quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     quitAction->setMenuRole(QAction::QuitRole);
 
-
-
-    rebuildAction = new QAction(tr("&Rebuild Block Chain"), this);
-    rebuildAction->setStatusTip(tr("Rebuild Block Chain"));
-    rebuildAction->setMenuRole(QAction::TextHeuristicRole);
-
     downloadAction = new QAction(tr("&Download Blocks"), this);
     downloadAction->setStatusTip(tr("Download Blocks"));
     downloadAction->setMenuRole(QAction::TextHeuristicRole);
@@ -683,7 +656,6 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
     connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
     connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
     connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
@@ -712,7 +684,6 @@ void BitcoinGUI::setIcons()
     chatAction->setIcon(QPixmap(":/icons/chat"));
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
-    rebuildAction->setIcon(QPixmap(":/images/gridcoin"));
     downloadAction->setIcon(QPixmap(":/images/gridcoin"));
     upgradeAction->setIcon(QPixmap(":/images/gridcoin"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -778,8 +749,6 @@ void BitcoinGUI::createMenuBar()
 //	qmAdvanced->addAction(diagnosticsAction);
      qmAdvanced->addAction(downloadAction);
 #endif /* defined(WIN32) */
-    qmAdvanced->addSeparator();
-    qmAdvanced->addAction(rebuildAction);
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
@@ -1330,12 +1299,6 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                               .arg(type)
                               .arg(address), icon);
     }
-}
-
-void BitcoinGUI::rebuildClicked()
-{
-    LogPrintf("Rebuilding...");
-    ReindexWallet();
 }
 
 void BitcoinGUI::upgradeClicked()

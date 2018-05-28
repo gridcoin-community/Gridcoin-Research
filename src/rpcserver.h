@@ -263,7 +263,6 @@ extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
 
 #ifdef WIN32
-extern UniValue reindex(const UniValue& params, bool fHelp);
 extern UniValue restart(const UniValue& params, bool fHelp);
 extern UniValue restorepoint(const UniValue& params, bool fHelp);
 #endif
