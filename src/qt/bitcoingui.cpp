@@ -1200,11 +1200,6 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
     }
 }
 
-void BitcoinGUI::rebootClicked()
-{
-    qApp->exit(EXIT_CODE_REBOOT);
-}
-
 void BitcoinGUI::configClicked()
 {
 #ifdef WIN32

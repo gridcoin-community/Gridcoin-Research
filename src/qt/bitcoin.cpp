@@ -353,15 +353,6 @@ int main(int argc, char *argv[])
     threads->removeAll();
     threads.reset();
 
-    // use exit codes to trigger restart of the wallet
-    if(currentExitCode == EXIT_CODE_REBOOT)
-    {
-        LogPrintf("Restarting wallet...\n");
-        QStringList args = QApplication::arguments();
-        args.removeFirst();
-        QProcess::startDetached(QApplication::applicationFilePath(), args);
-    }
-
     return 0;
 }
 #endif // BITCOIN_QT_TEST
