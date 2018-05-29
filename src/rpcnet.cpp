@@ -332,7 +332,6 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         obj.pushKV("Neural Network", bNeural);
         if (bNeural)
         {
-            obj.pushKV("Neural Hash", stats.NeuralHash);
             obj.pushKV("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime()));
 
         }
