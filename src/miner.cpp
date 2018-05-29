@@ -665,17 +665,23 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
+void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 {
     if(OutOfSyncByAge())
-        return LogPrintf("AddNeuralContractOrVote: Out Of Sync\n");
+    {
+        LogPrintf("AddNeuralContractOrVote: Out Of Sync\n");
+        return;
+    }
 
     /* Retrive the neural Contract */
     const std::string& sb_contract = NN::GetNeuralContract();
     const std::string& sb_hash = GetQuorumHash(sb_contract);
 
     if(sb_contract.empty())
-        return LogPrintf("AddNeuralContractOrVote: Local Contract Empty\n");
+    {
+        LogPrintf("AddNeuralContractOrVote: Local Contract Empty\n");
+        return;
+    }
 
     /* To save network bandwidth, start posting the neural hashes in the
        CurrentNeuralHash field, so that out of sync neural network nodes can
@@ -686,7 +692,10 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     bb.CurrentNeuralHash = sb_hash;
 
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
-        return LogPrintf("AddNeuralContractOrVote: Not Participating\n");
+    {
+        LogPrintf("AddNeuralContractOrVote: Not Participating\n");
+        return;
+    }
 
     if(blocknew.nVersion >= 9)
     {
@@ -696,7 +705,10 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     }
 
     if(!NeedASuperblock())
-        return LogPrintf("AddNeuralContractOrVote: not Needed\n");
+    {
+        LogPrintf("AddNeuralContractOrVote: not Needed\n");
+        return;
+    }
 
     int pending_height = RoundFromString(ReadCache("neuralsecurity","pending").value, 0);
 
@@ -705,19 +717,25 @@ int AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s\n",sb_hash);
 
     if (pending_height>=(pindexBest->nHeight-200))
-        return LogPrintf("AddNeuralContractOrVote: already Pending\n");
+    {
+        LogPrintf("AddNeuralContractOrVote: already Pending\n");
+        return;
+    }
 
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 
     if (consensus_hash!=sb_hash)
-        return LogPrintf("AddNeuralContractOrVote: not in Consensus\n");
+    {
+        LogPrintf("AddNeuralContractOrVote: not in Consensus\n");
+        return;
+    }
 
     /* We have consensus, Add our neural contract */
     bb.superblock = PackBinarySuperblock(sb_contract);
     LogPrintf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")\n",bb.superblock.length());
 
-    return 0;
+    return;
 }
 
 bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev)

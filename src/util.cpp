@@ -227,13 +227,12 @@ bool LogAcceptCategory(const char* category)
     return true;
 }
 
-int LogPrintStr(const std::string &str)
+void LogPrintStr(const std::string &str)
 {
-    int ret = 0;
     if (fPrintToConsole)
     {
         // print to console
-        ret = fwrite(str.data(), 1, str.size(), stdout);
+        fwrite(str.data(), 1, str.size(), stdout);
     }
     //else
     if (!fPrintToDebugger)
@@ -275,7 +274,7 @@ int LogPrintStr(const std::string &str)
             else
                 fStartedNewLine = false;
 
-            ret = fwrite(str.data(), 1, str.size(), fileout);
+            fwrite(str.data(), 1, str.size(), fileout);
             fflush(fileout);
         }
     }
@@ -305,7 +304,7 @@ int LogPrintStr(const std::string &str)
         }
     }
 #endif */
-    return ret;
+    return;
 }
 
 int GetDayOfYear(int64_t timestamp)
