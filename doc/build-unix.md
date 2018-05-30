@@ -200,6 +200,40 @@ or building and depending on a local version of Berkeley DB 4.8. The readily ava
 As mentioned above, when maintaining portability of the wallet between the standard Gridcoin distributions and independently built
 node software is desired, Berkeley DB 4.8 must be used.
 
+Bulding on Raspbian/Raspberry Pi
+-------------------
+Building on a current [Raspbian Stretch Lite](https://www.raspberrypi.org/downloads/raspbian/):
+You should add a Swapfile to compensate the low memory on the device. I used 4 GB.
+
+Clone the Repository. Probably you can also use the Gridcoin-Community repo https://github.com/gridcoin-community/Gridcoin-Research
+
+```bash
+git clone https://github.com/gridcoin/Gridcoin-Research
+cd Gridcoin-Research
+```
+Get the dependencies. 
+```bash
+sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libboost-all-dev
+```
+You will need BerkeleyDB 4.8 (see in the other guides), so you need to compile it yourself. You can use "make -j4" if you have 4 cores to increase the speed, otherwise scratch "-j4".
+```bash
+wget http://download.oracle.com/berkeley-db/db-4.8.30.NC.tar.gz
+tar -xzvf db-4.8.30.NC.tar.gz
+cd db-4.8.30.NC/build_unix
+../dist/configure --enable-cxx
+make -j4
+sudo make install
+export BDB_INCLUDE_PATH="/usr/local/BerkeleyDB.4.8/include"
+export BDB_LIB_PATH="/usr/local/BerkeleyDB.4.8/lib"
+ln -s /usr/local/BerkeleyDB.4.8/lib/libdb-4.8.so /usr/lib/libdb-4.8.so
+```
+Compile with the following commands. The ./configure flags are set your system that it should use less memory to compile than usual and that you have BerkeleyDB 4.8.
+```bash
+./autogen.sh
+ ./configure CXXFLAGS="--param ggc-min-expand=1 --param ggc-min-heapsize=32768" CPPFLAGS="-I/usr/local/BerkeleyDB.4.8/include -O2" LDFLAGS="-L/usr/local/BerkeleyDB.4.8/lib"
+make -j4
+sudo make install
+```
 
 ARM Cross-compilation
 -------------------
