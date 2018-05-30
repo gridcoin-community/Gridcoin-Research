@@ -279,32 +279,6 @@ Partial Class frmMining
         Me.TabControl1.Size = New System.Drawing.Size(1045, 383)
         Me.TabControl1.TabIndex = 53
         '
-        'GroupBox4
-        '
-        Me.GroupBox4.BackgroundImage = Global.BoincStake.My.Resources.Resources.gradient
-        Me.GroupBox4.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
-        Me.GroupBox4.Location = New System.Drawing.Point(640, 6)
-        Me.GroupBox4.Name = "GroupBox4"
-        Me.GroupBox4.Size = New System.Drawing.Size(260, 214)
-        Me.GroupBox4.TabIndex = 57
-        Me.GroupBox4.TabStop = False
-        Me.GroupBox4.Text = "Network Status:"
-        '
-        'GroupBox3
-        '
-        Me.GroupBox3.BackColor = System.Drawing.Color.Transparent
-        Me.GroupBox3.BackgroundImage = Global.BoincStake.My.Resources.Resources.gradient753
-        Me.GroupBox3.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
-        Me.GroupBox3.Controls.Add(Me.RichTextBox1)
-        Me.GroupBox3.Font = New System.Drawing.Font("Microsoft Sans Serif", 9.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.GroupBox3.ForeColor = System.Drawing.Color.Green
-        Me.GroupBox3.Location = New System.Drawing.Point(6, 226)
-        Me.GroupBox3.Name = "GroupBox3"
-        Me.GroupBox3.Size = New System.Drawing.Size(893, 125)
-        Me.GroupBox3.TabIndex = 55
-        Me.GroupBox3.TabStop = False
-        Me.GroupBox3.Text = "API Commands:"
-        '
         'RichTextBox1
         '
         Me.RichTextBox1.BackColor = System.Drawing.Color.DimGray
@@ -314,60 +288,6 @@ Partial Class frmMining
         Me.RichTextBox1.Size = New System.Drawing.Size(880, 100)
         Me.RichTextBox1.TabIndex = 0
         Me.RichTextBox1.Text = ""
-        '
-        'GroupBox2
-        '
-        Me.GroupBox2.BackgroundImage = Global.BoincStake.My.Resources.Resources.gradient
-        Me.GroupBox2.Controls.Add(Me.ChartHashRate)
-        Me.GroupBox2.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
-        Me.GroupBox2.Location = New System.Drawing.Point(344, 6)
-        Me.GroupBox2.Name = "GroupBox2"
-        Me.GroupBox2.Size = New System.Drawing.Size(290, 214)
-        Me.GroupBox2.TabIndex = 54
-        Me.GroupBox2.TabStop = False
-        Me.GroupBox2.Text = "Performance:"
-        '
-        'ChartHashRate
-        '
-        Me.ChartHashRate.BackColor = System.Drawing.Color.Transparent
-        Me.ChartHashRate.BackImageTransparentColor = System.Drawing.Color.Black
-        Me.ChartHashRate.BackSecondaryColor = System.Drawing.Color.Black
-        Me.ChartHashRate.BorderlineColor = System.Drawing.Color.Black
-        ChartArea3.Area3DStyle.Enable3D = True
-        ChartArea3.BackColor = System.Drawing.Color.FromArgb(CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer), CType(CType(64, Byte), Integer))
-        ChartArea3.Name = "ChartArea1"
-        Me.ChartHashRate.ChartAreas.Add(ChartArea3)
-        Me.ChartHashRate.Location = New System.Drawing.Point(27, 45)
-        Me.ChartHashRate.Name = "ChartHashRate"
-        Me.ChartHashRate.Palette = System.Windows.Forms.DataVisualization.Charting.ChartColorPalette.Fire
-        Series3.ChartArea = "ChartArea1"
-        Series3.Name = "Series1"
-        Me.ChartHashRate.Series.Add(Series3)
-        Me.ChartHashRate.Size = New System.Drawing.Size(231, 122)
-        Me.ChartHashRate.SuppressExceptions = True
-        Me.ChartHashRate.TabIndex = 45
-        Me.ChartHashRate.Text = "Chart2"
-        '
-        'GroupBox1
-        '
-        Me.GroupBox1.BackgroundImage = Global.BoincStake.My.Resources.Resources.gradient
-        Me.GroupBox1.ForeColor = System.Drawing.Color.Lime
-        Me.GroupBox1.Location = New System.Drawing.Point(6, 6)
-        Me.GroupBox1.Name = "GroupBox1"
-        Me.GroupBox1.Size = New System.Drawing.Size(332, 214)
-        Me.GroupBox1.TabIndex = 53
-        Me.GroupBox1.TabStop = False
-        Me.GroupBox1.Text = "Neural Statistics:"
-        '
-        'pbCgminer
-        '
-        Me.pbCgminer.BackgroundImage = Global.BoincStake.My.Resources.Resources.gradient
-        Me.pbCgminer.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
-        Me.pbCgminer.Location = New System.Drawing.Point(0, 1)
-        Me.pbCgminer.Name = "pbCgminer"
-        Me.pbCgminer.Size = New System.Drawing.Size(1037, 360)
-        Me.pbCgminer.TabIndex = 3
-        Me.pbCgminer.TabStop = False
         '
         'TabPage1
         '
@@ -693,7 +613,7 @@ Partial Class frmMining
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.BackColor = System.Drawing.Color.Black
-        Me.BackgroundImage = Global.BoincStake.My.Resources.Resources.GradientU
+        Me.BackgroundImage = My.Resources.GradientU
         Me.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.ClientSize = New System.Drawing.Size(1071, 793)
         Me.Controls.Add(Me.lblAvgMagnitude)

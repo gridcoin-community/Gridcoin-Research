@@ -463,8 +463,8 @@ Refresh:
             If prj.PrimaryKey <> "neuralnetwork" Then
                 dgvProjects.Rows.Add()
                 dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
-                dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
-                dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
+                dgvProjects.Rows(iRow).Cells(1).Value = Val(prj.RAC)
+                dgvProjects.Rows(iRow).Cells(2).Value = Val(prj.AvgRAC)
                 dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
                 iRow = iRow + 1
             End If

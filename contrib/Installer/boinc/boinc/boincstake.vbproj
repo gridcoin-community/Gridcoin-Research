@@ -77,21 +77,9 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GRCSec, Version=1.0.0.2, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\GRCSec.dll</HintPath>
-    </Reference>
     <Reference Include="icsharpcode.sharpziplib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\release\icsharpcode.sharpziplib.dll</HintPath>
-    </Reference>
-    <Reference Include="openpopstake, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\openpopstake.dll</HintPath>
-    </Reference>
-    <Reference Include="sqlitestake.net, Version=0.21.1869.3794, Culture=neutral, PublicKeyToken=c273bd375e695f9c">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\sqlitestake.net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -218,8 +206,6 @@
     <None Include="Resources\gradientmiddle.png" />
     <None Include="Resources\GradientU.png" />
     <None Include="Resources\gradient.jpg" />
-    <None Include="Resources\mining.jpg" />
-    <None Include="Resources\splash.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
