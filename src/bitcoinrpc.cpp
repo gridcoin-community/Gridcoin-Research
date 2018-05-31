@@ -1306,31 +1306,26 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
     const CRPCCommand *pcmd = tableRPC[strMethod];
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
-
+    
     // Observe safe mode
     string strWarning = GetWarnings("rpc");
     if (strWarning != "" && !GetBoolArg("-disablesafemode") &&
         !pcmd->okSafeMode)
         throw JSONRPCError(RPC_FORBIDDEN_BY_SAFE_MODE, string("Safe mode: ") + strWarning);
-
+    
     // Lets add a optional debug4 to display how long it takes the rpc commands to be performed in ms
     // We will do this only on successful calls not exceptions
     try
-    {
-        Value result;
-
+    {           
         if (fDebug4)
-        {
-            int64_t nRPCtimebegin;
-            int64_t nRPCtimetotal;
-            nRPCtimebegin = GetTimeMillis();
-            result = pcmd->actor(params, false);
-            nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-            printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
-        }
-        else
-            result = pcmd->actor(params, false);
-
+            LogPrintf("Serving RPC call %s", strMethod);                        
+        
+        int64_t nRPCtimebegin = GetTimeMillis();
+        Value result = pcmd->actor(params, false);
+        
+        if (fDebug4)
+            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod, GetTimeMillis() - nRPCtimebegin);
+        
         return result;
     }
     catch (std::exception& e)
