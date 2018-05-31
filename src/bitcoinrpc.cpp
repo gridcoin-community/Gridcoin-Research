@@ -1229,11 +1229,8 @@ void ServiceConnection(AcceptedConnection *conn)
     RenameThread("grc-rpchand");
 
     bool fRun = true;
-    while (true)
+    while (fRun && !fShutdown)
     {
-        if (fShutdown || !fRun)
-            break;
-
         map<string, string> mapHeaders;
         string strRequest;
 
