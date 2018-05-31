@@ -1140,8 +1140,7 @@ void ThreadRPCServer2(void* parg)
         return;
     }
 
-    while (!fShutdown)
-        rpc_io_service->run_one();
+    rpc_io_service->run();
 
     delete rpc_io_service;
     rpc_io_service = NULL;
