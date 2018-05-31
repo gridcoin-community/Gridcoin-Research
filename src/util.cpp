@@ -1316,7 +1316,7 @@ void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
     {
         // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
         // the entire network is displaced for some reason.
-        int64_t nTimeOffset = 0.95 * vTimeOffsets.median();
+        nTimeOffset = 0.95 * vTimeOffsets.median();
         std::vector<int64_t> vSorted = vTimeOffsets.sorted();
         // Only let other nodes change our time by so much
         if (abs64(nTimeOffset) >= 70 * 60)
