@@ -431,10 +431,11 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogPrintf("Entering GRC debug mode 3.\n");
     }
 
-    fDebug4 = GetBoolArg("-debug4");
-
-    if (fDebug4)
-        printf("Entering RPC time debug mode\r\n");
+    if (GetArg("-debug4", "false")=="true")
+    {
+        fDebug4 = true;
+        LogPrintf("Entering RPC time debug mode");
+    }
 
     fDebug10= (GetArg("-debug10","false")=="true");
 
