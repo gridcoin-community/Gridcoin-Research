@@ -1303,10 +1303,8 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes)
 // avoid including unnecessary files for standalone upgrader
 
 
-void AddTimeData(const CNetAddr& ip, int64_t nTime)
+void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 {
-    int64_t nOffsetSample = nTime - GetTime();
-
     // Ignore duplicates
     static set<CNetAddr> setKnown;
     if (!setKnown.insert(ip).second)

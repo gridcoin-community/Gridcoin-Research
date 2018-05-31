@@ -205,7 +205,7 @@ bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
 bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes);
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
-void AddTimeData(const CNetAddr& ip, int64_t nTime);
+void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
 void runCommand(std::string strCommand);
 
 //!
