@@ -1539,7 +1539,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "lifttime\n"
+                "lifetime\n"
                 "\n"
                 "Displays information for the lifetime of your cpid in the network\n");
 
@@ -2168,7 +2168,7 @@ UniValue dportally(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "dporttally\n"
+                "dportally\n"
                 "\n"
                 "Request a tally of DPOR in superblock\n");
 
@@ -2803,7 +2803,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    UniValue res, diff(UniValue::VOBJ);
+    UniValue res(UniValue::VOBJ), diff(UniValue::VOBJ);
 
     res.pushKV("blocks",          nBestHeight);
     res.pushKV("moneysupply",     ValueFromAmount(pindexBest->nMoneySupply));

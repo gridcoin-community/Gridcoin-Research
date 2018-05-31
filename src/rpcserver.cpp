@@ -851,7 +851,7 @@ void ServiceConnection(AcceptedConnection *conn)
         try
         {
             // Parse request
-            UniValue valRequest;
+            UniValue valRequest(UniValue::VSTR);
             if (!valRequest.read(strRequest))
                 throw JSONRPCError(RPC_PARSE_ERROR, "Parse error");
 
@@ -862,7 +862,6 @@ void ServiceConnection(AcceptedConnection *conn)
                 jreq.parse(valRequest);
 
                 UniValue result = tableRPC.execute(jreq.strMethod, jreq.params);
-
                 // Send reply
                 strReply = JSONRPCReply(result, NullUniValue, jreq.id);
 

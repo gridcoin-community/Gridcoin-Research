@@ -203,7 +203,7 @@ string JSONRPCRequest(const string& strMethod, const UniValue& params, const Uni
 UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id)
 {
     UniValue reply(UniValue::VOBJ);
-    if (error.isNull())
+    if (!error.isNull())
         reply.pushKV("result", NullUniValue);
     else
         reply.pushKV("result", result);
