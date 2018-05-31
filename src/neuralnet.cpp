@@ -62,7 +62,7 @@ namespace NN
 
     std::string ExecuteDotNetStringFunction(std::string function, std::string data)
     {
-        qtExecuteDotNetStringFunction(function, data);
+        return qtExecuteDotNetStringFunction(function, data);
     }
 
     int64_t IsNeuralNet()

@@ -4,7 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "txdb.h"
 #include "walletdb.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
 #include "net.h"
 #include "init.h"
 #include "util.h"
@@ -434,7 +434,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     fDebug4 = GetBoolArg("-debug4");
 
     if (fDebug4)
-        printf("Entering RPC time debug mode\r\n");
+       LogPrintf("Entering RPC time debug mode\n");
 
     fDebug10= (GetArg("-debug10","false")=="true");
 

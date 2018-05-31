@@ -7,7 +7,8 @@
 #include "config/gridcoin-config.h"
 #endif
 
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "txdb.h"
 #include "walletdb.h"
 #include "net.h"

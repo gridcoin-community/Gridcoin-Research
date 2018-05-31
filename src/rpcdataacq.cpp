@@ -5,7 +5,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "main.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
 #include "cpid.h"
 #include "kernel.h"
 #include "block.h"
@@ -20,7 +20,9 @@
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <algorithm>
-using namespace json_spirit;
+
+#include <univalue.h>
+
 using namespace std;
 
 extern BlockFinder RPCBlockFinder;
@@ -31,7 +33,7 @@ static bool compare_second(const pair<std::string, long>  &p1, const pair<std::s
     return p1.second > p2.second;
 }
 
-Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
+UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 {
     if(fHelp || params.size() < 1 || params.size() > 3 )
         throw runtime_error(
@@ -64,7 +66,7 @@ Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
     }
     else throw runtime_error("getblockstats: Invalid mode specified");
     CBlockIndex* cur;
-    Object result1;
+    UniValue result1(UniValue::VOBJ);
     {
         LOCK(cs_main);
         cur= pindexBest;
@@ -152,67 +154,67 @@ Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
     }
 
     {
-        Object result;
-        result.push_back(Pair("blocks", blockcount));
-        result.push_back(Pair("first_height", l_first));
-        result.push_back(Pair("last_height", l_last));
-        result.push_back(Pair("first_time", TimestampToHRDate(l_first_time)));
-        result.push_back(Pair("last_time", TimestampToHRDate(l_last_time)));
-        result.push_back(Pair("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600));
-        result.push_back(Pair("min_blocksizek", size_min_blk/(double)1024));
-        result.push_back(Pair("max_blocksizek", size_max_blk/(double)1024));
-        result.push_back(Pair("min_posdiff", diff_min));
-        result.push_back(Pair("max_posdiff", diff_max));
-        result1.push_back(Pair("general", result));
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("blocks", blockcount);
+        result.pushKV("first_height", l_first);
+        result.pushKV("last_height", l_last);
+        result.pushKV("first_time", TimestampToHRDate(l_first_time));
+        result.pushKV("last_time", TimestampToHRDate(l_last_time));
+        result.pushKV("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600);
+        result.pushKV("min_blocksizek", size_min_blk/(double)1024);
+        result.pushKV("max_blocksizek", size_max_blk/(double)1024);
+        result.pushKV("min_posdiff", diff_min);
+        result.pushKV("max_posdiff", diff_max);
+        result1.pushKV("general", result);
     }
     {
-        Object result;
-        result.push_back(Pair("block", blockcount));
-        result.push_back(Pair("empty_block", emptyblockscount));
-        result.push_back(Pair("transaction", transactioncount));
-        result.push_back(Pair("proof_of_stake", poscount));
-        result.push_back(Pair("boincreward", researchcount));
-        result.push_back(Pair("super", super_count));
-        result1.push_back(Pair("counts", result));
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("block", blockcount);
+        result.pushKV("empty_block", emptyblockscount);
+        result.pushKV("transaction", transactioncount);
+        result.pushKV("proof_of_stake", poscount);
+        result.pushKV("boincreward", researchcount);
+        result.pushKV("super", super_count);
+        result1.pushKV("counts", result);
     }
     {
-        Object result;
-        result.push_back(Pair("block", blockcount));
-        result.push_back(Pair("research", researchtotal));
-        result.push_back(Pair("interest", interesttotal));
-        result.push_back(Pair("mint", minttotal/(double)COIN));
-        //result.push_back(Pair("stake_input", stakeinputtotal/(double)COIN));
-        result.push_back(Pair("blocksizek", size_sum_blk/(double)1024));
-        result.push_back(Pair("posdiff", diff_sum));
-        result1.push_back(Pair("totals", result));
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("block", blockcount);
+        result.pushKV("research", researchtotal);
+        result.pushKV("interest", interesttotal);
+        result.pushKV("mint", minttotal/(double)COIN);
+        //result.pushKV("stake_input", stakeinputtotal/(double)COIN);
+        result.pushKV("blocksizek", size_sum_blk/(double)1024);
+        result.pushKV("posdiff", diff_sum);
+        result1.pushKV("totals", result);
     }
     {
-        Object result;
-        result.push_back(Pair("research", researchtotal/(double)researchcount));
-        result.push_back(Pair("interest", interesttotal/(double)blockcount));
-        result.push_back(Pair("mint", (minttotal/(double)blockcount)/(double)COIN));
-        //result.push_back(Pair("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN));
-        result.push_back(Pair("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount));
-        result.push_back(Pair("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time)));
-        result.push_back(Pair("transaction", transactioncount/(double)(blockcount-emptyblockscount)));
-        result.push_back(Pair("blocksizek", size_sum_blk/(double)blockcount/(double)1024));
-        result.push_back(Pair("posdiff", diff_sum/(double)poscount));
-        result.push_back(Pair("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0));
-        result1.push_back(Pair("averages", result));
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("research", researchtotal/(double)researchcount);
+        result.pushKV("interest", interesttotal/(double)blockcount);
+        result.pushKV("mint", (minttotal/(double)blockcount)/(double)COIN);
+        //result.pushKV("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN);
+        result.pushKV("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount);
+        result.pushKV("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time));
+        result.pushKV("transaction", transactioncount/(double)(blockcount-emptyblockscount));
+        result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
+        result.pushKV("posdiff", diff_sum/(double)poscount);
+        result.pushKV("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0);
+        result1.pushKV("averages", result);
     }
     {
-        Object result;
+        UniValue result(UniValue::VOBJ);
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_version.begin(), c_version.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
         for (auto const& item : list)
         {
-            result.push_back(Pair(item.first, item.second/(double)blockcount));
+            result.pushKV(item.first, item.second/(double)blockcount);
         }
-        result1.push_back(Pair("versions", result));
+        result1.pushKV("versions", result);
     }
     {
-        Object result;
+        UniValue result(UniValue::VOBJ);
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_cpid.begin(), c_cpid.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
@@ -220,12 +222,12 @@ Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
         for (auto const& item : list)
         {
             if(!(limit--)) break;
-            result.push_back(Pair(item.first, item.second/(double)blockcount));
+            result.pushKV(item.first, item.second/(double)blockcount);
         }
-        result1.push_back(Pair("cpids", result));
+        result1.pushKV("cpids", result);
     }
     {
-        Object result;
+        UniValue result(UniValue::VOBJ);
         std::vector<PAIRTYPE(std::string, long)> list;
         std::copy(c_org.begin(), c_org.end(), back_inserter(list));
         std::sort(list.begin(),list.end(),compare_second);
@@ -233,14 +235,14 @@ Value rpc_getblockstats(const json_spirit::Array& params, bool fHelp)
         for (auto const& item : list)
         {
             if(!(limit--)) break;
-            result.push_back(Pair(item.first, item.second/(double)blockcount));
+            result.pushKV(item.first, item.second/(double)blockcount);
         }
-        result1.push_back(Pair("orgs", result));
+        result1.pushKV("orgs", result);
     }
     return result1;
 }
 
-json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHelp)
+UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
 {
     if(fHelp || params.size() != 2 )
         throw runtime_error(
@@ -252,28 +254,28 @@ json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHel
     long mode= RoundFromString(params[0].get_str(),0);
     CBlockIndex* pStart=NULL;
     long nMaxDepth_weight= 0;
-    Object result1;
+    UniValue result1(UniValue::VOBJ);
     if("last"==params[1].get_str())
     {
         std::string sheight= ReadCache("superblock", "block_number").value;
         long height= RoundFromString(sheight,0);
         if(!height)
         {
-            result1.push_back(Pair("error","No superblock loaded"));
+            result1.pushKV("error","No superblock loaded");
             return result1;
         }
         CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(height);
         if(!pblockindex)
         {
-            result1.push_back(Pair("height_cache",sheight));
-            result1.push_back(Pair("error","Superblock not found in block index"));
+            result1.pushKV("height_cache",sheight);
+            result1.pushKV("error","Superblock not found in block index");
             return result1;
         }
         if(!pblockindex->nIsSuperBlock)
         {
-            result1.push_back(Pair("height_cache",sheight));
-            result1.push_back(Pair("block_hash",pblockindex->GetBlockHash().GetHex()));
-            result1.push_back(Pair("error","Superblock loaded not a Superblock"));
+            result1.pushKV("height_cache",sheight);
+            result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
+            result1.pushKV("error","Superblock loaded not a Superblock");
             return result1;
         }
         pStart=pblockindex;
@@ -281,7 +283,7 @@ json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHel
         /* sb votes are evaluated on content of the previous block */
         nMaxDepth_weight= pStart->nHeight -1;
     }
-    else 
+    else
     if("now"==params[1].get_str())
     {
         LOCK(cs_main);
@@ -296,7 +298,7 @@ json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHel
 
         if (mapBlockIndex.count(hash) == 0)
         {
-            result1.push_back(Pair("error","Block hash not found in block index"));
+            result1.pushKV("error","Block hash not found in block index");
             return result1;
         }
 
@@ -305,8 +307,8 @@ json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHel
 
         if(!pblockindex->nIsSuperBlock)
         {
-            result1.push_back(Pair("block_hash",pblockindex->GetBlockHash().GetHex()));
-            result1.push_back(Pair("error","Requested block is not a Superblock"));
+            result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
+            result1.pushKV("error","Requested block is not a Superblock");
             return result1;
         }
         pStart = pblockindex;
@@ -316,24 +318,24 @@ json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHel
     }
 
     {
-        Object info;
+        UniValue info(UniValue::VOBJ);
         CBlock block;
         if(!block.ReadFromDisk(pStart->nFile,pStart->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
         MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
-        info.push_back(Pair("block_hash",pStart->GetBlockHash().GetHex()));
-        info.push_back(Pair("height",pStart->nHeight));
-        info.push_back(Pair("neuralhash", bb.NeuralHash ));
+        info.pushKV("block_hash",pStart->GetBlockHash().GetHex());
+        info.pushKV("height",pStart->nHeight);
+        info.pushKV("neuralhash", bb.NeuralHash );
         std::string superblock = UnpackBinarySuperblock(bb.superblock);
         std::string neural_hash = GetQuorumHash(superblock);
-        info.push_back(Pair("contract_size", superblock.size() ));
-        info.push_back(Pair("packed_size", bb.superblock.size() ));
-        info.push_back(Pair("contract_hash", neural_hash ));
-        result1.push_back(Pair("info", info ));
+        info.pushKV("contract_size", (int64_t)superblock.size() );
+        info.pushKV("packed_size", (int64_t)bb.superblock.size() );
+        info.pushKV("contract_hash", neural_hash );
+        result1.pushKV("info", info );
     }
 
-    Object votes;
+    UniValue votes(UniValue::VOBJ);
     std::map<std::string,double> tally;
 
     long blockcount=0;
@@ -390,33 +392,33 @@ json_spirit::Value rpc_getsupervotes(const json_spirit::Array& params, bool fHel
             + "|"+RoundToString(delta,0)
             + "|"+bb.cpid
             ;
-            votes.push_back(Pair(ToString(cur->nHeight), line ));
+            votes.pushKV(ToString(cur->nHeight), line );
         }
         else
         {
-            Object result2;
-            result2.push_back(Pair("neuralhash", bb.NeuralHash ));
-            result2.push_back(Pair("weight", weight ));
-            result2.push_back(Pair("cpid", cur->GetCPID() ));
-            result2.push_back(Pair("organization", bb.Organization ));
-            result2.push_back(Pair("cversion", bb.clientversion ));
+            UniValue result2(UniValue::VOBJ);
+            result2.pushKV("neuralhash", bb.NeuralHash );
+            result2.pushKV("weight", weight );
+            result2.pushKV("cpid", cur->GetCPID() );
+            result2.pushKV("organization", bb.Organization );
+            result2.pushKV("cversion", bb.clientversion );
             if(mode>=2)
             {
-                result2.push_back(Pair("difficulty", diff ));
-                result2.push_back(Pair("delay", delta ));
-                result2.push_back(Pair("hash", cur->GetBlockHash().GetHex() ));
-                result2.push_back(Pair("stakeout", (double) stakeout / COIN ));
+                result2.pushKV("difficulty", diff );
+                result2.pushKV("delay", delta );
+                result2.pushKV("hash", cur->GetBlockHash().GetHex() );
+                result2.pushKV("stakeout", (double) stakeout / COIN );
             }
-            votes.push_back(Pair(ToString(cur->nHeight), result2 ));
+            votes.pushKV(ToString(cur->nHeight), result2 );
         }
 
     }
-    result1.push_back(Pair("votes", votes ));
+    result1.pushKV("votes", votes );
 
     return result1;
 }
 
-json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
+UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
     if(fHelp)
         throw runtime_error(
@@ -441,7 +443,7 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
             "maxblocks not a smoothing multiple\n");
     */
     CBlockIndex* cur;
-    Object result1;
+    UniValue result1(UniValue::VOBJ);
     {
         LOCK(cs_main);
         cur= pindexBest;
@@ -598,15 +600,15 @@ json_spirit::Value rpc_exportstats(const json_spirit::Array& params, bool fHelp)
         cur = cur->pprev;
     }
 
-    result1.push_back(Pair("file", o_path.string()));
-    result1.push_back(Pair("points",(uint64_t)points));
-    result1.push_back(Pair("smoothing",smoothing));
-    result1.push_back(Pair("blockcount",blockcount));
+    result1.pushKV("file", o_path.string());
+    result1.pushKV("points",(uint64_t)points);
+    result1.pushKV("smoothing",smoothing);
+    result1.pushKV("blockcount",blockcount);
     Output.close();
     return result1;
 }
 
-json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fHelp)
+UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 {
     if(fHelp || params.size() < 1 || params.size() > 3 )
         throw runtime_error(
@@ -624,7 +626,7 @@ json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fH
     long maxblocks= RoundFromString(params[1].get_str(),0);
 
     CBlockIndex* cur;
-    Object result1;
+    UniValue result1(UniValue::VOBJ);
     {
         LOCK(cs_main);
         cur= pindexBest;
@@ -645,13 +647,13 @@ json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fH
 
             100 json
         */
-    
+
         double diff = GetDifficulty(cur);
         signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);
 
-        Object result2;
+        UniValue result2(UniValue::VOBJ);
         std::string line = cur->GetBlockHash().GetHex();
 
         if(detail<100)
@@ -677,16 +679,16 @@ json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fH
         }
         else
         {
-            result2.push_back(Pair("hash", line ));
-            result2.push_back(Pair("difficulty", diff ));
-            result2.push_back(Pair("deltatime", (int64_t)delta ));
-            result2.push_back(Pair("issuperblock", (bool)cur->nIsSuperBlock ));
-            result2.push_back(Pair("iscontract", (bool)cur->nIsContract ));
-            result2.push_back(Pair("ismodifier", (bool)cur->GeneratedStakeModifier() ));
-            result2.push_back(Pair("cpid", cur->GetCPID() ));
-            result2.push_back(Pair("research", cur->nResearchSubsidy ));
-            result2.push_back(Pair("interest", cur->nInterestSubsidy ));
-            result2.push_back(Pair("magnitude", cur->nMagnitude ));
+            result2.pushKV("hash", line );
+            result2.pushKV("difficulty", diff );
+            result2.pushKV("deltatime", (int64_t)delta );
+            result2.pushKV("issuperblock", (bool)cur->nIsSuperBlock );
+            result2.pushKV("iscontract", (bool)cur->nIsContract );
+            result2.pushKV("ismodifier", (bool)cur->GeneratedStakeModifier() );
+            result2.pushKV("cpid", cur->GetCPID() );
+            result2.pushKV("research", cur->nResearchSubsidy );
+            result2.pushKV("interest", cur->nInterestSubsidy );
+            result2.pushKV("magnitude", cur->nMagnitude );
         }
 
         if( (detail<100 && detail>=20) || (detail>=120) )
@@ -713,17 +715,17 @@ json_spirit::Value rpc_getrecentblocks(const json_spirit::Array& params, bool fH
             }
             else
             {
-                result2.push_back(Pair("organization", bb.Organization ));
-                result2.push_back(Pair("cversion", bb.clientversion ));
-                result2.push_back(Pair("neuralhash", bb.NeuralHash ));
-                result2.push_back(Pair("superblocksize", bb.NeuralHash ));
-                result2.push_back(Pair("vtxsz", block.vtx.size() ));
+                result2.pushKV("organization", bb.Organization );
+                result2.pushKV("cversion", bb.clientversion );
+                result2.pushKV("neuralhash", bb.NeuralHash );
+                result2.pushKV("superblocksize", bb.NeuralHash );
+                result2.pushKV("vtxsz", (int64_t)block.vtx.size() );
             }
         }
         if(detail<100)
-            result1.push_back(Pair(ToString(cur->nHeight), line ));
+            result1.pushKV(ToString(cur->nHeight), line );
         else
-            result1.push_back(Pair(ToString(cur->nHeight), result2 ));
+            result1.pushKV(ToString(cur->nHeight), result2 );
 
     }
     return result1;

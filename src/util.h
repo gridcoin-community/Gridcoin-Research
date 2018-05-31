@@ -112,10 +112,10 @@ void RandAddSeedPerfmon();
 /* Return true if log accepts specified category */
 bool LogAcceptCategory(const char* category);
 /* Send a string to the log output */
-int LogPrintStr(const std::string &str);
+void LogPrintStr(const std::string &str);
 
 #define strprintf tfm::format
-#define LogPrintf(...) LogPrint(NULL, __VA_ARGS__)
+#define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
 
 /* When we switch to C++11, this can be switched to variadic templates instead
  * of this macro-based construction (see tinyformat.h).
@@ -123,10 +123,11 @@ int LogPrintStr(const std::string &str);
 #define MAKE_ERROR_AND_LOG_FUNC(n)                                        \
     /*   Print to debug.log if -debug=category switch is given OR category is NULL. */ \
     template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline int LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
+    static inline void LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
     {                                                                         \
-        if(!LogAcceptCategory(category)) return 0;                            \
-        return LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n"); \
+        if(!LogAcceptCategory(category)) return;                            \
+        LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
+        return;                                                               \
     }                                                                         \
     /*   Log error and return false */                                        \
     template<TINYFORMAT_ARGTYPES(n)>                                          \
@@ -141,10 +142,11 @@ TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
 /* Zero-arg versions of logging and error, these are not covered by
  * TINYFORMAT_FOREACH_ARGNUM
 */
-static inline int LogPrint(const char* category, const char* format)
+static inline void LogPrint(const char* category, const char* format)
 {
-    if(!LogAcceptCategory(category)) return 0;
-    return LogPrintStr(format);
+    if(!LogAcceptCategory(category)) return;
+    LogPrintStr(format);
+    return;
 }
 static inline bool error(const char* format)
 {

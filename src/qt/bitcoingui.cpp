@@ -86,7 +86,9 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
+#include "rpcprotocol.h"
 #include "contract/polls.h"
 
 #include <iostream>

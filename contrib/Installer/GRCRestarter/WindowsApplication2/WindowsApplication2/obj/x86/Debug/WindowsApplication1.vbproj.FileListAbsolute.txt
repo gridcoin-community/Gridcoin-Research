@@ -1,4 +1,0 @@
-C:\Users\rachalupa\AppData\Local\Temporary Projects\WindowsApplication1\obj\x86\Debug\WindowsApplication1.vbprojResolveAssemblyReference.cache
-C:\Users\rachalupa\AppData\Local\Temporary Projects\WindowsApplication1\obj\x86\Debug\WindowsApplication1.Form1.resources
-C:\Users\rachalupa\AppData\Local\Temporary Projects\WindowsApplication1\obj\x86\Debug\WindowsApplication1.Resources.resources
-C:\Users\rachalupa\AppData\Local\Temporary Projects\WindowsApplication1\obj\x86\Debug\WindowsApplication1.vbproj.GenerateResource.Cache

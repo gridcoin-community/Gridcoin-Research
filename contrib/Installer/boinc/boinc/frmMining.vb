@@ -260,7 +260,6 @@ Public Class frmMining
         dgv.BackgroundColor = Drawing.Color.Black
         dgv.ForeColor = Drawing.Color.Lime
         dgv.ReadOnly = True
-        Dim grr As New GridcoinReader.GridcoinRow
         Dim vHeading() As String = Split(sHeader, ",")
         PopulateHeadings(vHeading, dgv, False)
         dgv.Columns(2).Visible = False
@@ -369,7 +368,6 @@ Refresh:
         dgv.ForeColor = Drawing.Color.Lime
         dgv.ReadOnly = True
 
-        Dim grr As New GridcoinReader.GridcoinRow
         Dim vHeading() As String = Split(sHeader, ",")
 
         PopulateHeadings(vHeading, dgv, False)
@@ -465,8 +463,8 @@ Refresh:
             If prj.PrimaryKey <> "neuralnetwork" Then
                 dgvProjects.Rows.Add()
                 dgvProjects.Rows(iRow).Cells(0).Value = prj.PrimaryKey
-                dgvProjects.Rows(iRow).Cells(1).Value = prj.RAC
-                dgvProjects.Rows(iRow).Cells(2).Value = prj.AvgRAC
+                dgvProjects.Rows(iRow).Cells(1).Value = Val(prj.RAC)
+                dgvProjects.Rows(iRow).Cells(2).Value = Val(prj.AvgRAC)
                 dgvProjects.Rows(iRow).Cells(3).Value = Trim(bIsThisWhitelisted)
                 iRow = iRow + 1
             End If

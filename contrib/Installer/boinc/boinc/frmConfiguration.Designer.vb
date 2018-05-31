@@ -21,14 +21,12 @@ Partial Class frmConfiguration
     Private Sub InitializeComponent()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmConfiguration))
         Me.GroupBox1 = New System.Windows.Forms.GroupBox()
-        Me.chkUpgrade = New System.Windows.Forms.CheckBox()
         Me.chkSpeech = New System.Windows.Forms.CheckBox()
         Me.btnSave = New System.Windows.Forms.Button()
         Me.MenuStrip1 = New System.Windows.Forms.MenuStrip()
         Me.FileToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.HideToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
         Me.OptionalModulesToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem()
-        Me.InstallGridcoinGalazaToolStripMenuItem1 = New System.Windows.Forms.ToolStripMenuItem()
         Me.lblTestnet = New System.Windows.Forms.Label()
         Me.GroupBox1.SuspendLayout()
         Me.MenuStrip1.SuspendLayout()
@@ -37,7 +35,6 @@ Partial Class frmConfiguration
         'GroupBox1
         '
         Me.GroupBox1.BackColor = System.Drawing.Color.Black
-        Me.GroupBox1.Controls.Add(Me.chkUpgrade)
         Me.GroupBox1.Controls.Add(Me.chkSpeech)
         Me.GroupBox1.ForeColor = System.Drawing.Color.Lime
         Me.GroupBox1.Location = New System.Drawing.Point(25, 36)
@@ -46,16 +43,6 @@ Partial Class frmConfiguration
         Me.GroupBox1.TabIndex = 3
         Me.GroupBox1.TabStop = False
         Me.GroupBox1.Text = "Configuration:"
-        '
-        'chkUpgrade
-        '
-        Me.chkUpgrade.AutoSize = True
-        Me.chkUpgrade.Location = New System.Drawing.Point(32, 57)
-        Me.chkUpgrade.Name = "chkUpgrade"
-        Me.chkUpgrade.Size = New System.Drawing.Size(139, 17)
-        Me.chkUpgrade.TabIndex = 2
-        Me.chkUpgrade.Text = "Suppress Auto Upgrade"
-        Me.chkUpgrade.UseVisualStyleBackColor = True
         '
         'chkSpeech
         '
@@ -109,19 +96,10 @@ Partial Class frmConfiguration
         'OptionalModulesToolStripMenuItem
         '
         Me.OptionalModulesToolStripMenuItem.BackColor = System.Drawing.Color.Black
-        Me.OptionalModulesToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.InstallGridcoinGalazaToolStripMenuItem1})
         Me.OptionalModulesToolStripMenuItem.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
         Me.OptionalModulesToolStripMenuItem.Name = "OptionalModulesToolStripMenuItem"
         Me.OptionalModulesToolStripMenuItem.Size = New System.Drawing.Size(114, 20)
         Me.OptionalModulesToolStripMenuItem.Text = "Optional Modules"
-        '
-        'InstallGridcoinGalazaToolStripMenuItem1
-        '
-        Me.InstallGridcoinGalazaToolStripMenuItem1.BackColor = System.Drawing.Color.Black
-        Me.InstallGridcoinGalazaToolStripMenuItem1.ForeColor = System.Drawing.Color.FromArgb(CType(CType(0, Byte), Integer), CType(CType(192, Byte), Integer), CType(CType(0, Byte), Integer))
-        Me.InstallGridcoinGalazaToolStripMenuItem1.Name = "InstallGridcoinGalazaToolStripMenuItem1"
-        Me.InstallGridcoinGalazaToolStripMenuItem1.Size = New System.Drawing.Size(190, 22)
-        Me.InstallGridcoinGalazaToolStripMenuItem1.Text = "Install Gridcoin Galaza"
         '
         'lblTestnet
         '
@@ -160,9 +138,7 @@ Partial Class frmConfiguration
     Friend WithEvents FileToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents HideToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents OptionalModulesToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
-    Friend WithEvents InstallGridcoinGalazaToolStripMenuItem1 As System.Windows.Forms.ToolStripMenuItem
     Friend WithEvents chkSpeech As System.Windows.Forms.CheckBox
-    Friend WithEvents chkUpgrade As System.Windows.Forms.CheckBox
     Friend WithEvents lblTestnet As System.Windows.Forms.Label
 
 End Class
