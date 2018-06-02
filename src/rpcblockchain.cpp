@@ -1054,13 +1054,18 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 {
     Array params;
     params.push_back(arg1);
-    params.push_back(arg2);
+
+    if (method == "vote")
+        params.push_back(arg2);
     LogPrintf("Executing method %s\n",method);
     Value vResult;
     try
     {
         if (method == "vote")
             vResult = vote(params,false);
+
+        if (method == "rain")
+            vResult = rain(params,false);
     }
     catch (std::exception& e)
     {
