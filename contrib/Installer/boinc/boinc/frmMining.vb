@@ -234,7 +234,7 @@ Public Class frmMining
         Try
 
             Call OneMinuteUpdate()
-            Me.TabControl1.SelectedIndex = 2
+            Me.TabControl1.SelectedIndex = 1
             If mbTestNet Then lblTestnet.Text = "TESTNET"
             PopulateNeuralData()
 
