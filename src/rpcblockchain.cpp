@@ -981,19 +981,19 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6)
 {
     Array params;
-    params.push_back(method);
     params.push_back(arg1);
-    params.push_back(arg2);
+    params.push_back(RoundFromString(arg2, 0));
     params.push_back(arg3);
     params.push_back(arg4);
-    params.push_back(arg5);
+    params.push_back(RoundFromString(arg5, 0));
     params.push_back(arg6);
 
     LogPrintf("Executing method %s\n",method);
     Value vResult;
     try
     {
-        vResult = execute(params,false);
+        if (method == "addpoll")
+            vResult = addpoll(params, false);
     }
     catch (std::exception& e)
     {
@@ -1053,14 +1053,19 @@ std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2)
 {
     Array params;
-    params.push_back(method);
     params.push_back(arg1);
-    params.push_back(arg2);
+
+    if (method == "vote")
+        params.push_back(arg2);
     LogPrintf("Executing method %s\n",method);
     Value vResult;
     try
     {
-        vResult = execute(params,false);
+        if (method == "vote")
+            vResult = vote(params,false);
+
+        if (method == "rain")
+            vResult = rain(params,false);
     }
     catch (std::exception& e)
     {
