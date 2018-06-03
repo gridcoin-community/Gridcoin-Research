@@ -252,14 +252,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             if (wtx.nOrderPos == -1)
                 wss.fAnyUnordered = true;
-
-            //// debug print
-            //LogPrintf("LoadWallet  %s\n", wtx.GetHash().ToString());
-            //LogPrintf(" %12" PRId64 "  %s  %s  %s\n",
-            //    wtx.vout[0].nValue,
-            //    DateTimeStrFormat("%x %H:%M:%S", wtx.GetBlockTime()),
-            //    wtx.hashBlock.ToString().substr(0,20),
-            //    wtx.mapValue["message"]);
         }
         else if (strType == "acentry")
         {

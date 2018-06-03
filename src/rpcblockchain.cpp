@@ -650,7 +650,7 @@ void GetSuperblockProjectCount(std::string data, double& out_project_count, doub
     std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
     double avg_of_projects = GetAverageInList(avgs, out_project_count);
     out_whitelist_count = GetCountOf("project");
-    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  \n",(double)out_project_count,(double)out_whitelist_count);
+    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  ",(double)out_project_count,(double)out_whitelist_count);
 }
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
@@ -673,7 +673,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (avg_of_projects   < 050000)  return -3;
         // Note bIgnoreBeacons is passed in when the chain is syncing from 0 (this is because the lists of beacons and projects are not full at that point)
         if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
-        if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f \n",(double)avg_count,(double)out_project_count,(double)nHeight);
+        if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f ",(double)avg_count,(double)out_project_count,(double)nHeight);
         if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }
@@ -866,7 +866,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string GRCAddress = DefaultWalletAddress();
         // Public Signing Key is stored in Beacon
         std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
-        LogPrintf("\n Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
+        LogPrintf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
         std::string sBase = EncodeBase64(contract);
         std::string sAction = "add";
         std::string sType = "beacon";
@@ -1265,7 +1265,7 @@ UniValue cpids(const UniValue& params, bool fHelp)
     if (mvCPIDs.size() < 1)
         HarvestCPIDs(false);
 
-    LogPrintf("generating cpid report\n");
+    LogPrintf("Generating cpid report");
 
     for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
     {
@@ -2075,7 +2075,7 @@ UniValue genboinckey(const UniValue& params, bool fHelp)
     std::string sBase = EncodeBase64(sParam);
 
     if (fDebug3)
-        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s\r\n", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
+        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s\r", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
 
     res.pushKV("[Specify in config file without quotes] boinckey=", sBase);
 
@@ -2974,13 +2974,12 @@ UniValue MagnitudeReport(std::string cpid)
             entry3.pushKV("End Block",nMaxDepth);
             results.push_back(entry3);
         }
-        if (fDebug3) LogPrintf("*MR5*");
 
         return results;
     }
     catch(...)
     {
-        LogPrintf("\nError in Magnitude Report \n ");
+        LogPrintf("Error in Magnitude Report");
         return results;
     }
 

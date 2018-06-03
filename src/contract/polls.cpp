@@ -42,7 +42,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 
     if (sTitle.empty() || sQuestion.empty() || sAnswers.empty() || sURL.empty())
     {
-        return std::make_pair("Error", "Must specify a poll title, question, answers, and URL\n");
+        return std::make_pair("Error", "Must specify a poll title, question, answers, and URL");
     }
     else if (days < 7)
         return std::make_pair("Error", "Minimum duration is 7 days; please specify a longer poll duration.");
@@ -69,7 +69,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer)
 {
     if (sTitle.empty() || sAnswer.empty())
-        return std::make_pair("Error", "Must specify a poll title and answers\n");
+        return std::make_pair("Error", "Must specify a poll title and answers");
     if (pwalletMain->IsLocked())
         return std::make_pair("Error", "Please fully unlock the wallet first.");
     else if (fWalletUnlockStakingOnly)
@@ -111,7 +111,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
 
     StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
-    LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
+    LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f", cpid_age, stake_age, poll_duration);
     double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
     // Share Type 1 == "Magnitude"
@@ -368,7 +368,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
     double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
     double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
 
-    if (fDebug10) LogPrintf(" \n Total Voted Balance %f, Legacy Balance %f \n",(float)dTotalVotedBalance,(float)dLegacyBalance);
+    if (fDebug10) LogPrintf("Total Voted Balance %f, Legacy Balance %f", dTotalVotedBalance, dLegacyBalance);
     if (!bCreatedAfterSecurityUpgrade) return dLegacyBalance;
 
     double dCounted = 0;

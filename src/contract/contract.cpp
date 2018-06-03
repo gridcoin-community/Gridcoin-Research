@@ -43,7 +43,7 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     std::string sConcatMessage = sCPID + sBlockHash;
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
     if(!bValid)
-        LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s\n"
+        LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s"
                   ,sSignature, sBeaconPublicKey);
     return bValid;
 }

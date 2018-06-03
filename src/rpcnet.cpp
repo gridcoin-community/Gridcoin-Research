@@ -40,7 +40,6 @@ std::string NeuralRequest(std::string MyNeuralRequest)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
-            //LogPrintf("Node is a neural participant \n");
             std::string reqid = "reqid";
             pNode->PushMessage("neural", MyNeuralRequest, reqid);
             if (fDebug3) LogPrintf(" PUSH ");
@@ -242,7 +241,6 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
         {
             std::string reqid = cpid;
             pNode->PushMessage("neural", command_name, reqid);
-            //if (fDebug3) LogPrintf("Requested command %s \n",command_name.c_str());
             iContactCount++;
             if (iContactCount >= NodeLimit) return true;
         }

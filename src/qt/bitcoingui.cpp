@@ -382,7 +382,7 @@ void qtSyncWithDPORNodes(std::string data)
         QString qsData = ToQstring(data);
         if (fDebug3) LogPrintf("FullSyncWDporNodes");
         result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-        LogPrintf("Done syncing. %d\n", result);
+        LogPrintf("Done syncing. %d", result);
     #endif
 }
 
@@ -486,7 +486,7 @@ int64_t IsNeural()
     }
     catch(...)
     {
-        LogPrintf("Exception\n");
+        LogPrintf("Exception");
         return 0;
     }
 }
@@ -1242,7 +1242,7 @@ void BitcoinGUI::NewUserWizard()
         std::string sBoincNarr = "";
         if (sout == "-1")
         {
-            LogPrintf("Boinc not installed in default location! \n");
+            LogPrintf("Boinc not installed in default location! ");
             //BoincInstalled=false;
             std::string nicePath = GetBoincDataDir();
             sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
@@ -1257,7 +1257,7 @@ void BitcoinGUI::NewUserWizard()
         {
             std::string new_email = tostdstring(boincemail);
             boost::to_lower(new_email);
-            LogPrintf("User entered %s \n",new_email);
+            LogPrintf("User entered %s ",new_email);
             //Create Config File
             CreateNewConfigFile(new_email);
             QString strMessage = tr("Created new Configuration File Successfully. ");
@@ -1320,7 +1320,7 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                               tr("Date: %1\n"
                                  "Amount: %2\n"
                                  "Type: %3\n"
-                                 "Address: %4\n")
+                                 "Address: %4")
                               .arg(date)
                               .arg(BitcoinUnits::formatWithUnit(walletModel->getOptionsModel()->getDisplayUnit(), amount, true))
                               .arg(type)
@@ -1866,7 +1866,7 @@ void BitcoinGUI::updateStakingIcon()
 
     if (staking)
     {
-        if (fDebug10) LogPrintf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
+        if (fDebug10) LogPrintf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f ", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")
