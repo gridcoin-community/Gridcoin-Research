@@ -76,7 +76,7 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
         throw runtime_error("no response from server");
 
     // Parse reply
-    UniValue valReply;
+    UniValue valReply(UniValue::VSTR);
     if (!valReply.read(strReply))
         throw runtime_error("couldn't parse reply from server");
     const UniValue& reply = valReply.get_obj();
@@ -202,6 +202,18 @@ CRPCConvertTable::CRPCConvertTable()
 
 static CRPCConvertTable rpcCvtTable;
 
+/** Non-RFC4627 JSON parser, accepts internal values (such as numbers, true, false, null)
+ * as well as objects and arrays.
+ */
+UniValue ParseNonRFCJSONValue(const std::string& strVal)
+{
+    UniValue jVal;
+    if (!jVal.read(std::string("[")+strVal+std::string("]")) ||
+        !jVal.isArray() || jVal.size()!=1)
+        throw runtime_error(string("Error parsing JSON:")+strVal);
+    return jVal[0];
+}
+
 // Convert strings to command-specific RPC representation
 UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::string> &strParams)
 {
@@ -210,17 +222,14 @@ UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::s
     for (unsigned int idx = 0; idx < strParams.size(); idx++) {
         const std::string& strVal = strParams[idx];
 
-        // insert string value directly
         if (!rpcCvtTable.convert(strMethod, idx)) {
+            // insert string value directly
             params.push_back(strVal);
         }
 
         // parse string as JSON, insert bool/number/object/etc. value
         else {
-            UniValue jVal;
-            if (!jVal.read(strVal))
-                throw runtime_error(string("Error parsing JSON:")+strVal);
-            params.push_back(jVal);
+            params.push_back(ParseNonRFCJSONValue(strVal));
         }
 
     }

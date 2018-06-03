@@ -461,7 +461,7 @@ double GetMoneySupplyFactor()
 
 UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
 {
-    UniValue aPolls;
+    UniValue aPolls(UniValue::VARR);
     std::vector<polling::Poll> vPolls = GetPolls(bDetail, includeExpired, byTitle);
     for(const auto& iterPoll: vPolls)
     {
@@ -497,7 +497,6 @@ UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
 std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::string byTitle)
 {
     std::vector<polling::Poll> vPolls;
-    std::string::size_type longestanswer = 0;
     polling::Vote vote;
     std::vector<std::string> vAnswers;
     boost::to_lower(byTitle);
@@ -525,6 +524,7 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
             continue;
 
         vAnswers = split(poll.sAnswers.c_str(),";");
+        std::string::size_type longestanswer = 0;
 
         for (const std::string& answer : vAnswers)
             longestanswer = std::max( longestanswer, answer.length() );
