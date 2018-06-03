@@ -2056,7 +2056,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
         LogPrintf("%s", strError);
         return false;
     }
-    if (fDebug10) LogPrintf("Bound to %s", addrBind.ToString().c_str());
+    if (fDebug10) LogPrintf("Bound to %s", addrBind.ToString());
 
     // Listen for incoming connections
     if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
@@ -2109,14 +2109,14 @@ void static Discover()
                 struct sockaddr_in* s4 = (struct sockaddr_in*)(ifa->ifa_addr);
                 CNetAddr addr(s4->sin_addr);
                 if (AddLocal(addr, LOCAL_IF))
-                    LogPrintf("IPv4 %s: %s", ifa->ifa_name, addr.ToString().c_str());
+                    LogPrintf("IPv4 %s: %s", ifa->ifa_name, addr.ToString());
             }
             else if (ifa->ifa_addr->sa_family == AF_INET6)
             {
                 struct sockaddr_in6* s6 = (struct sockaddr_in6*)(ifa->ifa_addr);
                 CNetAddr addr(s6->sin6_addr);
                 if (AddLocal(addr, LOCAL_IF))
-                    LogPrintf("IPv6 %s: %s", ifa->ifa_name, addr.ToString().c_str());
+                    LogPrintf("IPv6 %s: %s", ifa->ifa_name, addr.ToString());
             }
         }
         freeifaddrs(myaddrs);

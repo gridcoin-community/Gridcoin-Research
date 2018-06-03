@@ -921,13 +921,13 @@ MiningCPID GetNextProject(bool bForce)
 #                                       if 0
                                         if (!bResult)
                                         {
-                                            LogPrintf("GetNextProject: failed to sign block with cpid -> %s", sError.c_str());
+                                            LogPrintf("GetNextProject: failed to sign block with cpid -> %s", sError);
                                             continue;
                                         }
                                         GlobalCPUMiningCPID.BoincSignature = sSignature;
                                         if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
                                         {
-                                            LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
+                                            LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2);
                                             continue;
                                         }
 #                                       endif
@@ -2792,7 +2792,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
                 DeleteCache(sMType, sMKey);
                 if(fDebug)
-                    LogPrintf("DisconnectBlock: Delete contract %s %s", sMType.c_str(), sMKey);
+                    LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
 
                 if("beacon"==sMType)
                 {
@@ -4763,7 +4763,7 @@ void GridcoinServices()
             bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
             if (!fResult)
             {
-                LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError.c_str(), sMessage.c_str());
+                LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError, sMessage);
                 LOCK(MinerStatus.lock);
                 msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
             }
@@ -6098,7 +6098,7 @@ bool TallyResearchAverages_v9(CBlockIndex* index)
 
         LoadSuperblock(superblock, sbIndex->nTime, sbIndex->nHeight);
         if (fDebug)
-            LogPrintf("TallyResearchAverages_v9: Superblock Loaded {%s %i}", sbIndex->GetBlockHash().GetHex().c_str(), sbIndex->nHeight);
+            LogPrintf("TallyResearchAverages_v9: Superblock Loaded {%s %i}", sbIndex->GetBlockHash().GetHex(), sbIndex->nHeight);
         break;
     }
 
@@ -6429,7 +6429,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 {
     RandAddSeedPerfmon();
     if (fDebug10)
-        LogPrintf("received: %s from %s (%" PRIszu " bytes)", strCommand.c_str(), pfrom->addrName.c_str(), vRecv.size());
+        LogPrintf("received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
     if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
     {
         LogPrintf("dropmessagestest DROPPING RECV MESSAGE");
@@ -6485,7 +6485,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < 180321 && fTestNet)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) LogPrintf("Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug10) LogPrintf("Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -6493,7 +6493,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) LogPrintf("partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug10) LogPrintf("partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -6555,7 +6555,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect if we connected to ourself
         if (nNonce == nLocalHostNonce && nNonce > 1)
         {
-            if (fDebug3) LogPrintf("connected to self at %s, disconnecting", pfrom->addr.ToString().c_str());
+            if (fDebug3) LogPrintf("connected to self at %s, disconnecting", pfrom->addr.ToString());
             pfrom->fDisconnect = true;
             return true;
         }
@@ -6756,7 +6756,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
             if (fDebug10)
-                LogPrintf("  got inventory: %s  %s", inv.ToString().c_str(), fAlreadyHave ? "have" : "new");
+                LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
@@ -7107,7 +7107,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             uint64_t nonce = 0;
             vRecv >> nonce >> acid;
-            //if (fDebug10) LogPrintf("pong valid %s",YesNo(pong_valid).c_str());
 
             // Echo the message back with the nonce. This allows for two useful features:
             //
@@ -8477,7 +8476,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
                     LogPrintf("ComputeResearchAccrual: Newbie special stake too high, reward=500GRC");
                     return (500*COIN);
                 }
-                if (fDebug3) LogPrintf("ComputeResearchAccrual: Newbie Special First Stake for CPID %s, Age %f, Accrual %" PRId64, cpid.c_str(),dNewbieAccrualAge, iAccrual);
+                if (fDebug3) LogPrintf("ComputeResearchAccrual: Newbie Special First Stake for CPID %s, Age %f, Accrual %" PRId64, cpid, dNewbieAccrualAge, iAccrual);
                 if(fDebug && !bVerifyingBlock) LogPrintf("CRE: Newbie Stake, "
                     "dNewbieAccrualAge= %f dCurrentMagnitude= %.1f dMagnitudeUnit= %f Accrual= %f",
                     dNewbieAccrualAge, dCurrentMagnitude, dMagnitudeUnit, iAccrual/(double)COIN);
@@ -8671,7 +8670,6 @@ std::string CPIDHash(double dMagIn, std::string sCPID)
     std::string sMagComponent1 = RoundToString(dMagIn/(dExponent+.01),0);
     std::string sSuffix = RoundToString(dMagLength * dExponent, 0);
     std::string sHash = sCPID + sMagComponent1 + sSuffix;
-    //  LogPrintf("%s, %s, %f, %f, %s",sCPID.c_str(), sMagComponent1.c_str(),dMagLength,dExponent,sSuffix.c_str());
     return sHash;
 }
 
@@ -8774,7 +8772,6 @@ std::string getHardDriveSerial()
         cmd1 = "ls /dev/disk/by-uuid";
     #endif
     std::string result = SystemCommand(cmd1.c_str());
-    //if (fDebug3) LogPrintf("result %s",result.c_str());
     msHDDSerial = result;
     return result;
 }
@@ -8821,8 +8818,6 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
     }
 
     uint256 uADH = uint256("0x" + address_day_hash);
-    //LogPrintf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
-    //LogPrintf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());
     return (uADH < uRef);
 }
 

@@ -205,7 +205,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
         if (tx_out_publickey != chk_out_publickey)
         {
             if (fDebug10)
-                LogPrintf("VBCTX : Beacon tx publickey != publickey in chain. %s != %s", tx_out_publickey.c_str(), chk_out_publickey);
+                LogPrintf("VBCTX : Beacon tx publickey != publickey in chain. %s != %s", tx_out_publickey, chk_out_publickey);
 
             return false;
         }

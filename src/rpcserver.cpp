@@ -913,7 +913,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
             nRPCtimebegin = GetTimeMillis();
             result = pcmd->actor(params, false);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod.c_str(), nRPCtimetotal);
+            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod, nRPCtimetotal);
         }
         else
             result = pcmd->actor(params, false);

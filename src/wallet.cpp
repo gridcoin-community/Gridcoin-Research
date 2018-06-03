@@ -1087,7 +1087,7 @@ void CWallet::ReacceptWalletTransactions()
                 }
                 if (fUpdated)
                 {
-                    LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s", FormatMoney(wtx.GetCredit()).c_str(), wtx.GetHash().ToString());
+                    LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkDirty();
                     wtx.WriteToDisk();
                 }

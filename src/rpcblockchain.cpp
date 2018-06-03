@@ -2075,7 +2075,7 @@ UniValue genboinckey(const UniValue& params, bool fHelp)
     std::string sBase = EncodeBase64(sParam);
 
     if (fDebug3)
-        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s\r", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
+        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s", GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, sParam);
 
     res.pushKV("[Specify in config file without quotes] boinckey=", sBase);
 

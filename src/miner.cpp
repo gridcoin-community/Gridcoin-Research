@@ -642,7 +642,6 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
-    //if (fDebug2)  LogPrintf("SignStakeBlock: %s",SerializedBoincData.c_str());
 
     //Sign the coinstake transaction
     unsigned nIn = 0;

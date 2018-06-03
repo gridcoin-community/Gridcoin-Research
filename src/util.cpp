@@ -1128,7 +1128,6 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        // LogPrintf("Checking for %s ", (boost::filesystem::current_path() / list[i]).c_str());
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             return boost::filesystem::current_path();
