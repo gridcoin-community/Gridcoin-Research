@@ -145,12 +145,12 @@ TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
 static inline void LogPrint(const char* category, const char* format)
 {
     if(!LogAcceptCategory(category)) return;
-    LogPrintStr(format);
+    LogPrintStr(format + std::string("\n"));
     return;
 }
 static inline bool error(const char* format)
 {
-    LogPrintStr(std::string("ERROR: ") + format);
+    LogPrintStr(std::string("ERROR: ") + format + std::string("\n"));
     return false;
 }
 
