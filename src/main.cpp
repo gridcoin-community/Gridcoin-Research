@@ -3046,7 +3046,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     while (pblockIndex->nHeight > nMinDepth)
     {
             pblockIndex = pblockIndex->pprev;
-            LogPrintf("Money Supply height %f",(double)pblockIndex->nHeight);
+            LogPrintf("Money Supply height %d", pblockIndex->nHeight);
 
             if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
             if (pblockIndex == pindexGenesisBlock)
@@ -4286,7 +4286,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         {
             if (vtx[i].IsCoinStake())
             {
-                LogPrintf("Found more than one coinstake in coinbase at location %f",(double)i);
+                LogPrintf("Found more than one coinstake in coinbase at location %d", i);
                 return DoS(100, error("CheckBlock[] : more than one coinstake"));
             }
         }
@@ -5959,7 +5959,7 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
         pblockindex = pblockindex->pprev;
     }
 
-    if (fDebug3) LogPrintf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
+    if (fDebug3) LogPrintf("Max block %d, seektime %" PRId64, pblockindex->nHeight, GetTimeMillis()-nStart);
     nStart=GetTimeMillis();
 
 
@@ -6024,7 +6024,7 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
         bNetAveragesLoaded=true;
     }
 
-    if (fDebug3) LogPrintf("NA loaded in %f",(double)GetTimeMillis()-nStart);
+    if (fDebug3) LogPrintf("NA loaded in %" PRId64, GetTimeMillis() - nStart);
 
     bNetAveragesLoaded=true;
     return false;
@@ -7787,7 +7787,9 @@ void HarvestCPIDs(bool cleardata)
                         structcpid.team = team;
                         InitializeProjectStruct(structcpid);
                         int64_t elapsed = GetTimeMillis()-nStart;
-                        if (fDebug3) LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ", structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), (double)elapsed);
+                        if (fDebug3)
+                            LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
+                        
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);

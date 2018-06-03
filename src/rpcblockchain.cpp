@@ -650,7 +650,7 @@ void GetSuperblockProjectCount(std::string data, double& out_project_count, doub
     std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
     double avg_of_projects = GetAverageInList(avgs, out_project_count);
     out_whitelist_count = GetCountOf("project");
-    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  ",(double)out_project_count,(double)out_whitelist_count);
+    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f", out_project_count, out_whitelist_count);
 }
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
@@ -673,7 +673,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (avg_of_projects   < 050000)  return -3;
         // Note bIgnoreBeacons is passed in when the chain is syncing from 0 (this is because the lists of beacons and projects are not full at that point)
         if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
-        if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f ",(double)avg_count,(double)out_project_count,(double)nHeight);
+        if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %d", avg_count, out_project_count, nHeight);
         if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }

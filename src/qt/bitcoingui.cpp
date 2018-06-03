@@ -378,10 +378,9 @@ void qtSyncWithDPORNodes(std::string data)
 
     #if defined(WIN32) && defined(QT_GUI)
         if (!bGlobalcomInitialized) return;
-        int result = 0;
         QString qsData = ToQstring(data);
         if (fDebug3) LogPrintf("FullSyncWDporNodes");
-        result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
+        int result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
         LogPrintf("Done syncing. %d", result);
     #endif
 }
@@ -447,11 +446,10 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
     if (!bGlobalcomInitialized) return;
 
     #if defined(WIN32) && defined(QT_GUI)
-        int result = 0;
         std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
         QString qsSession = ToQstring(session);
-        result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
-        LogPrintf("rs%f",(double)result);
+        int result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
+        LogPrintf("Set session info result %d", result);
     #endif
 }
 
@@ -1866,12 +1864,10 @@ void BitcoinGUI::updateStakingIcon()
 
     if (staking)
     {
-        if (fDebug10) LogPrintf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f ", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")
                                      .arg(nWeight).arg(nNetworkWeight).arg(text));
-
     }
     else
     {

@@ -521,7 +521,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
             //Use this area to log the submitters cpid and mint amount:
             if (!checking_local || fDebug)
             {
-                if (LessVerbose(75)) LogPrintf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %f ",cpid, boincblock.projectname, (double)RSA_WEIGHT);
+                if (LessVerbose(75)) LogPrintf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %" PRId64, cpid, boincblock.projectname, RSA_WEIGHT);
             }
             return false;
         }
@@ -644,13 +644,13 @@ static bool CheckStakeKernelHashV3(CBlockIndex* pindexPrev, unsigned int nBits,
     targetProofOfStake=bnTarget.getuint256();
 
     if(fPrintProofOfStake) LogPrintf(
-"CheckStakeKernelHashV3: %sRSA %g, Time1 %.f, Time2 %.f,  Time3 %.f, Por_Nonce %.f Bits %u Weight %.f\n"
+"CheckStakeKernelHashV3: %sRSA %" PRId64 ", Time1 %" PRId64 ", Time2 %" PRId64 ", Time3 %d, Por_Nonce %.f Bits %u Weight %" PRId64 "\n"
 " Stk %72s\n"
 " Trg %72s", checking_local?"Local ":"",
-        (double)RSA_WEIGHT,
-        (double)blockFrom.nTime, (double)txPrev.nTime, (double)nTimeTx,
+        RSA_WEIGHT,
+        blockFrom.nTime, txPrev.nTime, nTimeTx,
         por_nonce,
-        nBits, (double)Weight,
+        nBits, Weight,
         CBigNum(hashProofOfStake).GetHex(), bnTarget.GetHex()
     );
 

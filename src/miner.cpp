@@ -294,11 +294,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
             // Size limits
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
-            if (fDebug10) LogPrintf("Tx Size for %s  %f",tx.GetHash().GetHex(), (double)nTxSize);
 
             if (nBlockSize + nTxSize >= nBlockMaxSize)
             {
-                if (fDebug10) LogPrintf("Tx size too large for tx %s  blksize %f , tx siz %f",tx.GetHash().GetHex().c_str(),(double)nBlockSize,(double)nTxSize);
+                LogPrintf("Tx size too large for tx %s blksize %" PRIu64 ", tx size %" PRId64, tx.GetHash().GetHex(), nBlockSize, nTxSize);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge("
                     + ToString(nBlockSize) + "," + ToString(nTxSize) + ")("
                     + ToString(nBlockSize) + ");";
@@ -356,7 +355,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
             {
-                if (fDebug10) LogPrintf("Not including tx %s  due to TxFees of %f ; bare min fee is %f", tx.GetHash().GetHex(), (double)nTxFees, (double)nMinFee);
+                if (fDebug10) LogPrintf("Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall("
                     + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
@@ -365,8 +364,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
-                if (fDebug10) LogPrintf("Not including tx %s  due to exceeding max sigops of %f ; sigops is %f",
-                    tx.GetHash().GetHex(), (double)(nBlockSigOps+nTxSigOps), (double)MAX_BLOCK_SIGOPS);
+                if (fDebug10) LogPrintf("Not including tx %s due to exceeding max sigops of %d, sigops is %d",
+                    tx.GetHash().GetHex(), (nBlockSigOps+nTxSigOps), MAX_BLOCK_SIGOPS);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps("
                     + ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
                     + ToString(MAX_BLOCK_SIGOPS) + ");";
