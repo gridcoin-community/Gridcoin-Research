@@ -880,7 +880,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 sError = "Failed to backup old configuration file. Beacon not sent.";
                 return true;
             }
-                        // Backup config with new keys with beacon suffix
+            // Backup config with new keys with beacon suffix
             StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
             {
@@ -912,68 +912,75 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6)
 {
-     UniValue params(UniValue::VARR);
-     params.push_back(method);
-     params.push_back(arg1);
-     params.push_back(arg2);
-     params.push_back(arg3);
-     params.push_back(arg4);
-     params.push_back(arg5);
-     params.push_back(arg6);
+    UniValue params(UniValue::VARR);
+    params.push_back(method);
+    params.push_back(arg1);
+    params.push_back(RoundFromString(arg2, 0));
+    params.push_back(arg3);
+    params.push_back(arg4);
+    params.push_back(RoundFromString(arg5, 0));
+    params.push_back(arg6);
 
-     LogPrintf("Executing method %s\n",method);
-     UniValue vResult(UniValue::VSTR);
-     try
-     {
-        vResult = execute(params,false);
-     }
-     catch (std::exception& e)
-     {
-         LogPrintf("Std exception %s \n",method);
+    LogPrintf("Executing method %s\n",method);
+    UniValue vResult(UniValue::VSTR);
+    try
+    {
+        if (method == "addpoll")
+            vResult = addpoll(params, false);
+    }
+    catch (std::exception& e)
+    {
+        LogPrintf("Std exception %s \n",method);
 
-         std::string caught = e.what();
-         return "Exception " + caught;
-     }
-     catch (...)
-     {
-            LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
-            return "Generic Exception (Please try unlocking the wallet).";
-     }
-     std::string sResult = "";
+        std::string caught = e.what();
+        return "Exception " + caught;
+    }
+    catch (...)
+    {
+        LogPrintf("Generic exception (Please try unlocking the wallet) %s \n",method);
+        return "Generic Exception (Please try unlocking the wallet).";
+    }
+    std::string sResult = "";
      sResult = vResult.write() + "\n";
-     LogPrintf("Response %s",sResult);
-     return sResult;
+    LogPrintf("Response %s",sResult);
+    return sResult;
 }
 
 std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2)
 {
-     UniValue params(UniValue::VARR);
-     params.push_back(method);
-     params.push_back(arg1);
-     params.push_back(arg2);
-     LogPrintf("Executing method %s\n",method);
-     UniValue vResult(UniValue::VSTR);
-     try
-     {
-        vResult = execute(params,false);
-     }
-     catch (std::exception& e)
-     {
-         LogPrintf("Std exception %s \n",method);
+    UniValue params(UniValue::VARR);
+    params.push_back(method);
+    params.push_back(arg1);
 
-         std::string caught = e.what();
-         return "Exception " + caught;
+    if (method == "vote")
+    params.push_back(arg2);
+    LogPrintf("Executing method %s\n",method);
+    UniValue vResult(UniValue::VSTR);
+    try
+    {
+        if (method == "vote")
+            vResult = vote(params,false);
 
-     }
-     catch (...)
-     {
-            LogPrintf("Generic exception (Please try unlocking the wallet). %s \n",method);
-            return "Generic Exception (Please try unlocking the wallet).";
-     }
-     std::string sResult = "";
+        if (method == "rain")
+            vResult = rain(params,false);
+    }
+    catch (std::exception& e)
+    {
+        LogPrintf("Std exception %s \n",method);
+
+        std::string caught = e.what();
+        return "Exception " + caught;
+
+    }
+    catch (...)
+    {
+        LogPrintf("Generic exception (Please try unlocking the wallet). %s \n",method);
+        return "Generic Exception (Please try unlocking the wallet).";
+    }
+    std::string sResult = "";
      sResult = vResult.write() + "\n";
-     LogPrintf("Response %s",sResult);
-     return sResult;
+    LogPrintf("Response %s",sResult);
+    return sResult;
 }
 
 int64_t AmountFromDouble(double dAmount)
@@ -2777,7 +2784,7 @@ UniValue writedata(const UniValue& params, bool fHelp)
 // Network RPC commands
 
 UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
-{
+        {
     if (fHelp || params.size() != 0)
         throw runtime_error(
                 "askforoutstandingblocks\n"
@@ -3297,77 +3304,77 @@ UniValue GetJsonUnspentReport()
 
     // Now we will need to go back through the XML and Audit the claimed vote weight balance as a 3rd party
 
-	double dCounted = 0;
+    double dCounted = 0;
 
-	std::vector<std::string> vXML= split(sXML.c_str(),"<ROW>");
-	for (unsigned int x = 0; x < vXML.size(); x++)
-	{
-		// Prove the contents of the XML as a 3rd party
-		CTransaction tx2;
-		uint256 hashBlock = 0;
-		uint256 uTXID(ExtractXML(vXML[x],"<TXID>","</TXID>"));
-		std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
-		std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
-		std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
-		std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
-		std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
+    std::vector<std::string> vXML= split(sXML.c_str(),"<ROW>");
+    for (unsigned int x = 0; x < vXML.size(); x++)
+    {
+        // Prove the contents of the XML as a 3rd party
+        CTransaction tx2;
+        uint256 hashBlock = 0;
+        uint256 uTXID(ExtractXML(vXML[x],"<TXID>","</TXID>"));
+        std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
+        std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
+        std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
+        std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
+        std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
 
-		int32_t iPos = RoundFromString(sPos,0);
-		std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
+        int32_t iPos = RoundFromString(sPos,0);
+        std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 
-		if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
-		{
+        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
+        {
 
-			if (GetTransaction(uTXID, tx2, hashBlock))
-			{
-				if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
-				{
-					    int64_t nValue2 = tx2.vout[iPos].nValue;
-					    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
-					    CTxDestination address2;
-						std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
-						std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
-						std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
-						double dAmount = CoinToDouble(nValue2);
-						if (ExtractDestination(tx2.vout[iPos].scriptPubKey, address2))
-						{
-							if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
-							{
+            if (GetTransaction(uTXID, tx2, hashBlock))
+            {
+                if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
+                {
+                    int64_t nValue2 = tx2.vout[iPos].nValue;
+                    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
+                    CTxDestination address2;
+                    std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
+                    std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
+                    std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
+                    double dAmount = CoinToDouble(nValue2);
+                    if (ExtractDestination(tx2.vout[iPos].scriptPubKey, address2))
+                    {
+                        if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
+                        {
 								UniValue entry(UniValue::VOBJ);
       					   		entry.pushKV("Audited Amount",ValueFromAmount(nValue2));
- 						    	std::string sDecXmlSig = DecodeBase64(sXmlSig);
-							    CKey keyVerify;
-							    if (keyVerify.SetPubKey(ParseHex(sPubKey)))
-								{
-									  	std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
-										std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
-										bool bValid = keyVerify.Verify(uTXID,vchSig1);
-										// Unspent Balance is proven to be owned by the voters public key, count the vote
-										if (bValid) dCounted += dAmount;
+                            std::string sDecXmlSig = DecodeBase64(sXmlSig);
+                            CKey keyVerify;
+                            if (keyVerify.SetPubKey(ParseHex(sPubKey)))
+                            {
+                                std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
+                                std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
+                                bool bValid = keyVerify.Verify(uTXID,vchSig1);
+                                // Unspent Balance is proven to be owned by the voters public key, count the vote
+                                if (bValid) dCounted += dAmount;
 										entry.pushKV("Verified",bValid);
-								}
+                            }
 
-	  							results.push_back(entry);
-							}
-					}
-				}
-			}
-		}
-	}
+                            results.push_back(entry);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 	UniValue entry(UniValue::VOBJ);
-	// Note that the voter needs to have the wallet at least unlocked for staking in order for the coins to be signed, otherwise the coins-owned portion of the vote balance will be 0.
-	// In simpler terms: The wallet must be unlocked to cast a provable vote.
+    // Note that the voter needs to have the wallet at least unlocked for staking in order for the coins to be signed, otherwise the coins-owned portion of the vote balance will be 0.
+    // In simpler terms: The wallet must be unlocked to cast a provable vote.
 
 	entry.pushKV("Total Voting Balance Weight", dTotal);
     entry.pushKV("Grand Verified Amount",dCounted);
 
-	std::string sBalCheck2 = GetProvableVotingWeightXML();
-	double dVerifiedBalance = ReturnVerifiedVotingBalance(sBalCheck2,true);
-	double dVerifiedMag = ReturnVerifiedVotingMagnitude(sBalCheck2, true);
+    std::string sBalCheck2 = GetProvableVotingWeightXML();
+    double dVerifiedBalance = ReturnVerifiedVotingBalance(sBalCheck2,true);
+    double dVerifiedMag = ReturnVerifiedVotingMagnitude(sBalCheck2, true);
 	entry.pushKV("Balance check",dVerifiedBalance);
 	entry.pushKV("Mag check",dVerifiedMag);
-	results.push_back(entry);
+    results.push_back(entry);
     return results;
 }
 
@@ -3472,17 +3479,17 @@ UniValue GetJSONNeuralNetworkReport()
 
     for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
     {
-              double popularity = mvNeuralNetworkHash[(*ii).first];
-              neural_hash = (*ii).first;
+        double popularity = mvNeuralNetworkHash[(*ii).first];
+        neural_hash = (*ii).first;
 
-              //If the hash != empty_hash: >= .01
-              if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
-              {
-                  row = neural_hash + "," + RoundToString(popularity,0);
-                  report += row + "\n";
-                  pct = (((double)popularity)/(votes+.01))*100;
+        //If the hash != empty_hash: >= .01
+        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+        {
+            row = neural_hash + "," + RoundToString(popularity,0);
+            report += row + "\n";
+            pct = (((double)popularity)/(votes+.01))*100;
                   entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
-              }
+        }
     }
     // If we have a pending superblock, append it to the report:
     std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
@@ -3525,17 +3532,17 @@ UniValue GetJSONCurrentNeuralNetworkReport()
 
     for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
     {
-              double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-              neural_hash = (*ii).first;
+        double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+        neural_hash = (*ii).first;
 
-              //If the hash != empty_hash: >= .01
-              if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
-              {
-                  row = neural_hash + "," + RoundToString(popularity,0);
-                  report += row + "\n";
-                  pct = (((double)popularity)/(votes+.01))*100;
+        //If the hash != empty_hash: >= .01
+        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+        {
+            row = neural_hash + "," + RoundToString(popularity,0);
+            report += row + "\n";
+            pct = (((double)popularity)/(votes+.01))*100;
                   entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
-              }
+        }
     }
     // If we have a pending superblock, append it to the report:
     std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
@@ -3581,16 +3588,16 @@ UniValue GetJSONVersionReport()
 
     for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii)
     {
-              double popularity = mvNeuralVersion[(*ii).first];
-              neural_ver = (*ii).first;
-              //If the hash != empty_hash:
-              if (popularity > 0)
-              {
-                  row = neural_ver + "," + RoundToString(popularity,0);
-                  report += row + "\n";
-                  pct = popularity/(votes+.01)*100;
+        double popularity = mvNeuralVersion[(*ii).first];
+        neural_ver = (*ii).first;
+        //If the hash != empty_hash:
+        if (popularity > 0)
+        {
+            row = neural_ver + "," + RoundToString(popularity,0);
+            report += row + "\n";
+            pct = popularity/(votes+.01)*100;
                   entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
-              }
+        }
     }
     results.push_back(entry);
     return results;
