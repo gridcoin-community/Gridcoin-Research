@@ -30,12 +30,12 @@ using namespace boost;
 using namespace boost::asio;
 using namespace json_spirit;
 
-void ThreadRPCServer2(void* parg);
-
 static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
 static asio::io_service* rpc_io_service = NULL;
+static ssl::context* rpc_ssl_context = NULL;
+static boost::thread_group* rpc_worker_group = NULL;
 
 const Object emptyobj;
 
@@ -914,39 +914,6 @@ private:
 
 void ServiceConnection(AcceptedConnection *conn);
 
-void StopRPCThreads()
-{
-    LogPrintf("Stop RPC IO service\n");
-    if(!rpc_io_service)
-    {
-        LogPrintf("RPC IO server not started\n");
-        return;
-    }
-
-    rpc_io_service->stop();
-}
-
-void ThreadRPCServer(void* parg)
-{
-    // Make this thread recognisable as the RPC listener
-    RenameThread("grc-rpclist");
-
-    try
-    {
-        ThreadRPCServer2(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadRPCServer()");
-    }
-    catch (boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
-        return;
-    }
-    LogPrintf("ThreadRPCServer exited\n");
-}
-
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
@@ -1013,7 +980,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     delete conn;
 }
 
-void ThreadRPCServer2(void* parg)
+void StartRPCThreads()
 {
     if (fDebug10) LogPrintf("ThreadRPCServer started\n");
 
@@ -1050,24 +1017,24 @@ void ThreadRPCServer2(void* parg)
 
     assert(rpc_io_service == NULL);
     rpc_io_service = new asio::io_service();
+    rpc_ssl_context = new ssl::context(*rpc_io_service, ssl::context::sslv23);
 
-    ssl::context context(ssl::context::sslv23);
     if (fUseSSL)
     {
-        context.set_options(ssl::context::no_sslv2);
+        rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
-        if (filesystem::exists(pathCertFile)) context.use_certificate_chain_file(pathCertFile.string());
+        if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
-        if (filesystem::exists(pathPKFile)) context.use_private_key_file(pathPKFile.string(), ssl::context::pem);
+        if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
+        SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
@@ -1076,8 +1043,6 @@ void ThreadRPCServer2(void* parg)
     ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
     boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
-
-    boost::signals2::signal<void ()> StopRequests;
 
     bool fListening = false;
     std::string strerr;
@@ -1092,11 +1057,7 @@ void ThreadRPCServer2(void* parg)
         acceptor->bind(endpoint);
         acceptor->listen(socket_base::max_connections);
 
-        RPCListen(acceptor, context, fUseSSL);
-        // Cancel outstanding listen-requests for this acceptor when shutting down
-        StopRequests.connect(signals2::slot<void ()>(
-                                 static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                             .track(acceptor));
+        RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
         fListening = true;
     }
@@ -1119,11 +1080,7 @@ void ThreadRPCServer2(void* parg)
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_connections);
 
-            RPCListen(acceptor, context, fUseSSL);
-            // Cancel outstanding listen-requests for this acceptor when shutting down
-            StopRequests.connect(signals2::slot<void ()>(
-                                     static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                                 .track(acceptor));
+            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
             fListening = true;
         }
@@ -1139,13 +1096,31 @@ void ThreadRPCServer2(void* parg)
         StartShutdown();
         return;
     }
+    
+    rpc_worker_group = new boost::thread_group();
+    for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
+        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+}
 
-    while (!fShutdown)
-        rpc_io_service->run_one();
+void StopRPCThreads()
+{
+    LogPrintf("Stop RPC IO service\n");
+    if(!rpc_io_service)
+    {
+        LogPrintf("RPC IO server not started\n");
+        return;
+    }
 
+    rpc_io_service->stop();
+    if (rpc_worker_group != NULL)
+        rpc_worker_group->join_all();
+    
+    delete rpc_worker_group;
+    rpc_worker_group = NULL;
+    delete rpc_ssl_context;
+    rpc_ssl_context = NULL;
     delete rpc_io_service;
     rpc_io_service = NULL;
-    StopRequests();
 }
 
 class JSONRequest
@@ -1225,9 +1200,6 @@ static string JSONRPCExecBatch(const Array& vReq)
 
 void ServiceConnection(AcceptedConnection *conn)
 {
-    // Make this thread recognisable as the RPC handler
-    RenameThread("grc-rpchand");
-
     bool fRun = true;
     while (fRun && !fShutdown)
     {
