@@ -6576,8 +6576,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fClient = !(pfrom->nServices & NODE_NETWORK);
 
+        // Moved the below from AddTimeData to here to follow bitcoin's approach.
+        int64_t nOffsetSample = nTime - GetTime();
         if (GetBoolArg("-synctime", true))
-            AddTimeData(pfrom->addr, nTime);
+            AddTimeData(pfrom->addr, nOffsetSample);
 
         // Change version
         pfrom->PushMessage("verack");

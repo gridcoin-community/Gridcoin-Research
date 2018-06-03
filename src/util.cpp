@@ -1302,10 +1302,8 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes)
 // avoid including unnecessary files for standalone upgrader
 
 
-void AddTimeData(const CNetAddr& ip, int64_t nTime)
+void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 {
-    int64_t nOffsetSample = nTime - GetTime();
-
     // Ignore duplicates
     static set<CNetAddr> setKnown;
     if (!setKnown.insert(ip).second)
@@ -1316,17 +1314,15 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
     if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
-        int64_t nMedian = vTimeOffsets.median();
+        // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
+        // the entire network is displaced for some reason.
+        nTimeOffset = 0.95 * vTimeOffsets.median();
         std::vector<int64_t> vSorted = vTimeOffsets.sorted();
         // Only let other nodes change our time by so much
-        if (abs64(nMedian) < 70 * 60)
-        {
-            nTimeOffset = nMedian;
-        }
-        else
+        if (abs64(nTimeOffset) >= 70 * 60)
         {
             nTimeOffset = 0;
-
+        
             static bool fDone;
             if (!fDone)
             {
