@@ -90,6 +90,7 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "contract/polls.h"
+#include "contract/contract.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -106,9 +107,6 @@ extern double qtPushGridcoinDiagnosticData(std::string data);
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
-std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
@@ -1783,35 +1781,11 @@ void BitcoinGUI::timerfire()
                         std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
                         std::string Argument2 = ExtractXML(sData,"<ARG2>","</ARG2>");
 
-                        if (RPCCommand=="vote")
+                        if (RPCCommand=="rain")
                         {
-                            std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                            double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                            std::string response = ExecuteRPCCommand("vote",Argument1,Argument2);
+                            std::string response = executeRain(Argument1+Argument2);
                             double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
                         }
-                        else if (RPCCommand=="rain")
-                        {
-                            std::string response = ExecuteRPCCommand("rain",Argument1,Argument2);
-                            double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
-                        }
-                        else if (RPCCommand=="addpoll")
-                        {
-                            std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                            double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                            std::string Argument3 = ExtractXML(sData,"<ARG3>","</ARG3>");
-                            std::string Argument4 = ExtractXML(sData,"<ARG4>","</ARG4>");
-                            std::string Argument5 = ExtractXML(sData,"<ARG5>","</ARG5>");
-                            std::string Argument6 = ExtractXML(sData,"<ARG6>","</ARG6>");
-                            std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5,Argument6);
-                            double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
-                        }
-                        else if (RPCCommand == "addattachment")
-                        {
-                            msAttachmentGuid = Argument1;
-                            LogPrintf("\n attachment added %s \n",msAttachmentGuid);
-                        }
-
                     }
                 #endif
         }
