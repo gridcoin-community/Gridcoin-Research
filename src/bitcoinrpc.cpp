@@ -656,21 +656,6 @@ static string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
                 strMsg);
 }
 
-int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
-{
-    string str;
-    getline(stream, str);
-    vector<string> vWords;
-    boost::split(vWords, str, boost::is_any_of(" "));
-    if (vWords.size() < 2)
-        return HTTP_INTERNAL_SERVER_ERROR;
-    proto = 0;
-    const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != NULL)
-        proto = atoi(ver+7);
-    return atoi(vWords[1].c_str());
-}
-
 int ReadHTTPHeader(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
 {
     int nLen = 0;
@@ -696,17 +681,90 @@ int ReadHTTPHeader(std::basic_istream<char>& stream, map<string, string>& mapHea
     return nLen;
 }
 
-int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet, string& strMessageRet)
+bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
+                         string& http_method, string& http_uri)
+{
+    string str;
+    getline(stream, str);
+
+    // HTTP request line is space-delimited
+    vector<string> vWords;
+    boost::split(vWords, str, boost::is_any_of(" "));
+    if (vWords.size() < 2)
+        return false;
+
+    // HTTP methods permitted: GET, POST
+    http_method = vWords[0];
+    if (http_method != "GET" && http_method != "POST")
+        return false;
+
+    // HTTP URI must be an absolute path, relative to current host
+    http_uri = vWords[1];
+    if (http_uri.size() == 0 || http_uri[0] != '/')
+        return false;
+
+    // parse proto, if present
+    string strProto = "";
+    if (vWords.size() > 2)
+        strProto = vWords[2];
+
+    proto = 0;
+    const char *ver = strstr(strProto.c_str(), "HTTP/1.");
+    if (ver != NULL)
+        proto = atoi(ver+7);
+
+    return true;
+}
+
+int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
+{
+    string str;
+    getline(stream, str);
+    vector<string> vWords;
+    boost::split(vWords, str, boost::is_any_of(" "));
+    if (vWords.size() < 2)
+        return HTTP_INTERNAL_SERVER_ERROR;
+    proto = 0;
+    const char *ver = strstr(str.c_str(), "HTTP/1.");
+    if (ver != NULL)
+        proto = atoi(ver+7);
+    return atoi(vWords[1].c_str());
+}
+
+int ReadHTTPHeaders(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
+{
+    int nLen = 0;
+    while (true)
+    {
+        string str;
+        std::getline(stream, str);
+        if (str.empty() || str == "\r")
+            break;
+        string::size_type nColon = str.find(":");
+        if (nColon != string::npos)
+        {
+            string strHeader = str.substr(0, nColon);
+            boost::trim(strHeader);
+            boost::to_lower(strHeader);
+            string strValue = str.substr(nColon+1);
+            boost::trim(strValue);
+            mapHeadersRet[strHeader] = strValue;
+            if (strHeader == "content-length")
+                nLen = atoi(strValue.c_str());
+        }
+    }
+    return nLen;
+}
+
+int ReadHTTPMessage(std::basic_istream<char>& stream, map<string,
+                    string>& mapHeadersRet, string& strMessageRet,
+                    int nProto)
 {
     mapHeadersRet.clear();
     strMessageRet = "";
 
-    // Read status
-    int nProto = 0;
-    int nStatus = ReadHTTPStatus(stream, nProto);
-
     // Read header
-    int nLen = ReadHTTPHeader(stream, mapHeadersRet);
+    int nLen = ReadHTTPHeaders(stream, mapHeadersRet);
     if (nLen < 0 || nLen > (int)MAX_SIZE)
         return HTTP_INTERNAL_SERVER_ERROR;
 
@@ -728,9 +786,8 @@ int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRe
             mapHeadersRet["connection"] = "close";
     }
 
-    return nStatus;
+    return HTTP_OK;
 }
-
 bool HTTPAuthorized(map<string, string>& mapHeaders)
 {
     string strAuth = mapHeaders["authorization"];
@@ -1203,10 +1260,21 @@ void ServiceConnection(AcceptedConnection *conn)
     bool fRun = true;
     while (fRun && !fShutdown)
     {
+        int nProto = 0;
         map<string, string> mapHeaders;
-        string strRequest;
+        string strRequest, strMethod, strURI;
 
-        ReadHTTP(conn->stream(), mapHeaders, strRequest);
+        // Read HTTP request line
+        if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
+            break;
+
+        // Read HTTP message headers and body
+        ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto);
+
+        if (strURI != "/") {
+            conn->stream() << HTTPReply(HTTP_NOT_FOUND, "", false) << std::flush;
+            break;
+        }
 
         // Check authorization
         if (mapHeaders.count("authorization") == 0)
@@ -1332,10 +1400,15 @@ Object CallRPC(const string& strMethod, const Array& params)
     string strPost = HTTPPost(strRequest, mapRequestHeaders);
     stream << strPost << std::flush;
 
-    // Receive reply
+    // Receive HTTP reply status
+    int nProto = 0;
+    int nStatus = ReadHTTPStatus(stream, nProto);
+    
+    // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
-    int nStatus = ReadHTTP(stream, mapHeaders, strReply);
+    ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
+    
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");
     else if (nStatus >= 400 && nStatus != HTTP_BAD_REQUEST && nStatus != HTTP_NOT_FOUND && nStatus != HTTP_INTERNAL_SERVER_ERROR)
