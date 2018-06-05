@@ -197,7 +197,7 @@ string JSONRPCRequest(const string& strMethod, const UniValue& params, const Uni
     request.push_back(Pair("method", strMethod));
     request.push_back(Pair("params", params));
     request.push_back(Pair("id", id));
-    return request.write(), false + "\n";
+    return request.write() + "\n";
 }
 
 UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id)
