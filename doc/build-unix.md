@@ -38,7 +38,12 @@ make
 make install # optional
 ```
 
-This will build gridcoinresearch as well if the dependencies are met.
+Or, to keep the source directory clean:
+```bash
+./autogen.sh && mkdir build && ../configure && make
+```
+
+This will build gridcoinresearch (Qt client) as well if the dependencies are met.
 
 Dependencies
 ---------------------
