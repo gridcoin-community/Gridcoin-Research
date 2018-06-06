@@ -332,8 +332,6 @@ bool UpdateNeuralNetworkQuorumData()
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    NN::SetTestnetFlag(fTestNet);
     NN::ExecuteDotNetStringFunction("SetQuorumData",data);
     return true;
 }
@@ -371,7 +369,6 @@ bool FullSyncWithDPORNodes()
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::SetTestnetFlag(fTestNet);
     NN::SynchronizeDPOR(data);
     return true;
 }
@@ -7089,7 +7086,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             if (neural_request=="neural_data")
             {
-                NN::SetTestnetFlag(fTestNet);
                 pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
             }
             else if (neural_request=="neural_hash")
@@ -7104,7 +7100,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             else if (neural_request=="quorum")
             {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
-            NN::SetTestnetFlag(fTestNet);
             pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
             }
     }
@@ -7215,7 +7210,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                  std::string results = "";
                  //Resolve discrepancies
-                NN::SetTestnetFlag(fTestNet);
                 results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
                  if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s \n",results);
             }
@@ -7229,7 +7223,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                  std::string results = "";
                  //Resolve discrepancies
-                NN::SetTestnetFlag(fTestNet);
                     LogPrintf("\n** Sync neural network data from supermajority **\n");
                 results = NN::ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
                  if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s \n",results);

@@ -49,11 +49,6 @@ namespace NN
         return qtGetNeuralContract("");
     }
 
-    bool SetTestnetFlag(bool onTestnet)
-    {
-        return qtExecuteGenericFunction("SetTestNetFlag", onTestnet ? "TESTNET" : "MAINNET") != 0;
-    }
-
     bool SynchronizeDPOR(const std::string& data)
     {
         qtSyncWithDPORNodes(data);
