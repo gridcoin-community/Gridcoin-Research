@@ -155,6 +155,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "debugnet"               , 0 },
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
+    { "getblockstats"          , 2 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
     { "sendalert"              , 4 },
