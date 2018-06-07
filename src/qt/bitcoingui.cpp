@@ -1744,10 +1744,8 @@ void ReinstantiateGlobalcom()
 
     bGlobalcomInitialized = true;
     std::string sNetworkFlag = fTestNet ? "TESTNET" : "MAINNET";
-    globalcom->dynamicCall("SetTestNetFlag(QString)", ToQstring(sNetworkFlag)).toInt();
+    globalcom->dynamicCall("SetTestNetFlag(QString)", ToQstring(sNetworkFlag));
 #endif
-
-    return;
 }
 
 void BitcoinGUI::timerfire()
