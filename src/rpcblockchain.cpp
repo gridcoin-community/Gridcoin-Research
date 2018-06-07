@@ -1592,32 +1592,21 @@ UniValue magnitude(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "magnitude <cpid>\n"
                 "\n"
-                "<cpid> -> Required to be used on mainnet\n"
+                "<cpid> -> cpid to look up\n"
                 "\n"
                 "Displays information for the magnitude of all cpids or specified in the network\n");
 
     UniValue results(UniValue::VARR);
 
-    std::string cpid = "";
+    std::string cpid;
 
-    if (params.size() > 1)
+    if (params.size() > 0)
         cpid = params[0].get_str();
 
     {
         LOCK(cs_main);
 
-        results = MagnitudeReport(cpid);
-    }
-
-    if (results.size() > 1000)
-    {
-        results.clear();
-
-        UniValue entry(UniValue::VOBJ);
-
-        entry.pushKV("Error","Magnitude report too large; try specifying the cpid : magnitude <cpid>.");
-
-        results.push_back(entry);
+        results.push_back(MagnitudeReport(cpid));
     }
 
     return results;
