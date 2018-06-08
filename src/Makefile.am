@@ -43,25 +43,25 @@ GRIDCOIN_CORE_H = \
 	addrman.h \
 	alert.h \
 	allocators.h \
-	appcache.h \
-	backup.h \
+        gridcoin/appcache.h \
+        gridcoin/backup.h \
 	base58.h \
-	beacon.h \
+        gridcoin/beacon.h \
 	bignum.h \
-	block.h \
-	boinc.h \
+        gridcoin/block.h \
+        gridcoin/boinc.h \
 	checkpoints.h \
 	coincontrol.h \
 	compat.h \
-	contract/polls.h \
-	contract/contract.h \
-	cpid.h \
+        gridcoin/contract/polls.h \
+        gridcoin/contract/contract.h \
+        gridcoin/cpid.h \
 	crypter.h \
 	db.h \
-	fwd.h \
-    global_objects.hpp \
-    global_objects_noui.hpp \
-	gridcoin.h \
+        gridcoin/fwd.h \
+    gridcoin/global_objects.hpp \
+    gridcoin/global_objects_noui.hpp \
+        gridcoin/gridcoin.h \
 	grcrestarter.h \
 	init.h \
 	kernel.h \
@@ -70,7 +70,7 @@ GRIDCOIN_CORE_H = \
 	main.h \
 	miner.h \
 	mruset.h \
-	neuralnet.h \
+        gridcoin/neuralnet.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
@@ -83,7 +83,7 @@ GRIDCOIN_CORE_H = \
 	serialize.h \
 	strlcpy.h \
 	sync.h \
-	tally.h \
+        gridcoin/tally.h \
 	threadsafety.h \
 	tinyformat.h \
 	txdb.h \
@@ -98,15 +98,15 @@ GRIDCOIN_CORE_H = \
 GRIDCOIN_CORE_CPP = addrman.cpp \
 	alert.cpp \
 	allocators.cpp \
-	appcache.cpp \
-	backup.cpp \
-	beacon.cpp \
-	block.cpp \
-	boinc.cpp \
+        gridcoin/appcache.cpp \
+        gridcoin/backup.cpp \
+        gridcoin/beacon.cpp \
+        gridcoin/block.cpp \
+        gridcoin/boinc.cpp \
 	checkpoints.cpp \
-	contract/polls.cpp \
-	contract/contract.cpp \
-	cpid.cpp \
+        gridcoin/contract/polls.cpp \
+        gridcoin/contract/contract.cpp \
+        gridcoin/cpid.cpp \
 	crypter.cpp \
 	db.cpp \
 	init.cpp \
@@ -120,7 +120,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	noui.cpp \
 	pbkdf2.cpp \
 	protocol.cpp \
-	contract/rpccontract.cpp \
+        gridcoin/contract/rpccontract.cpp \
 	rpcblockchain.cpp \
 	rpcclient.cpp \
 	rpcdump.cpp \
@@ -130,11 +130,11 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	rpcrawtransaction.cpp \
 	rpcserver.cpp \
 	rpcwallet.cpp \
-	rpcdataacq.cpp \
+        gridcoin/rpcdataacq.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
-    tally.cpp \
+    gridcoin/tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
