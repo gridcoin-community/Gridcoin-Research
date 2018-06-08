@@ -6,13 +6,13 @@
 
 #include "main.h"
 #include "rpcserver.h"
-#include "gridcoin/cpid.h"
+#include "cpid.h"
 #include "kernel.h"
-#include "gridcoin/block.h"
+#include "block.h"
 #include "txdb.h"
-#include "gridcoin/beacon.h"
+#include "beacon.h"
 #include "util.h"
-#include "gridcoin/appcache.h"
+#include "appcache.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>
