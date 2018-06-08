@@ -34,7 +34,7 @@ namespace boost {
 #include <openssl/rand.h>
 #include <cstdarg>
 
-#include "neuralnet.h"
+#include "gridcoin/neuralnet.h"
 
 #ifdef WIN32
 #ifdef _MSC_VER

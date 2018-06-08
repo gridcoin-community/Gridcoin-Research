@@ -12,7 +12,7 @@
 #include "init.h"
 #include "base58.h"
 #include "util.h"
-#include "backup.h"
+#include "gridcoin/backup.h"
 
 #include <univalue.h>
 

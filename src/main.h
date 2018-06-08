@@ -11,7 +11,7 @@
 #include "scrypt.h"
 #include "util.h"
 
-#include "global_objects_noui.hpp"
+#include "gridcoin/global_objects_noui.hpp"
 
 #include <map>
 #include <unordered_map>

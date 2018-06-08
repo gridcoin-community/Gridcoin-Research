@@ -46,10 +46,10 @@
 #include "rpcconsole.h"
 #include "wallet.h"
 #include "init.h"
-#include "block.h"
+#include "gridcoin/block.h"
 #include "miner.h"
 #include "main.h"
-#include "backup.h"
+#include "gridcoin/backup.h"
 #include "clicklabel.h"
 
 #ifdef Q_OS_MAC
@@ -89,12 +89,12 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "contract/polls.h"
-#include "contract/contract.h"
+#include "gridcoin/contract/polls.h"
+#include "gridcoin/contract/contract.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include "boinc.h"
+#include "gridcoin/boinc.h"
 
 extern CWallet* pwalletMain;
 int ReindexWallet();

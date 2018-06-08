@@ -1,4 +1,4 @@
-#include "cpid.h"
+#include "gridcoin/cpid.h"
 
 #include <boost/test/unit_test.hpp>
 

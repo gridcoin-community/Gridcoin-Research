@@ -17,7 +17,7 @@
 #include "txdb.h"
 #include "util.h"
 #include "main.h"
-#include "block.h"
+#include "gridcoin/block.h"
 #include "ui_interface.h"
 
 using namespace std;

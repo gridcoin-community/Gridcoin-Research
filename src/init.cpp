@@ -9,7 +9,7 @@
 #include "init.h"
 #include "util.h"
 #include "ui_interface.h"
-#include "tally.h"
+#include "gridcoin/tally.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -20,7 +20,7 @@
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
-#include "global_objects_noui.hpp"
+#include "gridcoin/global_objects_noui.hpp"
 
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;

@@ -7,7 +7,7 @@
 #define BITCOIN_UTIL_H
 
 #include "uint256.h"
-#include "fwd.h"
+#include "gridcoin/fwd.h"
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -33,7 +33,6 @@
 #include <openssl/sha.h>
 #include <openssl/ripemd.h>
 
-#include "fwd.h"
 #include "serialize.h"
 #include "tinyformat.h"
 

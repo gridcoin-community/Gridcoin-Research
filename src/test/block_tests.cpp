@@ -1,5 +1,5 @@
 #include "main.h"
-#include "block.h"
+#include "gridcoin/block.h"
 
 #include <boost/test/unit_test.hpp>
 #include <array>

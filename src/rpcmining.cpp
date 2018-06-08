@@ -9,8 +9,8 @@
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
-#include "neuralnet.h"
-#include "global_objects_noui.hpp"
+#include "gridcoin/neuralnet.h"
+#include "gridcoin/global_objects_noui.hpp"
 using namespace std;
 
 int64_t GetCoinYearReward(int64_t nTime);

@@ -13,7 +13,7 @@ class CBlockIndex;
 
 #include <univalue.h>
 
-#include "global_objects_noui.hpp"
+#include "gridcoin/global_objects_noui.hpp"
 #include "util.h"
 #include "checkpoints.h"
 

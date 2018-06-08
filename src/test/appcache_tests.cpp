@@ -1,4 +1,4 @@
-#include "appcache.h"
+#include "gridcoin/appcache.h"
 
 #include <boost/test/unit_test.hpp>
 

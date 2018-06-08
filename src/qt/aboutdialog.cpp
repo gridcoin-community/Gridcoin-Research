@@ -11,8 +11,8 @@
 #include <iostream>
 #include "uint256.h"
 #include "base58.h"
-#include "../global_objects.hpp"
-#include "../global_objects_noui.hpp"
+#include "gridcoin/global_objects.hpp"
+#include "gridcoin/global_objects_noui.hpp"
 
 
 

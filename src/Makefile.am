@@ -155,7 +155,7 @@ libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
     grcrestarter_stub.cpp \
-    neuralnet_stub.cpp \
+    gridcoin/neuralnet_stub.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS
