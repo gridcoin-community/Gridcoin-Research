@@ -165,7 +165,7 @@ endif
 nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 
 # gridcoinresearchd binary #
-gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
+gridcoinresearchd_SOURCES = gridcoin/gridcoinresearchd.cpp
 gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 gridcoinresearchd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
@@ -180,7 +180,7 @@ gridcoinresearchd_LDADD = \
 gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 
 if TARGET_WINDOWS
-gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
+gridcoinresearchd_SOURCES += gridcoin/gridcoinresearchd-res.rc
 gridcoinresearchd_CPPFLAGS += -DUNICODE
 endif
 
