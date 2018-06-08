@@ -130,7 +130,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
     rpcrawtransaction.cpp \
     rpcserver.cpp \
     rpcwallet.cpp \
-    gridcoin/rpcdataacq.cpp \
+    gridcoin/rpc/dataacq.cpp \
     script.cpp \
     scrypt.cpp \
     sync.cpp \
