@@ -1,10 +1,10 @@
-#include "gridcoin/cpid.h"
+#include "cpid.h"
 #include "init.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "keystore.h"
-#include "gridcoin/beacon.h"
+#include "beacon.h"
 
 double GetTotalBalance();
 

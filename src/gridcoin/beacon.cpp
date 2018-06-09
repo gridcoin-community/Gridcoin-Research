@@ -4,7 +4,7 @@
 #include "key.h"
 #include "main.h"
 #include "appcache.h"
-#include "contract/contract.h"
+#include "contract.h"
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);

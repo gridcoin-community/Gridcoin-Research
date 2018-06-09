@@ -12,7 +12,7 @@
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/neuralnet.h"
-#include "gridcoin/contract/contract.h"
+#include "gridcoin/contract.h"
 
 #include <memory>
 

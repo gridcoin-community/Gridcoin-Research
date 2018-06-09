@@ -89,8 +89,8 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "gridcoin/contract/polls.h"
-#include "gridcoin/contract/contract.h"
+#include "gridcoin/polls.h"
+#include "gridcoin/contract.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()

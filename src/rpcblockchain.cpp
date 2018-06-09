@@ -18,8 +18,8 @@
 #include "gridcoin/backup.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/tally.h"
-#include "gridcoin/contract/polls.h"
-#include "gridcoin/contract/contract.h"
+#include "gridcoin/polls.h"
+#include "gridcoin/contract.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>

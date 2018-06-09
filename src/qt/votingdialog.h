@@ -1,7 +1,7 @@
 #ifndef VOTINGDIALOG_H
 #define VOTINGDIALOG_H
 
-#include "gridcoin/contract/polls.h"
+#include "gridcoin/polls.h"
 
 #include <time.h>
 #include <QAbstractTableModel>
