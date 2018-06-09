@@ -58,6 +58,7 @@ GRIDCOIN_CORE_H = \
   cpid.h \
   crypter.h \
   db.h \
+  fs.h \
   fwd.h \
   global_objects.hpp \
   global_objects_noui.hpp \
@@ -67,6 +68,7 @@ GRIDCOIN_CORE_H = \
   kernel.h \
   key.h \
   keystore.h \
+  logging.h \
   main.h \
   miner.h \
   mruset.h \
@@ -91,6 +93,8 @@ GRIDCOIN_CORE_H = \
   ui_interface.h \
   uint256.h \
   util.h \
+  utilstrencodings.h \
+  utiltime.h \
   version.h \
   walletdb.h \
   wallet.h
@@ -109,10 +113,12 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   cpid.cpp \
   crypter.cpp \
   db.cpp \
+  fs.cpp \
   init.cpp \
   kernel.cpp \
   key.cpp \
   keystore.cpp \
+  logging.cpp \
   main.cpp \
   miner.cpp \
   netbase.cpp \
@@ -137,6 +143,8 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   tally.cpp \
   txdb-leveldb.cpp \
   util.cpp \
+  utilstrencodings.cpp \
+  utiltime.cpp \
   version.cpp \
   wallet.cpp \
   walletdb.cpp
