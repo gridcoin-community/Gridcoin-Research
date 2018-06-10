@@ -112,6 +112,7 @@ GRIDCOIN_CORE_H = \
   ui_interface.h \
   uint256.h \
   util.h \
+  utilmoneystr.h \
   utilstrencodings.h \
   utiltime.h \
   version.h \
@@ -169,6 +170,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   tally.cpp \
   txdb-leveldb.cpp \
   util.cpp \
+  utilmoneystr.cpp \
   utilstrencodings.cpp \
   utiltime.cpp \
   version.cpp \
