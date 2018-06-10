@@ -22,6 +22,7 @@
 #include <string>
 #include <ostream>
 #include <locale>
+#include <memory>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
@@ -656,6 +657,13 @@ private:
     boost::thread_group threadGroup;
     std::map<std::string,boost::thread*> threadMap;
 };
+
+//! Substitute for C++14 std::make_unique.
+template <typename T, typename... Args>
+std::unique_ptr<T> MakeUnique(Args&&... args)
+{
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 
 #endif
 

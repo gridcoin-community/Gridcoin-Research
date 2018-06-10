@@ -69,6 +69,7 @@ GRIDCOIN_CORE_H = \
   grcrestarter.h \
   indirectmap.h \
   init.h \
+  interfaces/handler.h \
   kernel.h \
   key.h \
   keystore.h \
@@ -125,6 +126,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   db.cpp \
   fs.cpp \
   init.cpp \
+  interfaces/handler.cpp \
   kernel.cpp \
   key.cpp \
   keystore.cpp \
