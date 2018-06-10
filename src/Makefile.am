@@ -55,6 +55,9 @@ GRIDCOIN_CORE_H = \
   checkqueue.h \
   coincontrol.h \
   compat.h \
+  compat/byteswap.h \
+  compat/endian.h \
+  compat/sanity.h \
   contract/polls.h \
   contract/contract.h \
   cpid.h \
@@ -119,6 +122,9 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   block.cpp \
   boinc.cpp \
   checkpoints.cpp \
+  compat/glibc_sanity.cpp \
+  compat/glibcxx_sanity.cpp \
+  compat/strnlen.cpp \
   contract/polls.cpp \
   contract/contract.cpp \
   cpid.cpp \
@@ -161,6 +167,9 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   wallet.cpp \
   walletdb.cpp
 
+if GLIBC_BACK_COMPAT
+GRIDCOIN_CORE_CPP += compat/glibc_compat.cpp
+endif
 
 obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj
