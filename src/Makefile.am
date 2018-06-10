@@ -98,6 +98,10 @@ GRIDCOIN_CORE_H = \
   serialize.h \
   span.h \
   strlcpy.h \
+  support/allocators/secure.h \
+  support/allocators/zeroafterfree.h \
+  support/cleanse.h \
+  support/lockedpool.h \
   sync.h \
   tally.h \
   threadsafety.h \
@@ -158,6 +162,8 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   rpcdataacq.cpp \
   script.cpp \
   scrypt.cpp \
+  support/cleanse.cpp \
+  support/lockedpool.cpp \
   sync.cpp \
   tally.cpp \
   txdb-leveldb.cpp \
