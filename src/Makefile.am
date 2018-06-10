@@ -59,6 +59,7 @@ GRIDCOIN_CORE_H = \
   contract/contract.h \
   cpid.h \
   crypter.h \
+  cuckoocache.h \
   db.h \
   fs.h \
   fwd.h \
