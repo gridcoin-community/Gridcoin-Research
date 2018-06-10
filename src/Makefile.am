@@ -43,6 +43,7 @@ GRIDCOIN_CORE_H = \
   addrman.h \
   alert.h \
   allocators.h \
+  amount.h \
   appcache.h \
   backup.h \
   base58.h \

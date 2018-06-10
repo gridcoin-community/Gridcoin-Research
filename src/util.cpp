@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "util.h"
+#include "amount.h"
 #include "sync.h"
 #include "strlcpy.h"
 #include "version.h"
