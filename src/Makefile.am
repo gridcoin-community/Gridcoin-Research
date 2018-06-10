@@ -106,7 +106,8 @@ GRIDCOIN_CORE_H = \
   utiltime.h \
   version.h \
   walletdb.h \
-  wallet.h
+  wallet.h \
+  walletinitinterface.h
 
 GRIDCOIN_CORE_CPP = addrman.cpp \
   alert.cpp \
