@@ -80,6 +80,7 @@ GRIDCOIN_CORE_H = \
   limitedmap.h \
   logging.h \
   main.h \
+  memusage.h \
   miner.h \
   mruset.h \
   neuralnet.h \
