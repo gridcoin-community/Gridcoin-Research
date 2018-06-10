@@ -51,6 +51,7 @@ GRIDCOIN_CORE_H = \
   block.h \
   boinc.h \
   checkpoints.h \
+  checkqueue.h \
   coincontrol.h \
   compat.h \
   contract/polls.h \
@@ -64,10 +65,12 @@ GRIDCOIN_CORE_H = \
   global_objects_noui.hpp \
   gridcoin.h \
   grcrestarter.h \
+  indirectmap.h \
   init.h \
   kernel.h \
   key.h \
   keystore.h \
+  limitedmap.h \
   logging.h \
   main.h \
   miner.h \
@@ -76,13 +79,17 @@ GRIDCOIN_CORE_H = \
   netbase.h \
   net.h \
   pbkdf2.h \
+  prevector.h \
   protocol.h \
+  reverse_iterator.h \
+  reverselock.h \
   rpcclient.h \
   rpcprotocol.h \
   rpcserver.h \
   script.h \
   scrypt.h \
   serialize.h \
+  span.h \
   strlcpy.h \
   sync.h \
   tally.h \
