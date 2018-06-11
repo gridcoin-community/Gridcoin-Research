@@ -1,6 +1,8 @@
 #ifndef WALLETMODEL_H
 #define WALLETMODEL_H
 
+#include "amount.h"
+
 #include <QObject>
 #include <vector>
 #include <map>
@@ -27,7 +29,7 @@ class SendCoinsRecipient
 public:
     QString address;
     QString label;
-    qint64 amount;
+    CAmount amount;
 	QString Message;
 };
 
