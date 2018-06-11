@@ -4361,6 +4361,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
               || (IsV8Enabled(nHeight) && nVersion < 8)
               || (IsV9Enabled(nHeight) && nVersion < 9)
+              || (nVersion < pindexPrev->nVersion)
               )
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
