@@ -693,7 +693,6 @@ digraph "source tree" {
 	"txdb" -> "hash"
 	"validation" -> "undo"
 	"net" -> "ui_interface"
-	"init" -> "sanity"
 	"guiutil" -> "transaction"
 	"blockchain" -> "checkpoints"
 	"net" -> "consensus"
