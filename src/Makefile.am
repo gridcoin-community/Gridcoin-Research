@@ -105,6 +105,7 @@ GRIDCOIN_CORE_H = \
   support/lockedpool.h \
   sync.h \
   tally.h \
+  threadinterrupt.h \
   threadsafety.h \
   tinyformat.h \
   txdb.h \
@@ -168,6 +169,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   support/lockedpool.cpp \
   sync.cpp \
   tally.cpp \
+  threadinterrupt.cpp \
   txdb-leveldb.cpp \
   util.cpp \
   utilmoneystr.cpp \
