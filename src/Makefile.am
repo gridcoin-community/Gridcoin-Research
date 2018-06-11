@@ -42,7 +42,6 @@ endif
 GRIDCOIN_CORE_H = \
   addrman.h \
   alert.h \
-  allocators.h \
   amount.h \
   appcache.h \
   backup.h \
@@ -123,7 +122,6 @@ GRIDCOIN_CORE_H = \
 
 GRIDCOIN_CORE_CPP = addrman.cpp \
   alert.cpp \
-  allocators.cpp \
   appcache.cpp \
   backup.cpp \
   beacon.cpp \

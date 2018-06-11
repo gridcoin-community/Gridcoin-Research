@@ -112,8 +112,6 @@ void locking_callback(int mode, int i, const char* file, int line) NO_THREAD_SAF
     }
 }
 
-LockedPageManager LockedPageManager::instance;
-
 // Init
 class CInit
 {
