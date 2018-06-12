@@ -219,7 +219,7 @@ gridcoinresearchd_LDADD = \
 gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 
 if TARGET_WINDOWS
-gridcoinresearchd_SOURCES += gridcoin/gridcoinresearchd-res.rc
+gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc
 gridcoinresearchd_CPPFLAGS += -DUNICODE
 endif
 
