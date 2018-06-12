@@ -8560,7 +8560,14 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
     // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
-    if (iRABlockSpan < 10) Accrual = 0;
+    if(pindexLast->nVersion>=10)
+    {
+        if (iRABlockSpan < 10) Accrual = 0;
+    }
+    else
+    {
+        if (iRABlockSpan < 10 && iVerificationPhase != 2) Accrual = 0;
+    }
 
     double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
     if ((fDebug && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) LogPrintf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \n",
