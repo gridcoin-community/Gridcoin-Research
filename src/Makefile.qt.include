@@ -94,6 +94,7 @@ QT_MOC_CPP = \
   qt/moc_bitcoinaddressvalidator.cpp \
   qt/moc_bitcoinamountfield.cpp \
   qt/moc_bitcoingui.cpp \
+  qt/moc_bitcoinunits.cpp \
   qt/moc_clicklabel.cpp \
   qt/moc_clientmodel.cpp \
   qt/moc_coincontroldialog.cpp \
@@ -129,6 +130,7 @@ GRIDCOIN_MM = \
   qt/macnotificationhandler.mm
 
 QT_MOC = \
+  qt/bitcoinamountfield.moc \
   qt/overviewpage.moc \
   qt/rpcconsole.moc \
   qt/bitcoin.moc
@@ -147,6 +149,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/bitcoinamountfield.h \
   qt/bitcoingui.h \
   qt/bitcoinunits.h \
+  qt/callback.h \
   qt/clicklabel.h \
   qt/clientmodel.h \
   qt/coincontroldialog.h \
@@ -163,6 +166,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/optionsdialog.h \
   qt/optionsmodel.h \
   qt/overviewpage.h \
+  qt/platformstyle.h \
   qt/qtipcserver.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
@@ -202,6 +206,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \
   qt/overviewpage.cpp \
+  qt/platformstyle.cpp \
   qt/qtipcserver.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \

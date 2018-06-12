@@ -1,11 +1,14 @@
 #ifndef WALLETMODEL_H
 #define WALLETMODEL_H
 
+#include "amount.h"
+
 #include <QObject>
 #include <vector>
 #include <map>
 
-#include "allocators.h" /* for SecureString */
+
+#include <support/allocators/secure.h> /* for SecureString */
 
 class OptionsModel;
 class AddressTableModel;
@@ -27,7 +30,7 @@ class SendCoinsRecipient
 public:
     QString address;
     QString label;
-    qint64 amount;
+    CAmount amount;
 	QString Message;
 };
 

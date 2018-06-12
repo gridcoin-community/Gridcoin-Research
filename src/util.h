@@ -22,6 +22,7 @@
 #include <string>
 #include <ostream>
 #include <locale>
+#include <memory>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
@@ -41,9 +42,6 @@
 
 #include <stdint.h>
 #include <inttypes.h>
-
-static const int64_t COIN = 100000000;
-static const int64_t CENT = 1000000;
 
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
@@ -658,6 +656,13 @@ private:
     boost::thread_group threadGroup;
     std::map<std::string,boost::thread*> threadMap;
 };
+
+//! Substitute for C++14 std::make_unique.
+template <typename T, typename... Args>
+std::unique_ptr<T> MakeUnique(Args&&... args)
+{
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 
 #endif
 

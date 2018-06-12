@@ -42,7 +42,7 @@ endif
 GRIDCOIN_CORE_H = \
   addrman.h \
   alert.h \
-  allocators.h \
+  amount.h \
   gridcoin/appcache.h \
   gridcoin/backup.h \
   gridcoin/beacon.h \
@@ -60,30 +60,52 @@ GRIDCOIN_CORE_H = \
   base58.h \
   bignum.h \
   checkpoints.h \
+  checkqueue.h \
   coincontrol.h \
   compat.h \
+  compat/byteswap.h \
+  compat/endian.h \
+  compat/sanity.h \
+  cpid.h \
   crypter.h \
+  crypto/common.h \
+  cuckoocache.h \
   db.h \
+  fs.h \
   grcrestarter.h \
+  indirectmap.h \
   init.h \
+  interfaces/handler.h \
   kernel.h \
   key.h \
   keystore.h \
+  limitedmap.h \
+  logging.h \
   main.h \
+  memusage.h \
   miner.h \
   mruset.h \
   netbase.h \
   net.h \
   pbkdf2.h \
+  prevector.h \
   protocol.h \
+  reverse_iterator.h \
+  reverselock.h \
   rpcclient.h \
   rpcprotocol.h \
   rpcserver.h \
   script.h \
   scrypt.h \
   serialize.h \
+  span.h \
   strlcpy.h \
+  support/allocators/secure.h \
+  support/allocators/zeroafterfree.h \
+  support/cleanse.h \
+  support/lockedpool.h \
   sync.h \
+  threadinterrupt.h \
   threadsafety.h \
   tinyformat.h \
   txdb.h \
@@ -91,14 +113,21 @@ GRIDCOIN_CORE_H = \
   ui_interface.h \
   uint256.h \
   util.h \
+  utilmoneystr.h \
+  utilstrencodings.h \
+  utiltime.h \
   version.h \
   walletdb.h \
-  wallet.h
+  wallet.h \
+  walletinitinterface.h
 
 GRIDCOIN_CORE_CPP = addrman.cpp \
   alert.cpp \
-  allocators.cpp \
   checkpoints.cpp \
+  compat/glibc_sanity.cpp \
+  compat/glibcxx_sanity.cpp \
+  compat/strnlen.cpp \
+  contract/polls.cpp \
   gridcoin/appcache.cpp \
   gridcoin/backup.cpp \
   gridcoin/beacon.cpp \
@@ -112,10 +141,13 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   gridcoin/tally.cpp \
   crypter.cpp \
   db.cpp \
+  fs.cpp \
   init.cpp \
+  interfaces/handler.cpp \
   kernel.cpp \
   key.cpp \
   keystore.cpp \
+  logging.cpp \
   main.cpp \
   miner.cpp \
   netbase.cpp \
@@ -134,13 +166,22 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   rpcwallet.cpp \
   script.cpp \
   scrypt.cpp \
+  support/cleanse.cpp \
+  support/lockedpool.cpp \
   sync.cpp \
+  threadinterrupt.cpp \
   txdb-leveldb.cpp \
   util.cpp \
+  utilmoneystr.cpp \
+  utilstrencodings.cpp \
+  utiltime.cpp \
   version.cpp \
   wallet.cpp \
   walletdb.cpp
 
+if GLIBC_BACK_COMPAT
+GRIDCOIN_CORE_CPP += compat/glibc_compat.cpp
+endif
 
 obj/build.h: FORCE
 	@$(MKDIR_P) $(builddir)/obj

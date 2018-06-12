@@ -437,7 +437,7 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
             {
                 if (!RecvLine(hSocket, strLine))
                 {
-                    closesocket(hSocket);
+                    CloseSocket(hSocket);
                     return false;
                 }
                 if (pszKeyword == NULL)
@@ -448,7 +448,7 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
                     break;
                 }
             }
-            closesocket(hSocket);
+            CloseSocket(hSocket);
             if (strLine.find("<") != string::npos)
                 strLine = strLine.substr(0, strLine.find("<"));
             strLine = strLine.substr(strspn(strLine.c_str(), " \t\n\r"));
@@ -462,7 +462,7 @@ bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const cha
             return true;
         }
     }
-    closesocket(hSocket);
+    CloseSocket(hSocket);
     return error("GetMyExternalIP() : connection closed");
 }
 
@@ -653,8 +653,7 @@ void CNode::CloseSocketDisconnect()
     if (hSocket != INVALID_SOCKET)
     {
         if (fDebug10) LogPrintf("disconnecting node %s\n", addrName);
-        closesocket(hSocket);
-        hSocket = INVALID_SOCKET;
+        CloseSocket(hSocket);
 
         // in case this fails, we'll empty the recv buffer when the CNode is deleted
         TRY_LOCK(cs_vRecvMsg, lockRecv);
@@ -1104,12 +1103,12 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (fDebug10)
                     LogPrintf("\n Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
-                closesocket(hSocket);
+                CloseSocket(hSocket);
             }
             else if (CNode::IsBanned(addr))
             {
                 if (fDebug10) LogPrintf("connection from %s dropped (banned)\n", addr.ToString());
-                closesocket(hSocket);
+                CloseSocket(hSocket);
             }
             else
             {
@@ -2216,10 +2215,10 @@ public:
         // Close sockets
         for (auto const& pnode : vNodes)
             if (pnode->hSocket != INVALID_SOCKET)
-                closesocket(pnode->hSocket);
+                CloseSocket(pnode->hSocket);
         for (auto &hListenSocket : vhListenSocket)
             if (hListenSocket != INVALID_SOCKET)
-                if (closesocket(hListenSocket) == SOCKET_ERROR)
+                if (!CloseSocket(hListenSocket))
                     LogPrintf("closesocket(hListenSocket) died with error %d\n", WSAGetLastError());
 
 #ifdef WIN32
