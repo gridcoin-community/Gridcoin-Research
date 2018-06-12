@@ -66,7 +66,6 @@ GRIDCOIN_CORE_H = \
   compat/byteswap.h \
   compat/endian.h \
   compat/sanity.h \
-  cpid.h \
   crypter.h \
   crypto/common.h \
   cuckoocache.h \
