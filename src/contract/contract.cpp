@@ -27,6 +27,7 @@ bool CheckMessageSignature(std::string sAction,std::string messagetype, std::str
     if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
     if (sAction=="D" && messagetype=="poll")   strMasterPubKey = msMasterProjectPublicKey;
     if (sAction=="D" && messagetype=="vote")   strMasterPubKey = msMasterProjectPublicKey;
+    if (messagetype=="protocol")  strMasterPubKey = msMasterProjectPublicKey;
 
     std::string db64 = DecodeBase64(sSig);
     CKey key;
