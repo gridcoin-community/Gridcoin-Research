@@ -127,7 +127,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
   compat/glibc_sanity.cpp \
   compat/glibcxx_sanity.cpp \
   compat/strnlen.cpp \
-  contract/polls.cpp \
   gridcoin/appcache.cpp \
   gridcoin/backup.cpp \
   gridcoin/beacon.cpp \
