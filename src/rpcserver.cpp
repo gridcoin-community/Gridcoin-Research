@@ -248,9 +248,9 @@ UniValue stop(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 0)
         throw runtime_error(
             "stop\n"
-            "Stop Gridcoin server.\n");
+            "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
-    LogPrintf("Stopping...\n");
+    LogPrintf("Stopping...");
     StartShutdown();
     return "Gridcoin server stopping";
 }
@@ -504,10 +504,10 @@ void ServiceConnection(AcceptedConnection *conn);
 
 void StopRPCThreads()
 {
-    LogPrintf("Stop RPC IO service\n");
+    LogPrintf("Stop RPC IO service");
     if(!rpc_io_service)
     {
-        LogPrintf("RPC IO server not started\n");
+        LogPrintf("RPC IO server not started");
         return;
     }
 
@@ -529,10 +529,10 @@ void ThreadRPCServer(void* parg)
     }
     catch (boost::thread_interrupted&)
     {
-            LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
+            LogPrintf("ThreadRPCServer exited (interrupt)\r");
             return;
     }
-    LogPrintf("ThreadRPCServer exited\n");
+    LogPrintf("ThreadRPCServer exited");
 }
 
 // Forward declaration required for RPCListen
@@ -603,7 +603,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 
 void ThreadRPCServer2(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadRPCServer started\n");
+    if (fDebug10) LogPrintf("ThreadRPCServer started");
 
     strRPCUserColonPass = mapArgs["-rpcuser"] + ":" + mapArgs["-rpcpassword"];
     if ((mapArgs["-rpcpassword"] == "") ||
@@ -625,7 +625,7 @@ void ThreadRPCServer2(void* parg)
               "The username and password MUST NOT be the same.\n"
               "If the file does not exist, create it with owner-readable-only file permissions.\n"
               "It is also recommended to set alertnotify so you are notified of problems;\n"
-              "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
+              "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com"),
                 strWhatAmI,
                 GetConfigFile().string(),
                 EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
@@ -647,12 +647,12 @@ void ThreadRPCServer2(void* parg)
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
         if (filesystem::exists(pathCertFile)) context.use_certificate_chain_file(pathCertFile.string());
-        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
+        else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
         if (filesystem::exists(pathPKFile)) context.use_private_key_file(pathPKFile.string(), ssl::context::pem);
-        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
+        else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
         SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
@@ -765,7 +765,7 @@ void JSONRequest::parse(const UniValue& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Method must be a string");
     strMethod = valMethod.get_str();
     if (strMethod != "getwork" && strMethod != "getblocktemplate")
-        if (fDebug10) LogPrintf("ThreadRPCServer method=%s\n", strMethod);
+        if (fDebug10) LogPrintf("ThreadRPCServer method=%s", strMethod);
 
     // Parse params
     UniValue valParams = find_value(request, "params");
@@ -835,7 +835,7 @@ void ServiceConnection(AcceptedConnection *conn)
         }
         if (!HTTPAuthorized(mapHeaders))
         {
-            LogPrintf("ThreadRPCServer incorrect password attempt from %s\n", conn->peer_address_to_string());
+            LogPrintf("ThreadRPCServer incorrect password attempt from %s", conn->peer_address_to_string());
             /* Deter brute-forcing short passwords.
                If this results in a DOS the user really
                shouldn't have their RPC port exposed.*/
@@ -913,7 +913,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
             nRPCtimebegin = GetTimeMillis();
             result = pcmd->actor(params, false);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
+            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod, nRPCtimetotal);
         }
         else
             result = pcmd->actor(params, false);
@@ -942,7 +942,7 @@ int main(int argc, char *argv[])
     {
         if (argc >= 2 && string(argv[1]) == "-server")
         {
-            LogPrintf("server ready\n");
+            LogPrintf("server ready");
             ThreadRPCServer(NULL);
         }
         else

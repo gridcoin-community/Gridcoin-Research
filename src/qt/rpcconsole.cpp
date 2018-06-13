@@ -185,7 +185,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (UniValue& objError)
     {
-		LogPrintf("gridcoinresearch:  Handling Error [Request %s]...\n",command.toStdString());
+		LogPrintf("gridcoinresearch:  Handling Error [Request %s]...",command.toStdString());
 
         try // Nice formatting for standard-format error
         {
@@ -200,7 +200,7 @@ void RPCExecutor::request(const QString &command)
     }
     catch (std::exception& e)
     {
-		LogPrintf("gridcoinresearch:  Handling Error[2]...\n");
+		LogPrintf("gridcoinresearch:  Handling Error[2]...");
 
         emit reply(RPCConsole::CMD_ERROR, QString("Error: ") + QString::fromStdString(e.what()));
     }

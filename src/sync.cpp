@@ -12,8 +12,8 @@
 #ifdef DEBUG_LOCKCONTENTION
 void PrintLockContention(const char* pszName, const char* pszFile, int nLine)
 {
-    LogPrintf("LOCKCONTENTION: %s\n", pszName);
-    LogPrintf("Locker: %s:%d\n", pszFile, nLine);
+    LogPrintf("LOCKCONTENTION: %s", pszName);
+    LogPrintf("Locker: %s:%d", pszFile, nLine);
 }
 #endif /* DEBUG_LOCKCONTENTION */
 
@@ -72,8 +72,8 @@ static thread_local std::unique_ptr<LockStack> lockstack;
 
 static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch, const LockStack& s1, const LockStack& s2)
 {
-    LogPrintf("POTENTIAL DEADLOCK DETECTED\n");
-    LogPrintf("Previous lock order was:\n");
+    LogPrintf("POTENTIAL DEADLOCK DETECTED");
+    LogPrintf("Previous lock order was:");
     for (const std::pair<void*, CLockLocation> & i : s2) {
         if (i.first == mismatch.first) {
             LogPrintf(" (1)");
@@ -81,9 +81,9 @@ static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch,
         if (i.first == mismatch.second) {
             LogPrintf(" (2)");
         }
-        LogPrintf(" %s\n", i.second.ToString());
+        LogPrintf(" %s", i.second.ToString());
     }
-    LogPrintf("Current lock order is:\n");
+    LogPrintf("Current lock order is:");
     for (const std::pair<void*, CLockLocation> & i : s1) {
         if (i.first == mismatch.first) {
             LogPrintf(" (1)");
@@ -91,7 +91,7 @@ static void potential_deadlock_detected(const std::pair<void*, void*>& mismatch,
         if (i.first == mismatch.second) {
             LogPrintf(" (2)");
         }
-        LogPrintf(" %s\n", i.second.ToString());
+        LogPrintf(" %s", i.second.ToString());
     }
     assert(false);
 }
@@ -140,7 +140,7 @@ std::string LocksHeld()
 {
     std::string result;
     for (const std::pair<void*, CLockLocation> & i : *lockstack)
-        result += i.second.ToString() + std::string("\n");
+        result += i.second.ToString() + std::string("");
     return result;
 }
 

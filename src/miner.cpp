@@ -54,10 +54,10 @@ public:
 
     void print() const
     {
-        LogPrintf("COrphan(hash=%s, dPriority=%.1f, dFeePerKb=%.1f)\n",
+        LogPrintf("COrphan(hash=%s, dPriority=%.1f, dFeePerKb=%.1f)",
                ptx->GetHash().ToString().substr(0,10), dPriority, dFeePerKb);
         for (auto const& hash : setDependsOn)
-            LogPrintf("   setDependsOn %s\n", hash.ToString().substr(0,10));
+            LogPrintf("   setDependsOn %s", hash.ToString().substr(0,10));
     }
 };
 
@@ -224,7 +224,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
                     // or other transactions in the memory pool.
                     if (!mempool.mapTx.count(txin.prevout.hash))
                     {
-                        LogPrintf("ERROR: mempool transaction missing input\n");
+                        LogPrintf("ERROR: mempool transaction missing input");
                         if (fDebug) assert("mempool transaction missing input" == 0);
                         fMissingInputs = true;
                         if (porphan)
@@ -294,11 +294,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
             // Size limits
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
-            if (fDebug10) LogPrintf("Tx Size for %s  %f",tx.GetHash().GetHex(), (double)nTxSize);
 
             if (nBlockSize + nTxSize >= nBlockMaxSize)
             {
-                if (fDebug10) LogPrintf("Tx size too large for tx %s  blksize %f , tx siz %f",tx.GetHash().GetHex().c_str(),(double)nBlockSize,(double)nTxSize);
+                LogPrintf("Tx size too large for tx %s blksize %" PRIu64 ", tx size %" PRId64, tx.GetHash().GetHex(), nBlockSize, nTxSize);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":SizeTooLarge("
                     + ToString(nBlockSize) + "," + ToString(nTxSize) + ")("
                     + ToString(nBlockSize) + ");";
@@ -356,7 +355,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             int64_t nTxFees = tx.GetValueIn(mapInputs)-tx.GetValueOut();
             if (nTxFees < nMinFee)
             {
-                if (fDebug10) LogPrintf("Not including tx %s  due to TxFees of %f ; bare min fee is %f", tx.GetHash().GetHex(), (double)nTxFees, (double)nMinFee);
+                if (fDebug10) LogPrintf("Not including tx %s  due to TxFees of %" PRId64 ", bare min fee is %" PRId64, tx.GetHash().GetHex(), nTxFees, nMinFee);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":FeeTooSmall("
                     + RoundToString(CoinToDouble(nFees),8) + "," +RoundToString(CoinToDouble(nMinFee),8) + ");";
                 continue;
@@ -365,8 +364,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
             nTxSigOps += tx.GetP2SHSigOpCount(mapInputs);
             if (nBlockSigOps + nTxSigOps >= MAX_BLOCK_SIGOPS)
             {
-                if (fDebug10) LogPrintf("Not including tx %s  due to exceeding max sigops of %f ; sigops is %f",
-                    tx.GetHash().GetHex(), (double)(nBlockSigOps+nTxSigOps), (double)MAX_BLOCK_SIGOPS);
+                if (fDebug10) LogPrintf("Not including tx %s due to exceeding max sigops of %d, sigops is %d",
+                    tx.GetHash().GetHex(), (nBlockSigOps+nTxSigOps), MAX_BLOCK_SIGOPS);
                 msMiningErrorsExcluded += tx.GetHash().GetHex() + ":ExceededSigOps("
                     + ToString(nBlockSigOps) + "," + ToString(nTxSigOps) + ")("
                     + ToString(MAX_BLOCK_SIGOPS) + ");";
@@ -393,7 +392,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
             if (fDebug10 || GetBoolArg("-printpriority"))
             {
-                LogPrintf("priority %.1f feeperkb %.1f txid %s\n",
+                LogPrintf("priority %.1f feeperkb %.1f txid %s",
                        dPriority, dFeePerKb, tx.GetHash().ToString());
             }
 
@@ -417,7 +416,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
         }
 
         if (fDebug10 || GetBoolArg("-printpriority"))
-            LogPrintf("CreateNewBlock(): total size %" PRIu64 "\n", nBlockSize);
+            LogPrintf("CreateNewBlock(): total size %" PRIu64 "", nBlockSize);
     }
 
     //Add fees to coinbase
@@ -469,7 +468,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     }
     BalanceToStake -= nReserveBalance;
 
-    if(fDebug2) LogPrintf("\nCreateCoinStake: Staking nTime/16= %d Bits= %u",
+    if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
 
     for(const auto& pcoin : CoinsToStake)
@@ -541,7 +540,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 " RSA_WEIGHT %.f\n"
 " Stk %72s\n"
 " Trg %72s\n"
-" Diff %0.7f of %0.7f\n",
+" Diff %0.7f of %0.7f",
             blocknew.nVersion,
             (double)txnew.nTime, mdPORNonce,
             (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
@@ -554,7 +553,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         if( StakeKernelHash <= StakeTarget )
         {
             // Found a kernel
-            LogPrintf("\nCreateCoinStake: Found Kernel;\n");
+            LogPrintf("CreateCoinStake: Found Kernel;");
             blocknew.nNonce= mdPORNonce;
             vector<valtype> vSolutions;
             txnouttype whichType;
@@ -563,7 +562,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             scriptPubKeyKernel = CoinTx.vout[CoinTxN].scriptPubKey;
             if (!Solver(scriptPubKeyKernel, whichType, vSolutions))
             {
-                LogPrintf("CreateCoinStake: failed to parse kernel\n");
+                LogPrintf("CreateCoinStake: failed to parse kernel");
                 break;
             }
             if (whichType == TX_PUBKEYHASH) // pay to address type
@@ -571,7 +570,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                 // convert to pay to public key type
                 if (!wallet.GetKey(uint160(vSolutions[0]), key))
                 {
-                    LogPrintf("CreateCoinStake: failed to get key for kernel type=%d\n", whichType);
+                    LogPrintf("CreateCoinStake: failed to get key for kernel type=%d", whichType);
                     break;  // unable to find corresponding public key
                 }
                 scriptPubKeyOut << key.GetPubKey() << OP_CHECKSIG;
@@ -582,7 +581,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                 if (!wallet.GetKey(Hash160(vchPubKey), key)
                     || key.GetPubKey() != vchPubKey)
                 {
-                    LogPrintf("CreateCoinStake: failed to get key for kernel type=%d\n", whichType);
+                    LogPrintf("CreateCoinStake: failed to get key for kernel type=%d", whichType);
                     break;  // unable to find corresponding public key
                 }
 
@@ -590,7 +589,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             }
             else
             {
-                LogPrintf("CreateCoinStake: no support for kernel type=%d\n", whichType);
+                LogPrintf("CreateCoinStake: no support for kernel type=%d", whichType);
                 break;  // only support pay to public key and pay to address
             }
 
@@ -604,7 +603,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             txnew.vout.push_back(CTxOut(nCredit, scriptPubKeyOut));
             //txnew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
-            LogPrintf("CreateCoinStake: added kernel type=%d credit=%f\n", whichType,CoinToDouble(nCredit));
+            LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
             LOCK(MinerStatus.lock);
             MinerStatus.KernelsFound++;
@@ -637,13 +636,12 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sBoincSignature, sError);
         if (!bResult)
         {
-            return error("SignStakeBlock: Failed to sign boinchash -> %s\n", sError);
+            return error("SignStakeBlock: Failed to sign boinchash -> %s", sError);
         }
         BoincData.BoincSignature = sBoincSignature;
-        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s\n", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
+        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
-    //if (fDebug2)  LogPrintf("SignStakeBlock: %s\n",SerializedBoincData.c_str());
 
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -669,7 +667,7 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 {
     if(OutOfSyncByAge())
     {
-        LogPrintf("AddNeuralContractOrVote: Out Of Sync\n");
+        LogPrintf("AddNeuralContractOrVote: Out Of Sync");
         return;
     }
 
@@ -679,7 +677,7 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     if(sb_contract.empty())
     {
-        LogPrintf("AddNeuralContractOrVote: Local Contract Empty\n");
+        LogPrintf("AddNeuralContractOrVote: Local Contract Empty");
         return;
     }
 
@@ -693,20 +691,20 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
     {
-        LogPrintf("AddNeuralContractOrVote: Not Participating\n");
+        LogPrintf("AddNeuralContractOrVote: Not Participating");
         return;
     }
 
     if(blocknew.nVersion >= 9)
     {
         // break away from block timing
-        if (fDebug) LogPrintf("AddNeuralContractOrVote: Updating Neural Supermajority (v9 M) height %d\n",nBestHeight);
+        if (fDebug) LogPrintf("AddNeuralContractOrVote: Updating Neural Supermajority (v9 M) height %d",nBestHeight);
         ComputeNeuralNetworkSupermajorityHashes();
     }
 
     if(!NeedASuperblock())
     {
-        LogPrintf("AddNeuralContractOrVote: not Needed\n");
+        LogPrintf("AddNeuralContractOrVote: not Needed");
         return;
     }
 
@@ -714,11 +712,11 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     /* Add our Neural Vote */
     bb.NeuralHash = sb_hash;
-    LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s\n",sb_hash);
+    LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s",sb_hash);
 
     if (pending_height>=(pindexBest->nHeight-200))
     {
-        LogPrintf("AddNeuralContractOrVote: already Pending\n");
+        LogPrintf("AddNeuralContractOrVote: already Pending");
         return;
     }
 
@@ -727,13 +725,13 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
     if (consensus_hash!=sb_hash)
     {
-        LogPrintf("AddNeuralContractOrVote: not in Consensus\n");
+        LogPrintf("AddNeuralContractOrVote: not in Consensus");
         return;
     }
 
     /* We have consensus, Add our neural contract */
     bb.superblock = PackBinarySuperblock(sb_contract);
-    LogPrintf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")\n",bb.superblock.length());
+    LogPrintf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")",bb.superblock.length());
 
     return;
 }
@@ -795,7 +793,7 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     double PORDiff = GetBlockDifficulty(blocknew.nBits);
     double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
 
-    LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f \n",
+    LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f ",
         miningcpid.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 
     //INVESTORS
@@ -909,19 +907,19 @@ void StakeMiner(CWallet *pwallet)
         // * create rest of the block
         if( !CreateRestOfTheBlock(StakeBlock,pindexPrev) )
             continue;
-        LogPrintf("StakeMiner: created rest of the block\n");
+        LogPrintf("StakeMiner: created rest of the block");
 
         // * add gridcoin reward to coinstake
         if( !CreateGridcoinReward(StakeBlock,BoincData,StakeCoinAge,pindexPrev) )
             continue;
-        LogPrintf("StakeMiner: added gridcoin reward to coinstake\n");
+        LogPrintf("StakeMiner: added gridcoin reward to coinstake");
 
         AddNeuralContractOrVote(StakeBlock, BoincData);
 
         // * sign boinchash, coinstake, wholeblock
         if( !SignStakeBlock(StakeBlock,BlockKey,StakeInputs,pwallet,BoincData) )
             continue;
-        LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock\n");
+        LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
 
         { LOCK(MinerStatus.lock);
             MinerStatus.CreatedCnt++;
@@ -934,7 +932,7 @@ void StakeMiner(CWallet *pwallet)
             continue;
         }
 
-        LogPrintf("StakeMiner: block processed\n");
+        LogPrintf("StakeMiner: block processed");
         { LOCK(MinerStatus.lock);
             MinerStatus.AcceptedCnt++;
             nLastBlockSolved = GetAdjustedTime();

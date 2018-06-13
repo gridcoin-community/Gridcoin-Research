@@ -417,13 +417,6 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     entry.pushKV("time", (int)tx.nTime);
     entry.pushKV("locktime", (int)tx.nLockTime);
     entry.pushKV("hashboinc", tx.hashBoinc);
-    /*
-        if (tx.hashBoinc=="code")
-        {
-            LogPrintf("Executing .net code\n");
-            ExecuteCode();
-        }
-    */
 
     UniValue vin(UniValue::VARR);
     for (auto const& txin : tx.vin)
