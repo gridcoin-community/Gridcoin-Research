@@ -20,12 +20,12 @@ namespace
     }
 }
 
-bool GenerateBeaconKeys(const std::string &cpid, CKey outPrivPubKey)
+bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 {
     // Try to reuse 5-month-old beacon
     const std::string sBeaconPublicKey = GetBeaconPublicKey(cpid,false);
 
-    if(sBeaconPublicKey.empty())
+    if(!sBeaconPublicKey.empty())
     {
         CPubKey oldKey(ParseHex(sBeaconPublicKey));
         if(oldKey.IsValid())

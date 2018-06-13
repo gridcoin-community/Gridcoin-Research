@@ -15,3 +15,4 @@ struct StructCPID;
 class ThreadHandler;
 typedef std::shared_ptr<ThreadHandler> ThreadHandlerPtr;
 
+class CKey;

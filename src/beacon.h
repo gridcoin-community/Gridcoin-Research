@@ -5,7 +5,6 @@
 #pragma once
 
 #include "fwd.h"
-#include "key.h"
 #include <string>
 
 //!
@@ -21,7 +20,7 @@
 //! \param outPrivPubKey Generated or reused Private+public key
 //! \return \c false on failure
 //!
-bool GenerateBeaconKeys(const std::string &cpid, CKey outPrivPubKey);
+bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey);
 
 
 //!
