@@ -286,7 +286,7 @@ int CommandLineRPC(int argc, char *argv[])
             else if (result.isStr())
                 strPrint = result.get_str();
             else
-                strPrint = result.write();
+                strPrint = result.write(2);
         }
     }
     catch (std::exception& e)
