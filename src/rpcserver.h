@@ -17,8 +17,8 @@ class CBlockIndex;
 #include "util.h"
 #include "checkpoints.h"
 
+void StartRPCThreads();
 void StopRPCThreads();
-void ThreadRPCServer(void* parg);
 int CommandLineRPC(int argc, char *argv[]);
 
 /*
