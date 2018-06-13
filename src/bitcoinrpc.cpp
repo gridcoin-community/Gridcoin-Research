@@ -30,12 +30,12 @@ using namespace boost;
 using namespace boost::asio;
 using namespace json_spirit;
 
-void ThreadRPCServer2(void* parg);
-
 static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
 static asio::io_service* rpc_io_service = NULL;
+static ssl::context* rpc_ssl_context = NULL;
+static boost::thread_group* rpc_worker_group = NULL;
 
 const Object emptyobj;
 
@@ -656,21 +656,6 @@ static string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
                 strMsg);
 }
 
-int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
-{
-    string str;
-    getline(stream, str);
-    vector<string> vWords;
-    boost::split(vWords, str, boost::is_any_of(" "));
-    if (vWords.size() < 2)
-        return HTTP_INTERNAL_SERVER_ERROR;
-    proto = 0;
-    const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != NULL)
-        proto = atoi(ver+7);
-    return atoi(vWords[1].c_str());
-}
-
 int ReadHTTPHeader(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
 {
     int nLen = 0;
@@ -696,17 +681,90 @@ int ReadHTTPHeader(std::basic_istream<char>& stream, map<string, string>& mapHea
     return nLen;
 }
 
-int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet, string& strMessageRet)
+bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
+                         string& http_method, string& http_uri)
+{
+    string str;
+    getline(stream, str);
+
+    // HTTP request line is space-delimited
+    vector<string> vWords;
+    boost::split(vWords, str, boost::is_any_of(" "));
+    if (vWords.size() < 2)
+        return false;
+
+    // HTTP methods permitted: GET, POST
+    http_method = vWords[0];
+    if (http_method != "GET" && http_method != "POST")
+        return false;
+
+    // HTTP URI must be an absolute path, relative to current host
+    http_uri = vWords[1];
+    if (http_uri.size() == 0 || http_uri[0] != '/')
+        return false;
+
+    // parse proto, if present
+    string strProto = "";
+    if (vWords.size() > 2)
+        strProto = vWords[2];
+
+    proto = 0;
+    const char *ver = strstr(strProto.c_str(), "HTTP/1.");
+    if (ver != NULL)
+        proto = atoi(ver+7);
+
+    return true;
+}
+
+int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
+{
+    string str;
+    getline(stream, str);
+    vector<string> vWords;
+    boost::split(vWords, str, boost::is_any_of(" "));
+    if (vWords.size() < 2)
+        return HTTP_INTERNAL_SERVER_ERROR;
+    proto = 0;
+    const char *ver = strstr(str.c_str(), "HTTP/1.");
+    if (ver != NULL)
+        proto = atoi(ver+7);
+    return atoi(vWords[1].c_str());
+}
+
+int ReadHTTPHeaders(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
+{
+    int nLen = 0;
+    while (true)
+    {
+        string str;
+        std::getline(stream, str);
+        if (str.empty() || str == "\r")
+            break;
+        string::size_type nColon = str.find(":");
+        if (nColon != string::npos)
+        {
+            string strHeader = str.substr(0, nColon);
+            boost::trim(strHeader);
+            boost::to_lower(strHeader);
+            string strValue = str.substr(nColon+1);
+            boost::trim(strValue);
+            mapHeadersRet[strHeader] = strValue;
+            if (strHeader == "content-length")
+                nLen = atoi(strValue.c_str());
+        }
+    }
+    return nLen;
+}
+
+int ReadHTTPMessage(std::basic_istream<char>& stream, map<string,
+                    string>& mapHeadersRet, string& strMessageRet,
+                    int nProto)
 {
     mapHeadersRet.clear();
     strMessageRet = "";
 
-    // Read status
-    int nProto = 0;
-    int nStatus = ReadHTTPStatus(stream, nProto);
-
     // Read header
-    int nLen = ReadHTTPHeader(stream, mapHeadersRet);
+    int nLen = ReadHTTPHeaders(stream, mapHeadersRet);
     if (nLen < 0 || nLen > (int)MAX_SIZE)
         return HTTP_INTERNAL_SERVER_ERROR;
 
@@ -728,9 +786,8 @@ int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRe
             mapHeadersRet["connection"] = "close";
     }
 
-    return nStatus;
+    return HTTP_OK;
 }
-
 bool HTTPAuthorized(map<string, string>& mapHeaders)
 {
     string strAuth = mapHeaders["authorization"];
@@ -914,39 +971,6 @@ private:
 
 void ServiceConnection(AcceptedConnection *conn);
 
-void StopRPCThreads()
-{
-    LogPrintf("Stop RPC IO service\n");
-    if(!rpc_io_service)
-    {
-        LogPrintf("RPC IO server not started\n");
-        return;
-    }
-
-    rpc_io_service->stop();
-}
-
-void ThreadRPCServer(void* parg)
-{
-    // Make this thread recognisable as the RPC listener
-    RenameThread("grc-rpclist");
-
-    try
-    {
-        ThreadRPCServer2(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadRPCServer()");
-    }
-    catch (boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
-        return;
-    }
-    LogPrintf("ThreadRPCServer exited\n");
-}
-
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
@@ -1013,7 +1037,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     delete conn;
 }
 
-void ThreadRPCServer2(void* parg)
+void StartRPCThreads()
 {
     if (fDebug10) LogPrintf("ThreadRPCServer started\n");
 
@@ -1050,24 +1074,24 @@ void ThreadRPCServer2(void* parg)
 
     assert(rpc_io_service == NULL);
     rpc_io_service = new asio::io_service();
+    rpc_ssl_context = new ssl::context(*rpc_io_service, ssl::context::sslv23);
 
-    ssl::context context(ssl::context::sslv23);
     if (fUseSSL)
     {
-        context.set_options(ssl::context::no_sslv2);
+        rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
-        if (filesystem::exists(pathCertFile)) context.use_certificate_chain_file(pathCertFile.string());
+        if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
-        if (filesystem::exists(pathPKFile)) context.use_private_key_file(pathPKFile.string(), ssl::context::pem);
+        if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
+        SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
@@ -1076,8 +1100,6 @@ void ThreadRPCServer2(void* parg)
     ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
     boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
-
-    boost::signals2::signal<void ()> StopRequests;
 
     bool fListening = false;
     std::string strerr;
@@ -1092,11 +1114,7 @@ void ThreadRPCServer2(void* parg)
         acceptor->bind(endpoint);
         acceptor->listen(socket_base::max_connections);
 
-        RPCListen(acceptor, context, fUseSSL);
-        // Cancel outstanding listen-requests for this acceptor when shutting down
-        StopRequests.connect(signals2::slot<void ()>(
-                                 static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                             .track(acceptor));
+        RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
         fListening = true;
     }
@@ -1119,11 +1137,7 @@ void ThreadRPCServer2(void* parg)
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_connections);
 
-            RPCListen(acceptor, context, fUseSSL);
-            // Cancel outstanding listen-requests for this acceptor when shutting down
-            StopRequests.connect(signals2::slot<void ()>(
-                                     static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                                 .track(acceptor));
+            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
             fListening = true;
         }
@@ -1139,13 +1153,31 @@ void ThreadRPCServer2(void* parg)
         StartShutdown();
         return;
     }
+    
+    rpc_worker_group = new boost::thread_group();
+    for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
+        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+}
 
-    while (!fShutdown)
-        rpc_io_service->run_one();
+void StopRPCThreads()
+{
+    LogPrintf("Stop RPC IO service\n");
+    if(!rpc_io_service)
+    {
+        LogPrintf("RPC IO server not started\n");
+        return;
+    }
 
+    rpc_io_service->stop();
+    if (rpc_worker_group != NULL)
+        rpc_worker_group->join_all();
+    
+    delete rpc_worker_group;
+    rpc_worker_group = NULL;
+    delete rpc_ssl_context;
+    rpc_ssl_context = NULL;
     delete rpc_io_service;
     rpc_io_service = NULL;
-    StopRequests();
 }
 
 class JSONRequest
@@ -1225,19 +1257,24 @@ static string JSONRPCExecBatch(const Array& vReq)
 
 void ServiceConnection(AcceptedConnection *conn)
 {
-    // Make this thread recognisable as the RPC handler
-    RenameThread("grc-rpchand");
-
     bool fRun = true;
-    while (true)
+    while (fRun && !fShutdown)
     {
-        if (fShutdown || !fRun)
+        int nProto = 0;
+        map<string, string> mapHeaders;
+        string strRequest, strMethod, strURI;
+
+        // Read HTTP request line
+        if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
             break;
 
-        map<string, string> mapHeaders;
-        string strRequest;
+        // Read HTTP message headers and body
+        ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto);
 
-        ReadHTTP(conn->stream(), mapHeaders, strRequest);
+        if (strURI != "/") {
+            conn->stream() << HTTPReply(HTTP_NOT_FOUND, "", false) << std::flush;
+            break;
+        }
 
         // Check authorization
         if (mapHeaders.count("authorization") == 0)
@@ -1306,31 +1343,26 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
     const CRPCCommand *pcmd = tableRPC[strMethod];
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
-
+    
     // Observe safe mode
     string strWarning = GetWarnings("rpc");
     if (strWarning != "" && !GetBoolArg("-disablesafemode") &&
         !pcmd->okSafeMode)
         throw JSONRPCError(RPC_FORBIDDEN_BY_SAFE_MODE, string("Safe mode: ") + strWarning);
-
+    
     // Lets add a optional debug4 to display how long it takes the rpc commands to be performed in ms
     // We will do this only on successful calls not exceptions
     try
-    {
-        Value result;
-
+    {           
         if (fDebug4)
-        {
-            int64_t nRPCtimebegin;
-            int64_t nRPCtimetotal;
-            nRPCtimebegin = GetTimeMillis();
-            result = pcmd->actor(params, false);
-            nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-            printf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
-        }
-        else
-            result = pcmd->actor(params, false);
-
+            LogPrintf("Serving RPC call %s", strMethod);                        
+        
+        int64_t nRPCtimebegin = GetTimeMillis();
+        Value result = pcmd->actor(params, false);
+        
+        if (fDebug4)
+            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod, GetTimeMillis() - nRPCtimebegin);
+        
         return result;
     }
     catch (std::exception& e)
@@ -1368,10 +1400,15 @@ Object CallRPC(const string& strMethod, const Array& params)
     string strPost = HTTPPost(strRequest, mapRequestHeaders);
     stream << strPost << std::flush;
 
-    // Receive reply
+    // Receive HTTP reply status
+    int nProto = 0;
+    int nStatus = ReadHTTPStatus(stream, nProto);
+    
+    // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
-    int nStatus = ReadHTTP(stream, mapHeaders, strReply);
+    ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
+    
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");
     else if (nStatus >= 400 && nStatus != HTTP_BAD_REQUEST && nStatus != HTTP_NOT_FOUND && nStatus != HTTP_INTERNAL_SERVER_ERROR)

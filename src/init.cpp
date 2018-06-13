@@ -216,6 +216,7 @@ std::string HelpMessage()
         "  -rpcport=<port>        " + _("Listen for JSON-RPC connections on <port> (default: 15715 or testnet: 25715)") + "\n" +
         "  -rpcallowip=<ip>       " + _("Allow JSON-RPC connections from specified IP address") + "\n" +
         "  -rpcconnect=<ip>       " + _("Send commands to node running on <ip> (default: 127.0.0.1)") + "\n" +
+        "  -rpcthreads=<n>        " + _("Set the number of threads to service RPC calls (default: 4)") + "\n" +
         "  -blocknotify=<cmd>     " + _("Execute command when the best block changes (%s in cmd is replaced by block hash)") + "\n" +
         "  -walletnotify=<cmd>    " + _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)") + "\n" +
         "  -confchange            " + _("Require a confirmations for change (default: 0)") + "\n" +
@@ -431,10 +432,11 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogPrintf("Entering GRC debug mode 3.\n");
     }
 
-    fDebug4 = GetBoolArg("-debug4");
-
-    if (fDebug4)
-        printf("Entering RPC time debug mode\r\n");
+    if (GetArg("-debug4", "false")=="true")
+    {
+        fDebug4 = true;
+        LogPrintf("Entering RPC time debug mode");
+    }
 
     fDebug10= (GetArg("-debug10","false")=="true");
 
@@ -931,7 +933,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         InitError(_("Error: could not start node"));
 
     if (fServer)
-        threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");
+        StartRPCThreads();
 
     // ********************************************************* Step 12: finished
 
