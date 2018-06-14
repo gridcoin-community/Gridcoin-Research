@@ -2,11 +2,6 @@
 #include "util.h"
 
 #include <boost/filesystem.hpp>
-#ifdef WIN32
-#include <windows.h>
-#define KEY_WOW64_64KEY 0x0100
-#endif
-
 
 std::string GetBoincDataDir(){
 

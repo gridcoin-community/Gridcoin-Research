@@ -3,18 +3,18 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "util.h"
+#include "net.h"
 #include "alert.h"
 #include "checkpoints.h"
 #include "db.h"
 #include "txdb.h"
-#include "net.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "kernel.h"
 #include "block.h"
 #include "scrypt.h"
 #include "global_objects_noui.hpp"
-#include "util.h"
 #include "cpid.h"
 #include "rpcserver.h"
 #include "rpcclient.h"

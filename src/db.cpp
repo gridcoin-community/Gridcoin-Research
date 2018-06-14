@@ -5,9 +5,10 @@
 
 #include "db.h"
 #include "net.h"
-#include "util.h"
 #include "main.h"
 #include "ui_interface.h"
+#include "util.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <stdint.h>

@@ -4,12 +4,12 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "util.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "rpcprotocol.h"
 #include "base58.h"
 #include "db.h"
+#include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>

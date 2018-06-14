@@ -1,8 +1,8 @@
 #include "transactiondescdialog.h"
+#include "transactiontablemodel.h"
 #include "ui_transactiondescdialog.h"
 #include "main.h"
 #include "util.h"
-#include "transactiontablemodel.h"
 #include <QMessageBox>
 #include <QModelIndex>
 

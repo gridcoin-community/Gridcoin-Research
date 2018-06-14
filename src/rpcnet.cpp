@@ -2,13 +2,13 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "net.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "alert.h"
 #include "wallet.h"
 #include "db.h"
 #include "walletdb.h"
+#include "net.h"
 
 using namespace std;
 extern std::string NeuralRequest(std::string MyNeuralRequest);

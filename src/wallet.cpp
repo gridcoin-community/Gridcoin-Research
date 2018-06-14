@@ -18,11 +18,11 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "util.h"
 #include "grcrestarter.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
 #include "main.h"
+#include "util.h"
 
 using namespace std;
 

@@ -15,10 +15,10 @@
 
 #include "kernel.h"
 #include "txdb.h"
-#include "util.h"
 #include "main.h"
 #include "block.h"
 #include "ui_interface.h"
+#include "util.h"
 
 using namespace std;
 using namespace boost;

@@ -12,7 +12,6 @@
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "util.h"
 #include "neuralnet.h"
 #include "grcrestarter.h"
 #include "backup.h"
@@ -20,6 +19,7 @@
 #include "tally.h"
 #include "contract/polls.h"
 #include "contract/contract.h"
+#include "util.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>

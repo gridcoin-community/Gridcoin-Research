@@ -1,7 +1,7 @@
 #include "main.h"
-#include "util.h"
 #include "boinc.h"
 #include "appcache.h"
+#include "util.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
