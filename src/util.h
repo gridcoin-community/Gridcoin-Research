@@ -9,14 +9,6 @@
 #include "uint256.h"
 #include "fwd.h"
 
-#ifndef WIN32
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#else
-#include <windows.h> // For LARGE_INTEGER
-#endif
-
 #include <map>
 #include <vector>
 #include <string>
@@ -33,9 +25,16 @@
 #include <openssl/sha.h>
 #include <openssl/ripemd.h>
 
+#include <compat.h>
 #include "fwd.h"
 #include "serialize.h"
 #include "tinyformat.h"
+
+#ifndef WIN32
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
 
 // to obtain PRId64 on some old systems
 #define __STDC_FORMAT_MACROS 1

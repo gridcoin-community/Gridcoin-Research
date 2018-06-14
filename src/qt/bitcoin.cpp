@@ -11,11 +11,12 @@
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
-#include "util.h"
 #include "guiconstants.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "qtipcserver.h"
+#include "util.h"
+
 #include <QMessageBox>
 #include <QTextCodec>
 #include <QLocale>

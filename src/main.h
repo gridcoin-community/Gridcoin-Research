@@ -5,11 +5,11 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
-#include "sync.h"
+#include "util.h"
 #include "net.h"
+#include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "util.h"
 
 #include "global_objects_noui.hpp"
 

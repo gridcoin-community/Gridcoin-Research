@@ -8,11 +8,11 @@
 #include "miner.h"
 #include "kernel.h"
 #include "cpid.h"
-#include "util.h"
 #include "main.h"
 #include "appcache.h"
 #include "neuralnet.h"
 #include "contract/contract.h"
+#include "util.h"
 
 #include <memory>
 
