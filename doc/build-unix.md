@@ -221,7 +221,7 @@ wget http://download.oracle.com/berkeley-db/db-4.8.30.NC.tar.gz
 tar -xzvf db-4.8.30.NC.tar.gz
 cd db-4.8.30.NC/build_unix
 ../dist/configure --enable-cxx
-make -j4
+make -j4 #-jX is optional, using X threads/CPU cores. In my case, a Raspberry 3B+, I have 4 cores
 sudo make install
 export BDB_INCLUDE_PATH="/usr/local/BerkeleyDB.4.8/include"
 export BDB_LIB_PATH="/usr/local/BerkeleyDB.4.8/lib"
@@ -229,9 +229,10 @@ ln -s /usr/local/BerkeleyDB.4.8/lib/libdb-4.8.so /usr/lib/libdb-4.8.so
 ```
 Compile with the following commands. The ./configure flags are set your system that it should use less memory to compile than usual and that you have BerkeleyDB 4.8.
 ```bash
+cd ~/Gridcoin-Research/
 ./autogen.sh
  ./configure CXXFLAGS="--param ggc-min-expand=1 --param ggc-min-heapsize=32768" CPPFLAGS="-I/usr/local/BerkeleyDB.4.8/include -O2" LDFLAGS="-L/usr/local/BerkeleyDB.4.8/lib"
-make -j4
+make -j4 #-jX is optional, using X threads/CPU cores. In my case, a Raspberry 3B+, I have 4 cores
 sudo make install
 ```
 
