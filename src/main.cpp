@@ -2139,8 +2139,12 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             if (pindexLast->nVersion>=10)
             {
                 AppCacheEntry oCBReward= ReadCache("protocol","blockreward1");
-                int64_t nCBReward = atoi64(oCBReward.value);
-                nInterest= nCBReward;
+                //TODO: refactor the expire checking to subroutine
+                //Note: time constant is same as GetBeaconPublicKey
+                if( (pindexLast->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
+                {
+                    nInterest= atoi64(oCBReward.value);
+                }
             }
             else
             {
