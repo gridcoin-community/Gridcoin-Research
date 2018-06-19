@@ -146,7 +146,7 @@ $(BITCOIND_BIN): FORCE
 	$(MAKE) -C src $(@F)
 
 if USE_LCOV
-LCOV_FILTER_PATTERN=-p "/usr/include/" -p "src/leveldb/" -p "src/secp256k1"
+LCOV_FILTER_PATTERN=-p "/usr/include/" -p "src/leveldb/" -p "src/univalue"
 
 baseline.info:
 	$(LCOV) -c -i -d $(abs_builddir)/src -o $@

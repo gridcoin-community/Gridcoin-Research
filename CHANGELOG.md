@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.13.0] 2018-06-02, leisure
+### Fixed
+ - Fix voting regression when done from the UI, #1133 (@Foggyx420).
+
 ## [3.7.12.0] 2018-05-25, leisure
 
 ### Fixed

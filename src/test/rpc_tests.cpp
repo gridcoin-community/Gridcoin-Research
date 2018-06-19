@@ -3,19 +3,21 @@
 
 #include "base58.h"
 #include "util.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
+#include "rpcprotocol.h"
+#include <univalue.h>
 
 using namespace std;
-using namespace json_spirit;
 
 BOOST_AUTO_TEST_SUITE(rpc_tests)
 
-static Array
+static UniValue
 createArgs(int nRequired, const char* address1=NULL, const char* address2=NULL)
 {
-    Array result;
+    UniValue result(UniValue::VARR);
     result.push_back(nRequired);
-    Array addresses;
+    UniValue addresses(UniValue::VARR);
     if (address1) addresses.push_back(address1);
     if (address2) addresses.push_back(address2);
     result.push_back(addresses);
@@ -31,7 +33,7 @@ BOOST_AUTO_TEST_CASE(rpc_addmultisig)
     // new, compressed:
     const char address2Hex[] = "0388c2037017c62240b6b72ac1a2a5f94da790596ebd06177c8572752922165cb4";
 
-    Value v;
+    UniValue v;
     CBitcoinAddress address;
     BOOST_CHECK_NO_THROW(v = addmultisig(createArgs(1, address1Hex), false));
     address.SetString(v.get_str());

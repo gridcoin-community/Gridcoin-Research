@@ -25,6 +25,7 @@
 
 #include <winsock2.h>
 #include <mswsock.h>
+#include <windows.h>
 #include <ws2tcpip.h>
 #else
 #include <sys/types.h>
@@ -35,10 +36,9 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
-
+#include <unistd.h>
 typedef u_int SOCKET;
 #endif
-
 
 #ifdef WIN32
 #define MSG_NOSIGNAL        0
