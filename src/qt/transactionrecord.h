@@ -5,6 +5,11 @@
 
 #include <QList>
 
+// Workaround for Windows #define:ing SendMessage to SendMessageW.
+#if defined(SendMessage)
+#undef SendMessage
+#endif
+
 class CWallet;
 class CWalletTx;
 
