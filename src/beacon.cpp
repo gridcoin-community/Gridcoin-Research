@@ -35,13 +35,13 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
         fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError, true);
         if (!fResult)
         {
-            LogPrintf("GenerateNewKeyPair::Failed to sign block with cpid -> %s", sError);
+            LogPrintf("GenerateBeaconKey::Failed to sign block with cpid -> %s", sError);
             return false;
         }
         fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
         if (fResult)
         {
-            LogPrintf("GenerateNewKeyPair::Current keypair is valid.");
+            LogPrintf("GenerateBeaconKey::Current keypair is valid.");
             return false;
         }
     }
