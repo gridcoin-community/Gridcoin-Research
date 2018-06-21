@@ -880,7 +880,12 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
                 return false;
             }
             // Backup config with new keys with beacon suffix
-            StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+            if (!StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey))
+            {
+                sError = "Failed to store keys in configuration file. Beacon not sent.";
+                return false;
+            }
+            // Since keys successfully stored; backup the new beacon config
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
             {
                 sError = "Failed to back up configuration file. Beacon not sent, please manually roll back to previous configuration.";
