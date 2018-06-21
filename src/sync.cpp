@@ -140,7 +140,7 @@ std::string LocksHeld()
 {
     std::string result;
     for (const std::pair<void*, CLockLocation> & i : *lockstack)
-        result += i.second.ToString() + std::string("");
+        result += i.second.ToString() + std::string("\n");
     return result;
 }
 
