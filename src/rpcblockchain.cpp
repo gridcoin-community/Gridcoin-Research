@@ -854,7 +854,13 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             return false;
         }
 
-        GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+        if (!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey))
+        {
+            sError = "Failed to generate beacon keys. See debug.log or GenerateBeaconKeys.";
+            return false;
+        }
+
+        // Verify the Private key and Public Key are not empty after success of generating beacon keys
         if (sOutPrivKey.empty() || sOutPubKey.empty())
         {
             sError = "Keypair is empty.";
