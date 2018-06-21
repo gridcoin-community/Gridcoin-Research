@@ -56,13 +56,18 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
     return true;
 }
 
-void StoreBeaconKeys(
+bool StoreBeaconKeys(
         const std::string &cpid,
         const std::string &pubKey,
         const std::string &privKey)
 {
-    WriteKey("publickey" + cpid + GetNetSuffix(), pubKey);
-    WriteKey("privatekey" + cpid + GetNetSuffix(), privKey);
+    if (   !WriteKey("publickey" + cpid + GetNetSuffix(), pubKey)
+        || !WriteKey("privatekey" + cpid + GetNetSuffix(), privKey)
+       )
+        return false;
+
+    else
+        return true;
 }
 
 std::string GetStoredBeaconPrivateKey(const std::string& cpid)
