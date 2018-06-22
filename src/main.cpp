@@ -1964,7 +1964,7 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
     //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
     int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
-        LogPrintf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64 "", FormatMoney(nSubsidy), nSubsidy);
+        LogPrintf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64, FormatMoney(nSubsidy), nSubsidy);
     if (nSubsidy < (30*COIN)) nSubsidy=30*COIN;
     //Gridcoin Foundation Block:
     if (height==10)
@@ -2388,6 +2388,7 @@ bool CheckProofOfResearch(
 
     if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
     {
+        if(fDebug) LogPrintf("CheckProofOfResearch: pHistorical was %s", GetHistoricalMagnitude(bb.cpid)->GetBlockHash().GetHex());
         return block.DoS(10,error("CheckProofOfResearch: Researchers Reward Pays too much : "
                             "claimed %f vs calculated %f for CPID %s",
                             bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() ));
@@ -4074,7 +4075,7 @@ bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
     if (nCoinAge == 0) // block coin age minimum 1 coin-day
         nCoinAge = 1;
     if (fDebug && GetBoolArg("-printcoinage"))
-        LogPrintf("block coin age total nCoinDays=%" PRIu64 "", nCoinAge);
+        LogPrintf("block coin age total nCoinDays=%" PRIu64, nCoinAge);
     return true;
 }
 
@@ -5310,8 +5311,8 @@ bool WriteKey(std::string sKey, std::string sValue)
                     fWritten=true;
                 }
             }
-            sLine = strReplace(sLine,"\r","");
-            sLine = strReplace(sLine,"","");
+            sLine = strReplace(sLine, "\r", "");
+            sLine = strReplace(sLine, "\n", "");
             sLine += "\n";
             sConfig += sLine;
        }
@@ -7624,12 +7625,15 @@ bool ProjectIsValid(std::string sProject)
 
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
 {
-  size_t pos = 0;
-  while((pos = str.find(oldStr, pos)) != std::string::npos){
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
+    assert(oldStr.empty() == false && "Cannot replace an empty string");
+
+    size_t pos = 0;
+    while((pos = str.find(oldStr, pos)) != std::string::npos)
+    {
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+    return str;
 }
 
 std::string LowerUnderscore(std::string data)
@@ -8437,15 +8441,12 @@ double GRCMagnitudeUnit(int64_t locktime)
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
-    if(fDebug && !bVerifyingBlock) LogPrintf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)", cpid, pindexLast->GetBlockHash().GetHex(), pindexLast->nHeight, pindexBest->nHeight);
     if(pindexLast->nVersion>=9)
     {
         // Bugfix for newbie rewards always being around 1 GRC
         dMagnitudeUnit = GRCMagnitudeUnit(nTime);
     }
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f", dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f", pHistorical->GetBlockHash().GetHex(), pHistorical->nHeight, !!pHistorical->pnext, pHistorical->nMagnitude);
     bool bIsNewbie = (pHistorical->nHeight <= nNewIndex || pHistorical->nTime==0);
     if(pindexLast->nVersion<9)
     {
@@ -8458,8 +8459,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
         if(fDebug && !bVerifyingBlock) LogPrintf("CRE: No prior block exists...");
         if (!AreBinarySuperblocksEnabled(pindexLast->nHeight))
         {
-                if(fDebug && !bVerifyingBlock) LogPrintf("CRE: Newbie Stake, Binary SB not enabled, "
-                                                  "dCurrentMagnitude= %.1f", dCurrentMagnitude);
+                if(fDebug) LogPrintf("ComputeResearchAccrual: %s Newbie stake, Binary SB not enabled, dCurrentMagnitude= %.1f",
+                    cpid, dCurrentMagnitude);
             return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
         }
         else
@@ -8473,18 +8474,16 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
                 if ((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit) > 500)
                 {
-                    LogPrintf("ComputeResearchAccrual: Newbie special stake too high, reward=500GRC");
+                    LogPrintf("ComputeResearchAccrual: %s Newbie special stake too high, reward=500GRC", cpid);
                     return (500*COIN);
                 }
-                if (fDebug3) LogPrintf("ComputeResearchAccrual: Newbie Special First Stake for CPID %s, Age %f, Accrual %" PRId64, cpid, dNewbieAccrualAge, iAccrual);
-                if(fDebug && !bVerifyingBlock) LogPrintf("CRE: Newbie Stake, "
-                    "dNewbieAccrualAge= %f dCurrentMagnitude= %.1f dMagnitudeUnit= %f Accrual= %f",
-                    dNewbieAccrualAge, dCurrentMagnitude, dMagnitudeUnit, iAccrual/(double)COIN);
+                if(fDebug) LogPrintf("ComputeResearchAccrual: %s Newbie stake, unit=%f, age=%f, magnitude= %.1f -> %f",
+                    cpid, dMagnitudeUnit, dNewbieAccrualAge, dCurrentMagnitude, iAccrual/(double)COIN);
                 return iAccrual;
             }
             else
             {
-                if(fDebug && !bVerifyingBlock) LogPrintf("CRE: Invalid Beacon, Using 0.01 age bootstrap");
+                LogPrintf("ComputeResearchAccrual: %s Invalid Beacon, Using 0.01 age bootstrap", cpid);
                 return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
             }
         }
@@ -8493,7 +8492,6 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
     double dAvgMag = stCPID.ResearchAverageMagnitude;
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: iRABlockSpan= %d  ResearchAverageMagnitude= %.1f", iRABlockSpan, dAvgMag);
     // ResearchAge: If the accrual age is > 20 days, add in the midpoint lifetime average magnitude to ensure the overall avg magnitude accurate:
     if (iRABlockSpan > (int)(BLOCKS_PER_DAY*20))
     {
@@ -8504,38 +8502,39 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
     }
     if (AvgMagnitude > 20000) AvgMagnitude = 20000;
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: AvgMagnitude= %.3f", AvgMagnitude);
 
     dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
     if (dAccrualAge < 0) dAccrualAge=0;
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: dAccrualAge= %.8f", dAccrualAge);
     dMagnitudeUnit = GRCMagnitudeUnit(nTime);
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: new.dMagnitudeUnit= %f", dMagnitudeUnit);
 
     int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: Accrual= %f", Accrual/(double)COIN);
     // Double check researcher lifetime paid
     double days = (nTime - stCPID.LowLockTime) / 86400.0;
     double PPD = stCPID.ResearchSubsidy/(days+.01);
     double ReferencePPD = dMagnitudeUnit*dAvgMag;
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE: RSA$ "
-        "LowLockTime= %u days= %f stCPID.ResearchSubsidy= %f PPD= %f ReferencePPD= %f",
-        stCPID.LowLockTime,days,   stCPID.ResearchSubsidy,    PPD,    ReferencePPD );
+
     if ((PPD > ReferencePPD*5))
     {
-            LogPrintf("ComputeResearchAccrual: Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
-                   PPD,ReferencePPD,cpid.c_str(),dAvgMag,days, dMagnitudeUnit);
-            Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
-    }
-    // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
-    if (iRABlockSpan < 10 && iVerificationPhase != 2) Accrual = 0;
+        if(fDebug) LogPrintf("ComputeResearchAccrual: %s RA-PPD, PPD=%f, unit=%f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> Accrual 0 (would be %f)",
+                cpid, PPD, dMagnitudeUnit, stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
 
-    double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
-    if ((fDebug && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) LogPrintf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  ",
-        operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,
-        (double)pHistorical->nHeight,   dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
-    if(fDebug && !bVerifyingBlock) LogPrintf("CRE.End: Accrual= %f",Accrual/(double)COIN);
-    return Accrual;
+        return 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
+    }
+    else if (iRABlockSpan < 10 && iVerificationPhase != 2)
+    {
+        if(fDebug) LogPrintf("ComputeResearchAccrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %f)", cpid, iRABlockSpan, Accrual/(double)COIN);
+        if(fDebug2) LogPrintf(" pHistorical w %s", pHistorical->GetBlockHash().GetHex());
+
+        // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
+        return 0;
+    }
+    else
+    {
+        if(fDebug) LogPrintf("ComputeResearchAccrual: %s Normal, unit=%f, Age=%f, AvgMagnitude=%f, Span=%d, CurMag=%.1f, OldMag=%.1f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> %d",
+            cpid, dMagnitudeUnit,dAccrualAge,AvgMagnitude,iRABlockSpan,dCurrentMagnitude,pHistorical->nMagnitude,
+            stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
+        return Accrual;
+    }
 }
 
 

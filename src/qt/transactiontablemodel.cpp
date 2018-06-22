@@ -534,7 +534,7 @@ QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx)
 
 QString TransactionTableModel::formatTooltip(const TransactionRecord *rec) const
 {
-    QString tooltip = formatTxStatus(rec) + QString("") + formatTxType(rec);
+    QString tooltip = formatTxStatus(rec) + QString("\n") + formatTxType(rec);
     if(rec->type==TransactionRecord::RecvFromOther || rec->type==TransactionRecord::SendToOther ||
        rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress)
     {
