@@ -33,16 +33,22 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
         std::string sError;
         bool fResult;
         fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError, true);
+
         if (!fResult)
+            LogPrintf("GenerateBeaconKeys::Failed to sign block with cpid with existing keys; generating new key pair -> %s", sError);
+
+        else
         {
-            LogPrintf("GenerateNewKeyPair::Failed to sign block with cpid -> %s", sError);
-            return false;
-        }
-        fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
-        if (fResult)
-        {
-            LogPrintf("GenerateNewKeyPair::Current keypair is valid.");
-            return false;
+            fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
+
+            if (fResult)
+            {
+                LogPrintf("GenerateBeaconKeys::Current keypair is valid.");
+                return true;
+            }
+
+            else
+                LogPrintf("GenerateBeaconKeys::Signing block with CPID was successful; However Verifying CPID Sign was not; Key pair is not valid, generating new key pair");
         }
     }
 
@@ -56,13 +62,18 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
     return true;
 }
 
-void StoreBeaconKeys(
+bool StoreBeaconKeys(
         const std::string &cpid,
         const std::string &pubKey,
         const std::string &privKey)
 {
-    WriteKey("publickey" + cpid + GetNetSuffix(), pubKey);
-    WriteKey("privatekey" + cpid + GetNetSuffix(), privKey);
+    if (   !WriteKey("publickey" + cpid + GetNetSuffix(), pubKey)
+        || !WriteKey("privatekey" + cpid + GetNetSuffix(), privKey)
+       )
+        return false;
+
+    else
+        return true;
 }
 
 std::string GetStoredBeaconPrivateKey(const std::string& cpid)
