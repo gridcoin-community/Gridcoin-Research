@@ -45,7 +45,6 @@ extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
-extern bool WriteKey(std::string sKey, std::string sValue);
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
@@ -5284,58 +5283,6 @@ int GetFilesize(FILE* file)
         nFilesize = ftell(file);
     fseek(file, nSavePos, SEEK_SET);
     return nFilesize;
-}
-
-bool WriteKey(std::string sKey, std::string sValue)
-{
-    // Allows Gridcoin to store the key value in the config file.
-    boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
-    if (!filesystem::exists(pathConfigFile))  return false;
-    boost::to_lower(sKey);
-    std::string sLine = "";
-    ifstream streamConfigFile;
-    streamConfigFile.open(pathConfigFile.string().c_str());
-    std::string sConfig = "";
-    bool fWritten = false;
-    if(streamConfigFile)
-    {
-       while(getline(streamConfigFile, sLine))
-       {
-            std::vector<std::string> vEntry = split(sLine,"=");
-            if (vEntry.size() == 2)
-            {
-                std::string sSourceKey = vEntry[0];
-                std::string sSourceValue = vEntry[1];
-                boost::to_lower(sSourceKey);
-
-                if (sSourceKey==sKey)
-                {
-                    sSourceValue = sValue;
-                    sLine = sSourceKey + "=" + sSourceValue;
-                    fWritten=true;
-                }
-            }
-            sLine = strReplace(sLine,"\r","");
-            sLine = strReplace(sLine,"","");
-            sLine += "\n";
-            sConfig += sLine;
-       }
-    }
-    if (!fWritten)
-    {
-        sLine = sKey + "=" + sValue + "\n";
-        sConfig += sLine;
-    }
-
-    streamConfigFile.close();
-
-    FILE *outFile = fopen(pathConfigFile.string().c_str(),"w");
-    fputs(sConfig.c_str(), outFile);
-    fclose(outFile);
-
-    ReadConfigFile(mapArgs, mapMultiArgs);
-    return true;
 }
 
 
