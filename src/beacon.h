@@ -25,21 +25,15 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey);
 
 //!
 //! \brief Get beacon private key from permanent storage.
+//!
+//! Uses the appcache to find public key to cpid, and then wallet to find
+//! privare key to it.
+//!
 //! \param cpid CPID tied to the private key.
 //! \param outPrivPubKey Stored beacon private key if available, otherwise an empty string.
 //! \return true on success
 //!
 bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey);
-
-// Push new beacon keys into memory as this process is not automatic and currently requires a restart of client to do so.
-// This corrects issues where users who have deleted beacons and then advertise new ones.
-// This corrects issues where users who readvertise and the existing keypair is no longer valid.
-// TODO: remove this
-
-void ActivateBeaconKeys(
-        const std::string &cpid,
-        const std::string &pubKey,
-        const std::string &privKey);
 
 // Lets move more of the beacon functions out of rpcblockchain.cpp and main.cpp
 // Lets also use header space where applicable - iFoggz
