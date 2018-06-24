@@ -34,6 +34,7 @@ bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey);
 // Push new beacon keys into memory as this process is not automatic and currently requires a restart of client to do so.
 // This corrects issues where users who have deleted beacons and then advertise new ones.
 // This corrects issues where users who readvertise and the existing keypair is no longer valid.
+// TODO: remove this
 
 void ActivateBeaconKeys(
         const std::string &cpid,
