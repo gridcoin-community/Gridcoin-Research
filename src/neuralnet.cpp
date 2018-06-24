@@ -1,7 +1,7 @@
 #include "neuralnet.h"
-#include "util.h"
 #include "version.h"
 #include "sync.h"
+#include "util.h"
 
 #include <boost/filesystem/path.hpp>
 #include <boost/algorithm/string.hpp>

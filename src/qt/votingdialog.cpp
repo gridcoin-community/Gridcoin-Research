@@ -264,16 +264,16 @@ void VotingTableModel::resetData(bool history)
             QString sExpiration = QString::fromStdString(iterPoll.expiration);
             VotingItem *item = new VotingItem;
             item->rowNumber_ = items.size() + 1;
-            item->title_ = QString::fromStdString(iterPoll.title);
+            item->title_ = QString::fromStdString(iterPoll.title).replace("_"," ");
             item->expiration_ = QDateTime::fromString(QString::fromStdString(iterPoll.expiration), "M-d-yyyy HH:mm:ss");
             item->shareType_ = QString::fromStdString(iterPoll.sharetype);
-            item->question_ = QString::fromStdString(iterPoll.question);
-            item->answers_ = QString::fromStdString(iterPoll.sAnswers);
+            item->question_ = QString::fromStdString(iterPoll.question).replace("_"," ");
+            item->answers_ = QString::fromStdString(iterPoll.sAnswers).replace("_"," ");
             item->vectorOfAnswers_ = iterPoll.answers;
             item->totalParticipants_ = iterPoll.total_participants;
             item->totalShares_ = iterPoll.total_shares;
-            item->url_ = QString::fromStdString(iterPoll.url);
-            item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer);
+            item->url_ = QString::fromStdString(iterPoll.url).replace("_"," ");
+            item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer).replace("_"," ");
             items.push_back(item);
         }
     }
@@ -704,7 +704,7 @@ void VotingChartDialog::resetData(const VotingItem *item)
     //for(size_t y=1; y < vAnswers.size(); y++)
     for(polling::Vote iterAnswer: vectorOfAnswers)
     {
-        sAnswerNames.push_back(QString::fromStdString(iterAnswer.answer));
+        sAnswerNames.push_back(QString::fromStdString(iterAnswer.answer).replace("_"," "));
         iShares.push_back(iterAnswer.shares);
         sharesSum += iterAnswer.shares;
     }
@@ -817,7 +817,7 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     std::string listOfAnswers = item->answers_.toUtf8().constData();
     std::vector<std::string> vAnswers = split(listOfAnswers, ";");
     for(size_t y=0; y < vAnswers.size(); y++) {
-        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(vAnswers[y]),answerList_);
+        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(vAnswers[y]).replace("_"," "),answerList_);
         answerItem->setCheckState(Qt::Unchecked);
     }
 }

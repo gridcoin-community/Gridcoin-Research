@@ -5,8 +5,8 @@
 
 #include "kernel.h"
 #include "txdb.h"
-#include "util.h"
 #include "main.h"
+#include "util.h"
 
 bool IsCPIDValidv2(MiningCPID& mc,int height);
 using namespace std;

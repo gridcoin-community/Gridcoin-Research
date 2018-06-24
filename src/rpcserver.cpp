@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "util.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "base58.h"
@@ -12,6 +11,7 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "db.h"
+#include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
@@ -605,7 +605,7 @@ void StartRPCThreads()
 
     assert(rpc_io_service == NULL);
     rpc_io_service = new asio::io_service();
-    rpc_ssl_context = new ssl::context(*rpc_io_service, ssl::context::sslv23);
+    rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
     if (fUseSSL)
     {

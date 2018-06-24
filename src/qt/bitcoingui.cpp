@@ -18,7 +18,6 @@
 // include <QtSql> // Future Use
 
 #include <fstream>
-#include "util.h"
 
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
@@ -95,6 +94,8 @@
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include "boinc.h"
+#include "util.h"
+
 
 extern CWallet* pwalletMain;
 int ReindexWallet();

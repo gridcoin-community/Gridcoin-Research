@@ -3,12 +3,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "util.h"
+#include "netbase.h" // for AddTimeData
 #include "sync.h"
 #include "strlcpy.h"
 #include "version.h"
-#include "netbase.h" // for AddTimeData
 #include "ui_interface.h"
+#include "util.h"
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year

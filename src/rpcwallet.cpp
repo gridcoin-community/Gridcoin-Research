@@ -11,8 +11,8 @@
 #include "rpcprotocol.h"
 #include "init.h"
 #include "base58.h"
-#include "util.h"
 #include "backup.h"
+#include "util.h"
 
 #include <univalue.h>
 
