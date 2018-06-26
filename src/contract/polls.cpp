@@ -59,7 +59,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
             {
                 std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
                 std::string contract = "<TITLE>" + sTitle + "</TITLE><DAYS>" + std::to_string(days) + "</DAYS><QUESTION>" + sQuestion + "</QUESTION><ANSWERS>" + sAnswers + "</ANSWERS><SHARETYPE>" + std::to_string(iSharetype) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                std::string result = AddContract("poll", sTitle, contract);
+                std::string result = SendContract("poll", sTitle, contract);
                 return std::make_pair("Success",result);
             }
         }
@@ -135,7 +135,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         voter += GetProvableVotingWeightXML();
         std::string pk = sTitle + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
         std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
-        std::string result = AddContract("vote",pk,contract);
+        std::string result = SendContract("vote",pk,contract);
         std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
         return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
     }
