@@ -2,6 +2,7 @@
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
+#include "contract/superblock.h"
 
 #include "data/superblock.txt.h"
 #include "data/superblock_packed.bin.h"
@@ -13,8 +14,6 @@
 #include <string>
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-extern std::string PackBinarySuperblock(std::string sBlock);
-extern std::string UnpackBinarySuperblock(std::string sBlock);
 extern std::map<std::string, StructCPID> mvDPOR;
 extern std::string GetQuorumHash(const std::string& data);
 extern std::string ConvertHexToBin(std::string a);
