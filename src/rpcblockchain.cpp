@@ -888,7 +888,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             }
 
             // Send the beacon transaction
-            sMessage = AddContract(sType,sName,sBase);
+            sMessage = SendContract(sType,sName,sBase);
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
             // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
@@ -1841,7 +1841,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     res.pushKV("Name", sName);
     res.pushKV("Value", sValue);
 
-    std::string result = AddMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
+    std::string result = SendMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
 
     res.pushKV("Results", result);
 
