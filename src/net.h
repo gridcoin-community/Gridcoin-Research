@@ -137,7 +137,6 @@ public:
     double dPingTime;
     double dPingWait;
 	std::string addrLocal;
-	std::string NeuralHash;
 	int nTrust;
 	std::string sGRCAddress;
 	//std::string securityversion;
