@@ -12,8 +12,8 @@
 #include "keystore.h"
 #include "script.h"
 #include "ui_interface.h"
-#include "util.h"
 #include "walletdb.h"
+#include "util.h"
 
 extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;

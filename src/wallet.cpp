@@ -18,10 +18,10 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "util.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
 #include "main.h"
+#include "util.h"
 
 using namespace std;
 
@@ -154,7 +154,7 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE)
     {
         std::string strAddr = CBitcoinAddress(redeemScript.GetID()).ToString();
-        LogPrintf("%s: Warning: This wallet contains a redeemScript of size %" PRIszu " which exceeds maximum size %i thus can never be redeemed. Do not use address %s.\n",
+        LogPrintf("%s: Warning: This wallet contains a redeemScript of size %" PRIszu " which exceeds maximum size %i thus can never be redeemed. Do not use address %s.",
             __func__, redeemScript.size(), MAX_SCRIPT_ELEMENT_SIZE, strAddr);
         return true;
     }
@@ -214,7 +214,7 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 if (pMasterKey.second.nDeriveIterations < 25000)
                     pMasterKey.second.nDeriveIterations = 25000;
 
-                LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i\n", pMasterKey.second.nDeriveIterations);
+                LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i", pMasterKey.second.nDeriveIterations);
 
                 if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
                     return false;
@@ -305,7 +305,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
     if (kMasterKey.nDeriveIterations < 25000)
         kMasterKey.nDeriveIterations = 25000;
 
-    LogPrintf("Encrypting Wallet with an nDeriveIterations of %i\n", kMasterKey.nDeriveIterations);
+    LogPrintf("Encrypting Wallet with an nDeriveIterations of %i", kMasterKey.nDeriveIterations);
 
     if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, kMasterKey.nDeriveIterations, kMasterKey.nDerivationMethod))
         return false;
@@ -408,10 +408,10 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock)
             {
                 CWalletTx& wtx = (*mi).second;
                 if (txin.prevout.n >= wtx.vout.size())
-                    LogPrintf("WalletUpdateSpent: bad wtx %s\n", wtx.GetHash().ToString());
+                    LogPrintf("WalletUpdateSpent: bad wtx %s", wtx.GetHash().ToString());
                 else if (!wtx.IsSpent(txin.prevout.n) && IsMine(wtx.vout[txin.prevout.n]))
                 {
-                    if (fDebug) LogPrintf("WalletUpdateSpent found spent coin %s gC %s\n", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
+                    if (fDebug) LogPrintf("WalletUpdateSpent found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkSpent(txin.prevout.n);
                     wtx.WriteToDisk();
                     NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
@@ -506,7 +506,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                 }
                 else
                 {
-                    if (fDebug) LogPrintf("AddToWallet() : found %s in block %s not in index\n",
+                    if (fDebug) LogPrintf("AddToWallet() : found %s in block %s not in index",
                            wtxIn.GetHash().ToString().substr(0,10),
                            wtxIn.hashBlock.ToString());
                 }
@@ -573,7 +573,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 
         if (wtxIn.IsCoinBase() || wtxIn.IsCoinStake())
         {
-            if (fDebug10) LogPrintf("\nCoinBase:CoinStake\n");
+            if (fDebug10) LogPrintf("CoinBase:CoinStake");
             CBlockIndex* pBlk = mapBlockIndex[wtxIn.hashBlock];
             CBlock blk;
             bool r = blk.ReadFromDisk(pBlk);
@@ -590,21 +590,17 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
                     if (!sRewardAddress.empty())
                     {
                         // Ensure this Proof Of Stake Coinbase was Just Generated before sending the reward (prevent rescans from sending rewards):
-                        LogPrintf("reward locktime %f curr time %f",(double)wtxIn.nTime,(double)GetAdjustedTime());
-                        LogPrintf(" reward shared %f",(double)dRewardShare);
+                        LogPrintf("reward locktime %" PRId64 " curr time %" PRId64, wtxIn.nTime, GetAdjustedTime());
+                        LogPrintf(" reward shared %f", dRewardShare);
                         LogPrintf(" addr %s",sRewardAddress);
                         if (IsLockTimeWithinMinutes(wtxIn.nTime, GetAdjustedTime(), 10))
                         {
                             std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
-                            LogPrintf("\nIssuing Reward Share of %f GRC to %s. Response: %s\n",dRewardShare,sRewardAddress, sResult);
+                            LogPrintf("Issuing Reward Share of %f GRC to %s. Response: %s",dRewardShare,sRewardAddress, sResult);
                         }
                     }
                 }
             }
-        }
-        else
-        {
-            // LogPrintf("\nNot CoinBase Or CoinStake\n");
         }
 
         if (!strCmd.empty())
@@ -824,7 +820,7 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
             if (   (  !bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) )
                 || (   bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN) )
             {
-                LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+                LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                      this->GetHash().ToString().c_str());
                 address = CNoDestination();
             }
@@ -903,7 +899,7 @@ void CWalletTx::GetAmounts(list<pair<CTxDestination, int64_t> >& listReceived,
         CTxDestination address;
         if (!ExtractDestination(txout.scriptPubKey, address))
         {
-            LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s\n",
+            LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                      this->GetHash().ToString().c_str());
             address = CNoDestination();
         }
@@ -996,7 +992,7 @@ void CWalletTx::AddSupportingTransactions(CTxDB& txdb)
                 }
                 else
                 {
-                    LogPrintf("ERROR: AddSupportingTransactions() : unsupported transaction\n");
+                    LogPrintf("ERROR: AddSupportingTransactions() : unsupported transaction");
                     continue;
                 }
 
@@ -1074,7 +1070,7 @@ void CWallet::ReacceptWalletTransactions()
                 // Update fSpent if a tx got spent somewhere else by a copy of wallet.dat
                 if (txindex.vSpent.size() != wtx.vout.size())
                 {
-                    LogPrintf("ERROR: ReacceptWalletTransactions() : txindex.vSpent.size() %" PRIszu " != wtx.vout.size() %" PRIszu "\n", txindex.vSpent.size(), wtx.vout.size());
+                    LogPrintf("ERROR: ReacceptWalletTransactions() : txindex.vSpent.size() %" PRIszu " != wtx.vout.size() %" PRIszu, txindex.vSpent.size(), wtx.vout.size());
                     continue;
                 }
                 for (unsigned int i = 0; i < txindex.vSpent.size(); i++)
@@ -1090,7 +1086,7 @@ void CWallet::ReacceptWalletTransactions()
                 }
                 if (fUpdated)
                 {
-                    LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s\n", FormatMoney(wtx.GetCredit()).c_str(), wtx.GetHash().ToString());
+                    LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkDirty();
                     wtx.WriteToDisk();
                 }
@@ -1128,7 +1124,7 @@ void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
         uint256 hash = GetHash();
         if (!txdb.ContainsTx(hash))
         {
-            if (fDebug10) LogPrintf("Relaying wtx %s\n", hash.ToString().substr(0,10));
+            if (fDebug10) LogPrintf("Relaying wtx %s", hash.ToString().substr(0,10));
             RelayTransaction((CTransaction)*this, hash);
         }
     }
@@ -1162,7 +1158,6 @@ void CWallet::ResendWalletTransactions(bool fForce)
     }
 
     // Rebroadcast any of our txes that aren't in a block yet
-    //if (fDebug10) printf("ResendWalletTransactions()\n");
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
@@ -1182,7 +1177,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
             if (wtx.CheckTransaction())
                 wtx.RelayWalletTransaction(txdb);
             else
-                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s\n", wtx.GetHash().ToString());
+                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s", wtx.GetHash().ToString());
         }
     }
 }
@@ -1492,7 +1487,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
             for (unsigned int i = 0; i < vValue.size(); i++)
                 if (vfBest[i])
                     LogPrintf("%s ", FormatMoney(vValue[i].first));
-            LogPrintf("total %s\n", FormatMoney(nBest));
+            LogPrintf("total %s", FormatMoney(nBest));
         }
     }
 
@@ -1848,7 +1843,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
         if (!wtxNew.AcceptToMemoryPool())
         {
             // This must not fail. The transaction has already been signed and recorded.
-            LogPrintf("CommitTransaction() : Error: Transaction not valid\n");
+            LogPrintf("CommitTransaction() : Error: Transaction not valid");
             return false;
         }
         wtxNew.RelayWalletTransaction();
@@ -2032,7 +2027,7 @@ void CWallet::PrintWallet(const CBlock& block)
          }
 
     }
-    LogPrintf("\n");
+    LogPrintf("");
 }
 
 bool CWallet::GetTransaction(const uint256 &hashTx, CWalletTx& wtx)
@@ -2091,7 +2086,7 @@ bool CWallet::NewKeyPool()
             walletdb.WritePool(nIndex, CKeyPool(GenerateNewKey()));
             setKeyPool.insert(nIndex);
         }
-        LogPrintf("CWallet::NewKeyPool wrote %" PRId64 " new keys\n", nKeys);
+        LogPrintf("CWallet::NewKeyPool wrote %" PRId64 " new keys", nKeys);
     }
     return true;
 }
@@ -2121,7 +2116,7 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
             if (!walletdb.WritePool(nEnd, CKeyPool(GenerateNewKey())))
                 throw runtime_error("TopUpKeyPool() : writing generated key failed");
             setKeyPool.insert(nEnd);
-            if (fDebug10) LogPrintf("keypool added key %" PRId64 ", size=%" PRIszu "\n", nEnd, setKeyPool.size());
+            if (fDebug10) LogPrintf("keypool added key %" PRId64 ", size=%" PRIszu, nEnd, setKeyPool.size());
         }
     }
     return true;
@@ -2151,7 +2146,7 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
             throw runtime_error("ReserveKeyFromKeyPool() : unknown key in key pool");
         assert(keypool.vchPubKey.IsValid());
         if (fDebug && GetBoolArg("-printkeypool"))
-            LogPrintf("keypool reserve %" PRId64 "\n", nIndex);
+            LogPrintf("keypool reserve %" PRId64, nIndex);
     }
 }
 
@@ -2179,7 +2174,7 @@ void CWallet::KeepKey(int64_t nIndex)
         walletdb.ErasePool(nIndex);
     }
     if(fDebug)
-        LogPrintf("keypool keep %" PRId64 "\n", nIndex);
+        LogPrintf("keypool keep %" PRId64, nIndex);
 }
 
 void CWallet::ReturnKey(int64_t nIndex)
@@ -2190,7 +2185,7 @@ void CWallet::ReturnKey(int64_t nIndex)
         setKeyPool.insert(nIndex);
     }
     if(fDebug)
-        LogPrintf("keypool return %" PRId64 "\n", nIndex);
+        LogPrintf("keypool return %" PRId64, nIndex);
 }
 
 bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)
@@ -2376,7 +2371,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
         {
             if (IsMine(pcoin->vout[n]) && pcoin->IsSpent(n) && (txindex.vSpent.size() <= n || txindex.vSpent[n].IsNull()))
             {
-                LogPrintf("FixSpentCoins found lost coin %s gC %s[%d], %s\n",
+                LogPrintf("FixSpentCoins found lost coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
                 nMismatchFound++;
                 nBalanceInQuestion += pcoin->vout[n].nValue;
@@ -2388,7 +2383,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
             }
             else if (IsMine(pcoin->vout[n]) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
             {
-                LogPrintf("FixSpentCoins found spent coin %s gC %s[%d], %s\n",
+                LogPrintf("FixSpentCoins found spent coin %s gC %s[%d], %s",
                     FormatMoney(pcoin->vout[n].nValue).c_str(), pcoin->GetHash().ToString().c_str(), n, fCheckOnly? "repair not attempted" : "repairing");
                 nMismatchFound++;
                 nBalanceInQuestion += pcoin->vout[n].nValue;
@@ -2498,7 +2493,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             CKeyID keyID;
             if (!address.GetKeyID(keyID))
             {
-                LogPrintf("GetAllPrivateKeys: During private key backup, Address %s does not refer to a key\n", address.ToString());
+                LogPrintf("GetAllPrivateKeys: During private key backup, Address %s does not refer to a key", address.ToString());
             }
             else
             {
@@ -2506,7 +2501,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
-                    LogPrintf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known\n", address.ToString());
+                    LogPrintf("GetAllPrivateKeys: During private key backup, Private key for address %s is not known", address.ToString());
                 }
                 else
                 {
@@ -2531,7 +2526,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
 
         if (!HaveKey(keyID))
         {
-            LogPrintf("GetAllPrivateKeys: Unknown key in key pool\n");
+            LogPrintf("GetAllPrivateKeys: Unknown key in key pool");
         }
         else
         {
@@ -2540,7 +2535,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
             {
-                LogPrintf("GetAllPrivateKeys: During Private Key Backup, Private key for address %s is not known\n", keyID.ToString());
+                LogPrintf("GetAllPrivateKeys: During Private Key Backup, Private key for address %s is not known", keyID.ToString());
             }
             else
             {

@@ -2,11 +2,6 @@
 #include "util.h"
 
 #include <boost/filesystem.hpp>
-#ifdef WIN32
-#include <windows.h>
-#define KEY_WOW64_64KEY 0x0100
-#endif
-
 
 std::string GetBoincDataDir(){
 
@@ -39,7 +34,7 @@ std::string GetBoincDataDir(){
             if (boost::filesystem::exists(path)){
                 return path;
             } else {
-                LogPrintf("Cannot find BOINC data dir %s.\n", path);
+                LogPrintf("Cannot find BOINC data dir %s.", path);
             }
         }
         RegCloseKey(hKey);
@@ -68,6 +63,6 @@ std::string GetBoincDataDir(){
     }
     #endif
 
-    LogPrintf("ERROR: Cannot find BOINC data dir\n");
+    LogPrintf("ERROR: Cannot find BOINC data dir");
     return "";
 }

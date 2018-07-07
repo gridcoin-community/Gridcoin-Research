@@ -11,8 +11,8 @@
 #include "rpcprotocol.h"
 #include "init.h"
 #include "base58.h"
-#include "util.h"
 #include "backup.h"
+#include "util.h"
 
 #include <univalue.h>
 
@@ -282,7 +282,7 @@ UniValue getaccountaddress(const UniValue& params, bool fHelp)
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
 
-    UniValue ret;
+    UniValue ret(UniValue::VSTR);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2049,7 +2049,7 @@ public:
     UniValue operator()(const CNoDestination &dest) const { return UniValue(); }
 
     UniValue operator()(const CKeyID &keyID) const {
-        UniValue obj;
+        UniValue obj(UniValue::VOBJ);
         CPubKey vchPubKey;
         pwalletMain->GetPubKey(keyID, vchPubKey);
         obj.pushKV("isscript", false);
@@ -2059,7 +2059,7 @@ public:
     }
 
     UniValue operator()(const CScriptID &scriptID) const {
-        UniValue obj;
+        UniValue obj(UniValue::VOBJ);
         obj.pushKV("isscript", true);
         CScript subscript;
         pwalletMain->GetCScript(scriptID, subscript);

@@ -18,7 +18,6 @@
 // include <QtSql> // Future Use
 
 #include <fstream>
-#include "util.h"
 
 #include "bitcoingui.h"
 #include "transactiontablemodel.h"
@@ -90,10 +89,13 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "contract/polls.h"
+#include "contract/contract.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include "boinc.h"
+#include "util.h"
+
 
 extern CWallet* pwalletMain;
 extern QString ToQstring(std::string s);
@@ -104,9 +106,6 @@ extern std::string getMacAddress();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
-std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
@@ -307,13 +306,10 @@ void qtSyncWithDPORNodes(std::string data)
 
     #if defined(WIN32) && defined(QT_GUI)
         if (!bGlobalcomInitialized) return;
-        int result = 0;
         QString qsData = ToQstring(data);
         if (fDebug3) LogPrintf("FullSyncWDporNodes");
-        std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-        double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-        result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-        LogPrintf("Done syncing. %f %f\n",function_call,(double)result);
+        int result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
+        LogPrintf("Done syncing. %d", result);
     #endif
 }
 
@@ -378,11 +374,10 @@ void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double ma
     if (!bGlobalcomInitialized) return;
 
     #if defined(WIN32) && defined(QT_GUI)
-        int result = 0;
         std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
         QString qsSession = ToQstring(session);
-        result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
-        LogPrintf("rs%f",(double)result);
+        int result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
+        LogPrintf("Set session info result %d", result);
     #endif
 }
 
@@ -400,7 +395,7 @@ int64_t IsNeural()
     }
     catch(...)
     {
-        LogPrintf("Exception\n");
+        LogPrintf("Exception");
         return 0;
     }
 }
@@ -1090,7 +1085,7 @@ void BitcoinGUI::NewUserWizard()
         std::string sBoincNarr = "";
         if (sout == "-1")
         {
-            LogPrintf("Boinc not installed in default location! \n");
+            LogPrintf("Boinc not installed in default location! ");
             //BoincInstalled=false;
             std::string nicePath = GetBoincDataDir();
             sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
@@ -1105,7 +1100,7 @@ void BitcoinGUI::NewUserWizard()
         {
             std::string new_email = tostdstring(boincemail);
             boost::to_lower(new_email);
-            LogPrintf("User entered %s \n",new_email);
+            LogPrintf("User entered %s ",new_email);
             //Create Config File
             CreateNewConfigFile(new_email);
             QString strMessage = tr("Created new Configuration File Successfully. ");
@@ -1168,7 +1163,7 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                               tr("Date: %1\n"
                                  "Amount: %2\n"
                                  "Type: %3\n"
-                                 "Address: %4\n")
+                                 "Address: %4")
                               .arg(date)
                               .arg(BitcoinUnits::formatWithUnit(walletModel->getOptionsModel()->getDisplayUnit(), amount, true))
                               .arg(type)
@@ -1196,8 +1191,6 @@ void BitcoinGUI::miningClicked()
 
 #ifdef WIN32
     if (!bGlobalcomInitialized) return;
-    std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-    double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
     globalcom->dynamicCall("ShowMiningConsole()");
 #endif
 }
@@ -1531,18 +1524,22 @@ void ReinstantiateGlobalcom()
     // Note, on Windows, if the performance counters are corrupted, rebuild them
     // by going to an elevated command prompt and issue the command: lodctr /r
     // (to rebuild the performance counters in the registry)
-    LogPrintf("Instantiating globalcom for Windows %f",(double)0);
+    LogPrintf("Instantiating globalcom for Windows.");
     try
     {
         globalcom = new QAxObject("BoincStake.Utilization");
-        LogPrintf("Instantiated globalcom for Windows");
+        LogPrintf("Instantiated globalcom for Windows.");
     }
     catch(...)
     {
         LogPrintf("Failed to instantiate globalcom.");
+
+        return;
     }
 
     bGlobalcomInitialized = true;
+    std::string sNetworkFlag = fTestNet ? "TESTNET" : "MAINNET";
+    globalcom->dynamicCall("SetTestNetFlag(QString)", ToQstring(sNetworkFlag));
 #endif
 }
 
@@ -1581,35 +1578,11 @@ void BitcoinGUI::timerfire()
                         std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
                         std::string Argument2 = ExtractXML(sData,"<ARG2>","</ARG2>");
 
-                        if (RPCCommand=="vote")
+                        if (RPCCommand=="rain")
                         {
-                            std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                            double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                            std::string response = ExecuteRPCCommand("vote",Argument1,Argument2);
+                            std::string response = executeRain(Argument1+Argument2);
                             double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
                         }
-                        else if (RPCCommand=="rain")
-                        {
-                            std::string response = ExecuteRPCCommand("rain",Argument1,Argument2);
-                            double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
-                        }
-                        else if (RPCCommand=="addpoll")
-                        {
-                            std::string testnet_flag = fTestNet ? "TESTNET" : "MAINNET";
-                            double function_call = qtExecuteGenericFunction("SetTestNetFlag",testnet_flag);
-                            std::string Argument3 = ExtractXML(sData,"<ARG3>","</ARG3>");
-                            std::string Argument4 = ExtractXML(sData,"<ARG4>","</ARG4>");
-                            std::string Argument5 = ExtractXML(sData,"<ARG5>","</ARG5>");
-                            std::string Argument6 = ExtractXML(sData,"<ARG6>","</ARG6>");
-                            std::string response = ExecuteRPCCommand("addpoll",Argument1,Argument2,Argument3,Argument4,Argument5,Argument6);
-                            double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
-                        }
-                        else if (RPCCommand == "addattachment")
-                        {
-                            msAttachmentGuid = Argument1;
-                            LogPrintf("\n attachment added %s \n",msAttachmentGuid);
-                        }
-
                     }
                 #endif
         }
@@ -1690,12 +1663,10 @@ void BitcoinGUI::updateStakingIcon()
 
     if (staking)
     {
-        if (fDebug10) LogPrintf("StakeIcon Vitals BH %f, NetWeight %f, Weight %f \n", (double)GetTargetSpacing(nBestHeight),(double)nNetworkWeight,(double)nWeight);
         QString text = GetEstimatedTime(nEstimateTime);
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")
                                      .arg(nWeight).arg(nNetworkWeight).arg(text));
-
     }
     else
     {

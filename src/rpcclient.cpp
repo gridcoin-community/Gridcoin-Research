@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "util.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "base58.h"
@@ -12,6 +11,7 @@
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "db.h"
+#include "util.h"
 
 // #undef printf
 #include <set>
@@ -39,9 +39,9 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
 {
     if (mapArgs["-rpcuser"] == "" && mapArgs["-rpcpassword"] == "")
         throw runtime_error(strprintf(
-            _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
-              "If the file does not exist, create it with owner-readable-only file permissions."),
-                GetConfigFile().string()));
+                                _("You must set rpcpassword=<password> in the configuration file:\n%s\n"
+                                  "If the file does not exist, create it with owner-readable-only file permissions."),
+                                GetConfigFile().string()));
 
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");
@@ -64,10 +64,15 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     string strPost = HTTPPost(strRequest, mapRequestHeaders);
     stream << strPost << std::flush;
 
-    // Receive reply
+    // Receive HTTP reply status
+    int nProto = 0;
+    int nStatus = ReadHTTPStatus(stream, nProto);
+    
+    // Receive HTTP reply message headers and body
     map<string, string> mapHeaders;
     string strReply;
-    int nStatus = ReadHTTP(stream, mapHeaders, strReply);
+    ReadHTTPMessage(stream, mapHeaders, strReply, nProto);
+    
     if (nStatus == HTTP_UNAUTHORIZED)
         throw runtime_error("incorrect rpcuser or rpcpassword (authorization failed)");
     else if (nStatus >= 400 && nStatus != HTTP_BAD_REQUEST && nStatus != HTTP_NOT_FOUND && nStatus != HTTP_INTERNAL_SERVER_ERROR)
@@ -76,7 +81,7 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
         throw runtime_error("no response from server");
 
     // Parse reply
-    UniValue valReply;
+    UniValue valReply(UniValue::VSTR);
     if (!valReply.read(strReply))
         throw runtime_error("couldn't parse reply from server");
     const UniValue& reply = valReply.get_obj();
@@ -155,6 +160,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "debugnet"               , 0 },
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
+    { "getblockstats"          , 2 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
     { "sendalert"              , 4 },
@@ -202,6 +208,18 @@ CRPCConvertTable::CRPCConvertTable()
 
 static CRPCConvertTable rpcCvtTable;
 
+/** Non-RFC4627 JSON parser, accepts internal values (such as numbers, true, false, null)
+ * as well as objects and arrays.
+ */
+UniValue ParseNonRFCJSONValue(const std::string& strVal)
+{
+    UniValue jVal;
+    if (!jVal.read(std::string("[")+strVal+std::string("]")) ||
+        !jVal.isArray() || jVal.size()!=1)
+        throw runtime_error(string("Error parsing JSON:")+strVal);
+    return jVal[0];
+}
+
 // Convert strings to command-specific RPC representation
 UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::string> &strParams)
 {
@@ -210,17 +228,14 @@ UniValue RPCConvertValues(const std::string &strMethod, const std::vector<std::s
     for (unsigned int idx = 0; idx < strParams.size(); idx++) {
         const std::string& strVal = strParams[idx];
 
-        // insert string value directly
         if (!rpcCvtTable.convert(strMethod, idx)) {
+            // insert string value directly
             params.push_back(strVal);
         }
 
         // parse string as JSON, insert bool/number/object/etc. value
         else {
-            UniValue jVal;
-            if (!jVal.read(strVal))
-                throw runtime_error(string("Error parsing JSON:")+strVal);
-            params.push_back(jVal);
+            params.push_back(ParseNonRFCJSONValue(strVal));
         }
 
     }
@@ -250,13 +265,13 @@ int CommandLineRPC(int argc, char *argv[])
         UniValue params = RPCConvertValues(strMethod, strParams);
 
         // Execute
-        UniValue reply = CallRPC(strMethod, params);
+        const UniValue reply = CallRPC(strMethod, params);
 
         // Parse reply
         const UniValue& result = find_value(reply, "result");
         const UniValue& error  = find_value(reply, "error");
 
-        if (error.isNull())
+        if (!error.isNull())
         {
             // Error
             strPrint = "error: " + error.write();
@@ -271,7 +286,7 @@ int CommandLineRPC(int argc, char *argv[])
             else if (result.isStr())
                 strPrint = result.get_str();
             else
-                strPrint = result.write();
+                strPrint = result.write(2);
         }
     }
     catch (std::exception& e)

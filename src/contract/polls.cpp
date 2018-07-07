@@ -42,7 +42,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 
     if (sTitle.empty() || sQuestion.empty() || sAnswers.empty() || sURL.empty())
     {
-        return std::make_pair("Error", "Must specify a poll title, question, answers, and URL\n");
+        return std::make_pair("Error", "Must specify a poll title, question, answers, and URL");
     }
     else if (days < 7)
         return std::make_pair("Error", "Minimum duration is 7 days; please specify a longer poll duration.");
@@ -59,7 +59,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
             {
                 std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
                 std::string contract = "<TITLE>" + sTitle + "</TITLE><DAYS>" + std::to_string(days) + "</DAYS><QUESTION>" + sQuestion + "</QUESTION><ANSWERS>" + sAnswers + "</ANSWERS><SHARETYPE>" + std::to_string(iSharetype) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                std::string result = AddContract("poll", sTitle, contract);
+                std::string result = SendContract("poll", sTitle, contract);
                 return std::make_pair("Success",result);
             }
         }
@@ -69,7 +69,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer)
 {
     if (sTitle.empty() || sAnswer.empty())
-        return std::make_pair("Error", "Must specify a poll title and answers\n");
+        return std::make_pair("Error", "Must specify a poll title and answers");
     if (pwalletMain->IsLocked())
         return std::make_pair("Error", "Please fully unlock the wallet first.");
     else if (fWalletUnlockStakingOnly)
@@ -111,7 +111,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
 
     StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
-    LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f \r\n", cpid_age, stake_age, poll_duration);
+    LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f", cpid_age, stake_age, poll_duration);
     double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
     // Share Type 1 == "Magnitude"
@@ -135,7 +135,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         voter += GetProvableVotingWeightXML();
         std::string pk = sTitle + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
         std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
-        std::string result = AddContract("vote",pk,contract);
+        std::string result = SendContract("vote",pk,contract);
         std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
         return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
     }
@@ -368,7 +368,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
     double dTotalVotedBalance = RoundFromString(ExtractXML(sPayload,"<TOTALVOTEDBALANCE>","</TOTALVOTEDBALANCE>"),2);
     double dLegacyBalance = RoundFromString(ExtractXML(sXML,"<BALANCE>","</BALANCE>"),0);
 
-    if (fDebug10) LogPrintf(" \n Total Voted Balance %f, Legacy Balance %f \n",(float)dTotalVotedBalance,(float)dLegacyBalance);
+    if (fDebug10) LogPrintf("Total Voted Balance %f, Legacy Balance %f", dTotalVotedBalance, dLegacyBalance);
     if (!bCreatedAfterSecurityUpgrade) return dLegacyBalance;
 
     double dCounted = 0;
@@ -461,7 +461,7 @@ double GetMoneySupplyFactor()
 
 UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
 {
-    UniValue aPolls;
+    UniValue aPolls(UniValue::VARR);
     std::vector<polling::Poll> vPolls = GetPolls(bDetail, includeExpired, byTitle);
     for(const auto& iterPoll: vPolls)
     {
@@ -497,7 +497,6 @@ UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle)
 std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::string byTitle)
 {
     std::vector<polling::Poll> vPolls;
-    std::string::size_type longestanswer = 0;
     polling::Vote vote;
     std::vector<std::string> vAnswers;
     boost::to_lower(byTitle);
@@ -525,6 +524,7 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
             continue;
 
         vAnswers = split(poll.sAnswers.c_str(),";");
+        std::string::size_type longestanswer = 0;
 
         for (const std::string& answer : vAnswers)
             longestanswer = std::max( longestanswer, answer.length() );

@@ -166,9 +166,14 @@ private:
     boost::iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
 };
 
-int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet, string& strMessageRet);
 string HTTPPost(const string& strMsg, const map<string,string>& mapRequestHeaders);
 string HTTPReply(int nStatus, const string& strMsg, bool keepalive);
+bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
+                         std::string& http_method, std::string& http_uri);
+int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto);
+int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet);
+int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet,
+                    std::string& strMessageRet, int nProto);
 string JSONRPCRequest(const string& strMethod, const UniValue& params, const UniValue& id);
 UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id);
 string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id);

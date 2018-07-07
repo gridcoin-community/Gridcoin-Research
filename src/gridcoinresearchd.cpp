@@ -7,13 +7,13 @@
 #include "config/gridcoin-config.h"
 #endif
 
-#include "rpcserver.h"
-#include "rpcclient.h"
+#include "util.h"
+#include "net.h"
 #include "txdb.h"
 #include "walletdb.h"
-#include "net.h"
 #include "init.h"
-#include "util.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "ui_interface.h"
 
 #include <boost/thread.hpp>

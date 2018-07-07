@@ -14,11 +14,11 @@ class CBlockIndex;
 #include <univalue.h>
 
 #include "global_objects_noui.hpp"
-#include "util.h"
 #include "checkpoints.h"
+#include "util.h"
 
+void StartRPCThreads();
 void StopRPCThreads();
-void ThreadRPCServer(void* parg);
 int CommandLineRPC(int argc, char *argv[]);
 
 /*
