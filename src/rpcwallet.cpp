@@ -857,10 +857,17 @@ UniValue sendmany(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "sendmany <fromaccount> {address:amount,...} [minconf=1] [comment]\n"
                 "\n"
+                "<fromaccount> Specify account name to use or use '' to use all addresses in wallet\n"
+                "\n"
                 "amounts are double-precision floating point numbers\n"
                 + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
+    bool bFromAccount = false;
+
+    if (!strAccount.empty())
+        bFromAccount = true;
+
     UniValue sendTo = params[1].get_obj();
     int nMinDepth = 1;
     if (params.size() > 2)
@@ -869,7 +876,10 @@ UniValue sendmany(const UniValue& params, bool fHelp)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CWalletTx wtx;
-    wtx.strFromAccount = strAccount;
+
+    if (bFromAccount)
+        wtx.strFromAccount = strAccount;
+
     if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
         wtx.mapValue["comment"] = params[3].get_str();
 
@@ -899,8 +909,38 @@ UniValue sendmany(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    // Check funds
-    int64_t nBalance = GetAccountBalance(strAccount, nMinDepth);
+    // Check funds & Support non-account sendmany
+    int64_t nBalance;
+
+    if (bFromAccount)
+        nBalance = GetAccountBalance(strAccount, nMinDepth);
+
+    else
+    {
+        isminefilter filter = MINE_SPENDABLE;
+
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            const CWalletTx& wtx = (*it).second;
+            if (!wtx.IsTrusted())
+                continue;
+
+            int64_t allFee;
+            string strSentAccount;
+            list<pair<CTxDestination, int64_t> > listReceived;
+            list<pair<CTxDestination, int64_t> > listSent;
+            wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
+            if (wtx.GetDepthInMainChain() >= nMinDepth && wtx.GetBlocksToMaturity() == 0)
+            {
+                for (auto const& r : listReceived)
+                    nBalance += r.second;
+            }
+            for (auto const& r : listSent)
+                nBalance -= r.second;
+            nBalance -= allFee;
+        }
+    }
+
     if (totalAmount > nBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
 
