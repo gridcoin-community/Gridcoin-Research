@@ -13,7 +13,6 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
@@ -114,8 +113,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 std::string getfilecontents(std::string filename);
-int CreateRestorePoint();
-int DownloadBlocks();
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
@@ -2685,27 +2682,6 @@ UniValue decryptphrase(const UniValue& params, bool fHelp)
     return res;
 }
 
-/*
-#ifdef WIN32
-UniValue downloadblocks(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "downloadblocks\n"
-                "\n"
-                "Download blocks from a snapshot\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r = Restarter::DownloadGridcoinBlocks();
-
-    res.pushKV("Download Blocks", r);
-
-    return res;
-}
-#endif
-*/
-
 UniValue encryptphrase(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2757,60 +2733,6 @@ UniValue networktime(const UniValue& params, bool fHelp)
 
     return res;
 }
-
-#ifdef WIN32
-UniValue reindex(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "reindex\n"
-                "\n"
-                "Re-index the block chain\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r = Restarter::CreateGridcoinRestorePoint();
-    Restarter::ReindexGridcoinWallet();
-    res.pushKV("Reindex Chain", r);
-
-    return res;
-}
-
-UniValue restart(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "restart\n"
-                "\n"
-                "Restarts the wallet\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LogPrintf("Restarting Gridcoin...");
-    int iResult = Restarter::RestartGridcoin();
-    res.pushKV("RebootClient", iResult);
-
-    return res;
-}
-
-UniValue restorepoint(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "restorepoint\n"
-                "\n"
-                "Create a restore point\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r= Restarter::CreateGridcoinRestorePoint();
-    //We must stop the node before we can do this
-    //RestartGridcoin();
-    res.pushKV("Restore Point", r);
-
-    return res;
-}
-#endif
 
 UniValue execute(const UniValue& params, bool fHelp)
 {
