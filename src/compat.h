@@ -2,8 +2,18 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
-#ifndef _BITCOIN_COMPAT_H
-#define _BITCOIN_COMPAT_H 1
+#ifndef _GRIDCOIN_COMPAT_H
+#define _GRIDCOIN_COMPAT_H 1
+
+#include <type_traits>
+
+// GCC 4.8 is missing some C++11 type_traits,
+// https://www.gnu.org/software/gcc/gcc-5/changes.html
+#if defined(__GNUC__) && __GNUC__ < 5
+#define IS_TRIVIALLY_CONSTRUCTIBLE std::is_trivial
+#else
+#define IS_TRIVIALLY_CONSTRUCTIBLE std::is_trivially_constructible
+#endif
 
 #ifdef WIN32
 #ifdef _WIN32_WINNT
