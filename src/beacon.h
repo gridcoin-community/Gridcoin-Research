@@ -28,7 +28,7 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
 //! \param pubKey Beacon public key.
 //! \param privKey Beacon private key.
 //!
-void StoreBeaconKeys(
+bool StoreBeaconKeys(
         const std::string &cpid,
         const std::string &pubKey,
         const std::string &privKey);
