@@ -12,40 +12,6 @@
 #include <string>
 namespace utf = boost::unit_test;
 
-namespace
-{
-   // Arbitrary random characters generated with Python UUID.
-   const std::string TEST_CPID("17c65330c0924259b2f93c31d25b03ac");
-
-   struct GridcoinTestsConfig
-   {
-      GridcoinTestsConfig()
-      {
-         // Create a fake CPID
-         StructCPID cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
-         cpid.projectname = "My Simple Test Project";
-         cpid.entries = 1;
-         cpid.cpid = TEST_CPID;
-         cpid.payments = 123;
-         //cpid.EarliestPaymentTime = 1490260000;
-         mvMagnitudes[TEST_CPID] = cpid;
-
-         // Create a fake DPOR
-         StructCPID dpor = GetInitializedStructCPID2(TEST_CPID, mvDPOR);
-         dpor.Magnitude = 125;
-         mvDPOR[TEST_CPID] = dpor;
-      }
-
-      ~GridcoinTestsConfig()
-      {
-         // Clean up.
-         mvMagnitudes.erase(TEST_CPID);
-         mvDPOR.erase(TEST_CPID);
-      }
-   };
-}
-
-BOOST_GLOBAL_FIXTURE(GridcoinTestsConfig);
 
 BOOST_AUTO_TEST_SUITE(gridcoin_beacon_tests)
 
@@ -56,10 +22,10 @@ BOOST_AUTO_TEST_SUITE(gridcoin_beacon_tests)
     * p: GetBeaconElements, GetBeaconPublicKey, BeaconTimeStamp, HasActiveBeacon [ClearSky]
     * p: VerifyBeaconContractTx [ok, i guess]
  * contract
-    * SignBlockWithCPID
-    * VerifyCPIDSignature
-    * SignContract
-    * VerifyContract
+    * SignBlockWithCPID [Integ]
+    * VerifyCPIDSignature [Integ]
+    * SignMessage [Smoke]
+    * (contract sign/verify in another test suite)
  * rpcblockchain ImportBeaconKeysFromConfig
  * rpcblockchain AdvertiseBeacon
  * main GridcoinServices? timer that calls import
@@ -87,9 +53,11 @@ struct GridcoinBeaconTestsFixture
 "d0cea85e7a4a3e30af709e672dace08b": "ZDBjZWE4NWU3YTRhM2UzMGFmNzA5ZTY3MmRhY2UwOGI5OGM4M2Q5NDY2Yzc2NjNhOWI2YjNlNjc5Nzk5NjdjNzllY2EzOTYzNzA5MzllOTY5OWM4MzY5Yjk4NmI2M2M1NzQ2OTZlNzA3MDY4NmQ2NjcwNzQ3NjZjNjI2ZTZhNDE2ODZlNjI2YTZkMmY2NDcwNmU7OTQ0MmI4OWRlMzcyMzE0MWEyZDQ5YWNhZTIxN2QyYTNjYzRhNmQ4NjFlMzQ3YTZiZGZiZTYwY2JjNmMwZDc1Yzttb0FhYmFzRGlMRjd5YURKSHZQS0REc0RvdUYyUXhNb0J5OzA0MDU3ZWU2MzhhNTY3NzcwM2YyMWNjMzk5MmI1MDc0ZmI3YjA0MWUxYTI3MDg2NWYzZTAwNGJhNWFlNGNkN2IxMWZkZmY1YTE0ZWU4MDk3ODBjODJlZDhjNTZkMmM5N2FjOTgyMzJhMzAwZTU4ZjZiZmQ0ZTM3YjZkZjQzOTI0ZmE=",
     */
     const int64_t beacon1_time,beacon2_time;
+    const std::string TEST_CPID;
     GridcoinBeaconTestsFixture()
         : beacon1_time(pindexBest->nTime - 600 /* 10 minutes ago */)
         , beacon2_time(pindexBest->nTime - (5 * 60 * 24 * 30 * 60) - 1 /* 5 months ago */)
+        , TEST_CPID("17c65330c0924259b2f93c31d25b03ad")
     {
         // setup function
         /* Add cpid beacon, so it is valid (age 10 minutes)
@@ -133,7 +101,7 @@ BOOST_FIXTURE_TEST_CASE(HasActiveBeacon_clearsky, GridcoinBeaconTestsFixture)
 }
 
 
-BOOST_AUTO_TEST_CASE(Generate_Retrieve_integration)
+BOOST_FIXTURE_TEST_CASE(Generate_Retrieve_integration, GridcoinBeaconTestsFixture)
 {
     CKey generatedKey, retrievedKey;
     BOOST_CHECK( GenerateBeaconKeys(TEST_CPID, generatedKey) );
