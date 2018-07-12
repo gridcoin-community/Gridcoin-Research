@@ -66,6 +66,8 @@ GRIDCOIN_CORE_H = \
 	checkpoints.h \
 	coincontrol.h \
 	compat.h \
+	compat/byteswap.h \
+	compat/endian.h \
 	contract/polls.h \
 	contract/contract.h \
 	cpid.h \
@@ -87,6 +89,7 @@ GRIDCOIN_CORE_H = \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
+	prevector.h \
 	protocol.h \
 	rpcclient.h \
 	rpcprotocol.h \
@@ -215,7 +218,11 @@ crypto_libgridcoin_crypto_avx2_a_CXXFLAGS += $(AVX2_CXXFLAGS)
 crypto_libgridcoin_crypto_avx2_a_CPPFLAGS += -DENABLE_AVX2
 crypto_libgridcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp
 
-
+CTAES_DIST =  crypto/ctaes/bench.c
+CTAES_DIST += crypto/ctaes/ctaes.c
+CTAES_DIST += crypto/ctaes/ctaes.h
+CTAES_DIST += crypto/ctaes/README.md
+CTAES_DIST += crypto/ctaes/test.c
 
 # gridcoinresearchd binary #
 gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
