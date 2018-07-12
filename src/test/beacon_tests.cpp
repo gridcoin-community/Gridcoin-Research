@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_SUITE(gridcoin_beacon_tests)
     * n:GenerateBeaconKeys [Integ]
     * n:GetStoredBeaconPrivateKey [Integ]
     * p: GetBeaconElements, GetBeaconPublicKey, BeaconTimeStamp, HasActiveBeacon [ClearSky]
-    * p: VerifyBeaconContractTx
+    * p: VerifyBeaconContractTx [ok, i guess]
  * contract
     * SignMessage
     * Verify signature
@@ -84,9 +84,10 @@ struct GridcoinBeaconTestsFixture
 "c5c0a595d39ff3a00a2aca7485f1754f": "YzVjMGE1OTVkMzlmZjNhMDBhMmFjYTc0ODVmMTc1NGY5N2M2MzUzNjM5M2FjYTM4Mzc5MTY1NmIzZDM5NjY5Njk4M2MzNWM4OTYzZDk3MzU2OTljYzY2Yjk2M2UzZTQwNjMzMTc1NDE3NDY2N2I2ZjYyNmUyZjY0N2I7YjE2NDdhMTFmYzIzOWI5NTU2ODAyYzE2YjhhNWNhODY0M2U4MDBkMDE5NTE5MDdkMGU2NzI5NGU0MjMyNzNjYTttclZTNkVRVzVoNEcxRnM1QTlFTWFnajFLNXllTkRNSGdrOzA0ODNjY2YyZTA3MWI3Yjk3OTU4ZGM4MzI0YmNlNDA2NDQzODk2ZDEyYjk5MmNjZjQ5ZDA3YjIxZTgzMzU2NGVkODg4NzU3YzhlOGNjMWJmMjVhNWM0NzQ1MDIzOTc2N2M2MDIxZWJjNjAyYzY3MjcwMDY0MGYyODZjNzBlNTQwMGM=",
 "d0cea85e7a4a3e30af709e672dace08b": "ZDBjZWE4NWU3YTRhM2UzMGFmNzA5ZTY3MmRhY2UwOGI5OGM4M2Q5NDY2Yzc2NjNhOWI2YjNlNjc5Nzk5NjdjNzllY2EzOTYzNzA5MzllOTY5OWM4MzY5Yjk4NmI2M2M1NzQ2OTZlNzA3MDY4NmQ2NjcwNzQ3NjZjNjI2ZTZhNDE2ODZlNjI2YTZkMmY2NDcwNmU7OTQ0MmI4OWRlMzcyMzE0MWEyZDQ5YWNhZTIxN2QyYTNjYzRhNmQ4NjFlMzQ3YTZiZGZiZTYwY2JjNmMwZDc1Yzttb0FhYmFzRGlMRjd5YURKSHZQS0REc0RvdUYyUXhNb0J5OzA0MDU3ZWU2MzhhNTY3NzcwM2YyMWNjMzk5MmI1MDc0ZmI3YjA0MWUxYTI3MDg2NWYzZTAwNGJhNWFlNGNkN2IxMWZkZmY1YTE0ZWU4MDk3ODBjODJlZDhjNTZkMmM5N2FjOTgyMzJhMzAwZTU4ZjZiZmQ0ZTM3YjZkZjQzOTI0ZmE=",
     */
-    const int64_t beacon1_time;
+    const int64_t beacon1_time,beacon2_time;
     GridcoinBeaconTestsFixture()
         : beacon1_time(pindexBest->nTime - 600 /* 10 minutes ago */)
+        , beacon2_time(pindexBest->nTime - (5 * 60 * 24 * 30 * 60) - 1 /* 5 months ago */)
     {
         // setup function
         /* Add cpid beacon, so it is valid (age 10 minutes)
@@ -94,6 +95,12 @@ struct GridcoinBeaconTestsFixture
         WriteCache("beacon","b67846ea8547cedd2d61ce492fe14102",
             "YjY3ODQ2ZWE4NTQ3Y2VkZDJkNjFjZTQ5MmZlMTQxMDIzNTM4MzgzZDlhOWEzZWM5OTZjYTk3Mzk0MDM5OTUzNmM3NmM2NjZjMzQ5NDQxYzkzZTlkOTM2OTZkM2M0MjZiNzk2MjZlNmE2ZjZlNzA0MTcwNmU2ZjZhNzU2NjY0NjkyZjZmNjY3NTs3MmQzMDlhMDI5OGJmNjc0NTI2ZmI1NDI3NjMxY2NjZWIyNGQzMDA4NjVlOTM0Mjg1NjJiODIwZGMxNTA2MGQyO21tejQ4UFBBcGhWNk15ZmFxRGlZaTd6OUMzTkVnWGFTajU7MDRhMTQzODgxZjQwYWJiMzRiOTI4ZWZhZGEyODczZjY1NzFkYmY3NTgzYjMzMzU5ZWIxMjhiZWVlMzA5YWZmMjViNGUwY2E1ZTlhMWQ4MzUwNzkxNzA1MzkyY2I5NDQ1ZDIzY2ZlY2NlODRjYmYxMDEzNDRmNGYxY2QxZjg3N2Y0Yg==",
             beacon1_time);
+        /* Beacon that is valid, but renewable */
+        WriteCache("beacon","bc0621a4ac4610ffa400a0d298c02e23",
+            "YmMwNjIxYTRhYzQ2MTBmZmE0MDBhMGQyOThjMDJlMjNjYWMyOWEzZGM1OTc2N2M4OTk5OWM0M2M0MjNjYzM0MzM5NzAzYjk4NjgzMmM4YzgzODk5Njk5Nzk3M2U2NTk4NmI2MjZlNjY3NDcwNzg2NjZmNzQ0MTcwNzE3NTcwNmY2ZDZhNmY2NjJmNmY2Njc1OzBlNWQwODg1ODllYmU3MTBjODBlOWM2YjU1YjgwYWQzOTZkOTk2ZWUxNzBlMGVkNjQyMmVhMWI1ZTk5NDVlYjg7bW42Mm9rNzl2RmFOc3N6ZUVxZGUybldWUXRKVmdaUHo2RjswNGYyMTU1OWViY2Q2NzhmYTg3N2RiZThhYjAwOWE4YjZlNWNkODA3ZWE3Y2FlMzAxNDNiMjU1YTYyNjRmYmMxMjUzMmM2NGZjZGYyMjcxOTk2ODk2ZDQ3NTIzNGYzN2E5YjhjOWE4YTQzMjlhMDQyNGVlMjg2M2NiY2NlMWY1MmRm",
+            beacon2_time);
+        /* Ensure this cpid is not present */
+        DeleteCache("beacon","363d6c820aef2dbbe082768b40feed0d");
     }
     ~GridcoinBeaconTestsFixture()
     {     // teardown function
@@ -139,6 +146,79 @@ BOOST_AUTO_TEST_CASE(Generate_Retrieve_integration)
     BOOST_CHECK( !retrievedKey.GetPrivKey().empty() );
     bool bool1,bool2;
     BOOST_CHECK( retrievedKey.GetSecret(bool1) == generatedKey.GetSecret(bool2));
+}
+
+
+/* p: VerifyBeaconContractTx
+ClearSky: cpid not in cache, well-formed beacon
+*/
+
+BOOST_FIXTURE_TEST_CASE(VerifyContract_clearsky, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>beacon</MT><MK>363d6c820aef2dbbe082768b40feed0d</MK>"
+    "<MV>MzYzZDZjODIwYWVmMmRiYmUwODI3NjhiNDBmZWVkMGQ5OTQzMzgzNmM3OTg5YTkzY2E2ZDY5NjgzNWNhM2MzYzYzNjQzODQxY2E5OWM1NmE5OTk5NmY5Njk0YzQ5NjY3NzE2NjczNzQ3MDZmNzU2OTZhNmY2ODZlNjI2ZjMzNDE2ODZlNjI2YTZkMmY2NDcwNmU7ZjhlMTZlN2Q5Zjk1NTI5MzlmOWIwMjczNDkwYThiYmNmMjBiOTJhNDY1ODNjZjA4NjZmZDdjYjIwYWY0MzM3ODttb0djZVVjbmhNTm9QaEQxNEpRUGJyd3JVN3dpdjlMRGZrOzA0ZGMwZTg5OGZkNjNlNGU1ODZiNzBkZTRlNWI0MTU0NGI3OTRhMWU4MWY3Nzg2NzAxMWI2NzIzNzVjMDUzMTk3M2M5OGMzNmUwYTMyMjVkYTRhOWQ2NTczZGMyYzgzMjMwMGYyOGJiZjk0Mzk4ZmYzYzU4Njc3ZjNkYTk1ODYwMTQ=</MV>"
+    "<MA>A</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK(true == VerifyBeaconContractTx(tx));
+}
+
+BOOST_FIXTURE_TEST_CASE(VerifyContract_not_beacon, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>kek</MT><MK>363d6c820aef2dbbe082768b40feed0d</MK>"
+    "<MV>MzYzZDZjODIwYWVmMmRiYmUwODI3NjhiNDBmZWVkMGQ5OTQzMzgzNmM3OTg5YTkzY2E2ZDY5NjgzNWNhM2MzYzYzNjQzODQxY2E5OWM1NmE5OTk5NmY5Njk0YzQ5NjY3NzE2NjczNzQ3MDZmNzU2OTZhNmY2ODZlNjI2ZjMzNDE2ODZlNjI2YTZkMmY2NDcwNmU7ZjhlMTZlN2Q5Zjk1NTI5MzlmOWIwMjczNDkwYThiYmNmMjBiOTJhNDY1ODNjZjA4NjZmZDdjYjIwYWY0MzM3ODttb0djZVVjbmhNTm9QaEQxNEpRUGJyd3JVN3dpdjlMRGZrOzA0ZGMwZTg5OGZkNjNlNGU1ODZiNzBkZTRlNWI0MTU0NGI3OTRhMWU4MWY3Nzg2NzAxMWI2NzIzNzVjMDUzMTk3M2M5OGMzNmUwYTMyMjVkYTRhOWQ2NTczZGMyYzgzMjMwMGYyOGJiZjk0Mzk4ZmYzYzU4Njc3ZjNkYTk1ODYwMTQ=</MV>"
+    "<MA>A</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK(true == VerifyBeaconContractTx(tx));
+}
+BOOST_FIXTURE_TEST_CASE(VerifyContract_not_add, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>beacon</MT><MK>363d6c820aef2dbbe082768b40feed0d</MK>"
+    "<MV>MzYzZDZjODIwYWVmMmRiYmUwODI3NjhiNDBmZWVkMGQ5OTQzMzgzNmM3OTg5YTkzY2E2ZDY5NjgzNWNhM2MzYzYzNjQzODQxY2E5OWM1NmE5OTk5NmY5Njk0YzQ5NjY3NzE2NjczNzQ3MDZmNzU2OTZhNmY2ODZlNjI2ZjMzNDE2ODZlNjI2YTZkMmY2NDcwNmU7ZjhlMTZlN2Q5Zjk1NTI5MzlmOWIwMjczNDkwYThiYmNmMjBiOTJhNDY1ODNjZjA4NjZmZDdjYjIwYWY0MzM3ODttb0djZVVjbmhNTm9QaEQxNEpRUGJyd3JVN3dpdjlMRGZrOzA0ZGMwZTg5OGZkNjNlNGU1ODZiNzBkZTRlNWI0MTU0NGI3OTRhMWU4MWY3Nzg2NzAxMWI2NzIzNzVjMDUzMTk3M2M5OGMzNmUwYTMyMjVkYTRhOWQ2NTczZGMyYzgzMjMwMGYyOGJiZjk0Mzk4ZmYzYzU4Njc3ZjNkYTk1ODYwMTQ=</MV>"
+    "<MA>D</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK(true == VerifyBeaconContractTx(tx));
+}
+BOOST_FIXTURE_TEST_CASE(VerifyContract_no_value, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>beacon</MT><MK>363d6c820aef2dbbe082768b40feed0d</MK>"
+    "<MV></MV>"
+    "<MA>A</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK(false == VerifyBeaconContractTx(tx));
+}
+/* todo: empty or invalid beacon parts */
+
+BOOST_FIXTURE_TEST_CASE(VerifyContract_recent, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>beacon</MT><MK>b67846ea8547cedd2d61ce492fe14102</MK>"
+    "<MV>YjY3ODQ2ZWE4NTQ3Y2VkZDJkNjFjZTQ5MmZlMTQxMDIzNTM4MzgzZDlhOWEzZWM5OTZjYTk3Mzk0MDM5OTUzNmM3NmM2NjZjMzQ5NDQxYzkzZTlkOTM2OTZkM2M0MjZiNzk2MjZlNmE2ZjZlNzA0MTcwNmU2ZjZhNzU2NjY0NjkyZjZmNjY3NTs3MmQzMDlhMDI5OGJmNjc0NTI2ZmI1NDI3NjMxY2NjZWIyNGQzMDA4NjVlOTM0Mjg1NjJiODIwZGMxNTA2MGQyO21tejQ4UFBBcGhWNk15ZmFxRGlZaTd6OUMzTkVnWGFTajU7MDRhMTQzODgxZjQwYWJiMzRiOTI4ZWZhZGEyODczZjY1NzFkYmY3NTgzYjMzMzU5ZWIxMjhiZWVlMzA5YWZmMjViNGUwY2E1ZTlhMWQ4MzUwNzkxNzA1MzkyY2I5NDQ1ZDIzY2ZlY2NlODRjYmYxMDEzNDRmNGYxY2QxZjg3N2Y0Yg==</MV>"
+    "<MA>A</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK_EQUAL(false, VerifyBeaconContractTx(tx));
+}
+/* todo: just now (time=time) */
+BOOST_FIXTURE_TEST_CASE(VerifyContract_renew_good, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>beacon</MT><MK>bc0621a4ac4610ffa400a0d298c02e23</MK>"
+    "<MV>YmMwNjIxYTRhYzQ2MTBmZmE0MDBhMGQyOThjMDJlMjNjYWMyOWEzZGM1OTc2N2M4OTk5OWM0M2M0MjNjYzM0MzM5NzAzYjk4NjgzMmM4YzgzODk5Njk5Nzk3M2U2NTk4NmI2MjZlNjY3NDcwNzg2NjZmNzQ0MTcwNzE3NTcwNmY2ZDZhNmY2NjJmNmY2Njc1OzBlNWQwODg1ODllYmU3MTBjODBlOWM2YjU1YjgwYWQzOTZkOTk2ZWUxNzBlMGVkNjQyMmVhMWI1ZTk5NDVlYjg7bW42Mm9rNzl2RmFOc3N6ZUVxZGUybldWUXRKVmdaUHo2RjswNGYyMTU1OWViY2Q2NzhmYTg3N2RiZThhYjAwOWE4YjZlNWNkODA3ZWE3Y2FlMzAxNDNiMjU1YTYyNjRmYmMxMjUzMmM2NGZjZGYyMjcxOTk2ODk2ZDQ3NTIzNGYzN2E5YjhjOWE4YTQzMjlhMDQyNGVlMjg2M2NiY2NlMWY1MmRm</MV>"
+    "<MA>A</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK(true == VerifyBeaconContractTx(tx));
+}
+BOOST_FIXTURE_TEST_CASE(VerifyContract_renew_otherkey, GridcoinBeaconTestsFixture)
+{
+    CTransaction tx;
+    tx.hashBoinc = "<MT>beacon</MT><MK>bc0621a4ac4610ffa400a0d298c02e23</MK>"
+    "<MV>YmMwNjIxYTRhYzQ2MTBmZmE0MDBhMGQyOThjMDJlMjNjYWMyOWEzZGM1OTc2N2M4OTk5OWM0M2M0MjNjYzM0MzM5NzAzYjk4NjgzMmM4YzgzODk5Njk5Nzk3M2U2NTk4NmI2MjZlNjY3NDcwNzg2NjZmNzQ0MTcwNzE3NTcwNmY2ZDZhNmY2NjJmNmY2Njc1OzBlNWQwODg1ODllYmU3MTBjODBlOWM2YjU1YjgwYWQzOTZkOTk2ZWUxNzBlMGVkNjQyMmVhMWI1ZTk5NDVlYjg7bW42Mm9rNzl2RmFOc3N6ZUVxZGUybldWUXRKVmdaUHo2RjswNGYyMTU1OWViY2Q2NzhmYTg3N2RiZThhYjAwOWE4YjZlNWNkODA3ZWE3Y2FlMzAxNDNiMjU1YTYyNjRmYmMxMjUzMmM2NGZjZGYyMjcxOTk2ODk2ZDQ3NTIzNGYzN2E5YjhjOWE4YTQzMjlhOTk5NGVlMjg2M2NiY2NlMWY1MmRm</MV>"
+    "<MA>A</MA>";
+    tx.nTime= tx.nLockTime= pindexBest->nTime;
+    BOOST_CHECK_EQUAL(false, VerifyBeaconContractTx(tx));
 }
 
 
