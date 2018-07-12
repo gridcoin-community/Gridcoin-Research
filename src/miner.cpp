@@ -793,16 +793,20 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
 
     double mint = CoinToDouble(nReward);
     double PORDiff = GetBlockDifficulty(blocknew.nBits);
-    double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
 
     LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f \n",
         miningcpid.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
 
-    //INVESTORS
-    if(blocknew.nVersion < 8) mintlimit = std::max(mintlimit, 0.0051);
-    if (nReward == 0 || mint < mintlimit)
+    // Mint Limiter
+    if(blocknew.nVersion < 10)
     {
-            return error("CreateGridcoinReward: Mint %f of %f too small",(double)mint,(double)mintlimit);
+        double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
+        //INVESTORS
+        if(blocknew.nVersion < 8) mintlimit = std::max(mintlimit, 0.0051);
+        if (nReward == 0 || mint < mintlimit)
+        {
+                return error("CreateGridcoinReward: Mint %f of %f too small",(double)mint,(double)mintlimit);
+        }
     }
 
     //fill in reward and boinc
