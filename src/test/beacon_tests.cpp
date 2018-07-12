@@ -187,6 +187,24 @@ BOOST_FIXTURE_TEST_CASE(VerifyContract_renew_otherkey, GridcoinBeaconTestsFixtur
     BOOST_CHECK_EQUAL(false, VerifyBeaconContractTx(tx));
 }
 
+struct GridcoinBeaconSigningFixture
+ : public GridcoinBeaconTestsFixture
+{
+    GridcoinBeaconSigningFixture()
+    {   // setup function
+        // Generate new beacon keys
+        CKey generatedKey;
+        BOOST_CHECK( GenerateBeaconKeys(TEST_CPID, generatedKey) );
+        //Simulate that a beacon was accepted
+        WriteCache("beacon",TEST_CPID,
+            EncodeBase64(TEST_CPID+";stuff1;stuff2;"+HexStr(generatedKey.GetPubKey().Raw())),
+            pindexBest->nTime - 600);
+    }
+    ~GridcoinBeaconSigningFixture()
+    {     // teardown function
+        DeleteCache("beacon",TEST_CPID);
+    }
+};
 
 BOOST_AUTO_TEST_CASE(SignMessage1_smoke)
 {
@@ -195,6 +213,15 @@ BOOST_AUTO_TEST_CASE(SignMessage1_smoke)
     BOOST_CHECK( !signature.empty() );
     BOOST_CHECK( signature.find(' ')==std::string::npos );
     /* there is no verify signature ... */
+}
+BOOST_FIXTURE_TEST_CASE(CPID_Sign_Verify_integ, GridcoinBeaconSigningFixture)
+{
+    const std::string sBlockHash("Block Hash Sample Text");
+    std::string signature, sError;
+    BOOST_CHECK( SignBlockWithCPID(TEST_CPID, sBlockHash, signature, sError, false) );
+    BOOST_CHECK( !signature.empty() );
+    BOOST_CHECK( signature.find(' ')==std::string::npos );
+    BOOST_CHECK( VerifyCPIDSignature(TEST_CPID, sBlockHash, signature) );
 }
 
 BOOST_AUTO_TEST_SUITE_END()
