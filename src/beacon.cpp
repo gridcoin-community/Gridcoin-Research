@@ -22,6 +22,8 @@ namespace
 
 bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 {
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
     // Try to reuse 5-month-old beacon
     const std::string sBeaconPublicKey = GetBeaconPublicKey(cpid,false);
 
@@ -60,6 +62,8 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 
 bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
 {
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
     CPubKey oldKey(ParseHex(GetBeaconPublicKey(cpid, false)));
     if(oldKey.IsValid())
     {
@@ -99,6 +103,7 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
+    AssertLockHeld(cs_main);
     const AppCacheEntry& entry =  ReadCache("beacon", cpid);
     std::string sBeacon = entry.value;
     int64_t iLocktime = entry.timestamp;
@@ -118,6 +123,7 @@ bool HasActiveBeacon(const std::string& cpid)
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
+    AssertLockHeld(cs_main);
     const AppCacheEntry& entry = ReadCache("beacon", cpid);
 
     // Compare the age of the beacon to the age of the current block. If we have
@@ -133,6 +139,7 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
 
 bool VerifyBeaconContractTx(const CTransaction& tx)
 {
+    AssertLockHeld(cs_main);
     // Check if tx contains beacon advertisement and evaluate for certain conditions
     std::string chkMessageType = ExtractXML(tx.hashBoinc, "<MT>", "</MT>");
     std::string chkMessageAction = ExtractXML(tx.hashBoinc, "<MA>", "</MA>");

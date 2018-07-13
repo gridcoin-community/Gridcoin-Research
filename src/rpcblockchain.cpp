@@ -806,6 +806,7 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 
 bool ImportBeaconKeysFromConfig()
 {
+    AssertLockHeld(cs_main);
     string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,false);
     string sCPID(msPrimaryCPID);
     string strSecret= GetArgument("privatekey" + sCPID + (fTestNet ? "testnet" : ""), "");
