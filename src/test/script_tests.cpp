@@ -9,9 +9,6 @@
 #include <boost/foreach.hpp>
 #include <boost/preprocessor/stringize.hpp>
 #include <boost/test/unit_test.hpp>
-#include "json/json_spirit_reader_template.h"
-#include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_utils.h"
 
 #include "main.h"
 #include "wallet.h"
@@ -20,14 +17,14 @@
 #include "data/script_invalid.json.h"
 
 #include <cstdint>
+#include <univalue.h>
 
 using namespace std;
-using namespace json_spirit;
 using namespace boost::algorithm;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn, int nHashType);
-extern Array read_json(std::string& jsondata);
+extern UniValue read_json(std::string& content);
 
 CScript
 ParseScript(string s)
@@ -91,24 +88,24 @@ ParseScript(string s)
     return result;
 }
 
-Array
+UniValue
 read_json(std::string& content)
 {
     std::stringstream ss;
     ss.str(content);
     //ifstream ifs(testFile.string().c_str(), ifstream::in);
-    Value v;
-    if (!read_stream(ss, v))
+    UniValue v;
+    if (!v.read(content) || !v.isArray())
     {
         //if (ifs.fail())
         //    BOOST_ERROR("Cound not find/open " << filename);
         BOOST_ERROR("JSON syntax error in " << "Some file.");
-        return Array();
+        return UniValue(UniValue::VARR);
     }
-    if (v.type() != array_type)
+    if (!v.isArray())
     {
         BOOST_ERROR("Some file" << " does not contain a json array");
-        return Array();
+        return UniValue(UniValue::VARR);
     }
 
     return v.get_array();
@@ -124,12 +121,11 @@ BOOST_AUTO_TEST_CASE(script_valid)
     // Inner arrays are [ "scriptSig", "scriptPubKey" ]
     // ... where scriptSig and scriptPubKey are stringified
     // scripts.
-    Array tests = read_json(json_tests::script_valid);
+    UniValue tests = read_json(json_tests::script_valid);
 
-    BOOST_FOREACH(Value& tv, tests)
-    {
-        Array test = tv.get_array();
-        string strTest = write_string(tv, false);
+    for (unsigned int idx = 0; idx < tests.size(); idx++) {
+        UniValue test = tests[idx];
+        string strTest = test.write();
         if (test.size() < 2) // Allow size > 2; extra stuff ignored (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);
@@ -148,12 +144,11 @@ BOOST_AUTO_TEST_CASE(script_valid)
 BOOST_AUTO_TEST_CASE(script_invalid)
 {
     // Scripts that should evaluate as invalid
-    Array tests = read_json(json_tests::script_invalid);
-
-    BOOST_FOREACH(Value& tv, tests)
+    UniValue tests = read_json(json_tests::script_invalid);
+    for (unsigned int idx = 0; idx < tests.size(); idx++)
     {
-        Array test = tv.get_array();
-        string strTest = write_string(tv, false);
+        UniValue test = tests[idx];
+        string strTest = test.write();
         if (test.size() < 2) // Allow size > 2; extra stuff ignored (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);

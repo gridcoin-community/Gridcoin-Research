@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.13.0] 2018-06-02, leisure
+### Fixed
+ - Fix voting regression when done from the UI, #1133 (@Foggyx420).
+
+## [3.7.12.0] 2018-05-25, leisure
+
+### Fixed
+ - Fixes for displaying on high DPI displays, #517 (@skcin).
+ - Re-enable unit tests, add unit test to Travis, #769, #808 (@thecharlatan).
+ - Fix empty string in sendalert2 (@tomasbrod).
+
+### Added
+ - Neural Report RPC command, #1063 (@tomasbrod).
+ - GUI wallet redign with new icons and purple native style (@skcin).
+ 
+### Changed
+ - Switch to autotools and Depends from Bitcoin, #487 (@thecharlatan).
+ - Clean and update docs for new build system, remove outdated, #828 (@thecharlatan).
+ - Change estimated time to stake calculations to be more accurate, #1084 (@jamescowens).
+ - Move logging to tinyformat, #1009 (@thecharlatan).
+ - Improve appcache performance, #734 (@denravonska).
+ - Improve block index memory access performance, #679 (@denravonska).
+ - NN fixes: clean logging, explain mag single response, move contract to ndata_nresp (@denravonska)
+ - Updated translations:
+    - Turkish, #771 (@confuest).
+    - Chinese, #1012 (@linnaea).
+ - RPC refactor: Cleaner locks, better error handling, move execute calls to straght rpc calls, #1024 (@Foggyx420).
+ - Change locking primitives from Boost to STL, #1029 (@Foggyx420).
+
+### Removed
+ - gridcoindiagnostic RPC call (@denravonska).
+ - Galaza, #945 (@barton2526).
+ - Assertion in SignSignature, #998 (@thecharlatan).
+ - Upgrade menu, #1094 (@jamescowens).
+ - Acid test functions, #871 (@tomasbrod).
+ - Qt4 support, #801 (@denravonska).
+ 
 ## [3.7.11.0] 2018-03-15, leisure
 ### Fixed
  - Fix wallet being locked while flushing. It now requires a clean shutdown

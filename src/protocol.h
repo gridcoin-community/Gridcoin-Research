@@ -10,8 +10,8 @@
 #ifndef __INCLUDED_PROTOCOL_H__
 #define __INCLUDED_PROTOCOL_H__
 
-#include "serialize.h"
 #include "netbase.h"
+#include "serialize.h"
 #include <string>
 #include "uint256.h"
 

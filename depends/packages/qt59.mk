@@ -1,9 +1,9 @@
 PACKAGE=qt59
-$(package)_version=5.9.4
+$(package)_version=5.9.6
 $(package)_download_path=http://download.qt.io/official_releases/qt/5.9/$($(package)_version)/submodules
 $(package)_suffix=opensource-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=69e6bde3ab00673a77e1506173551fec7d0cd899fcbf9b1260517db1b61004cf
+$(package)_sha256_hash=eed620cb268b199bd83b3fc6a471c51d51e1dc2dbb5374fc97a0cc75facbe36f
 $(package)_dependencies=openssl zlib
 $(package)_linux_dependencies=freetype fontconfig libxcb libX11 xproto libXext
 $(package)_build_subdir=qtbase
@@ -11,20 +11,20 @@ $(package)_qt_libs=corelib network widgets gui plugins testlib concurrent xml
 $(package)_patches=0001-Fix-linguist-macro.patch mac-qmake.conf 0005-Make-sure-.pc-files-are-installed-correctly.patch 0008-Fix-linking-against-shared-static-libpng.patch 0011-Fix-linking-against-static-freetype2.patch 0012-Fix-linking-against-static-harfbuzz.patch 0001-Add-profile-for-cross-compilation-with-mingw-w64.patch 0030-Prevent-qmake-from-messing-static-lib-dependencies.patch 0021-Use-.dll.a-as-import-lib-extension.patch fix_qt_pkgconfig.patch 0013-Fix-linking-against-static-pcre.patch
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=e5cf81f88cc6811166ea631e6b7faa869a578a910dce61e951f98ff83f27bad6
+$(package)_qttranslations_sha256_hash=9822084f8e2d2939ba39f4af4c0c2320e45d5996762a9423f833055607604ed8
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=95aa5782d5a79be22fba36cea4dc2319cf2a2060a3cc1e24e6585b8d98996e87
+$(package)_qttools_sha256_hash=50e75417ec0c74bb8b1989d1d8e981ee83690dce7dfc0c2169f7c00f397e5117
 
 $(package)_qtcharts_file_name=qtcharts-$($(package)_suffix)
-$(package)_qtcharts_sha256_hash=75f72983fde6720a093d5f065d33f47e77a4bd2188ae9d41ebb9a4fcc459d3e7
+$(package)_qtcharts_sha256_hash=5fd60f08b1815b0e7b813c75a0ec726bffc7cc686b160bebf1e710e882ceadab
 
 $(package)_qtactiveqt_file_name=qtactiveqt-$($(package)_suffix)
-$(package)_qtactiveqt_sha256_hash=5664c60bb4f68531070770dc3df6279fc736337660bdf0f9da3fb7be145ac5aa
+$(package)_qtactiveqt_sha256_hash=ad2a041ab98a49b3c7f01fd293c375ab5b5f71bcc93c6b773544d7f08e8fbdf1
 $(package)_qtactiveqt_libs=axcontainer
 
 $(package)_qtsvg_file_name=qtsvg-$($(package)_suffix)
-$(package)_qtsvg_sha256_hash=a2f22732bfd4f0f0204443daaa59448298ab5018750dce4600d01d969355037a
+$(package)_qtsvg_sha256_hash=4318ce3c1f94ca865e3405aefb927f257ca824c5adc482302f1449ed34dbd8b8
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)

@@ -5,9 +5,10 @@
 
 #include "db.h"
 #include "net.h"
-#include "util.h"
 #include "main.h"
 #include "ui_interface.h"
+#include "util.h"
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <stdint.h>
@@ -38,7 +39,7 @@ void CDBEnv::EnvShutdown()
     fDbEnvInit = false;
     int ret = dbenv.close(0);
     if (ret != 0)
-        LogPrintf("EnvShutdown exception: %s (%d)\n", DbEnv::strerror(ret), ret);
+        LogPrintf("EnvShutdown exception: %s (%d)", DbEnv::strerror(ret), ret);
     if (!fMockDb)
         DbEnv((uint32_t)0).remove(strPath.c_str(),0);
 }
@@ -123,7 +124,7 @@ void CDBEnv::MakeMock()
     if (fShutdown)
         throw runtime_error("CDBEnv::MakeMock(): during shutdown");
 
-    LogPrint("db", "CDBEnv::MakeMock()\n");
+    LogPrint("db", "CDBEnv::MakeMock()");
 
     dbenv.set_cachesize(1, 0, 1);
     dbenv.set_lg_bsize(10485760*4);
@@ -182,16 +183,16 @@ bool CDBEnv::Salvage(std::string strFile, bool fAggressive,
     int result = db.verify(strFile.c_str(), NULL, &strDump, flags);
     if (result == DB_VERIFY_BAD)
     {
-        LogPrintf("Error: Salvage found errors, all data may not be recoverable.\n");
+        LogPrintf("Error: Salvage found errors, all data may not be recoverable.");
         if (!fAggressive)
         {
-            LogPrintf("Error: Rerun with aggressive mode to ignore errors and continue.\n");
+            LogPrintf("Error: Rerun with aggressive mode to ignore errors and continue.");
             return false;
         }
     }
     if (result != 0 && result != DB_VERIFY_BAD)
     {
-        LogPrintf("ERROR: db salvage failed: %d\n",result);
+        LogPrintf("ERROR: db salvage failed: %d", result);
         return false;
     }
 
@@ -361,7 +362,7 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                 bitdb.mapFileUseCount.erase(strFile);
 
                 bool fSuccess = true;
-                LogPrintf("Rewriting %s...\n", strFile);
+                LogPrintf("Rewriting %s...", strFile);
                 string strFileRes = strFile + ".rewrite";
                 { // surround usage of db with extra {}
                     CDB db(strFile.c_str(), "r");
@@ -375,7 +376,7 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                                             0);
                     if (ret > 0)
                     {
-                        LogPrintf("Cannot create database file %s\n", strFileRes);
+                        LogPrintf("Cannot create database file %s", strFileRes);
                         fSuccess = false;
                     }
 
@@ -431,7 +432,7 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                         fSuccess = false;
                 }
                 if (!fSuccess)
-                    LogPrintf("Rewriting of %s FAILED!\n", strFileRes);
+                    LogPrintf("Rewriting of %s FAILED!", strFileRes);
                 return fSuccess;
             }
         }
@@ -446,7 +447,7 @@ void CDBEnv::Flush(bool fShutdown)
     int64_t nStart = GetTimeMillis();
     // Flush log data to the actual data file
     //  on all files that are not in use
-    LogPrint("db", "Flush(%s)%s\n", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started");
+    LogPrint("db", "Flush(%s)%s", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started");
     if (!fDbEnvInit)
         return;
     {
@@ -456,23 +457,23 @@ void CDBEnv::Flush(bool fShutdown)
         {
             string strFile = (*mi).first;
             int nRefCount = (*mi).second;
-            LogPrint("db", "%s refcount=%d\n", strFile, nRefCount);
+            LogPrint("db", "%s refcount=%d", strFile, nRefCount);
             if (nRefCount == 0)
             {
                 // Move log data to the dat file
                 CloseDb(strFile);
-                LogPrint("db", "%s checkpoint\n", strFile);
+                LogPrint("db", "%s checkpoint", strFile);
                 dbenv.txn_checkpoint(0, 0, 0);
-                LogPrint("db", "%s detach\n", strFile);
+                LogPrint("db", "%s detach", strFile);
                 if (!fMockDb)
                     dbenv.lsn_reset(strFile.c_str(), 0);
-                LogPrint("db", "%s closed\n", strFile);
+                LogPrint("db", "%s closed", strFile);
                 mapFileUseCount.erase(mi++);
             }
             else
                 mi++;
         }
-        LogPrint("db", "DBFlush(%s)%s ended %15" PRId64 "ms\n", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started", GetTimeMillis() - nStart);
+        LogPrint("db", "DBFlush(%s)%s ended %15" PRId64 "ms", fShutdown ? "true" : "false", fDbEnvInit ? "" : " db not started", GetTimeMillis() - nStart);
         if (fShutdown)
         {
             char** listp;

@@ -7,12 +7,13 @@
 #include "config/gridcoin-config.h"
 #endif
 
-#include "bitcoinrpc.h"
+#include "util.h"
+#include "net.h"
 #include "txdb.h"
 #include "walletdb.h"
-#include "net.h"
 #include "init.h"
-#include "util.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "ui_interface.h"
 
 #include <boost/thread.hpp>
@@ -120,6 +121,9 @@ extern void noui_connect();
 int main(int argc, char* argv[])
 {
     bool fRet = false;
+
+    // Set global boolean to indicate intended absence of GUI to core...
+    fQtActive = false;
 
     // Connect bitcoind signal handlers
     noui_connect();

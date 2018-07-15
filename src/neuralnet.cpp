@@ -1,7 +1,7 @@
 #include "neuralnet.h"
-#include "util.h"
 #include "version.h"
 #include "sync.h"
+#include "util.h"
 
 #include <boost/filesystem/path.hpp>
 #include <boost/algorithm/string.hpp>
@@ -49,11 +49,6 @@ namespace NN
         return qtGetNeuralContract("");
     }
 
-    bool SetTestnetFlag(bool onTestnet)
-    {
-        return qtExecuteGenericFunction("SetTestNetFlag", onTestnet ? "TESTNET" : "MAINNET") != 0;
-    }
-
     bool SynchronizeDPOR(const std::string& data)
     {
         qtSyncWithDPORNodes(data);
@@ -62,7 +57,7 @@ namespace NN
 
     std::string ExecuteDotNetStringFunction(std::string function, std::string data)
     {
-        qtExecuteDotNetStringFunction(function, data);
+        return qtExecuteDotNetStringFunction(function, data);
     }
 
     int64_t IsNeuralNet()

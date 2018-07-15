@@ -45,8 +45,6 @@ Module modPersistedDataSystem
         Public Witnesses As Double
         Public Updated As DateTime
     End Structure
-    Public mdictNeuralNetworkQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
-    Public mdictNeuralNetworkAdditionalQuorumData As Dictionary(Of String, GRCSec.GridcoinData.NeuralStructure)
     Public Structure Row
         Public Database As String
         Public Table As String
@@ -80,13 +78,6 @@ Module modPersistedDataSystem
         Return sOut
     End Function
     Public Sub TestPDS1()
-    End Sub
-    Public Sub ReconnectToNeuralNetwork()
-        Try
-            mGRCData = New GRCSec.GridcoinData
-        Catch ex As Exception
-            Log("Unable to connect to neural network.")
-        End Try
     End Sub
     Public Function ConstructTargetFileName(sEtag As String) As String
         Dim sFilename = sEtag + ".gz"
@@ -226,21 +217,15 @@ Module modPersistedDataSystem
             'binary superblock will diff. When the 70 average mag requirement has been lifted from the
             'C++ code this placeholder can be removed.
             '            sOut += "00000000000000000000000000000001,32767;"
-            sOut += "</MAGNITUDES><QUOTES>"
+            sOut += "</MAGNITUDES>"
 
-            surrogateRow.Database = "Prices"
-            surrogateRow.Table = "Quotes"
-            lstCPIDs = GetList(surrogateRow, "*")
+            'If total network magnitude exceeds 1% tolerance of 115000 (116150) then do not form a contract
+            If lTotal > (115000 * 1.01) Then
+                Log("Total Network Magnitude out of bounds: " + Trim(lTotal))
+                Return "<ERROR>Contract Total Network Magnitude " + Trim(lTotal) + " out of bounds</ERROR>"
+            End If
 
-            For Each cpid As Row In lstCPIDs
-                Dim dNeuralMagnitude As Double = 0
-                Dim sRow As String = cpid.PrimaryKey + "," + Num(cpid.Magnitude) + ";"
-                lTotal = lTotal + Val("0" + Trim(cpid.Magnitude))
-                lRows = lRows + 1
-                sOut += sRow
-            Next
-
-            sOut += "</QUOTES><AVERAGES>"
+            sOut += "<AVERAGES>"
             Dim avg As Double
             avg = lTotal / (lRows + 0.01)
 
@@ -291,7 +276,7 @@ Module modPersistedDataSystem
             Return sOut
 
         Catch ex As Exception
-            Log("GetMagnitudeContract" + ex.Message)
+            Log("GetMagnitudeContract: " + ex.Message)
             Return ""
         End Try
 
@@ -789,21 +774,6 @@ Module modPersistedDataSystem
         CountOfAllProjects = lstProjects1.Count
         Return lstWhitelist
     End Function
-    Private Function GetConsensusData()
-        For x As Integer = 1 To 3
-            Try
-                ReconnectToNeuralNetwork()
-                mdictNeuralNetworkQuorumData = mGRCData.GetNeuralNetworkQuorumData2("quorumdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
-                mdictNeuralNetworkAdditionalQuorumData = mGRCData.GetNeuralNetworkQuorumData3("quorumconsensusdata", mbTestNet, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD))
-                If mdictNeuralNetworkQuorumData.Count > IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD) Then
-                    Return True
-                End If
-            Catch ex As Exception
-                Dim sErr As String = ex.Message
-            End Try
-        Next x
-        Return False
-    End Function
     Public Function GuiDoEvents()
         Try
             If Not mfrmMining Is Nothing Then
@@ -850,12 +820,11 @@ Module modPersistedDataSystem
         Dim WhitelistedProjects As Double = 0
         Dim ProjCount As Double = 0
         Dim lstWhitelist As List(Of Row)
-        Dim bConsensus As Boolean = False
-        bConsensus = GetConsensusData()
-        Log("Updating Magnitudes " + IIf(bConsensus, "With consensus data", "Without consensus data"))
+        Log("Updating Magnitudes..")
         Dim lStartingWitnesses As Long = CPIDCountWithNoWitnesses()
         Log(Trim(lStartingWitnesses) + " CPIDs starting out with clean slate.")
-
+        Dim MaxWitnessLoopCount As Integer = 5
+        Dim CurrentWitnessLoopCount As Integer = 0
         For z As Integer = 1 To 5
             Dim iRow As Long = 0
 
@@ -865,6 +834,8 @@ Module modPersistedDataSystem
                 surrogateRow.Table = "CPIDS"
                 lstCPIDs = GetList(surrogateRow, "*")
                 lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
+                'If Queue is <> 0 then Warn about undefined outcome. This should not occur anymore but would be a nice log catch if it does!
+                If mlQueue <> 0 Then Log("Warning: Reiterating through CPIDS due to some CPIDS having no witness; However mlQueue is not as expected " + Trim(mlQueue))
                 mlQueue = 0
                 For Each cpid As Row In lstCPIDs
                     Try
@@ -889,6 +860,7 @@ Module modPersistedDataSystem
             End Try
 
             'Thread.Join
+ThreadSleep:
             For x As Integer = 1 To 120
                 If mlQueue = 0 Then Exit For
                 GuiDoEvents()
@@ -897,7 +869,35 @@ Module modPersistedDataSystem
                 If mlPercentComplete < 10 Then mlPercentComplete = 10
             Next
             Dim lNoWitnesses As Long = CPIDCountWithNoWitnesses()
-            If mlQueue = 0 And lNoWitnesses = 0 Then Exit For Else Log(Trim(lNoWitnesses) + " CPIDs remaining with no witnesses.  Cleaning up problem.")
+            'If mlQueue = 0 And lNoWitnesses = 0 Then Exit For Else Log(Trim(lNoWitnesses) + " CPIDs remaining with no witnesses.  Cleaning up problem.")
+            'If Queue is 0 and the count in question is 0 we exit the loop as complete
+            'Decided to use small lock scope here and copy the number instead of making this area more complicated then need be.
+            Dim mlQueueCopy As Long = mlQueue
+            If mlQueueCopy = 0 And lNoWitnesses = 0 Then
+                Log("No CPIDs remain with no witness; Success")
+                Exit For
+                'If Queue is less then 0 which is a critical problem to RAC/MAG bug we handle the situation better
+                'However the locks should of taken care of this and I have not seen any of this case since
+            ElseIf mlQueueCopy < 0 Then
+                If lNoWitnesses = 0 Then
+                    Log("Warning: mlQueue is negative but no CPIDs with no witness remain! Undefined behaviour with contract possible; Continuing contract creation")
+                    Exit For
+                Else
+                    Log("Warning: mlQueue is negative but some CPIDs have no witness! Undefined behaviour with contract possible; Sleeping to try to rectify problem.")
+                    GoTo ThreadSleep
+                End If
+                'If Queue is greater then 0 then handle this situation properly! This means there is still Threads for CPIDs in queue or running.
+            ElseIf mlQueueCopy > 0 Then
+                If lNoWitnesses = 0 Then
+                    If CurrentWitnessLoopCount >= MaxWitnessLoopCount Then Exit For
+                    CurrentWitnessLoopCount += 1
+                    Log("No CPIDs remaining with no witness, but mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to try rectify problem. Attempt " + Trim(CurrentWitnessLoopCount) + "/" + Trim(MaxWitnessLoopCount))
+                    GoTo ThreadSleep
+                Else
+                    Log(Trim(lNoWitnesses) + " CPIDs remaining with no witness and mlQueue persists with " + Trim(mlQueueCopy) + "; Sleeping to allow completion of threads")
+                    GoTo ThreadSleep
+                End If
+            End If
         Next z
 
         Try
@@ -913,29 +913,6 @@ Module modPersistedDataSystem
         lstWhitelist = GetWPC(WhitelistedProjects, ProjCount)
         lstCPIDs.Sort(Function(x, y) x.PrimaryKey.CompareTo(y.PrimaryKey))
         Dim sMemoryName = IIf(mbTestNet, "magnitudes_testnet", "magnitudes")
-        'Get CryptoCurrency Quotes:
-        Dim dBTC As Double = GetCryptoPrice("BTC").Price * 100
-        Dim dGRC As Double = GetCryptoPrice("GRC").Price * 10000000000
-        '8-16-2015
-        Dim q As New Row
-        q.Database = "Prices"
-        q.Table = "Quotes"
-        q.PrimaryKey = "BTC"
-        q.Expiration = DateAdd(DateInterval.Day, 1, Now)
-        q.Synced = q.Expiration
-
-        q.Magnitude = Trim(Math.Round(dBTC, 2))
-        Log("Storing Bitcoin price quote")
-        Store(q)
-        q = New Row
-        q.Database = "Prices"
-        q.Table = "Quotes"
-        q.Expiration = DateAdd(DateInterval.Day, 1, Now)
-        q.PrimaryKey = "GRC"
-        q.Magnitude = Trim(Math.Round(dGRC, 2))
-        q.Synced = q.Expiration
-        Log("Storing Gridcoin Price Quote")
-        Store(q)
 
         'Update all researchers magnitudes (Final Calculation Phase):
         Dim surrogatePrj As New Row
@@ -987,8 +964,6 @@ Module modPersistedDataSystem
                 mlPercentComplete = p + 90
                 If mlPercentComplete > 99 Then mlPercentComplete = 99
             Next
-
-            mGRCData.FinishSync(mbTestNet)
 
             mlPercentComplete = 0
             Return True
@@ -1118,7 +1093,10 @@ TryAgain:
             Threading.ThreadPool.QueueUserWorkItem(AddressOf ThreadGetRac, oNeuralType)
 
 ThreadStarted:
-            mlQueue += 1
+            Dim mlLock As New Object
+            SyncLock mlLock
+                mlQueue += 1
+            End SyncLock
             If lCatastrophicFailures > 0 Then
                 Log("Successfully recovered from catastrophic failures.")
             End If
@@ -1160,43 +1138,11 @@ ThreadStarted:
                 Log("Attempt # " + Trim(x) + ": Error in ThreadGetRAC : " + ex.Message + ", Trying again.")
             End Try
         Next x
-        mlQueue -= 1
+        Dim mlLock As New Object
+        SyncLock mlLock
+            mlQueue -= 1
+        End SyncLock
     End Sub
-    Public Function GetSupermajorityVoteStatus(sCPID As String, lMinimumWitnessesRequired As Long) As Boolean
-        If mdictNeuralNetworkQuorumData Is Nothing Then Return False
-        Try
-            For Each NS In mdictNeuralNetworkQuorumData
-                If NS.Value.CPID = sCPID Then
-                    If NS.Value.Witnesses > (NS.Value.Participants * 0.51) And NS.Value.Witnesses > lMinimumWitnessesRequired Then
-                        Return True
-                    End If
-                End If
-            Next
-            Return False
-        Catch ex As Exception
-            Return False
-        End Try
-        Return False
-    End Function
-    Public Function GetSupermajorityVoteStatusForResearcher(sCPID As String, lMinimumWitnessesRequired As Long, ByRef ResearcherMagnitude As Double) As Boolean
-        Return False
-        If mdictNeuralNetworkAdditionalQuorumData Is Nothing Then Return False
-        Try
-            If mdictNeuralNetworkAdditionalQuorumData.ContainsKey(sCPID) Then
-                Dim NS As GRCSec.GridcoinData.NeuralStructure = mdictNeuralNetworkAdditionalQuorumData(sCPID)
-                If NS.Witnesses > (NS.Participants * 0.51) And NS.Witnesses > lMinimumWitnessesRequired Then
-                    ResearcherMagnitude = NS.Magnitude
-                    Return True
-                End If
-                Return False
-            Else
-                Return False
-            End If
-        Catch ex As Exception
-            Return False
-        End Try
-        Return False
-    End Function
     Public Function GetRAC(sCPID As String) As String
         'First try the project database:
         Dim sData As String
@@ -1234,32 +1180,6 @@ ThreadStarted:
 Retry:
         msCurrentNeuralHash = ""
         Dim TotalRAC As Double = 0
-        Dim lFailCount As Long = 0
-        If 1 = 0 Then
-            Try
-                'If more than 51% of the network voted on this CPIDs projects today, use that value
-                If GetSupermajorityVoteStatus(sCPID, IIf(mbTestNet, MINIMUM_WITNESSES_REQUIRED_TESTNET, MINIMUM_WITNESSES_REQUIRED_PROD)) Then
-                    'Use the Neural Network Quorum Data since we have over 51% witnesses for this CPID on file:
-                    Dim lWitnesses As Long = 0
-                    For Each nNeuralStructure In mdictNeuralNetworkQuorumData
-                        If nNeuralStructure.Value.CPID = sCPID Then
-                            If nNeuralStructure.Value.RAC > 10 Then PersistProjectRAC(sCPID, nNeuralStructure.Value.RAC, nNeuralStructure.Value.Project, False)
-                            TotalRAC += nNeuralStructure.Value.RAC
-                            If nNeuralStructure.Value.Witnesses > lWitnesses Then lWitnesses = nNeuralStructure.Value.Witnesses
-                        End If
-                    Next
-                    UpdateCPIDStatus(sCPID, TotalRAC, lWitnesses)
-                    Return True
-                End If
-            Catch ex As Exception
-                lFailCount += 1
-                If lFailCount < 12 Then
-                    Threading.Thread.Sleep(400)
-                    GoTo Retry
-                End If
-                Log("Error while updating CPID  (Attempts: 12) - Resorting to gather online rac for " + sCPID)
-            End Try
-        End If
 
         Try
             Dim sData As String = GetRAC(sCPID)
@@ -1346,11 +1266,6 @@ Retry:
         ' (Infinity Error)
         If Not d.Found Then
             Store(d)
-            'Vote on the RAC for the project for the CPID (Once we verify > 51% of the NN agrees (by distinct IP-CPID per vote), the nodes can use this project RAC for the day to increase performance)
-            Try
-                If bGenData Then mGRCData.VoteOnProjectRAC(sCPID, rac, Project, mbTestNet)
-            Catch ex As Exception
-            End Try
         End If
         Return True
     End Function
@@ -1673,7 +1588,6 @@ Retry:
             Dim sReportRow As String = ""
             Dim sHeader As String = "CPID,LocalMagnitude,NeuralMagnitude,TotalRAC,Synced Til,Address,CPID_Valid,Witnesses"
             sReport += sHeader + vbCrLf
-            Dim grr As New GridcoinReader.GridcoinRow
             Dim sHeading As String = "CPID;LocalMagnitude;NeuralMagnitude;TotalRAC;Synced Til;Address;CPID_Valid;Witnesses"
             Dim vHeading() As String = Split(sHeading, ";")
             Dim sData As String = modPersistedDataSystem.GetMagnitudeContractDetails()
@@ -1735,55 +1649,6 @@ Retry:
 
     End Sub
 
-    Private Function NiceTicker(sSymbol As String)
-        sSymbol = Replace(Replace(sSymbol, "$", ""), "^", "")
-        Return sSymbol
-    End Function
-
-    Public Function GetCryptoPrice(sSymbol As String) As Quote
-
-        Try
-
-            'Sample Ticker Format :  {"ticker":{"high":0.00003796,"low":0.0000365,"avg":0.00003723,"lastbuy":0.0000371,"lastsell":0.00003795,"buy":0.00003794,"sell":0.00003795,"lastprice":0.00003795,"updated":1420369200}}
-            Dim sSymbol1 As String
-            sSymbol1 = NiceTicker(sSymbol)
-            Dim ccxPage As String = ""
-            If sSymbol1 = "BTC" Then
-                ccxPage = "btc-usd.json"
-            Else
-                ccxPage = LCase(sSymbol1) + "-btc.json"
-            End If
-            Dim sURL As String = "https://c-cex.com/t/" + ccxPage
-            Dim w As New MyWebClient
-            Dim sJSON As String = String.Empty
-            Try
-                sJSON = w.DownloadString(sURL)
-
-            Catch ex As Exception
-
-            End Try
-            Dim sLast As String = ExtractValue(sJSON, "lastprice", "updated")
-            sLast = Replace(sLast, ",", ".")
-
-            Dim dprice As Double
-            dprice = CDbl(sLast)
-            Dim qBitcoin As Quote
-            qBitcoin = GetQuote("$BTC")
-            If sSymbol1 <> "BTC" And qBitcoin.Price > 0 Then dprice = dprice * qBitcoin.Price
-            Dim q As Quote
-            q = GetQuote(sSymbol)
-            q.Symbol = sSymbol
-            q.PreviousClose = q.Price
-            Dim Variance As Double
-            Variance = Math.Round(dprice, 3) - q.PreviousClose
-            q.Variance = Variance
-            q.Price = Math.Round(dprice, 11)
-            Return q
-
-        Catch ex As Exception
-            Log("Unable to get quote data probably due to SSL being blocked: " + ex.Message)
-        End Try
-    End Function
     Public Function GetWindowsFileAge(sPath As String) As Double
         If File.Exists(sPath) = False Then Return 1000000
         Dim fi As New FileInfo(sPath)
