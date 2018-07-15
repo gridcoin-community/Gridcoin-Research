@@ -22,7 +22,6 @@
 #include "beacon.h"
 #include "miner.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
@@ -1964,7 +1963,7 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
     //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
     int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
-        LogPrintf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64 "", FormatMoney(nSubsidy), nSubsidy);
+        LogPrintf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64, FormatMoney(nSubsidy), nSubsidy);
     if (nSubsidy < (30*COIN)) nSubsidy=30*COIN;
     //Gridcoin Foundation Block:
     if (height==10)
@@ -4075,7 +4074,7 @@ bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
     if (nCoinAge == 0) // block coin age minimum 1 coin-day
         nCoinAge = 1;
     if (fDebug && GetBoolArg("-printcoinage"))
-        LogPrintf("block coin age total nCoinDays=%" PRIu64 "", nCoinAge);
+        LogPrintf("block coin age total nCoinDays=%" PRIu64, nCoinAge);
     return true;
 }
 
@@ -4778,29 +4777,8 @@ void GridcoinServices()
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
-/*
-    // Check for updates once per day.
-    if(GetAdjustedTime() - nLastCheckedForUpdate > 24 * 60 * 60)
-    {
-        nLastCheckedForUpdate = GetAdjustedTime();
-
-        if (fDebug3) LogPrintf("Checking for upgrade...");
-        if(Restarter::IsUpgradeAvailable())
-        {
-            LogPrintf("Upgrade available.");
-            if(GetBoolArg("-autoupgrade", false))
-            {
-                LogPrintf("Upgrading client.");
-                Restarter::UpgradeClient();
-            }
-        }
-    }
-*/
-
     if (fDebug10) LogPrintf(" {/SVC} ");
 }
-
-
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
@@ -7577,12 +7555,15 @@ bool ProjectIsValid(std::string sProject)
 
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
 {
-  size_t pos = 0;
-  while((pos = str.find(oldStr, pos)) != std::string::npos){
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
+    assert(oldStr.empty() == false && "Cannot replace an empty string");
+
+    size_t pos = 0;
+    while((pos = str.find(oldStr, pos)) != std::string::npos)
+    {
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+    return str;
 }
 
 std::string LowerUnderscore(std::string data)

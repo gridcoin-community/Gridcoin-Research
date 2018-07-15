@@ -62,7 +62,6 @@ GRIDCOIN_CORE_H = \
     global_objects.hpp \
     global_objects_noui.hpp \
 	gridcoin.h \
-	grcrestarter.h \
 	init.h \
 	kernel.h \
 	key.h \
@@ -154,7 +153,6 @@ libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
-    grcrestarter_stub.cpp \
     neuralnet_stub.cpp \
     $(GRIDCOIN_CORE_H)
 

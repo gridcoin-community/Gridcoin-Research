@@ -416,7 +416,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
         }
 
         if (fDebug10 || GetBoolArg("-printpriority"))
-            LogPrintf("CreateNewBlock(): total size %" PRIu64 "", nBlockSize);
+            LogPrintf("CreateNewBlock(): total size %" PRIu64, nBlockSize);
     }
 
     //Add fees to coinbase

@@ -18,7 +18,6 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "grcrestarter.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
 #include "main.h"
@@ -1071,7 +1070,7 @@ void CWallet::ReacceptWalletTransactions()
                 // Update fSpent if a tx got spent somewhere else by a copy of wallet.dat
                 if (txindex.vSpent.size() != wtx.vout.size())
                 {
-                    LogPrintf("ERROR: ReacceptWalletTransactions() : txindex.vSpent.size() %" PRIszu " != wtx.vout.size() %" PRIszu "", txindex.vSpent.size(), wtx.vout.size());
+                    LogPrintf("ERROR: ReacceptWalletTransactions() : txindex.vSpent.size() %" PRIszu " != wtx.vout.size() %" PRIszu, txindex.vSpent.size(), wtx.vout.size());
                     continue;
                 }
                 for (unsigned int i = 0; i < txindex.vSpent.size(); i++)
@@ -2117,7 +2116,7 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
             if (!walletdb.WritePool(nEnd, CKeyPool(GenerateNewKey())))
                 throw runtime_error("TopUpKeyPool() : writing generated key failed");
             setKeyPool.insert(nEnd);
-            if (fDebug10) LogPrintf("keypool added key %" PRId64 ", size=%" PRIszu "", nEnd, setKeyPool.size());
+            if (fDebug10) LogPrintf("keypool added key %" PRId64 ", size=%" PRIszu, nEnd, setKeyPool.size());
         }
     }
     return true;
@@ -2147,7 +2146,7 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
             throw runtime_error("ReserveKeyFromKeyPool() : unknown key in key pool");
         assert(keypool.vchPubKey.IsValid());
         if (fDebug && GetBoolArg("-printkeypool"))
-            LogPrintf("keypool reserve %" PRId64 "", nIndex);
+            LogPrintf("keypool reserve %" PRId64, nIndex);
     }
 }
 
@@ -2175,7 +2174,7 @@ void CWallet::KeepKey(int64_t nIndex)
         walletdb.ErasePool(nIndex);
     }
     if(fDebug)
-        LogPrintf("keypool keep %" PRId64 "", nIndex);
+        LogPrintf("keypool keep %" PRId64, nIndex);
 }
 
 void CWallet::ReturnKey(int64_t nIndex)
@@ -2186,7 +2185,7 @@ void CWallet::ReturnKey(int64_t nIndex)
         setKeyPool.insert(nIndex);
     }
     if(fDebug)
-        LogPrintf("keypool return %" PRId64 "", nIndex);
+        LogPrintf("keypool return %" PRId64, nIndex);
 }
 
 bool CWallet::GetKeyFromPool(CPubKey& result, bool fAllowReuse)

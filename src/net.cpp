@@ -750,7 +750,6 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-    X(NeuralHash);
     X(sGRCAddress);
     X(nTrust);
 
@@ -2141,7 +2140,7 @@ void StartNode(void* parg)
         semOutbound = new CSemaphore(nMaxOutbound);
     }
 
-    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64 "", MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
+    LogPrintf("Using %i OutboundConnections with a MaxConnections of %" PRId64, MAX_OUTBOUND_CONNECTIONS, GetArg("-maxconnections", 125));
 
     if (pnodeLocalHost == NULL)
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService("127.0.0.1", 0), nLocalServices));

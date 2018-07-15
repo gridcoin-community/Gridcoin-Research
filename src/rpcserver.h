@@ -236,7 +236,6 @@ extern UniValue addpoll(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue decryptphrase(const UniValue& params, bool fHelp);
-//extern UniValue downloadblocks(const UniValue& params, bool fHelp);
 extern UniValue encryptphrase(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
@@ -261,13 +260,6 @@ extern UniValue listpolls(const UniValue& params, bool fHelp);
 extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
-
-#ifdef WIN32
-extern UniValue reindex(const UniValue& params, bool fHelp);
-extern UniValue restart(const UniValue& params, bool fHelp);
-extern UniValue restorepoint(const UniValue& params, bool fHelp);
-#endif
-
 extern UniValue rpc_getsupervotes(const UniValue& params, bool fHelp);
 extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 extern UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
