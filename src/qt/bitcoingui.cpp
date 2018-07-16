@@ -608,17 +608,17 @@ void BitcoinGUI::createActions()
 
 
 
-    rebuildAction = new QAction(tr("&Rebuild Block Chain"), this);
-    rebuildAction->setStatusTip(tr("Rebuild Block Chain"));
-    rebuildAction->setMenuRole(QAction::TextHeuristicRole);
+//    rebuildAction = new QAction(tr("&Rebuild Block Chain"), this);
+//    rebuildAction->setStatusTip(tr("Rebuild Block Chain"));
+//    rebuildAction->setMenuRole(QAction::TextHeuristicRole);
 
-    downloadAction = new QAction(tr("&Download Blocks"), this);
-    downloadAction->setStatusTip(tr("Download Blocks"));
-    downloadAction->setMenuRole(QAction::TextHeuristicRole);
+//    downloadAction = new QAction(tr("&Download Blocks"), this);
+//    downloadAction->setStatusTip(tr("Download Blocks"));
+//    downloadAction->setMenuRole(QAction::TextHeuristicRole);
 
-    upgradeAction = new QAction(tr("&Upgrade Client"), this);
-    upgradeAction->setStatusTip(tr("Upgrade Client"));
-    upgradeAction->setMenuRole(QAction::TextHeuristicRole);
+//    upgradeAction = new QAction(tr("&Upgrade Client"), this);
+//    upgradeAction->setStatusTip(tr("Upgrade Client"));
+//    upgradeAction->setMenuRole(QAction::TextHeuristicRole);
 
     aboutAction = new QAction(tr("&About Gridcoin"), this);
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
@@ -678,9 +678,9 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
-    connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
-    connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
+//    connect(rebuildAction, SIGNAL(triggered()), this, SLOT(rebuildClicked()));
+//    connect(upgradeAction, SIGNAL(triggered()), this, SLOT(upgradeClicked()));
+//    connect(downloadAction, SIGNAL(triggered()), this, SLOT(downloadClicked()));
     connect(configAction, SIGNAL(triggered()), this, SLOT(configClicked()));
     connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
@@ -707,9 +707,9 @@ void BitcoinGUI::setIcons()
     chatAction->setIcon(QPixmap(":/icons/chat"));
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
-    rebuildAction->setIcon(QPixmap(":/images/gridcoin"));
-    downloadAction->setIcon(QPixmap(":/images/gridcoin"));
-    upgradeAction->setIcon(QPixmap(":/images/gridcoin"));
+//    rebuildAction->setIcon(QPixmap(":/images/gridcoin"));
+//    downloadAction->setIcon(QPixmap(":/images/gridcoin"));
+//    upgradeAction->setIcon(QPixmap(":/images/gridcoin"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
     miningAction->setIcon(QPixmap(":/images/gridcoin"));
     configAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -762,19 +762,21 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
+#ifdef WIN32  // The only remaining actions in this menu only work on Windows
+    
     QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
 
-#ifdef WIN32  // Some actions in this menu are implemented in Visual Basic and thus only work on Windows
     qmAdvanced->addAction(configAction);
     qmAdvanced->addAction(miningAction);
 //	qmAdvanced->addAction(newUserWizardAction);
     qmAdvanced->addSeparator();
     qmAdvanced->addAction(foundationAction);
 //	qmAdvanced->addAction(diagnosticsAction);
-     qmAdvanced->addAction(downloadAction);
-#endif /* defined(WIN32) */
+//  qmAdvanced->addAction(downloadAction);
     qmAdvanced->addSeparator();
-    qmAdvanced->addAction(rebuildAction);
+//  qmAdvanced->addAction(rebuildAction);
+
+#endif /* defined(WIN32) */
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
