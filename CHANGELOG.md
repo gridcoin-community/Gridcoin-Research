@@ -6,35 +6,40 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [3.7.14.0] unreleased
 ### Added
- - support for Qt 5.9 (@thecharlatan)
- - compatibility with boost-1.67 (@ravon)
- - calculations to reduce network time offset (@jamescowens)
- - feedback for addnode command (@tomasbrod)
- - added data acquisiton commands (getrecentblocks,exportstats1,getsupervotes) (@tomasbrod)
+ - Support for Qt 5.9 (@thecharlatan)
+ - Compatibility with boost-1.67 (@ravon)
+ - Calculations to reduce network time offset (@jamescowens)
+ - Feedback for addnode RPC command (@tomasbrod)
+ - Added data acquisiton commands (@tomasbrod):
+    - getrecentblocks
+    - exportstats1
+    - getsupervotes
  - /var/lib/boinc/ as a valid boinc path on Linux (@rsparlin)
- - stress testing script  (@Foggyx420)
+ - Stress testing script  (@Foggyx420)
  - refhash command also on linux (@jamescowens)
- - documentation for out of source build (@thecharlatan)
+ - Documentation for out of source build (@thecharlatan)
+ 
 ### Changed
- - more accurate time to stake and network weight estimations (@jamescowens)
- - compressed image files (@Peppernrino)
- - poll (voting) code refactoring (@thecharlatan)
+ - More accurate time to stake and network weight estimations (@jamescowens)
+ - Compressed image files (@Peppernrino)
+ - Poll (voting) code refactoring (@thecharlatan)
  - BITCOIN optimize command listunspent (@Foggyx420)
- - rpc server refactoring (Wladimir J. van der Laan) (@thecharlatan)
- - replace json spirit with univalue json library (@thecharlatan)
- - change repository URL (@Foggyx420)
- - pretty-print rpc output (@ravon)
+ - RPC server refactoring (Wladimir J. van der Laan) (@thecharlatan)
+ - Replace json spirit with Univalue JSON library (@thecharlatan)
+ - Change repository URL (@Foggyx420)
+ - Pretty-print rpc output (@ravon)
  - Logging for debugging reward computation (@tomasbrod)
- - clean-up beacon manipulation (@Foggyx420)
+ - Clean-up beacon manipulation (@Foggyx420)
+ 
 ### Fixed
- - building errors on Mac releated to SVG framework (@thecharlatan)
+ - Building errors on Mac releated to SVG framework (@thecharlatan)
  - neural data response
  - neural network fixes (@Foggyx420)
  - investor cpid's appearing as zeros in block index (@tomasbrod)
  - ensure that daemon functionality is correct when built together with gui wallet (@jamescowens)
  - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@ravon)
  - windows socket warnings (@thecharlatan)
- - deobfuscate cpid.cpp (@ravon)
+
 ### Remove
  - unused components of neural network (@Foggyx420)
  - GRCRestarter (@Foggyx420)
