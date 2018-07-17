@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@ravon)
  - windows socket warnings (@thecharlatan)
 
-### Remove
+### Removed
  - unused components of neural network (@Foggyx420)
  - GRCRestarter (@Foggyx420)
  - Galaza (game) (@Foggyx420)
