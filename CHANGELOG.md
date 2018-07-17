@@ -5,50 +5,49 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [3.7.14.0] unreleased
+### Added
  - Add support for Qt 5.9 (@thecharlatan)
- - CBR
- - improved  time to stake and network weight estimations
- - fix neural data response
- - compressed image files (@Peppernrino)
- - remove unused images (@barton2526)
- - fix investor cpid's appearing as zeros in block index
- - remove unusual activity report (@tomasbrod)
+ - compatibility with boost-1.67 (@ravon)
+ - calculations to reduce network time offset (@jamescowens)
  - feedback for addnode command (@tomasbrod)
- - poll (voting) code refactoring (@thecharlatan)
- - remove burnamount and recipient from appcache (@tomasbrod)
- - (@Pythonix) remove no-op conditional
- - remove dead code in CScript::Find (@Foggyx420)
- - Implementation of global flag fQtActive
  - added data acquisiton commands (getrecentblocks,exportstats1,getsupervotes) (@tomasbrod)
- - remove FAQ (@Lenni)
- - BITCOIN optimize command listunspent (@Foggyx420)
- - neural network "nn fixes"  (@Foggyx420)
- - add alternative boinc data dir on Linux (@rsparlin)
+ - add /var/lib/boinc/ as a valid boinc path on Linux (@rsparlin)
  - add stress testing script  (@Foggyx420)
- - network time offset reduction (@jamescowens)
- - log newlines (@jamescowens) (@Foggyx420) (@tomasbrod) (@ravon)
  - add refhash command also on linux (@jamescowens)
+ - documentation for out of source build (@thecharlatan)
+ - CBR !!!!
+### Changed
+ - more accurate time to stake and network weight estimations (@jamescowens)
+ - compressed image files (@Peppernrino)
+ - poll (voting) code refactoring (@thecharlatan)
+ - BITCOIN optimize command listunspent (@Foggyx420)
  - rpc server refactoring (Wladimir J. van der Laan) (@thecharlatan)
- - remove GRCRestarter (@Foggyx420)
- - remove Galaza (game) (@Foggyx420)
- - nn cleanup (@Foggyx420)
  - replace json spirit with univalue json library (@thecharlatan)
  - change repository URL (@Foggyx420)
- - Show how to configure for out of source build (@thecharlatan)
- - Remove unusable limit from magnitude command (@Foggyx420)
  - pretty-print rpc output (@ravon)
- - compatibility with boost-1.67 (@ravon)
- - fix windows socket warnings (@thecharlatan)
- - deobfuscate cpid.cpp (@ravon)
  - Logging for debugging reward computation (@tomasbrod)
  - clean-up beacon manipulation (@Foggyx420)
+### Fixed
  - fix building errors on Mac releated to SVG framework (@thecharlatan)
+ - fix neural data response
+ - neural network fixes (@Foggyx420)
+ - fix investor cpid's appearing as zeros in block index (@tomasbrod)
+ - ensure that daemon functionality is correct when built together with gui wallet (@jamescowens)
+ - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@ravon)
+ - fix windows socket warnings (@thecharlatan)
+ - deobfuscate cpid.cpp (@ravon)
+### Remove
+ - unused components of neural network (@Foggyx420)
+ - remove GRCRestarter (@Foggyx420)
+ - remove Galaza (game) (@Foggyx420)
+ - remove unused images (@barton2526)
+ - remove unused code (@Foggyx420) (@Pythonix)
+ - remove unusual activity report (@tomasbrod)
+ - remove burnamount and recipient from appcache (@tomasbrod)
+ - remove FAQ (@Lenni)
+ - Remove unusable limit from magnitude command (@Foggyx420)
  - remove cgminer support (@Foggyx420)
  - remove deprecated menu items (@jamescowens) 
- 
- 
- 
- 
 
 ## [3.7.13.0] 2018-06-02, leisure
 ### Fixed
