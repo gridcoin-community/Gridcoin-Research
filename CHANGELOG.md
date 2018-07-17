@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - add stress testing script  (@Foggyx420)
  - add refhash command also on linux (@jamescowens)
  - documentation for out of source build (@thecharlatan)
- - CBR !!!!
 ### Changed
  - more accurate time to stake and network weight estimations (@jamescowens)
  - compressed image files (@Peppernrino)
