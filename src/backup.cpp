@@ -53,12 +53,12 @@ bool BackupConfigFile(const std::string& strDest)
         #else
             filesystem::copy_file(ConfigSource, ConfigTarget);
         #endif
-        LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s\n", ConfigTarget.string());
+        LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
         return true;
     }
     catch(const filesystem::filesystem_error &e)
     {
-        LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s\n", ConfigTarget.string(), e.what());
+        LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s", ConfigTarget.string(), e.what());
         return false;
     }
     return false;
@@ -92,11 +92,11 @@ bool BackupWallet(const CWallet& wallet, const std::string& strDest)
 #else
             filesystem::copy_file(WalletSource, WalletTarget);
 #endif
-            LogPrintf("BackupWallet: Copied wallet.dat to %s\n", WalletTarget.string());
+            LogPrintf("BackupWallet: Copied wallet.dat to %s", WalletTarget.string());
             return true;
         }
         catch(const filesystem::filesystem_error &e) {
-            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s\n", WalletTarget.string(), e.what());
+            LogPrintf("BackupWallet: Error copying wallet.dat to %s - %s", WalletTarget.string(), e.what());
             return false;
         }
     }
@@ -126,7 +126,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
         }
         myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
     }
-    LogPrintf("BackupPrivateKeys: Backup made to %s\n", PrivateKeysTarget.string());
+    LogPrintf("BackupPrivateKeys: Backup made to %s", PrivateKeysTarget.string());
     myBackup.close();
     return true;
 }

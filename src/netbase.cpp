@@ -161,7 +161,7 @@ bool LookupNumeric(const char *pszName, CService& addr, int portDefault)
 
 bool static Socks4(const CService &addrDest, SOCKET& hSocket)
 {
-    LogPrintf("SOCKS4 connecting %s\n", addrDest.ToString());
+    LogPrintf("SOCKS4 connecting %s", addrDest.ToString());
     if (!addrDest.IsIPv4())
     {
         closesocket(hSocket);
@@ -196,16 +196,16 @@ bool static Socks4(const CService &addrDest, SOCKET& hSocket)
     {
         closesocket(hSocket);
         if (pchRet[1] != 0x5b)
-            LogPrintf("ERROR: Proxy returned error %d\n", pchRet[1]);
+            LogPrintf("ERROR: Proxy returned error %d", pchRet[1]);
         return false;
     }
-    LogPrintf("SOCKS4 connected %s\n", addrDest.ToString());
+    LogPrintf("SOCKS4 connected %s", addrDest.ToString());
     return true;
 }
 
 bool static Socks5(string strDest, int port, SOCKET& hSocket)
 {
-    LogPrintf("SOCKS5 connecting %s\n", strDest);
+    LogPrintf("SOCKS5 connecting %s", strDest);
     if (strDest.size() > 255)
     {
         closesocket(hSocket);
@@ -304,7 +304,7 @@ bool static Socks5(string strDest, int port, SOCKET& hSocket)
         closesocket(hSocket);
         return error("Error reading from proxy");
     }
-    LogPrintf("SOCKS5 connected %s\n", strDest);
+    LogPrintf("SOCKS5 connected %s", strDest);
     return true;
 }
 
@@ -315,7 +315,7 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
     struct sockaddr_storage sockaddr;
     socklen_t len = sizeof(sockaddr);
     if (!addrConnect.GetSockAddr((struct sockaddr*)&sockaddr, &len)) {
-        LogPrintf("Cannot connect to %s: unsupported network\n", addrConnect.ToString());
+        LogPrintf("Cannot connect to %s: unsupported network", addrConnect.ToString());
         return false;
     }
 
@@ -355,13 +355,12 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
             int nRet = select(hSocket + 1, NULL, &fdset, NULL, &timeout);
             if (nRet == 0)
             {
-                //LogPrintf("connection timeout\n");
                 closesocket(hSocket);
                 return false;
             }
             if (nRet == SOCKET_ERROR)
             {
-                LogPrintf("select() for connection failed: %i\n",WSAGetLastError());
+                LogPrintf("select() for connection failed: %i",WSAGetLastError());
                 closesocket(hSocket);
                 return false;
             }
@@ -372,13 +371,13 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
             if (getsockopt(hSocket, SOL_SOCKET, SO_ERROR, &nRet, &nRetSize) == SOCKET_ERROR)
 #endif
             {
-                LogPrintf("getsockopt() for connection failed: %i\n",WSAGetLastError());
+                LogPrintf("getsockopt() for connection failed: %i",WSAGetLastError());
                 closesocket(hSocket);
                 return false;
             }
             if (nRet != 0)
             {
-                if (fDebug10) LogPrintf("socket connect() failed after select(): %s, Destination Addr %s \n",strerror(nRet),addrConnect.ToString());
+                if (fDebug10) LogPrintf("socket connect() failed after select(): %s, Destination Addr %s ",strerror(nRet),addrConnect.ToString());
                 closesocket(hSocket);
                 return false;
             }
@@ -389,7 +388,7 @@ bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRe
         else
 #endif
         {
-            LogPrintf("connect() failed: %i\n",WSAGetLastError());
+            LogPrintf("connect() failed: %i",WSAGetLastError());
             closesocket(hSocket);
             return false;
         }
@@ -906,7 +905,7 @@ uint64_t CNetAddr::GetHash() const
 
 void CNetAddr::print() const
 {
-    LogPrintf("CNetAddr(%s)\n", ToString());
+    LogPrintf("CNetAddr(%s)", ToString());
 }
 
 // private extensions to enum Network, only returned by GetExtNetwork,
@@ -1145,7 +1144,7 @@ std::string CService::ToString() const
 
 void CService::print() const
 {
-    LogPrintf("CService(%s)\n", ToString());
+    LogPrintf("CService(%s)", ToString());
 }
 
 void CService::SetPort(unsigned short portIn)

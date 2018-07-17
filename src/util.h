@@ -9,14 +9,6 @@
 #include "uint256.h"
 #include "fwd.h"
 
-#ifndef WIN32
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#else
-#include <windows.h> // For LARGE_INTEGER
-#endif
-
 #include <map>
 #include <vector>
 #include <string>
@@ -33,9 +25,16 @@
 #include <openssl/sha.h>
 #include <openssl/ripemd.h>
 
+#include <compat.h>
 #include "fwd.h"
 #include "serialize.h"
 #include "tinyformat.h"
+
+#ifndef WIN32
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
 
 // to obtain PRId64 on some old systems
 #define __STDC_FORMAT_MACROS 1
@@ -112,10 +111,10 @@ void RandAddSeedPerfmon();
 /* Return true if log accepts specified category */
 bool LogAcceptCategory(const char* category);
 /* Send a string to the log output */
-int LogPrintStr(const std::string &str);
+void LogPrintStr(const std::string &str);
 
 #define strprintf tfm::format
-#define LogPrintf(...) LogPrint(NULL, __VA_ARGS__)
+#define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
 
 /* When we switch to C++11, this can be switched to variadic templates instead
  * of this macro-based construction (see tinyformat.h).
@@ -123,10 +122,11 @@ int LogPrintStr(const std::string &str);
 #define MAKE_ERROR_AND_LOG_FUNC(n)                                        \
     /*   Print to debug.log if -debug=category switch is given OR category is NULL. */ \
     template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline int LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
+    static inline void LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
     {                                                                         \
-        if(!LogAcceptCategory(category)) return 0;                            \
-        return LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n"); \
+        if(!LogAcceptCategory(category)) return;                            \
+        LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
+        return;                                                               \
     }                                                                         \
     /*   Log error and return false */                                        \
     template<TINYFORMAT_ARGTYPES(n)>                                          \
@@ -141,14 +141,15 @@ TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
 /* Zero-arg versions of logging and error, these are not covered by
  * TINYFORMAT_FOREACH_ARGNUM
 */
-static inline int LogPrint(const char* category, const char* format)
+static inline void LogPrint(const char* category, const char* format)
 {
-    if(!LogAcceptCategory(category)) return 0;
-    return LogPrintStr(format);
+    if(!LogAcceptCategory(category)) return;
+    LogPrintStr(format + std::string("\n"));
+    return;
 }
 static inline bool error(const char* format)
 {
-    LogPrintStr(std::string("ERROR: ") + format);
+    LogPrintStr(std::string("ERROR: ") + format + std::string("\n"));
     return false;
 }
 
@@ -177,6 +178,8 @@ void FileCommit(FILE *fileout);
 
 int GetFilesize(FILE* file);
 
+std::string TimestampToHRDate(double dtm);
+
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 boost::filesystem::path GetDefaultDataDir();
 boost::filesystem::path GetProgramDir();
@@ -203,7 +206,7 @@ bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
 bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes);
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
-void AddTimeData(const CNetAddr& ip, int64_t nTime);
+void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
 void runCommand(std::string strCommand);
 
 //!

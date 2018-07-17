@@ -11,11 +11,12 @@
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
-#include "util.h"
 #include "guiconstants.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "qtipcserver.h"
+#include "util.h"
+
 #include <QMessageBox>
 #include <QTextCodec>
 #include <QLocale>
@@ -77,7 +78,7 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     }
     else
     {
-        LogPrintf("%s: %s\n", caption, message);
+        LogPrintf("%s: %s", caption, message);
         fprintf(stderr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
@@ -156,7 +157,7 @@ void timerfire()
 static void handleRunawayException(std::exception *e)
 {
     PrintExceptionContinue(e, "Runaway exception");
-    QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n\n") + QString::fromStdString(strMiscWarning));
+    QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
     exit(1);
 }
 
@@ -280,14 +281,14 @@ int main(int argc, char *argv[])
         guiref = &window;
 
 		QTimer *timer = new QTimer(guiref);
-		LogPrintf("\nStarting Gridcoin\n");
+		LogPrintf("Starting Gridcoin");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
 
 	    //Start globalcom
         if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
 		{
-				LogPrintf("Error; NewThread(ThreadAppInit2) failed\n");
+				LogPrintf("Error; NewThread(ThreadAppInit2) failed");
 		        return 1;
 		}
 		else
@@ -334,7 +335,7 @@ int main(int argc, char *argv[])
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-			LogPrintf("\nbitcoin.cpp:main calling Shutdown...\n");
+			LogPrintf("Main calling Shutdown...");
             Shutdown(NULL);
         }
 
@@ -356,7 +357,7 @@ int main(int argc, char *argv[])
     // use exit codes to trigger restart of the wallet
     if(currentExitCode == EXIT_CODE_REBOOT)
     {
-        LogPrintf("Restarting wallet...\n");
+        LogPrintf("Restarting wallet...");
         QStringList args = QApplication::arguments();
         args.removeFirst();
         QProcess::startDetached(QApplication::applicationFilePath(), args);

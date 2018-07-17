@@ -23,11 +23,6 @@ namespace NN
         return std::string();
     }
 
-    bool SetTestnetFlag(bool onTestnet)
-    {
-        return false;
-    }
-
     bool SynchronizeDPOR(const std::string& data)
     {
         return false;
