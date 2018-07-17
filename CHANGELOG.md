@@ -6,14 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [3.7.14.0] unreleased
 ### Added
- - Add support for Qt 5.9 (@thecharlatan)
+ - support for Qt 5.9 (@thecharlatan)
  - compatibility with boost-1.67 (@ravon)
  - calculations to reduce network time offset (@jamescowens)
  - feedback for addnode command (@tomasbrod)
  - added data acquisiton commands (getrecentblocks,exportstats1,getsupervotes) (@tomasbrod)
- - add /var/lib/boinc/ as a valid boinc path on Linux (@rsparlin)
- - add stress testing script  (@Foggyx420)
- - add refhash command also on linux (@jamescowens)
+ - /var/lib/boinc/ as a valid boinc path on Linux (@rsparlin)
+ - stress testing script  (@Foggyx420)
+ - refhash command also on linux (@jamescowens)
  - documentation for out of source build (@thecharlatan)
 ### Changed
  - more accurate time to stake and network weight estimations (@jamescowens)
@@ -27,26 +27,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Logging for debugging reward computation (@tomasbrod)
  - clean-up beacon manipulation (@Foggyx420)
 ### Fixed
- - fix building errors on Mac releated to SVG framework (@thecharlatan)
- - fix neural data response
+ - building errors on Mac releated to SVG framework (@thecharlatan)
+ - neural data response
  - neural network fixes (@Foggyx420)
- - fix investor cpid's appearing as zeros in block index (@tomasbrod)
+ - investor cpid's appearing as zeros in block index (@tomasbrod)
  - ensure that daemon functionality is correct when built together with gui wallet (@jamescowens)
  - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@ravon)
- - fix windows socket warnings (@thecharlatan)
+ - windows socket warnings (@thecharlatan)
  - deobfuscate cpid.cpp (@ravon)
 ### Remove
  - unused components of neural network (@Foggyx420)
- - remove GRCRestarter (@Foggyx420)
- - remove Galaza (game) (@Foggyx420)
- - remove unused images (@barton2526)
- - remove unused code (@Foggyx420) (@Pythonix)
- - remove unusual activity report (@tomasbrod)
- - remove burnamount and recipient from appcache (@tomasbrod)
- - remove FAQ (@Lenni)
- - Remove unusable limit from magnitude command (@Foggyx420)
- - remove cgminer support (@Foggyx420)
- - remove deprecated menu items (@jamescowens) 
+ - GRCRestarter (@Foggyx420)
+ - Galaza (game) (@Foggyx420)
+ - unused images (@barton2526)
+ - unused code (@Foggyx420) (@Pythonix)
+ - unusual activity report (@tomasbrod)
+ - burnamount and recipient from appcache (@tomasbrod)
+ - GUI FAQ (@Lenni)
+ - unusable limit from magnitude command (@Foggyx420)
+ - cgminer support (@Foggyx420)
+ - deprecated menu items (@jamescowens) 
 
 ## [3.7.13.0] 2018-06-02, leisure
 ### Fixed
