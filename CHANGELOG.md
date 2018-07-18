@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.15.0] Unreleased
+## [3.7.15.0] 2018-07-18
 ### Changed
  - Balance now includes unconfirmed coins sent by self, #1192 (@Foggyx420).
 
