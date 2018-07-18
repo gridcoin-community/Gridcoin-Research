@@ -4,10 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.15.0] Unreleased
+### Changed
+ - Balance now includes unconfirmed coins sent by self, #1192 (@Foggyx420).
+
 ## [3.7.14.0] 2018-07-17
 ### Added
  - Support for Qt 5.9 (@thecharlatan)
- - Compatibility with boost-1.67 (@ravon)
+ - Compatibility with boost-1.67 (@denravonska)
  - Calculations to reduce network time offset (@jamescowens)
  - Feedback for addnode RPC command (@tomasbrod)
  - Added data acquisiton commands (@tomasbrod):
@@ -27,7 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - RPC server refactoring (Wladimir J. van der Laan) (@thecharlatan)
  - Replace json spirit with Univalue JSON library (@thecharlatan)
  - Change repository URL (@Foggyx420)
- - Pretty-print rpc output (@ravon)
+ - Pretty-print rpc output (@denravonska)
  - Logging for debugging reward computation (@tomasbrod)
  - Clean-up beacon manipulation (@Foggyx420)
  
@@ -37,7 +41,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - neural network fixes (@Foggyx420)
  - investor cpid's appearing as zeros in block index (@tomasbrod)
  - ensure that daemon functionality is correct when built together with gui wallet (@jamescowens)
- - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@ravon)
+ - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@denravonska)
  - windows socket warnings (@thecharlatan)
 
 ### Removed
