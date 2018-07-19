@@ -44,3 +44,12 @@ int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR);
 bool HasActiveBeacon(const std::string& cpid);
 
 bool VerifyBeaconContractTx(const CTransaction& tx);
+
+//!
+//! \brief Import beacon from configuration to the wallet.
+//! 
+//! Attempts to beacon keys stored in the configuration file into the wallet.
+//! 
+//! \return \c true on success, \c false on failure.
+//!
+bool ImportBeaconKeysFromConfig();

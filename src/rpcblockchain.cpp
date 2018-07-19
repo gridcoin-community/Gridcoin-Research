@@ -801,41 +801,6 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
     return (externalcpid==cpidv1);
 }
 
-bool ImportBeaconKeysFromConfig()
-{
-    AssertLockHeld(cs_main);
-    string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,false);
-    string sCPID(msPrimaryCPID);
-    string strSecret= GetArgument("privatekey" + sCPID + (fTestNet ? "testnet" : ""), "");
-    if(strSecret.empty())
-        return false;
-    auto vecsecret = ParseHex(strSecret);
-
-    CKey key;
-    if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
-        return error("ImportBeaconKeysFromConfig: Invalid private key");
-    CKeyID vchAddress = key.GetPubKey().GetID();
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    // Don't throw error in case a key is already there
-    if (!pwalletMain->HaveKey(vchAddress))
-    {
-        if (pwalletMain->IsLocked())
-            return error("ImportBeaconKeysFromConfig: Wallet locked!");
-
-        pwalletMain->MarkDirty();
-
-        pwalletMain->mapKeyMetadata[vchAddress].nCreateTime = 0;
-
-        if (!pwalletMain->AddKey(key))
-            return error("ImportBeaconKeysFromConfig: failed to add key to wallet");
-
-        pwalletMain->SetAddressBookName(vchAddress, "DPoR Beacon CPID "+sCPID+" imported");
-    }
-    return true;
-}
-
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {
     sOutPrivKey = "BUG! deprecated field used";

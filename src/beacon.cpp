@@ -6,6 +6,7 @@
 #include "init.h"
 #include "appcache.h"
 #include "contract/contract.h"
+#include "key.h"
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
@@ -198,5 +199,40 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     }
 
     // Passed checks
+    return true;
+}
+
+bool ImportBeaconKeysFromConfig()
+{
+    AssertLockHeld(cs_main);
+    std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,false);
+    std::string sCPID(msPrimaryCPID);
+    std::string strSecret= GetArgument("privatekey" + sCPID + (fTestNet ? "testnet" : ""), "");
+    if(strSecret.empty())
+        return false;
+    auto vecsecret = ParseHex(strSecret);
+
+    CKey key;
+    if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
+        return error("ImportBeaconKeysFromConfig: Invalid private key");
+    CKeyID vchAddress = key.GetPubKey().GetID();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Don't throw error in case a key is already there
+    if (!pwalletMain->HaveKey(vchAddress))
+    {
+        if (pwalletMain->IsLocked())
+            return error("ImportBeaconKeysFromConfig: Wallet locked!");
+
+        pwalletMain->MarkDirty();
+
+        pwalletMain->mapKeyMetadata[vchAddress].nCreateTime = 0;
+
+        if (!pwalletMain->AddKey(key))
+            return error("ImportBeaconKeysFromConfig: failed to add key to wallet");
+
+        pwalletMain->SetAddressBookName(vchAddress, "DPoR Beacon CPID "+sCPID+" imported");
+    }
     return true;
 }
