@@ -4768,10 +4768,6 @@ void GridcoinServices()
                 msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
             }
         }
-        else
-        {
-            ImportBeaconKeysFromConfig();
-        }
     }
 
     if (TimerMain("gather_cpids",480))

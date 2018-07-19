@@ -12,6 +12,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "tally.h"
+#include "beacon.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -795,6 +796,9 @@ bool AppInit2(ThreadHandlerPtr threads)
         else
             strErrors << _("Error loading wallet.dat") << "\n";
     }
+    
+    // here try to import keys from config
+    ImportBeaconKeysFromConfig();
 
     if (GetBoolArg("-upgradewallet", fFirstRun))
     {

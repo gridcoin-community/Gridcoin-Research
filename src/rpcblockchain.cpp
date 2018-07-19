@@ -813,9 +813,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             return false;
         }
 
-        // here try to import keys from config
-        ImportBeaconKeysFromConfig();
-
         //If beacon is already in the chain, exit early
         std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
         if (!sBeaconPublicKey.empty())
