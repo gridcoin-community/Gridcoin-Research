@@ -12,14 +12,6 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
-namespace
-{
-    std::string GetNetSuffix()
-    {
-        return fTestNet ? "testnet" : "";
-    }
-}
-
 bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 {
     AssertLockHeld(cs_main);
