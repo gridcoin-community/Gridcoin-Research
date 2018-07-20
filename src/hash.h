@@ -4,8 +4,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef GRIDCOIN_HASH_H
-#define GRIDCOIN_HASH_H
+#ifndef BITCOIN_HASH_H
+#define BITCOIN_HASH_H
 
 #include <uint256.h>
 
@@ -211,4 +211,4 @@ uint256 SerializeHash(const T& obj, int nType=SER_GETHASH, int nVersion=PROTOCOL
     return ss.GetHash();
 }
 
-#endif // GRIDCOIN_HASH_H
+#endif // BITCOIN_HASH_H
