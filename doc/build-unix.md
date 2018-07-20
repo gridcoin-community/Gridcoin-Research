@@ -26,7 +26,7 @@ Clone the repository and cd into it:
 git clone https://github.com/gridcoin/Gridcoin-Research
 cd Gridcoin-Research
 ```
-Go to platform specific instructions for the required depencies below. 
+Go to platform specific instructions for the required depencies below.
 
 To Build
 ---------------------
@@ -55,11 +55,11 @@ These dependencies are required:
  libssl      | Crypto           | Random Number Generation, Elliptic Curve Cryptography
  libboost    | Utility          | Library for threading, data structures, etc
  libevent    | Networking       | OS independent asynchronous networking
-  miniupnpc   | UPnP Support     | Firewall-jumping support
+ miniupnpc   | UPnP Support     | Firewall-jumping support
  libdb4.8    | Berkeley DB      | Wallet storage (only needed when wallet enabled)
  qt          | GUI              | GUI toolkit (only needed when GUI enabled)
  libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
- 
+
 For the versions used in the release, see [release-process.md](release-process.md) under *Fetch and build inputs*.
 
 Memory Requirements
@@ -122,6 +122,12 @@ To build with Qt 5 (recommended) you need the following:
 
     sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
 
+If ```./configure``` fails to detect your QT installation, you have to run:
+
+		sudo apt-get install libqt5*
+
+to install all QT5 packages available for your Linux Distribution.
+
 libqrencode (enabled by default, switch off by passing `--without-qrencode` to configure) can be installed with:
 
     sudo apt-get install libqrencode-dev
@@ -134,7 +140,7 @@ Dependency Build Instructions: OpenSUSE
 Build requirements:
 
     sudo zypper install -t pattern devel_basis
-    sudo zypper install libtool automake autoconf pkg-config libopenssl-devel libevent-devel 
+    sudo zypper install libtool automake autoconf pkg-config libopenssl-devel libevent-devel
 
 Options when installing required Boost library files:
 
@@ -145,7 +151,7 @@ install necessary parts of boost:
 Tumbleweed:
 
         sudo zypper install libboost_system1_*_0-devel libboost_filesystem1_*_0-devel libboost_chrono1_*_0-devel libboost_program_options1_*_0-devel libboost_test1_*_0-devel libboost_thread1_*_0-devel
-        
+
 Leap:
 
         sudo zypper install libboost_system1_61_0-devel libboost_filesystem1_61_0-devel libboost_chrono1_61_0-devel libboost_program_options1_61_0-devel libboost_test1_61_0-devel libboost_thread1_61_0-devel
