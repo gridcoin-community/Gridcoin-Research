@@ -796,9 +796,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         else
             strErrors << _("Error loading wallet.dat") << "\n";
     }
-    
-    // here try to import keys from config
-    ImportBeaconKeysFromConfig();
 
     if (GetBoolArg("-upgradewallet", fFirstRun))
     {
@@ -906,9 +903,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
+    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     LoadCPIDs();
 
-    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
+    // here try to import keys from config
+    ImportBeaconKeysFromConfig();    
 
     if (!CheckDiskSpace())
         return false;
