@@ -203,9 +203,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
 }
 
 bool ImportBeaconKeysFromConfig(const std::string& cpid)
-{
-    AssertLockHeld(cs_main);
-    
+{    
     if(cpid.empty())
         return error("Empty CPID");
     
