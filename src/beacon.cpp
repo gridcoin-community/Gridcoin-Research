@@ -202,12 +202,15 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     return true;
 }
 
-bool ImportBeaconKeysFromConfig()
+bool ImportBeaconKeysFromConfig(const std::string& cpid)
 {
     AssertLockHeld(cs_main);
-    std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,false);
-    std::string sCPID(msPrimaryCPID);
-    std::string strSecret= GetArgument("privatekey" + sCPID + (fTestNet ? "testnet" : ""), "");
+    
+    if(cpid.empty())
+        return error("Empty CPID");
+    
+    std::string sBeaconPublicKey = GetBeaconPublicKey(cpid, false);
+    std::string strSecret= GetArgument("privatekey" + cpid + (fTestNet ? "testnet" : ""), "");
     if(strSecret.empty())
         return false;
     auto vecsecret = ParseHex(strSecret);
@@ -232,7 +235,7 @@ bool ImportBeaconKeysFromConfig()
         if (!pwalletMain->AddKey(key))
             return error("ImportBeaconKeysFromConfig: failed to add key to wallet");
 
-        pwalletMain->SetAddressBookName(vchAddress, "DPoR Beacon CPID "+sCPID+" imported");
+        pwalletMain->SetAddressBookName(vchAddress, "DPoR Beacon CPID " + cpid + " imported");
     }
     return true;
 }

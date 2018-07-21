@@ -906,8 +906,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     LoadCPIDs();
 
-    // here try to import keys from config
-    ImportBeaconKeysFromConfig();    
+    // here try to import keys from config    
+    ImportBeaconKeysFromConfig(msPrimaryCPID);    
 
     if (!CheckDiskSpace())
         return false;
