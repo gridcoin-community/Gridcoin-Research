@@ -51,7 +51,8 @@ bool VerifyBeaconContractTx(const CTransaction& tx);
 //! Attempts to beacon keys stored in the configuration file into the wallet.
 //! 
 //! \param cpid CPID to import the keys for.
+//! \param wallet Wallet to import to.
 //! 
 //! \return \c true on success, \c false on failure.
 //!
-bool ImportBeaconKeysFromConfig(const std::string& cpid);
+bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet);

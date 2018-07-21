@@ -907,7 +907,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     LoadCPIDs();
 
     // here try to import keys from config    
-    ImportBeaconKeysFromConfig(msPrimaryCPID);    
+    ImportBeaconKeysFromConfig(msPrimaryCPID, pwalletMain);
 
     if (!CheckDiskSpace())
         return false;

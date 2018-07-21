@@ -202,7 +202,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     return true;
 }
 
-bool ImportBeaconKeysFromConfig(const std::string& cpid)
+bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
 {    
     if(cpid.empty())
         return error("Empty CPID");
@@ -221,19 +221,19 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Don't throw error in case a key is already there
-    if (!pwalletMain->HaveKey(vchAddress))
+    if (!wallet->HaveKey(vchAddress))
     {
-        if (pwalletMain->IsLocked())
+        if (wallet->IsLocked())
             return error("ImportBeaconKeysFromConfig: Wallet locked!");
 
-        pwalletMain->MarkDirty();
+        wallet->MarkDirty();
 
-        pwalletMain->mapKeyMetadata[vchAddress].nCreateTime = 0;
+        wallet->mapKeyMetadata[vchAddress].nCreateTime = 0;
 
-        if (!pwalletMain->AddKey(key))
+        if (!wallet->AddKey(key))
             return error("ImportBeaconKeysFromConfig: failed to add key to wallet");
 
-        pwalletMain->SetAddressBookName(vchAddress, "DPoR Beacon CPID " + cpid + " imported");
+        wallet->SetAddressBookName(vchAddress, "DPoR Beacon CPID " + cpid + " imported");
     }
     return true;
 }

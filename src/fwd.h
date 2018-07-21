@@ -7,6 +7,7 @@ class CBlock;
 class CBlockIndex;
 class CNetAddr;
 class CTransaction;
+class CWallet;
 
 // Gridcoin
 struct MiningCPID;
