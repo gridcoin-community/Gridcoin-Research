@@ -207,10 +207,11 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid)
     if(cpid.empty())
         return error("Empty CPID");
     
-    std::string sBeaconPublicKey = GetBeaconPublicKey(cpid, false);
-    std::string strSecret= GetArgument("privatekey" + cpid + (fTestNet ? "testnet" : ""), "");
-    if(strSecret.empty())
+    std::string sBeaconPublicKey = GetArgument("publickey" + cpid + (fTestNet ? "testnet" : ""), "");
+    std::string strSecret = GetArgument("privatekey" + cpid + (fTestNet ? "testnet" : ""), "");
+    if(strSecret.empty() || sBeaconPublicKey.empty())
         return false;
+    
     auto vecsecret = ParseHex(strSecret);
 
     CKey key;
