@@ -215,7 +215,6 @@ extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
 extern UniValue refhash(const UniValue& params, bool fHelp);
 extern UniValue rpc_reorganize(const UniValue& params, bool fHelp);
-extern UniValue seefile(const UniValue& params, bool fHelp);
 extern UniValue sendalert(const UniValue& params, bool fHelp);
 extern UniValue sendalert2(const UniValue& params, bool fHelp);
 extern UniValue sendblock(const UniValue& params, bool fHelp);
