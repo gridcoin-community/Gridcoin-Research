@@ -2,8 +2,7 @@
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
-
-#include <boost/endian/arithmetic.hpp>
+#include "compat/endian.h"
 
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 
@@ -12,7 +11,7 @@ namespace
     struct BinaryResearcher
     {
         std::array<unsigned char, 16> cpid;
-        boost::endian::big_int16_t magnitude;
+        int16_t magnitude;
     };
 }
 
@@ -40,7 +39,7 @@ std::string UnpackBinarySuperblock(std::string sBlock)
 
         const BinaryResearcher* researcher = reinterpret_cast<const BinaryResearcher*>(sBinary.data() + x);
         stream << HexStr(researcher->cpid.begin(), researcher->cpid.end()) << ","
-               << researcher->magnitude << ";";
+               << be16toh(researcher->magnitude) << ";";
     }
 
     // Append zero magnitude researchers so the beacon count matches
@@ -78,7 +77,7 @@ std::string PackBinarySuperblock(std::string sBlock)
         // Ensure we do not blow out the binary space (technically we can handle 0-65535)
         double magnitude_d = strtod(ExtractValue(entry, ",", 1).c_str(), NULL);
         magnitude_d = std::max(0.0, std::min(magnitude_d, 32767.0));
-        researcher.magnitude = roundint(magnitude_d);
+        researcher.magnitude = htobe16(roundint(magnitude_d));
 
         stream.write((const char*) &researcher, sizeof(BinaryResearcher));
     }
