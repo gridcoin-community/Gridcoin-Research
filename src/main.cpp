@@ -22,7 +22,6 @@
 #include "beacon.h"
 #include "miner.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
@@ -4768,29 +4767,8 @@ void GridcoinServices()
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
-/*
-    // Check for updates once per day.
-    if(GetAdjustedTime() - nLastCheckedForUpdate > 24 * 60 * 60)
-    {
-        nLastCheckedForUpdate = GetAdjustedTime();
-
-        if (fDebug3) LogPrintf("Checking for upgrade...");
-        if(Restarter::IsUpgradeAvailable())
-        {
-            LogPrintf("Upgrade available.");
-            if(GetBoolArg("-autoupgrade", false))
-            {
-                LogPrintf("Upgrading client.");
-                Restarter::UpgradeClient();
-            }
-        }
-    }
-*/
-
     if (fDebug10) LogPrintf(" {/SVC} ");
 }
-
-
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
