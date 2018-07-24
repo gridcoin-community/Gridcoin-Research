@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "util.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "base58.h"
@@ -12,6 +11,7 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "db.h"
+#include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
@@ -37,6 +37,8 @@ static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
 static asio::io_service* rpc_io_service = NULL;
+static ssl::context* rpc_ssl_context = NULL;
+static boost::thread_group* rpc_worker_group = NULL;
 
 const UniValue emptyobj(UniValue::VOBJ);
 
@@ -248,9 +250,9 @@ UniValue stop(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 0)
         throw runtime_error(
             "stop\n"
-            "Stop Gridcoin server.\n");
+            "Stop Gridcoin server.");
     // Shutdown will take long enough that the response should get back
-    LogPrintf("Stopping...\n");
+    LogPrintf("Stopping...");
     StartShutdown();
     return "Gridcoin server stopping";
 }
@@ -389,7 +391,6 @@ static const CRPCCommand vRPCCommands[] =
     { "readdata",                &readdata,                false,  cat_developer     },
     { "refhash",                 &refhash,                 false,  cat_developer     },
     { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
-    { "seefile",                 &seefile,                 false,  cat_developer     },
     { "sendalert",               &sendalert,               false,  cat_developer     },
     { "sendalert2",              &sendalert2,              false,  cat_developer     },
     { "sendblock",               &sendblock,               false,  cat_developer     },
@@ -412,7 +413,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getnetworkinfo",          &getnetworkinfo,          true,   cat_network       },
     { "currenttime",             &currenttime,             false,  cat_network       },
     { "decryptphrase",           &decryptphrase,           false,  cat_network       },
-//  { "downloadblocks",          &downloadblocks,          false,  cat_network       },
     { "encryptphrase",           &encryptphrase,           false,  cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        true,   cat_network       },
     { "getbestblockhash",        &getbestblockhash,        true,   cat_network       },
@@ -435,11 +435,6 @@ static const CRPCCommand vRPCCommands[] =
     { "memorypool",              &memorypool,              true,   cat_network       },
     { "networktime",             &networktime,             true,   cat_network       },
     { "ping",                    &ping,                    true,   cat_network       },
-#ifdef WIN32
-    { "reindex",                 &reindex,                 true,   cat_network       },
-    { "restart",                 &restart,                 true,   cat_network       },
-    { "restorepoint",            &restorepoint,            true,   cat_network       },
-#endif
     { "showblock",               &showblock,               true,   cat_network       },
     { "stop",                    &stop,                    true,   cat_network       },
     { "vote",                    &vote,                    false,  cat_network       },
@@ -502,39 +497,6 @@ bool ClientAllowed(const boost::asio::ip::address& address)
 
 void ServiceConnection(AcceptedConnection *conn);
 
-void StopRPCThreads()
-{
-    LogPrintf("Stop RPC IO service\n");
-    if(!rpc_io_service)
-    {
-        LogPrintf("RPC IO server not started\n");
-        return;
-    }
-
-    rpc_io_service->stop();
-}
-
-void ThreadRPCServer(void* parg)
-{
-    // Make this thread recognisable as the RPC listener
-    RenameThread("grc-rpclist");
-
-    try
-    {
-        ThreadRPCServer2(parg);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadRPCServer()");
-    }
-    catch (boost::thread_interrupted&)
-    {
-            LogPrintf("ThreadRPCServer exited (interrupt)\r\n");
-            return;
-    }
-    LogPrintf("ThreadRPCServer exited\n");
-}
-
 // Forward declaration required for RPCListen
 template <typename Protocol>
 static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
@@ -548,21 +510,21 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
  */
 template <typename Protocol>
 static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > acceptor,
-                   ssl::context& context,
-                   const bool fUseSSL)
+                      ssl::context& context,
+                      const bool fUseSSL)
 {
     // Accept connection
     AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(acceptor->get_io_service(), context, fUseSSL);
 
     acceptor->async_accept(
-            conn->sslStream.lowest_layer(),
-            conn->peer,
-            boost::bind(&RPCAcceptHandler<Protocol>,
-                acceptor,
-                boost::ref(context),
-                fUseSSL,
-                conn,
-                boost::asio::placeholders::error));
+                conn->sslStream.lowest_layer(),
+                conn->peer,
+                boost::bind(&RPCAcceptHandler<Protocol>,
+                            acceptor,
+                            boost::ref(context),
+                            fUseSSL,
+                            conn,
+                            boost::asio::placeholders::error));
 }
 
 /**
@@ -601,10 +563,8 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
     delete conn;
 }
 
-void ThreadRPCServer2(void* parg)
+void StartRPCThreads()
 {
-    if (fDebug10) LogPrintf("ThreadRPCServer started\n");
-
     strRPCUserColonPass = mapArgs["-rpcuser"] + ":" + mapArgs["-rpcpassword"];
     if ((mapArgs["-rpcpassword"] == "") ||
         (mapArgs["-rpcuser"] == mapArgs["-rpcpassword"]))
@@ -617,19 +577,19 @@ void ThreadRPCServer2(void* parg)
         else if (mapArgs.count("-daemon"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-daemon\"");
         uiInterface.ThreadSafeMessageBox(strprintf(
-            _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
-              "It is recommended you use the following random password:\n"
-              "rpcuser=gridcoinrpc\n"
-              "rpcpassword=%s\n"
-              "(you do not need to remember this password)\n"
-              "The username and password MUST NOT be the same.\n"
-              "If the file does not exist, create it with owner-readable-only file permissions.\n"
-              "It is also recommended to set alertnotify so you are notified of problems;\n"
-              "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
-                strWhatAmI,
-                GetConfigFile().string(),
-                EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
-            _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
+                                             _("%s, you must set a rpcpassword in the configuration file:\n %s\n"
+                                               "It is recommended you use the following random password:\n"
+                                               "rpcuser=gridcoinrpc\n"
+                                               "rpcpassword=%s\n"
+                                               "(you do not need to remember this password)\n"
+                                               "The username and password MUST NOT be the same.\n"
+                                               "If the file does not exist, create it with owner-readable-only file permissions.\n"
+                                               "It is also recommended to set alertnotify so you are notified of problems;\n"
+                                               "for example: alertnotify=echo %%s | mail -s \"Gridcoin Alert\" admin@foo.com\n"),
+                                             strWhatAmI,
+                                             GetConfigFile().string(),
+                                             EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
+                _("Error"), CClientUIInterface::OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
@@ -638,24 +598,24 @@ void ThreadRPCServer2(void* parg)
 
     assert(rpc_io_service == NULL);
     rpc_io_service = new asio::io_service();
+    rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
-    ssl::context context(ssl::context::sslv23);
     if (fUseSSL)
     {
-        context.set_options(ssl::context::no_sslv2);
+        rpc_ssl_context->set_options(ssl::context::no_sslv2);
 
         filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
         if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
-        if (filesystem::exists(pathCertFile)) context.use_certificate_chain_file(pathCertFile.string());
+        if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
         filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
         if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
-        if (filesystem::exists(pathPKFile)) context.use_private_key_file(pathPKFile.string(), ssl::context::pem);
+        if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
-        SSL_CTX_set_cipher_list(context.native_handle(), strCiphers.c_str());
+        SSL_CTX_set_cipher_list(rpc_ssl_context->native_handle(), strCiphers.c_str());
     }
 
     // Try a dual IPv6/IPv4 socket, falling back to separate IPv4 and IPv6 sockets
@@ -664,8 +624,6 @@ void ThreadRPCServer2(void* parg)
     ip::tcp::endpoint endpoint(bindAddress, GetArg("-rpcport", GetDefaultRPCPort()));
     boost::system::error_code v6_only_error;
     boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
-
-    boost::signals2::signal<void ()> StopRequests;
 
     bool fListening = false;
     std::string strerr;
@@ -680,11 +638,7 @@ void ThreadRPCServer2(void* parg)
         acceptor->bind(endpoint);
         acceptor->listen(socket_base::max_connections);
 
-        RPCListen(acceptor, context, fUseSSL);
-        // Cancel outstanding listen-requests for this acceptor when shutting down
-        StopRequests.connect(signals2::slot<void ()>(
-                    static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                .track(acceptor));
+        RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
         fListening = true;
     }
@@ -707,11 +661,7 @@ void ThreadRPCServer2(void* parg)
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_connections);
 
-            RPCListen(acceptor, context, fUseSSL);
-            // Cancel outstanding listen-requests for this acceptor when shutting down
-            StopRequests.connect(signals2::slot<void ()>(
-                        static_cast<void (ip::tcp::acceptor::*)()>(&ip::tcp::acceptor::close), acceptor.get())
-                    .track(acceptor));
+            RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
 
             fListening = true;
         }
@@ -727,13 +677,31 @@ void ThreadRPCServer2(void* parg)
         StartShutdown();
         return;
     }
+    
+    rpc_worker_group = new boost::thread_group();
+    for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
+        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+}
 
-    while (!fShutdown)
-        rpc_io_service->run_one();
+void StopRPCThreads()
+{
+    LogPrintf("Stop RPC IO service\n");
+    if(!rpc_io_service)
+    {
+        LogPrintf("RPC IO server not started\n");
+        return;
+    }
 
+    rpc_io_service->stop();
+    if (rpc_worker_group != NULL)
+        rpc_worker_group->join_all();
+    
+    delete rpc_worker_group;
+    rpc_worker_group = NULL;
+    delete rpc_ssl_context;
+    rpc_ssl_context = NULL;
     delete rpc_io_service;
     rpc_io_service = NULL;
-    StopRequests();
 }
 
 class JSONRequest
@@ -765,7 +733,7 @@ void JSONRequest::parse(const UniValue& valRequest)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Method must be a string");
     strMethod = valMethod.get_str();
     if (strMethod != "getwork" && strMethod != "getblocktemplate")
-        if (fDebug10) LogPrintf("ThreadRPCServer method=%s\n", strMethod);
+        if (fDebug10) LogPrintf("ThreadRPCServer method=%s", strMethod);
 
     // Parse params
     UniValue valParams = find_value(request, "params");
@@ -813,19 +781,24 @@ static string JSONRPCExecBatch(const UniValue& vReq)
 
 void ServiceConnection(AcceptedConnection *conn)
 {
-    // Make this thread recognisable as the RPC handler
-    RenameThread("grc-rpchand");
-
     bool fRun = true;
-    while (true)
+    while (fRun && !fShutdown)
     {
-        if (fShutdown || !fRun)
-           break;
-
+        int nProto = 0;
         map<string, string> mapHeaders;
-        string strRequest;
+        string strRequest, strMethod, strURI;
 
-        ReadHTTP(conn->stream(), mapHeaders, strRequest);
+        // Read HTTP request line
+        if (!ReadHTTPRequestLine(conn->stream(), nProto, strMethod, strURI))
+            break;
+
+        // Read HTTP message headers and body
+        ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto);
+
+        if (strURI != "/") {
+            conn->stream() << HTTPReply(HTTP_NOT_FOUND, "", false) << std::flush;
+            break;
+        }
 
         // Check authorization
         if (mapHeaders.count("authorization") == 0)
@@ -863,6 +836,7 @@ void ServiceConnection(AcceptedConnection *conn)
                 jreq.parse(valRequest);
 
                 UniValue result = tableRPC.execute(jreq.strMethod, jreq.params);
+
                 // Send reply
                 strReply = JSONRPCReply(result, NullUniValue, jreq.id);
 
@@ -913,7 +887,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
             nRPCtimebegin = GetTimeMillis();
             result = pcmd->actor(params, false);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
-            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms\n", strMethod.c_str(), nRPCtimetotal);
+            LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod, nRPCtimetotal);
         }
         else
             result = pcmd->actor(params, false);
@@ -942,7 +916,7 @@ int main(int argc, char *argv[])
     {
         if (argc >= 2 && string(argv[1]) == "-server")
         {
-            LogPrintf("server ready\n");
+            LogPrintf("server ready");
             ThreadRPCServer(NULL);
         }
         else

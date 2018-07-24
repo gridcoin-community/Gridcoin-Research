@@ -2,13 +2,13 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "net.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "alert.h"
 #include "wallet.h"
 #include "db.h"
 #include "walletdb.h"
+#include "net.h"
 
 using namespace std;
 extern std::string NeuralRequest(std::string MyNeuralRequest);
@@ -40,7 +40,6 @@ std::string NeuralRequest(std::string MyNeuralRequest)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
-            //LogPrintf("Node is a neural participant \n");
             std::string reqid = "reqid";
             pNode->PushMessage("neural", MyNeuralRequest, reqid);
             if (fDebug3) LogPrintf(" PUSH ");
@@ -242,7 +241,6 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
         {
             std::string reqid = cpid;
             pNode->PushMessage("neural", command_name, reqid);
-            //if (fDebug3) LogPrintf("Requested command %s \n",command_name.c_str());
             iContactCount++;
             if (iContactCount >= NodeLimit) return true;
         }
@@ -332,7 +330,6 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         obj.pushKV("Neural Network", bNeural);
         if (bNeural)
         {
-            obj.pushKV("Neural Hash", stats.NeuralHash);
             obj.pushKV("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime()));
 
         }

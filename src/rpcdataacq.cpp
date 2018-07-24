@@ -11,8 +11,8 @@
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "util.h"
 #include "appcache.h"
+#include "util.h"
 
 #include <boost/filesystem.hpp>
 #include <iostream>

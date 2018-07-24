@@ -44,7 +44,7 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     std::string sConcatMessage = sCPID + sBlockHash;
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
     if(!bValid)
-        LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s\n"
+        LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s"
                   ,sSignature, sBeaconPublicKey);
     return bValid;
 }
@@ -65,7 +65,7 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
     return SignedMessage;
 }
 
-std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
+std::string SendMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
                        std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
 {
     std::string sAddress = GetBurnAddress();
@@ -89,10 +89,10 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, st
     return wtx.GetHash().GetHex().c_str();
 }
 
-std::string AddContract(std::string sType, std::string sName, std::string sContract)
+std::string SendContract(std::string sType, std::string sName, std::string sContract)
 {
     std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-    std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
+    std::string result = SendMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
     return result;
 }
 

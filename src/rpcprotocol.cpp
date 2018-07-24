@@ -4,12 +4,12 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "util.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "rpcprotocol.h"
 #include "base58.h"
 #include "db.h"
+#include "util.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
@@ -106,22 +106,7 @@ string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
         strMsg);
 }
 
-int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
-{
-    string str;
-    getline(stream, str);
-    vector<string> vWords;
-    boost::split(vWords, str, boost::is_any_of(" "));
-    if (vWords.size() < 2)
-        return HTTP_INTERNAL_SERVER_ERROR;
-    proto = 0;
-    const char *ver = strstr(str.c_str(), "HTTP/1.");
-    if (ver != NULL)
-        proto = atoi(ver+7);
-    return atoi(vWords[1].c_str());
-}
-
-int ReadHTTPHeader(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
+int ReadHTTPHeaders(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
 {
     int nLen = 0;
     while (true)
@@ -146,17 +131,65 @@ int ReadHTTPHeader(std::basic_istream<char>& stream, map<string, string>& mapHea
     return nLen;
 }
 
-int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet, string& strMessageRet)
+bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
+                         string& http_method, string& http_uri)
+{
+    string str;
+    getline(stream, str);
+
+    // HTTP request line is space-delimited
+    vector<string> vWords;
+    boost::split(vWords, str, boost::is_any_of(" "));
+    if (vWords.size() < 2)
+        return false;
+
+    // HTTP methods permitted: GET, POST
+    http_method = vWords[0];
+    if (http_method != "GET" && http_method != "POST")
+        return false;
+
+    // HTTP URI must be an absolute path, relative to current host
+    http_uri = vWords[1];
+    if (http_uri.size() == 0 || http_uri[0] != '/')
+        return false;
+
+    // parse proto, if present
+    string strProto = "";
+    if (vWords.size() > 2)
+        strProto = vWords[2];
+
+    proto = 0;
+    const char *ver = strstr(strProto.c_str(), "HTTP/1.");
+    if (ver != NULL)
+        proto = atoi(ver+7);
+
+    return true;
+}
+
+int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
+{
+    string str;
+    getline(stream, str);
+    vector<string> vWords;
+    boost::split(vWords, str, boost::is_any_of(" "));
+    if (vWords.size() < 2)
+        return HTTP_INTERNAL_SERVER_ERROR;
+    proto = 0;
+    const char *ver = strstr(str.c_str(), "HTTP/1.");
+    if (ver != NULL)
+        proto = atoi(ver+7);
+    return atoi(vWords[1].c_str());
+}
+
+int ReadHTTPMessage(std::basic_istream<char>& stream, map<string,
+                    string>& mapHeadersRet, string& strMessageRet,
+                    int nProto)
 {
     mapHeadersRet.clear();
     strMessageRet = "";
 
-    // Read status
-    int nProto = 0;
-    int nStatus = ReadHTTPStatus(stream, nProto);
-
     // Read header
-    int nLen = ReadHTTPHeader(stream, mapHeadersRet);
+    int nLen = ReadHTTPHeaders(stream, mapHeadersRet);
     if (nLen < 0 || nLen > (int)MAX_SIZE)
         return HTTP_INTERNAL_SERVER_ERROR;
 
@@ -178,7 +211,7 @@ int ReadHTTP(std::basic_istream<char>& stream, map<string, string>& mapHeadersRe
             mapHeadersRet["connection"] = "close";
     }
 
-    return nStatus;
+    return HTTP_OK;
 }
 
 //

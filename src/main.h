@@ -5,11 +5,11 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
-#include "sync.h"
+#include "util.h"
 #include "net.h"
+#include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "util.h"
 
 #include "global_objects_noui.hpp"
 
@@ -421,7 +421,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -504,7 +504,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -588,7 +588,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -1123,7 +1123,7 @@ public:
         // Take last bit of block hash as entropy bit
         unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
         if (fDebug && GetBoolArg("-printstakemodifier"))
-            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString(), nEntropyBit);
+            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash().ToString(), nEntropyBit);
         return nEntropyBit;
     }
 
@@ -1259,7 +1259,7 @@ public:
 
     void print() const
     {
-        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
+        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)",
             GetHash().ToString(),
             nVersion,
             hashPrevBlock.ToString(),
@@ -1274,8 +1274,7 @@ public:
         }
         LogPrintf("  vMerkleTree: ");
         for (unsigned int i = 0; i < vMerkleTree.size(); i++)
-            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10));
-        LogPrintf("\n");
+            LogPrintf("%s", vMerkleTree[i].ToString().substr(0,10));
     }
 
 
@@ -1562,7 +1561,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -1683,7 +1682,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 

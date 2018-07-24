@@ -12,16 +12,14 @@
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "util.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
 #include "contract/polls.h"
 #include "contract/contract.h"
+#include "util.h"
 
-#include <boost/filesystem.hpp>
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
@@ -48,7 +46,6 @@ extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
-extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 bool StrLessThanReferenceHash(std::string rh);
@@ -114,8 +111,6 @@ int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 std::string getfilecontents(std::string filename);
-int CreateRestorePoint();
-int DownloadBlocks();
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
@@ -146,40 +141,6 @@ double GetNetworkTotalByProject(std::string projectname)
     if (!structcpid.initialized) return 0;
     double networkavgrac = structcpid.rac;
     return networkavgrac;
-}
-
-std::string FileManifest()
-{
-    using namespace boost::filesystem;
-    path dir_path = GetDataDir() / "nn2";
-    std::string sMyManifest;
-    for(directory_iterator it(dir_path); it != directory_iterator(); ++it)
-    {
-        if(boost::filesystem::is_regular_file(it->path()))
-        {
-            sMyManifest += it->path().string();
-        }
-    }
-    return sMyManifest;
-}
-
-
-
-
-
-
-std::vector<unsigned char> readFileToVector(std::string filename)
-{
-    std::ifstream file(filename.c_str(), std::ios::binary);
-    file.unsetf(std::ios::skipws);
-    std::streampos fileSize;
-    file.seekg(0, std::ios::end);
-    fileSize = file.tellg();
-    file.seekg(0, std::ios::beg);
-    std::vector<unsigned char> vec;
-    vec.reserve(fileSize);
-    vec.insert(vec.begin(), std::istream_iterator<unsigned char>(file), std::istream_iterator<unsigned char>());
-    return vec;
 }
 
 double GetDifficulty(const CBlockIndex* blockindex)
@@ -650,7 +611,7 @@ void GetSuperblockProjectCount(std::string data, double& out_project_count, doub
     std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
     double avg_of_projects = GetAverageInList(avgs, out_project_count);
     out_whitelist_count = GetCountOf("project");
-    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f  \n",(double)out_project_count,(double)out_whitelist_count);
+    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f", out_project_count, out_whitelist_count);
 }
 
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
@@ -673,7 +634,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (avg_of_projects   < 050000)  return -3;
         // Note bIgnoreBeacons is passed in when the chain is syncing from 0 (this is because the lists of beacons and projects are not full at that point)
         if (!fTestNet && !bIgnoreBeacons && (mag_count < out_beacon_count*.90 || mag_count > out_beacon_count*1.10)) return -4;
-        if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %f \n",(double)avg_count,(double)out_project_count,(double)nHeight);
+        if (fDebug10) LogPrintf(" CountOfProjInBlock %f vs WhitelistedCount %f Height %d", avg_count, out_project_count, nHeight);
         if (!fTestNet && !bIgnoreBeacons && nHeight > 972000 && (avg_count < out_project_count*.50)) return -5;
         return avg_of_magnitudes + avg_of_projects;
     }
@@ -854,7 +815,13 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             return false;
         }
 
-        GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+        if (!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey))
+        {
+            sError = "Failed to generate beacon keys. See debug.log or GenerateBeaconKeys.";
+            return false;
+        }
+
+        // Verify the Private key and Public Key are not empty after success of generating beacon keys
         if (sOutPrivKey.empty() || sOutPubKey.empty())
         {
             sError = "Keypair is empty.";
@@ -866,7 +833,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string GRCAddress = DefaultWalletAddress();
         // Public Signing Key is stored in Beacon
         std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
-        LogPrintf("\n Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
+        LogPrintf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
         std::string sBase = EncodeBase64(contract);
         std::string sAction = "add";
         std::string sType = "beacon";
@@ -877,10 +844,15 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf")))
             {
                 sError = "Failed to backup old configuration file. Beacon not sent.";
-                return true;
+                return false;
             }
             // Backup config with new keys with beacon suffix
-            StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
+            if (!StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey))
+            {
+                sError = "Failed to store keys in configuration file. Beacon not sent.";
+                return false;
+            }
+            // Since keys successfully stored; backup the new beacon config
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
             {
                 sError = "Failed to back up configuration file. Beacon not sent, please manually roll back to previous configuration.";
@@ -888,7 +860,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             }
 
             // Send the beacon transaction
-            sMessage = AddContract(sType,sName,sBase);
+            sMessage = SendContract(sType,sName,sBase);
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
             // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
@@ -1265,7 +1237,7 @@ UniValue cpids(const UniValue& params, bool fHelp)
     if (mvCPIDs.size() < 1)
         HarvestCPIDs(false);
 
-    LogPrintf("generating cpid report\n");
+    LogPrintf("Generating cpid report");
 
     for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
     {
@@ -1841,7 +1813,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     res.pushKV("Name", sName);
     res.pushKV("Value", sValue);
 
-    std::string result = AddMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
+    std::string result = SendMessage(bAdd, sType, sName, sValue, sPass, AmountFromValue(5), .1, "");
 
     res.pushKV("Results", result);
 
@@ -2075,7 +2047,7 @@ UniValue genboinckey(const UniValue& params, bool fHelp)
     std::string sBase = EncodeBase64(sParam);
 
     if (fDebug3)
-        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s\r\n", GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(), sParam.c_str());
+        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s", GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, sParam);
 
     res.pushKV("[Specify in config file without quotes] boinckey=", sBase);
 
@@ -2320,33 +2292,6 @@ UniValue readdata(const UniValue& params, bool fHelp)
 
     res.pushKV("Key", sKey);
     res.pushKV("Result", sValue);
-
-    return res;
-}
-
-UniValue seefile(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "seefile\n"
-                "\n"
-                "Unit test for sending a file from node to node\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    // This is a unit test to prove viability of transmitting a file from node to node
-    std::string sFile = "C:\\test.txt";
-    std::vector<unsigned char> v = readFileToVector(sFile);
-
-    res.pushKV("byte1", v[1]);
-    res.pushKV("bytes", (int)v.size());
-
-    for (unsigned int i = 0; i < v.size(); i++)
-        res.pushKV("bytes", v[i]);
-
-    std::string sManifest = FileManifest();
-
-    res.pushKV("manifest", sManifest);
 
     return res;
 }
@@ -2685,27 +2630,6 @@ UniValue decryptphrase(const UniValue& params, bool fHelp)
     return res;
 }
 
-/*
-#ifdef WIN32
-UniValue downloadblocks(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "downloadblocks\n"
-                "\n"
-                "Download blocks from a snapshot\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r = Restarter::DownloadGridcoinBlocks();
-
-    res.pushKV("Download Blocks", r);
-
-    return res;
-}
-#endif
-*/
-
 UniValue encryptphrase(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -2757,60 +2681,6 @@ UniValue networktime(const UniValue& params, bool fHelp)
 
     return res;
 }
-
-#ifdef WIN32
-UniValue reindex(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "reindex\n"
-                "\n"
-                "Re-index the block chain\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r = Restarter::CreateGridcoinRestorePoint();
-    Restarter::ReindexGridcoinWallet();
-    res.pushKV("Reindex Chain", r);
-
-    return res;
-}
-
-UniValue restart(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "restart\n"
-                "\n"
-                "Restarts the wallet\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LogPrintf("Restarting Gridcoin...");
-    int iResult = Restarter::RestartGridcoin();
-    res.pushKV("RebootClient", iResult);
-
-    return res;
-}
-
-UniValue restorepoint(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "restorepoint\n"
-                "\n"
-                "Create a restore point\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    int r= Restarter::CreateGridcoinRestorePoint();
-    //We must stop the node before we can do this
-    //RestartGridcoin();
-    res.pushKV("Restore Point", r);
-
-    return res;
-}
-#endif
 
 UniValue execute(const UniValue& params, bool fHelp)
 {
@@ -2974,13 +2844,12 @@ UniValue MagnitudeReport(std::string cpid)
             entry3.pushKV("End Block",nMaxDepth);
             results.push_back(entry3);
         }
-        if (fDebug3) LogPrintf("*MR5*");
 
         return results;
     }
     catch(...)
     {
-        LogPrintf("\nError in Magnitude Report \n ");
+        LogPrintf("Error in Magnitude Report");
         return results;
     }
 

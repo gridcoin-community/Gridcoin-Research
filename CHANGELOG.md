@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [3.7.15.0] 2018-07-18
+### Changed
+ - Balance now includes unconfirmed coins sent by self, #1192 (@Foggyx420).
+
+## [3.7.14.0] 2018-07-17
+### Added
+ - Support for Qt 5.9 (@thecharlatan)
+ - Compatibility with boost-1.67 (@denravonska)
+ - Calculations to reduce network time offset (@jamescowens)
+ - Feedback for addnode RPC command (@tomasbrod)
+ - Added data acquisiton commands (@tomasbrod):
+    - getrecentblocks
+    - exportstats1
+    - getsupervotes
+ - /var/lib/boinc/ as a valid boinc path on Linux (@rsparlin)
+ - Stress testing script  (@Foggyx420)
+ - refhash command also on linux (@jamescowens)
+ - Documentation for out of source build (@thecharlatan)
+ 
+### Changed
+ - More accurate time to stake and network weight estimations (@jamescowens)
+ - Compressed image files (@Peppernrino)
+ - Poll (voting) code refactoring (@thecharlatan)
+ - BITCOIN optimize command listunspent (@Foggyx420)
+ - RPC server refactoring (Wladimir J. van der Laan) (@thecharlatan)
+ - Replace json spirit with Univalue JSON library (@thecharlatan)
+ - Change repository URL (@Foggyx420)
+ - Pretty-print rpc output (@denravonska)
+ - Logging for debugging reward computation (@tomasbrod)
+ - Clean-up beacon manipulation (@Foggyx420)
+ 
+### Fixed
+ - Building errors on Mac releated to SVG framework (@thecharlatan)
+ - neural data response
+ - neural network fixes (@Foggyx420)
+ - investor cpid's appearing as zeros in block index (@tomasbrod)
+ - ensure that daemon functionality is correct when built together with gui wallet (@jamescowens)
+ - improve logging, remove empty lines (@jamescowens) (@Foggyx420) (@tomasbrod) (@denravonska)
+ - windows socket warnings (@thecharlatan)
+
+### Removed
+ - unused components of neural network (@Foggyx420)
+ - GRCRestarter (@Foggyx420)
+ - Galaza (game) (@Foggyx420)
+ - unused images (@barton2526)
+ - unused code (@Foggyx420) (@Pythonix)
+ - unusual activity report (@tomasbrod)
+ - burnamount and recipient from appcache (@tomasbrod)
+ - GUI FAQ (@Lenni)
+ - unusable limit from magnitude command (@Foggyx420)
+ - cgminer support (@Foggyx420)
+ - deprecated menu items (@jamescowens) 
+
 ## [3.7.13.0] 2018-06-02, leisure
 ### Fixed
  - Fix voting regression when done from the UI, #1133 (@Foggyx420).

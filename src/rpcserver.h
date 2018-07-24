@@ -14,11 +14,11 @@ class CBlockIndex;
 #include <univalue.h>
 
 #include "global_objects_noui.hpp"
-#include "util.h"
 #include "checkpoints.h"
+#include "util.h"
 
+void StartRPCThreads();
 void StopRPCThreads();
-void ThreadRPCServer(void* parg);
 int CommandLineRPC(int argc, char *argv[]);
 
 /*
@@ -215,7 +215,6 @@ extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
 extern UniValue refhash(const UniValue& params, bool fHelp);
 extern UniValue rpc_reorganize(const UniValue& params, bool fHelp);
-extern UniValue seefile(const UniValue& params, bool fHelp);
 extern UniValue sendalert(const UniValue& params, bool fHelp);
 extern UniValue sendalert2(const UniValue& params, bool fHelp);
 extern UniValue sendblock(const UniValue& params, bool fHelp);
@@ -236,7 +235,6 @@ extern UniValue addpoll(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue decryptphrase(const UniValue& params, bool fHelp);
-//extern UniValue downloadblocks(const UniValue& params, bool fHelp);
 extern UniValue encryptphrase(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
@@ -261,13 +259,6 @@ extern UniValue listpolls(const UniValue& params, bool fHelp);
 extern UniValue memorypool(const UniValue& params, bool fHelp);
 extern UniValue networktime(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
-
-#ifdef WIN32
-extern UniValue reindex(const UniValue& params, bool fHelp);
-extern UniValue restart(const UniValue& params, bool fHelp);
-extern UniValue restorepoint(const UniValue& params, bool fHelp);
-#endif
-
 extern UniValue rpc_getsupervotes(const UniValue& params, bool fHelp);
 extern UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 extern UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
