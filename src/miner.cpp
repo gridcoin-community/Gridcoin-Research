@@ -871,6 +871,8 @@ void StakeMiner(CWallet *pwallet)
                 StakeBlock.nVersion = 8;
             if(IsV9Enabled(pindexPrev->nHeight+1))
                 StakeBlock.nVersion = 9;
+            if(pindexPrev->nVersion == 10)
+                StakeBlock.nVersion = 10;
 
             MinerStatus.Version= StakeBlock.nVersion;
         }
