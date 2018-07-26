@@ -341,7 +341,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getmininginfo",           &getmininginfo,           false,  cat_mining        },
     { "lifetime",                &lifetime,                false,  cat_mining        },
     { "magnitude",               &magnitude,               false,  cat_mining        },
-    { "mymagnitude",             &mymagnitude,             false,  cat_mining        },
 #ifdef WIN32
     { "myneuralhash",            &myneuralhash,            false,  cat_mining        },
     { "neuralhash",              &neuralhash,              false,  cat_mining        },

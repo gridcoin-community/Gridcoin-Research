@@ -1263,34 +1263,6 @@ UniValue magnitude(const UniValue& params, bool fHelp)
     return results;
 }
 
-UniValue mymagnitude(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "mymagnitude\n"
-                "\n"
-                "Displays information for your magnitude in the network\n");
-
-    UniValue results(UniValue::VARR);
-
-    if (msPrimaryCPID.empty())
-    {
-        UniValue res(UniValue::VOBJ);
-
-        res.pushKV("Error", "Your CPID appears to be empty");
-
-        results.push_back(res);
-    }
-
-    else
-    {
-        LOCK(cs_main);
-
-        results = MagnitudeReport(msPrimaryCPID);
-    }
-    return results;
-}
-
 #ifdef WIN32
 UniValue myneuralhash(const UniValue& params, bool fHelp)
 {
