@@ -280,7 +280,6 @@ static const CRPCCommand vRPCCommands[] =
     { "backupprivatekeys",       &backupprivatekeys,       false,  cat_wallet        },
     { "backupwallet",            &backupwallet,            true,   cat_wallet        },
     { "burn",                    &burn,                    false,  cat_wallet        },
-    { "burn2",                   &burn2,                   false,  cat_wallet        },
     { "checkwallet",             &checkwallet,             false,  cat_wallet        },
     { "createrawtransaction",    &createrawtransaction,    false,  cat_wallet        },
     { "decoderawtransaction",    &decoderawtransaction,    false,  cat_wallet        },

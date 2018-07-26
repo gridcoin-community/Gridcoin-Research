@@ -908,57 +908,6 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue burn2(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 4)
-        throw runtime_error(
-                "burn2 <burnaddress> <burnamount> <burnkey> <burndetail>\n"
-                "\n"
-                "<burnaddress> -> Address where the coins will be burned\n"
-                "<burnamount>  -> Amount of coins to be burned\n"
-                "<burnaddress> -> Burn key to be used\n"
-                "<burndetails> -> Details of the burn\n"
-                "\n"
-                "Burn coins on the network\n");
-
-    UniValue res(UniValue::VOBJ);
-    std::string sAddress = params[0].get_str();
-    double dAmount  = Round(params[1].get_real(), 6);
-    std::string sKey     = params[2].get_str();
-    std::string sDetail  = params[3].get_str();
-    CBitcoinAddress address(sAddress);
-    bool isValid = address.IsValid();
-
-    if (!isValid)
-    {
-        res.pushKV("Error", "Invalid GRC Burn Address");
-
-        return res;
-    }
-
-    if (dAmount == 0 || dAmount < 0)
-    {
-        res.pushKV("Error", "Burn amount must be > 0");
-
-        return res;
-    }
-
-    if (sKey.empty() || sDetail.empty())
-    {
-        res.pushKV("Error", "Burn Key and Burn Detail must be populated");
-
-        return res;
-    }
-
-    std::string sContract = "<KEY>" + sKey + "</KEY><DETAIL>" + sDetail + "</DETAIL>";
-
-    std::string sResult = BurnCoinsWithNewContract(true, "burn", sKey, sContract, AmountFromValue(1), dAmount, "", sAddress);
-
-    res.pushKV("Burn_Response", sResult);
-
-    return res;
-}
-
 UniValue encrypt(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
