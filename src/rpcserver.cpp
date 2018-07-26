@@ -346,7 +346,6 @@ static const CRPCCommand vRPCCommands[] =
     { "neuralhash",              &neuralhash,              false,  cat_mining        },
 #endif
     { "neuralreport",            &neuralreport,            false,  cat_mining        },
-    { "proveownership",          &proveownership,          false,  cat_mining        },
     { "resetcpids",              &resetcpids,              false,  cat_mining        },
     { "staketime",               &staketime,               false,  cat_mining        },
     { "superblockage",           &superblockage,           false,  cat_mining        },

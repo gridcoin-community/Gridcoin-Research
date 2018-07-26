@@ -1315,50 +1315,6 @@ UniValue neuralreport(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue proveownership(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "proveownership\n"
-                "\n"
-                "Prove ownership of your CPID\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    HarvestCPIDs(true);
-    GetNextProject(true);
-
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    std::string sLongCPID = ComputeCPIDv2(email, GlobalCPUMiningCPID.boincruntimepublickey,1);
-    std::string sShortCPID = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey + email);
-    std::string sEmailMD5 = RetrieveMd5(email);
-    std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
-
-    res.pushKV("Boinc E-Mail", email);
-    res.pushKV("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey);
-    res.pushKV("CPID", GlobalCPUMiningCPID.cpid);
-    res.pushKV("Computed Email Hash", sEmailMD5);
-    res.pushKV("Computed BPK", sBPKMD5);
-    res.pushKV("Computed CPID", sLongCPID);
-    res.pushKV("Computed Short CPID", sShortCPID);
-
-    bool fResult = CPID_IsCPIDValid(sShortCPID, sLongCPID, 1);
-
-    if (GlobalCPUMiningCPID.boincruntimepublickey.empty())
-    {
-        fResult = false;
-
-        res.pushKV("Error", "Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location.");
-    }
-
-    res.pushKV("CPID Valid", fResult);
-
-    return res;
-}
-
 UniValue resetcpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
