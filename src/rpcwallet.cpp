@@ -910,7 +910,7 @@ UniValue sendmany(const UniValue& params, bool fHelp)
     EnsureWalletIsUnlocked();
 
     // Check funds & Support non-account sendmany
-    int64_t nBalance;
+    int64_t nBalance = 0;
 
     if (bFromAccount)
         nBalance = GetAccountBalance(strAccount, nMinDepth);
