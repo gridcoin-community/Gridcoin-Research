@@ -175,7 +175,6 @@ extern UniValue neuralhash(const UniValue& params, bool fHelp);
 extern UniValue neuralreport(const UniValue& params, bool fHelp);
 extern UniValue proveownership(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
-extern UniValue rsa(const UniValue& params, bool fHelp);
 extern UniValue rsaweight(const UniValue& params, bool fHelp);
 extern UniValue staketime(const UniValue& params, bool fHelp);
 extern UniValue superblockage(const UniValue& params, bool fHelp);

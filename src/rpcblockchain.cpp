@@ -1379,27 +1379,6 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue rsa(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "rsa\n"
-                "\n"
-                "Displays RSA report for your CPID\n");
-
-    UniValue res(UniValue::VARR);
-
-    if (msPrimaryCPID.empty() || msPrimaryCPID == "INVESTOR")
-        throw runtime_error(
-                "PrimaryCPID is empty or INVESTOR; No RSA available for this condition\n");
-
-    LOCK(cs_main);
-
-    res = MagnitudeReport(msPrimaryCPID);
-
-    return res;
-}
-
 UniValue rsaweight(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
