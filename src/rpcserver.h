@@ -139,7 +139,6 @@ extern UniValue listtransactions(const UniValue& params, bool fHelp);
 extern UniValue listunspent(const UniValue& params, bool fHelp);
 extern UniValue makekeypair(const UniValue& params, bool fHelp);
 extern UniValue movecmd(const UniValue& params, bool fHelp);
-extern UniValue newburnaddress(const UniValue& params, bool fHelp);
 extern UniValue rain(const UniValue& params, bool fHelp);
 extern UniValue repairwallet(const UniValue& params, bool fHelp);
 extern UniValue resendtx(const UniValue& params, bool fHelp);

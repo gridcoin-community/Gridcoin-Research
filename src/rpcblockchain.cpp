@@ -980,66 +980,6 @@ UniValue encrypt(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue newburnaddress(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "newburnaddress [burntemplate]\n"
-                "\n"
-                "[burntemplate] -> Allow a vanity burn address\n"
-                "\n"
-                "Creates a new burn address\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    //3-12-2016 - R Halford - Allow the user to make vanity GRC Burn Addresses that have no corresponding private key
-    std::string sBurnTemplate = "GRCBurnAddressGRCBurnAddressGRCBurnAddress";
-
-    if (params.size() > 0)
-        sBurnTemplate = params[0].get_str();
-
-    // Address must start with the correct base58 network flag and address type for GRC
-    std::string sPrefix = (fTestNet) ? "mp" : "Rx";
-    std::string t34 = sPrefix + sBurnTemplate + "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-    t34 = t34.substr(0,34); // Template must be 34 characters
-    std::vector<unsigned char> vchDecoded34;
-    DecodeBase58(t34, vchDecoded34);
-    //Now we have the 34 digit address decoded from base58 to binary
-    std::string sDecoded34(vchDecoded34.begin(), vchDecoded34.end());
-    //Now we have a binary string - Chop off all but last 4 bytes (save space for the checksum)
-    std::string sDecoded30 = sDecoded34.substr(0,sDecoded34.length()-4);
-    //Convert to Hex first
-    vector<unsigned char> vchDecoded30(sDecoded30.begin(), sDecoded30.end());
-    std::string sDecodedHex = ConvertBinToHex(sDecoded30);
-    // Get sha256 Checksum of DecodedHex
-    uint256 hash = Hash(vchDecoded30.begin(), vchDecoded30.end());
-    // The BTC address spec calls for double SHA256 hashing
-    uint256 DoubleHash = Hash(hash.begin(),hash.end());
-    std::string sSha256 = DoubleHash.GetHex();
-    // Only use the first 8 hex bytes to retrieve the checksum
-    sSha256  = sSha256.substr(0,8);
-    // Combine the Hex Address prefix and the Sha256 Checksum to form the Hex version of the address (Note: There is no private key)
-    std::string combined = sDecodedHex + sSha256;
-    std::string sBinary = ConvertHexToBin(combined);
-    vector<unsigned char> v(sBinary.begin(), sBinary.end());
-    //Make the new address so that it passes base 58 Checks
-    std::string encoded1 = EncodeBase58(v);
-    std::string encoded2 = EncodeBase58Check(vchDecoded30);
-
-    res.pushKV("CombinedHex",combined);
-
-    if (encoded2.length() != 34)
-    {
-        res.pushKV("Burn Address Creation failed","NOTE: the input phrase must not include zeroes, or nonbase58 characters.");
-
-        return res;
-    }
-    // Give the user the new vanity burn address
-    res.pushKV("Burn Address",encoded2);
-
-    return res;
-}
-
 UniValue rain(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
