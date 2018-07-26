@@ -162,7 +162,6 @@ extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue beaconreport(const UniValue& params, bool fHelp);
 extern UniValue beaconstatus(const UniValue& params, bool fHelp);
-extern UniValue cpids(const UniValue& params, bool fHelp);
 extern UniValue currentneuralhash(const UniValue& params, bool fHelp);
 extern UniValue currentneuralreport(const UniValue& params, bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);

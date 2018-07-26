@@ -1109,51 +1109,6 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue cpids(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "cpids\n"
-                "\n"
-                "Displays information on your cpids\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    //Dump vectors:
-
-    LOCK(cs_main);
-
-    if (mvCPIDs.size() < 1)
-        HarvestCPIDs(false);
-
-    LogPrintf("Generating cpid report");
-
-    for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-    {
-
-        StructCPID structcpid = mvCPIDs[(*ii).first];
-
-        if (structcpid.initialized)
-        {
-            if ((GlobalCPUMiningCPID.cpid.length() > 3 &&
-                 structcpid.cpid == GlobalCPUMiningCPID.cpid)
-                || !IsResearcher(structcpid.cpid) || !IsResearcher(GlobalCPUMiningCPID.cpid))
-            {
-                res.pushKV("Project",structcpid.projectname);
-                res.pushKV("CPID",structcpid.cpid);
-                res.pushKV("RAC",structcpid.rac);
-                res.pushKV("Team",structcpid.team);
-                res.pushKV("CPID Link",structcpid.link);
-                res.pushKV("Debug Info",structcpid.errors);
-                res.pushKV("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid);
-
-            }
-        }
-    }
-
-    return res;
-}
-
 UniValue currentneuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
