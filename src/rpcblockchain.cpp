@@ -1379,31 +1379,6 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue rsaweight(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "rsaweight\n"
-                "\n"
-                "Display Rsaweight for your CPID\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    double out_magnitude = 0;
-    double out_owed = 0;
-
-    LOCK(cs_main);
-
-    int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-    out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid, out_owed);
-
-    res.pushKV("RSA Weight", RSAWEIGHT);
-    res.pushKV("Magnitude", out_magnitude);
-    res.pushKV("RSA Owed", out_owed);
-
-    return res;
-}
-
 UniValue staketime(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
