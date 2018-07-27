@@ -908,27 +908,6 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue encrypt(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "encrypt <walletpassphrase>\n"
-                "\n"
-                "<walletpassphrase> -> The password of your encrypted wallet\n"
-                "\n"
-                "Encrypts a walletpassphrase\n");
-
-    UniValue res(UniValue::VOBJ);
-    //Encrypt a phrase
-    std::string sParam = params[0].get_str();
-    std::string encrypted = AdvancedCryptWithHWID(sParam);
-
-    res.pushKV("Passphrase",encrypted);
-    res.pushKV("[Specify in config file] autounlock=",encrypted);
-
-    return res;
-}
-
 UniValue rain(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)

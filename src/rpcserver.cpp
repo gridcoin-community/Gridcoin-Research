@@ -286,7 +286,6 @@ static const CRPCCommand vRPCCommands[] =
     { "decodescript",            &decodescript,            false,  cat_wallet        },
     { "dumpprivkey",             &dumpprivkey,             false,  cat_wallet        },
     { "dumpwallet",              &dumpwallet,              true,   cat_wallet        },
-    { "encrypt",                 &encrypt,                 false,  cat_wallet        },
     { "encryptwallet",           &encryptwallet,           false,  cat_wallet        },
     { "getaccount",              &getaccount,              false,  cat_wallet        },
     { "getaccountaddress",       &getaccountaddress,       true,   cat_wallet        },
