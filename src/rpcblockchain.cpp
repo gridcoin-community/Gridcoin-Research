@@ -47,7 +47,6 @@ extern UniValue MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
 bool bNetAveragesLoaded_retired;
-std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(std::string cpid);
@@ -3000,33 +2999,6 @@ UniValue GetJSONVersionReport()
     results.push_back(entry);
     return results;
 }
-
-std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
-                                     int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress)
-{
-    CBitcoinAddress address(sBurnAddress);
-    if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    std::string sMasterKey = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-
-    int64_t nAmount = AmountFromValue(dFees);
-    // Wallet comments
-    CWalletTx wtx;
-    if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project or Smart Contract
-    std::string sMessageKey       = "<MK>" + sPrimaryKey   + "</MK>";
-    std::string sMessageValue     = "<MV>" + sValue + "</MV>";
-    std::string sMessagePublicKey = "<MPK>"+ strPublicKey + "</MPK>";
-    std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>"; //Add or Delete
-    //Sign Message
-    std::string sSig = SignMessage(sType+sPrimaryKey+sValue,sMasterKey);
-    std::string sMessageSignature = "<MS>" + sSig + "</MS>";
-    wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessagePublicKey+sMessageSignature;
-    string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
-    if (!strError.empty())        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-    return wtx.GetHash().GetHex().c_str();
-}
-
-
 
 std::string SendReward(std::string sAddress, int64_t nAmount)
 {
