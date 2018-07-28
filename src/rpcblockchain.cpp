@@ -1749,7 +1749,6 @@ UniValue validcpids(const UniValue& params, bool fHelp)
                     entry.pushKV("Project", structcpid.projectname);
                     entry.pushKV("CPID", structcpid.cpid);
                     entry.pushKV("CPIDhash", structcpid.cpidhash);
-                    entry.pushKV("Email", structcpid.emailhash);
                     entry.pushKV("UTC", structcpid.utc);
                     entry.pushKV("RAC", structcpid.rac);
                     entry.pushKV("Team", structcpid.team);
