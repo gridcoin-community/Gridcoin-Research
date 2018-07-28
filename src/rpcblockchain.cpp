@@ -1742,7 +1742,7 @@ UniValue validcpids(const UniValue& params, bool fHelp)
         {
             if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
             {
-                if (structcpid.verifiedteam == "gridcoin")
+                if (structcpid.team == "gridcoin")
                 {
                     UniValue entry(UniValue::VOBJ);
 
