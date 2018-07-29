@@ -5743,6 +5743,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         CBlockIndex* pblockindex = mapItem->second;
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
+           pblockindex->IsUserCPID() == false ||
            pblockindex->cpid != cpid128)
             continue;
 
