@@ -830,7 +830,10 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     }
 
     if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
-        return LogPrintf("AddNeuralContractOrVote: Not Participating");
+    {
+        LogPrintf("AddNeuralContractOrVote: Not Participating");
+        return;
+    }
 
     if(blocknew.nVersion >= 9)
     {
@@ -840,12 +843,18 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     }
 
     if(!NeedASuperblock())
-        return LogPrintf("AddNeuralContractOrVote: not Needed");
+    {
+        LogPrintf("AddNeuralContractOrVote: not Needed");
+        return;
+    }
 
     int pending_height = RoundFromString(ReadCache("neuralsecurity","pending").value, 0);
 
     if (pending_height>=(pindexBest->nHeight-200))
-        return LogPrintf("AddNeuralContractOrVote: already Pending");
+    {
+        LogPrintf("AddNeuralContractOrVote: already Pending");
+        return;
+    }
 
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
