@@ -1732,13 +1732,15 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     int depth = pindex ? (1 + nBestHeight - pindex->nHeight) : -1;
     UniValue transactions(UniValue::VARR);
+    CTxDB txdb("r");
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); it++)
     {
         CWalletTx tx = (*it).second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
-            ListTransactions(tx, "*", 0, true, transactions, filter);
+            ListTransactions2(tx, "*", 0, true, transactions, txdb, filter);
+            //ListTransactions(tx, "*", 0, true, transactions, filter);
     }
 
     int target_height = pindexBest->nHeight + 1 - target_confirms;
