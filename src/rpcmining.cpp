@@ -88,8 +88,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
 
     if (IsResearcher(msPrimaryCPID))
     {
-        obj.pushKV("RSAWeight",GetRSAWeightByCPID(msPrimaryCPID));
-
         {
             double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
             double dAccrualAge,AvgMagnitude;
