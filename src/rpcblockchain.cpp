@@ -1969,6 +1969,9 @@ UniValue projects(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
+    if (mvCPIDs.size() < 1)
+        HarvestCPIDs(false);
+
     for (const auto& item : ReadCacheSection("project"))
     {
         UniValue entry(UniValue::VOBJ);
@@ -1990,6 +1993,28 @@ UniValue projects(const UniValue& params, bool fHelp)
 
         entry.pushKV("Project", sProjectName);
         entry.pushKV("URL", sProjectURL);
+
+        if (mvCPIDs.size() > 0)
+        {
+            StructCPID structcpid = mvCPIDs[sProjectName];
+
+            if (structcpid.initialized)
+            {
+                if (IsResearcher(structcpid.cpid) && IsResearcher(GlobalCPUMiningCPID.cpid))
+                {
+                    UniValue researcher(UniValue::VOBJ);
+
+                    researcher.pushKV("CPID", structcpid.cpid);
+                    researcher.pushKV("Team", structcpid.team);
+                    researcher.pushKV("Valid for Research", (structcpid.team == "gridcoin" && structcpid.Iscpidvalid ? "true" : "false"));
+
+                    if (!structcpid.errors.empty())
+                        researcher.pushKV("Errors", structcpid.errors);
+
+                    entry.pushKV("Researcher", researcher);
+                }
+            }
+        }
 
         res.push_back(entry);
     }
