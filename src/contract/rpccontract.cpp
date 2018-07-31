@@ -1,17 +1,17 @@
 #include "appcache.h"
 #include "main.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "contract/contract.h"
 #include "contract/polls.h"
 
 #include <utility>
 #include <string>
 
-using namespace json_spirit;
 double GetTotalBalance();
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
-Value addpoll(const Array& params, bool fHelp)
+UniValue addpoll(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 6)
         throw std::runtime_error(
@@ -20,13 +20,13 @@ Value addpoll(const Array& params, bool fHelp)
                 "<title> -----> The title for poll with no spaces. Use _ in between words\n"
                 "<days> ------> The number of days the poll will run\n"
                 "<question> --> The question with no spaces. Use _ in between words\n"
-                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to seperate answers\n"
+                "<answers> ---> The answers available for voter to choose from. Use - in between words and ; to separate answers\n"
                 "<sharetype> -> The share type of the poll; 1 = Magnitude 2 = Balance 3 = Magnitude + Balance 4 = CPID count 5 = Participant count\n"
                 "<url> -------> The corresponding url for the poll\n"
                 "\n"
                 "Add a poll to the network; Requires 100K GRC balance\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
     std::string sTitle = params[0].get_str();
     int iPollDays = params[1].get_int();
     std::string sQuestion = params[2].get_str();
@@ -35,11 +35,11 @@ Value addpoll(const Array& params, bool fHelp)
     std::string sURL = params[5].get_str();
 
     std::pair<std::string,std::string> ResultString = CreatePollContract(sTitle, iPollDays, sQuestion, sAnswers, iShareType, sURL);
-    res.push_back(Pair(std::get<0>(ResultString),std::get<1>(ResultString)));
+    res.pushKV(std::get<0>(ResultString),std::get<1>(ResultString));
     return res;
 }
 
-Value listallpolls(const Array& params, bool fHelp)
+UniValue listallpolls(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw std::runtime_error(
@@ -49,11 +49,11 @@ Value listallpolls(const Array& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    Array res = GetJSONPollsReport(false, "", out1, true);
+    UniValue res = getjsonpoll(false, true, "");
     return res;
 }
 
-Value listallpolldetails(const Array& params, bool fHelp)
+UniValue listallpolldetails(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw std::runtime_error(
@@ -63,11 +63,11 @@ Value listallpolldetails(const Array& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    Array res = GetJSONPollsReport(true, "", out1, true);
+    UniValue res = getjsonpoll(true, true, "");
     return res;
 }
 
-Value listpolldetails(const Array& params, bool fHelp)
+UniValue listpolldetails(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw std::runtime_error(
@@ -77,11 +77,11 @@ Value listpolldetails(const Array& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    Array res = GetJSONPollsReport(true, "", out1, false);
+    UniValue res = getjsonpoll(true, false, "");
     return res;
 }
 
-Value listpollresults(const Array& params, bool fHelp)
+UniValue listpollresults(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 2 || params.size() < 1)
         throw std::runtime_error(
@@ -93,7 +93,7 @@ Value listpollresults(const Array& params, bool fHelp)
                 "Displays results for specified poll\n");
 
     LOCK(cs_main);
-    Array res;
+    UniValue res(UniValue::VARR);
     bool bIncExpired = false;
 
     if (params.size() == 2)
@@ -103,22 +103,22 @@ Value listpollresults(const Array& params, bool fHelp)
 
     if (!PollExists(Title1))
     {
-        Object result;
+        UniValue result(UniValue::VOBJ);
 
-        result.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+        result.pushKV("Error", "Poll does not exist.  Please listpolls.");
         res.push_back(result);
     }
     else
     {
         std::string Title = params[0].get_str();
         std::string out1 = "";
-        Array myPolls = GetJSONPollsReport(true, Title, out1, bIncExpired);
+        UniValue myPolls = getjsonpoll(true, bIncExpired, Title);
         res.push_back(myPolls);
     }
     return res;
 }
 
-Value listpolls(const Array& params, bool fHelp)
+UniValue listpolls(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw std::runtime_error(
@@ -128,54 +128,54 @@ Value listpolls(const Array& params, bool fHelp)
 
     LOCK(cs_main);
     std::string out1;
-    Array res = GetJSONPollsReport(false, "", out1, false);
+    UniValue res = getjsonpoll(false, false, "");
     return res;
 }
 
-Value vote(const Array& params, bool fHelp)
+UniValue vote(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 2)
         throw std::runtime_error(
                 "vote <title> <answer1;answer2...>\n"
                 "\n"
                 "<title -> Title of poll being voted on\n"
-                "<answers> -> Answers chosen for specified poll seperated by ;\n"
+                "<answers> -> Answers chosen for specified poll separated by ;\n"
                 "\n"
                 "Vote on a specific poll with specified answers\n");
 
-    Object res;
+    UniValue res(UniValue::VOBJ);
 
     std::string sTitle = params[0].get_str();
     std::string sAnswer = params[1].get_str();
 
     std::pair<std::string,std::string> ResultString = CreateVoteContract(sTitle, sAnswer);
-    res.push_back(Pair(std::get<0>(ResultString),std::get<1>(ResultString)));
+    res.pushKV(std::get<0>(ResultString),std::get<1>(ResultString));
     return res;
 }
 
-Value votedetails(const Array& params, bool fHelp)
+UniValue votedetails(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
         throw std::runtime_error(
-                "votedetails <pollname>]n"
+                "votedetails <pollname>\n"
                 "\n"
                 "<pollname> Specified poll name\n"
                 "\n"
                 "Displays vote details of a specified poll\n");
 
-    Array res;
+    UniValue res(UniValue::VARR);
     std::string Title = params[0].get_str();
 
     if (!PollExists(Title))
     {
-        Object results;
-        results.push_back(Pair("Error", "Poll does not exist.  Please listpolls."));
+        UniValue results(UniValue::VOBJ);
+        results.pushKV("Error", "Poll does not exist.  Please listpolls.");
         res.push_back(results);
     }
     else
     {
         LOCK(cs_main);
-        Array myVotes = GetJsonVoteDetailsReport(Title);
+        UniValue myVotes = GetJsonVoteDetailsReport(Title);
         res.push_back(myVotes);
     }
     return res;

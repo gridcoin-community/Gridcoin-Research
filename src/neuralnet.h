@@ -54,12 +54,6 @@ namespace NN
     std::string GetNeuralContract();
 
     //!
-    //! \brief Enable/disable testnet in neural net.
-    //! \param onTestnet New testnet flag.
-    //!
-    bool SetTestnetFlag(bool onTestnet);
-
-    //!
     //! \brief Synchronize DPOR data.
     //!
     //! Asynchronously asks the neural net to download BOINC statistic files

@@ -1,6 +1,8 @@
 #ifndef VOTINGDIALOG_H
 #define VOTINGDIALOG_H
 
+#include "contract/polls.h"
+
 #include <time.h>
 #include <QAbstractTableModel>
 #include <QDialog>
@@ -50,7 +52,7 @@ public:
     QString shareType_;
     QString question_;
     QString answers_;
-    QString arrayOfAnswers_;
+    std::vector<polling::Vote> vectorOfAnswers_;
     unsigned int totalParticipants_;
     unsigned int totalShares_;
     QString url_;
@@ -100,6 +102,7 @@ public:
     void resetData(bool history);
 
 private:
+    std::vector<polling::Poll> Polls;
     QStringList columns_;
     QList<VotingItem *> data_;
 };

@@ -5,6 +5,16 @@
 #ifndef _BITCOIN_COMPAT_H
 #define _BITCOIN_COMPAT_H 1
 
+#include <type_traits>
+
+// GCC 4.8 is missing some C++11 type_traits,
+// https://www.gnu.org/software/gcc/gcc-5/changes.html
+#if defined(__GNUC__) && __GNUC__ < 5
+#define IS_TRIVIALLY_CONSTRUCTIBLE std::is_trivial
+#else
+#define IS_TRIVIALLY_CONSTRUCTIBLE std::is_trivially_constructible
+#endif
+
 #ifdef WIN32
 #ifdef _WIN32_WINNT
 #undef _WIN32_WINNT
@@ -25,6 +35,7 @@
 
 #include <winsock2.h>
 #include <mswsock.h>
+#include <windows.h>
 #include <ws2tcpip.h>
 #else
 #include <sys/types.h>
@@ -35,10 +46,9 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
-
+#include <unistd.h>
 typedef u_int SOCKET;
 #endif
-
 
 #ifdef WIN32
 #define MSG_NOSIGNAL        0

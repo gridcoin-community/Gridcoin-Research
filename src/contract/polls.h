@@ -1,13 +1,34 @@
 #pragma once
 
-#include "json/json_spirit_reader_template.h"
-#include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_utils.h"
+#include <univalue.h>
 
 #include <string>
 #include <utility> //std::pair
 
-using namespace json_spirit;
+namespace polling {
+
+struct Vote {
+    std::string answer;
+    double shares;
+    double participants;
+};
+
+struct Poll {
+    std::string title;
+    std::string question;
+    std::string url;
+    std::string expiration;
+    std::string sharetype;
+    std::string type;
+    std::vector<Vote> answers;
+    std::string sAnswers;
+    double highest_share;
+    double total_shares;
+    double total_participants;
+    std::string best_answer;
+    int pollnumber;
+};
+};
 
 std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int days, std::string sQuestion, std::string sAnswers, int sSharetype, std::string sURL);
 
@@ -35,15 +56,17 @@ std::string PollAnswers(std::string pollname);
 
 std::string GetProvableVotingWeightXML();
 
-std::string GetShareType(double dShareType);
-
 double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 
 double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurityUpgrade);
 
 double GetMoneySupplyFactor();
 
-Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
+UniValue getjsonpoll(bool bDetail, bool includeExpired, std::string byTitle);
 
-Array GetJsonVoteDetailsReport(std::string pollname);
+std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::string byTitle);
+
+UniValue GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool IncludeExpired);
+
+UniValue GetJsonVoteDetailsReport(std::string pollname);
 

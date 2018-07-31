@@ -5,11 +5,11 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
-#include "sync.h"
+#include "util.h"
 #include "net.h"
+#include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "util.h"
 
 #include "global_objects_noui.hpp"
 
@@ -274,6 +274,8 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
+
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();
@@ -421,7 +423,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -504,7 +506,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -588,7 +590,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -1002,7 +1004,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 9;
+    static const int CURRENT_VERSION = 10;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -1123,7 +1125,7 @@ public:
         // Take last bit of block hash as entropy bit
         unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
         if (fDebug && GetBoolArg("-printstakemodifier"))
-            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u\n", GetHash().ToString(), nEntropyBit);
+            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash().ToString(), nEntropyBit);
         return nEntropyBit;
     }
 
@@ -1259,7 +1261,7 @@ public:
 
     void print() const
     {
-        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)\n",
+        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%" PRIszu ", vchBlockSig=%s)",
             GetHash().ToString(),
             nVersion,
             hashPrevBlock.ToString(),
@@ -1274,8 +1276,7 @@ public:
         }
         LogPrintf("  vMerkleTree: ");
         for (unsigned int i = 0; i < vMerkleTree.size(); i++)
-            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10));
-        LogPrintf("\n");
+            LogPrintf("%s", vMerkleTree[i].ToString().substr(0,10));
     }
 
 
@@ -1562,7 +1563,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 
@@ -1683,7 +1684,7 @@ public:
 
     void print() const
     {
-        LogPrintf("%s\n", ToString());
+        LogPrintf("%s", ToString());
     }
 };
 

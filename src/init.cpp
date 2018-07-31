@@ -2,12 +2,14 @@
 // Copyright (c) 2009-2012 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+
+#include "util.h"
+#include "net.h"
 #include "txdb.h"
 #include "walletdb.h"
-#include "bitcoinrpc.h"
-#include "net.h"
+#include "rpcserver.h"
 #include "init.h"
-#include "util.h"
 #include "ui_interface.h"
 #include "tally.h"
 
@@ -60,7 +62,7 @@ bool ShutdownRequested()
 void StartShutdown()
 {
 
-    LogPrintf("Calling start shutdown...\n");
+    LogPrintf("Calling start shutdown...");
 
     if(fQtActive)
         // ensure we leave the Qt main loop for a clean GUI exit (Shutdown() is called in bitcoin.cpp afterwards)
@@ -90,7 +92,7 @@ void Shutdown(void* parg)
     static bool fExit;
     if (fFirstThread)
     {
-         LogPrintf("gridcoinresearch exiting...\n");
+         LogPrintf("gridcoinresearch exiting...");
 
         fShutdown = true;
         bitdb.Flush(false);
@@ -105,7 +107,7 @@ void Shutdown(void* parg)
         // lock file.
         //CTxDB().Close();
         MilliSleep(50);
-        LogPrintf("Gridcoin exited\n\n");
+        LogPrintf("Gridcoin exited");
         fExit = true;
     }
     else
@@ -216,6 +218,7 @@ std::string HelpMessage()
         "  -rpcport=<port>        " + _("Listen for JSON-RPC connections on <port> (default: 15715 or testnet: 25715)") + "\n" +
         "  -rpcallowip=<ip>       " + _("Allow JSON-RPC connections from specified IP address") + "\n" +
         "  -rpcconnect=<ip>       " + _("Send commands to node running on <ip> (default: 127.0.0.1)") + "\n" +
+        "  -rpcthreads=<n>        " + _("Set the number of threads to service RPC calls (default: 4)") + "\n" +
         "  -blocknotify=<cmd>     " + _("Execute command when the best block changes (%s in cmd is replaced by block hash)") + "\n" +
         "  -walletnotify=<cmd>    " + _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)") + "\n" +
         "  -confchange            " + _("Require a confirmations for change (default: 0)") + "\n" +
@@ -225,7 +228,7 @@ std::string HelpMessage()
         "  -keypool=<n>           " + _("Set key pool size to <n> (default: 100)") + "\n" +
         "  -rescan                " + _("Rescan the block chain for missing wallet transactions") + "\n" +
         "  -salvagewallet         " + _("Attempt to recover private keys from a corrupt wallet.dat") + "\n" +
-        "  -zapwallettxes=<mode>  " + _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup\n") +
+        "  -zapwallettxes=<mode>  " + _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup") + "\n" +
         "  -checkblocks=<n>       " + _("How many blocks to check at startup (default: 2500, 0 = all)") + "\n" +
         "  -checklevel=<n>        " + _("How thorough the block verification is (0-6, default: 1)") + "\n" +
         "  -loadblock=<file>      " + _("Imports blocks from external blk000?.dat file") + "\n" +
@@ -250,14 +253,14 @@ std::string HelpMessage()
  */
 bool InitSanityCheck(void)
 {
+    // The below sanity check is still required for OpenSSL via key.cpp until Bitcoin's secp256k1 is ported over. For now we have
+    // only ported the accelerated hashing.
     if(!ECC_InitSanityCheck()) {
         InitError("OpenSSL appears to lack support for elliptic curve cryptography. For more "
                   "information, visit https://en.bitcoin.it/wiki/OpenSSL_and_EC_Libraries");
         return false;
     }
-
-    // Remaining sanity checks, see #4081
-
+    
     return true;
 }
 
@@ -346,7 +349,7 @@ bool AppInit2(ThreadHandlerPtr threads)
           << BOOST_VERSION % 100                // patch level
           << "\n";
 
-    LogPrintf("\nBoost Version: %s",s.str());
+    LogPrintf("Boost Version: %s", s.str());
 
     //Placeholder: Load Remote CPIDs Here
 
@@ -412,7 +415,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug", "false")=="true")
     {
             fDebug = true;
-            LogPrintf("Entering debug mode.\n");
+            LogPrintf("Entering debug mode.");
     }
 
     fDebug2 = false;
@@ -420,7 +423,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug2", "false")=="true")
     {
             fDebug2 = true;
-            LogPrintf("Entering GRC debug mode 2.\n");
+            LogPrintf("Entering GRC debug mode 2.");
     }
 
     fDebug3 = false;
@@ -428,13 +431,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetArg("-debug3", "false")=="true")
     {
             fDebug3 = true;
-            LogPrintf("Entering GRC debug mode 3.\n");
+            LogPrintf("Entering GRC debug mode 3.");
     }
 
-    fDebug4 = GetBoolArg("-debug4");
-
-    if (fDebug4)
-        printf("Entering RPC time debug mode\r\n");
+    if (GetArg("-debug4", "false")=="true")
+    {
+        fDebug4 = true;
+        LogPrintf("Entering RPC time debug mode");
+    }
 
     fDebug10= (GetArg("-debug10","false")=="true");
 
@@ -490,6 +494,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!InitSanityCheck())
         return InitError(_("Initialization sanity check failed. Gridcoin is shutting down."));
 
+    // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
+    std::string sha256_algo = SHA256AutoDetect();
+    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);                                                                                      
+
     std::string strDataDir = GetDataDir().string();
     std::string strWalletFileName = GetArg("-wallet", "wallet.dat");
 
@@ -532,9 +540,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 #endif
 
     ShrinkDebugFile();
-    LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("***************************************** GRIDCOIN RESEARCH ***************************************************\n");
-
+    LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
     LogPrintf("Gridcoin version %s (%s)", FormatFullVersion(), CLIENT_DATE);
     LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
@@ -548,7 +554,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         fDevbuildCripple = true;
         LogPrintf("WARNING: Running development version outside of testnet!\n"
-               "Staking and sending transactions will be disabled.");
+                  "Staking and sending transactions will be disabled.");
         if( (GetArg("-devbuild", "") == "override") && fDebug )
             fDevbuildCripple = false;
     }
@@ -720,7 +726,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     uiInterface.InitMessage(_("Loading block index..."));
-    LogPrintf("Loading block index...\n");
+    LogPrintf("Loading block index...");
     nStart = GetTimeMillis();
     if (!LoadBlockIndex())
         return InitError(_("Error loading blkindex.dat"));
@@ -730,10 +736,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // As the program has not fully started yet, Shutdown() is possibly overkill.
     if (fRequestShutdown)
     {
-        LogPrintf("Shutdown requested. Exiting.\n");
+        LogPrintf("Shutdown requested. Exiting.");
         return false;
     }
-    LogPrintf(" block index %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {
@@ -755,19 +761,19 @@ bool AppInit2(ThreadHandlerPtr threads)
                 block.ReadFromDisk(pindex);
                 block.BuildMerkleTree();
                 block.print();
-                LogPrintf("\n");
+                LogPrintf("");
                 nFound++;
             }
         }
         if (nFound == 0)
-            LogPrintf("No blocks matching %s were found\n", strMatch);
+            LogPrintf("No blocks matching %s were found", strMatch);
         return false;
     }
 
     // ********************************************************* Step 8: load wallet
 
     uiInterface.InitMessage(_("Loading wallet..."));
-    LogPrintf("Loading wallet...\n");
+    LogPrintf("Loading wallet...");
     nStart = GetTimeMillis();
     bool fFirstRun = true;
     pwalletMain = new CWallet(strWalletFileName);
@@ -799,12 +805,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         int nMaxVersion = GetArg("-upgradewallet", 0);
         if (nMaxVersion == 0) // the -upgradewallet without argument case
         {
-            LogPrintf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
+            LogPrintf("Performing wallet upgrade to %i", FEATURE_LATEST);
             nMaxVersion = CLIENT_VERSION;
             pwalletMain->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
         }
         else
-            LogPrintf("Allowing wallet upgrade up to %i\n", nMaxVersion);
+            LogPrintf("Allowing wallet upgrade up to %i", nMaxVersion);
         if (nMaxVersion < pwalletMain->GetVersion())
             strErrors << _("Cannot downgrade wallet") << "\n";
         pwalletMain->SetMaxVersion(nMaxVersion);
@@ -824,7 +830,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     LogPrintf("%s", strErrors.str());
-    LogPrintf(" wallet      %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+    LogPrintf(" wallet      %15" PRId64 "ms", GetTimeMillis() - nStart);
 
     RegisterWallet(pwalletMain);
 
@@ -841,10 +847,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (pindexBest != pindexRescan && pindexBest && pindexRescan && pindexBest->nHeight > pindexRescan->nHeight)
     {
         uiInterface.InitMessage(_("Rescanning..."));
-        LogPrintf("Rescanning last %i blocks (from block %i)...\n", pindexBest->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);
+        LogPrintf("Rescanning last %i blocks (from block %i)...", pindexBest->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);
         nStart = GetTimeMillis();
         pwalletMain->ScanForWalletTransactions(pindexRescan, true);
-        LogPrintf(" rescan      %15" PRId64 "ms\n", GetTimeMillis() - nStart);
+        LogPrintf(" rescan      %15" PRId64 "ms", GetTimeMillis() - nStart);
     }
 
     // ********************************************************* Step 9: import blocks
@@ -877,13 +883,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 10: load peers
 
     uiInterface.InitMessage(_("Loading addresses..."));
-    if (fDebug10) LogPrintf("Loading addresses...\n");
+    if (fDebug10) LogPrintf("Loading addresses...");
     nStart = GetTimeMillis();
 
     {
         CAddrDB adb;
         if (!adb.Read(addrman))
-            LogPrintf("Invalid or missing peers.dat; recreating\n");
+            LogPrintf("Invalid or missing peers.dat; recreating");
     }
 
     LogPrintf("Loaded %i addresses from peers.dat  %" PRId64 "ms",  addrman.size(), GetTimeMillis() - nStart);
@@ -931,12 +937,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         InitError(_("Error: could not start node"));
 
     if (fServer)
-        threads->createThread(ThreadRPCServer, NULL, "RPC Server Thread");
+        StartRPCThreads();
 
     // ********************************************************* Step 12: finished
 
     uiInterface.InitMessage(_("Done loading"));
-    LogPrintf("Done loading\n");
+    LogPrintf("Done loading");
 
     if (!strErrors.str().empty())
         return InitError(strErrors.str());

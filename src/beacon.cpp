@@ -33,16 +33,22 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
         std::string sError;
         bool fResult;
         fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError, true);
+
         if (!fResult)
+            LogPrintf("GenerateBeaconKeys::Failed to sign block with cpid with existing keys; generating new key pair -> %s", sError);
+
+        else
         {
-            LogPrintf("GenerateNewKeyPair::Failed to sign block with cpid -> %s\n", sError);
-            return false;
-        }
-        fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
-        if (fResult)
-        {
-            LogPrintf("\nGenerateNewKeyPair::Current keypair is valid.\n");
-            return false;
+            fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
+
+            if (fResult)
+            {
+                LogPrintf("GenerateBeaconKeys::Current keypair is valid.");
+                return true;
+            }
+
+            else
+                LogPrintf("GenerateBeaconKeys::Signing block with CPID was successful; However Verifying CPID Sign was not; Key pair is not valid, generating new key pair");
         }
     }
 
@@ -56,13 +62,18 @@ bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::s
     return true;
 }
 
-void StoreBeaconKeys(
+bool StoreBeaconKeys(
         const std::string &cpid,
         const std::string &pubKey,
         const std::string &privKey)
 {
-    WriteKey("publickey" + cpid + GetNetSuffix(), pubKey);
-    WriteKey("privatekey" + cpid + GetNetSuffix(), privKey);
+    if (   !WriteKey("publickey" + cpid + GetNetSuffix(), pubKey)
+        || !WriteKey("privatekey" + cpid + GetNetSuffix(), privKey)
+       )
+        return false;
+
+    else
+        return true;
 }
 
 std::string GetStoredBeaconPrivateKey(const std::string& cpid)
@@ -117,7 +128,7 @@ int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
     int64_t iLocktime = entry.timestamp;
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
     if (fDebug10)
-        LogPrintf("\n Beacon %s, Weight %" PRId64 ", Locktime %" PRId64 "\n",sBeacon, iRSAWeight, iLocktime);
+        LogPrintf("Beacon %s, Weight %" PRId64 ", Locktime %" PRId64, sBeacon, iRSAWeight, iLocktime);
     if (bZeroOutAfterPOR && iRSAWeight==0)
         iLocktime = 0;
     return iLocktime;
@@ -172,7 +183,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     if (beaconEntry.value.empty())
     {
         if (fDebug10)
-            LogPrintf("VBCTX : No Previous beacon found for CPID %s\n", chkMessageContractCPID);
+            LogPrintf("VBCTX : No Previous beacon found for CPID %s", chkMessageContractCPID);
 
         return true; // No previous beacon in cache
     }
@@ -187,7 +198,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     if (chkiAge <= chkSecondsBase * 5 && chkiAge >= 1)
     {
         if (fDebug10)
-            LogPrintf("VBCTX : Beacon age violation. Beacon Age %" PRId64 " < Required Age %" PRId64 "\n", chkiAge, (chkSecondsBase * 5));
+            LogPrintf("VBCTX : Beacon age violation. Beacon Age %" PRId64 " < Required Age %" PRId64, chkiAge, (chkSecondsBase * 5));
 
         return false;
     }
@@ -205,7 +216,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
         if (tx_out_publickey != chk_out_publickey)
         {
             if (fDebug10)
-                LogPrintf("VBCTX : Beacon tx publickey != publickey in chain. %s != %s\n", tx_out_publickey.c_str(), chk_out_publickey);
+                LogPrintf("VBCTX : Beacon tx publickey != publickey in chain. %s != %s", tx_out_publickey, chk_out_publickey);
 
             return false;
         }

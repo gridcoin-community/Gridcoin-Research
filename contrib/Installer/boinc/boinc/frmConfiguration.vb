@@ -2,14 +2,8 @@
 
 Public Class frmConfiguration
 
-
-    Private Sub InstallGridcoinGalazaToolStripMenuItem1_Click(sender As System.Object, e As System.EventArgs) Handles InstallGridcoinGalazaToolStripMenuItem1.Click
-        InstallGalaza()
-    End Sub
-
     Private Sub btnSave_Click(sender As System.Object, e As System.EventArgs) Handles btnSave.Click
         WriteSetting(chkSpeech, "enablespeech")
-        WriteSetting(chkUpgrade, "suppressupgrade")
         MsgBox("Configuration Updated.", MsgBoxStyle.Information, "Configuration")
 
     End Sub
@@ -22,7 +16,6 @@ Public Class frmConfiguration
         'Read keys
         lblTestnet.Text = IIf(mbTestNet, "TestNet", "")
         UpdateCheckbox(chkSpeech, "enablespeech")
-        UpdateCheckbox(chkUpgrade, "suppressupgrade")
     End Sub
     Private Sub UpdateCheckbox(oCheckbox As CheckBox, sSettingName As String)
         Dim sValue As String = KeyValue(sSettingName)
