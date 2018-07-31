@@ -13,7 +13,6 @@ using namespace std;
 StructCPID GetStructCPID();
 extern int64_t GetRSAWeightByCPID(std::string cpid);
 extern int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 extern double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 bool LessVerbose(int iMax1000);
