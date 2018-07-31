@@ -1087,6 +1087,54 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue cpids(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "cpids\n"
+                "\n"
+                "Displays information on your cpids\n");
+
+    UniValue res(UniValue::VARR);
+
+    //Dump vectors:
+
+    LOCK(cs_main);
+
+    if (mvCPIDs.size() < 1)
+        HarvestCPIDs(false);
+
+    LogPrintf("Generating cpid report");
+
+    for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
+    {
+
+        StructCPID structcpid = mvCPIDs[(*ii).first];
+
+        if (structcpid.initialized)
+        {
+            if ((GlobalCPUMiningCPID.cpid.length() > 3 &&
+                 structcpid.cpid == GlobalCPUMiningCPID.cpid)
+                || IsResearcher(structcpid.cpid) || IsResearcher(GlobalCPUMiningCPID.cpid))
+            {
+                UniValue entry(UniValue::VOBJ);
+
+                entry.pushKV("Project",structcpid.projectname);
+                entry.pushKV("CPID",structcpid.cpid);
+                entry.pushKV("RAC",structcpid.rac);
+                entry.pushKV("Team",structcpid.team);
+                entry.pushKV("CPID Link",structcpid.link);
+                entry.pushKV("Debug Info",structcpid.errors);
+                entry.pushKV("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid);
+
+                res.push_back(entry);
+            }
+        }
+    }
+
+    return res;
+}
+
 UniValue currentneuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1443,14 +1491,13 @@ UniValue validcpids(const UniValue& params, bool fHelp)
         {
             if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
             {
-                if (structcpid.verifiedteam == "gridcoin")
+                if (structcpid.team == "gridcoin")
                 {
                     UniValue entry(UniValue::VOBJ);
 
                     entry.pushKV("Project", structcpid.projectname);
                     entry.pushKV("CPID", structcpid.cpid);
                     entry.pushKV("CPIDhash", structcpid.cpidhash);
-                    entry.pushKV("Email", structcpid.emailhash);
                     entry.pushKV("UTC", structcpid.utc);
                     entry.pushKV("RAC", structcpid.rac);
                     entry.pushKV("Team", structcpid.team);
