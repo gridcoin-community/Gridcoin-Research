@@ -1963,7 +1963,7 @@ UniValue projects(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "projects\n"
                 "\n"
-                "Displays information on projects in the network\n");
+                "Displays information on projects in the network as well as researcher data if available\n");
 
     UniValue res(UniValue::VARR);
 
