@@ -1177,7 +1177,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     res.pushKV("TXID", wtx.GetHash().GetHex());
     res.pushKV("Rain Amount Sent", dTotalAmount);
     res.pushKV("TX Fee", ((double)nFeeRequired) / COIN);
-    res.pushKV("# of Recipients", vecSend.size());
+    res.pushKV("# of Recipients", (uint64_t)vecSend.size());
 
     if (!sMessage.empty())
         res.pushKV("Message", sMessage);
