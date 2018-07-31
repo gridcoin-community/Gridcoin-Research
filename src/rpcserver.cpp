@@ -314,6 +314,7 @@ static const CRPCCommand vRPCCommands[] =
     { "move",                    &movecmd,                 false,  cat_wallet        },
     { "newburnaddress",          &newburnaddress,          false,  cat_wallet        },
     { "rain",                    &rain,                    false,  cat_wallet        },
+    { "rainbymagnitude",         &rainbymagnitude,         false,  cat_wallet        },
     { "repairwallet",            &repairwallet,            false,  cat_wallet        },
     { "resendtx",                &resendtx,                false,  cat_wallet        },
     { "reservebalance",          &reservebalance,          false,  cat_wallet        },
