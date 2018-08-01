@@ -1419,55 +1419,6 @@ UniValue upgradedbeaconreport(const UniValue& params, bool fHelp)
     return aUpgBR;
 }
 
-UniValue validcpids(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "validcpids\n"
-                "\n"
-                "Displays information about valid CPIDs collected from BOINC\n");
-
-    UniValue res(UniValue::VARR);
-
-    LOCK(cs_main);
-
-    //Dump vectors:
-    if (mvCPIDs.size() < 1)
-        HarvestCPIDs(false);
-
-    for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-    {
-        StructCPID structcpid = mvCPIDs[(*ii).first];
-
-        if (structcpid.initialized)
-        {
-            if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
-            {
-                if (structcpid.team == "gridcoin")
-                {
-                    UniValue entry(UniValue::VOBJ);
-
-                    entry.pushKV("Project", structcpid.projectname);
-                    entry.pushKV("CPID", structcpid.cpid);
-                    entry.pushKV("CPIDhash", structcpid.cpidhash);
-                    entry.pushKV("UTC", structcpid.utc);
-                    entry.pushKV("RAC", structcpid.rac);
-                    entry.pushKV("Team", structcpid.team);
-                    entry.pushKV("RecTime", structcpid.rectime);
-                    entry.pushKV("Age", structcpid.age);
-                    entry.pushKV("Is my CPID Valid?", structcpid.Iscpidvalid);
-                    entry.pushKV("CPID Link", structcpid.link);
-                    entry.pushKV("Errors", structcpid.errors);
-
-                    res.push_back(entry);
-                }
-            }
-        }
-    }
-
-    return res;
-}
-
 UniValue addkey(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 4)

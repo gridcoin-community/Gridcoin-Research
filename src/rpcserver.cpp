@@ -351,7 +351,6 @@ static const CRPCCommand vRPCCommands[] =
     { "superblocks",             &superblocks,             false,  cat_mining        },
     { "syncdpor2",               &syncdpor2,               false,  cat_mining        },
     { "upgradedbeaconreport",    &upgradedbeaconreport,    false,  cat_mining        },
-    { "validcpids",              &validcpids,              false,  cat_mining        },
 
   // Developer commands
     { "addkey",                  &addkey,                  false,  cat_developer     },
