@@ -15,6 +15,7 @@
 #include "util.h"
 
 #include <memory>
+#include <algorithm>
 
 using namespace std;
 
@@ -600,7 +601,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             txnew.vout.push_back(CTxOut(0, CScript())); // First Must be empty
             txnew.vout.push_back(CTxOut(nCredit, scriptPubKeyOut));
-            //txnew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
             LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
@@ -623,6 +623,119 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }
+
+
+
+void SplitCoinStakeOutput(CBlock &blocknew)
+{
+    // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
+    // and there will be a single coinstake output (besides the empty one) that has the combined stake + research
+    // reward. This function will determine whether more than one UTXO is justified/desired to optimize
+    // staking, and if so, it will pop off the single output and replace it with the output split among the
+    // calculated number of outputs to meet efficiency requirements.
+    
+    int64_t nTotalStakeOutputValue = 0;
+    CScript scriptPubKey;
+    unsigned int nUTXOCount = 1;
+    int64_t nActualStakeOutputValue = 0;
+
+    // Pull out total value of output for stake, which also includes (interest or CBR) and research rewards at this point.
+    nTotalStakeOutputValue = blocknew.vtx[1].vout[1].nValue;
+
+    // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert.
+    assert(blocknew.vtx[1].vout.size() == 2);
+    
+    // Compute number of stake outputs needed.
+    nUTXOCount = GetNumberOfStakeOutputs(nTotalStakeOutputValue);
+    
+    // Only go to the effort to split if nUTXOCount > 1, otherwise leave undisturbed.
+    if (nUTXOCount > 1)
+    {
+        scriptPubKey = blocknew.vtx[1].vout[1].scriptPubKey;
+        
+        // Remove the existing single stake output.
+        blocknew.vtx[1].vout.pop_back();
+    
+        nActualStakeOutputValue = nTotalStakeOutputValue / nUTXOCount;
+
+        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nUTXOCount = %f", nUTXOCount);
+        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
+        
+        int64_t nSumStakeUTXOValue = 0;
+        for (unsigned int i = 1; i < nUTXOCount; i++)
+        {
+            blocknew.vtx[1].vout.push_back(CTxOut(nActualStakeOutputValue, scriptPubKey));
+            LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", i, CoinToDouble(nActualStakeOutputValue));
+            nSumStakeUTXOValue += nActualStakeOutputValue;
+        }
+        // For the last UTXO, subtract the running sum from the desired total, which does not include the last UTXO so far,
+        // to recover anything lost from rounding. This will be a very small difference from the others.
+        // The reason we go through this trouble is that integer division rounds down, and we don't even want
+        // to have the wallet lose 1 Halford.
+        blocknew.vtx[1].vout.push_back(CTxOut((nTotalStakeOutputValue - nSumStakeUTXOValue), scriptPubKey));
+        LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nUTXOCount, CoinToDouble(nTotalStakeOutputValue - nSumStakeUTXOValue));
+    }
+}
+
+
+
+unsigned int GetNumberOfStakeOutputs(int64_t nValue)
+{
+    int64_t nMinUTXOPostSplitValue = 0;
+    double dEfficiency = 0.0;
+    int64_t nDesiredStakeUTXOValue = 0;
+    unsigned int nUTXOCount = 1;
+
+    // For the definition of the constant G, please see
+    // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
+    // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
+    const double G = 9942.2056;
+
+    // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
+    // Default to 800 and do not allow it to be specified below 800 GRC.
+    nMinUTXOPostSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
+
+    if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nMinUTXOPostSplitValue = %f", CoinToDouble(nMinUTXOPostSplitValue));
+
+    // If the stake output provided to GetNumberofStakeOutputs is less than or equal to nMinUTXOPostSplitValue then there will
+    // be only one output, so return(1) immediately.
+    if (nValue <= nMinUTXOPostSplitValue)
+        return(1);
+
+    // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
+    dEfficiency = (double)GetArg("-stakingefficiency", 90) / 100;
+    if (dEfficiency > 0.98)
+        dEfficiency = 0.98;
+    else if (dEfficiency < 0.75)
+        dEfficiency = 0.75;
+
+    if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: dEfficiency = %f", dEfficiency);
+
+    // Set Desired UTXO size post stake based on efficiency and difficulty, but do not allow to go below MinUTXOPostSplitValue.
+    // Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than StakeKernelDiff, because the block
+    // to block difficulty has too much scatter. Please refer to the above link, equation (27) on page 10 as a reference for
+    // the below formula.
+    nDesiredStakeUTXOValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+    nDesiredStakeUTXOValue = max(nMinUTXOPostSplitValue, nDesiredStakeUTXOValue);
+
+    if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nDesiredStakeUTXOValue = %f", CoinToDouble(nDesiredStakeUTXOValue));
+
+    // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
+    nUTXOCount = nValue / nDesiredStakeUTXOValue;
+
+    // Currently limited to 2 UTXO's for coinstakes, so limit to 2 for right now. This can be removed when the limit in the coinstake txnew
+    // is expanded.
+    if (nUTXOCount < 1)
+        nUTXOCount = 1;
+    else if (nUTXOCount > 2)
+        nUTXOCount = 2;
+
+    if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nUTXOCount = %u", nUTXOCount);
+
+    return(nUTXOCount);
+}
+
+
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
 {
@@ -918,6 +1031,10 @@ void StakeMiner(CWallet *pwallet)
         if( !CreateGridcoinReward(StakeBlock,BoincData,StakeCoinAge,pindexPrev) )
             continue;
         LogPrintf("StakeMiner: added gridcoin reward to coinstake");
+        
+        // * If argument is supplied desiring stake output splitting, then split stake outputs if needed.
+        if (GetBoolArg("-enablestakesplit"))
+            SplitCoinStakeOutput(StakeBlock);
 
         AddNeuralContractOrVote(StakeBlock, BoincData);
 
