@@ -69,6 +69,7 @@ UniValue MagnitudeReport(std::string cpid);
 extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
+StructCPID TallyResearcherTotals(const uint128& cpid, const HashSet& hashes);
 extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
 std::string TimestampToHRDate(double dtm);
@@ -3165,7 +3166,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
                     // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
@@ -3382,7 +3383,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else
                                 LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                                     bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
-                                }
+                            }
                         }
                 }
         }
@@ -3909,8 +3910,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
             //TODO: do something with retired tally?
         }
 
-        if(pindex->IsUserCPID()) // is this needed?
-            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
+        TallyResearcherTotals(pindex->cpid, HashSet{ pindex->GetBlockHash() });
     }
 
     if (fDebug && (cnt_dis>0 || cnt_con>1))
@@ -5644,23 +5644,19 @@ void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
    mvCPIDBlockHashes[cpid].erase(blockhash);
 }
 
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
+StructCPID TallyResearcherTotals(const uint128& cpid, const HashSet& hashes)
 {
+    const std::string& cpid_hex = cpid.GetHex();
+
     //Eliminates issues with reorgs, disconnects, double counting, etc..
-    if (!IsResearcher(cpid))
+    if (!IsResearcher(cpid_hex))
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
 
-    if (fDebug10) LogPrintf("GetLifetimeCPID.BEGIN: %s %s", sCalledFrom, cpid);
-
-    const HashSet& hashes = GetCPIDBlockHashes(cpid);
-    ZeroOutResearcherTotals(cpid);
-
-    const uint128 cpid128(cpid);
-    StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
+    StructCPID stCPID = GetInitializedStructCPID2(cpid_hex, mvResearchAge);
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
         const uint256& uHash = *it;
-        if (fDebug10) LogPrintf("GetLifetimeCPID: trying %s",uHash.GetHex());
+        if (fDebug10) LogPrintf("TallyResearcherTotals: trying %s",uHash.GetHex());
 
         // Ensure that we have this block.
         auto mapItem = mapBlockIndex.find(uHash);
@@ -5672,17 +5668,17 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
            pblockindex->IsUserCPID() == false ||
-           pblockindex->cpid != cpid128)
+           pblockindex->cpid != cpid)
             continue;
 
         // Block located and verified.
         if (fDebug10)
-            LogPrintf("GetLifetimeCPID: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f",
-            uHash.GetHex().c_str(),pblockindex->nHeight,(int)stCPID.LastBlock,pblockindex->nResearchSubsidy);
+            LogPrintf("TallyResearcherTotals: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f",
+            uHash.GetHex().c_str(),pblockindex->nHeight, stCPID.LastBlock, pblockindex->nResearchSubsidy);
         if(!pblockindex->pnext && pblockindex!=pindexBest)
-            LogPrintf("WARNING GetLifetimeCPID: index {%s %d} for cpid %s, "
+            LogPrintf("WARNING TallyResearcherTotals: index {%s %d} for cpid %s, "
                 "is not in the main chain",pblockindex->GetBlockHash().GetHex(),
-                pblockindex->nHeight,cpid);
+                pblockindex->nHeight, cpid_hex);
 
         if(pblockindex->nResearchSubsidy> 0)
         {
@@ -5706,10 +5702,24 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         }
     }
 
-    // Save updated CPID data holder.
-    if (fDebug10) LogPrintf("GetLifetimeCPID.END: %s set {%s %d}",cpid, stCPID.BlockHash, (int)stCPID.LastBlock);
-    mvResearchAge[cpid] = stCPID;
+    mvResearchAge[cpid_hex] = stCPID;
+
+    if (fDebug10) LogPrintf("TallyResearcherTotals.END: %s set {%s %d}", cpid_hex, stCPID.BlockHash, stCPID.LastBlock);
     return stCPID;
+}
+
+StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
+{
+    //Eliminates issues with reorgs, disconnects, double counting, etc..
+    if (!IsResearcher(cpid))
+        return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
+
+    if (fDebug10) LogPrintf("GetLifetimeCPID.BEGIN: %s %s", sCalledFrom, cpid);
+
+    ZeroOutResearcherTotals(cpid);
+    return TallyResearcherTotals(
+                uint128(cpid),
+                GetCPIDBlockHashes(cpid));
 }
 
 MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef)
@@ -7036,7 +7046,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
                 supercfwd::QuorumResponseHook(pfrom,neural_request_id);
-            }
+    }
     }
     else if (strCommand == "ping")
     {
@@ -7570,13 +7580,13 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
 
-  size_t pos = 0;
+    size_t pos = 0;
     while((pos = str.find(oldStr, pos)) != std::string::npos)
     {
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+    return str;
 }
 
 std::string LowerUnderscore(std::string data)
@@ -7735,7 +7745,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-
+                        
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -8312,8 +8322,8 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 if (sMessageType=="poll")
                                 {
                                     msPoll = msg;
-                                        }
                                 }
+                        }
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
@@ -8332,9 +8342,9 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if(fDebug)
                             WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
+            }
                   }
                 }
-    }
 
    return fMessageLoaded;
 }
