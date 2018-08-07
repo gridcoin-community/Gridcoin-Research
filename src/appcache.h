@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <map>
+#include <unordered_map>
 
 //!
 //! \brief An entry in the application cache.
@@ -15,12 +15,12 @@ struct AppCacheEntry
 //!
 //! \brief Application cache section type.
 //! 
-typedef std::map<std::string, AppCacheEntry> AppCacheSection;
+typedef std::unordered_map<std::string, AppCacheEntry> AppCacheSection;
 
 //!
 //! \brief Application cache type.
 //!
-typedef std::map<std::string, AppCacheSection> AppCache;
+typedef std::unordered_map<std::string, AppCacheSection> AppCache;
 
 //!
 //! \brief Write value into application cache.
