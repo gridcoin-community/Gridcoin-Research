@@ -6,14 +6,14 @@
 #include <openssl/evp.h>
 #include <vector>
 #include <string>
+
+#include "util.h"
+#include "crypter.h"
+#include "scrypt.h"
+
 #ifdef WIN32
 #include <windows.h>
 #endif
-
-#include "crypter.h"
-#include "scrypt.h"
-#include "util.h"
-
 
 unsigned char chKeyGridcoin[256];
 unsigned char chIVGridcoin[256];

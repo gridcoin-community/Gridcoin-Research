@@ -1,7 +1,7 @@
 #include "main.h"
-#include "util.h"
 #include "boinc.h"
 #include "appcache.h"
+#include "util.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
@@ -304,7 +304,7 @@ void DiagnosticsDialog::on_testBtn_clicked()
 
     //client version
     ui->checkClientVersionResultLbl->setText("Testing...");
-    networkManager->get(QNetworkRequest(QUrl("https://api.github.com/repos/gridcoin/Gridcoin-Research/releases/latest")));
+    networkManager->get(QNetworkRequest(QUrl("https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest")));
 
     return;
 }

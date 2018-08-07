@@ -1,6 +1,6 @@
 #include "appcache.h"
-#include "util.h"
 #include "main.h"
+#include "util.h"
 
 #include <boost/algorithm/string.hpp>
 
@@ -54,7 +54,7 @@ void DeleteCache(const std::string& section, const std::string& key)
     if(cache == mvApplicationCache.end())
        return;
 
-    cache->second.erase(key); 
+    cache->second.erase(key);
 }
 
 std::string GetListOf(const std::string& section)
