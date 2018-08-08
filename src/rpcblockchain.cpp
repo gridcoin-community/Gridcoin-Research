@@ -1988,13 +1988,13 @@ UniValue dportally(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue forcequorom(const UniValue& params, bool fHelp)
+UniValue forcequorum(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "forcequorom\n"
+                "forcequorum\n"
                 "\n"
-                "Requests neural network for force a quorom among nodes\n");
+                "Requests neural network for force a quorum among nodes\n");
 
     UniValue res(UniValue::VOBJ);
 
@@ -2489,13 +2489,13 @@ UniValue testnewcontract(const UniValue& params, bool fHelp)
 }
 #endif
 
-UniValue updatequoromdata(const UniValue& params, bool fHelp)
+UniValue updatequorumdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "updatequoromdata\n"
+                "updatequorumdata\n"
                 "\n"
-                "Requests update of neural network quorom data\n");
+                "Requests update of neural network quorum data\n");
 
     UniValue res(UniValue::VOBJ);
 
@@ -2601,7 +2601,7 @@ UniValue currenttime(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "currenttime\n"
                 "\n"
-                "Displays UTC unix time as well as date and time in UTC\n");
+                "Displays UTC Unix time as well as date and time in UTC\n");
 
     UniValue res(UniValue::VOBJ);
 
