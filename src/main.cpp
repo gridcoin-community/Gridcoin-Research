@@ -690,7 +690,22 @@ void GetGlobalStatus()
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        GlobalStatusStruct.poll = msPoll;
+
+        std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
+        std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
+        // Alerts are displayed as polls but do not have an expiration
+        if(sPollExpiration.empty())
+        {
+            sPollExpiration = std::to_string(pindexBest->nTime);
+        }
+        if (stoll(sPollExpiration) >= pindexBest->nTime)
+        {
+            GlobalStatusStruct.poll = sMessageKey.substr(0,80);
+        }
+        else
+        {
+            GlobalStatusStruct.poll = "No current polls";
+        }
 
         GlobalStatusStruct.status.clear();
 
@@ -8370,14 +8385,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
-                                        if (Contains(sMessageKey,"[Foundation"))
-                                        {
-                                                msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
-                                        }
-                                        else
-                                        {
-                                                msPoll = "Poll: " + sMessageKey.substr(0,80);
-                                        }
+                                    msPoll = msg;
                                 }
                         }
                         else if(sMessageAction=="D")
