@@ -203,10 +203,9 @@ int64_t nTransactionFee = MIN_TX_FEE;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
-std::map<std::string, double> mvNeuralNetworkHash;
-std::map<std::string, double> mvCurrentNeuralNetworkHash;
-
-std::map<std::string, double> mvNeuralVersion;
+std::unordered_map<std::string, double> mvNeuralNetworkHash;
+std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
+std::unordered_map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
 std::map<std::string, StructCPID> mvDPORCopy;
@@ -5830,11 +5829,13 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
 
 bool ComputeNeuralNetworkSupermajorityHashes()
 {
-    if (nBestHeight < 15)  return true;
+    if (nBestHeight < 15)
+        return true;
+    
     //Clear the neural network hash buffer
-    if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
-    if (mvNeuralVersion.size() > 0)  mvNeuralVersion.clear();
-    if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
+    mvNeuralNetworkHash.clear();
+    mvNeuralVersion.clear();
+    mvCurrentNeuralNetworkHash.clear();
 
     //Clear the votes
     /* ClearCache was no-op in previous version due to bug. Now it was fixed,
@@ -5854,12 +5855,18 @@ bool ComputeNeuralNetworkSupermajorityHashes()
         CBlockIndex* pblockindex = pindexBest;
         while (pblockindex->nHeight > nMinDepth)
         {
-            if (!pblockindex || !pblockindex->pprev) return false;
+            if (!pblockindex || !pblockindex->pprev)
+                return false;
+            
             pblockindex = pblockindex->pprev;
-            if (pblockindex == pindexGenesisBlock) return false;
-            if (!pblockindex->IsInMainChain()) continue;
+            if (pblockindex == pindexGenesisBlock)
+                return false;
+            if (!pblockindex->IsInMainChain())
+                continue;
+            
             block.ReadFromDisk(pblockindex);
-            std::string hashboinc = "";
+            
+            std::string hashboinc;
             if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
             if (!hashboinc.empty())
             {
@@ -5878,7 +5885,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                 //Increment Neural Network Hashes Supermajority (over the last N blocks)
                 IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10,pblockindex);
                 IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
-
             }
         }
 
@@ -5888,12 +5894,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     {
             LogPrintf("Neural Error while memorizing hashes.");
     }
-    catch(...)
-    {
-        LogPrintf("Neural error While Memorizing Hashes! [1]");
-    }
+    
     return true;
-
 }
 
 bool TallyResearchAverages(CBlockIndex* index)
@@ -8156,36 +8158,30 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
 void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
-    if (NeuralHash.length() < 5) return;
-    double temp_hashcount = 0;
-    if (mvCurrentNeuralNetworkHash.size() > 0)
-    {
-            temp_hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
-    }
+    if (NeuralHash.length() < 5)
+        return;    
+
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("currentneuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache("currentneuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
+    
     WriteCache("currentneuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
-    if (temp_hashcount == 0)
-    {
-        mvCurrentNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
-    }
-    double multiplier = 200;
-    if (distance < 40) multiplier = 400;
+
+    double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
-    temp_hashcount += votes;
-    mvCurrentNeuralNetworkHash[NeuralHash] = temp_hashcount;
+    double& hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
+    hashcount += votes;
 }
-
-
 
 void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex)
 {
-    if (NeuralHash.length() < 5) return;
+    if (NeuralHash.length() < 5)
+        return;
+    
     if (pblockindex->nVersion >= 8)
     {
         try
@@ -8209,30 +8205,23 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
             return;
         }
     }
-    double temp_hashcount = 0;
-    if (mvNeuralNetworkHash.size() > 0)
-    {
-            temp_hashcount = mvNeuralNetworkHash[NeuralHash];
-    }
+
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("neuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache("neuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
+    
     WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
-    if (temp_hashcount == 0)
-    {
-        mvNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
-    }
-    double multiplier = 200;
-    if (distance < 40) multiplier = 400;
-    double votes = (1/distance)*multiplier;
-    temp_hashcount += votes;
-    mvNeuralNetworkHash[NeuralHash] = temp_hashcount;
-}
 
+    // Reference to the value stored within the map to avoid multiple lookups.
+    double& hashcount = mvNeuralNetworkHash[NeuralHash];
+    double multiplier = distance < 40 ? 400 : 200;
+    double votes = (1/distance)*multiplier;
+    hashcount += votes;
+}
 
 void IncrementVersionCount(const std::string& Version)
 {
@@ -8270,26 +8259,32 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
 
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
 {
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
     double highest_popularity = -1;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    std::string neural_hash;    
+    for(auto& entry : sorted_hashes)
     {
-                double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-                // d41d8 is the hash of an empty magnitude contract - don't count it
-                if ( ((*ii).first != "d41d8cd98f00b204e9800998ecf8427e") && popularity > 0 && popularity > highest_popularity && (*ii).first != "TOTAL_VOTES")
-                {
-                    highest_popularity = popularity;
-                    neural_hash = (*ii).first;
-                }
+        auto& hash = entry.first;
+        auto& popularity = entry.second;
+
+        // d41d8 is the hash of an empty magnitude contract - don't count it
+        if(popularity > 0 &&
+           popularity > highest_popularity &&
+           hash != "TOTAL_VOTES" &&
+           hash != "d41d8cd98f00b204e9800998ecf8427e")
+        {            
+            highest_popularity = popularity;
+            neural_hash = hash;
+        }
     }
+    
     out_popularity = highest_popularity;
     return neural_hash;
 }
-
-
-
-
-
 
 std::string GetNeuralNetworkReport()
 {
@@ -8297,13 +8292,14 @@ std::string GetNeuralNetworkReport()
     std::string neural_hash = "";
     std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
-    {
-                double popularity = mvNeuralNetworkHash[(*ii).first];
-                neural_hash = (*ii).first;
-                row = neural_hash+ "," + RoundToString(popularity,0);
-                report += row + "\n";
-    }
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
+        report += entry.first + "," + RoundToString(entry.second, 0) + "\n";
 
     return report;
 }
@@ -8314,8 +8310,6 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
     return Symbol;
 
 }
-
-
 
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
 {
