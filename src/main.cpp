@@ -3389,21 +3389,32 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
                         }
 
-                        if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
+                        const std::set<uint256> vSkipHashdStakeRewardSignCheck =
+                        {   uint256("129ae6779d620ec189f8e5148e205efca2dfe31d9f88004b918da3342157b7ff") //T407024
+                           ,uint256("c3f85818ba5290aaea1bcbd25b4e136f83acc93999942942bbb25aee2c655f7a") //T407068
+                           ,uint256("cf7f1316f92547f611852cf738fc7a4a643a2bb5b9290a33cd2f9425f44cc3f9") //T407099
+                           ,uint256("b47085beb075672c6f20d059633d0cad4dba9c5c20f1853d35455b75dc5d54a9") //T407117
+                           ,uint256("5a7d437d15bccc41ee8e39143e77960781f3dcf08697a888fa8c4af8a4965682") //T407161
+                           ,uint256("aeb3c24277ae1047bda548975a515e9d353d6e12a2952fb733da03f92438fb0f") //T407181
+                           ,uint256("fc584b18239f3e3ea78afbbd33af7c6a29bb518b8299f01c1ed4b52d19413d4f") //T407214
+                           ,uint256("d5441f7c35eb9ea1b786bbbed820b7f327504301ae70ef2ac3ca3cbc7106236b") //T479114
+                        };
+                        if( vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())==0 )
                         {
+                          if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
+                          {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
-                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                                        pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime, pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
                             if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                             {
-
-                                if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
-
-                                return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+                                  if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                      (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
+                                      return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                          (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
                             }
+                          }
                         }
+                      else LogPrintf("WARNING: ignoring invalid hash in dStakeReward check signature on block %s", pindex->GetBlockHash().ToString());
                 }
         }
 
@@ -7783,7 +7794,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-                        
+
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -8829,4 +8840,3 @@ bool IsResearcher(const std::string& cpid)
 {
     return cpid.length() == 32;
 }
-
