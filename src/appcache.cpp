@@ -3,72 +3,98 @@
 #include "util.h"
 
 #include <boost/algorithm/string.hpp>
+#include <array>
+#include <type_traits>
 
 namespace
-{
-    AppCache mvApplicationCache;
+{    
+    typedef typename std::underlying_type<Section>::type Section_t;    
+    std::array<AppCacheSection, static_cast<Section_t>(Section::NUM_CACHES)> caches;
+    
+    // Section name to ID map. Used by MemorizeMessage and needs to be kept
+    // up to date with the sections.
+    const std::unordered_map<std::string, Section> section_name_map =
+    {
+        { "beacon", Section::BEACON },
+        { "beaconalt", Section::BEACONALT },
+        { "superblock", Section::SUPERBLOCK },
+        { "global", Section::GLOBAL },
+        { "protocol", Section::PROTOCOL },
+        { "neuralsecurity", Section::NEURALSECURITY },
+        { "currentneuralsecurity", Section::CURRENTNEURALSECURITY },
+        { "trxid", Section::TRXID },
+        { "poll", Section::POLL },
+        { "vote", Section::VOTE },
+        { "project", Section::PROJECT },
+        { "projectmapping", Section::PROJECTMAPPING }
+    };
+    
+    //static_assert(section_name_map.size() == NumCaches, "Section name table size mismatch");
+    
+    AppCacheSection& GetSection(Section section)
+    {
+        if(section == Section::NUM_CACHES)
+            throw std::runtime_error("Invalid cache");
+        
+        auto idx = static_cast<Section_t>(section);
+        return caches[idx];
+    }
 }
 
 void WriteCache(
-        const std::string& section,
+        Section section,
         const std::string& key,
         const std::string& value,
         int64_t locktime)
 {
-    if (section.empty() || key.empty())
+    if(key.empty())
         return;
-
-    mvApplicationCache[section][key] = AppCacheEntry{ value, locktime };
+    
+    AppCacheSection& cache = GetSection(section);
+    cache[key] = AppCacheEntry{ value, locktime };
 }
 
 AppCacheEntry ReadCache(
-        const std::string& section,
+        Section section,
         const std::string& key)
 {
-    if (section.empty() || key.empty())
+    if (key.empty())
         return AppCacheEntry{ std::string(), 0 };
 
-    const auto& cache = ReadCacheSection(section);
+    const auto& cache = GetSection(section);
     auto entry = cache.find(key);
     return entry != cache.end()
                    ? entry->second
                    : AppCacheEntry{std::string(), 0};
 }
 
-AppCacheSection ReadCacheSection(const std::string& section)
+AppCacheSection& ReadCacheSection(Section section)
 {
-    const auto& cache = mvApplicationCache.find(section);
-    return cache != mvApplicationCache.end()
-        ? cache->second
-        : AppCacheSection();
+    return GetSection(section);
 }
 
-void ClearCache(const std::string& section)
+void ClearCache(Section section)
 {
-    mvApplicationCache.erase(section);
+    GetSection(section).clear();
 }
 
-void DeleteCache(const std::string& section, const std::string& key)
+void DeleteCache(Section section, const std::string &key)
 {
-    auto cache = mvApplicationCache.find(section);
-    if(cache == mvApplicationCache.end())
-       return;
-
-    cache->second.erase(key);
+    GetSection(section).erase(key);
 }
 
-std::string GetListOf(const std::string& section)
+std::string GetListOf(Section section)
 {
     return GetListOf(section, 0, 0);
 }
 
 std::string GetListOf(
-        const std::string& section,
+        Section section,
         int64_t minTime,
         int64_t maxTime)
 {
     std::string rows;
-    for(const auto& item : ReadCacheSection(section))
+    for(const auto& item : GetSection(section))
     {
         const std::string& key = item.first;
         const AppCacheEntry& entry = item.second;
@@ -79,7 +105,7 @@ std::string GetListOf(
             continue;
 
         // Skip invalid beacons.
-        if (section == "beacon" && Contains("INVESTOR", entry.value))
+        if (section == Section::BEACON && Contains("INVESTOR", entry.value))
             continue;
 
         rows += key + "<COL>" + entry.value + "<ROW>";
@@ -88,7 +114,7 @@ std::string GetListOf(
     return rows;
 }
 
-size_t GetCountOf(const std::string& section)
+size_t GetCountOf(Section section)
 {
     const std::string& data = GetListOf(section);
     size_t count = 0;
@@ -102,4 +128,13 @@ size_t GetCountOf(const std::string& section)
     }
 
     return count;
+}
+
+Section StringToSection(const std::string &section)
+{
+    auto entry = section_name_map.find(section);
+    if(entry == section_name_map.end())
+        throw std::runtime_error("Invalid section " + section);
+    
+    return entry->second;
 }

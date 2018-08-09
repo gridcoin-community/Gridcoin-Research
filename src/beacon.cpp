@@ -21,12 +21,12 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
     const std::string sBeaconPublicKey = GetBeaconPublicKey(cpid,false);
 
     if(!sBeaconPublicKey.empty())
-    {
+{
         CPubKey oldKey(ParseHex(sBeaconPublicKey));
         if(oldKey.IsValid())
-        {
+    {
             if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
-            {
+        {
                 assert(outPrivPubKey.IsValid());//GetKey gives valid key or false
                 assert(outPrivPubKey.GetPubKey()==oldKey);//GetKey should return the key we ask for
                 LogPrintf("GenerateBeaconKeys: Reusing >5 <6 m old Key");
@@ -50,7 +50,7 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
     if (!pwalletMain->GetKey(keyID, outPrivPubKey))
         return error("GenerateBeaconKeys: Failed to get Private Key from Wallet");
 
-    return true;
+        return true;
 }
 
 bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
@@ -61,10 +61,10 @@ bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
     if(oldKey.IsValid())
     {
         if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
-        {
+{
             return outPrivPubKey.IsValid();
-        }
-    }
+}
+}
     return false;
 }
 
@@ -97,7 +97,7 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
     AssertLockHeld(cs_main);
-    const AppCacheEntry& entry =  ReadCache("beacon", cpid);
+    const AppCacheEntry& entry =  ReadCache(Section::BEACON, cpid);
     std::string sBeacon = entry.value;
     int64_t iLocktime = entry.timestamp;
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
@@ -117,7 +117,7 @@ bool HasActiveBeacon(const std::string& cpid)
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
     AssertLockHeld(cs_main);
-    const AppCacheEntry& entry = ReadCache("beacon", cpid);
+    const AppCacheEntry& entry = ReadCache(Section::BEACON, cpid);
 
     // Compare the age of the beacon to the age of the current block. If we have
     // no current block we assume that the beacon is valid.
@@ -155,7 +155,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     if (tx_out_cpid.empty() || tx_out_address.empty() || tx_out_publickey.empty() || chkMessageContractCPID.empty())
         return false; // Incomplete contract
 
-    const AppCacheEntry& beaconEntry = ReadCache("beacon", chkMessageContractCPID);
+    const AppCacheEntry& beaconEntry = ReadCache(Section::BEACON, chkMessageContractCPID);
     if (beaconEntry.value.empty())
     {
         if (fDebug10)

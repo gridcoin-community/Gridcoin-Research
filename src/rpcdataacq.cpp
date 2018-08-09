@@ -259,7 +259,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
     UniValue result1(UniValue::VOBJ);
     if("last"==params[1].get_str())
     {
-        std::string sheight= ReadCache("superblock", "block_number").value;
+        std::string sheight= ReadCache(Section::SUPERBLOCK, "block_number").value;
         long height= RoundFromString(sheight,0);
         if(!height)
         {

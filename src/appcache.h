@@ -2,6 +2,26 @@
 
 #include <string>
 #include <map>
+#include <unordered_map>
+
+enum class Section
+{
+    BEACON,
+    BEACONALT,
+    SUPERBLOCK,
+    GLOBAL,
+    PROTOCOL,
+    NEURALSECURITY,
+    CURRENTNEURALSECURITY,
+    TRXID,
+    POLL,
+    VOTE,
+    PROJECT,
+    PROJECTMAPPING,
+    
+    // Enum counting entry. Using it will throw.
+    NUM_CACHES
+};
 
 //!
 //! \brief An entry in the application cache.
@@ -15,12 +35,7 @@ struct AppCacheEntry
 //!
 //! \brief Application cache section type.
 //! 
-typedef std::map<std::string, AppCacheEntry> AppCacheSection;
-
-//!
-//! \brief Application cache type.
-//!
-typedef std::map<std::string, AppCacheSection> AppCache;
+typedef std::unordered_map<std::string, AppCacheEntry> AppCacheSection;
 
 //!
 //! \brief Write value into application cache.
@@ -29,7 +44,7 @@ typedef std::map<std::string, AppCacheSection> AppCache;
 //! \param value Entry value to write.
 //!
 void WriteCache(
-        const std::string& section,
+        Section section,
         const std::string& key,
         const std::string& value,
         int64_t locktime);
@@ -42,7 +57,7 @@ void WriteCache(
 //! if either the section or the key don't exist.
 //!
 AppCacheEntry ReadCache(
-        const std::string& section,
+        Section section,
         const std::string& key);
 
 //!
@@ -50,21 +65,21 @@ AppCacheEntry ReadCache(
 //! \param section Section to read.
 //! \returns The data for \p section if available.
 //!
-AppCacheSection ReadCacheSection(const std::string& section);
+AppCacheSection& ReadCacheSection(Section section);
 
 //!
 //! \brief Clear all values in a cache section.
 //! \param section Cache section to clear.
 //! \note This only clears the values. It does not erase them.
 //!
-void ClearCache(const std::string& section);
+void ClearCache(Section section);
 
 //!
 //! \brief Erase key from appcache section.
 //! \param section Cache section to erase from.
 //! \param key Entry key to erase.
 //!
-void DeleteCache(const std::string& section, const std::string& key);
+void DeleteCache(Section section, const std::string& key);
 
 //!
 //! \brief Get a list of section values.
@@ -80,7 +95,7 @@ void DeleteCache(const std::string& section, const std::string& key);
 //! \return Formatted section values string.
 //! \todo Make this return std::vector<std::string> instead.
 //!
-std::string GetListOf(const std::string& section);
+std::string GetListOf(Section section);
 
 //!
 //! \brief Get a list of section values with age restrictions.
@@ -89,7 +104,7 @@ std::string GetListOf(const std::string& section);
 //! \param maxTime Entry max timestamp. Set to 0 to disable limit.
 //!
 std::string GetListOf(
-        const std::string& section,
+        Section section,
         int64_t minTime,
         int64_t maxTime);
 
@@ -102,4 +117,6 @@ std::string GetListOf(
 //! \return Number of values in \p section.
 //! \see GetListOf() for beacon restrictions.
 //!
-size_t GetCountOf(const std::string& section);
+size_t GetCountOf(Section section);
+
+Section StringToSection(const std::string& section);
