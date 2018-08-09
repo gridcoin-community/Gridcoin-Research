@@ -15,6 +15,7 @@
 #include <string>
 #include <ostream>
 #include <locale>
+#include <strings.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
@@ -80,8 +81,22 @@ static const int64_t CENT = 1000000;
 void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);
-extern std::map<std::string, std::string> mapArgs;
-extern std::map<std::string, std::vector<std::string> > mapMultiArgs;
+
+
+/**
+ * Allows search of mapArgs and mapMultiArgs in a case insensitive way
+ */
+
+struct mapArgscomp
+{
+   bool operator() (const std::string& lhs, const std::string& rhs) const
+   {
+       return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
+   }
+};
+
+extern std::map<std::string, std::string, mapArgscomp> mapArgs;
+extern std::map<std::string, std::vector<std::string>, mapArgscomp> mapMultiArgs;
 extern bool fDebug;
 extern bool fDebugNet;
 extern bool fDebug2;
@@ -188,7 +203,7 @@ boost::filesystem::path GetPidFile();
 #ifndef WIN32
 void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
 #endif
-void ReadConfigFile(std::map<std::string, std::string>& mapSettingsRet, std::map<std::string, std::vector<std::string> >& mapMultiSettingsRet);
+void ReadConfigFile(std::map<std::string, std::string, mapArgscomp>& mapSettingsRet, std::map<std::string, std::vector<std::string>, mapArgscomp>& mapMultiSettingsRet);
 #ifdef WIN32
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
@@ -376,7 +391,6 @@ inline bool IsSwitchChar(char c)
     return c == '-';
 #endif
 }
-
 /**
  * Return string argument or default value
  *
