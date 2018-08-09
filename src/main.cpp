@@ -5836,6 +5836,12 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     mvNeuralNetworkHash.clear();
     mvNeuralVersion.clear();
     mvCurrentNeuralNetworkHash.clear();
+    
+    // ClearCache was no-op in previous version due to bug. Now it was fixed,	
+    // and we previously emulated the old behavior to prevent early forks when
+    // switching to v9. We want to clear these to avoid the data stacking up
+    // with time. If this causes an issue when syncing then considering making
+    // this >=v9 only again.
     ClearCache("neuralsecurity");
     ClearCache("currentneuralsecurity");
 
