@@ -2864,9 +2864,17 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             if(!sMType.empty())
             {
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
+                
+                try
+                {
                 DeleteCache(StringToSection(sMType), sMKey);
                 if(fDebug)
                     LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+                }
+                catch(const std::runtime_error& e)
+                {
+                    error("Attempting to delete from unknown cache: %s", sMType);
+                }
 
                 if("beacon"==sMType)
                 {
@@ -8306,10 +8314,17 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                         WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
                                 }
 
+                    try
+                    {
                     WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
-                                if(fDebug10 && sMessageType=="beacon" ){
+                        if(fDebug10 && sMessageType=="beacon" )
                                     LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
                                 }
+                    catch(const std::runtime_error& e)
+                    {
+                        error("Attempting to add to unknown cache: %s", sMessageType);
+                    }
+
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
@@ -8322,9 +8337,17 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 if(fDebug10 && sMessageType=="beacon" ){
                                     LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
                                 }
+                    
+                    try
+                    {                    
                     DeleteCache(StringToSection(sMessageType), sMessageKey);
                                 fMessageLoaded = true;
                         }
+                    catch(const std::runtime_error& e)
+                    {
+                        error("Attempting to add to unknown cache: %s", sMessageType);
+                    }
+                }
                         // If this is a boinc project, load the projects into the coin:
                         if (sMessageType=="project" || sMessageType=="projectmapping")
                         {
