@@ -1872,7 +1872,7 @@ UniValue projects(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    if (mvCPIDs.size() < 1)
+    if (mvCPIDs.empty())
         HarvestCPIDs(false);
 
     for (const auto& item : ReadCacheSection("project"))
@@ -1897,13 +1897,11 @@ UniValue projects(const UniValue& params, bool fHelp)
         entry.pushKV("Project", sProjectName);
         entry.pushKV("URL", sProjectURL);
 
-        if (mvCPIDs.size() > 0)
+        if (!mvCPIDs.empty())
         {
             StructCPID structcpid = mvCPIDs[sProjectName];
 
-            if (structcpid.initialized)
-            {
-                if (IsResearcher(structcpid.cpid) && IsResearcher(GlobalCPUMiningCPID.cpid))
+                if (structcpid.initialized && IsResearcher(structcpid.cpid) && IsResearcher(GlobalCPUMiningCPID.cpid))
                 {
                     UniValue researcher(UniValue::VOBJ);
 
@@ -1916,7 +1914,6 @@ UniValue projects(const UniValue& params, bool fHelp)
 
                     entry.pushKV("Researcher", researcher);
                 }
-            }
         }
 
         res.push_back(entry);
