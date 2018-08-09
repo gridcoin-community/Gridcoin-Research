@@ -82,7 +82,6 @@ void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);
 
-
 /**
  * Allows search of mapArgs and mapMultiArgs in a case insensitive way
  */
