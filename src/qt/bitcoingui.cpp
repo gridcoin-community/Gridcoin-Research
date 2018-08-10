@@ -50,6 +50,7 @@
 #include "main.h"
 #include "backup.h"
 #include "clicklabel.h"
+#include "univalue.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -622,7 +623,6 @@ void BitcoinGUI::createMenuBar()
 
 #ifdef WIN32  // actions in this menu are on .NET dll side only show this menu for windows
     QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
-
     qmAdvanced->addAction(miningAction);
 #endif /* defined(WIN32) */
 
@@ -1569,24 +1569,30 @@ void BitcoinGUI::timerfire()
 
         if (bGlobalcomInitialized)
         {
-                //R Halford - Allow .NET to talk to Core: 6-21-2015
-                #ifdef WIN32
-                    std::string sData = qtExecuteDotNetStringFunction("GetDotNetMessages","");
-                    if (!sData.empty())
-                    {
-                        std::string RPCCommand = ExtractXML(sData,"<COMMAND>","</COMMAND>");
-                        std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
-                        std::string Argument2 = ExtractXML(sData,"<ARG2>","</ARG2>");
+            //R Halford - Allow .NET to talk to Core: 6-21-2015
+            #ifdef WIN32
+                std::string sData = qtExecuteDotNetStringFunction("GetDotNetMessages","");
+                if (!sData.empty())
+                {
+                    std::string RPCCommand = ExtractXML(sData,"<COMMAND>","</COMMAND>");
+                    std::string Argument1 = ExtractXML(sData,"<ARG1>","</ARG1>");
+                    std::string Argument2 = ExtractXML(sData,"<ARG2>","</ARG2>");
 
-                        if (RPCCommand=="rain")
+                    if (RPCCommand=="rain")
+                    {
+                        try
                         {
                             std::string response = executeRain(Argument1+Argument2);
-                            double resultcode = qtExecuteGenericFunction("SetRPCResponse"," "+response);
+                            qtExecuteGenericFunction("SetRPCResponse"," "+response);
+                        }
+                        catch (const UniValue& objError)
+                        {
+                            qtExecuteGenericFunction("SetRPCResponse", find_value(objError, "message").get_str());
                         }
                     }
-                #endif
+                }
+            #endif
         }
-
 
         if (Timer("status_update",5))
         {
