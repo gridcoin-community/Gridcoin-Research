@@ -690,23 +690,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-
-        std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
-        std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
-        // Alerts are displayed as polls but do not have an expiration
-        if(sPollExpiration.empty())
-        {
-            sPollExpiration = std::to_string(pindexBest->nTime);
-        }
-        if (stoll(sPollExpiration) >= pindexBest->nTime)
-        {
-            GlobalStatusStruct.poll = sMessageKey.substr(0,80);
-        }
-        else
-        {
-            GlobalStatusStruct.poll = "No current polls";
-        }
-
+        GlobalStatusStruct.poll = GetPoll();
         GlobalStatusStruct.status.clear();
 
         if(MinerStatus.WeightSum)
@@ -744,6 +728,40 @@ void GetGlobalStatus()
         LogPrintf("Error obtaining status");
         return;
     }
+}
+
+std::string GetPoll()
+{
+    std::string poll = "";
+    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
+    std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
+    uint64_t uPollExpiration = 0;
+    // Alerts are displayed as polls but do not have an expiration
+    if(sPollExpiration.empty())
+    {
+        uPollExpiration = pindexBest->nTime;
+    }
+    else
+    {
+        try
+        {
+            uPollExpiration = stoll(sPollExpiration);
+        }
+        catch(std::exception &e)
+        {
+            // Malformed poll expiration, don't display
+            uPollExpiration = 0;
+        }
+    }
+    if (uPollExpiration >= pindexBest->nTime)
+    {
+        poll = sMessageKey.substr(0,80);
+    }
+    else
+    {
+        poll = "No current polls";
+    }
+    return poll;
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)
