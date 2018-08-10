@@ -137,7 +137,6 @@ int64_t nLastCleaned = 0;
 
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -2128,12 +2127,28 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     {
             // Research Age Subsidy - PROD
             int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+            int64_t nInterest = 0;
 
             // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
             // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
             // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
             // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
+
+            /* Constant Block Reward */
+            if (pindexLast->nVersion>=10)
+            {
+                AppCacheEntry oCBReward= ReadCache("protocol","blockreward1");
+                //TODO: refactor the expire checking to subroutine
+                //Note: time constant is same as GetBeaconPublicKey
+                if( (pindexLast->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
+                {
+                    nInterest= atoi64(oCBReward.value);
+                }
+            }
+            else
+            {
+                nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+            }
 
             int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
 
@@ -2327,6 +2342,8 @@ bool CheckProofOfResearch(
         const CBlockIndex* pindexPrev, //previous block in chain index
         const CBlock &block)     //block to check
 {
+    /* In this function GetProofOfStakeReward is called with wrong pindex,
+     * which does not matter, because this one is no longer used */
     if(block.vtx.size() == 0 ||
        !block.IsProofOfStake() ||
        pindexPrev->nHeight <= nGrandfather ||
@@ -3206,13 +3223,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (pindex->nHeight > nGrandfather && !fReorganizing)
     {
-        // Block Spamming
-        if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+        if(nVersion < 10)
         {
-            return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
-        }
+            // Block Spamming
+            if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+            {
+                return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
+            }
 
-        if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
+            if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
+        }
 
         double OUT_POR = 0;
         double OUT_INTEREST = 0;
@@ -4174,7 +4194,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         if (fDebug10) LogPrintf("CheckBlock[]: TotalSubsidy %f, Height %i, %s, %f, Res %f, Interest %f, hb: %s ",
                              total_subsidy, height1, bb.cpid,
                              mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
-        if (total_subsidy < limiter)
+        if ((nVersion < 10) && (total_subsidy < limiter))
         {
             if (fDebug3) LogPrintf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s ",bb.cpid,
                                 mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
@@ -4269,6 +4289,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
               || (IsV8Enabled(nHeight) && nVersion < 8)
               || (IsV9Enabled(nHeight) && nVersion < 9)
+              || (nVersion < pindexPrev->nVersion)
               )
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
@@ -8334,6 +8355,10 @@ double GRCMagnitudeUnit(int64_t locktime)
 
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
+    // If not a researcher save cpu cycles and return 0
+    if (!IsResearcher(cpid))
+        return 0;
+
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
     if(pindexLast->nVersion>=9)
     {
@@ -8414,21 +8439,20 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
         return 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
-    else if (iRABlockSpan < 10 && iVerificationPhase != 2)
+
+    // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
+    if((pindexLast->nVersion >= 10 && iRABlockSpan < 10) ||
+       (pindexLast->nVersion < 10 && iRABlockSpan < 10 && iVerificationPhase != 2))
     {
         if(fDebug) LogPrintf("ComputeResearchAccrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %f)", cpid, iRABlockSpan, Accrual/(double)COIN);
         if(fDebug2) LogPrintf(" pHistorical w %s", pHistorical->GetBlockHash().GetHex());
-
-        // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
         return 0;
     }
-    else
-    {
-        if(fDebug) LogPrintf("ComputeResearchAccrual: %s Normal, unit=%f, Age=%f, AvgMagnitude=%f, Span=%d, CurMag=%.1f, OldMag=%.1f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> %d",
-            cpid, dMagnitudeUnit,dAccrualAge,AvgMagnitude,iRABlockSpan,dCurrentMagnitude,pHistorical->nMagnitude,
-            stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
-        return Accrual;
-    }
+
+    if(fDebug) LogPrintf("ComputeResearchAccrual: %s Normal, unit=%f, Age=%f, AvgMagnitude=%f, Span=%d, CurMag=%.1f, OldMag=%.1f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> %d",
+        cpid, dMagnitudeUnit,dAccrualAge,AvgMagnitude,iRABlockSpan,dCurrentMagnitude,pHistorical->nMagnitude,
+        stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
+    return Accrual;
 }
 
 
