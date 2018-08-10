@@ -1803,11 +1803,17 @@ UniValue addkey(const UniValue& params, bool fHelp)
     std::string sAction = params[0].get_str();
     bool bAdd = (sAction == "add") ? true : false;
     std::string sType = params[1].get_str();
-    std::string sPass = "";
     std::string sName = params[2].get_str();
     std::string sValue = params[3].get_str();
 
-    sPass = (sType == "project" || sType == "projectmapping" || (sType == "beacon" && sAction == "delete")) ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+    bool bProjectKey = (sType == "project" || sType == "projectmapping"
+        || (sType == "beacon" && sAction == "delete")
+        || sType == "protocol"
+    );
+
+    const std::string sPass = bProjectKey
+            ? GetArgument("masterprojectkey", msMasterMessagePrivateKey)
+            : msMasterMessagePrivateKey;
 
     res.pushKV("Action", sAction);
     res.pushKV("Type", sType);
