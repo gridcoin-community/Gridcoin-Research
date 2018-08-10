@@ -94,8 +94,12 @@ struct mapArgscomp
    }
 };
 
-extern std::map<std::string, std::string, mapArgscomp> mapArgs;
-extern std::map<std::string, std::vector<std::string>, mapArgscomp> mapMultiArgs;
+typedef std::map<std::string, std::string, mapArgscomp> tArgs;
+typedef std::map<std::string, std::vector<std::string>, mapArgscomp> tMultiArgs;
+
+extern tArgs mapArgs;
+extern tMultiArgs mapMultiArgs;
+
 extern bool fDebug;
 extern bool fDebugNet;
 extern bool fDebug2;
@@ -202,7 +206,7 @@ boost::filesystem::path GetPidFile();
 #ifndef WIN32
 void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
 #endif
-void ReadConfigFile(std::map<std::string, std::string, mapArgscomp>& mapSettingsRet, std::map<std::string, std::vector<std::string>, mapArgscomp>& mapMultiSettingsRet);
+void ReadConfigFile(tArgs& mapSettingsRet, tMultiArgs& mapMultiSettingsRet);
 #ifdef WIN32
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
