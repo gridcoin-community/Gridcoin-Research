@@ -13,6 +13,14 @@ namespace
         std::array<unsigned char, 16> cpid;
         int16_t magnitude;
     };
+    
+    // Ensure that the compiler does not add padding between the cpid and the
+    // magnitude. If it does it does it to align the data, at which point the
+    // pointer cast in UnpackBinarySuperblock will be illegal. In such a
+    // case we will have to resort to a slower unpack.
+    static_assert(offsetof(struct BinaryResearcher, magnitude) ==
+                  sizeof(struct BinaryResearcher) - sizeof(int16_t),
+                  "Unexpected padding in BinaryResearcher");
 }
 
 std::string UnpackBinarySuperblock(std::string sBlock)
