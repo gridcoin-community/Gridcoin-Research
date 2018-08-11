@@ -690,7 +690,16 @@ void GetGlobalStatus()
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        GlobalStatusStruct.poll = GetPoll();
+        try
+        {
+            GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
+        }
+        catch (std::exception &e)
+        {
+            GlobalStatusStruct.poll = "Error obtaining last poll";
+            LogPrintf("Error obtaining last poll");
+        }
+
         GlobalStatusStruct.status.clear();
 
         if(MinerStatus.WeightSum)
@@ -730,7 +739,7 @@ void GetGlobalStatus()
     }
 }
 
-std::string GetPoll()
+std::string GetCurrentOverviewTabPoll()
 {
     std::string poll = "";
     std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
