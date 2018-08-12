@@ -2341,6 +2341,8 @@ bool CheckProofOfResearch(
         const CBlockIndex* pindexPrev, //previous block in chain index
         const CBlock &block)     //block to check
 {
+    /* In this function GetProofOfStakeReward is called with wrong pindex,
+     * which does not matter, because this one is no longer used */
     if(block.vtx.size() == 0 ||
        !block.IsProofOfStake() ||
        pindexPrev->nHeight <= nGrandfather ||
