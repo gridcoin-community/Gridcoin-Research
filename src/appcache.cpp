@@ -7,7 +7,7 @@
 #include <type_traits>
 
 namespace
-{    
+{
     typedef typename std::underlying_type<Section>::type Section_t;    
     std::array<AppCacheSection, static_cast<Section_t>(Section::NUM_CACHES)> caches;
     
@@ -49,7 +49,7 @@ void WriteCache(
 {
     if(key.empty())
         return;
-    
+
     AppCacheSection& cache = GetSection(section);
     cache[key] = AppCacheEntry{ value, locktime };
 }
@@ -71,6 +71,12 @@ AppCacheEntry ReadCache(
 AppCacheSection& ReadCacheSection(Section section)
 {
     return GetSection(section);
+}
+
+SortedAppCacheSection ReadSortedCacheSection(Section section)
+{
+    const auto& cache = ReadCacheSection(section);
+    return SortedAppCacheSection(cache.begin(), cache.end());
 }
 
 void ClearCache(Section section)
