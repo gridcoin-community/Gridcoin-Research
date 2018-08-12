@@ -391,7 +391,6 @@ static const CRPCCommand vRPCCommands[] =
     { "readdata",                &readdata,                false,  cat_developer     },
     { "refhash",                 &refhash,                 false,  cat_developer     },
     { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
-    { "seefile",                 &seefile,                 false,  cat_developer     },
     { "sendalert",               &sendalert,               false,  cat_developer     },
     { "sendalert2",              &sendalert2,              false,  cat_developer     },
     { "sendblock",               &sendblock,               false,  cat_developer     },

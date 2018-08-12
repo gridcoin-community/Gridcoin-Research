@@ -26,7 +26,6 @@
 using namespace std;
 
 std::string SendReward(std::string sAddress, int64_t nAmount);
-extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
 
 MiningCPID DeserializeBoincBlock(std::string block);
@@ -1201,7 +1200,7 @@ int64_t CWallet::GetBalance() const
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletTx* pcoin = &(*it).second;
-            if (pcoin->IsTrusted() && pcoin->IsConfirmed())
+            if (pcoin->IsTrusted() && (pcoin->IsConfirmed() || pcoin->fFromMe))
                 nTotal += pcoin->GetAvailableCredit();
         }
     }

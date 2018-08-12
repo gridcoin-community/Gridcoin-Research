@@ -85,14 +85,16 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("MyNeuralHash", NN::GetNeuralHash());
 
     obj.pushKV("CPID",msPrimaryCPID);
-    obj.pushKV("RSAWeight",GetRSAWeightByCPID(msPrimaryCPID));
 
+    if (IsResearcher(msPrimaryCPID))
     {
-        double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
-        double dAccrualAge,AvgMagnitude;
-        int64_t nBoinc = ComputeResearchAccrual(nTime, msPrimaryCPID, "getmininginfo", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-        obj.pushKV("Magnitude Unit",dMagnitudeUnit);
-        obj.pushKV("BoincRewardPending",nBoinc/(double)COIN);
+        {
+            double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+            double dAccrualAge,AvgMagnitude;
+            int64_t nBoinc = ComputeResearchAccrual(nTime, msPrimaryCPID, "getmininginfo", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+            obj.pushKV("Magnitude Unit",dMagnitudeUnit);
+            obj.pushKV("BoincRewardPending",nBoinc/(double)COIN);
+        }
     }
 
     obj.pushKV("MiningInfo 1", msMiningErrors);

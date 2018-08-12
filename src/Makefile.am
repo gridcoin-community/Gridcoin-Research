@@ -23,10 +23,23 @@ GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLA
 
 LIBGRIDCOIN_UTIL=libgridcoin_util.a
 LIBGRIDCOINQT=qt/libgridcoinqt.a
+LIBGRIDCOIN_CRYPTO_BASE=crypto/libgridcoin_crypto_base.a
+
+LIBGRIDCOIN_CRYPTO= $(LIBGRIDCOIN_CRYPTO_BASE)
+if ENABLE_SSE41
+LIBGRIDCOIN_CRYPTO_SSE41 = crypto/libgridcoin_crypto_sse41.a
+LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_SSE41)
+endif
+if ENABLE_AVX2
+LIBGRIDCOIN_CRYPTO_AVX2 = crypto/libgridcoin_crypto_avx2.a
+LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_AVX2)
+endif
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
-EXTRA_LIBRARIES += $(LIBGRIDCOIN_UTIL) 
+EXTRA_LIBRARIES += $(LIBGRIDCOIN_UTIL) \
+                   $(LIBGRIDCOIN_CRYPTO)
+
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
@@ -53,15 +66,18 @@ GRIDCOIN_CORE_H = \
 	checkpoints.h \
 	coincontrol.h \
 	compat.h \
+	compat/byteswap.h \
+	compat/endian.h \
 	contract/polls.h \
 	contract/contract.h \
 	cpid.h \
 	crypter.h \
 	db.h \
 	fwd.h \
-    global_objects.hpp \
-    global_objects_noui.hpp \
+	global_objects.hpp \
+	global_objects_noui.hpp \
 	gridcoin.h \
+	hash.h \
 	init.h \
 	kernel.h \
 	key.h \
@@ -73,6 +89,7 @@ GRIDCOIN_CORE_H = \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
+	prevector.h \
 	protocol.h \
 	rpcclient.h \
 	rpcprotocol.h \
@@ -133,7 +150,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
-    tally.cpp \
+	tally.cpp \
 	txdb-leveldb.cpp \
 	util.cpp \
 	version.cpp \
@@ -162,6 +179,51 @@ endif
 
 nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 
+
+# crypto primitives library
+crypto_libgridcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libgridcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libgridcoin_crypto_base_a_SOURCES = \
+  crypto/aes.cpp \
+  crypto/aes.h \
+  crypto/chacha20.h \
+  crypto/chacha20.cpp \
+  crypto/common.h \
+  crypto/hmac_sha256.cpp \
+  crypto/hmac_sha256.h \
+  crypto/hmac_sha512.cpp \
+  crypto/hmac_sha512.h \
+  crypto/ripemd160.cpp \
+  crypto/ripemd160.h \
+  crypto/sha1.cpp \
+  crypto/sha1.h \
+  crypto/sha256.cpp \
+  crypto/sha256.h \
+  crypto/sha512.cpp \
+  crypto/sha512.h
+
+if USE_ASM
+crypto_libgridcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
+endif
+
+crypto_libgridcoin_crypto_sse41_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libgridcoin_crypto_sse41_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libgridcoin_crypto_sse41_a_CXXFLAGS += $(SSE41_CXXFLAGS)
+crypto_libgridcoin_crypto_sse41_a_CPPFLAGS += -DENABLE_SSE41
+crypto_libgridcoin_crypto_sse41_a_SOURCES = crypto/sha256_sse41.cpp
+
+crypto_libgridcoin_crypto_avx2_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libgridcoin_crypto_avx2_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libgridcoin_crypto_avx2_a_CXXFLAGS += $(AVX2_CXXFLAGS)
+crypto_libgridcoin_crypto_avx2_a_CPPFLAGS += -DENABLE_AVX2
+crypto_libgridcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp
+
+CTAES_DIST =  crypto/ctaes/bench.c
+CTAES_DIST += crypto/ctaes/ctaes.c
+CTAES_DIST += crypto/ctaes/ctaes.h
+CTAES_DIST += crypto/ctaes/README.md
+CTAES_DIST += crypto/ctaes/test.c
+
 # gridcoinresearchd binary #
 gridcoinresearchd_SOURCES = gridcoinresearchd.cpp
 gridcoinresearchd_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
@@ -170,6 +232,7 @@ gridcoinresearchd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 gridcoinresearchd_LDADD = \
  $(LIBGRIDCOIN_UTIL) \
+ $(LIBGRIDCOIN_CRYPTO) \
  $(LIBUNIVALUE) \
  $(LIBLEVELDB) \
  $(LIBLEVELDB_SSE42) \
@@ -186,6 +249,7 @@ CLEANFILES = $(EXTRA_LIBRARIES)
 CLEANFILES += univalue/*.gcda univalue/*.gcno
 CLEANFILES += *.gcda *.gcno
 CLEANFILES += compat/*.gcda compat/*.gcno
+CLEANFILES += crypto/*.gcda crypto/*.gcno
 CLEANFILES += obj/build.h
 
 EXTRA_DIST = $(CTAES_DIST)

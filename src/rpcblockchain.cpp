@@ -20,7 +20,6 @@
 #include "contract/contract.h"
 #include "util.h"
 
-#include <boost/filesystem.hpp>
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
@@ -47,7 +46,6 @@ extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
 std::string ConvertBinToHex(std::string a);
 std::string ConvertHexToBin(std::string a);
-extern std::vector<unsigned char> readFileToVector(std::string filename);
 bool bNetAveragesLoaded_retired;
 std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 bool StrLessThanReferenceHash(std::string rh);
@@ -143,40 +141,6 @@ double GetNetworkTotalByProject(std::string projectname)
     if (!structcpid.initialized) return 0;
     double networkavgrac = structcpid.rac;
     return networkavgrac;
-}
-
-std::string FileManifest()
-{
-    using namespace boost::filesystem;
-    path dir_path = GetDataDir() / "nn2";
-    std::string sMyManifest;
-    for(directory_iterator it(dir_path); it != directory_iterator(); ++it)
-    {
-        if(boost::filesystem::is_regular_file(it->path()))
-        {
-            sMyManifest += it->path().string();
-        }
-    }
-    return sMyManifest;
-}
-
-
-
-
-
-
-std::vector<unsigned char> readFileToVector(std::string filename)
-{
-    std::ifstream file(filename.c_str(), std::ios::binary);
-    file.unsetf(std::ios::skipws);
-    std::streampos fileSize;
-    file.seekg(0, std::ios::end);
-    fileSize = file.tellg();
-    file.seekg(0, std::ios::beg);
-    std::vector<unsigned char> vec;
-    vec.reserve(fileSize);
-    vec.insert(vec.begin(), std::istream_iterator<unsigned char>(file), std::istream_iterator<unsigned char>());
-    return vec;
 }
 
 double GetDifficulty(const CBlockIndex* blockindex)
@@ -1264,7 +1228,7 @@ UniValue cpids(const UniValue& params, bool fHelp)
                 "\n"
                 "Displays information on your cpids\n");
 
-    UniValue res(UniValue::VOBJ);
+    UniValue res(UniValue::VARR);
 
     //Dump vectors:
 
@@ -1284,16 +1248,19 @@ UniValue cpids(const UniValue& params, bool fHelp)
         {
             if ((GlobalCPUMiningCPID.cpid.length() > 3 &&
                  structcpid.cpid == GlobalCPUMiningCPID.cpid)
-                || !IsResearcher(structcpid.cpid) || !IsResearcher(GlobalCPUMiningCPID.cpid))
+                || IsResearcher(structcpid.cpid) || IsResearcher(GlobalCPUMiningCPID.cpid))
             {
-                res.pushKV("Project",structcpid.projectname);
-                res.pushKV("CPID",structcpid.cpid);
-                res.pushKV("RAC",structcpid.rac);
-                res.pushKV("Team",structcpid.team);
-                res.pushKV("CPID Link",structcpid.link);
-                res.pushKV("Debug Info",structcpid.errors);
-                res.pushKV("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid);
+                UniValue entry(UniValue::VOBJ);
 
+                entry.pushKV("Project",structcpid.projectname);
+                entry.pushKV("CPID",structcpid.cpid);
+                entry.pushKV("RAC",structcpid.rac);
+                entry.pushKV("Team",structcpid.team);
+                entry.pushKV("CPID Link",structcpid.link);
+                entry.pushKV("Debug Info",structcpid.errors);
+                entry.pushKV("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid);
+
+                res.push_back(entry);
             }
         }
     }
@@ -1775,14 +1742,13 @@ UniValue validcpids(const UniValue& params, bool fHelp)
         {
             if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
             {
-                if (structcpid.verifiedteam == "gridcoin")
+                if (structcpid.team == "gridcoin")
                 {
                     UniValue entry(UniValue::VOBJ);
 
                     entry.pushKV("Project", structcpid.projectname);
                     entry.pushKV("CPID", structcpid.cpid);
                     entry.pushKV("CPIDhash", structcpid.cpidhash);
-                    entry.pushKV("Email", structcpid.emailhash);
                     entry.pushKV("UTC", structcpid.utc);
                     entry.pushKV("RAC", structcpid.rac);
                     entry.pushKV("Team", structcpid.team);
@@ -1837,11 +1803,17 @@ UniValue addkey(const UniValue& params, bool fHelp)
     std::string sAction = params[0].get_str();
     bool bAdd = (sAction == "add") ? true : false;
     std::string sType = params[1].get_str();
-    std::string sPass = "";
     std::string sName = params[2].get_str();
     std::string sValue = params[3].get_str();
 
-    sPass = (sType == "project" || sType == "projectmapping" || (sType == "beacon" && sAction == "delete")) ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
+    bool bProjectKey = (sType == "project" || sType == "projectmapping"
+        || (sType == "beacon" && sAction == "delete")
+        || sType == "protocol"
+    );
+
+    const std::string sPass = bProjectKey
+            ? GetArgument("masterprojectkey", msMasterMessagePrivateKey)
+            : msMasterMessagePrivateKey;
 
     res.pushKV("Action", sAction);
     res.pushKV("Type", sType);
@@ -2328,33 +2300,6 @@ UniValue readdata(const UniValue& params, bool fHelp)
 
     res.pushKV("Key", sKey);
     res.pushKV("Result", sValue);
-
-    return res;
-}
-
-UniValue seefile(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "seefile\n"
-                "\n"
-                "Unit test for sending a file from node to node\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    // This is a unit test to prove viability of transmitting a file from node to node
-    std::string sFile = "C:\\test.txt";
-    std::vector<unsigned char> v = readFileToVector(sFile);
-
-    res.pushKV("byte1", v[1]);
-    res.pushKV("bytes", (int)v.size());
-
-    for (unsigned int i = 0; i < v.size(); i++)
-        res.pushKV("bytes", v[i]);
-
-    std::string sManifest = FileManifest();
-
-    res.pushKV("manifest", sManifest);
 
     return res;
 }
