@@ -1997,7 +1997,7 @@ UniValue projects(const UniValue& params, bool fHelp)
     if (mvCPIDs.empty())
         HarvestCPIDs(false);
 
-    for (const auto& item : ReadCacheSection(Section::PROJECT))
+    for (const auto& item : ReadSortedCacheSection(Section::PROJECT))
     {
         UniValue entry(UniValue::VOBJ);
 
@@ -2879,7 +2879,7 @@ UniValue GetUpgradedBeaconReport()
     std::string row = "";
     int iBeaconCount = 0;
     int iUpgradedBeaconCount = 0;
-    for(const auto& item : ReadCacheSection(Section::BEACON))
+    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
     {
         const AppCacheEntry& entry = item.second;
         std::string contract = DecodeBase64(entry.value);
@@ -2904,7 +2904,7 @@ UniValue GetJSONBeaconReport()
     UniValue entry(UniValue::VOBJ);
     entry.pushKV("CPID","GRCAddress");
     std::string row;
-    for(const auto& item : ReadCacheSection(Section::BEACON))
+    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
     {
         const std::string& key = item.first;
         const AppCacheEntry& cache = item.second;
