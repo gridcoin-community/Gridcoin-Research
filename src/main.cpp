@@ -8176,8 +8176,7 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
 
     double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
-    double& hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
-    hashcount += votes;
+    mvCurrentNeuralNetworkHash[NeuralHash] += votes;
 }
 
 void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex)
@@ -8219,11 +8218,9 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
     
     WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
 
-    // Reference to the value stored within the map to avoid multiple lookups.
-    double& hashcount = mvNeuralNetworkHash[NeuralHash];
     double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
-    hashcount += votes;
+    mvNeuralNetworkHash[NeuralHash] += votes;
 }
 
 void IncrementVersionCount(const std::string& Version)
