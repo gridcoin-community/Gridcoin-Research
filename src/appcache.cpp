@@ -43,6 +43,12 @@ AppCacheSection ReadCacheSection(const std::string& section)
         : AppCacheSection();
 }
 
+SortedAppCacheSection ReadSortedCacheSection(const std::string& section)
+{
+    const auto& cache = ReadCacheSection(section);
+    return SortedAppCacheSection(cache.begin(), cache.end());
+}
+
 void ClearCache(const std::string& section)
 {
     mvApplicationCache.erase(section);

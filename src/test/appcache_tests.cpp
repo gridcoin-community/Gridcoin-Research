@@ -50,4 +50,21 @@ BOOST_AUTO_TEST_CASE(appcache_GetListOfBeaconShouldIgnoreInvestors)
     BOOST_CHECK(GetListOf("beacon").find("abc123") != std::string::npos);
 }
 
+BOOST_AUTO_TEST_CASE(appcache_SortedSectionsShouldBeSorted)
+{
+    ClearCache("beacon");
+    WriteCache("beacon", "b", "321", 0);
+    WriteCache("beacon", "a", "123", 0);
+    
+    const SortedAppCacheSection& section = ReadSortedCacheSection("beacon");
+    auto it = section.begin();
+    BOOST_CHECK(it->first == "a");
+    BOOST_CHECK(it->second.value == "123");
+    
+    ++it;
+    BOOST_CHECK(it->first == "b");
+    BOOST_CHECK(it->second.value == "321");
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
