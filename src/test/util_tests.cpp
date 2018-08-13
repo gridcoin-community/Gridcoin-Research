@@ -360,4 +360,40 @@ BOOST_AUTO_TEST_CASE(util_VerifySplit3)
     BOOST_CHECK_EQUAL("",       res[0]);
 }
 
+BOOST_AUTO_TEST_CASE(util_mapArgsComparator)
+{
+    mapArgs.clear();
+
+    mapArgs["-UPPERCASE"] = "uppertest";
+    mapArgs["-MuLtIcAsE"] = "multitest";
+    mapArgs["-lowercase"] = "lowertest";
+
+    BOOST_CHECK_EQUAL(mapArgs["-UpPeRcAsE"], mapArgs["-uppercase"]);
+    BOOST_CHECK_EQUAL(mapArgs["-uppercase"], mapArgs["-UPPERCASE"]);
+    BOOST_CHECK_EQUAL(mapArgs["-multicase"], mapArgs["-multicase"]);
+    BOOST_CHECK_EQUAL(mapArgs["-MULTICASE"], mapArgs["-MuLtIcAsE"]);
+    BOOST_CHECK_EQUAL(mapArgs["-LOWERCASE"], mapArgs["-LoWeRcAsE"]);
+    BOOST_CHECK_EQUAL(mapArgs["-LoWeRcAsE"], mapArgs["-lowercase"]);
+
+    mapArgs["-modify"] = "testa";
+
+    BOOST_CHECK_EQUAL(mapArgs["-modify"], "testa");
+
+    mapArgs["-MoDiFy"] = "testb";
+
+    BOOST_CHECK_EQUAL(mapArgs["-modify"], "testb");
+    BOOST_CHECK_NE(mapArgs["-modify"], "testa");
+
+    mapArgs["-MODIFY"] = "testc";
+
+    BOOST_CHECK_EQUAL(mapArgs["-modify"], "testc");
+    BOOST_CHECK_NE(mapArgs["-modify"], "testb");
+
+    BOOST_CHECK_EQUAL(mapArgs.count("-modify"), 1);
+    BOOST_CHECK_EQUAL(mapArgs.count("-MODIFY"), 1);
+    BOOST_CHECK_EQUAL(mapArgs.count("-MoDiFy"), 1);
+
+    BOOST_CHECK_EQUAL(mapArgs.size(), 4);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
