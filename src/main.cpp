@@ -5304,8 +5304,8 @@ bool WriteKey(std::string sKey, std::string sValue)
                     fWritten=true;
                 }
             }
-            sLine = strReplace(sLine, "\r", "");
-            sLine = strReplace(sLine, "\n", "");
+            sLine = strReplace(sLine,"\r","");
+            sLine = strReplace(sLine,"\n","");
             sLine += "\n";
             sConfig += sLine;
        }
@@ -7081,6 +7081,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             else if (neural_request=="neural_hash")
             {
+            if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
+            {
+                std::string r_hash;  vRecv >> r_hash;
+                supercfwd::SendResponse(pfrom,r_hash);
+            }
+            else
             pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
             }
             else if (neural_request=="explainmag")
@@ -7092,6 +7098,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
+            }
+            else if (neural_request=="supercfwdr")
+            {
+                // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
+                supercfwd::QuorumResponseHook(pfrom,neural_request_id);
             }
     }
     else if (strCommand == "ping")
@@ -7178,6 +7189,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // nNeuralNonce must match request ID
             pfrom->NeuralHash = neural_response;
             if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
+
+            // Hook into miner for delegated sb staking
+            supercfwd::HashResponseHook(pfrom, neural_response);
     }
     else if (strCommand == "expmag_nresp")
     {
@@ -7203,6 +7217,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
                  if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
             }
+
+            // Hook into miner for delegated sb staking
+            supercfwd::QuorumResponseHook(pfrom,neural_contract);
     }
     else if (strCommand == "ndata_nresp")
     {
@@ -7620,13 +7637,13 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
 
-    size_t pos = 0;
+  size_t pos = 0;
     while((pos = str.find(oldStr, pos)) != std::string::npos)
     {
-        str.replace(pos, oldStr.length(), newStr);
-        pos += newStr.length();
-    }
-    return str;
+     str.replace(pos, oldStr.length(), newStr);
+     pos += newStr.length();
+  }
+  return str;
 }
 
 std::string LowerUnderscore(std::string data)
@@ -7785,7 +7802,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-                        
+
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -8400,9 +8417,9 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if(fDebug)
                             WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
-            }
                   }
                 }
+    }
 
    return fMessageLoaded;
 }
@@ -8520,6 +8537,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     {
         if(fDebug) LogPrintf("ComputeResearchAccrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %f)", cpid, iRABlockSpan, Accrual/(double)COIN);
         if(fDebug2) LogPrintf(" pHistorical w %s", pHistorical->GetBlockHash().GetHex());
+
+        // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
         return 0;
     }
 

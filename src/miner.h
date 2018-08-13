@@ -31,4 +31,12 @@ struct CMinerStatus
 extern CMinerStatus MinerStatus;
 extern unsigned int nMinerSleep;
 
+namespace supercfwd
+{
+    int MaybeRequest();
+    void HashResponseHook(CNode* fromNode, const std::string& neural_response);
+    void QuorumResponseHook(CNode* fromNode, const std::string& neural_response);
+    void SendResponse(CNode* fromNode, const std::string& req_hash);
+}
+
 #endif // NOVACOIN_MINER_H
