@@ -22,6 +22,7 @@ namespace
             {
                block->pprev = &prev;
                block->nHeight = prev.nHeight + 1;
+               block->nTime = prev.nTime + 10;
             }
             if(block != &blocks.back())
                block->pnext = &next;
@@ -60,6 +61,24 @@ BOOST_AUTO_TEST_CASE(FindBlockByHeightShouldWorkOnChainsWithJustOneBlock)
    BOOST_CHECK_EQUAL(&chain.blocks.front(), finder.FindByHeight(0));
    BOOST_CHECK_EQUAL(&chain.blocks.front(), finder.FindByHeight(1));
    BOOST_CHECK_EQUAL(&chain.blocks.front(), finder.FindByHeight(-1));
+}
+
+BOOST_AUTO_TEST_CASE(FindBlockByTimeShouldReturnNextYoungestBlock)
+{
+    // Chain with block times 0, 10, 20, 30, 40 etc.
+    BlockChain<10> chain;
+    BlockFinder finder;
+    
+    // Finding the block older than time 10 should return block #2
+    // which has time 20.
+    BOOST_CHECK_EQUAL(&chain.blocks[2], finder.FindByTime(11));
+}
+
+BOOST_AUTO_TEST_CASE(FindBlockByTimeShouldReturnLastBlockIfOlderThanTime)
+{
+    BlockChain<10> chain;
+    BlockFinder finder;
+    BOOST_CHECK_EQUAL(&chain.blocks.back(), finder.FindByTime(999999));    
 }
 
 BOOST_AUTO_TEST_SUITE_END()
