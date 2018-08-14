@@ -696,8 +696,8 @@ void GetGlobalStatus()
         }
         catch (std::exception &e)
         {
-            GlobalStatusStruct.poll = "Error obtaining last poll";
-            LogPrintf("Error obtaining last poll");
+            GlobalStatusStruct.poll = _("No current polls");
+            LogPrintf("Error obtaining last poll: %s", e.what());
         }
 
         GlobalStatusStruct.status.clear();
@@ -768,7 +768,7 @@ std::string GetCurrentOverviewTabPoll()
     }
     else
     {
-        poll = "No current polls";
+        poll = _("No current polls");
     }
     return poll;
 }
