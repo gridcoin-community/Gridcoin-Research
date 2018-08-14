@@ -5582,7 +5582,8 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
     try
     {
-        StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
+        const std::string& cpid = pIndex->GetCPID();
+        StructCPID stMag = GetInitializedStructCPID2(cpid, mvMagnitudesCopy);
         stMag.InterestSubsidy += pIndex->nInterestSubsidy;
         stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
@@ -5612,11 +5613,10 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
         stMag.interestPayments += pIndex->nInterestSubsidy;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag,
-                                              pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
+        stMag.owed = GetOutstandingAmountOwed(stMag, cpid, pIndex->nTime, total_owed, pIndex->nMagnitude);
 
         stMag.totalowed = total_owed;
-        mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
+        mvMagnitudesCopy[cpid] = stMag;
     }
     catch (const std::bad_alloc& ba)
     {
