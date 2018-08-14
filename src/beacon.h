@@ -35,6 +35,18 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey);
 //!
 bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey);
 
+//!
+//! \brief Get maximum beacon age.
+//! \return Maximum beacon age in seconds.
+//!
+int64_t MaxBeaconAge();
+
+//!
+//! \brief Get beacon age advertise threshold.
+//! \return The point at which a beacon should be re-advertised.
+//!
+int64_t BeaconAgeAdvertiseThreshold();
+
 // Lets move more of the beacon functions out of rpcblockchain.cpp and main.cpp
 // Lets also use header space where applicable - iFoggz
 
