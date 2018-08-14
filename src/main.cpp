@@ -8347,21 +8347,20 @@ void ZeroOutResearcherTotals(StructCPID& stCPID)
 
 bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
-    int nMaxDepth = nBestHeight;
-    int nMinDepth = fTestNet ? 1 : 164618;
-    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*12);
-    if (nMinDepth < 2) nMinDepth=2;
-    if (!bFullTableScan) nMinDepth = nMaxDepth-6;
-    if (nMaxDepth < nMinDepth) return false;
-    CBlockIndex* pindex = blockFinder.FindByHeight(nMinDepth);
-    // These are memorized consecutively in order from oldest to newest
+    // Find starting block. On full table scan we want to scan 6 months back.
+    // On a shallow scan we can limit to 6 blocks back.
+    CBlockIndex* pindex = bFullTableScan
+            ? blockFinder.FindByTime(pindexBest->nTime - MaxBeaconAge())
+            : blockFinder.FindByHeight(pindexBest->nHeight - 6);
 
-    while (pindex->nHeight < nMaxDepth)
+    if(pindex->nHeight < (fTestNet ? 1 : 164618))
+       return true;
+
+    // These are memorized consecutively in order from oldest to newest
+    for(; pindex && pindex->pnext; pindex = pindex->pnext)
     {
-        if (!pindex || !pindex->pnext) return false;
-        pindex = pindex->pnext;
-        if (pindex==NULL) continue;
-        if (!pindex || !pindex->IsInMainChain()) continue;
+        if (!pindex->IsInMainChain())
+            continue;
         if (IsContract(pindex))
         {
             CBlock block;
