@@ -2459,6 +2459,7 @@ UniValue MagnitudeReport(std::string cpid)
                         entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
                         entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
                         entry.pushKV("Research Payments (14 days)",structMag.payments);
+                        entry.pushKV("Owed",structMag.owed);
                         entry.pushKV("Daily Paid",structMag.payments/14);
                         // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                         double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
