@@ -3399,22 +3399,22 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                            ,uint256("fc584b18239f3e3ea78afbbd33af7c6a29bb518b8299f01c1ed4b52d19413d4f") //T407214
                            ,uint256("d5441f7c35eb9ea1b786bbbed820b7f327504301ae70ef2ac3ca3cbc7106236b") //T479114
                         };
-                        if( vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())==0 )
+                        if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
-                          if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
-                          {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
                             GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime, pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
                             if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                             {
-                                  if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                      (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
-                                      return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                          (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+                                if( vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())==0 || (vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())!=0 && !fTestNet))
+                                {
+                                    if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                        (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
+                                        return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                            (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+                                }
+                                else LogPrintf("WARNING: ignoring invalid dStakeReward on block %s", pindex->GetBlockHash().ToString());
                             }
-                          }
                         }
-                      else LogPrintf("WARNING: ignoring invalid hash in dStakeReward check signature on block %s", pindex->GetBlockHash().ToString());
                 }
         }
 
