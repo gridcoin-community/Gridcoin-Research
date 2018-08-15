@@ -8542,24 +8542,11 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
         if (IsContract(pindex))
         {
             CBlock block;
-            if (!block.ReadFromDisk(pindex)) continue;
-            int iPos = 0;
+            if (!block.ReadFromDisk(pindex))
+                continue;
+
             for (auto const &tx : block.vtx)
-            {
-                  if (iPos > 0)
-                  {
-                      // Retrieve the Burn Amount for Contracts
-                      double dAmount = 0;
-                      std::string sRecipient = "";
-                      for (unsigned int i = 1; i < tx.vout.size(); i++)
-                      {
-                            sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-                            dAmount += CoinToDouble(tx.vout[i].nValue);
-                      }
-                      MemorizeMessage(tx,dAmount,sRecipient);
-                  }
-                  iPos++;
-            }
+                MemorizeMessage(tx);
         }
     }
 

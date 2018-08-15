@@ -213,32 +213,32 @@ std::string executeRain(std::string sRecipients)
     return sNarr;
 }
 
-bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
+bool MemorizeMessage(const CTransaction &tx)
 {
     const std::string &msg = tx.hashBoinc;
     const int64_t &nTime = tx.nTime;
     if (msg.empty()) return false;
     bool fMessageLoaded = false;
-    
+
     if (!Contains(msg,"<MT>"))
         return false;
-    
+
     std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
     std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
     std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
     std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
     std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
     std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-    
+
     if (sMessageType.empty() || sMessageKey.empty() || sMessageValue.empty() || sMessageAction.empty()  || sSignature.empty())
         return false;
 
     if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
         return false;
-    
+
     if (sMessageType=="superblock")
         return false;
-    
+
     //Verify sig first
     if(!CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
                               sSignature,sMessagePublicKey))
@@ -255,7 +255,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
             GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
             WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
         }
-        
+
         WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
         if(fDebug10 && sMessageType=="beacon" ){
             LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
@@ -288,9 +288,9 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
         //Reserved
         fMessageLoaded = true;
     }
-    
+
     if(fDebug)
         WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
-    
+
     return fMessageLoaded;
 }
