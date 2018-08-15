@@ -5,6 +5,7 @@
 #include "rpcprotocol.h"
 #include "keystore.h"
 #include "beacon.h"
+#include "appcache.h"
 
 double GetTotalBalance();
 
@@ -219,83 +220,77 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
     if (msg.empty()) return false;
     bool fMessageLoaded = false;
     
-    if (Contains(msg,"<MT>"))
+    if (!Contains(msg,"<MT>"))
+        return false;
+    
+    std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
+    std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
+    std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
+    std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
+    std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
+    std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
+    
+    if (sMessageType.empty() || sMessageKey.empty() || sMessageValue.empty() || sMessageAction.empty()  || sSignature.empty())
+        return false;
+
+    if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
+        return false;
+    
+    if (sMessageType=="superblock")
+        return false;
+    
+    //Verify sig first
+    if(!CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
+                              sSignature,sMessagePublicKey))
+       return false;
+
+    if (sMessageAction=="A")
     {
-        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
+        /* With this we allow verifying blocks with stupid beacon */
+        if("beacon"==sMessageType)
         {
-            sMessageValue="";
+            std::string out_cpid;
+            std::string out_address;
+            std::string out_publickey;
+            GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+            WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
         }
         
-        if (sMessageType=="superblock")
-        {
-            // Deny access to superblock processing runtime data
-            sMessageValue="";
+        WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
+        if(fDebug10 && sMessageType=="beacon" ){
+            LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
         }
-        
-        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
+        fMessageLoaded = true;
+        if (sMessageType=="poll")
         {
-            //Verify sig first
-            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                                                  sSignature,sMessagePublicKey);
-            
-            if (Verified)
+            if (Contains(sMessageKey,"[Foundation"))
             {
-                if (sMessageAction=="A")
-                {
-                    /* With this we allow verifying blocks with stupid beacon */
-                    if("beacon"==sMessageType)
-                    {
-                        std::string out_cpid = "";
-                        std::string out_address = "";
-                        std::string out_publickey = "";
-                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                        WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                    }
-                    
-                    WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                    if(fDebug10 && sMessageType=="beacon" ){
-                        LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                    }
-                    fMessageLoaded = true;
-                    if (sMessageType=="poll")
-                    {
-                        if (Contains(sMessageKey,"[Foundation"))
-                        {
-                            msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
-                        }
-                        else
-                        {
-                            msPoll = "Poll: " + sMessageKey.substr(0,80);
-                        }
-                    }
-                }
-                else if(sMessageAction=="D")
-                {
-                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
-                    if(fDebug10 && sMessageType=="beacon" ){
-                        LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
-                    }
-                    DeleteCache(sMessageType,sMessageKey);
-                    fMessageLoaded = true;
-                }
-                // If this is a boinc project, load the projects into the coin:
-                if (sMessageType=="project" || sMessageType=="projectmapping")
-                {
-                    //Reserved
-                    fMessageLoaded = true;
-                }
-                
-                if(fDebug)
-                    WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
+                msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
+            }
+            else
+            {
+                msPoll = "Poll: " + sMessageKey.substr(0,80);
             }
         }
     }
+    else if(sMessageAction=="D")
+    {
+        if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
+        if(fDebug10 && sMessageType=="beacon" ){
+            LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
+        }
+        DeleteCache(sMessageType,sMessageKey);
+        fMessageLoaded = true;
+    }
+    // If this is a boinc project, load the projects into the coin:
+    if (sMessageType=="project" || sMessageType=="projectmapping")
+    {
+        //Reserved
+        fMessageLoaded = true;
+    }
+    
+    if(fDebug)
+        WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
     
     return fMessageLoaded;
 }
