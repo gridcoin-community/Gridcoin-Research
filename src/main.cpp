@@ -3687,6 +3687,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // point should only happen with -reindex/-loadblock, or a misbehaving peer.
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
         {
+            ForgetMessage(tx);
+
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate())
                 vResurrect.push_front(tx);            
         }
@@ -3728,8 +3730,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
         {
-            AcceptToMemoryPool(mempool, tx, NULL);
-            ForgetMessage(tx);
+            AcceptToMemoryPool(mempool, tx, NULL);            
         }
 
         if (!txdb.TxnCommit())
