@@ -1695,7 +1695,7 @@ UniValue syncdpor2(const UniValue& params, bool fHelp)
 
     bool bFull = GetCountOf("beacon") < 50 ? true : false;
 
-    LoadAdminMessages(bFull, sOut);
+    //LoadAdminMessages(bFull, sOut);
     FullSyncWithDPORNodes();
 
     res.pushKV("Syncing", 1);

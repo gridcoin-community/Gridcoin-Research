@@ -13,3 +13,4 @@ bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, 
 bool CheckMessageSignature(std::string sAction,std::string messagetype, std::string sMsg, std::string sSig, std::string opt_pubkey);
 std::string executeRain(std::string sRecipients);
 bool MemorizeMessage(const CTransaction &tx);
+bool ForgetMessage(const CTransaction& tx);

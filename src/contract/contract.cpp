@@ -250,11 +250,14 @@ struct Message
     std::string pubkey;
 };
 
-bool MemorizeMessage(const CTransaction &tx)
-{
-    Message msg(tx.hashBoinc);
-    const int64_t &nTime = tx.nTime;
+typedef std::string MessageType_t;
+typedef std::string MessageKey_t;
+typedef std::pair<MessageType_t, MessageKey_t> MessagePair_t;
+typedef std::list<uint256> TxHashCollection;
+std::map<MessagePair_t, TxHashCollection> messageTable;
 
+bool ApplyMessage(const Message& msg, int64_t nTime)
+{
     if (msg.action == "A")
     {
         /* With this we allow verifying blocks with stupid beacon */
@@ -293,13 +296,86 @@ bool MemorizeMessage(const CTransaction &tx)
         DeleteCache(msg.type, msg.key);
     }
     // If this is a boinc project, load the projects into the coin:
-    if (msg.type == "project" || msg.type == "projectmapping")
+    else if (msg.type == "project" || msg.type == "projectmapping")
     {
         //Reserved
     }
+    else
+        return false;
 
-    if(fDebug)
-        WriteCache("TrxID;" + msg.type, msg.key, tx.GetHash().GetHex(), nTime);
+    LogPrintf("ApplyMessage: %s %s", msg.type, msg.key);
+
+    return true;
+}
+
+bool MemorizeMessage(const CTransaction &tx)
+{
+    Message msg(tx.hashBoinc);
+
+    bool ret = ApplyMessage(msg, tx.nTime);
+    if(ret)
+    {
+        if(fDebug)
+            WriteCache("TrxID;" + msg.type, msg.key, tx.GetHash().GetHex(), tx.nTime);
+
+        messageTable[std::make_pair(msg.type, msg.key)].push_back(tx.GetHash());
+    }
+
+    return ret;
+}
+
+bool ForgetMessage(const CTransaction& tx)
+{
+    Message msg(tx.hashBoinc);
+    if(!msg.IsValid())
+        return false;
+
+    // Locate message section.
+    const uint256& tx_hash = tx.GetHash();
+    auto section_it = messageTable.find(std::make_pair(msg.type, msg.key));
+    if(section_it == messageTable.end())
+        return false;
+
+    // Locate message
+    TxHashCollection& hashes = section_it->second;
+    auto message_it = std::find(hashes.begin(), hashes.end(), tx_hash);
+    if(message_it == hashes.end())
+        return error("ForgetMessage: Hash not memorized, %s", tx_hash.GetHex());
+
+    // Invert message
+    if(msg.action == "A")
+        msg.action = "D";
+    else if(msg.action == "D")
+        msg.action == "A";
+    else
+        return error("ForgetMessage: Invalid message action, %s", msg.action);
+
+    // Erase message
+    if(!ApplyMessage(msg, tx.nTime))
+        LogPrintf("ForgetMessage: Error unloading message");
+
+    hashes.erase(message_it);
+
+    LogPrintf("ForgetMessage: %s %s", msg.type, msg.key);
+
+    // Load previous message
+    while(!hashes.empty())
+    {
+        uint256 memorized_hash = hashes.back();
+
+        CWalletTx wtx;
+        CTransaction memorized_tx;
+        uint256 hash_block;
+        if(GetTransaction(memorized_hash, memorized_tx, hash_block))
+        {
+            Message memorized_msg(memorized_tx.hashBoinc);
+            if(memorized_msg.IsValid() &&
+               ApplyMessage(memorized_msg, tx.nTime))
+                break;
+        }
+
+        hashes.pop_back();
+    }
 
     return true;
 }

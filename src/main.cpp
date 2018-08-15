@@ -350,7 +350,7 @@ bool FullSyncWithDPORNodes()
         if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
     }
     std::string errors1;
-    LoadAdminMessages(false,errors1);
+    //LoadAdminMessages(false,errors1);
 
     const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
     const int64_t nLookback = 30 * 6 * 86400;
@@ -3572,11 +3572,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
 
-    if (pindex->nHeight % 5 == 0 && pindex->nHeight > 100)
+    /*if (pindex->nHeight % 5 == 0 && pindex->nHeight > 100)
     {
         std::string errors1 = "";
         LoadAdminMessages(false,errors1);
-    }
+    }*/
 
     // Slow down Retallying when in RA mode so we minimize disruption of the network
     // TODO: Remove this if we can sync to v9 without it.
@@ -3686,8 +3686,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // We only do this for blocks after the last checkpoint (reorganisation before that
         // point should only happen with -reindex/-loadblock, or a misbehaving peer.
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
+        {
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate())
-                vResurrect.push_front(tx);
+                vResurrect.push_front(tx);            
+        }
 
         if(pindexBest->IsUserCPID())
         {
@@ -3725,7 +3727,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
+        {
             AcceptToMemoryPool(mempool, tx, NULL);
+            ForgetMessage(tx);
+        }
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
@@ -3733,7 +3738,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // Need to reload all contracts
         if (fDebug10) LogPrintf("DisconnectBlocksBatch: LoadAdminMessages");
         std::string admin_messages;
-        LoadAdminMessages(true, admin_messages);
+        //LoadAdminMessages(true, admin_messages);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight))
@@ -3884,6 +3889,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             mempool.remove(tx);
             mempool.removeConflicts(tx);
+            MemorizeMessage(tx);
         }
 
         if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
@@ -3916,8 +3922,8 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         cnt_con++;
 
         // Load recent contracts
-        std::string admin_messages;
-        LoadAdminMessages(false, admin_messages);
+        //std::string admin_messages;
+        //LoadAdminMessages(false, admin_messages);
 
         if(IsV9Enabled_Tally(nBestHeight))
         {
