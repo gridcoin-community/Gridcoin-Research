@@ -3402,7 +3402,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                         {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
-                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime, pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
+                                pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
                             if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                             {
                                 if( vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())==0 || (vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())!=0 && !fTestNet))
