@@ -393,7 +393,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     CWalletTx wtx;
     if (params.size() > 2 && !params[2].isNull() && !params[2].get_str().empty())
         wtx.mapValue["comment"] = params[2].get_str();
-    if (params.size() > 3 && params[3].isNull() && !params[3].get_str().empty())
+    if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
         wtx.mapValue["to"]      = params[3].get_str();
 
     if (pwalletMain->IsLocked())
