@@ -3388,7 +3388,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             LogPrintf("******  %s ***** ", sNarr);
                             if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
                         }
-
+                        /* ignore bad blocks already in chain on testnet */
                         const std::set<uint256> badSignBlocksTestnet =
                         {   uint256("129ae6779d620ec189f8e5148e205efca2dfe31d9f88004b918da3342157b7ff") //T407024
                            ,uint256("c3f85818ba5290aaea1bcbd25b4e136f83acc93999942942bbb25aee2c655f7a") //T407068
