@@ -3389,7 +3389,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
                         }
 
-                        const std::set<uint256> vSkipHashdStakeRewardSignCheck =
+                        const std::set<uint256> badSignBlocksTestnet =
                         {   uint256("129ae6779d620ec189f8e5148e205efca2dfe31d9f88004b918da3342157b7ff") //T407024
                            ,uint256("c3f85818ba5290aaea1bcbd25b4e136f83acc93999942942bbb25aee2c655f7a") //T407068
                            ,uint256("cf7f1316f92547f611852cf738fc7a4a643a2bb5b9290a33cd2f9425f44cc3f9") //T407099
@@ -3406,7 +3406,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                 pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
                             if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
                             {
-                                if( vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())==0 || (vSkipHashdStakeRewardSignCheck.count(pindex->GetBlockHash())!=0 && !fTestNet))
+                                if(!fTestNet || badSignBlocksTestnet.count(pindex->GetBlockHash()) ==0)
                                 {
                                     if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                         (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
