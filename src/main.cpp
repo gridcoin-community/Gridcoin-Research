@@ -3100,7 +3100,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
     unsigned int nSigOps = 0;
-    double DPOR_Paid = 0;
 
     bool bIsDPOR = false;
 
@@ -3221,8 +3220,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     uint64_t nCoinAge = 0;
 
-    double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
-    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward) - DPOR_Paid;
+    double dStakeReward = CoinToDouble(nStakeReward+nFees);
+    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward);
 
     if (fDebug) LogPrintf("Stake Reward of %f B %f I %f F %.f %s %s  ",
         dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid, bb.Organization);
@@ -3330,9 +3329,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s does not match calculated research subsidy",
                             (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str()));
+                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),bb.cpid.c_str()));
 
                 }
 
