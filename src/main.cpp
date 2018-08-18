@@ -3330,8 +3330,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
                         return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s does not match calculated research subsidy",
-                            (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),bb.cpid.c_str()));
+                            bb.InterestSubsidy,bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
+                            OUT_INTEREST,OUT_POR,CoinToDouble(nFees),bb.cpid.c_str()));
 
                 }
 
