@@ -1089,12 +1089,12 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     wtx.hashBoinc = "<NARR>Rain By Magnitude: " + MakeSafeMessage(sMessage) + "</NARR>";
 
     // Gather Magnitude data
-    std::string sSuperblock = ReadCache("superblock", "magnitudes").value;
+//    std::string sSuperblock = ReadCache("superblock", "magnitudes").value;
 
-    if (sSuperblock.empty())
-        throw runtime_error("Unable to load superblock data");
+//    if (sSuperblock.empty())
+//        throw runtime_error("Unable to load superblock data");
 
-    std::vector<std::string> vSuperblock = split(sSuperblock, ";");
+//    std::vector<std::string> vSuperblock = split(sSuperblock, ";");
 
     double dTotalAmount = 0;
     int64_t nTotalAmount = 0;
@@ -1104,19 +1104,17 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     // Use total network magnitude here as using 115000 can results in a lower then intended sent amount due to a missing project
     double dTotalNetworkMagnitude = structcpid.NetworkMagnitude;
 
-    for (unsigned int i = 0; i < vSuperblock.size(); i++)
+    for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
     {
-        if (vSuperblock[i].length() > 1)
+        StructCPID structMag = mvMagnitudes[(*ii).first];
+
+        if (structMag.initialized &&
+            !structMag.cpid.empty() &&
+            structMag.Magnitude > 0
+           )
         {
-            // Find GRC address in beacon
-            std::string sCPID = ExtractValue(vSuperblock[i], ",", 0);
-            double dMagnitude = RoundFromString(ExtractValue(vSuperblock[i], ",", 1), 0);
-
-            // No magnitude means no value to be rained on
-            if (dMagnitude == 0)
-                continue;
-
-            std::string scacheContract = ReadCache("beacon", sCPID).value;
+            // Find beacon grc address
+            std::string scacheContract = ReadCache("beacon", structMag.cpid).value;
 
             // Should never occur but we know seg faults can occur in some cases
             if (scacheContract.empty())
@@ -1125,7 +1123,11 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             std::string sContract = DecodeBase64(scacheContract);
             std::string sGRCAddress = ExtractValue(sContract, ";", 2);
 
-            double dPayout = Round(((dMagnitude / dTotalNetworkMagnitude) * dAmount), 4);
+            double dPayout = (structMag.Magnitude / dTotalNetworkMagnitude) * dAmount;
+
+            if (dPayout <= 0)
+                continue;
+
             dTotalAmount += dPayout;
 
             CBitcoinAddress address(sGRCAddress);
@@ -1137,8 +1139,10 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
             CScript scriptPubKey;
             scriptPubKey.SetDestination(address.Get());
+
             int64_t nAmount = roundint64(dPayout * COIN);
             nTotalAmount += nAmount;
+
             vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
         }
     }
