@@ -1227,10 +1227,15 @@ UniValue magnitude(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VARR);
 
-    std::string cpid;
+    const std::string cpid = (params.size() > 0 &&
+                              !params[0].isNull() &&
+                              !params[0].get_str().empty()
+                             )
+            ? params[0].get_str()
+            : msPrimaryCPID;
 
-    if (params.size() > 0)
-        cpid = params[0].get_str();
+    if(cpid.empty())
+       throw runtime_error("CPID appears to be empty; unable to request magnitude report");
 
     {
         LOCK(cs_main);
@@ -2459,7 +2464,7 @@ UniValue MagnitudeReport(std::string cpid)
                         entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
                         entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
                         entry.pushKV("Research Payments (14 days)",structMag.payments);
-                        entry.pushKV("Owed",structMag.owed);
+                        entry.pushKV("Owed",(structMag.owed <= 0) ? 0 : structMag.owed);
                         entry.pushKV("Daily Paid",structMag.payments/14);
                         // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                         double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
