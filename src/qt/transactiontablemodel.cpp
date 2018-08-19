@@ -399,14 +399,24 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 				return tr("Minted - (Local) DPOR");
 			}
 		}
-		else if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
-		{
-				return tr("Mined - PoR");
-		}
-		else
-		{
-				return tr("Mined - Interest");
-		}
+
+        else
+        {
+            MinedType gentype = GenerateType(wtx->hash);
+
+            if (gentype == MinedType::POS)
+                return tr("Mined - POS");
+
+            else if (gentype == MinedType::POR)
+                return tr("Mined - POR");
+
+            else if (gentype == MinedType::ORPHANED)
+                return tr("Mined - ORPHANED");
+
+            else
+                return tr("Mined - UNKNOWN");
+        }
+
     default:
         return QString();
     }
