@@ -425,21 +425,19 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
-	double reward = CoinToDouble(wtx->credit + wtx->debit);
-	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
-	bool is_por = IsPoR(reward);
-	switch(wtx->type)
+    switch(wtx->type)
     {
     case TransactionRecord::Generated:
-        if (is_por)
-        {
-            return QIcon(":/icons/tx_cpumined");
-        }
-        else
-        {
-            return QIcon(":/icons/tx_mined");
-        }
+    {
+        MinedType gentype = GenerateType(wtx->hash);
 
+        if (gentype == MinedType::POR)
+            return QIcon(":/icons/tx_cpumined");
+
+        // TODO lets make a ORPHANED ICON/UNKNOWN ICON
+        else
+            return QIcon(":/icons/tx_mined");
+    }
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:
         return QIcon(":/icons/tx_input");
