@@ -383,17 +383,14 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         {
             MinedType gentype = GenerateType(wtx->hash);
 
-            if (gentype == MinedType::POS)
-                return tr("Mined - POS");
-
-            else if (gentype == MinedType::POR)
-                return tr("Mined - POR");
-
-            else if (gentype == MinedType::ORPHANED)
-                return tr("Mined - ORPHANED");
-
-            else
-                return tr("Mined - UNKNOWN");
+            switch (gentype)
+            {
+                case MinedType::POS        :    return tr("MINED - POS");
+                case MinedType::POR        :    return tr("MINED - POR");
+                case MinedType::ORPHANED   :    return tr("MINED - ORPHANED");
+                case MinedType::UNKNOWN    :    return tr("MINED - UNKNOWN");
+                default                    :    return tr("MINED - UNKNOWN");
+            }
         }
 
     default:
@@ -408,14 +405,15 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     {
     case TransactionRecord::Generated:
     {
+        // TODO consider an icon for least unknown thou unlikely we would have that and orphan only seen when showorphans option set to true
         MinedType gentype = GenerateType(wtx->hash);
 
-        if (gentype == MinedType::POR)
-            return QIcon(":/icons/tx_cpumined");
-
-        // TODO lets make a ORPHANED ICON/UNKNOWN ICON
-        else
-            return QIcon(":/icons/tx_mined");
+        switch (gentype)
+        {
+            case MinedType::POS        :    return QIcon(":/icons/tx_mined");
+            case MinedType::POR        :    return QIcon(":/icons/tx_cpumined");
+            default                    :    return QIcon(":/icons/tx_mined");
+        }
     }
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:
