@@ -58,20 +58,6 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
-bool IsPoR2(double amt)
-{
-    std::string sAmt = RoundToString(amt,8);
-    if (sAmt.length() > 8)
-    {
-        std::string suffix = sAmt.substr(sAmt.length()-4,4);
-        if (suffix == "0124" || suffix=="0123")
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
 {
     int confirms = wtx.GetDepthInMainChain();
