@@ -1359,11 +1359,15 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                     else
                         entry.pushKV("category", "generate");
 
-                    std::string type = IsPoR2(CoinToDouble(r.amount)) ? "POR" : "Interest";
-                    {
-                        entry.pushKV("Type", type);
-                    }
+                    MinedType gentype = GenerateType(wtx.GetHash());
 
+                    switch (gentype)
+                    {
+                        case MinedType::POR         :   entry.pushKV("Type", "POR");  break;
+                        case MinedType::POS         :   entry.pushKV("Type", "POS");  break;
+                        case MinedType::ORPHANED    :   entry.pushKV("Type", "ORPHANED"); break;
+                        default                     :   entry.pushKV("Type", "UNKNOWN"); break;
+                    }
                 }
                 else
                 {
