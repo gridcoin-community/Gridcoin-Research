@@ -21,9 +21,6 @@
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double CoinToDouble(double surrogate);
-extern bool IsPoR(double amt);
-
-
 
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
@@ -352,23 +349,6 @@ QString TransactionTableModel::lookupAddress(const std::string &address, bool to
     }
 
     return description;
-}
-
-
-
-
-bool IsPoR(double amt)
-{
-	std::string sAmt = RoundToString(amt,8);
-	if (sAmt.length() > 8)
-	{
-		std::string suffix = sAmt.substr(sAmt.length()-4,4);
-		if (suffix =="0124" || suffix=="0123")
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
