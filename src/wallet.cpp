@@ -2575,3 +2575,27 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         mapKeyBirth[it->first] = it->second->nTime - 7200; // block times can be 2h off
 }
 
+MinedType GenerateType(const uint256& tx)
+{
+    CWalletTx wallettx;
+    uint256 hashblock;
+
+    if (!GetTransaction(tx, wallettx, hashblock))
+        return MinedType::ORPHANED;
+
+    BlockMap::iterator mi = mapBlockIndex.find(hashblock);
+
+    if (mi == mapBlockIndex.end())
+        return MinedType::UNKNOWN;
+
+    CBlockIndex* blkindex = (*mi).second;
+
+    if (blkindex->nResearchSubsidy == 0)
+        return MinedType::POS;
+
+    else if (blkindex->nResearchSubsidy > 0)
+        return MinedType::POR;
+
+    else
+        return MinedType::UNKNOWN;
+}
