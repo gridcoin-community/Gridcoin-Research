@@ -1124,22 +1124,29 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
 UniValue beaconstatus(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-                "beaconstatus [cpid]\n"
+                "beaconstatus [cpid] [bool:privatedetails]\n"
                 "\n"
-                "[cpid] -> Optional parameter of cpid\n"
+                "[cpid] ----------------> Optional parameter of cpid; can be empty or null if no cpid to be specified\n"
+                "[bool:privatedetails] -> Optional; Default false; When true displays private key\n"
                 "\n"
-                "Displays status of your beacon or specified beacon on the network\n");
+                "Displays status of your beacon or specified beacon on the network\n"
+                "Private details option should never be used except for your own viewing of personal private key\n"
+                "Sharing of this private key can result in theft of your cpid and is not required when receiving assistance\n");
 
     UniValue res(UniValue::VOBJ);
 
     // Search for beacon, and report on beacon status.
 
     std::string sCPID = msPrimaryCPID;
+    bool showprivate = false;
 
-    if (params.size() > 0)
+    if (params.size() > 0 && !params[0].isNull() && !params[0].get_str().empty())
         sCPID = params[0].get_str();
+
+    if (params.size() > 1 && !params[1].isNull())
+        showprivate = params[1].isNum() ? (params[1].get_int() != 0) : params[1].get_bool();
 
     LOCK(cs_main);
 
@@ -1151,9 +1158,9 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
     res.pushKV("CPID", sCPID);
     res.pushKV("Beacon Exists",YesNo(hasBeacon));
-    res.pushKV("Beacon Timestamp",timestamp.c_str());
-    res.pushKV("Public Key", sPubKey.c_str());
-    res.pushKV("Private Key", sPrivKey.c_str());
+    res.pushKV("Beacon Timestamp",timestamp);
+    res.pushKV("Public Key", sPubKey);
+    res.pushKV("Private Key", showprivate ? sPrivKey : "[redacted]");
 
     std::string sErr = "";
 
@@ -1165,7 +1172,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     // Verify the users Local Public Key matches the Beacon Public Key
     std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
 
-    res.pushKV("Local Configuration Public Key", sLocalPubKey.c_str());
+    res.pushKV("Local Configuration Public Key", sLocalPubKey);
 
     if (sLocalPubKey.empty())
         sErr += "Local configuration file Public Key missing. ";
