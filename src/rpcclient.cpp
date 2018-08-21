@@ -149,6 +149,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletpassphrase"       , 2 },
 
     // Mining
+    { "beaconstatus"           , 1 },
     { "explainmagnitude"       , 0 },
 
     // Developer
