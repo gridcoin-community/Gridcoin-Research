@@ -487,10 +487,13 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     uint256 hash;
     hash.SetHex(params[0].get_str());
 
+    // Accept either a bool (true) or a num (>=1) to indicate verbose output. Adapted from Bitcoin 20180820.
     bool fVerbose = false;
-    if (params.size() > 1)
-        fVerbose = (params[1].get_bool());
-
+    if (!params[1].isNull())
+    {
+        fVerbose = params[1].isNum() ? (params[1].get_int() != 0) : params[1].get_bool();
+    }
+    
     LOCK(cs_main);
 
     CTransaction tx;
