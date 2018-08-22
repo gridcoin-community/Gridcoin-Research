@@ -1430,9 +1430,14 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                         entry.pushKV("category", "generate");
 
                     }
-                    std::string type = IsPoR2(-nFee) ? "POR" : "Interest";
+                    MinedType gentype = GenerateType(wtx.GetHash());
+
+                    switch (gentype)
                     {
-                        entry.pushKV("Type", type);
+                        case MinedType::POR         :   entry.pushKV("Type", "POR");        break;
+                        case MinedType::POS         :   entry.pushKV("Type", "POS");        break;
+                        case MinedType::ORPHANED    :   entry.pushKV("Type", "ORPHANED");   break;
+                        default                     :   entry.pushKV("Type", "UNKNOWN");    break;
                     }
                 }
                 else
