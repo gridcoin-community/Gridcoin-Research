@@ -2122,7 +2122,7 @@ UniValue listdata(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    for(const auto& item : ReadCacheSection(sType))
+    for(const auto& item : ReadSortedCacheSection(sType))
         res.pushKV(item.first, item.second.value);
 
     return res;
@@ -2226,7 +2226,7 @@ UniValue projects(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    for (const auto& item : ReadCacheSection("project"))
+    for (const auto& item : ReadSortedCacheSection("project"))
     {
         UniValue entry(UniValue::VOBJ);
 
@@ -3088,7 +3088,7 @@ UniValue GetUpgradedBeaconReport()
     std::string row = "";
     int iBeaconCount = 0;
     int iUpgradedBeaconCount = 0;
-    for(const auto& item : ReadCacheSection("beacon"))
+    for(const auto& item : ReadSortedCacheSection("beacon"))
     {
         const AppCacheEntry& entry = item.second;
         std::string contract = DecodeBase64(entry.value);
@@ -3113,7 +3113,7 @@ UniValue GetJSONBeaconReport()
     UniValue entry(UniValue::VOBJ);
     entry.pushKV("CPID","GRCAddress");
     std::string row;
-    for(const auto& item : ReadCacheSection("beacon"))
+    for(const auto& item : ReadSortedCacheSection("beacon"))
     {
         const std::string& key = item.first;
         const AppCacheEntry& cache = item.second;

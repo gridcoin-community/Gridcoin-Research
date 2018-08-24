@@ -2,6 +2,7 @@
 
 #include <string>
 #include <map>
+#include <unordered_map>
 
 //!
 //! \brief An entry in the application cache.
@@ -15,12 +16,17 @@ struct AppCacheEntry
 //!
 //! \brief Application cache section type.
 //! 
-typedef std::map<std::string, AppCacheEntry> AppCacheSection;
+typedef std::unordered_map<std::string, AppCacheEntry> AppCacheSection;
+
+//!
+//! \brief Application cache section sorted by key.
+//!
+typedef std::map<std::string, AppCacheEntry> SortedAppCacheSection;
 
 //!
 //! \brief Application cache type.
 //!
-typedef std::map<std::string, AppCacheSection> AppCache;
+typedef std::unordered_map<std::string, AppCacheSection> AppCache;
 
 //!
 //! \brief Write value into application cache.
@@ -51,6 +57,19 @@ AppCacheEntry ReadCache(
 //! \returns The data for \p section if available.
 //!
 AppCacheSection ReadCacheSection(const std::string& section);
+
+//!
+//! \brief Reads a section from cache and sorts it.
+//! \param section Section to read.
+//! \returns The data for \p section if available.
+//! 
+//! Reads a cache section and transfers it to a sorted map. This can be an
+//! expensive operation and should not be used unless there is a need
+//! for sorted traversal.
+//! 
+//! \see ReadCacheSection
+//!
+SortedAppCacheSection ReadSortedCacheSection(const std::string& section);
 
 //!
 //! \brief Clear all values in a cache section.
