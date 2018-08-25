@@ -718,6 +718,13 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             // Push to an output the (reward times the allocation) to the address, increment the accumulator for allocation,
             // decrement the remaining stake output value, and increment outputs used.
             SideStakeScriptPubKey.SetDestination(address.Get());
+            
+            // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake entries
+            // if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that case. The
+            // coins should flow down to the coinstake outputs and be returned there. This will also simplify the display logic in
+            // the UI, because it makes the sidestake and coinstake outputs disjoint from an address point of view.
+            if (SideStakeScriptPubKey == CoinStakeScriptPubKey)
+                continue;
             blocknew.vtx[1].vout.push_back(CTxOut(nReward * iterSideStake->second, SideStakeScriptPubKey));
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s", nOutputsUsed, CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
             dSumAllocation += iterSideStake->second;
