@@ -626,7 +626,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
 
 
-void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking, SideStakeAlloc &vSideStakeAlloc, int64_t &nMinStakeSplitValue, double &dEfficiency)
+void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
+    SideStakeAlloc &vSideStakeAlloc, int64_t &nMinStakeSplitValue, double &dEfficiency)
 {
     // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
     // and there will be a single coinstake output (besides the empty one) that has the combined stake + research
@@ -734,7 +735,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
         // was in the vSideStakeAlloc vector. (Note that this is also in the parsing routine in StakeMiner, so it will show
         // up when the wallet is first started, but also needs to be here, to remind the user periodically that something
-        // is amiss.
+        // is amiss.)
         if (dSumAllocation == 0.0)
             LogPrintf("WARN: SplitCoinStakeOutput: enablesidestaking was set in config but nothing has been allocated for distribution!");
     }
@@ -1252,28 +1253,38 @@ void StakeMiner(CWallet *pwallet)
             for (auto const& sSubParam : mapMultiArgs["-sidestake"])
             {
                 ParseString(sSubParam, ',', vSubParam);
+                if (vSubParam.size() != 2)
+                {
+                    LogPrintf("WARN: StakeMiner: Incompletely SideStake Allocation specified. Skipping SideStake entry.");
+                    vSubParam.clear();
+                    continue;
+                }
+                   
                 sAddress = vSubParam[0];
 
                 CBitcoinAddress address(sAddress);
                 if (!address.IsValid())
                 {
                     LogPrintf("WARN: StakeMiner: ignoring sidestake invalid address %s.", sAddress.c_str());
+                    vSubParam.clear();
                     continue;
                 }
 
                 try
                 {
-                    dAllocation = atof(vSubParam[1].c_str()) / 100.0;
+                    dAllocation = stof(vSubParam[1]) / 100.0;
                 }
                 catch(...)
                 {
                     LogPrintf("WARN: StakeMiner: Invalid allocation provided. Skipping allocation.");
+                    vSubParam.clear();
                     continue;
                 }
                 
                 if (dAllocation <= 0)
                 {
                     LogPrintf("WARN: StakeMiner: Negative or zero allocation provided. Skipping allocation.");
+                    vSubParam.clear();
                     continue;
                 }
 
@@ -1288,7 +1299,7 @@ void StakeMiner(CWallet *pwallet)
                     LogPrintf("WARN: StakeMiner: allocation percentage over 100\%, ending sidestake allocations.");
                     break;
                 }
-                
+
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
                 LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
 
@@ -1385,7 +1396,7 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: created rest of the block");
 
         // * add gridcoin reward to coinstake, fill-in nReward
-        int64_t nReward;
+        int64_t nReward = 0;
         if( !CreateGridcoinReward(StakeBlock, BoincData, StakeCoinAge, pindexPrev, nReward) )
             continue;
         LogPrintf("StakeMiner: added gridcoin reward to coinstake");
