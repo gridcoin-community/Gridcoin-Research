@@ -3224,6 +3224,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
     double dStakeRewardWithoutFees = CoinToDouble(nStakeReward) - DPOR_Paid;
 
+    if( nVersion > 10 ) {
+        dStakeReward = CoinToDouble(nStakeReward);
+        dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
+    }
+
     if (fDebug) LogPrintf("Stake Reward of %f B %f I %f F %.f %s %s  ",
         dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid, bb.Organization);
 
@@ -3330,10 +3335,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
-                            (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str()));
-
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
+                            bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
+                            dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
                 }
 
                 if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
@@ -3402,9 +3406,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                 if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                     (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
 
-                                return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                            }
+                                    return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                        (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
+                                }
                         }
                 }
         }
