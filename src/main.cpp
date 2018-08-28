@@ -3224,6 +3224,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     double dStakeReward = CoinToDouble(nStakeReward+nFees);
     double dStakeRewardWithoutFees = CoinToDouble(nStakeReward);
 
+    if( nVersion > 10 ) {
+        dStakeReward = CoinToDouble(nStakeReward);
+        dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
+    }
+
     if (fDebug) LogPrintf("Stake Reward of %f B %f I %f F %.f %s %s  ",
         dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid, bb.Organization);
 
@@ -3330,9 +3335,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s does not match calculated research subsidy",
-                            bb.InterestSubsidy,bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            OUT_INTEREST,OUT_POR,CoinToDouble(nFees),bb.cpid.c_str()));
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
+                            bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
+                            dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
 
                 }
 
