@@ -231,7 +231,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                 else if (sVoteShareType == "3")
                 {
                     // For voting mag for mag + balance polls we need to calculate total network magnitude from superblock before vote to use the correct data in formula.
-                    // This gives us an accruate vote shares at that time. We like to keep wallet information as accruate as possible.
+                    // This gives us an accurate vote shares at that time. We like to keep wallet information as accurate as possible.
                     // Note during boosted superblocks we get unusual calculations for total network magnitude.
                     CBlockIndex* pblockindex = mapBlockIndex[mtx.hashBlock];
                     CBlock block;
@@ -325,7 +325,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                 std::string sProjectAction = ExtractXML(msg, "<MA>", "</MA>");
 
                 if (sProjectAction == "A")
-                    res.push_back(std::make_pair(_("Messate Type"), _("Add Project")));
+                    res.push_back(std::make_pair(_("Message Type"), _("Add Project")));
 
                 else if (sProjectAction == "D")
                     res.push_back(std::make_pair(_("Message Type"), _("Delete Project")));
@@ -378,7 +378,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
     {
         std::string sE(e.what());
 
-        res.push_back(std::make_pair(_("ERROR"), _("Out of rance exception while parsing Transaction Message -> ") + sE));
+        res.push_back(std::make_pair(_("ERROR"), _("Out of range exception while parsing Transaction Message -> ") + sE));
 
         return res;
     }
@@ -487,10 +487,13 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     uint256 hash;
     hash.SetHex(params[0].get_str());
 
+    // Accept either a bool (true) or a num (>=1) to indicate verbose output. Adapted from Bitcoin 20180820.
     bool fVerbose = false;
-    if (params.size() > 1)
-        fVerbose = (params[1].get_bool());
-
+    if (!params[1].isNull())
+    {
+        fVerbose = params[1].isNum() ? (params[1].get_int() != 0) : params[1].get_bool();
+    }
+    
     LOCK(cs_main);
 
     CTransaction tx;
