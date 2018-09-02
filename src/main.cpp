@@ -172,7 +172,6 @@ CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
-bool bOPReturnEnabled = true;
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -5115,7 +5114,6 @@ bool LoadBlockIndex(bool fAllowNew)
         nGrandfather = 196550;
         nNewIndex = 10;
         nNewIndex2 = 36500;
-        bOPReturnEnabled = false;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
     }
