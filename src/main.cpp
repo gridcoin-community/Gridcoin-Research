@@ -690,7 +690,15 @@ void GetGlobalStatus()
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        GlobalStatusStruct.poll = msPoll;
+        try
+        {
+            GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
+        }
+        catch (std::exception &e)
+        {
+            GlobalStatusStruct.poll = _("No current polls");
+            LogPrintf("Error obtaining last poll: %s", e.what());
+        }
 
         GlobalStatusStruct.status.clear();
 
@@ -729,6 +737,40 @@ void GetGlobalStatus()
         LogPrintf("Error obtaining status");
         return;
     }
+}
+
+std::string GetCurrentOverviewTabPoll()
+{
+    std::string poll = "";
+    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
+    std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
+    uint64_t uPollExpiration = 0;
+    // Alerts are displayed as polls but do not have an expiration
+    if(sPollExpiration.empty())
+    {
+        uPollExpiration = pindexBest->nTime;
+    }
+    else
+    {
+        try
+        {
+            uPollExpiration = stoll(sPollExpiration);
+        }
+        catch(std::exception &e)
+        {
+            // Malformed poll expiration, don't display
+            uPollExpiration = 0;
+        }
+    }
+    if (uPollExpiration >= pindexBest->nTime)
+    {
+        poll = sMessageKey.substr(0,80);
+    }
+    else
+    {
+        poll = _("No current polls");
+    }
+    return poll;
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)
@@ -8405,14 +8447,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
-                                        if (Contains(sMessageKey,"[Foundation"))
-                                        {
-                                                msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
-                                        }
-                                        else
-                                        {
-                                                msPoll = "Poll: " + sMessageKey.substr(0,80);
-                                        }
+                                    msPoll = msg;
                                 }
                         }
                         else if(sMessageAction=="D")

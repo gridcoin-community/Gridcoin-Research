@@ -260,6 +260,8 @@ bool WriteKey(std::string sKey, std::string sValue);
 double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
+std::string GetCurrentOverviewTabPoll();
+
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 // Validate researcher rewards.
 bool CheckProofOfResearch(
