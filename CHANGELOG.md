@@ -4,11 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [3.7.15.0] 2018-07-18
+## [3.7.16.0] 2018-09-03, leisure
+### Fixed
+ - Fix burned coins incorrectly showing up in wallets, #1283 (@jamescowens).
+ - Fix decimal output in RPC commands, #1272 (@Foggyx420).
+ - Fix verbose flag in `getrawtransaction` RPC output, #1271 (@jamescowens).
+
+## [3.7.15.0] 2018-07-18, leisure
 ### Changed
  - Balance now includes unconfirmed coins sent by self, #1192 (@Foggyx420).
 
-## [3.7.14.0] 2018-07-17
+## [3.7.14.0] 2018-07-17, leisure
 ### Added
  - Support for Qt 5.9 (@thecharlatan)
  - Compatibility with boost-1.67 (@denravonska)
