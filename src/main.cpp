@@ -170,7 +170,6 @@ CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
-bool bOPReturnEnabled = true;
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -3231,7 +3230,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
                     // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
@@ -3380,7 +3379,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
                             bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
                             dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
-
                 }
 
                 if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
@@ -3458,13 +3456,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             {
                                 if(!fTestNet || badSignBlocksTestnet.count(pindex->GetBlockHash()) ==0)
                                 {
-                                    return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                        (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                                }
-                                else LogPrintf("WARNING: ignoring Researchers Reward Pays too Much on block %s", pindex->GetBlockHash().ToString());
+                                return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
                             }
+                                else LogPrintf("WARNING: ignoring Researchers Reward Pays too Much on block %s", pindex->GetBlockHash().ToString());
                         }
                 }
+        }
         }
 
         //Approve first coinstake in DPOR block
@@ -5172,7 +5170,6 @@ bool LoadBlockIndex(bool fAllowNew)
         nGrandfather = 196550;
         nNewIndex = 10;
         nNewIndex2 = 36500;
-        bOPReturnEnabled = false;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
     }
@@ -8448,8 +8445,8 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 if (sMessageType=="poll")
                                 {
                                     msPoll = msg;
-                                }
-                        }
+                                        }
+                                        }
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);

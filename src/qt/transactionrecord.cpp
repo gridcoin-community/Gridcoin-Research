@@ -26,6 +26,17 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
             return false;
         }
     }
+
+    // Suppress OP_RETURN transactions if they did not originate from you.
+    // This is not "very" taxing but necessary since the transaction is in the wallet already.
+    if (!wtx.IsFromMe())
+    {
+        for (auto const& txout : wtx.vout)
+        {
+            if (txout.scriptPubKey == (CScript() << OP_RETURN))
+                return false;
+        }
+    }
     return true;
 }
 
