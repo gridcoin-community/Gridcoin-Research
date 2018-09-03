@@ -3181,20 +3181,21 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
                 }
 
-                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-                if (bIsDPOR && pindex->nHeight > nGrandfather)
+                if (pindex->nVersion >= 10)
                 {
+                    if (tx.vout.size() > 8)
+                        return DoS(100,error("Too many coinstake outputs"));
+                }
+                else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
+                {
+                    // Old rules, does not make sense
+                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
-                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                        if (fDebug10) LogPrintf("Iterating Recipient #%d  %s with Amount %f", i, Recipient, Amount);
                         if (Amount > 0)
                         {
-                            if (fDebug3) LogPrintf("Iterating Recipient #%d  %s with Amount %f", i, Recipient, Amount);
-                            LogPrintf("POR Payment results in an overpayment; Recipient %s, Amount %f ",Recipient, Amount);
-                            return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f ",
-                                                Recipient.c_str(), Amount));
+                            return DoS(50,error("Coinstake output %u forbidden", i));
                         }
                     }
                 }
@@ -3222,6 +3223,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     double dStakeReward = CoinToDouble(nStakeReward+nFees);
     double dStakeRewardWithoutFees = CoinToDouble(nStakeReward);
+
+    if( nVersion > 10 ) {
+        dStakeReward = CoinToDouble(nStakeReward);
+        dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
+    }
 
     if (fDebug) LogPrintf("Stake Reward of %f B %f I %f F %.f %s %s  ",
         dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid, bb.Organization);
@@ -3329,9 +3335,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s does not match calculated research subsidy",
-                            bb.InterestSubsidy,bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            OUT_INTEREST,OUT_POR,CoinToDouble(nFees),bb.cpid.c_str()));
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
+                            bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
+                            dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
 
                 }
 
