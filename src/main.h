@@ -170,8 +170,6 @@ extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
-extern bool bOPReturnEnabled;
-
 // Settings
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;

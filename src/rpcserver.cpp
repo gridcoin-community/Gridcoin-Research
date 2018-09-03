@@ -110,7 +110,11 @@ int64_t AmountFromValue(const UniValue& value)
 
 UniValue ValueFromAmount(int64_t amount)
 {
-    return (double)amount / (double)COIN;
+    bool sign = amount < 0;
+    int64_t n_abs = (sign ? -amount : amount);
+    int64_t quotient = n_abs / COIN;
+    int64_t remainder = n_abs % COIN;
+    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "", quotient, remainder));
 }
 
 
