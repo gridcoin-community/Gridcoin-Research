@@ -2,8 +2,8 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 3)
 define(_CLIENT_VERSION_MINOR, 7)
-define(_CLIENT_VERSION_REVISION, 15)
-define(_CLIENT_VERSION_BUILD, 2)
+define(_CLIENT_VERSION_REVISION, 16)
+define(_CLIENT_VERSION_BUILD, 1)
 define(_CLIENT_VERSION_IS_RELEASE, false)
 define(_COPYRIGHT_YEAR, 2018)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
@@ -234,10 +234,10 @@ if test "x$CXXFLAGS_overridden" = "xno"; then
   AX_CHECK_COMPILE_FLAG([-Wimplicit-fallthrough],[CXXFLAGS="$CXXFLAGS -Wno-implicit-fallthrough"],,[[$CXXFLAG_WERROR]])
 fi
 
-# Check for optional instruction set support. Enabling these does _not_ imply that all code will
-# be compiled with them, rather that specific objects/libs may use them after checking for runtime
-# compatibility.
-AX_CHECK_COMPILE_FLAG([-msse4.2],[[SSE42_CXXFLAGS="-msse4.2"]],,[[$CXXFLAG_WERROR]])
+  # Check for optional instruction set support. Enabling these does _not_ imply that all code will
+  # be compiled with them, rather that specific objects/libs may use them after checking for runtime
+  # compatibility.
+  AX_CHECK_COMPILE_FLAG([-msse4.2],[[SSE42_CXXFLAGS="-msse4.2"]],,[[$CXXFLAG_WERROR]])
 AX_CHECK_COMPILE_FLAG([-msse4.1],[[SSE41_CXXFLAGS="-msse4.1"]],,[[$CXXFLAG_WERROR]])
 AX_CHECK_COMPILE_FLAG([-mavx -mavx2],[[AVX2_CXXFLAGS="-mavx -mavx2"]],,[[$CXXFLAG_WERROR]])
 
