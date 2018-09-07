@@ -1410,8 +1410,6 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
         // We will follow normal rules as well
         sort(vCoins.begin(), vCoins.end(), smallestcoinscomp());
 
-        int64_t collectedcoins = 0;
-
         for (auto c : vCoins)
         {
             const CWalletTx *pcoin = c.tx;
@@ -1426,24 +1424,21 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
                 continue;
 
             int64_t n = pcoin->vout[i].nValue;
-            collectedcoins += n;
 
             pair<int64_t,pair<const CWalletTx*,unsigned int>> coin = make_pair(n,make_pair(pcoin, i));
 
-            if (collectedcoins >= nTargetValue)
-            {
-                setCoinsRet.insert(coin.second);
-                nValueRet += coin.first;
+            setCoinsRet.insert(coin.second);
+            nValueRet += coin.first;
 
+            if (nValueRet >= nTargetValue)
                 return true;
-            }
 
             else
                 continue;
         }
 
         // Not enough coins
-        if (collectedcoins < nTargetValue)
+        if (nValueRet < nTargetValue)
             return false;
     }
 
