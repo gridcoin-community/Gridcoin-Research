@@ -1675,17 +1675,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 set<pair<const CWalletTx*,unsigned int> > setCoins;
                 int64_t nValueIn = 0;
 
-                if (!contract)
-                {
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl))
-                        return false;
-                }
-
-                else
-                {
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, true))
-                        return false;
-                }
+                if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract))
+                    return false;
 
                 for (auto const& pcoin : setCoins)
                 {
