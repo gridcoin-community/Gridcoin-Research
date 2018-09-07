@@ -1663,7 +1663,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // Determine if this beacon or vote tx
                 bool contract = false;
 
-                if (!wtxNew.hashBoinc.empty())
+                if (!wtxNew.hashBoinc.empty() && !coinControl)
                 {
                     std::string contracttype = ExtractXML(wtxNew.hashBoinc, "<MT>", "</MT>");
 
