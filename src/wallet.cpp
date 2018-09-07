@@ -1387,113 +1387,176 @@ int64_t CWallet::GetNewMint() const
     return nTotal;
 }
 
-bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+// Our comparator
+struct smallestcoinscomp
+{
+    bool operator() (const COutput a, const COutput b)
+    {
+        const CWalletTx* acoin = a.tx;
+        const CWalletTx* bcoin = b.tx;
+
+        return (acoin->vout[a.i].nValue < bcoin->vout[b.i].nValue);
+    }
+};
+
+bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, bool smallest) const
 {
     setCoinsRet.clear();
     nValueRet = 0;
 
-    // List of values less than target
-    pair<int64_t, pair<const CWalletTx*,unsigned int> > coinLowestLarger;
-    coinLowestLarger.first = std::numeric_limits<int64_t>::max();
-    coinLowestLarger.second.first = NULL;
-    vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
-    int64_t nTotalLower = 0;
-
-    random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
-
-    for (auto output : vCoins)
+    if (smallest)
     {
-        const CWalletTx *pcoin = output.tx;
+        // For vote and beacon; users want to use lowest input; lets try to find one or more to meet that specification
+        // We will follow normal rules as well
+        sort(vCoins.begin(), vCoins.end(), smallestcoinscomp());
 
-        if (output.nDepth < (pcoin->IsFromMe() ? nConfMine : nConfTheirs))
-            continue;
+        int64_t collectedcoins = 0;
 
-        int i = output.i;
-
-        // Follow the timestamp rules
-        if (pcoin->nTime > nSpendTime)
-            continue;
-
-        int64_t n = pcoin->vout[i].nValue;
-
-        pair<int64_t,pair<const CWalletTx*,unsigned int> > coin = make_pair(n,make_pair(pcoin, i));
-
-        if (n == nTargetValue)
+        for (auto c : vCoins)
         {
-            setCoinsRet.insert(coin.second);
-            nValueRet += coin.first;
-            return true;
-        }
-        else if (n < nTargetValue + CENT)
-        {
-            vValue.push_back(coin);
-            nTotalLower += n;
-        }
-        else if (n < coinLowestLarger.first)
-        {
-            coinLowestLarger = coin;
-        }
-    }
+            const CWalletTx *pcoin = c.tx;
 
-    if (nTotalLower == nTargetValue)
-    {
-        for (unsigned int i = 0; i < vValue.size(); ++i)
-        {
-            setCoinsRet.insert(vValue[i].second);
-            nValueRet += vValue[i].first;
-        }
-        return true;
-    }
+            if (c.nDepth < (pcoin->IsFromMe() ? nConfMine : nConfTheirs))
+                continue;
 
-    if (nTotalLower < nTargetValue)
-    {
-        if (coinLowestLarger.second.first == NULL)
+            int i = c.i;
+
+            // Follow the timestamp rules
+            if (pcoin->nTime > nSpendTime)
+                continue;
+
+            int64_t n = pcoin->vout[i].nValue;
+            collectedcoins += n;
+
+            pair<int64_t,pair<const CWalletTx*,unsigned int>> coin = make_pair(n,make_pair(pcoin, i));
+
+            if (collectedcoins >= nTargetValue)
+            {
+                setCoinsRet.insert(coin.second);
+                nValueRet += coin.first;
+
+                return true;
+            }
+
+            else
+                continue;
+        }
+
+        // Not enough coins
+        if (collectedcoins < nTargetValue)
             return false;
-        setCoinsRet.insert(coinLowestLarger.second);
-        nValueRet += coinLowestLarger.first;
-        return true;
     }
 
-    // Solve subset sum by stochastic approximation
-    sort(vValue.rbegin(), vValue.rend(), CompareValueOnly());
-    vector<char> vfBest;
-    int64_t nBest;
-
-    ApproximateBestSubset(vValue, nTotalLower, nTargetValue, vfBest, nBest, 1000);
-    if (nBest != nTargetValue && nTotalLower >= nTargetValue + CENT)
-        ApproximateBestSubset(vValue, nTotalLower, nTargetValue + CENT, vfBest, nBest, 1000);
-
-    // If we have a bigger coin and (either the stochastic approximation didn't find a good solution,
-    //                                   or the next bigger coin is closer), return the bigger coin
-    if (coinLowestLarger.second.first &&
-        ((nBest != nTargetValue && nBest < nTargetValue + CENT) || coinLowestLarger.first <= nBest))
+    // original method we will use for all other kinds of transactions
+    else
     {
-        setCoinsRet.insert(coinLowestLarger.second);
-        nValueRet += coinLowestLarger.first;
-    }
-    else {
-        for (unsigned int i = 0; i < vValue.size(); i++)
-            if (vfBest[i])
+        // List of values less than target
+        pair<int64_t, pair<const CWalletTx*,unsigned int> > coinLowestLarger;
+        coinLowestLarger.first = std::numeric_limits<int64_t>::max();
+        coinLowestLarger.second.first = NULL;
+        vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
+        int64_t nTotalLower = 0;
+
+        random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+
+        for (auto output : vCoins)
+        {
+            const CWalletTx *pcoin = output.tx;
+
+            if (output.nDepth < (pcoin->IsFromMe() ? nConfMine : nConfTheirs))
+                continue;
+
+            int i = output.i;
+
+            // Follow the timestamp rules
+            if (pcoin->nTime > nSpendTime)
+                continue;
+
+            int64_t n = pcoin->vout[i].nValue;
+
+            pair<int64_t,pair<const CWalletTx*,unsigned int> > coin = make_pair(n,make_pair(pcoin, i));
+
+            if (n == nTargetValue)
+            {
+                setCoinsRet.insert(coin.second);
+                nValueRet += coin.first;
+                return true;
+            }
+            else if (n < nTargetValue + CENT)
+            {
+                vValue.push_back(coin);
+                nTotalLower += n;
+            }
+            else if (n < coinLowestLarger.first)
+            {
+                coinLowestLarger = coin;
+            }
+        }
+
+        if (nTotalLower == nTargetValue)
+        {
+            for (unsigned int i = 0; i < vValue.size(); ++i)
             {
                 setCoinsRet.insert(vValue[i].second);
                 nValueRet += vValue[i].first;
             }
+            return true;
+        }
 
-        if (fDebug && GetBoolArg("-printpriority"))
+        if (nTotalLower < nTargetValue)
         {
-            //// debug print
-            LogPrintf("SelectCoins() best subset: ");
+            if (coinLowestLarger.second.first == NULL)
+                return false;
+            setCoinsRet.insert(coinLowestLarger.second);
+            nValueRet += coinLowestLarger.first;
+            return true;
+        }
+
+        // Solve subset sum by stochastic approximation
+        sort(vValue.rbegin(), vValue.rend(), CompareValueOnly());
+        vector<char> vfBest;
+        int64_t nBest;
+
+        ApproximateBestSubset(vValue, nTotalLower, nTargetValue, vfBest, nBest, 1000);
+        if (nBest != nTargetValue && nTotalLower >= nTargetValue + CENT)
+            ApproximateBestSubset(vValue, nTotalLower, nTargetValue + CENT, vfBest, nBest, 1000);
+
+        // If we have a bigger coin and (either the stochastic approximation didn't find a good solution,
+        //                                   or the next bigger coin is closer), return the bigger coin
+        if (coinLowestLarger.second.first &&
+                ((nBest != nTargetValue && nBest < nTargetValue + CENT) || coinLowestLarger.first <= nBest))
+        {
+            setCoinsRet.insert(coinLowestLarger.second);
+            nValueRet += coinLowestLarger.first;
+        }
+        else {
             for (unsigned int i = 0; i < vValue.size(); i++)
                 if (vfBest[i])
-                    LogPrintf("%s ", FormatMoney(vValue[i].first));
-            LogPrintf("total %s", FormatMoney(nBest));
+                {
+                    setCoinsRet.insert(vValue[i].second);
+                    nValueRet += vValue[i].first;
+                }
+
+            if (fDebug && GetBoolArg("-printpriority"))
+            {
+                //// debug print
+                LogPrintf("SelectCoins() best subset: ");
+                for (unsigned int i = 0; i < vValue.size(); i++)
+                    if (vfBest[i])
+                        LogPrintf("%s ", FormatMoney(vValue[i].first));
+                LogPrintf("total %s", FormatMoney(nBest));
+            }
         }
+
+        return true;
+
     }
 
-    return true;
+    // We wont get here but so no complaints
+    return false;
 }
 
-bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl) const
+bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl, bool smallest) const
 {
     vector<COutput> vCoins;
     AvailableCoins(vCoins, true, coinControl, false);
@@ -1509,9 +1572,9 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
         return (nValueRet >= nTargetValue);
     }
 
-    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
+    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet, smallest) ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet, smallest)  ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet, smallest));
 }
 
 // Select some coins without random shuffle or best subset approximation
@@ -1597,11 +1660,33 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 for (auto const& s : vecSend)
                     wtxNew.vout.push_back(CTxOut(s.second, s.first));
 
+                // Determine if this beacon or vote tx
+                bool contract = false;
+
+                if (!wtxNew.hashBoinc.empty())
+                {
+                    std::string contracttype = ExtractXML(wtxNew.hashBoinc, "<MT>", "</MT>");
+
+                    if (contracttype == "beacon" || contracttype == "vote" || contracttype == "poll" || contracttype == "project")
+                        contract = true;
+                }
+
                 // Choose coins to use
                 set<pair<const CWalletTx*,unsigned int> > setCoins;
                 int64_t nValueIn = 0;
-                if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl))
-                    return false;
+
+                if (!contract)
+                {
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl))
+                        return false;
+                }
+
+                else
+                {
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, true))
+                        return false;
+                }
+
                 for (auto const& pcoin : setCoins)
                 {
                     int64_t nCredit = pcoin.first->vout[pcoin.second].nValue;
