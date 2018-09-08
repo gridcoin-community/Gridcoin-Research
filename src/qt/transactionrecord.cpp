@@ -100,32 +100,16 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 if (wtx.IsCoinStake())
                 {
                     // Generated (proof-of-stake)
-			        if (hashPrev == hash)
+                    if (hashPrev == hash)
                         continue; // last coinstake output
 
-					if (wtx.vout.size()==2)
-					{
-						//Standard POR CoinStake
-						sub.type = TransactionRecord::Generated;
-						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
-						hashPrev = hash;
-					}
-					else
-					{
-						//CryptoLottery - CoinStake - 4-3-2015
-						sub.type = TransactionRecord::Generated;
-						if (nDebit == 0)
-						{
-							sub.credit = GetMyValueOut(wallet,wtx);
-							sub.RemoteFlag = 1;
-						}
-						else
-						{
-							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
-						}
-
-						hashPrev = hash;
-					}
+                    if (wtx.vout.size() >= 2)
+                    {
+                        //Standard POR CoinStake
+                        sub.type = TransactionRecord::Generated;
+                        sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
+                        hashPrev = hash;
+                    }
                 }
 
                 parts.append(sub);

@@ -2149,16 +2149,17 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
             if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
             int64_t nTotalSubsidy = nSubsidy + nFees;
-            if (nBoinc > 1)
+            // This rule does not apply in v11
+            if (nBoinc > 1 && pindexLast->nVersion <= 10)
             {
                 std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+
                 if (sTotalSubsidy.length() > 7)
                 {
                     sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
                     nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
                 }
             }
-
             OUT_POR = CoinToDouble(nBoinc);
             OUT_INTEREST = CoinToDouble(nInterest);
             return nTotalSubsidy;
