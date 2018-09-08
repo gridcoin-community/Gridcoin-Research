@@ -452,9 +452,6 @@ QVariant TransactionTableModel::addressColor(const TransactionRecord *wtx) const
 
 QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool showUnconfirmed) const
 {
-
-	//4-3-2015 R Halford; Display the correct Tx Amount; Ensure credits sourced from CryptoLottery display the correct amount (not Block Stake minus Credit):
-
     QString str = BitcoinUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), wtx->credit + wtx->debit);
     if(showUnconfirmed)
     {
