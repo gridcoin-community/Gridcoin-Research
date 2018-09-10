@@ -125,7 +125,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
             default                           :    strHTML += tr("MINED - UNKNOWN");    break;
         }
 
-        strHTML += "<br";
+        strHTML += "<br>";
     }
     // Online transaction
     else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
