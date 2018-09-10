@@ -923,6 +923,139 @@ UniValue rain(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue rainbymagnitude(const UniValue& params, bool fHelp)
+{
+    if (fHelp || (params.size() < 1 || params.size() > 2))
+        throw runtime_error(
+                "rainbymagnitude <amount> [message]\n"
+                "\n"
+                "<amount> --> Required: Specify amount of coints in double to be rained\n"
+                "[message] -> Optional: Provide a message rained to all rainees\n"
+                "\n"
+                "rain coins by magnitude on network");
+
+    UniValue res(UniValue::VOBJ);
+
+    double dAmount = params[0].get_real();
+
+    if (dAmount <= 0)
+        throw runtime_error("Amount must be greater then 0");
+
+    std::string sMessage = "";
+
+    if (params.size() > 1)
+        sMessage = params[1].get_str();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CWalletTx wtx;
+    wtx.mapValue["comment"] = "Rain By Magnitude";
+    std::set<CBitcoinAddress> setAddress;
+    std::vector<std::pair<CScript, int64_t> > vecSend;
+
+    wtx.hashBoinc = "<NARR>Rain By Magnitude: " + MakeSafeMessage(sMessage) + "</NARR>";
+
+    // Gather Magnitude data
+//    std::string sSuperblock = ReadCache("superblock", "magnitudes").value;
+
+//    if (sSuperblock.empty())
+//        throw runtime_error("Unable to load superblock data");
+
+//    std::vector<std::string> vSuperblock = split(sSuperblock, ";");
+
+    double dTotalAmount = 0;
+    int64_t nTotalAmount = 0;
+
+    StructCPID structcpid = mvNetwork["NETWORK"];
+
+    // Use total network magnitude here as using 115000 can results in a lower then intended sent amount due to a missing project
+    double dTotalNetworkMagnitude = structcpid.NetworkMagnitude;
+
+    for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
+    {
+        StructCPID structMag = mvMagnitudes[(*ii).first];
+
+        if (structMag.initialized &&
+            !structMag.cpid.empty() &&
+            structMag.Magnitude > 0
+           )
+        {
+            // Find beacon grc address
+            std::string scacheContract = ReadCache("beacon", structMag.cpid).value;
+
+            // Should never occur but we know seg faults can occur in some cases
+            if (scacheContract.empty())
+                continue;
+
+            std::string sContract = DecodeBase64(scacheContract);
+            std::string sGRCAddress = ExtractValue(sContract, ";", 2);
+
+            double dPayout = (structMag.Magnitude / dTotalNetworkMagnitude) * dAmount;
+
+            if (dPayout <= 0)
+                continue;
+
+            dTotalAmount += dPayout;
+
+            CBitcoinAddress address(sGRCAddress);
+
+            if (!address.IsValid())
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Gridcoin address: ") + sGRCAddress);
+
+            setAddress.insert(address);
+
+            CScript scriptPubKey;
+            scriptPubKey.SetDestination(address.Get());
+
+            int64_t nAmount = roundint64(dPayout * COIN);
+            nTotalAmount += nAmount;
+
+            vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
+        }
+    }
+
+    EnsureWalletIsUnlocked();
+    // Check funds
+    double dBalance = GetTotalBalance();
+
+    if (dTotalAmount > dBalance)
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
+    // Send
+    CReserveKey keyChange(pwalletMain);
+
+    int64_t nFeeRequired = 0;
+    bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired);
+
+    LogPrintf("Rain By Magnitude Transaction Created.");
+
+    if (!fCreated)
+    {
+        if (nTotalAmount + nFeeRequired > pwalletMain->GetBalance())
+            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+
+        throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
+    }
+
+    LogPrintf("Committing.");
+    // Rain the recipients
+    if (!pwalletMain->CommitTransaction(wtx, keyChange))
+    {
+        LogPrintf("Rain By Magnitude Commit failed.");
+
+        throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
+    }
+    res.pushKV("Rain By Magnitude",  "Sent");
+    res.pushKV("TXID", wtx.GetHash().GetHex());
+    res.pushKV("Rain Amount Sent", dTotalAmount);
+    res.pushKV("TX Fee", ((double)nFeeRequired) / COIN);
+    res.pushKV("# of Recipients", (uint64_t)vecSend.size());
+
+    if (!sMessage.empty())
+        res.pushKV("Message", sMessage);
+
+    return res;
+}
+
 UniValue unspentreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

@@ -315,6 +315,7 @@ static const CRPCCommand vRPCCommands[] =
     { "makekeypair",             &makekeypair,             false,  cat_wallet        },
     { "move",                    &movecmd,                 false,  cat_wallet        },
     { "rain",                    &rain,                    false,  cat_wallet        },
+    { "rainbymagnitude",         &rainbymagnitude,         false,  cat_wallet        },
     { "repairwallet",            &repairwallet,            false,  cat_wallet        },
     { "resendtx",                &resendtx,                false,  cat_wallet        },
     { "reservebalance",          &reservebalance,          false,  cat_wallet        },

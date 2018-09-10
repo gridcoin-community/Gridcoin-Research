@@ -134,6 +134,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listunspent"            , 2 },
     { "move"                   , 2 },
     { "move"                   , 3 },
+    { "rainbymagnitude"        , 0 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
     { "sendfrom"               , 2 },
