@@ -1430,7 +1430,6 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     else
                     {
                         entry.pushKV("category", "generate");
-
                     }
                 }
                 else
