@@ -2611,7 +2611,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         mapKeyBirth[it->first] = it->second->nTime - 7200; // block times can be 2h off
 }
 
-MinedType GenerateType(const uint256& tx)
+MinedType GenerateType(const uint256& tx, unsigned int vout)
 {
     CWalletTx wallettx;
     uint256 hashblock;
@@ -2626,12 +2626,38 @@ MinedType GenerateType(const uint256& tx)
 
     CBlockIndex* blkindex = (*mi).second;
 
-    if (blkindex->nResearchSubsidy == 0)
-        return MinedType::POS;
+    // Basic CoinStake Support
+    if (wallettx.vout.size() == 2)
+    {
+        if (blkindex->nResearchSubsidy == 0)
+            return MinedType::POS;
 
-    else if (blkindex->nResearchSubsidy > 0)
-        return MinedType::POR;
+        else
+            return MinedType::POR;
+    }
 
-    else
-        return MinedType::UNKNOWN;
+    // Side/Split Stake Support
+    else if (wallettx.vout.size() >= 3)
+    {
+        // Split Stake -- There a better way since you cannot == two scriptPubKeys
+        if (wallettx.vout[vout].scriptPubKey.ToString() == wallettx.vout[1].scriptPubKey.ToString())
+        {
+            if (blkindex->nResearchSubsidy == 0)
+                return MinedType::POS;
+
+            else
+                return MinedType::POR;
+        }
+
+        else
+        {
+            if (blkindex->nResearchSubsidy == 0)
+                return MinedType::POS_SIDE_STAKE;
+
+            else
+                return MinedType::POR_SIDE_STAKE;
+        }
+    }
+
+    return MinedType::UNKNOWN;
 }

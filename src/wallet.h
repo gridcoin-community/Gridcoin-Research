@@ -39,7 +39,9 @@ enum MinedType
     UNKNOWN = 0,
     POS = 1,
     POR = 2,
-    ORPHANED = 3
+    ORPHANED = 3,
+    POS_SIDE_STAKE = 4,
+    POR_SIDE_STAKE = 5
 };
 
 /** A key pool entry */
@@ -946,6 +948,5 @@ private:
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 
-MinedType GenerateType(const uint256& tx);
-
+MinedType GenerateType(const uint256& tx, unsigned int vout);
 #endif
