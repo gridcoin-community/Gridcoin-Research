@@ -33,6 +33,15 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+/** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just incase!*/
+enum MinedType
+{
+    UNKNOWN = 0,
+    POS = 1,
+    POR = 2,
+    ORPHANED = 3
+};
+
 /** A key pool entry */
 class CKeyPool
 {
@@ -936,5 +945,7 @@ private:
 };
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
+
+MinedType GenerateType(const uint256& tx);
 
 #endif

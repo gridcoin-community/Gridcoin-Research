@@ -21,9 +21,6 @@
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double CoinToDouble(double surrogate);
-extern bool IsPoR(double amt);
-
-
 
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
@@ -354,23 +351,6 @@ QString TransactionTableModel::lookupAddress(const std::string &address, bool to
     return description;
 }
 
-
-
-
-bool IsPoR(double amt)
-{
-	std::string sAmt = RoundToString(amt,8);
-	if (sAmt.length() > 8)
-	{
-		std::string suffix = sAmt.substr(sAmt.length()-4,4);
-		if (suffix =="0124" || suffix=="0123")
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 {
     switch(wtx->type)
@@ -385,28 +365,18 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToSelf:
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
-	    if (wtx->RemoteFlag==1 && false)
-		{
+        {
+            MinedType gentype = GenerateType(wtx->hash);
 
-			double reward = CoinToDouble(wtx->credit + wtx->debit);
-			double max = GetMaximumBoincSubsidy(GetAdjustedTime());
-			if (reward==max)
-			{
-				return tr("Mined - DPOR");
-			}
-			else
-			{
-				return tr("Minted - (Local) DPOR");
-			}
-		}
-		else if (((IsPoR(CoinToDouble(wtx->credit + wtx->debit)))))
-		{
-				return tr("Mined - PoR");
-		}
-		else
-		{
-				return tr("Mined - Interest");
-		}
+            switch (gentype)
+            {
+                case MinedType::POS        :    return tr("MINED - POS");
+                case MinedType::POR        :    return tr("MINED - POR");
+                case MinedType::ORPHANED   :    return tr("MINED - ORPHANED");
+                default                    :    return tr("MINED - UNKNOWN");
+            }
+        }
+
     default:
         return QString();
     }
@@ -415,21 +385,21 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 
 QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx) const
 {
-	double reward = CoinToDouble(wtx->credit + wtx->debit);
-	double max = GetMaximumBoincSubsidy(GetAdjustedTime());
-	bool is_por = IsPoR(reward);
-	switch(wtx->type)
+    switch(wtx->type)
     {
     case TransactionRecord::Generated:
-        if (is_por)
-        {
-            return QIcon(":/icons/tx_cpumined");
-        }
-        else
-        {
-            return QIcon(":/icons/tx_mined");
-        }
+    {
+        // TODO consider an icon for least unknown thou unlikely we would have that and orphan only seen when showorphans option set to true
+        MinedType gentype = GenerateType(wtx->hash);
 
+        switch (gentype)
+        {
+            case MinedType::POS        :    return QIcon(":/icons/tx_mined");
+            case MinedType::POR        :    return QIcon(":/icons/tx_cpumined");
+            case MinedType::ORPHANED   :    return QIcon(":/icons/transaction_conflicted");
+            default                    :    return QIcon(":/icons/transaction_0");
+        }
+    }
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:
         return QIcon(":/icons/tx_input");
