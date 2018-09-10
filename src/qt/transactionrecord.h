@@ -108,7 +108,6 @@ public:
     std::string address;
     qint64 debit;
     qint64 credit;
-    qint64 RemoteFlag;
 
     // Side/Split Stake
     unsigned int vout;
