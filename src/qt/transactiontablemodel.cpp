@@ -370,12 +370,12 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
 
             switch (gentype)
             {
-                case MinedType::POS             :    return tr("MINED - POS");
-                case MinedType::POR             :    return tr("MINED - POR");
-                case MinedType::ORPHANED        :    return tr("MINED - ORPHANED");
-                case MinedType::POS_SIDE_STAKE  :    return tr("MINED - POS SIDE STAKE");
-                case MinedType::POR_SIDE_STAKE  :    return tr("MINED - POR SIDE STAKE");
-                default                         :    return tr("MINED - UNKNOWN");
+                case MinedType::POS               :    return tr("MINED - POS");
+                case MinedType::POR               :    return tr("MINED - POR");
+                case MinedType::ORPHANED          :    return tr("MINED - ORPHANED");
+                case MinedType::POS_SIDE_STAKE    :    return tr("POS SIDE STAKE");
+                case MinedType::POR_SIDE_STAKE    :    return tr("POR SIDE STAKE");
+                default                           :    return tr("MINED - UNKNOWN");
             }
         }
 
