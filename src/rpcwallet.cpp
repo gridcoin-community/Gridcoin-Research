@@ -1345,14 +1345,16 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                     else
                         entry.pushKV("category", "generate");
 
-                    MinedType gentype = GenerateType(wtx.GetHash());
+                    MinedType gentype = GenerateType(wtx.GetHash(), r.vout);
 
                     switch (gentype)
                     {
-                        case MinedType::POR         :   entry.pushKV("Type", "POR");  break;
-                        case MinedType::POS         :   entry.pushKV("Type", "POS");  break;
-                        case MinedType::ORPHANED    :   entry.pushKV("Type", "ORPHANED"); break;
-                        default                     :   entry.pushKV("Type", "UNKNOWN"); break;
+                        case MinedType::POR             :   entry.pushKV("Type", "POR");                break;
+                        case MinedType::POS             :   entry.pushKV("Type", "POS");                break;
+                        case MinedType::ORPHANED        :   entry.pushKV("Type", "ORPHANED");           break;
+                        case MinedType::POS_SIDE_STAKE  :   entry.pushKV("Type", "POS SIDE STAKE");     break;
+                        case MinedType::POR_SIDE_STAKE  :   entry.pushKV("Type", "POR SIDE STAKE");     break;
+                        default                         :   entry.pushKV("Type", "UNKNOWN");            break;
                     }
                 }
                 else
@@ -1429,15 +1431,6 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     {
                         entry.pushKV("category", "generate");
 
-                    }
-                    MinedType gentype = GenerateType(wtx.GetHash());
-
-                    switch (gentype)
-                    {
-                        case MinedType::POR         :   entry.pushKV("Type", "POR");        break;
-                        case MinedType::POS         :   entry.pushKV("Type", "POS");        break;
-                        case MinedType::ORPHANED    :   entry.pushKV("Type", "ORPHANED");   break;
-                        default                     :   entry.pushKV("Type", "UNKNOWN");    break;
                     }
                 }
                 else

@@ -69,18 +69,19 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
     {
-        //
-        // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1
-        //
-        for (auto const& txout : wtx.vout)
+        // Cannot use range based loop anymore
+        for (unsigned int t = 0; t < wtx.vout.size(); t++)
+        //for (auto const& txout : wtx.vout)
         {
-            if(wallet->IsMine(txout))
+            if(wallet->IsMine(wtx.vout[t]))
             {
                 TransactionRecord sub(hash, nTime);
                 CTxDestination address;
                 sub.idx = parts.size(); // sequence number
-                sub.credit = txout.nValue;
-                if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
+                sub.credit = wtx.vout[t].nValue;
+                sub.vout = t;
+
+                if (ExtractDestination(wtx.vout[t].scriptPubKey, address) && IsMine(*wallet, address))
                 {
                     // Received by Bitcoin Address
                     sub.type = TransactionRecord::RecvWithAddress;
@@ -105,7 +106,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
                     if (wtx.vout.size() >= 2)
                     {
-                        //Standard POR CoinStake
+                        //Standard POR/POS CoinStake
                         sub.type = TransactionRecord::Generated;
                         sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
                         hashPrev = hash;
@@ -132,7 +133,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             int64_t nChange = wtx.GetChange();
 
             parts.append(TransactionRecord(hash, nTime, TransactionRecord::SendToSelf, "",
-                            -(nDebit - nChange), nCredit - nChange));
+                            -(nDebit - nChange), nCredit - nChange, 0));
         }
         else if (fAllFromMe)
         {
@@ -185,7 +186,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             //
             // Mixed debit transaction, can't break down payees
             //
-            parts.append(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0));
+            parts.append(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0, 0));
         }
     }
 
