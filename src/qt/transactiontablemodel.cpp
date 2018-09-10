@@ -366,14 +366,16 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Payment to yourself");
     case TransactionRecord::Generated:
         {
-            MinedType gentype = GenerateType(wtx->hash);
+            MinedType gentype = GenerateType(wtx->hash, wtx->vout);
 
             switch (gentype)
             {
-                case MinedType::POS        :    return tr("MINED - POS");
-                case MinedType::POR        :    return tr("MINED - POR");
-                case MinedType::ORPHANED   :    return tr("MINED - ORPHANED");
-                default                    :    return tr("MINED - UNKNOWN");
+                case MinedType::POS             :    return tr("MINED - POS");
+                case MinedType::POR             :    return tr("MINED - POR");
+                case MinedType::ORPHANED        :    return tr("MINED - ORPHANED");
+                case MinedType::POS_SIDE_STAKE  :    return tr("MINED - POS SIDE STAKE");
+                case MinedType::POR_SIDE_STAKE  :    return tr("MINED - POR SIDE STAKE");
+                default                         :    return tr("MINED - UNKNOWN");
             }
         }
 
@@ -390,7 +392,7 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Generated:
     {
         // TODO consider an icon for least unknown thou unlikely we would have that and orphan only seen when showorphans option set to true
-        MinedType gentype = GenerateType(wtx->hash);
+        MinedType gentype = GenerateType(wtx->hash, wtx->vout);
 
         switch (gentype)
         {
