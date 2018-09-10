@@ -391,15 +391,17 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     {
     case TransactionRecord::Generated:
     {
-        // TODO consider an icon for least unknown thou unlikely we would have that and orphan only seen when showorphans option set to true
+        // TODO Make an icon for POS/POR SIDE STAKE
         MinedType gentype = GenerateType(wtx->hash, wtx->vout);
 
         switch (gentype)
         {
-            case MinedType::POS        :    return QIcon(":/icons/tx_mined");
-            case MinedType::POR        :    return QIcon(":/icons/tx_cpumined");
-            case MinedType::ORPHANED   :    return QIcon(":/icons/transaction_conflicted");
-            default                    :    return QIcon(":/icons/transaction_0");
+            case MinedType::POS               :    return QIcon(":/icons/tx_mined");
+            case MinedType::POR               :    return QIcon(":/icons/tx_cpumined");
+            case MinedType::ORPHANED          :    return QIcon(":/icons/transaction_conflicted");
+            case MinedType::POS_SIDE_STAKE    :    return QIcon(":/icons/transaction_0");
+            case MinedType::POR_SIDE_STAKE    :    return QIcon(":/icons/transaction_0");
+            default                           :    return QIcon(":/icons/transaction_0");
         }
     }
     case TransactionRecord::RecvWithAddress:
