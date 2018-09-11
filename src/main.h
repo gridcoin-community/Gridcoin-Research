@@ -170,8 +170,6 @@ extern std::set<CWallet*> setpwalletRegistered;
 extern unsigned char pchMessageStart[4];
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 
-extern bool bOPReturnEnabled;
-
 // Settings
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
@@ -259,6 +257,8 @@ bool LoadExternalBlockFile(FILE* fileIn);
 double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
+std::string GetCurrentOverviewTabPoll();
+
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 // Validate researcher rewards.
 bool CheckProofOfResearch(
@@ -272,6 +272,8 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
@@ -1001,7 +1003,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 9;
+    static const int CURRENT_VERSION = 10;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;

@@ -26,7 +26,6 @@
 using namespace std;
 
 std::string SendReward(std::string sAddress, int64_t nAmount);
-extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
 
 MiningCPID DeserializeBoincBlock(std::string block);
@@ -817,8 +816,8 @@ void CWalletTx::GetAmounts2(list<COutputEntry>& listReceived,
         }
         else
         {
-            if (   (  !bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) )
-                || (   bOPReturnEnabled && !ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN) )
+            if (   ( !ExtractDestination(txout.scriptPubKey, address) )
+                || ( !ExtractDestination(txout.scriptPubKey, address) && txout.scriptPubKey[0] != OP_RETURN) )
             {
                 LogPrintf("CWalletTx::GetAmounts: Unknown transaction type found, txid %s",
                      this->GetHash().ToString().c_str());
@@ -1201,7 +1200,7 @@ int64_t CWallet::GetBalance() const
         for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             const CWalletTx* pcoin = &(*it).second;
-            if (pcoin->IsTrusted() && pcoin->IsConfirmed())
+            if (pcoin->IsTrusted() && (pcoin->IsConfirmed() || pcoin->fFromMe))
                 nTotal += pcoin->GetAvailableCredit();
         }
     }

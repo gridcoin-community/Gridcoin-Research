@@ -969,11 +969,11 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                     valtype& vch = stacktop(-1);
                     valtype vchHash((opcode == OP_RIPEMD160 || opcode == OP_SHA1 || opcode == OP_HASH160) ? 20 : 32);
                     if (opcode == OP_RIPEMD160)
-                        RIPEMD160(&vch[0], vch.size(), &vchHash[0]);
+                        CRIPEMD160().Write(&vch[0], vch.size()).Finalize(&vchHash[0]);
                     else if (opcode == OP_SHA1)
-                        SHA1(&vch[0], vch.size(), &vchHash[0]);
+                        CSHA1().Write(&vch[0], vch.size()).Finalize(&vchHash[0]);
                     else if (opcode == OP_SHA256)
-                        SHA256(&vch[0], vch.size(), &vchHash[0]);
+                        CSHA256().Write(&vch[0], vch.size()).Finalize(&vchHash[0]);
                     else if (opcode == OP_HASH160)
                     {
                         uint160 hash160 = Hash160(vch);
@@ -1506,7 +1506,7 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     case TX_NONSTANDARD:
         return -1; // Note, this was empty (thats -1);
     case TX_NULL_DATA:
-        return (bOPReturnEnabled) ? -1 : -1;
+        return -1;
         // Script Sig Args Expected:  Bitcoin=-1, PPCoin=1
     case TX_PUBKEY:
         return 1;
@@ -1584,8 +1584,7 @@ bool IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
     {
     case TX_NONSTANDARD:
     case TX_NULL_DATA:
-        // Note this was always false, til 3-13-2016.
-        return (bOPReturnEnabled) ? true : false;
+        return false;
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
         return keystore.HaveKey(keyID);
@@ -1620,8 +1619,8 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
     if (!Solver(scriptPubKey, whichType, vSolutions))
         return false;
 
-    if (bOPReturnEnabled && whichType == TX_NULL_DATA)
-        return true;
+    if (whichType == TX_NULL_DATA)
+        return false;
 
     if (whichType == TX_PUBKEY)
     {

@@ -393,7 +393,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     CWalletTx wtx;
     if (params.size() > 2 && !params[2].isNull() && !params[2].get_str().empty())
         wtx.mapValue["comment"] = params[2].get_str();
-    if (params.size() > 3 && params[3].isNull() && !params[3].get_str().empty())
+    if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
         wtx.mapValue["to"]      = params[3].get_str();
 
     if (pwalletMain->IsLocked())
@@ -910,7 +910,7 @@ UniValue sendmany(const UniValue& params, bool fHelp)
     EnsureWalletIsUnlocked();
 
     // Check funds & Support non-account sendmany
-    int64_t nBalance;
+    int64_t nBalance = 0;
 
     if (bFromAccount)
         nBalance = GetAccountBalance(strAccount, nMinDepth);
@@ -1732,13 +1732,15 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
     int depth = pindex ? (1 + nBestHeight - pindex->nHeight) : -1;
     UniValue transactions(UniValue::VARR);
+    CTxDB txdb("r");
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); it++)
     {
         CWalletTx tx = (*it).second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
-            ListTransactions(tx, "*", 0, true, transactions, filter);
+            ListTransactions2(tx, "*", 0, true, transactions, txdb, filter);
+            //ListTransactions(tx, "*", 0, true, transactions, filter);
     }
 
     int target_height = pindexBest->nHeight + 1 - target_confirms;

@@ -110,7 +110,11 @@ int64_t AmountFromValue(const UniValue& value)
 
 UniValue ValueFromAmount(int64_t amount)
 {
-    return (double)amount / (double)COIN;
+    bool sign = amount < 0;
+    int64_t n_abs = (sign ? -amount : amount);
+    int64_t quotient = n_abs / COIN;
+    int64_t remainder = n_abs % COIN;
+    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "", quotient, remainder));
 }
 
 
@@ -280,14 +284,12 @@ static const CRPCCommand vRPCCommands[] =
     { "backupprivatekeys",       &backupprivatekeys,       false,  cat_wallet        },
     { "backupwallet",            &backupwallet,            true,   cat_wallet        },
     { "burn",                    &burn,                    false,  cat_wallet        },
-    { "burn2",                   &burn2,                   false,  cat_wallet        },
     { "checkwallet",             &checkwallet,             false,  cat_wallet        },
     { "createrawtransaction",    &createrawtransaction,    false,  cat_wallet        },
     { "decoderawtransaction",    &decoderawtransaction,    false,  cat_wallet        },
     { "decodescript",            &decodescript,            false,  cat_wallet        },
     { "dumpprivkey",             &dumpprivkey,             false,  cat_wallet        },
     { "dumpwallet",              &dumpwallet,              true,   cat_wallet        },
-    { "encrypt",                 &encrypt,                 false,  cat_wallet        },
     { "encryptwallet",           &encryptwallet,           false,  cat_wallet        },
     { "getaccount",              &getaccount,              false,  cat_wallet        },
     { "getaccountaddress",       &getaccountaddress,       true,   cat_wallet        },
@@ -312,8 +314,8 @@ static const CRPCCommand vRPCCommands[] =
     { "listunspent",             &listunspent,             false,  cat_wallet        },
     { "makekeypair",             &makekeypair,             false,  cat_wallet        },
     { "move",                    &movecmd,                 false,  cat_wallet        },
-    { "newburnaddress",          &newburnaddress,          false,  cat_wallet        },
     { "rain",                    &rain,                    false,  cat_wallet        },
+    { "rainbymagnitude",         &rainbymagnitude,         false,  cat_wallet        },
     { "repairwallet",            &repairwallet,            false,  cat_wallet        },
     { "resendtx",                &resendtx,                false,  cat_wallet        },
     { "reservebalance",          &reservebalance,          false,  cat_wallet        },
@@ -337,29 +339,23 @@ static const CRPCCommand vRPCCommands[] =
     { "advertisebeacon",         &advertisebeacon,         false,  cat_mining        },
     { "beaconreport",            &beaconreport,            false,  cat_mining        },
     { "beaconstatus",            &beaconstatus,            false,  cat_mining        },
-    { "cpids",                   &cpids,                   false,  cat_mining        },
     { "currentneuralhash",       &currentneuralhash,       false,  cat_mining        },
     { "currentneuralreport",     &currentneuralreport,     false,  cat_mining        },
     { "explainmagnitude",        &explainmagnitude,        false,  cat_mining        },
     { "getmininginfo",           &getmininginfo,           false,  cat_mining        },
     { "lifetime",                &lifetime,                false,  cat_mining        },
     { "magnitude",               &magnitude,               false,  cat_mining        },
-    { "mymagnitude",             &mymagnitude,             false,  cat_mining        },
 #ifdef WIN32
     { "myneuralhash",            &myneuralhash,            false,  cat_mining        },
     { "neuralhash",              &neuralhash,              false,  cat_mining        },
 #endif
     { "neuralreport",            &neuralreport,            false,  cat_mining        },
-    { "proveownership",          &proveownership,          false,  cat_mining        },
     { "resetcpids",              &resetcpids,              false,  cat_mining        },
-    { "rsa",                     &rsa,                     false,  cat_mining        },
-    { "rsaweight",               &rsaweight,               false,  cat_mining        },
     { "staketime",               &staketime,               false,  cat_mining        },
     { "superblockage",           &superblockage,           false,  cat_mining        },
     { "superblocks",             &superblocks,             false,  cat_mining        },
     { "syncdpor2",               &syncdpor2,               false,  cat_mining        },
     { "upgradedbeaconreport",    &upgradedbeaconreport,    false,  cat_mining        },
-    { "validcpids",              &validcpids,              false,  cat_mining        },
 
   // Developer commands
     { "addkey",                  &addkey,                  false,  cat_developer     },
@@ -374,7 +370,7 @@ static const CRPCCommand vRPCCommands[] =
     { "debugnet",                &debugnet,                true,   cat_developer     },
     { "dportally",               &dportally,               false,  cat_developer     },
     { "exportstats1",            &rpc_exportstats,         false,  cat_developer     },
-    { "forcequorom",             &forcequorom,             false,  cat_developer     },
+    { "forcequorum",             &forcequorum,             false,  cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
     { "genboinckey",             &genboinckey,             false,  cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       false,  cat_developer     },
@@ -391,7 +387,6 @@ static const CRPCCommand vRPCCommands[] =
     { "readdata",                &readdata,                false,  cat_developer     },
     { "refhash",                 &refhash,                 false,  cat_developer     },
     { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
-    { "seefile",                 &seefile,                 false,  cat_developer     },
     { "sendalert",               &sendalert,               false,  cat_developer     },
     { "sendalert2",              &sendalert2,              false,  cat_developer     },
     { "sendblock",               &sendblock,               false,  cat_developer     },
@@ -402,7 +397,7 @@ static const CRPCCommand vRPCCommands[] =
 #ifdef WIN32
     { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
 #endif
-    { "updatequoromdata",        &updatequoromdata,        false,  cat_developer     },
+    { "updatequorumdata",        &updatequorumdata,        false,  cat_developer     },
     { "versionreport",           &versionreport,           false,  cat_developer     },
     { "writedata",               &writedata,               false,  cat_developer     },
 
