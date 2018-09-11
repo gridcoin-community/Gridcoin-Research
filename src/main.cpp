@@ -4750,11 +4750,13 @@ void GridcoinServices()
             }
     }
 
-
-    if (TimerMain("send_beacon",180))
+    /* Do this only for users with valid CPID */
+    if (TimerMain("send_beacon",180) && IsResearcher(GlobalCPUMiningCPID.cpid))
     {
         std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-        if (tBeaconPublicKey.empty() && IsResearcher(GlobalCPUMiningCPID.cpid))
+
+        /* If there is no public key, beacon needs advertising */
+        if (tBeaconPublicKey.empty())
         {
             std::string sOutPubKey = "";
             std::string sOutPrivKey = "";
@@ -4767,7 +4769,13 @@ void GridcoinServices()
                 LOCK(MinerStatus.lock);
                 msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
             }
+        } else {
+            /* If public key is set, try to import it's private part from
+             * config. The function fails fast if there are none in config.
+             */
+            ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
         }
+
     }
 
     if (TimerMain("gather_cpids",480))

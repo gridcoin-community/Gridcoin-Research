@@ -1102,6 +1102,13 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
+    /* Try to copy key from config. The call is no-op if already imported or
+     * nothing to import. This saves a migrating users from copy-pasting
+     * the key string to importprivkey command.
+     */
+    bool importResult= ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
+    res.pushKV("ConfigKeyImported", importResult);
+
     std::string sOutPubKey = "";
     std::string sOutPrivKey = "";
     std::string sError = "";
@@ -1109,7 +1116,6 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
     res.pushKV("Result",SuccessFail(fResult));
-    res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
     res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
     res.pushKV("Message",sMessage.c_str());
 
@@ -1122,7 +1128,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     else
     {
         res.pushKV("Public Key",sOutPubKey.c_str());
-        res.pushKV("Warning!","Your public and private research keys have been stored in gridcoinresearch.conf.  Do not lose your private key (It is non-recoverable).  It is recommended that you back up your gridcoinresearch.conf file on a regular basis.");
+        res.pushKV("Warning!","Your keys to research rewards have been stored in your wallet. It is recommended that you back up your files on a regular basis.");
     }
 
     return res;
