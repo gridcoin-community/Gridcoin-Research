@@ -214,7 +214,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("mint", mint);
     result.pushKV("MoneySupply", blockindex->nMoneySupply);
     result.pushKV("time", block.GetBlockTime());
-    result.pushKV("nonce", (int)block.nNonce);
+    result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
