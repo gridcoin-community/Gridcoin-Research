@@ -619,12 +619,10 @@ bool CTxDB::LoadBlockIndex()
     if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
     {
         LogPrintf(" RA Starting %i %i %i ", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
-        while (pindex->nHeight < pindexBest->nHeight)
+        for(; pindex != NULL; pindex = pindex->pnext)
         {
-            if (!pindex || !pindex->pnext) break;
-            pindex = pindex->pnext;
-            if (pindex == pindexBest) break;
-            if (pindex==NULL || !pindex->IsInMainChain()) continue;
+            if (!pindex->IsInMainChain())
+                continue;
 
             if(fQtActive)
             {
