@@ -132,6 +132,24 @@ static void InitMessage(const std::string &message)
     }
 }
 
+static void UpdateMessageBox(const std::string& message)
+{
+    std::string caption = _("Gridcoin Update Available");
+
+    if (guiref)
+    {
+        QMetaObject::invokeMethod(guiref, "update", Qt::QueuedConnection,
+                                   Q_ARG(QString, QString::fromStdString(caption)),
+                                   Q_ARG(QString, QString::fromStdString(message)));
+    }
+
+    else
+    {
+        LogPrintf("\r\n%s:\r\n%s", caption, message);
+        fprintf(stderr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
+    }
+}
+
 static void QueueShutdown()
 {
     QMetaObject::invokeMethod(QCoreApplication::instance(), "quit", Qt::QueuedConnection);
@@ -249,6 +267,8 @@ int main(int argc, char *argv[])
     uiInterface.InitMessage.connect(InitMessage);
     uiInterface.QueueShutdown.connect(QueueShutdown);
     uiInterface.Translate.connect(Translate);
+
+    uiInterface.UpdateMessageBox.connect(UpdateMessageBox);
 
     // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
     // but before showing splash screen.

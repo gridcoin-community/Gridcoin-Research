@@ -24,6 +24,8 @@
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 #include "global_objects_noui.hpp"
 
+void IsUpdateAvailable();
+
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
@@ -953,6 +955,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+
+    // Check if a wallet update exists
+    IsUpdateAvailable();
 
     return true;
 }

@@ -96,6 +96,9 @@ public:
      * @note called with lock cs_mapAlerts held.
      */
     boost::signals2::signal<void (const uint256 &hash, ChangeType status)> NotifyAlertChanged;
+
+    /** Update notification message box. */
+    boost::signals2::signal<void (const std::string& message)> UpdateMessageBox;
 };
 
 extern CClientUIInterface uiInterface;
