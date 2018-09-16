@@ -44,7 +44,13 @@ private:
         SSLeay_add_ssl_algorithms();
         SSL_load_error_strings();
 
+        // functions for client method, etc change in 1.1.0 openssl
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
         meth = TLS_client_method();
+#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        meth = TLSv1_2_client_method();
+#endif
+
         ctx = SSL_CTX_new(meth);
         ssl = SSL_new(ctx);
 
