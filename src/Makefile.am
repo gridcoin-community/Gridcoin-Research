@@ -110,7 +110,7 @@ GRIDCOIN_CORE_H = \
 	version.h \
 	walletdb.h \
 	wallet.h \
-        update.h
+    update.h
 
 GRIDCOIN_CORE_CPP = addrman.cpp \
 	alert.cpp \
@@ -157,7 +157,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	version.cpp \
 	wallet.cpp \
 	walletdb.cpp \
-        update.cpp
+    update.cpp
 
 
 obj/build.h: FORCE
