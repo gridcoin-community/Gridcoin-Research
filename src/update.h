@@ -80,7 +80,9 @@ private:
 
         sa.sin_family = AF_INET;
         sa.sin_port = htons(443);
-        inet_pton(AF_INET, address.ToStringIP().c_str(), &(sa.sin_addr));
+
+        if(!address.GetInAddr(&(sa.sin_addr)))
+            return false;
 
         socklen = sizeof(sa);
 
@@ -110,8 +112,6 @@ private:
         ssl = nullptr;
         meth = nullptr;
         ctx = nullptr;
-        sock = 0;
-        s = 0;
     }
 
     bool requestdata()
@@ -160,8 +160,16 @@ private:
 
     void closeusedsocket()
     {
+        // This part needs to be looked at.
+        // we define socketsocket to accept a pointer to myclosesocket which sets to INVALID_SOCKET for win32
+        // So i've set to 0 for closing of the socket
+#ifdef WIN32
+        sock = 0;
+        s = 0;
+#else
         close(sock);
         close(s);
+#endif
     }
 
     void closessl()
