@@ -525,27 +525,23 @@ Este produto inclúe software desenvolvido polo OpenSSL Project para o uso no Op
         </translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">Fai %1 segundo</translation>
+        <translation type="obsolete">Fai %1 segundo</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">Fai %1 minuto</translation>
+        <translation type="obsolete">Fai %1 minuto</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">Fai %1 hora</translation>
+        <translation type="obsolete">Fai %1 hora</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">Fai %1 día</translation>
+        <translation type="obsolete">Fai %1 día</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+48"/>
         <source>Last received block was generated %1.</source>
         <translation>Último bloque recibido foi generado %1.</translation>
     </message>
@@ -845,8 +841,40 @@ Dirección: %4
         <source>&amp;Help</source>
         <translation>A&amp;xuda</translation>
     </message>
+    <message numerus="yes">
+        <location line="+292"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Fai %n segundo</numerusform>
+            <numerusform>Fai %n segundo</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Fai %n minuto</numerusform>
+            <numerusform>Fai %n minuto</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Fai %n hora</numerusform>
+            <numerusform>Fai %n hora</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Fai %n día</numerusform>
+            <numerusform>Fai %n día</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+310"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Actualizado</translation>
     </message>

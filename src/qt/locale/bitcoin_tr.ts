@@ -428,8 +428,36 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Encrypt or decrypt wallet</source>
         <translation>Cüzdanı şifrele veya cüzdanın şifresini aç</translation>
     </message>
+    <message numerus="yes">
+        <location line="+400"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n saniye önce</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n dakika önce</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n saat önce</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n gün önce</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+642"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -657,27 +685,23 @@ Adres: %4
         <translation>Gridcoin ağına %1 etkin bağlantı</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation>%1 saniye önce</translation>
+        <translation type="vanished">%1 saniye önce</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation>%1 dakika önce</translation>
+        <translation type="vanished">%1 dakika önce</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation>%1 saat önce</translation>
+        <translation type="vanished">%1 saat önce</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation>%1 gün önce</translation>
+        <translation type="vanished">%1 gün önce</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Son alınan blok, üretildi %1.</translation>
     </message>

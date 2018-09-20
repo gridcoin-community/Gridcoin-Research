@@ -432,8 +432,40 @@ Eric Young (eay@cryptsoft.com) y el software UPnP escrito por Thomas Bernard.</t
         <source>Encrypt or decrypt wallet</source>
         <translation>Cifrar o descifrar el monedero</translation>
     </message>
+    <message numerus="yes">
+        <location line="+400"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>hace %n segundo</numerusform>
+            <numerusform>hace %n segundo</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>hace %n minuto</numerusform>
+            <numerusform>hace %n minuto</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>hace %n hora</numerusform>
+            <numerusform>hace %n hora</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>hace %n dia</numerusform>
+            <numerusform>hace %n dia</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+642"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -677,27 +709,23 @@ Dirección: %4
         <translation type="unfinished">%1 conexión activa a la red Gridcoin</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">hace %1 segundo</translation>
+        <translation type="obsolete">hace %1 segundo</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">hace %1 minuto</translation>
+        <translation type="obsolete">hace %1 minuto</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">hace %1 hora</translation>
+        <translation type="obsolete">hace %1 hora</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">hace %1 dia</translation>
+        <translation type="obsolete">hace %1 dia</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Último bloque recibido se generó en %1.</translation>
     </message>

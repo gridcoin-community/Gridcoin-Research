@@ -573,8 +573,40 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <source>Export the data in the current tab to a file</source>
         <translation>Eksportere data i den aktuelle fane til en fil</translation>
     </message>
+    <message numerus="yes">
+        <location line="+386"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n sekund siden</numerusform>
+            <numerusform>%n sekund siden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minut siden</numerusform>
+            <numerusform>%n minut siden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n time siden</numerusform>
+            <numerusform>%n time siden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n dag siden</numerusform>
+            <numerusform>%n dag siden</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+628"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -677,27 +709,23 @@ Adresse: %4
         <translation type="unfinished">%1 aktiv forbindelse til Gridcoin netværk</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 sekund siden</translation>
+        <translation type="obsolete">%1 sekund siden</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minut siden</translation>
+        <translation type="obsolete">%1 minut siden</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 time siden</translation>
+        <translation type="obsolete">%1 time siden</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 dag siden</translation>
+        <translation type="obsolete">%1 dag siden</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Sidst modtagne blok blev genereret %1.</translation>
     </message>

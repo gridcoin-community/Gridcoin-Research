@@ -600,27 +600,23 @@ Acest produs include programe dezvoltate de c?tre OpenSSL Project pentru a fi fo
         <translation type="unfinished">%1 conexiune activ? la reteaua Gridcoin</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 secund? în urm?</translation>
+        <translation type="obsolete">%1 secund? în urm?</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minut în urm?</translation>
+        <translation type="obsolete">%1 minut în urm?</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 or? în urm?</translation>
+        <translation type="obsolete">%1 or? în urm?</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 zi în urm?</translation>
+        <translation type="obsolete">%1 zi în urm?</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Ultimul bloc primit a fost generat %1.</translation>
     </message>
@@ -826,8 +822,44 @@ Adresa: %4
             <numerusform>S-au procesat %n de blocuri din istoricul tranzacţiilor.</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+13"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n secund? în urm?</numerusform>
+            <numerusform>%n secund? în urm?</numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minut în urm?</numerusform>
+            <numerusform>%n minut în urm?</numerusform>
+            <numerusform>%n minut în urm?</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n or? în urm?</numerusform>
+            <numerusform>%n or? în urm?</numerusform>
+            <numerusform>%n or? în urm?</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n zi în urm?</numerusform>
+            <numerusform>%n zi în urm?</numerusform>
+            <numerusform>%n zi în urm?</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+31"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Actualizat</translation>
     </message>

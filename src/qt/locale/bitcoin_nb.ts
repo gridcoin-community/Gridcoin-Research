@@ -600,27 +600,23 @@ Dette produktet inneholder programvare utviklet av OpenSSL prosjektet for bruk i
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 sekunder siden</translation>
+        <translation type="obsolete">%1 sekunder siden</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minutt siden</translation>
+        <translation type="obsolete">%1 minutt siden</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 time siden</translation>
+        <translation type="obsolete">%1 time siden</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 dag siden</translation>
+        <translation type="obsolete">%1 dag siden</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -801,8 +797,40 @@ Adresse: %4
             <numerusform>Lastet %n blokker med transaksjonshistorikk.</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+13"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n sekunder siden</numerusform>
+            <numerusform>%n sekunder siden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minutt siden</numerusform>
+            <numerusform>%n minutt siden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n time siden</numerusform>
+            <numerusform>%n time siden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n dag siden</numerusform>
+            <numerusform>%n dag siden</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+31"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Oppdatert</translation>
     </message>

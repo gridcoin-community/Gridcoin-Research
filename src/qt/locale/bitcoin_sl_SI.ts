@@ -600,27 +600,23 @@ Ta proizvod vklju?uje softver razvit s strani projekta OpenSSL za uporabo v Open
         <translation type="unfinished">%1 aktivne povezave na Gridcoin omrežje</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">pred %1 sekundo</translation>
+        <translation type="obsolete">pred %1 sekundo</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">Pred %1 minuto</translation>
+        <translation type="obsolete">Pred %1 minuto</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">Pred %1 uro.</translation>
+        <translation type="obsolete">Pred %1 uro.</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">Pred %1 dnevom.</translation>
+        <translation type="obsolete">Pred %1 dnevom.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Zadnji prejeti blok je bil ustvarjen %1.</translation>
     </message>
@@ -831,8 +827,48 @@ Naslov: %4
             <numerusform>%n obdelanih blokov zgodovine transakcij.</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+13"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>pred %n sekundo</numerusform>
+            <numerusform>pred %n sekundo</numerusform>
+            <numerusform>pred %n sekundo</numerusform>
+            <numerusform>pred %n sekundo</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Pred %n minuto</numerusform>
+            <numerusform>Pred %n minuto</numerusform>
+            <numerusform>Pred %n minuto</numerusform>
+            <numerusform>Pred %n minuto</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Pred %n uro.</numerusform>
+            <numerusform>Pred %n uro.</numerusform>
+            <numerusform>Pred %n uro.</numerusform>
+            <numerusform>Pred %n uro.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>Pred %n dnevom.</numerusform>
+            <numerusform>Pred %n dnevom.</numerusform>
+            <numerusform>Pred %n dnevom.</numerusform>
+            <numerusform>Pred %n dnevom.</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+31"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Posodobljeno</translation>
     </message>
