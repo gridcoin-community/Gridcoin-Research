@@ -601,27 +601,23 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation type="unfinished">%1 aktiivinen yhteys Gridcoin-verkkoon</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 sekunti sitten</translation>
+        <translation type="obsolete">%1 sekunti sitten</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minuutti sitten</translation>
+        <translation type="obsolete">%1 minuutti sitten</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 tunti sitten</translation>
+        <translation type="obsolete">%1 tunti sitten</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 päivä sitten</translation>
+        <translation type="obsolete">%1 päivä sitten</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Viimeinen vastaanotettu lohko generoitu %1.</translation>
     </message>
@@ -821,8 +817,40 @@ Osoite: %4 {1
             <numerusform>Prosessoitu %n lohkoa rahansiirtohistoriasta.</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+13"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n sekunti sitten</numerusform>
+            <numerusform>%n sekunti sitten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minuutti sitten</numerusform>
+            <numerusform>%n minuutti sitten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n tunti sitten</numerusform>
+            <numerusform>%n tunti sitten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n päivä sitten</numerusform>
+            <numerusform>%n päivä sitten</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+31"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Rahansiirtohistoria on ajan tasalla</translation>
     </message>

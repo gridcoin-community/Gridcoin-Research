@@ -429,8 +429,40 @@ Denna produkten innehåller mjukvara utvecklad av OpenSSL Project för användni
         <source>Encrypt or decrypt wallet</source>
         <translation>Kryptera eller avkryptera plånbok</translation>
     </message>
+    <message numerus="yes">
+        <location line="+400"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n sekund sen</numerusform>
+            <numerusform>%n sekund sen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minut sen</numerusform>
+            <numerusform>%n minut sen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n timme sen</numerusform>
+            <numerusform>%n timme sen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n dag sen</numerusform>
+            <numerusform>%n dag sen</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+642"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -674,27 +706,23 @@ Adress: %4
         <translation type="unfinished">%1 aktiv anslutning till Gridcoin nätverket</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 sekund sen</translation>
+        <translation type="obsolete">%1 sekund sen</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minut sen</translation>
+        <translation type="obsolete">%1 minut sen</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 timme sen</translation>
+        <translation type="obsolete">%1 timme sen</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 dag sen</translation>
+        <translation type="obsolete">%1 dag sen</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Senaste mottagna block genererades %1.</translation>
     </message>

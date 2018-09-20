@@ -428,8 +428,40 @@ Este produto inclui software desenvolvido pelo Projeto OpenSSL para uso no OpenS
         <source>Encrypt or decrypt wallet</source>
         <translation>Cryptografar ou Decryptografar carteira</translation>
     </message>
+    <message numerus="yes">
+        <location line="+400"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+642"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -624,27 +656,7 @@ Endereço: %4 {1
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>%1 second(s) ago</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>%1 minute(s) ago</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>%1 hour(s) ago</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>%1 day(s) ago</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2711,8 +2723,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-155"/>
         <source>matures in %n more block(s)</source>
         <translation>
-            <numerusform>maduro em mais %n bloco</numerusform>
-            <numerusform>maduro em mais %n blocos</numerusform>
+            <numerusform>maduro&#xa0;em mais %n bloco</numerusform>
+            <numerusform>maduro&#xa0;em mais %n blocos</numerusform>
         </translation>
     </message>
     <message>

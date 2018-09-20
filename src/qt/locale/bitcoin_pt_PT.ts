@@ -428,8 +428,40 @@ Este produto inclui software desenvolvido pelo Projecto OpenSSL para uso no Open
         <source>Encrypt or decrypt wallet</source>
         <translation>Encriptar ou desencriptar carteira</translation>
     </message>
+    <message numerus="yes">
+        <location line="+400"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n há segundo</numerusform>
+            <numerusform>%n há segundo</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>há %n minuto</numerusform>
+            <numerusform>há %n minuto</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>há %n hora</numerusform>
+            <numerusform>há %n hora</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>há %n dia</numerusform>
+            <numerusform>há %n dia</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+642"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -673,27 +705,23 @@ Endereço: %4
         <translation type="unfinished">%1 ligação ativa à rede Gridcoin</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 há segundo</translation>
+        <translation type="obsolete">%1 há segundo</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">há %1 minuto</translation>
+        <translation type="obsolete">há %1 minuto</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">há %1 hora</translation>
+        <translation type="obsolete">há %1 hora</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">há %1 dia</translation>
+        <translation type="obsolete">há %1 dia</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>O último bloco recebido foi gerado %1.</translation>
     </message>

@@ -435,8 +435,40 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
             <numerusform>%n Blöcke des Transaktionsverlaufs verarbeitet.</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+13"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n Sekunde</numerusform>
+            <numerusform>%n Sekunden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n Minute</numerusform>
+            <numerusform>%n Minuten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n Stunde</numerusform>
+            <numerusform>%n Stunden</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n Tag</numerusform>
+            <numerusform>%n Tagen</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+31"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Auf aktuellem Stand</translation>
     </message>
@@ -576,12 +608,11 @@ Dieses Produkt enthält Software, die vom OpenSSL-Projekt zur Verwendung im Open
         <translation>Exportiere die Daten des momentanen Reiters in eine Datei</translation>
     </message>
     <message>
-        <location line="+386"/>
         <source>%1 second(s) ago</source>
-        <translation>%1 Sekunde(n)</translation>
+        <translation type="vanished">%1 Sekunde(n)</translation>
     </message>
     <message>
-        <location line="+242"/>
+        <location line="+628"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -667,22 +698,19 @@ Adresse: %4 {1
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+769"/>
         <source>%1 minute(s) ago</source>
-        <translation>%1 Minute(n)</translation>
+        <translation type="vanished">%1 Minute(n)</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation>%1 Stunde(n)</translation>
+        <translation type="vanished">%1 Stunde(n)</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation>%1 Tag(en)</translation>
+        <translation type="vanished">%1 Tag(en)</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+800"/>
         <source>Last received block was generated %1.</source>
         <translation>Letzter erhaltener Block wurde vor %1 generiert.</translation>
     </message>

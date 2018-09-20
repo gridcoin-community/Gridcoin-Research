@@ -479,8 +479,40 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
+    <message numerus="yes">
+        <location line="-174"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n second ago</numerusform>
+            <numerusform>%n second ago</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minuut gelede</numerusform>
+            <numerusform>%n minuut gelede</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n uur gelede</numerusform>
+            <numerusform>%n uur gelede</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n dag gelede</numerusform>
+            <numerusform>%n dag gelede</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="-643"/>
+        <location line="-481"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -623,27 +655,23 @@ This product includes software developed by the OpenSSL Project for use in the O
         </translation>
     </message>
     <message>
-        <location line="+13"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 second ago</translation>
+        <translation type="obsolete">%1 second ago</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minuut gelede</translation>
+        <translation type="obsolete">%1 minuut gelede</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 uur gelede</translation>
+        <translation type="obsolete">%1 uur gelede</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 dag gelede</translation>
+        <translation type="obsolete">%1 dag gelede</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+31"/>
         <source>Up to date</source>
         <translation>Up to date</translation>
     </message>

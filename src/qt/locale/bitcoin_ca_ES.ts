@@ -568,8 +568,40 @@ This product includes software developed by the OpenSSL Project for use in the O
         <source>Export the data in the current tab to a file</source>
         <translation>Exportar les dades de la pestanya actual a un arxiu</translation>
     </message>
+    <message numerus="yes">
+        <location line="+386"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>fa %n segon</numerusform>
+            <numerusform>fa %n segon</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>fa %n minut</numerusform>
+            <numerusform>fa %n minut</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>fa %n hora</numerusform>
+            <numerusform>fa %n hora</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>fa %n dia</numerusform>
+            <numerusform>fa %n dia</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+628"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -668,27 +700,23 @@ Address: %4</source>
         <translation type="unfinished">%1 conexió activa a la xarxa Gridcoin</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">fa %1 segon</translation>
+        <translation type="obsolete">fa %1 segon</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">fa %1 minut</translation>
+        <translation type="obsolete">fa %1 minut</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">fa %1 hora</translation>
+        <translation type="obsolete">fa %1 hora</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">fa %1 dia</translation>
+        <translation type="obsolete">fa %1 dia</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>El darrer bloc rebut s&apos;ha generat %1.</translation>
     </message>

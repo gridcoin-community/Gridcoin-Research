@@ -428,8 +428,44 @@ Tento produkt obsahuje softvér vyvinutý projektom OpenSSL Project pre použiti
         <source>Encrypt or decrypt wallet</source>
         <translation type="unfinished">Zašifrovať alebo dešifrovať peňaženku</translation>
     </message>
+    <message numerus="yes">
+        <location line="+400"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>pred %n sekundou</numerusform>
+            <numerusform>pred %n sekundou</numerusform>
+            <numerusform>pred %n sekundou</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>pred %n minútou</numerusform>
+            <numerusform>pred %n minútou</numerusform>
+            <numerusform>pred %n minútou</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>pred %n hodinou</numerusform>
+            <numerusform>pred %n hodinou</numerusform>
+            <numerusform>pred %n hodinou</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>pred %n dňom</numerusform>
+            <numerusform>pred %n dňom</numerusform>
+            <numerusform>pred %n dňom</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+642"/>
+        <location line="+230"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -672,27 +708,23 @@ Adresa: %4 {1
         <translation type="unfinished">%1 aktívne spojenie s Gridcoin sieťov</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">pred %1 sekundou</translation>
+        <translation type="obsolete">pred %1 sekundou</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">pred %1 minútou</translation>
+        <translation type="obsolete">pred %1 minútou</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">pred %1 hodinou</translation>
+        <translation type="obsolete">pred %1 hodinou</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">pred %1 dňom</translation>
+        <translation type="obsolete">pred %1 dňom</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Posledný prijatý blok bol vytvorený %1.</translation>
     </message>
