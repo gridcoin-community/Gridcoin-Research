@@ -105,6 +105,16 @@ inline uint32_t IsV9Enabled(int nHeight)
             : nHeight >= 1144000;
 }
 
+inline bool IsV10Enabled(int nHeight)
+{
+    // Testnet used a controlled switch by injecting a v10 block
+    // using a modified client and different miner trigger rules,
+    // hence the odd height.
+    return fTestNet
+            ? nHeight >= 629409
+            : nHeight >= 1400000;
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
