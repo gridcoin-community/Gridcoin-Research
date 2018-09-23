@@ -3265,7 +3265,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     double dStakeReward = CoinToDouble(nStakeReward+nFees);
     double dStakeRewardWithoutFees = CoinToDouble(nStakeReward);
 
-    if( nVersion > 10 ) {
+    if( nVersion >= 10 ) {
         dStakeReward = CoinToDouble(nStakeReward);
         dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
     }
