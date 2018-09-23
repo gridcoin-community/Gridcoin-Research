@@ -1957,7 +1957,7 @@ double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstr
 
 // miner's coin base reward
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
-{
+{    
     //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
     int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
@@ -2085,6 +2085,27 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 
 // miner's coin stake reward based on coin age spent (coin-days)
+int64_t GetConstantBlockReward(const CBlockIndex* index)
+{
+    const int64_t DEFAULT_CBR = 10 * COIN;
+    const int64_t MIN_CBR = 0;
+    const int64_t MAX_CBR = DEFAULT_CBR * 2;
+
+    int64_t reward = DEFAULT_CBR;
+    AppCacheEntry oCBReward = ReadCache("protocol","blockreward1");
+
+    //TODO: refactor the expire checking to subroutine
+    //Note: time constant is same as GetBeaconPublicKey
+    if( (index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
+    {
+        reward = atoi64(oCBReward.value);
+    }
+
+    // Clamp to limits.
+    reward = std::max(reward, MIN_CBR);
+    reward = std::min(reward, MAX_CBR);
+    return reward;
+}
 
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
     bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
@@ -2134,19 +2155,9 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 
             /* Constant Block Reward */
             if (pindexLast->nVersion>=10)
-            {
-                AppCacheEntry oCBReward= ReadCache("protocol","blockreward1");
-                //TODO: refactor the expire checking to subroutine
-                //Note: time constant is same as GetBeaconPublicKey
-                if( (pindexLast->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
-                {
-                    nInterest= atoi64(oCBReward.value);
-                }
-            }
+                nInterest = GetConstantBlockReward(pindexLast);
             else
-            {
                 nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-            }
 
             int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
 
