@@ -200,9 +200,8 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
         result.pushKV("posdiff", diff_sum/(double)poscount);
         if (super_count > 0)
-            result.pushKV("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0);
-        else
-            result.pushKV("super_spacing_hrs", "N/A");
+            result.pushKV("super_spacing_hrs", ((l_last_time-l_first_time)/(double)super_count)/3600.0);
+
         result1.pushKV("averages", result);
     }
     {
