@@ -2087,6 +2087,11 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetConstantBlockReward(const CBlockIndex* index)
 {
+    // The constant block reward is set to a default, voted on value, but this can
+    // be overridden using an admin message. This allows us to change the reward
+    // amount without having to release a mandatory with updated rules. In the case
+    // there is a breach or leaked admin keys the rewards are clamped to twice that
+    // of the default value.
     const int64_t DEFAULT_CBR = 10 * COIN;
     const int64_t MIN_CBR = 0;
     const int64_t MAX_CBR = DEFAULT_CBR * 2;
@@ -2101,7 +2106,6 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
         reward = atoi64(oCBReward.value);
     }
 
-    // Clamp to limits.
     reward = std::max(reward, MIN_CBR);
     reward = std::min(reward, MAX_CBR);
     return reward;
