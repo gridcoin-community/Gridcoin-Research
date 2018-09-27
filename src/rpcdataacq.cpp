@@ -199,7 +199,9 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         result.pushKV("transaction", transactioncount/(double)(blockcount-emptyblockscount));
         result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
         result.pushKV("posdiff", diff_sum/(double)poscount);
-        result.pushKV("super_spacing_hrs", (((double)l_last_time-(double)l_first_time)/(double)super_count)/3600.0);
+        if (super_count > 0)
+            result.pushKV("super_spacing_hrs", ((l_last_time-l_first_time)/(double)super_count)/3600.0);
+
         result1.pushKV("averages", result);
     }
     {
