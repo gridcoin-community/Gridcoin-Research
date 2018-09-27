@@ -1020,8 +1020,11 @@ bool IsMiningAllowed(CWallet *pwallet)
     return status;
 }
 
+volatile int startBV10;
+
 void StakeMiner(CWallet *pwallet)
 {
+    startBV10= GetBoolArg("-startv10", false);
 
     // Make this thread recognisable as the mining thread
     RenameThread("grc-stake-miner");
@@ -1051,6 +1054,10 @@ void StakeMiner(CWallet *pwallet)
                 StakeBlock.nVersion = 9;
             if(IsV10Enabled(pindexPrev->nHeight + 1))
                 StakeBlock.nVersion = 10;
+            if(startBV10)
+            {
+                StakeBlock.nVersion = 10;
+            }
 
             MinerStatus.Version= StakeBlock.nVersion;
         }
