@@ -1210,7 +1210,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     if (!sErr.empty())
     {
         res.pushKV("Errors", sErr);
-        res.pushKV("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon.");
+        res.pushKV("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: advertisebeacon.");
         res.pushKV("Configuration Status","FAIL");
     }
 
