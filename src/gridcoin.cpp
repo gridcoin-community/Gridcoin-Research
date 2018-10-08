@@ -19,7 +19,8 @@ namespace
     static const std::set<uint256> bad_blocks_testnet
     {
         // Invalid claims
-        uint256("c1aa0511add3bed3f2e366d38b954285a7602cae10a7244e7fe35e4002e90cd5") // 629408
+        uint256("c1aa0511add3bed3f2e366d38b954285a7602cae10a7244e7fe35e4002e90cd5"), // 629408
+        uint256("639756cf39bf12a4a0ab4ea5ec10938fd0f463cc7bc1bd2916529a445ceba2ab")  // 680406
     };
 }
 
