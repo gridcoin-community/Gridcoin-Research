@@ -3238,14 +3238,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     double dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
 
     // Common coin validator
-    auto is_claim_valid = [](
+    auto is_claim_valid = [this](
             int64_t claim,
             double por_owed,
             double pos_owed,
-            int64_t fees) -> bool
+            int64_t fees)
     {
         // Round to Halfords to avoid epsilon errors.
         int64_t max_owed = roundint64((por_owed * 1.25 + pos_owed) * COIN) + fees;
+
+        // Block version 9 and below allowed a 1 GRC wiggle.
+        if(nVersion < 10)
+            max_owed += 1 * COIN;
+
         return claim <= max_owed;
     };
 
