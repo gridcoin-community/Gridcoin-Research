@@ -125,6 +125,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	cpid.cpp \
 	crypter.cpp \
 	db.cpp \
+	gridcoin.cpp \
 	init.cpp \
 	kernel.cpp \
 	key.cpp \
