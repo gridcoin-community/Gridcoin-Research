@@ -3276,20 +3276,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
             double OUT_POR = 0;
             double OUT_INTEREST_OWED = 0;
-
-            double dAccrualAge = 0;
-            double dAccrualMagnitudeUnit = 0;
-            double dAccrualMagnitude = 0;
-
+            double unused;
             GetProofOfStakeReward(
                         nCoinAge, nFees, bb.cpid, true, 1, nTime,
                         pindex, "connectblock_investor",
-                        OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude);
+                        OUT_POR, OUT_INTEREST_OWED, unused, unused, unused);
 
             if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
             {
-                return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : actual %f vs calculated %f, Fees %f",
-                                     dStakeReward, OUT_INTEREST_OWED, /*dCalculatedResearchReward, (double)*/nFees));
+                if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
+                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : actual %f vs calculated %f, Fees %f",
+                                         dStakeReward, OUT_INTEREST_OWED, /*dCalculatedResearchReward, (double)*/nFees));
+
+                LogPrintf("WARNING: ignoring invalid invalid claims on block %s", pindex->GetBlockHash().ToString());
             }
         }
     }
