@@ -3398,10 +3398,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else
                                 LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                                     bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
+                            }
+                        }
                         }
                 }
-        }
-        }
 
         //Approve first coinstake in DPOR block
         if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
@@ -7580,13 +7580,13 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
 
-  size_t pos = 0;
+    size_t pos = 0;
     while((pos = str.find(oldStr, pos)) != std::string::npos)
     {
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+    return str;
 }
 
 std::string LowerUnderscore(std::string data)
@@ -7745,7 +7745,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-
+                        
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -8329,8 +8329,8 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 if (sMessageType=="poll")
                                 {
                                     msPoll = msg;
-                                        }
-                                        }
+                                }
+                        }
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
@@ -8357,9 +8357,9 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if(fDebug)
                     WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
+            }
                   }
                 }
-    }
 
    return fMessageLoaded;
 }
