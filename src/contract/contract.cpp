@@ -27,6 +27,7 @@ bool CheckMessageSignature(std::string sAction,std::string messagetype, std::str
     if (sAction=="D" && messagetype=="beacon") strMasterPubKey = msMasterProjectPublicKey;
     if (sAction=="D" && messagetype=="poll")   strMasterPubKey = msMasterProjectPublicKey;
     if (sAction=="D" && messagetype=="vote")   strMasterPubKey = msMasterProjectPublicKey;
+    if (messagetype=="protocol")  strMasterPubKey = msMasterProjectPublicKey;
 
     std::string db64 = DecodeBase64(sSig);
     CKey key;
@@ -64,7 +65,7 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
     return SignedMessage;
 }
 
-std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
+std::string SendMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
                        std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey)
 {
     std::string sAddress = GetBurnAddress();
@@ -88,10 +89,10 @@ std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, st
     return wtx.GetHash().GetHex().c_str();
 }
 
-std::string AddContract(std::string sType, std::string sName, std::string sContract)
+std::string SendContract(std::string sType, std::string sName, std::string sContract)
 {
     std::string sPass = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-    std::string result = AddMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
+    std::string result = SendMessage(true,sType,sName,sContract,sPass,AmountFromValue(1),.00001,"");
     return result;
 }
 

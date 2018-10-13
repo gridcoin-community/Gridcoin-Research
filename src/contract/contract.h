@@ -1,7 +1,7 @@
 #pragma once
 
-std::string AddContract(std::string sType, std::string sName, std::string sContract);
-std::string AddMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
+std::string SendContract(std::string sType, std::string sName, std::string sContract);
+std::string SendMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
                     std::string sMasterKey, int64_t MinimumBalance, double dFees, std::string strPublicKey);
 std::string GetBurnAddress();
 std::string SignMessage(std::string sMsg, std::string sPrivateKey);

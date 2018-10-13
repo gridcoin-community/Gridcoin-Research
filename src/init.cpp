@@ -253,14 +253,14 @@ std::string HelpMessage()
  */
 bool InitSanityCheck(void)
 {
+    // The below sanity check is still required for OpenSSL via key.cpp until Bitcoin's secp256k1 is ported over. For now we have
+    // only ported the accelerated hashing.
     if(!ECC_InitSanityCheck()) {
         InitError("OpenSSL appears to lack support for elliptic curve cryptography. For more "
                   "information, visit https://en.bitcoin.it/wiki/OpenSSL_and_EC_Libraries");
         return false;
     }
-
-    // Remaining sanity checks, see #4081
-
+    
     return true;
 }
 
@@ -493,6 +493,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Sanity check
     if (!InitSanityCheck())
         return InitError(_("Initialization sanity check failed. Gridcoin is shutting down."));
+
+    // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
+    std::string sha256_algo = SHA256AutoDetect();
+    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);                                                                                      
 
     std::string strDataDir = GetDataDir().string();
     std::string strWalletFileName = GetArg("-wallet", "wallet.dat");
