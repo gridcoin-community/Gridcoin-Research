@@ -3284,8 +3284,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
             {
                 if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
-                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : actual %f vs calculated %f, Fees %f",
-                                         dStakeReward, OUT_INTEREST_OWED, CoinToDouble(calculatedResearchReward), CoinToDouble(nFees)));
+                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : claimed %f vs calculated %f, Interest %f, Fees %f",
+                                         dStakeReward, CoinToDouble(calculatedResearchReward), OUT_INTEREST_OWED, CoinToDouble(nFees)));
 
                 LogPrintf("WARNING: ignoring invalid invalid claims on block %s", pindex->GetBlockHash().ToString());
             }
