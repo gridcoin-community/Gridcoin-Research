@@ -4143,8 +4143,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
 bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
-
-    if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
@@ -5560,7 +5558,8 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
     try
     {
-        StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
+        const std::string& cpid = pIndex->GetCPID();
+        StructCPID stMag = GetInitializedStructCPID2(cpid, mvMagnitudesCopy);
         stMag.InterestSubsidy += pIndex->nInterestSubsidy;
         stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
@@ -5590,11 +5589,10 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
         stMag.interestPayments += pIndex->nInterestSubsidy;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag,
-                                              pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
+        stMag.owed = GetOutstandingAmountOwed(stMag, cpid, pIndex->nTime, total_owed, pIndex->nMagnitude);
 
         stMag.totalowed = total_owed;
-        mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
+        mvMagnitudesCopy[cpid] = stMag;
     }
     catch (const std::bad_alloc& ba)
     {
@@ -5703,7 +5701,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
 
-
+    const uint128 cpid128(cpid);
     StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
@@ -5719,7 +5717,8 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         CBlockIndex* pblockindex = mapItem->second;
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
-           pblockindex->GetCPID() != cpid)
+           pblockindex->IsUserCPID() == false ||
+           pblockindex->cpid != cpid128)
             continue;
 
         // Block located and verified.
