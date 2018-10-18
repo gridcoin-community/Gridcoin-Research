@@ -2944,18 +2944,26 @@ UniValue GetJSONBeaconReport()
 double GetTotalNeuralNetworkHashVotes()
 {
     double total = 0;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
     {
-        double popularity = mvNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
+        auto& neural_hash = entry.first;
+        auto& popularity = entry.second;
+
         // d41d8 is the hash of an empty magnitude contract - don't count it
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
+        if(popularity >= 0.01 &&
+           neural_hash != "TOTAL_VOTES" &&
+           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             total += popularity;
         }
-
     }
+    
     return total;
 }
 
@@ -2963,18 +2971,26 @@ double GetTotalNeuralNetworkHashVotes()
 double GetTotalCurrentNeuralNetworkHashVotes()
 {
     double total = 0;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
     {
-        double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
+        auto& neural_hash = entry.first;
+        auto& popularity = entry.second;
+        
         // d41d8 is the hash of an empty magnitude contract - don't count it
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
+        if(popularity >= .01 &&
+           neural_hash != "TOTAL_VOTES" &&
+           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             total += popularity;
         }
-
     }
+    
     return total;
 }
 
@@ -2983,7 +2999,6 @@ UniValue GetJSONNeuralNetworkReport()
 {
     UniValue results(UniValue::VARR);
     //Returns a report of the networks neural hashes in order of popularity
-    std::string neural_hash = "";
     std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
     double pct = 0;
@@ -2991,18 +3006,25 @@ UniValue GetJSONNeuralNetworkReport()
     entry.pushKV("Neural Hash","Popularity,Percent %");
     double votes = GetTotalNeuralNetworkHashVotes();
 
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& hash : sorted_hashes)
     {
-        double popularity = mvNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
-
+        auto& neural_hash = hash.first;
+        auto& popularity = hash.second;
+        
         //If the hash != empty_hash: >= .01
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+        if (popularity > 0 &&
+            neural_hash != "TOTAL_VOTES" &&
+            neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             row = neural_hash + "," + RoundToString(popularity,0);
             report += row + "\n";
             pct = (((double)popularity)/(votes+.01))*100;
-                  entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+            entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
         }
     }
     // If we have a pending superblock, append it to the report:
@@ -3044,20 +3066,28 @@ UniValue GetJSONCurrentNeuralNetworkReport()
     entry.pushKV("Neural Hash","Popularity,Percent %");
     double votes = GetTotalCurrentNeuralNetworkHashVotes();
 
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
+    for(auto& hash : sorted_hashes)
     {
-        double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
-
+        auto& neural_hash = hash.first;
+        auto& popularity = hash.second;
+        
         //If the hash != empty_hash: >= .01
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+        if(popularity > 0 &&
+           neural_hash != "TOTAL_VOTES" &&
+           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             row = neural_hash + "," + RoundToString(popularity,0);
             report += row + "\n";
             pct = (((double)popularity)/(votes+.01))*100;
-                  entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+            entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
         }
     }
+    
     // If we have a pending superblock, append it to the report:
     std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
     if (!SuperblockHeight.empty() && SuperblockHeight != "0")
@@ -3089,30 +3119,36 @@ UniValue GetJSONVersionReport()
 {
     UniValue results(UniValue::VARR);
     //Returns a report of the GRC Version staking blocks over the last 100 blocks
-    std::string neural_ver = "";
     std::string report = "Version, Popularity\n";
     std::string row = "";
     double pct = 0;
     UniValue entry(UniValue::VOBJ);
     entry.pushKV("Version","Popularity,Percent %");
-
+    
     double votes = 0;
     for(auto it : mvNeuralVersion)
         votes += it.second;
-
-    for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii)
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_versions(
+                mvNeuralVersion.begin(),
+                mvNeuralVersion.end());
+    
+    for(auto& version : sorted_versions)
     {
-        double popularity = mvNeuralVersion[(*ii).first];
-        neural_ver = (*ii).first;
+        auto& neural_ver = version.first;
+        auto& popularity = version.second;        
+        
         //If the hash != empty_hash:
         if (popularity > 0)
         {
             row = neural_ver + "," + RoundToString(popularity,0);
             report += row + "\n";
             pct = popularity/(votes+.01)*100;
-                  entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+            entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
         }
     }
+    
     results.push_back(entry);
     return results;
 }
