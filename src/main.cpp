@@ -26,6 +26,7 @@
 #include "appcache.h"
 #include "tally.h"
 #include "contract/contract.h"
+#include "contract/superblock.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -2988,85 +2989,6 @@ std::string ConvertBinToHex(std::string a)
       }
       return sOut;
 }
-
-std::string UnpackBinarySuperblock(std::string sBlock)
-{
-    // 12-21-2015: R HALFORD: If the block is not binary, return the legacy format for backward compatibility
-    std::string sBinary = ExtractXML(sBlock,"<BINARY>","</BINARY>");
-    if (sBinary.empty()) return sBlock;
-    std::string sZero = ExtractXML(sBlock,"<ZERO>","</ZERO>");
-    double dZero = RoundFromString(sZero,0);
-    // Binary data support structure:
-    // Each CPID consumes 16 bytes and 2 bytes for magnitude: (Except CPIDs with zero magnitude - the count of those is stored in XML node <ZERO> to save space)
-    // 1234567890123456MM
-    // MM = Magnitude stored as 2 bytes
-    // No delimiter between CPIDs, Step Rate = 18
-    std::string sReconstructedMagnitudes = "";
-    for (unsigned int x = 0; x < sBinary.length(); x += 18)
-    {
-        if (sBinary.length() >= x+18)
-        {
-            std::string bCPID = sBinary.substr(x,16);
-            std::string bMagnitude = sBinary.substr(x+16,2);
-            std::string sCPID = ConvertBinToHex(bCPID);
-            std::string sHexMagnitude = ConvertBinToHex(bMagnitude);
-            double dMagnitude = ConvertHexToDouble("0x" + sHexMagnitude);
-            std::string sRow = sCPID + "," + RoundToString(dMagnitude,0) + ";";
-            sReconstructedMagnitudes += sRow;
-        }
-    }
-    // Append zero magnitude researchers so the beacon count matches
-    for (double d0 = 1; d0 <= dZero; d0++)
-    {
-            std::string sZeroCPID = "0";
-            std::string sRow1 = sZeroCPID + ",15;";
-            sReconstructedMagnitudes += sRow1;
-    }
-    std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
-    std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
-    std::string sReconstructedBlock = "<AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES><MAGNITUDES>" + sReconstructedMagnitudes + "</MAGNITUDES>";
-    return sReconstructedBlock;
-}
-
-std::string PackBinarySuperblock(std::string sBlock)
-{
-    std::string sMagnitudes = ExtractXML(sBlock,"<MAGNITUDES>","</MAGNITUDES>");
-    std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
-    std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
-    // For each CPID in the superblock, convert data to binary
-    std::vector<std::string> vSuperblock = split(sMagnitudes.c_str(),";");
-    std::string sBinary = "";
-    double dZeroMagCPIDCount = 0;
-    for (unsigned int i = 0; i < vSuperblock.size(); i++)
-    {
-            if (vSuperblock[i].length() > 1)
-            {
-                std::string sPrefix = "00000000000000000000000000000000000" + ExtractValue(vSuperblock[i],",",0);
-                std::string sCPID = sPrefix.substr(sPrefix.length()-32,32);
-                double magnitude = RoundFromString(ExtractValue("0"+vSuperblock[i],",",1),0);
-                if (magnitude < 0)     magnitude=0;
-                if (magnitude > 32767) magnitude = 32767;  // Ensure we do not blow out the binary space (technically we can handle 0-65535)
-                std::string sBinaryCPID   = ConvertHexToBin(sCPID);
-                std::string sHexMagnitude = DoubleToHexStr(magnitude,4);
-                std::string sBinaryMagnitude = ConvertHexToBin(sHexMagnitude);
-                std::string sBinaryEntry  = sBinaryCPID+sBinaryMagnitude;
-                if (sCPID=="00000000000000000000000000000000")
-                {
-                    dZeroMagCPIDCount += 1;
-                }
-                else
-                {
-                    sBinary += sBinaryEntry;
-                }
-
-            }
-    }
-    std::string sReconstructedBinarySuperblock = "<ZERO>" + RoundToString(dZeroMagCPIDCount,0) + "</ZERO><BINARY>" + sBinary + "</BINARY><AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES>";
-    return sReconstructedBinarySuperblock;
-}
-
-
-
 
 double ClientVersionNew()
 {
