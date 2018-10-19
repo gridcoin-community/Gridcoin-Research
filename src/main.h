@@ -113,7 +113,7 @@ inline bool IsV10Enabled(int nHeight)
     // hence the odd height.
     return fTestNet
             ? nHeight >= 629409
-            : nHeight >= 1400000;
+            : nHeight >= 1420000;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
