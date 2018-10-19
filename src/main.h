@@ -33,6 +33,7 @@ extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
+static const int64_t DEFAULT_CBR = 10 * COIN;
 
 static const double NeuralNetworkMultiplier = 115000;
 
@@ -112,7 +113,7 @@ inline bool IsV10Enabled(int nHeight)
     // hence the odd height.
     return fTestNet
             ? nHeight >= 629409
-            : nHeight >= 1400000;
+            : nHeight >= 1420000;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
@@ -278,7 +279,7 @@ bool CheckProofOfResearch(
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
-
+int64_t GetConstantBlockReward(const CBlockIndex* index);
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,

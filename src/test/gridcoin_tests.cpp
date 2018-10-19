@@ -2,6 +2,7 @@
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
+#include "appcache.h"
 #include "contract/superblock.h"
 
 #include "data/superblock.txt.h"
@@ -165,6 +166,76 @@ BOOST_AUTO_TEST_CASE(gridcoin_IncompleteCpidShouldNotBeResearcher)
 BOOST_AUTO_TEST_CASE(gridcoin_ValidCpidShouldBeResearcher)
 {
     BOOST_CHECK(IsResearcher("9c508a9e20f0415755db0ca27375c5fe") == true);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+//
+// CBR tests
+//
+struct GridcoinCBRTestConfig
+{
+    GridcoinCBRTestConfig()
+    {
+        // Clear out previous CBR settings.
+        DeleteCache("protocol", "blockreward1");
+    }
+};
+
+BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests)
+BOOST_GLOBAL_FIXTURE(GridcoinCBRTestConfig);
+
+BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
+{
+    CBlockIndex index;
+    index.nTime = 1538066417;
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
+{
+    const int64_t time = 123456;
+    const int64_t cbr = 14.9 * COIN;
+
+    CBlockIndex index;
+    index.nVersion = 10;
+    index.nTime = time;
+
+    WriteCache("protocol", "blockreward1", ToString(cbr), time);
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
+{
+    const int64_t time = 123456;
+    CBlockIndex index;
+    index.nTime = time;
+
+    WriteCache("protocol", "blockreward1", ToString(-1 * COIN), time);
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
+{
+    const int64_t time = 123456;
+    CBlockIndex index;
+    index.nTime = time;
+
+    WriteCache("protocol", "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
+{
+    CBlockIndex index;
+    index.nTime = 1538066417;
+    const int64_t max_message_age = 60 * 24 * 30 * 6 * 60;
+
+    // Make the block reward message 1 second older than the max age
+    // relative to the block.
+    WriteCache("protocol", "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
+
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
 
