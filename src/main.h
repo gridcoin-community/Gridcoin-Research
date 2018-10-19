@@ -33,6 +33,7 @@ extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
+static const int64_t DEFAULT_CBR = 10 * COIN;
 
 static const double NeuralNetworkMultiplier = 115000;
 
@@ -103,6 +104,16 @@ inline uint32_t IsV9Enabled(int nHeight)
     return fTestNet
             ? nHeight >=  399000
             : nHeight >= 1144000;
+}
+
+inline bool IsV10Enabled(int nHeight)
+{
+    // Testnet used a controlled switch by injecting a v10 block
+    // using a modified client and different miner trigger rules,
+    // hence the odd height.
+    return fTestNet
+            ? nHeight >= 629409
+            : nHeight >= 1420000;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
@@ -266,11 +277,13 @@ bool CheckProofOfResearch(
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height);
-
+int64_t GetConstantBlockReward(const CBlockIndex* index);
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
@@ -1000,7 +1013,7 @@ class CBlock
 {
 public:
     // header
-    static const int CURRENT_VERSION = 9;
+    static const int CURRENT_VERSION = 10;
     int nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;

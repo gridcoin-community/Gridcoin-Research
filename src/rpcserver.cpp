@@ -395,7 +395,6 @@ static const CRPCCommand vRPCCommands[] =
     { "readdata",                &readdata,                false,  cat_developer     },
     { "refhash",                 &refhash,                 false,  cat_developer     },
     { "reorganize",              &rpc_reorganize,          false,  cat_developer     },
-    { "seefile",                 &seefile,                 false,  cat_developer     },
     { "sendalert",               &sendalert,               false,  cat_developer     },
     { "sendalert2",              &sendalert2,              false,  cat_developer     },
     { "sendblock",               &sendblock,               false,  cat_developer     },
@@ -418,7 +417,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getnetworkinfo",          &getnetworkinfo,          true,   cat_network       },
     { "currenttime",             &currenttime,             false,  cat_network       },
     { "decryptphrase",           &decryptphrase,           false,  cat_network       },
-//  { "downloadblocks",          &downloadblocks,          false,  cat_network       },
     { "encryptphrase",           &encryptphrase,           false,  cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        true,   cat_network       },
     { "getbestblockhash",        &getbestblockhash,        true,   cat_network       },
@@ -441,11 +439,6 @@ static const CRPCCommand vRPCCommands[] =
     { "memorypool",              &memorypool,              true,   cat_network       },
     { "networktime",             &networktime,             true,   cat_network       },
     { "ping",                    &ping,                    true,   cat_network       },
-#ifdef WIN32
-    { "reindex",                 &reindex,                 true,   cat_network       },
-    { "restart",                 &restart,                 true,   cat_network       },
-    { "restorepoint",            &restorepoint,            true,   cat_network       },
-#endif
     { "showblock",               &showblock,               true,   cat_network       },
     { "stop",                    &stop,                    true,   cat_network       },
     { "vote",                    &vote,                    false,  cat_network       },

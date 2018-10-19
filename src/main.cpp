@@ -22,7 +22,6 @@
 #include "beacon.h"
 #include "miner.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
@@ -137,7 +136,6 @@ int64_t nLastCleaned = 0;
 
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
@@ -1959,7 +1957,7 @@ double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstr
 
 // miner's coin base reward
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
-{
+{    
     //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
     int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
@@ -2087,6 +2085,30 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 
 // miner's coin stake reward based on coin age spent (coin-days)
+int64_t GetConstantBlockReward(const CBlockIndex* index)
+{
+    // The constant block reward is set to a default, voted on value, but this can
+    // be overridden using an admin message. This allows us to change the reward
+    // amount without having to release a mandatory with updated rules. In the case
+    // there is a breach or leaked admin keys the rewards are clamped to twice that
+    // of the default value.    
+    const int64_t MIN_CBR = 0;
+    const int64_t MAX_CBR = DEFAULT_CBR * 2;
+
+    int64_t reward = DEFAULT_CBR;
+    AppCacheEntry oCBReward = ReadCache("protocol","blockreward1");
+
+    //TODO: refactor the expire checking to subroutine
+    //Note: time constant is same as GetBeaconPublicKey
+    if( (index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
+    {
+        reward = atoi64(oCBReward.value);
+    }
+
+    reward = std::max(reward, MIN_CBR);
+    reward = std::min(reward, MAX_CBR);
+    return reward;
+}
 
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
     bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
@@ -2127,12 +2149,18 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     {
             // Research Age Subsidy - PROD
             int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+            int64_t nInterest = 0;
 
             // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
             // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
             // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
             // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
+
+            /* Constant Block Reward */
+            if (pindexLast->nVersion>=10)
+                nInterest = GetConstantBlockReward(pindexLast);
+            else
+                nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 
             int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
 
@@ -2326,6 +2354,8 @@ bool CheckProofOfResearch(
         const CBlockIndex* pindexPrev, //previous block in chain index
         const CBlock &block)     //block to check
 {
+    /* In this function GetProofOfStakeReward is called with wrong pindex,
+     * which does not matter, because this one is no longer used */
     if(block.vtx.size() == 0 ||
        !block.IsProofOfStake() ||
        pindexPrev->nHeight <= nGrandfather ||
@@ -3039,21 +3069,21 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     if (nMinDepth < 12) nMinDepth=12;
     while (pblockIndex->nHeight > nMinDepth)
     {
-            pblockIndex = pblockIndex->pprev;
-            LogPrintf("Money Supply height %d", pblockIndex->nHeight);
+        pblockIndex = pblockIndex->pprev;
+        LogPrintf("Money Supply height %d", pblockIndex->nHeight);
 
-            if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
-            if (pblockIndex == pindexGenesisBlock)
-            {
-                return nGenesisSupply;
-            }
-            if (pblockIndex->nMoneySupply > nGenesisSupply)
-            {
-                //Set index back to original pointer
-                pindexcurrent = pblockMemory;
-                //Return last valid money supply
-                return pblockIndex->nMoneySupply;
-            }
+        if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
+        if (pblockIndex == pindexGenesisBlock)
+        {
+            return nGenesisSupply;
+        }
+        if (pblockIndex->nMoneySupply > nGenesisSupply)
+        {
+            //Set index back to original pointer
+            pindexcurrent = pblockMemory;
+            //Return last valid money supply
+            return pblockIndex->nMoneySupply;
+        }
     }
     // At this point, we fall back to the old logic with a minimum of the genesis supply (should never happen - if it did, blockchain will need rebuilt anyway due to other fields being invalid):
     pindexcurrent = pblockMemory;
@@ -3083,7 +3113,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
     unsigned int nSigOps = 0;
-    double DPOR_Paid = 0;
 
     bool bIsDPOR = false;
 
@@ -3162,23 +3191,24 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         nTotalCoinstake += tx.vout[i].nValue;
                     }
                     if (fDebug10)   LogPrintf(" nHeight %d; nTCS %f; nTxValueOut %f",
-                        pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
+                                              pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
                 }
 
-                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-                if (bIsDPOR && pindex->nHeight > nGrandfather)
+                if (pindex->nVersion >= 10)
                 {
+                    if (tx.vout.size() > 8)
+                        return DoS(100,error("Too many coinstake outputs"));
+                }
+                else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
+                {
+                    // Old rules, does not make sense
+                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
-                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                        if (fDebug10) LogPrintf("Iterating Recipient #%d  %s with Amount %f", i, Recipient, Amount);
                         if (Amount > 0)
                         {
-                            if (fDebug3) LogPrintf("Iterating Recipient #%d  %s with Amount %f", i, Recipient, Amount);
-                            LogPrintf("POR Payment results in an overpayment; Recipient %s, Amount %f ",Recipient, Amount);
-                            return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f ",
-                                                Recipient.c_str(), Amount));
+                            return DoS(50,error("Coinstake output %u forbidden", i));
                         }
                     }
                 }
@@ -3197,22 +3227,36 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // Check coinbase reward
         if (vtx[0].GetValueOut() > nReward)
             return DoS(50, error("ConnectBlock[] : coinbase reward exceeded (actual=%" PRId64 " vs calculated=%" PRId64 ")",
-                   vtx[0].GetValueOut(),
-                   nReward));
+                                 vtx[0].GetValueOut(),
+                       nReward));
     }
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     uint64_t nCoinAge = 0;
+    double dStakeReward = CoinToDouble(nStakeReward);
+    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
 
-    double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
-    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward) - DPOR_Paid;
+    // Common coin validator
+    auto is_claim_valid = [this](
+            int64_t claim,
+            double por_owed,
+            double pos_owed,
+            int64_t fees)
+    {
+        // Round to Halfords to avoid epsilon errors.
+        int64_t max_owed = roundint64((por_owed * 1.25 + pos_owed) * COIN) + fees;
 
-    if (fDebug) LogPrintf("Stake Reward of %f B %f I %f F %.f %s %s  ",
-        dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid, bb.Organization);
+        // Block version 9 and below allowed a 1 GRC wiggle.
+        if(nVersion < 10)
+            max_owed += 1 * COIN;
+
+        return claim <= max_owed;
+    };
+
 
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
-            // ppcoin: coin stake tx earns reward instead of paying fee
+        // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
@@ -3231,23 +3275,22 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
             double OUT_POR = 0;
             double OUT_INTEREST_OWED = 0;
+            double unused;
+            int64_t calculatedResearchReward = GetProofOfStakeReward(
+                        nCoinAge, nFees, bb.cpid, true, 1, nTime,
+                        pindex, "connectblock_investor",
+                        OUT_POR, OUT_INTEREST_OWED, unused, unused, unused);
 
-            double dAccrualAge = 0;
-            double dAccrualMagnitudeUnit = 0;
-            double dAccrualMagnitude = 0;
-
-            double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                    pindex, "connectblock_investor",
-                    OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
-            if (dStakeReward > (OUT_INTEREST_OWED+1+nFees) )
+            if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
             {
-                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f), dCalcResearchReward %f, Fees %f",
-                    bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED, dCalculatedResearchReward, (double)nFees));
+                if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
+                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : claimed %f vs calculated %f, Interest %f, Fees %f",
+                                         dStakeReward, CoinToDouble(calculatedResearchReward), OUT_INTEREST_OWED, CoinToDouble(nFees)));
+
+                LogPrintf("WARNING: ignoring invalid invalid claims on block %s", pindex->GetBlockHash().ToString());
             }
         }
-
     }
-
 
     AddCPIDBlockHash(bb.cpid, pindex->GetBlockHash());
 
@@ -3284,13 +3327,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (pindex->nHeight > nGrandfather && !fReorganizing)
     {
-        // Block Spamming
-        if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+        if(nVersion < 10)
         {
-            return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
-        }
+            // Block Spamming
+            if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+            {
+                return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
+            }
 
-        if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
+            if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
+        }
 
         double OUT_POR = 0;
         double OUT_INTEREST = 0;
@@ -3300,93 +3346,82 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         // ResearchAge 1:
         GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-            pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                              pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         if (IsResearcher(bb.cpid))
         {
+            //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
+            double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
+            if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
 
-                //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
-                double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
-                if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
+            if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
+            {
+                return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
+                                     bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
+                                     dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
+            }
 
-                if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
+            if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+            {
+                std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+                LogPrintf("******  %s ***** ",sNarr);
+            }
+
+            if (IsResearchAgeEnabled(pindex->nHeight)
+                && (BlockNeedsChecked(nTime) || nVersion>=9))
+            {
+
+                // 6-4-2017 - Verify researchers stored block magnitude
+                // 2018 02 04 - Moved here for better effect.
+                double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+                if( bb.Magnitude > 0
+                    && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
+                    && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
                 {
-                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
-                            (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str()));
-
+                    return DoS(20, error(
+                                   "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                                   bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
                 }
 
+                // 2018 02 04 - Brod - Move cpid check here for better effect
+                /* Only signature check is sufficient here, but kiss and
+                            call the function. The height is of previous block. */
+                if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
+                {
+                    if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
+                        return DoS(20, error(
+                                       "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                                       bb.cpid.c_str(), bb.cpidv2.c_str(),
+                                       bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
+                    else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
+                }
+
+                // Mitigate DPOR Relay attack
+                // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
                 if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
                 {
-                            std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-                            LogPrintf("******  %s ***** ",sNarr);
+                    std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+                    LogPrintf("******  %s ***** ", sNarr);
+                    if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
                 }
 
-                if (IsResearchAgeEnabled(pindex->nHeight)
-                    && (BlockNeedsChecked(nTime) || nVersion>=9))
+                if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
+                    StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
+                    GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
+                                          pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
-                        // 6-4-2017 - Verify researchers stored block magnitude
-                        // 2018 02 04 - Moved here for better effect.
-                        double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
-                        if( bb.Magnitude > 0
-                            && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
-                            && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
-                        {
-                            return DoS(20, error(
-                                "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
-                                bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
-                        }
-
-                        // 2018 02 04 - Brod - Move cpid check here for better effect
-                        /* Only signature check is sufficient here, but kiss and
-                            call the function. The height is of previous block. */
-                        if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
-                        {
-                            /* ignore on bad blocks already in chain */
-                            const std::set<uint256> vSkipHashBoincSignCheck =
-                            {    uint256("58b2d6d0ff7e3ebcaca1058be7574a87efadd4b7f5c661f9e14255f851a6185e") //P1144550 S
-                                ,uint256("471292b59e5f3ad94c39b3784a9a3f7a8324b9b56ff0ad00bd48c31658537c30") //P1146939 S
-                                ,uint256("5b63d4edbdec06ddc2182703ce45a3ced70db0d813e329070e83bf37347a6c2c") //P1152917 S
-                                ,uint256("e9035d821668a0563b632e9c84bc5af73f53eafcca1e053ac6da53907c7f6940") //P1154121 S
-                                ,uint256("1d30c6d4dce377d69c037f1a725aabbc6bafa72a95456dbe2b2538bc1da115bd") //P1168122 S
-                                ,uint256("934c6291209d90bb5d3987885b413c18e39f0e28430e8d302f20888d2a35e725") //P1168193 S
-                                ,uint256("58282559939ced7ebed7d390559c7ac821932958f8f2399ad40d1188eb0a57f9") //P1170167 S
-                                ,uint256("946996f693a33fa1334c1f068574238a463d438b1a3d2cd6d1dd51404a99c73d") //P1176436 S
-                            };
-                            if( vSkipHashBoincSignCheck.count(pindex->GetBlockHash())==0 )
-                                return DoS(20, error(
-                                    "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
-                                     bb.cpid.c_str(), bb.cpidv2.c_str(),
-                                     bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
-                            else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
-                        }
-
-                        // Mitigate DPOR Relay attack
-                        // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
-                        if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-                        {
-                            std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-                            LogPrintf("******  %s ***** ", sNarr);
-                            if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
-                        }
-
-                        if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
-                        {
-                            StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
-                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                                        pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-                            if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
-                            {
-
-                                if (fDebug3) LogPrintf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid);
-
-                                return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                            }
-                        }
+                    if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
+                    {
+                        if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
+                            return DoS(10,error(
+                                       "ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                            bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str()));
+                            else
+                                LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                                    bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
+                    }
                 }
+            }
         }
 
         //Approve first coinstake in DPOR block
@@ -3394,24 +3429,21 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
             if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
             {
-                if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
+                StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
+                if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
                 {
-                    StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
-                    if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
+                    double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
+                    if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
                     {
-                        double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
-                        if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
-                        {
-                            LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                   deficit, bb.cpid, (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
-                                   OUT_POR, vtx[0].hashBoinc.c_str());
-                        }
-                        else
-                        {
-                            return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                         bb.cpid.c_str(), bb.ResearchSubsidy,
-                                         OUT_POR, vtx[0].hashBoinc.c_str());
-                        }
+                        LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                  deficit, bb.cpid, (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                                  OUT_POR, vtx[0].hashBoinc.c_str());
+                    }
+                    else
+                    {
+                        return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                     bb.cpid.c_str(), bb.ResearchSubsidy,
+                                     OUT_POR, vtx[0].hashBoinc.c_str());
                     }
                 }
             }
@@ -3470,14 +3502,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 if (!VerifySuperblock(superblock, pindex))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
-                                        neural_hash.c_str(), consensus_hash.c_str());
+                                 neural_hash.c_str(), consensus_hash.c_str());
                 }
                 if (!IsResearchAgeEnabled(pindex->nHeight))
                 {
                     if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                        neural_hash.c_str(), consensus_hash.c_str());
+                                     neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
                 else
@@ -3485,7 +3517,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     if (consensus_hash != neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                        neural_hash.c_str(), consensus_hash.c_str());
+                                     neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
 
@@ -3532,15 +3564,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         stCPID.ResearchSubsidy += bb.ResearchSubsidy;
         if (pindex->nHeight > stCPID.LastBlock)
         {
-                stCPID.LastBlock = pindex->nHeight;
-                stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+            stCPID.LastBlock = pindex->nHeight;
+            stCPID.BlockHash = pindex->GetBlockHash().GetHex();
         }
 
         if (pindex->nMagnitude > 0)
         {
-                stCPID.Accuracy++;
-                stCPID.TotalMagnitude += pindex->nMagnitude;
-                stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+            stCPID.Accuracy++;
+            stCPID.TotalMagnitude += pindex->nMagnitude;
+            stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
         }
 
         if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
@@ -4252,7 +4284,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         if (fDebug10) LogPrintf("CheckBlock[]: TotalSubsidy %f, Height %i, %s, %f, Res %f, Interest %f, hb: %s ",
                              total_subsidy, height1, bb.cpid,
                              mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
-        if (total_subsidy < limiter)
+        if ((nVersion < 10) && (total_subsidy < limiter))
         {
             if (fDebug3) LogPrintf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s ",bb.cpid,
                                 mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
@@ -4347,12 +4379,13 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
               || (IsV8Enabled(nHeight) && nVersion < 8)
               || (IsV9Enabled(nHeight) && nVersion < 9)
+              || (IsV10Enabled(nHeight) && nVersion < 10)
               )
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
              ||(!IsV8Enabled(nHeight) && nVersion >= 8)
              ||(!IsV9Enabled(nHeight) && nVersion >= 9)
-             )
+             ||(!IsV10Enabled(nHeight) && nVersion >= 10))
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
@@ -4767,29 +4800,8 @@ void GridcoinServices()
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
-/*
-    // Check for updates once per day.
-    if(GetAdjustedTime() - nLastCheckedForUpdate > 24 * 60 * 60)
-    {
-        nLastCheckedForUpdate = GetAdjustedTime();
-
-        if (fDebug3) LogPrintf("Checking for upgrade...");
-        if(Restarter::IsUpgradeAvailable())
-        {
-            LogPrintf("Upgrade available.");
-            if(GetBoolArg("-autoupgrade", false))
-            {
-                LogPrintf("Upgrading client.");
-                Restarter::UpgradeClient();
-            }
-        }
-    }
-*/
-
     if (fDebug10) LogPrintf(" {/SVC} ");
 }
-
-
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
@@ -5303,8 +5315,8 @@ bool WriteKey(std::string sKey, std::string sValue)
                     fWritten=true;
                 }
             }
-            sLine = strReplace(sLine, "\r", "");
-            sLine = strReplace(sLine, "\n", "");
+            sLine = strReplace(sLine,"\r","");
+            sLine = strReplace(sLine,"\n","");
             sLine += "\n";
             sConfig += sLine;
        }
@@ -7080,6 +7092,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             else if (neural_request=="neural_hash")
             {
+            if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
+            {
+                std::string r_hash;  vRecv >> r_hash;
+                supercfwd::SendResponse(pfrom,r_hash);
+            }
+            else
             pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
             }
             else if (neural_request=="explainmag")
@@ -7091,6 +7109,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
+            }
+            else if (neural_request=="supercfwdr")
+            {
+                // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
+                supercfwd::QuorumResponseHook(pfrom,neural_request_id);
             }
     }
     else if (strCommand == "ping")
@@ -7177,6 +7200,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // nNeuralNonce must match request ID
             pfrom->NeuralHash = neural_response;
             if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
+
+            // Hook into miner for delegated sb staking
+            supercfwd::HashResponseHook(pfrom, neural_response);
     }
     else if (strCommand == "expmag_nresp")
     {
@@ -7202,6 +7228,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
                  if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
             }
+
+            // Hook into miner for delegated sb staking
+            supercfwd::QuorumResponseHook(pfrom,neural_contract);
     }
     else if (strCommand == "ndata_nresp")
     {
@@ -7619,13 +7648,13 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
 
-    size_t pos = 0;
+  size_t pos = 0;
     while((pos = str.find(oldStr, pos)) != std::string::npos)
     {
-        str.replace(pos, oldStr.length(), newStr);
-        pos += newStr.length();
-    }
-    return str;
+     str.replace(pos, oldStr.length(), newStr);
+     pos += newStr.length();
+  }
+  return str;
 }
 
 std::string LowerUnderscore(std::string data)
@@ -7784,7 +7813,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-                        
+
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -8399,9 +8428,9 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if(fDebug)
                             WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
-            }
                   }
                 }
+    }
 
    return fMessageLoaded;
 }
@@ -8512,7 +8541,10 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
 
         return 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
     }
-    else if (iRABlockSpan < 10 && iVerificationPhase != 2)
+
+    // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
+    if((pindexLast->nVersion >= 10 && iRABlockSpan < 10) ||
+       (pindexLast->nVersion < 10 && iRABlockSpan < 10 && iVerificationPhase != 2))
     {
         if(fDebug) LogPrintf("ComputeResearchAccrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %f)", cpid, iRABlockSpan, Accrual/(double)COIN);
         if(fDebug2) LogPrintf(" pHistorical w %s", pHistorical->GetBlockHash().GetHex());
@@ -8520,13 +8552,11 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
         // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
         return 0;
     }
-    else
-    {
-        if(fDebug) LogPrintf("ComputeResearchAccrual: %s Normal, unit=%f, Age=%f, AvgMagnitude=%f, Span=%d, CurMag=%.1f, OldMag=%.1f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> %d",
-            cpid, dMagnitudeUnit,dAccrualAge,AvgMagnitude,iRABlockSpan,dCurrentMagnitude,pHistorical->nMagnitude,
-            stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
-        return Accrual;
-    }
+
+    if(fDebug) LogPrintf("ComputeResearchAccrual: %s Normal, unit=%f, Age=%f, AvgMagnitude=%f, Span=%d, CurMag=%.1f, OldMag=%.1f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> %d",
+        cpid, dMagnitudeUnit,dAccrualAge,AvgMagnitude,iRABlockSpan,dCurrentMagnitude,pHistorical->nMagnitude,
+        stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
+    return Accrual;
 }
 
 

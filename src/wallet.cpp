@@ -18,7 +18,6 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "rpcprotocol.h"
-#include "grcrestarter.h"
 #include <boost/variant/apply_visitor.hpp>
 #include <script.h>
 #include "main.h"
@@ -27,7 +26,6 @@
 using namespace std;
 
 std::string SendReward(std::string sAddress, int64_t nAmount);
-extern double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 int64_t GetRSAWeightByCPID(std::string cpid);
 
 MiningCPID DeserializeBoincBlock(std::string block);

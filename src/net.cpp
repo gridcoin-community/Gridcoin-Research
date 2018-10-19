@@ -750,7 +750,6 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
-    X(NeuralHash);
     X(sGRCAddress);
     X(nTrust);
 
