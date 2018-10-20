@@ -52,13 +52,17 @@ struct GridcoinBeaconTestsFixture
 "c5c0a595d39ff3a00a2aca7485f1754f": "YzVjMGE1OTVkMzlmZjNhMDBhMmFjYTc0ODVmMTc1NGY5N2M2MzUzNjM5M2FjYTM4Mzc5MTY1NmIzZDM5NjY5Njk4M2MzNWM4OTYzZDk3MzU2OTljYzY2Yjk2M2UzZTQwNjMzMTc1NDE3NDY2N2I2ZjYyNmUyZjY0N2I7YjE2NDdhMTFmYzIzOWI5NTU2ODAyYzE2YjhhNWNhODY0M2U4MDBkMDE5NTE5MDdkMGU2NzI5NGU0MjMyNzNjYTttclZTNkVRVzVoNEcxRnM1QTlFTWFnajFLNXllTkRNSGdrOzA0ODNjY2YyZTA3MWI3Yjk3OTU4ZGM4MzI0YmNlNDA2NDQzODk2ZDEyYjk5MmNjZjQ5ZDA3YjIxZTgzMzU2NGVkODg4NzU3YzhlOGNjMWJmMjVhNWM0NzQ1MDIzOTc2N2M2MDIxZWJjNjAyYzY3MjcwMDY0MGYyODZjNzBlNTQwMGM=",
 "d0cea85e7a4a3e30af709e672dace08b": "ZDBjZWE4NWU3YTRhM2UzMGFmNzA5ZTY3MmRhY2UwOGI5OGM4M2Q5NDY2Yzc2NjNhOWI2YjNlNjc5Nzk5NjdjNzllY2EzOTYzNzA5MzllOTY5OWM4MzY5Yjk4NmI2M2M1NzQ2OTZlNzA3MDY4NmQ2NjcwNzQ3NjZjNjI2ZTZhNDE2ODZlNjI2YTZkMmY2NDcwNmU7OTQ0MmI4OWRlMzcyMzE0MWEyZDQ5YWNhZTIxN2QyYTNjYzRhNmQ4NjFlMzQ3YTZiZGZiZTYwY2JjNmMwZDc1Yzttb0FhYmFzRGlMRjd5YURKSHZQS0REc0RvdUYyUXhNb0J5OzA0MDU3ZWU2MzhhNTY3NzcwM2YyMWNjMzk5MmI1MDc0ZmI3YjA0MWUxYTI3MDg2NWYzZTAwNGJhNWFlNGNkN2IxMWZkZmY1YTE0ZWU4MDk3ODBjODJlZDhjNTZkMmM5N2FjOTgyMzJhMzAwZTU4ZjZiZmQ0ZTM3YjZkZjQzOTI0ZmE=",
     */
-    const int64_t beacon1_time,beacon2_time;
+    CBlockIndex index;
+    int64_t beacon1_time,beacon2_time;
     const std::string TEST_CPID;
     GridcoinBeaconTestsFixture()
-        : beacon1_time(pindexBest->nTime - 600 /* 10 minutes ago */)
-        , beacon2_time(pindexBest->nTime - (5 * 60 * 24 * 30 * 60) - 1 /* 5 months ago */)
-        , TEST_CPID("17c65330c0924259b2f93c31d25b03ad")
+        : TEST_CPID("17c65330c0924259b2f93c31d25b03ad")
     {
+        pindexBest = &index;
+        pindexBest->nTime = 1540016107;
+        beacon1_time = pindexBest->nTime - 600; /* 10 minutes ago */
+        beacon2_time = pindexBest->nTime - (5 * 60 * 24 * 30 * 60) - 1; /* 5 months ago */
+
         // setup function
         /* Add cpid beacon, so it is valid (age 10 minutes)
          * pk: 04a143881f40abb34b928efada2873f6571dbf7583b33359eb128beee309aff25b4e0ca5e9a1d8350791705392cb9445d23cfecce84cbf101344f4f1cd1f877f4b */
