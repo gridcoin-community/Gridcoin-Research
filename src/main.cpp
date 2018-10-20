@@ -2138,7 +2138,7 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
     const int64_t MAX_CBR = DEFAULT_CBR * 2;
 
     int64_t reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = ReadCache("protocol","blockreward1");
+    AppCacheEntry oCBReward = ReadCache(Section::PROTOCOL, "blockreward1");
 
     //TODO: refactor the expire checking to subroutine
     //Note: time constant is same as GetBeaconPublicKey
@@ -5784,10 +5784,9 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     // switching to v9. We want to clear these to avoid the data stacking up
     // with time. If this causes an issue when syncing then considering making
     // this >=v9 only again.
-        ClearCache(Section::NEURALSECURITY);
-    ClearCache("currentneuralsecurity");
-
+    ClearCache(Section::NEURALSECURITY);
     WriteCache(Section::NEURALSECURITY, "pending","0",GetAdjustedTime());
+
     try
     {
         int nMaxDepth = nBestHeight;

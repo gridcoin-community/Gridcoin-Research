@@ -178,7 +178,7 @@ struct GridcoinCBRTestConfig
     GridcoinCBRTestConfig()
     {
         // Clear out previous CBR settings.
-        DeleteCache("protocol", "blockreward1");
+        DeleteCache(Section::PROTOCOL, "blockreward1");
     }
 };
 
@@ -201,7 +201,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
     index.nVersion = 10;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(cbr), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
 }
 
@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(-1 * COIN), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
 }
 
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
@@ -233,7 +233,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
 
     // Make the block reward message 1 second older than the max age
     // relative to the block.
-    WriteCache("protocol", "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
 
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
 }
