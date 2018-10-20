@@ -12,6 +12,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "tally.h"
+#include "beacon.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -924,9 +925,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
     ComputeNeuralNetworkSupermajorityHashes();
 
+    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     LoadCPIDs();
 
-    uiInterface.InitMessage(_("Finding first applicable Research Project..."));
+    // Beacon private keys can't be imported here, because the wallet is locked
 
     if (!CheckDiskSpace())
         return false;
