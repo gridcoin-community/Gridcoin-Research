@@ -14,7 +14,7 @@ class RPCConsole: public QDialog
     Q_OBJECT
 
 public:
-    explicit RPCConsole(QWidget *parent = 0);
+    explicit RPCConsole(QWidget *parent = 0, Qt::WindowFlags f = Qt::WindowFlags() & ~Qt::WindowContextHelpButtonHint);
     ~RPCConsole();
 
     void setClientModel(ClientModel *model);

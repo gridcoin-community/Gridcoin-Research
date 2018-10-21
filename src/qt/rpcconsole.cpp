@@ -206,7 +206,7 @@ void RPCExecutor::request(const QString &command)
     }
 }
 
-RPCConsole::RPCConsole(QWidget *parent) :
+RPCConsole::RPCConsole(QWidget *parent, Qt::WindowFlags f) :
     QDialog(parent),
     ui(new Ui::RPCConsole),
     historyPtr(0)
