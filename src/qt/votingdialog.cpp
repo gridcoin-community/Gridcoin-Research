@@ -720,11 +720,6 @@ void VotingChartDialog::resetData(const VotingItem *item)
 
 #ifdef QT_CHARTS_LIB
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
-        unsigned int num = rand();
-        int r = (num >>  0) % 0xFF;
-        int g = (num >>  8) % 0xFF;
-        int b = (num >> 16) % 0xFF;
-        slice->setColor(QColor(r, g, b));
         series->append(slice);
         chart_->addSeries(series);
 #endif
