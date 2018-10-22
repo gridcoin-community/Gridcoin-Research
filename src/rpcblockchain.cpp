@@ -112,10 +112,7 @@ std::string getfilecontents(std::string filename);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
-
 std::string getfilecontents(std::string filename);
-
-std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -2000,7 +1997,7 @@ UniValue projects(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
-        std::string sProjectName = ToOfficialName(item.first);
+        std::string sProjectName = item.first;
 
         if (sProjectName.empty())
             continue;

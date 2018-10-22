@@ -107,8 +107,6 @@ extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
-extern std::string ToOfficialName(std::string proj);
-
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;
 
@@ -7547,41 +7545,14 @@ void InitializeProjectStruct(StructCPID& project)
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
-
-  size_t pos = 0;
-    while((pos = str.find(oldStr, pos)) != std::string::npos)
-    {
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
+    boost::replace_all(str, oldStr, newStr);
+    return str;
 }
 
 std::string LowerUnderscore(std::string data)
 {
     boost::to_lower(data);
-    data = strReplace(data,"_"," ");
-    return data;
-}
-
-std::string ToOfficialName(std::string proj)
-{
-        proj = LowerUnderscore(proj);
-        //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-    for(const auto& item : ReadCacheSection("projectmapping"))
-        {
-        const std::string& key = item.first;
-        const AppCacheEntry& entry = item.second;
-
-        std::string project_boinc   = key;
-        std::string project_netsoft = entry.value;
-                                proj=LowerUnderscore(proj);
-                                project_boinc=LowerUnderscore(project_boinc);
-                                project_netsoft=LowerUnderscore(project_netsoft);
-                                if (proj==project_boinc) proj=project_netsoft;
-                            }
-
-        return proj;
+    return strReplace(data,"_"," ");
 }
 
 void HarvestCPIDs(bool cleardata)
@@ -7691,8 +7662,7 @@ void HarvestCPIDs(bool cleardata)
                     std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
                     std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
 
-                    boost::to_lower(proj);
-                    proj = ToOfficialName(proj);
+                    proj = LowerUnderscore(proj);
                     int64_t nStart = GetTimeMillis();
                     if (cpidhash.length() > 5 && proj.length() > 3)
                     {
@@ -7718,7 +7688,6 @@ void HarvestCPIDs(bool cleardata)
                             structcpid.errors = "Gridcoin Email setting does not match project Email.  Check Gridcoin e-mail address setting or boinc project e-mail setting.";
                             structcpid.Iscpidvalid=false;
                         }
-
 
                         if (!structcpid.Iscpidvalid)
                         {

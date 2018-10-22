@@ -21,6 +21,7 @@ extern std::string ConvertHexToBin(std::string a);
 extern std::string ConvertBinToHex(std::string a);
 extern bool fTestNet;
 double RoundFromString(std::string s, int place);
+std::string LowerUnderscore(std::string data);
 
 namespace
 {
@@ -122,6 +123,11 @@ BOOST_AUTO_TEST_CASE(gridcoin_ValidateConvertBinToHex)
     boost::algorithm::unhex(hex, std::back_inserter(bin));
 
     BOOST_CHECK_EQUAL(ConvertBinToHex(bin), hex);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_LowerUnderscoreShouldConvertToLowerCaseAndReplaceUnderscoresWithSpaces)
+{
+    BOOST_CHECK_EQUAL("hello test string", LowerUnderscore("Hello_TEST_string"));
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
