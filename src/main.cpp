@@ -229,7 +229,6 @@ bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern void GetGlobalStatus();
-extern bool ProjectIsValid(std::string project);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -7547,25 +7546,6 @@ void InitializeProjectStruct(StructCPID& project)
     if (fDebug10) LogPrintf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname, YesNo(project.Iscpidvalid));
 }
 
-bool ProjectIsValid(std::string sProject)
-{
-    if (sProject.empty())
-        return false;
-
-    boost::to_lower(sProject);
-
-    for (const auto& item : ReadCacheSection("project"))
-    {
-        const AppCacheEntry& entry = item.second;
-        std::string sProjectName = ToOfficialName(entry.value);
-
-        if (sProjectName == sProject)
-            return true;
-    }
-
-    return false;
-}
-
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
@@ -7719,7 +7699,6 @@ void HarvestCPIDs(bool cleardata)
 
                     boost::to_lower(proj);
                     proj = ToOfficialName(proj);
-                    ProjectIsValid(proj);
                     int64_t nStart = GetTimeMillis();
                     if (cpidhash.length() > 5 && proj.length() > 3)
                     {
