@@ -7538,8 +7538,6 @@ void InitializeProjectStruct(StructCPID& project)
     std::string ENCbpk = AdvancedCrypt(cpid_non);
     project.boincpublickey = ENCbpk;
     project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
-    // (Old netsoft link) project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
-    project.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + project.cpid;
     //Local CPID with struct
     //Must contain cpidv2, cpid, boincpublickey
     project.Iscpidvalid = IsLocalCPIDValid(project);
@@ -7635,8 +7633,6 @@ void HarvestCPIDs(bool cleardata)
         // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
         LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", structcpid.email, structcpid.cpidhash, sDec);
         structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
-        // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
-        structcpid.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + structcpid.cpid;
         structcpid.Iscpidvalid = true;
         mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
         // CreditCheck(structcpid.cpid,false);

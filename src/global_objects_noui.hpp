@@ -59,7 +59,6 @@ struct StructCPID
     std::string projectname;
     std::string team;
     std::string boincpublickey;
-    std::string link;
     std::string errors;
     std::string email;
     std::string boincruntimepublickey;
