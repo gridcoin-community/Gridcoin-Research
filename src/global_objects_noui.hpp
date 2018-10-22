@@ -54,7 +54,6 @@ struct StructCPID
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
     std::string cpid;
-    std::string emailhash;
     std::string cpidhash;
     std::string projectname;
     std::string team;
