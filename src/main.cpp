@@ -7588,8 +7588,8 @@ std::string ToOfficialName(std::string proj)
 
 void HarvestCPIDs(bool cleardata)
 {
-
-    if (fDebug10) LogPrintf("loading BOINC cpids ...");
+    if (fDebug10)
+        LogPrintf("loading BOINC cpids ...");
 
     //Remote Boinc Feature - R Halford
     std::string sBoincKey = GetArgument("boinckey","");
@@ -7610,80 +7610,79 @@ void HarvestCPIDs(bool cleardata)
 
         if (GlobalCPUMiningCPID.cpid.empty())
         {
-                 LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
+            LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
         }
         else
         {
             LogPrintf("CPUMiningCPID Initialized.");
         }
 
-            GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            StructCPID structcpid = GetStructCPID();
-            structcpid.initialized = true;
-            structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
-            structcpid.projectname = GlobalCPUMiningCPID.projectname;
-            structcpid.team = "gridcoin"; //Will be verified later during Netsoft Call
-            structcpid.verifiedteam = "gridcoin";
-            structcpid.rac = GlobalCPUMiningCPID.rac;
-            structcpid.cpid = GlobalCPUMiningCPID.cpid;
-            structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
-            structcpid.boincruntimepublickey = structcpid.cpidhash;
-            structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-            structcpid.email = GlobalCPUMiningCPID.email;
-            // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-            LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", structcpid.email, structcpid.cpidhash, sDec);
-            structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
-            // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
-            structcpid.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + structcpid.cpid;
-            structcpid.Iscpidvalid = true;
-            mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
-            // CreditCheck(structcpid.cpid,false);
-            GetNextProject(false);
-            if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
-            if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
+        GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
+        LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
+        GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
+        LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
+        StructCPID structcpid = GetStructCPID();
+        structcpid.initialized = true;
+        structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
+        structcpid.projectname = GlobalCPUMiningCPID.projectname;
+        structcpid.team = "gridcoin"; //Will be verified later during Netsoft Call
+        structcpid.verifiedteam = "gridcoin";
+        structcpid.rac = GlobalCPUMiningCPID.rac;
+        structcpid.cpid = GlobalCPUMiningCPID.cpid;
+        structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
+        structcpid.boincruntimepublickey = structcpid.cpidhash;
+        structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
+        structcpid.email = GlobalCPUMiningCPID.email;
+        // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
+        LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", structcpid.email, structcpid.cpidhash, sDec);
+        structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
+        // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
+        structcpid.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + structcpid.cpid;
+        structcpid.Iscpidvalid = true;
+        mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
+        // CreditCheck(structcpid.cpid,false);
+        GetNextProject(false);
+        if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
+        if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
         return;
-  }
+    }
 
- try
- {
-    std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-    std::string sout = "";
-    sout = getfilecontents(sourcefile);
-    if (sout == "-1")
+    try
     {
-        LogPrintf("Unable to obtain Boinc CPIDs ");
-
-        if (mapArgs.count("-boincdatadir") && mapArgs["-boincdatadir"].length() > 0)
+        std::string sourcefile = GetBoincDataDir() + "client_state.xml";
+        std::string sout = "";
+        sout = getfilecontents(sourcefile);
+        if (sout == "-1")
         {
-            LogPrintf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified ");
+            LogPrintf("Unable to obtain Boinc CPIDs ");
+
+            if (mapArgs.count("-boincdatadir") && mapArgs["-boincdatadir"].length() > 0)
+            {
+                LogPrintf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified ");
+            }
+
+            else LogPrintf("Boinc data directory is not in the operating system's default location \nPlease move it there or specify its current location in gridcoinresearch.conf");
+
+            return;
         }
 
-        else LogPrintf("Boinc data directory is not in the operating system's default location \nPlease move it there or specify its current location in gridcoinresearch.conf");
+        if (cleardata)
+        {
+            mvCPIDs.clear();
+        }
+        std::string email = GetArgument("email","");
+        boost::to_lower(email);
 
-        return;
-    }
+        int iRow = 0;
+        std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
+        std::string investor = GetArgument("investor","false");
 
-    if (cleardata)
-    {
-        mvCPIDs.clear();
-    }
-    std::string email = GetArgument("email","");
-    boost::to_lower(email);
-
-    int iRow = 0;
-    std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
-    std::string investor = GetArgument("investor","false");
-
-    if (investor=="true")
-    {
+        if (investor=="true")
+        {
             msPrimaryCPID="INVESTOR";
-    }
-    else
-    {
-
+        }
+        else
+        {
             if (vCPID.size() > 0)
             {
                 for (unsigned int i = 0; i < vCPID.size(); i++)
@@ -7780,24 +7779,24 @@ void HarvestCPIDs(bool cleardata)
 
                         if (structcpid.Iscpidvalid)
                         {
-                                // Verify the CPID is a valid researcher:
-                                if (IsResearcher(structcpid.cpid))
-                                {
-                                    GlobalCPUMiningCPID.cpidhash = cpidhash;
-                                    GlobalCPUMiningCPID.email = email;
-                                    GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-                                    LogPrintf("Setting bpk to %s", cpidhash);
+                            // Verify the CPID is a valid researcher:
+                            if (IsResearcher(structcpid.cpid))
+                            {
+                                GlobalCPUMiningCPID.cpidhash = cpidhash;
+                                GlobalCPUMiningCPID.email = email;
+                                GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+                                LogPrintf("Setting bpk to %s", cpidhash);
 
-                                    if (structcpid.team=="gridcoin")
-                                    {
-                                        msPrimaryCPID = structcpid.cpid;
-                                            //Let the Neural Network know what your CPID is so it can be charted:
-                                            std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-                                        std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
-                                        //Try to get a neural RAC report
-                                        AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                                    }
+                                if (structcpid.team=="gridcoin")
+                                {
+                                    msPrimaryCPID = structcpid.cpid;
+                                    //Let the Neural Network know what your CPID is so it can be charted:
+                                    std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+                                    std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
+                                    //Try to get a neural RAC report
+                                    AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                 }
+                            }
                         }
 
                         mvCPIDs[proj] = structcpid;
@@ -7809,17 +7808,17 @@ void HarvestCPIDs(bool cleardata)
 
             }
             // If no valid boinc projects were found:
-            if (msPrimaryCPID.empty()) msPrimaryCPID="INVESTOR";
-
+            if (msPrimaryCPID.empty())
+                msPrimaryCPID="INVESTOR";
         }
     }
     catch (std::exception &e)
     {
-             LogPrintf("Error while harvesting CPIDs.");
+        LogPrintf("Error while harvesting CPIDs.");
     }
     catch(...)
     {
-             LogPrintf("Error while harvesting CPIDs 2.");
+        LogPrintf("Error while harvesting CPIDs 2.");
     }
 }
 
