@@ -59,7 +59,6 @@ struct StructCPID
     std::string team;
     std::string boincpublickey;
     std::string errors;
-    std::string boincruntimepublickey;
     std::string cpidv2;
     std::string BlockHash;
 };

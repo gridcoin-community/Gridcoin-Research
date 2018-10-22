@@ -7530,7 +7530,6 @@ void InitializeProjectStruct(StructCPID& project)
     boost::to_lower(email);
 
     std::string cpid_non = project.cpidhash+email;
-    project.boincruntimepublickey = project.cpidhash;
     project.cpid = CPID(cpid_non).hexdigest();
     std::string ENCbpk = AdvancedCrypt(cpid_non);
     project.boincpublickey = ENCbpk;
@@ -7591,7 +7590,6 @@ void HarvestCPIDs(bool cleardata)
         structcpid.rac = GlobalCPUMiningCPID.rac;
         structcpid.cpid = GlobalCPUMiningCPID.cpid;
         structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
-        structcpid.boincruntimepublickey = structcpid.cpidhash;
         structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
         // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
         LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", GlobalCPUMiningCPID.email, structcpid.cpidhash, sDec);
