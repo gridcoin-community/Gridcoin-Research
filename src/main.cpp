@@ -7625,8 +7625,7 @@ void HarvestCPIDs(bool cleardata)
         structcpid.initialized = true;
         structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
         structcpid.projectname = GlobalCPUMiningCPID.projectname;
-        structcpid.team = "gridcoin"; //Will be verified later during Netsoft Call
-        structcpid.verifiedteam = "gridcoin";
+        structcpid.team = "gridcoin";
         structcpid.rac = GlobalCPUMiningCPID.rac;
         structcpid.cpid = GlobalCPUMiningCPID.cpid;
         structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;

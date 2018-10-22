@@ -58,7 +58,6 @@ struct StructCPID
     std::string cpidhash;
     std::string projectname;
     std::string team;
-    std::string verifiedteam;
     std::string boincpublickey;
     std::string link;
     std::string errors;
