@@ -99,7 +99,6 @@ void qtSyncWithDPORNodes(std::string data);
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
 
-std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
@@ -120,7 +119,7 @@ BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
 {
-    projectname = strReplace(projectname,"_"," ");
+    boost::replace_all(projectname, "_", " ");
     if (mvNetwork.size() < 1)   return 0;
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;
@@ -130,7 +129,7 @@ double GetNetworkAvgByProject(std::string projectname)
 
 double GetNetworkTotalByProject(std::string projectname)
 {
-    projectname = strReplace(projectname,"_"," ");
+    boost::replace_all(projectname, "_", " ");
     if (mvNetwork.size() < 1)   return 0;
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;

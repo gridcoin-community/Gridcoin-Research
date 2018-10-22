@@ -6316,7 +6316,7 @@ double ExtractMagnitudeFromExplainMagnitude()
                     if (vMyMag.size() > 0)
                     {
                         std::string sSubMag = vMyMag[1];
-                        sSubMag = strReplace(sSubMag," ","");
+                        boost::replace_all(sSubMag, " ", "");
                         double dMag = RoundFromString("0"+sSubMag,0);
                         return dMag;
                     }
@@ -7542,17 +7542,11 @@ void InitializeProjectStruct(StructCPID& project)
     if (fDebug10) LogPrintf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname, YesNo(project.Iscpidvalid));
 }
 
-std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
-{
-    assert(oldStr.empty() == false && "Cannot replace an empty string");
-    boost::replace_all(str, oldStr, newStr);
-    return str;
-}
-
 std::string LowerUnderscore(std::string data)
 {
     boost::to_lower(data);
-    return strReplace(data,"_"," ");
+    boost::replace_all(data, "_", " ");
+    return data;
 }
 
 void HarvestCPIDs(bool cleardata)
