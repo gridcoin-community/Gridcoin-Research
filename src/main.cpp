@@ -7529,7 +7529,6 @@ void InitializeProjectStruct(StructCPID& project)
     std::string email = GetArgument("email", "NA");
     boost::to_lower(email);
 
-    project.email = email;
     std::string cpid_non = project.cpidhash+email;
     project.boincruntimepublickey = project.cpidhash;
     project.cpid = CPID(cpid_non).hexdigest();
@@ -7594,10 +7593,9 @@ void HarvestCPIDs(bool cleardata)
         structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
         structcpid.boincruntimepublickey = structcpid.cpidhash;
         structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-        structcpid.email = GlobalCPUMiningCPID.email;
         // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-        LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", structcpid.email, structcpid.cpidhash, sDec);
-        structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
+        LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", GlobalCPUMiningCPID.email, structcpid.cpidhash, sDec);
+        structcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, structcpid.cpidhash, 0);
         structcpid.Iscpidvalid = true;
         mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
         // CreditCheck(structcpid.cpid,false);
