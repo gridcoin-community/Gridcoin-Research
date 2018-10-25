@@ -54,19 +54,6 @@ void SendCoinsEntry::on_addressBookButton_clicked()
     }
 }
 
-
-void SendCoinsEntry::on_btnAddAttachment_clicked()
-{
-    if(!model)
-        return;
-	// 9-19-2015; Show Add document attachment dialog
-	// msAttachmentGuid = "";
-
-	#if defined(WIN32) && defined(QT_GUI)
-			std::string sData = qtExecuteDotNetStringFunction("ShowForm","frmAddAttachment");
-	#endif
-}
-
 void SendCoinsEntry::on_payTo_textChanged(const QString &address)
 {
     if(!model)

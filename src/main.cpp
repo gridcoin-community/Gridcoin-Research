@@ -258,7 +258,6 @@ std::string    msMiningErrors5;
 std::string    msMiningErrors6;
 std::string    msMiningErrors7;
 std::string    msMiningErrors8;
-std::string    msAttachmentGuid;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
 std::string    msNeuralResponse;
