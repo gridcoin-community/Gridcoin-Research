@@ -32,7 +32,7 @@ class TxViewDelegate : public QAbstractItemDelegate
 {
     Q_OBJECT
 public:
-    TxViewDelegate(): QAbstractItemDelegate(), unit(BitcoinUnits::BTC)
+    TxViewDelegate(QObject *parent=nullptr): QAbstractItemDelegate(parent), unit(BitcoinUnits::BTC)
     {
 
     }
@@ -57,13 +57,9 @@ public:
         qint64 amount = index.data(TransactionTableModel::AmountRole).toLongLong();
         bool confirmed = index.data(TransactionTableModel::ConfirmedRole).toBool();
 
-
-		//QColor foreground = option.palette.color(QPalette::Text);
-		//R Halford: 11-28-2013:
 		QColor foreground = QColor(200, 0, 0);
-
         QVariant value = index.data(Qt::ForegroundRole);
-        if(value.canConvert<QBrush>())
+        if(value.canConvert<QColor>())
         {
             foreground = qvariant_cast<QColor>(value);
         }
@@ -114,8 +110,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     currentStake(0),
     currentUnconfirmedBalance(-1),
     currentImmatureBalance(-1),
-    txdelegate(new TxViewDelegate()),
-    filter(0)
+    txdelegate(new TxViewDelegate(this))
 {
     ui->setupUi(this);
 
@@ -225,14 +220,14 @@ void OverviewPage::setModel(WalletModel *model)
     if(model && model->getOptionsModel())
     {
         // Set up transaction list
-        filter = new TransactionFilterProxy();
+        filter.reset(new TransactionFilterProxy());
         filter->setSourceModel(model->getTransactionTableModel());
         filter->setDynamicSortFilter(true);
         filter->setSortRole(Qt::EditRole);
         filter->setShowInactive(false);
         filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
 
-        ui->listTransactions->setModel(filter);
+        ui->listTransactions->setModel(filter.get());
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
 
         // Keep up to date with wallet

@@ -498,9 +498,6 @@
               <property name="toolTip">
                <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
               </property>
-              <property name="styleSheet">
-               <string notr="true">color: #dfffff;</string>
-              </property>
               <property name="text">
                <string notr="true">(out of sync)</string>
               </property>
@@ -593,7 +590,7 @@
      <item row="1" column="0">
       <widget class="QLabel" name="label_17">
        <property name="text">
-        <string>Client Messages:</string>
+        <string>Error Messages:</string>
        </property>
       </widget>
      </item>

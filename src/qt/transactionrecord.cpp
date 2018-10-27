@@ -8,7 +8,7 @@ std::string GetTxProject(uint256 hash, int& out_blocknumber, int& out_blocktype,
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 {
-	
+
 	std::string ShowOrphans = GetArg("-showorphans", "false");
 
 	//R Halford - POS Transactions - If Orphaned follow showorphans directive:
@@ -17,13 +17,24 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 	       //Orphaned tx
 		   return (ShowOrphans=="true" ? true : false);
     }
-	
+
     if (wtx.IsCoinBase())
     {
         // Ensures we show generated coins / mined transactions at depth 1
         if (!wtx.IsInMainChain())
         {
             return false;
+        }
+    }
+
+    // Suppress OP_RETURN transactions if they did not originate from you.
+    // This is not "very" taxing but necessary since the transaction is in the wallet already.
+    if (!wtx.IsFromMe())
+    {
+        for (auto const& txout : wtx.vout)
+        {
+            if (txout.scriptPubKey == (CScript() << OP_RETURN))
+                return false;
         }
     }
     return true;
@@ -59,7 +70,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
     {
         //
-        // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1
+        // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1 - deprecated. See below.
         //
         for (auto const& txout : wtx.vout)
         {
@@ -93,7 +104,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                         continue; // last coinstake output
 
 					if (wtx.vout.size()==2)
-					{  
+					{
 						//Standard POR CoinStake
 						sub.type = TransactionRecord::Generated;
 						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
@@ -101,7 +112,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 					}
 					else
 					{
-						//CryptoLottery - CoinStake - 4-3-2015
+                        // This part used to be used for a deprecated "crypto lottery". It is now
+                        // necessary for the implementation of side staking in PR 1265.
 						sub.type = TransactionRecord::Generated;
 						if (nDebit == 0)
 						{
@@ -112,7 +124,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 						{
 							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
 						}
-							
+
 						hashPrev = hash;
 					}
                 }

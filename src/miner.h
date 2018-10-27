@@ -13,7 +13,6 @@ struct CMinerStatus
 {
     CCriticalSection lock;
     std::string ReasonNotStaking;
-    std::string Message;
     uint64_t WeightSum,WeightMin,WeightMax;
     double ValueSum;
     double CoinAgeSum;
@@ -29,7 +28,25 @@ struct CMinerStatus
     CMinerStatus();
 };
 
+typedef std::vector< std::pair<std::string, double> > SideStakeAlloc;
+
 extern CMinerStatus MinerStatus;
 extern unsigned int nMinerSleep;
+
+namespace supercfwd
+{
+    int MaybeRequest();
+    void HashResponseHook(CNode* fromNode, const std::string& neural_response);
+    void QuorumResponseHook(CNode* fromNode, const std::string& neural_response);
+    void SendResponse(CNode* fromNode, const std::string& req_hash);
+}
+
+// Note the below constant controls the minimum value allowed for post
+// split UTXO size. It is int64_t but in GRC so that it matches the entry in the config file.
+// It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
+static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
+
+void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking, SideStakeAlloc &vSideStakeAlloc, double &dEfficiency);
+unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency);
 
 #endif // NOVACOIN_MINER_H

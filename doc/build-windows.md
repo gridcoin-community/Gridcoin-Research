@@ -104,6 +104,21 @@ Then build using:
     CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site ./configure --prefix=/
     make
 
+Ubuntu Bionic Beaver 18.04:
+
+    sudo update-alternatives --config x86_64-w64-mingw32-g++ # Set the default mingw32 g++ compiler option to posix.
+
+Bionic Beaver has a modern mingw version. You can therefore use it to build the
+Gridcoin Wallet with Qt5.9.4 and subsequently enable charting of vote results
+in the wallet. Follow these steps:
+
+    cd depends
+    make HOST=x86_64-w64-mingw32 QT_59=1
+    cd ..
+    ./autogen.sh # not required when building from tarball
+    CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site ./configure --prefix=/ --enable-qt59
+    make
+
 ## Building for 32-bit Windows
 
 To build executables for Windows 32-bit, install the following dependencies:

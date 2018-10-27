@@ -3,12 +3,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "util.h"
+#include "netbase.h" // for AddTimeData
 #include "sync.h"
 #include "strlcpy.h"
 #include "version.h"
-#include "netbase.h" // for AddTimeData
 #include "ui_interface.h"
+#include "util.h"
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>  //For day of year
@@ -63,12 +63,14 @@ namespace boost {
 
 using namespace std;
 
-map<string, string> mapArgs;
-map<string, vector<string> > mapMultiArgs;
+ArgsMap mapArgs;
+ArgsMultiMap mapMultiArgs;
+
 bool fDebug = false;
 bool fDebugNet = false;
 bool fDebug2 = false;
 bool fDebug3 = false;
+bool fDebug4 = false;
 bool fDebug10 = false;
 
 bool fPrintToConsole = false;
@@ -182,7 +184,7 @@ void RandAddSeedPerfmon()
     {
         RAND_add(pdata, nSize, nSize/100.0);
         memset(pdata, 0, nSize);
-        if (fDebug10) printf("RandAddSeed() %lu bytes\n", nSize);
+        if (fDebug10) LogPrint("rand", "RandAddSeed() %lu bytes", nSize);
     }
 #endif
 }
@@ -214,24 +216,24 @@ uint256 GetRandHash()
     return hash;
 }
 
-
-
-
-
-
-
-
-inline int OutputDebugStringF(const char* pszFormat, ...)
+bool LogAcceptCategory(const char* category)
 {
-    int ret = 0;
+    if (category != NULL)
+    {
+        if (!fDebug) return false;
+        const vector<string>& categories = mapMultiArgs["-debug"];
+        if (find(categories.begin(), categories.end(), string(category)) == categories.end())
+            return false;
+    }
+    return true;
+}
+
+void LogPrintStr(const std::string &str)
+{
     if (fPrintToConsole)
     {
         // print to console
-        va_list arg_ptr;
-        va_start(arg_ptr, pszFormat);
-        ret = vfprintf(stdout, pszFormat, arg_ptr);
-        fflush(stdout);
-        va_end(arg_ptr);
+        fwrite(str.data(), 1, str.size(), stdout);
     }
     //else
     if (!fPrintToDebugger)
@@ -268,20 +270,17 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             // Debug print useful for profiling
             if (fLogTimestamps && fStartedNewLine)
                 fprintf(fileout, "%s ", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()).c_str());
-            if (pszFormat[strlen(pszFormat) - 1] == '\n')
+            if (!str.empty() && str[str.size() - 1] == '\n')
                 fStartedNewLine = true;
             else
                 fStartedNewLine = false;
 
-            va_list arg_ptr;
-            va_start(arg_ptr, pszFormat);
-            ret = vfprintf(fileout, pszFormat, arg_ptr);
+            fwrite(str.data(), 1, str.size(), fileout);
             fflush(fileout);
-            va_end(arg_ptr);
         }
     }
 
-#ifdef WIN32
+/*#ifdef WIN32
     if (fPrintToDebugger)
     {
         static CCriticalSection cs_OutputDebugStringF;
@@ -292,8 +291,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             static std::string buffer;
 
             va_list arg_ptr;
-            va_start(arg_ptr, pszFormat);
-            buffer += vstrprintf(pszFormat, arg_ptr);
+            va_start(arg_ptr, str.c_str());
+            buffer += vstrprintf(str.c_str(), arg_ptr);
             va_end(arg_ptr);
 
             int line_start = 0, line_end;
@@ -305,53 +304,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
             buffer.erase(0, line_start);
         }
     }
-#endif
-    return ret;
-}
-
-string vstrprintf(const char *format, va_list ap)
-{
-    char buffer[50000];
-    char* p = buffer;
-    int limit = sizeof(buffer);
-    int ret;
-    while (true)
-    {
-        va_list arg_ptr;
-        va_copy(arg_ptr, ap);
-        ret = vsnprintf(p, limit, format, arg_ptr);
-        va_end(arg_ptr);
-        if (ret >= 0 && ret < limit)
-            break;
-        if (p != buffer)
-            delete[] p;
-        limit *= 2;
-        p = new char[limit];
-        if (p == NULL)
-            throw std::bad_alloc();
-    }
-    string str(p, p+ret);
-    if (p != buffer)
-        delete[] p;
-    return str;
-}
-
-string real_strprintf(const char *format, int dummy, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, dummy);
-    string str = vstrprintf(format, arg_ptr);
-    va_end(arg_ptr);
-    return str;
-}
-
-string real_strprintf(const std::string &format, int dummy, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, dummy);
-    string str = vstrprintf(format.c_str(), arg_ptr);
-    va_end(arg_ptr);
-    return str;
+#endif */
+    return;
 }
 
 int GetDayOfYear(int64_t timestamp)
@@ -369,18 +323,6 @@ int GetDayOfYear(int64_t timestamp)
         return 0;
     }
 }
-
-
-bool error(const char *format, ...)
-{
-    va_list arg_ptr;
-    va_start(arg_ptr, format);
-    std::string str = vstrprintf(format, arg_ptr);
-    va_end(arg_ptr);
-    printf("ERROR: %s\n", str.c_str());
-    return false;
-}
-
 
 void ParseString(const string& str, char c, vector<string>& v)
 {
@@ -526,7 +468,7 @@ vector<unsigned char> ParseHex(const string& str)
     return ParseHex(str.c_str());
 }
 
-static void InterpretNegativeSetting(string name, map<string, string>& mapSettingsRet)
+static void InterpretNegativeSetting(string name, ArgsMap& mapSettingsRet)
 {
     // interpret -nofoo as -foo=0 (and -nofoo=0 as -foo=1) as long as -foo not set
     if (name.find("-no") == 0)
@@ -1024,16 +966,22 @@ static std::string FormatException(std::exception* pex, const char* pszThread)
 #endif
     if (pex)
         return strprintf(
-            "EXCEPTION: %s       \n%s       \n%s in %s       \n", typeid(*pex).name(), pex->what(), pszModule, pszThread);
+            "EXCEPTION: %s       \n%s       \n%s in %s\n", typeid(*pex).name(), pex->what(), pszModule, pszThread);
     else
         return strprintf(
-            "UNKNOWN EXCEPTION       \n%s in %s       \n", pszModule, pszThread);
+            "UNKNOWN EXCEPTION       \n%s in %s\n", pszModule, pszThread);
+}
+
+void LogException(std::exception* pex, const char* pszThread)
+{
+    std::string message = FormatException(pex, pszThread);
+    LogPrintf("%s", message);
 }
 
 void PrintException(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
-    printf("\n\n************************\n%s\n", message.c_str());
+    LogPrintf("\n\n************************\n%s", message);
     fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
     strMiscWarning = message;
     throw;
@@ -1042,7 +990,7 @@ void PrintException(std::exception* pex, const char* pszThread)
 void PrintExceptionContinue(std::exception* pex, const char* pszThread)
 {
     std::string message = FormatException(pex, pszThread);
-    printf("\n\n************************\n%s\n", message.c_str());
+    LogPrintf("\n\n************************\n%s", message);
     fprintf(stderr, "\n\n************************\n%s\n", message.c_str());
     strMiscWarning = message;
 }
@@ -1116,7 +1064,7 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
     //2-25-2015
     fs::path &path = pathCached[fNetSpecific];
 
-    // This can be called during exceptions by printf, so we cache the
+    // This can be called during exceptions by LogPrintf, so we cache the
     // value so we don't have to do memory allocations after that.
     if (cachedPath[fNetSpecific]  && (fs::is_directory(path))  )
     {
@@ -1157,13 +1105,12 @@ boost::filesystem::path GetProgramDir()
 
     if (mapArgs.count("-programdir"))
     {
-        // printf("Acquiring program directory from conf file\n");
         path = boost::filesystem::system_complete(mapArgs["-programdir"]);
 
         if (!boost::filesystem::is_directory(path))
         {
             path = "";
-            printf("Invalid path stated in gridcoinresearch.conf\n");
+            LogPrintf("Invalid path stated in gridcoinresearch.conf");
         }
         else
         {
@@ -1182,14 +1129,13 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        // printf("Checking for %s \r\n", (boost::filesystem::current_path() / list[i]).c_str());
         if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
         {
             return boost::filesystem::current_path();
         }
     }
 
-        printf("Please specify program directory in config file using the 'programdir' argument\n");
+        LogPrintf("Please specify program directory in config file using the 'programdir' argument");
         path = "";
         return path;
 
@@ -1221,8 +1167,8 @@ bool IsConfigFileEmpty()
 
 
 
-void ReadConfigFile(map<string, string>& mapSettingsRet,
-                    map<string, vector<string> >& mapMultiSettingsRet)
+void ReadConfigFile(ArgsMap& mapSettingsRet,
+                    ArgsMultiMap& mapMultiSettingsRet)
 {
     boost::filesystem::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
@@ -1340,14 +1286,14 @@ int64_t GetAdjustedTime()
     return GetTime() + GetTimeOffset();
 }
 
-bool IsLockTimeWithin14days(int64_t locktime)
+bool IsLockTimeWithin14days(int64_t locktime, int64_t reference)
 {
-    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60);
+    return IsLockTimeWithinMinutes(locktime, reference, 14 * 24 * 60);
 }
 
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
+bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes)
 {
-    int64_t cutOff = GetAdjustedTime() - minutes * 60;
+    int64_t cutOff = reference - minutes * 60;
     return locktime >= cutOff;
 }
 
@@ -1355,10 +1301,8 @@ bool IsLockTimeWithinMinutes(int64_t locktime, int minutes)
 // avoid including unnecessary files for standalone upgrader
 
 
-void AddTimeData(const CNetAddr& ip, int64_t nTime)
+void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 {
-    int64_t nOffsetSample = nTime - GetTime();
-
     // Ignore duplicates
     static set<CNetAddr> setKnown;
     if (!setKnown.insert(ip).second)
@@ -1366,20 +1310,18 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
 
     // Add data
     vTimeOffsets.input(nOffsetSample);
-    if (fDebug10) printf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)\n", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
+    if (fDebug10) LogPrintf("Added time data, samples %d, offset %+" PRId64 " (%+" PRId64 " minutes)", vTimeOffsets.size(), nOffsetSample, nOffsetSample/60);
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
-        int64_t nMedian = vTimeOffsets.median();
+        // We believe the median of the other nodes 95% and our own node's time ("0" initial offset) 5%. This will also act to gently converge the network to consensus UTC, in case
+        // the entire network is displaced for some reason.
+        nTimeOffset = 0.95 * vTimeOffsets.median();
         std::vector<int64_t> vSorted = vTimeOffsets.sorted();
         // Only let other nodes change our time by so much
-        if (abs64(nMedian) < 70 * 60)
-        {
-            nTimeOffset = nMedian;
-        }
-        else
+        if (abs64(nTimeOffset) >= 70 * 60)
         {
             nTimeOffset = 0;
-
+        
             static bool fDone;
             if (!fDone)
             {
@@ -1394,17 +1336,17 @@ void AddTimeData(const CNetAddr& ip, int64_t nTime)
                     fDone = true;
                     string strMessage = _("Warning: Please check that your computer's date and time are correct! If your clock is wrong Gridcoin will not work properly.");
                     strMiscWarning = strMessage;
-                    printf("*** %s\n", strMessage.c_str());
+                    LogPrintf("*** %s", strMessage);
                     uiInterface.ThreadSafeMessageBox(strMessage+" ", string("Gridcoin"), CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION);
                 }
             }
         }
         if (fDebug10) {
             for (auto const& n : vSorted)
-                printf("%+" PRId64 "  ", n);
-            printf("|  ");
+                LogPrintf("%+" PRId64 "  ", n);
+            LogPrintf("|  ");
         }
-        if (fDebug10) printf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)\n", nTimeOffset, nTimeOffset/60);
+        if (fDebug10) LogPrintf("nTimeOffset = %+" PRId64 "  (%+" PRId64 " minutes)", nTimeOffset, nTimeOffset/60);
     }
 }
 
@@ -1537,7 +1479,7 @@ boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
         return fs::path(pszPath);
     }
 
-    printf("SHGetSpecialFolderPathA() failed, could not obtain requested path.\n");
+    LogPrintf("SHGetSpecialFolderPathA() failed, could not obtain requested path.");
     return fs::path("");
 }
 #endif
@@ -1546,7 +1488,7 @@ void runCommand(std::string strCommand)
 {
     int nErr = ::system(strCommand.c_str());
     if (nErr)
-        printf("runCommand error: system(%s) returned %d\n", strCommand.c_str(), nErr);
+        LogPrintf("runCommand error: system(%s) returned %d", strCommand, nErr);
 }
 
 void RenameThread(const char* name)
@@ -1576,7 +1518,7 @@ bool NewThread(void(*pfn)(void*), void* parg)
     {
         boost::thread(pfn, parg); // thread detaches when out of scope
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s", e.what());
         return false;
     }
     return true;
@@ -1606,7 +1548,7 @@ std::string MakeSafeMessage(const std::string& messagestring)
     }
     catch (...)
     {
-        printf("Exception occured in MakeSafeMessage. Returning an empty message.\n");
+        LogPrintf("Exception occurred in MakeSafeMessage. Returning an empty message.");
         safemessage = "";
     }
     return safemessage;
@@ -1620,7 +1562,7 @@ bool ThreadHandler::createThread(void(*pfn)(ThreadHandlerPtr), ThreadHandlerPtr 
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s", e.what());
         return false;
     }
     return true;
@@ -1634,7 +1576,7 @@ bool ThreadHandler::createThread(void(*pfn)(void*), void* parg, const std::strin
         threadGroup.add_thread(newThread);
         threadMap[tname] = newThread;
     } catch(boost::thread_resource_error &e) {
-        printf("Error creating thread: %s\n", e.what());
+        LogPrintf("Error creating thread: %s", e.what());
         return false;
     }
     return true;
@@ -1666,11 +1608,19 @@ void ThreadHandler::removeByName(const std::string tname)
 
 void ThreadHandler::removeAll()
 {
-    printf("Wait for %d threads to join.\n",numThreads());
+    LogPrintf("Wait for %d threads to join.",numThreads());
     threadGroup.join_all();
     for (auto it=threadMap.begin(); it!=threadMap.end(); ++it)
     {
         threadGroup.remove_thread(it->second);
     }
     threadMap.clear();
+}
+
+std::string TimestampToHRDate(double dtm)
+{
+    if (dtm == 0) return "1-1-1970 00:00:00";
+    if (dtm > 9888888888) return "1-1-2199 00:00:00";
+    std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
+    return sDt;
 }

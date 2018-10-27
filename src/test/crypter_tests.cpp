@@ -63,5 +63,12 @@ BOOST_AUTO_TEST_CASE(crypter_GridDecryptWithSaltShouldDecryptValidInput)
     BOOST_CHECK_EQUAL(PLAINTEXT, decrypted_message);
 }
 
+BOOST_AUTO_TEST_CASE(crypter_AdvancedDecryptWithSaltShouldNotCrash)
+{
+    const std::string boinchash_encrypted("HOVtyXamA5H5IWJl6TtwJr9iD5GGSOClvyb9l08ZYCAG2OkS22sGEH6jUt8NlrDQVto/8eBMz1TxPqWCv3bA+o38H25ysTEGHOijlPby2A1VhzQTjFzNYSNaXC4kIaHMgvwgoHCU/Io1LsCBgVK+atiZRuhXDSpbJLHpLmjHokAon0cELZGP3X2g0kQXhImh");
+    const std::string salt("\235\002\353\071A\244*\303\b\274\271\221");
+    const std::string result = AdvancedDecryptWithSalt(boinchash_encrypted, salt);
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

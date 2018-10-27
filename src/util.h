@@ -8,32 +8,32 @@
 
 #include "uint256.h"
 #include "fwd.h"
-
-#ifndef WIN32
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#else
-#include <windows.h> // For LARGE_INTEGER
-#endif
+#include "hash.h"
 
 #include <map>
 #include <vector>
 #include <string>
 #include <ostream>
 #include <locale>
+#include <strings.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/date_time/gregorian/gregorian_types.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/thread.hpp>
+#include <boost/thread/condition_variable.hpp>
 
-#include <openssl/sha.h>
-#include <openssl/ripemd.h>
-
+#include <compat.h>
 #include "fwd.h"
 #include "serialize.h"
+#include "tinyformat.h"
+
+#ifndef WIN32
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
 
 // to obtain PRId64 on some old systems
 #define __STDC_FORMAT_MACROS 1
@@ -80,23 +80,31 @@ static const int64_t CENT = 1000000;
 
 void MilliSleep(int64_t n);
 
-/* This GNU C extension enables the compiler to check the format string against the parameters provided.
- * X is the number of the "format string" parameter, and Y is the number of the first variadic parameter.
- * Parameters count from 1.
- */
-#ifdef __GNUC__
-#define ATTR_WARN_PRINTF(X,Y) __attribute__((format(gnu_printf,X,Y)))
-#else
-#define ATTR_WARN_PRINTF(X,Y)
-#endif
-
 extern int GetDayOfYear(int64_t timestamp);
-extern std::map<std::string, std::string> mapArgs;
-extern std::map<std::string, std::vector<std::string> > mapMultiArgs;
+
+/**
+ * Allows search of mapArgs and mapMultiArgs in a case insensitive way
+ */
+
+struct mapArgscomp
+{
+   bool operator() (const std::string& lhs, const std::string& rhs) const
+   {
+       return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
+   }
+};
+
+typedef std::map<std::string, std::string, mapArgscomp> ArgsMap;
+typedef std::map<std::string, std::vector<std::string>, mapArgscomp> ArgsMultiMap;
+
+extern ArgsMap mapArgs;
+extern ArgsMultiMap mapMultiArgs;
+
 extern bool fDebug;
 extern bool fDebugNet;
 extern bool fDebug2;
 extern bool fDebug3;
+extern bool fDebug4;
 extern bool fDebug10;
 
 extern bool fPrintToConsole;
@@ -115,38 +123,53 @@ extern bool fDevbuildCripple;
 
 void RandAddSeed();
 void RandAddSeedPerfmon();
-int ATTR_WARN_PRINTF(1,2) OutputDebugStringF(const char* pszFormat, ...);
 
-/*
-  Rationale for the real_strprintf / strprintf construction:
-    It is not allowed to use va_start with a pass-by-reference argument.
-    (C++ standard, 18.7, paragraph 3). Use a dummy argument to work around this, and use a
-    macro to keep similar semantics.
+/* Return true if log accepts specified category */
+bool LogAcceptCategory(const char* category);
+/* Send a string to the log output */
+void LogPrintStr(const std::string &str);
+
+#define strprintf tfm::format
+#define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
+
+/* When we switch to C++11, this can be switched to variadic templates instead
+ * of this macro-based construction (see tinyformat.h).
+ */
+#define MAKE_ERROR_AND_LOG_FUNC(n)                                        \
+    /*   Print to debug.log if -debug=category switch is given OR category is NULL. */ \
+    template<TINYFORMAT_ARGTYPES(n)>                                          \
+    static inline void LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
+    {                                                                         \
+        if(!LogAcceptCategory(category)) return;                            \
+        LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
+        return;                                                               \
+    }                                                                         \
+    /*   Log error and return false */                                        \
+    template<TINYFORMAT_ARGTYPES(n)>                                          \
+    static inline bool error(const char* format, TINYFORMAT_VARARGS(n))                     \
+    {                                                                         \
+        LogPrintStr("ERROR: " + tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n"); \
+        return false;                                                         \
+    }
+
+TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
+
+/* Zero-arg versions of logging and error, these are not covered by
+ * TINYFORMAT_FOREACH_ARGNUM
 */
+static inline void LogPrint(const char* category, const char* format)
+{
+    if(!LogAcceptCategory(category)) return;
+    LogPrintStr(format + std::string("\n"));
+    return;
+}
+static inline bool error(const char* format)
+{
+    LogPrintStr(std::string("ERROR: ") + format + std::string("\n"));
+    return false;
+}
 
-/** Overload strprintf for char*, so that GCC format type warnings can be given */
-std::string ATTR_WARN_PRINTF(1,3) real_strprintf(const char *format, int dummy, ...);
-/** Overload strprintf for std::string, to be able to use it with _ (translation).
- * This will not support GCC format type warnings (-Wformat) so be careful.
- */
-std::string real_strprintf(const std::string &format, int dummy, ...);
-#define strprintf(format, ...) real_strprintf(format, 0, __VA_ARGS__)
-std::string vstrprintf(const char *format, va_list ap);
-
-bool ATTR_WARN_PRINTF(1,2) error(const char *format, ...);
-
-/* Redefine printf so that it directs output to debug.log
- *
- * Do this *after* defining the other printf-like functions, because otherwise the
- * __attribute__((format(printf,X,Y))) gets expanded to __attribute__((format(OutputDebugStringF,X,Y)))
- * which confuses gcc.
- */
-
-#ifndef UPGRADERFLAG
-#define printf OutputDebugStringF
-#endif
-
-
+void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
 void ParseString(const std::string& str, char c, std::vector<std::string>& v);
@@ -171,6 +194,8 @@ void FileCommit(FILE *fileout);
 
 int GetFilesize(FILE* file);
 
+std::string TimestampToHRDate(double dtm);
+
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 boost::filesystem::path GetDefaultDataDir();
 boost::filesystem::path GetProgramDir();
@@ -181,7 +206,7 @@ boost::filesystem::path GetPidFile();
 #ifndef WIN32
 void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
 #endif
-void ReadConfigFile(std::map<std::string, std::string>& mapSettingsRet, std::map<std::string, std::vector<std::string> >& mapMultiSettingsRet);
+void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 #ifdef WIN32
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
@@ -193,11 +218,11 @@ int64_t GetTime();
 void SetMockTime(int64_t nMockTimeIn);
 int64_t GetAdjustedTime();
 int64_t GetTimeOffset();
-bool IsLockTimeWithin14days(int64_t locktime);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes);
+bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
+bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes);
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
-void AddTimeData(const CNetAddr& ip, int64_t nTime);
+void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
 void runCommand(std::string strCommand);
 
 //!
@@ -369,7 +394,6 @@ inline bool IsSwitchChar(char c)
     return c == '-';
 #endif
 }
-
 /**
  * Return string argument or default value
  *
@@ -457,108 +481,6 @@ static inline uint32_t insecure_rand(void)
  * @param Deterministic Use a determinstic seed
  */
 void seed_insecure_rand(bool fDeterministic=false);
-
-template<typename T1>
-inline uint256 Hash(const T1 pbegin, const T1 pend)
-{
-    static unsigned char pblank[1];
-    uint256 hash1;
-    SHA256((pbegin == pend ? pblank : (unsigned char*)&pbegin[0]), (pend - pbegin) * sizeof(pbegin[0]), (unsigned char*)&hash1);
-    uint256 hash2;
-    SHA256((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
-    return hash2;
-}
-
-class CHashWriter
-{
-private:
-    SHA256_CTX ctx;
-
-public:
-    int nType;
-    int nVersion;
-
-    void Init() {
-        SHA256_Init(&ctx);
-    }
-
-    CHashWriter(int nTypeIn, int nVersionIn) : nType(nTypeIn), nVersion(nVersionIn) {
-        Init();
-    }
-
-    CHashWriter& write(const char *pch, size_t size) {
-        SHA256_Update(&ctx, pch, size);
-        return (*this);
-    }
-
-    // invalidates the object
-    uint256 GetHash() {
-        uint256 hash1;
-        SHA256_Final((unsigned char*)&hash1, &ctx);
-        uint256 hash2;
-        SHA256((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
-        return hash2;
-    }
-
-    template<typename T>
-    CHashWriter& operator<<(const T& obj) {
-        // Serialize to this stream
-        ::Serialize(*this, obj, nType, nVersion);
-        return (*this);
-    }
-};
-
-
-template<typename T1, typename T2>
-inline uint256 Hash(const T1 p1begin, const T1 p1end,
-                    const T2 p2begin, const T2 p2end)
-{
-    static unsigned char pblank[1];
-    uint256 hash1;
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, (p1begin == p1end ? pblank : (unsigned char*)&p1begin[0]), (p1end - p1begin) * sizeof(p1begin[0]));
-    SHA256_Update(&ctx, (p2begin == p2end ? pblank : (unsigned char*)&p2begin[0]), (p2end - p2begin) * sizeof(p2begin[0]));
-    SHA256_Final((unsigned char*)&hash1, &ctx);
-    uint256 hash2;
-    SHA256((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
-    return hash2;
-}
-
-template<typename T1, typename T2, typename T3>
-inline uint256 Hash(const T1 p1begin, const T1 p1end,
-                    const T2 p2begin, const T2 p2end,
-                    const T3 p3begin, const T3 p3end)
-{
-    static unsigned char pblank[1];
-    uint256 hash1;
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, (p1begin == p1end ? pblank : (unsigned char*)&p1begin[0]), (p1end - p1begin) * sizeof(p1begin[0]));
-    SHA256_Update(&ctx, (p2begin == p2end ? pblank : (unsigned char*)&p2begin[0]), (p2end - p2begin) * sizeof(p2begin[0]));
-    SHA256_Update(&ctx, (p3begin == p3end ? pblank : (unsigned char*)&p3begin[0]), (p3end - p3begin) * sizeof(p3begin[0]));
-    SHA256_Final((unsigned char*)&hash1, &ctx);
-    uint256 hash2;
-    SHA256((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
-    return hash2;
-}
-
-template<typename T>
-uint256 SerializeHash(const T& obj, int nType=SER_GETHASH, int nVersion=PROTOCOL_VERSION)
-{
-    CHashWriter ss(nType, nVersion);
-    ss << obj;
-    return ss.GetHash();
-}
-
-inline uint160 Hash160(const std::vector<unsigned char>& vch)
-{
-    uint256 hash1;
-    SHA256(&vch[0], vch.size(), (unsigned char*)&hash1);
-    uint160 hash2;
-    RIPEMD160((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
-    return hash2;
-}
 
 /**
  * Timing-attack-resistant comparison.

@@ -16,8 +16,14 @@ JSON_TEST_FILES = \
   test/data/tx_invalid.json.h \
   test/data/tx_valid.json.h
 
+OTHER_TEST_FILES = \
+  test/data/superblock.txt.h \
+  test/data/superblock_packed.bin.h \
+  test/data/superblock_unpacked.txt.h
+
 # test_n binary #
 GRIDCOIN_TESTS =\
+  test/appcache_tests.cpp \
   test/Checkpoints_tests.cpp \
   test/DoS_tests.cpp \
   test/accounting_tests.cpp \
@@ -25,6 +31,7 @@ GRIDCOIN_TESTS =\
   test/base32_tests.cpp \
   test/base58_tests.cpp \
   test/base64_tests.cpp \
+  test/beacon_tests.cpp \
   test/bignum_tests.cpp \
   test/block_tests.cpp \
   test/cpid_tests.cpp \
@@ -47,12 +54,12 @@ GRIDCOIN_TESTS =\
   test/wallet_tests.cpp
 
 
-test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES)
+test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(OTHER_TEST_FILES)
 test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
-test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
+test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
 test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
-test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS)
+test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGRIDCOIN_CRYPTO)
 test_test_gridcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
 CLEAN_GRIDCOIN_TEST = test/*.gcda test/*.gcno

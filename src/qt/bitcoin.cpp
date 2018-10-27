@@ -11,12 +11,15 @@
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "guiutil.h"
-#include "util.h"
 #include "guiconstants.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "qtipcserver.h"
+#include "util.h"
+#include "winshutdownmonitor.h"
+
 #include <QMessageBox>
+#include <QDebug>
 #include <QTextCodec>
 #include <QLocale>
 #include <QTranslator>
@@ -37,13 +40,6 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
-#if QT_VERSION < 0x050000
-Q_IMPORT_PLUGIN(qcncodecs)
-Q_IMPORT_PLUGIN(qjpcodecs)
-Q_IMPORT_PLUGIN(qtwcodecs)
-Q_IMPORT_PLUGIN(qkrcodecs)
-Q_IMPORT_PLUGIN(qtaccessiblewidgets)
-#else
 #if QT_VERSION < 0x050400
 Q_IMPORT_PLUGIN(AccessibleFactory)
 #endif
@@ -54,7 +50,8 @@ Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_COCOA)
 Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 #endif
-#endif
+Q_IMPORT_PLUGIN(QSvgPlugin);
+Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
 
 // Need a global reference for the notifications to find the GUI
@@ -83,7 +80,7 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
     }
     else
     {
-        printf("%s: %s\n", caption.c_str(), message.c_str());
+        LogPrintf("%s: %s", caption, message);
         fprintf(stderr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
@@ -150,6 +147,27 @@ static std::string Translate(const char* psz)
     return QCoreApplication::translate("bitcoin-core", psz).toStdString();
 }
 
+/* qDebug() message handler --> debug.log */
+#if QT_VERSION < 0x050000
+void DebugMessageHandler(QtMsgType type, const char *msg)
+{
+    if (type == QtDebugMsg) {
+        LogPrint("Qt", "GUI: %s\n", msg);
+    } else {
+        LogPrintf("GUI: %s\n", msg);
+    }
+}
+#else
+void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg)
+{
+    Q_UNUSED(context);
+    if (type == QtDebugMsg) {
+        LogPrint("Qt", "GUI: %s\n", msg.toStdString());
+    } else {
+        LogPrintf("GUI: %s\n", msg.toStdString());
+    }
+}
+#endif
 
 
 void timerfire()
@@ -162,7 +180,7 @@ void timerfire()
 static void handleRunawayException(std::exception *e)
 {
     PrintExceptionContinue(e, "Runaway exception");
-    QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n\n") + QString::fromStdString(strMiscWarning));
+    QMessageBox::critical(0, "Runaway exception", BitcoinGUI::tr("A fatal error occurred. Gridcoin can no longer continue safely and will quit.") + QString("\n") + QString::fromStdString(strMiscWarning));
     exit(1);
 }
 
@@ -171,19 +189,17 @@ int main(int argc, char *argv[])
 {
     // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
     int currentExitCode = 0;
+ 
+    // Set global boolean to indicate intended presence of GUI to core.
+    fQtActive = true;
 
     std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
-#if QT_VERSION < 0x050000
-    // Internal string conversion is all UTF-8
-    QTextCodec::setCodecForTr(QTextCodec::codecForName("UTF-8"));
-    QTextCodec::setCodecForCStrings(QTextCodec::codecForTr());
-#endif
-
     Q_INIT_RESOURCE(bitcoin);
+    Q_INIT_RESOURCE(bitcoin_locale);
     QApplication app(argc, argv);
 	//uint SEM_FAILCRITICALERRORS= 0x0001;
 	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
@@ -193,6 +209,18 @@ int main(int argc, char *argv[])
 
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
+
+#if QT_VERSION < 0x050000
+    // Install qDebug() message handler to route to debug.log
+    qInstallMsgHandler(DebugMessageHandler);
+#else
+#if defined(WIN32)
+    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
+    qApp->installNativeEventFilter(new WinShutdownMonitor());
+#endif
+    // Install qDebug() message handler to route to debug.log
+    qInstallMessageHandler(DebugMessageHandler);
+#endif
 
     // Command-line options take precedence:
     ParseParameters(argc, argv);
@@ -288,14 +316,14 @@ int main(int argc, char *argv[])
         guiref = &window;
 
 		QTimer *timer = new QTimer(guiref);
-		printf("\r\nStarting Gridcoin\r\n");
+		LogPrintf("Starting Gridcoin");
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
 
 	    //Start globalcom
         if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
 		{
-				printf("Error; NewThread(ThreadAppInit2) failed\n");
+				LogPrintf("Error; NewThread(ThreadAppInit2) failed");
 		        return 1;
 		}
 		else
@@ -334,6 +362,10 @@ int main(int argc, char *argv[])
                 // Place this here as guiref has to be defined if we don't want to lose URIs
                 ipcInit(argc, argv);
 
+#if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
+                WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
+#endif
+
                 currentExitCode = app.exec();
 
                 window.hide();
@@ -342,7 +374,7 @@ int main(int argc, char *argv[])
                 guiref = 0;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-			printf("\r\nbitcoin.cpp:main calling Shutdown...\r\n");
+			LogPrintf("Main calling Shutdown...");
             Shutdown(NULL);
         }
 
@@ -360,15 +392,6 @@ int main(int argc, char *argv[])
     threads->interruptAll();
     threads->removeAll();
     threads.reset();
-
-    // use exit codes to trigger restart of the wallet
-    if(currentExitCode == EXIT_CODE_REBOOT)
-    {
-        printf("Restarting wallet...\r\n");
-        QStringList args = QApplication::arguments();
-        args.removeFirst();
-        QProcess::startDetached(QApplication::applicationFilePath(), args);
-    }
 
     return 0;
 }

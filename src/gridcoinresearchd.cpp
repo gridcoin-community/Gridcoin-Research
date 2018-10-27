@@ -7,12 +7,13 @@
 #include "config/gridcoin-config.h"
 #endif
 
-#include "bitcoinrpc.h"
+#include "util.h"
+#include "net.h"
 #include "txdb.h"
 #include "walletdb.h"
-#include "net.h"
 #include "init.h"
-#include "util.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "ui_interface.h"
 
 #include <boost/thread.hpp>
@@ -53,7 +54,7 @@ bool AppInit(int argc, char* argv[])
         //
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
-        printf("AppInit");
+        LogPrintf("AppInit");
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
@@ -91,23 +92,38 @@ bool AppInit(int argc, char* argv[])
         fRet = AppInit2(threads);
     }
     catch (std::exception& e) {
-        printf("AppInit()Exception1");
+        LogPrintf("AppInit()Exception1");
 
         PrintException(&e, "AppInit()");
     } catch (...) {
-        printf("AppInit()Exception2");
+        LogPrintf("AppInit()Exception2");
 
         PrintException(NULL, "AppInit()");
     }
-    if (!fRet)
-        Shutdown(NULL);
+    if(fRet)
+    {
+        while (!ShutdownRequested())
+            MilliSleep(500);
+    }
+
+    Shutdown(NULL);
+
+    // delete thread handler
+    threads->interruptAll();
+    threads->removeAll();
+    threads.reset();
+
     return fRet;
+
 }
 
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
     bool fRet = false;
+
+    // Set global boolean to indicate intended absence of GUI to core...
+    fQtActive = false;
 
     // Connect bitcoind signal handlers
     noui_connect();

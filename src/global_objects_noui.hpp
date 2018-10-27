@@ -7,13 +7,10 @@
 extern int nBoincUtilization;
 extern std::string sRegVer;
 extern int nRegVersion;
-extern bool bCPIDsLoaded;
-extern bool bProjectsInitialized;
 extern bool bNetAveragesLoaded;
 extern bool bForceUpdate;
-extern bool bCheckedForUpgrade;
-extern bool bCheckedForUpgradeLive;
 extern bool bGlobalcomInitialized;
+extern bool fQtActive;
 extern bool bGridcoinGUILoaded;
 
 struct StructCPID
@@ -71,16 +68,6 @@ struct StructCPID
     std::string BlockHash;
 };
 
-
-
-struct StructCPIDCache
-{
-    std::string xml;
-    bool initialized;
-};
-
-
-
 struct MiningCPID
 {
     double rac;
@@ -131,13 +118,8 @@ extern std::map<std::string, StructCPID> mvNetwork;
 extern std::map<std::string, StructCPID> mvNetworkCopy;
 extern std::map<std::string, StructCPID> mvMagnitudes;
 extern std::map<std::string, StructCPID> mvMagnitudesCopy;
-
-
 extern std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
 extern std::map<std::string, StructCPID> mvCreditNodeCPID;  //Contains verified CPID total Magnitude;
-//Caches
-extern std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
-extern std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
 
 //Global CPU Mining CPID:
 extern MiningCPID GlobalCPUMiningCPID;

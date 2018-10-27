@@ -3,28 +3,30 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "util.h"
+#include "net.h"
 #include "alert.h"
 #include "checkpoints.h"
 #include "db.h"
 #include "txdb.h"
-#include "net.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "kernel.h"
 #include "block.h"
 #include "scrypt.h"
 #include "global_objects_noui.hpp"
-#include "util.h"
 #include "cpid.h"
-#include "bitcoinrpc.h"
-#include "json/json_spirit_value.h"
+#include "rpcserver.h"
+#include "rpcclient.h"
 #include "boinc.h"
 #include "beacon.h"
 #include "miner.h"
 #include "neuralnet.h"
-#include "grcrestarter.h"
 #include "backup.h"
 #include "appcache.h"
+#include "tally.h"
+#include "contract/contract.h"
+#include "contract/superblock.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -43,34 +45,29 @@ extern std::string NodeAddress(CNode* pfrom);
 extern std::string ConvertBinToHex(std::string a);
 extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
-extern bool WriteKey(std::string sKey, std::string sValue);
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
-std::string SignBlockWithCPID(std::string sCPID, std::string sBlockHash);
+bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
-extern bool PushGridcoinDiagnostics();
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
-extern bool TallyResearchAverages_retired(bool Forcefully);
-extern bool TallyNetworkAverages_v9();
+bool TallyResearchAverages(CBlockIndex* index);
+bool TallyResearchAverages_retired(CBlockIndex* index);
+bool TallyResearchAverages_v9(CBlockIndex* index);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
-bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
-std::string GetListOfWithConsensus(std::string datatype);
 extern std::string getHardDriveSerial();
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void GridcoinServices();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
-void BusyWaitForTally_retired();
-extern bool TallyNetworkAverages_retired(bool Forcefully);
-extern bool TallyNetworkAverages();
 extern bool IsContract(CBlockIndex* pIndex);
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
-json_spirit::Array MagnitudeReport(std::string cpid);
+UniValue MagnitudeReport(std::string cpid);
 extern void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
+void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
 extern void ZeroOutResearcherTotals(std::string cpid);
 extern StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 extern std::string getCpuHash();
@@ -82,7 +79,6 @@ int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern bool UnusualActivityReport();
 
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
@@ -105,19 +101,13 @@ extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 
-
 extern double GetOwedAmount(std::string cpid);
-
-extern void DeleteCache(std::string section, std::string keyname);
-extern void ClearCache(std::string section);
 bool TallyMagnitudesInSuperblock();
-extern void WriteCache(std::string section, std::string key, std::string value, int64_t locktime);
 extern std::string GetNeuralNetworkReport();
-std::string GetListOf(std::string datatype);
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
-extern std::string ToOfficialNameNew(std::string proj);
+extern std::string ToOfficialName(std::string proj);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;
@@ -142,26 +132,20 @@ int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
 int64_t nLastLoadAdminMessages = 0;
-int64_t nCPIDsLoaded = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
-
 extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
-std::string DefaultOrg();
-std::string DefaultOrgKey(int key_length);
-
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
-extern int64_t PreviousBlockAge();
 int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
 int64_t nLastBlockSubmitted = 0;
+int64_t nLastCheckedForUpdate = 0;
 
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
@@ -187,7 +171,6 @@ CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
 unsigned int nStakeMaxAge = -1; // unlimited
 unsigned int nModifierInterval = 10 * 60; // time to elapse before new modifier is computed
-bool bOPReturnEnabled = true;
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
@@ -220,12 +203,9 @@ int64_t nTransactionFee = MIN_TX_FEE;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
-std::map<std::string, std::string> mvApplicationCache;
-std::map<std::string, int64_t> mvApplicationCacheTimestamp;
-std::map<std::string, double> mvNeuralNetworkHash;
-std::map<std::string, double> mvCurrentNeuralNetworkHash;
-
-std::map<std::string, double> mvNeuralVersion;
+std::unordered_map<std::string, double> mvNeuralNetworkHash;
+std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
+std::unordered_map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
 std::map<std::string, StructCPID> mvDPORCopy;
@@ -241,36 +221,23 @@ extern std::string RetrieveMd5(std::string s1);
 extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 bool bNetAveragesLoaded = false;
-bool bTallyStarted_retired      = false;
 bool bForceUpdate = false;
-bool bCheckedForUpgrade = false;
-bool bCheckedForUpgradeLive = false;
 bool bGlobalcomInitialized = false;
 bool bStakeMinerOutOfSyncWithNetwork = false;
-volatile bool bDoTally_retired = false;
-volatile bool bTallyFinished_retired = false;
+bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
-
-extern void WriteAppCache(std::string key, std::string value);
-extern void LoadCPIDsInBackground();
-
-extern void ThreadCPIDs();
 extern void GetGlobalStatus();
-
 extern bool ProjectIsValid(std::string project);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
 extern std::string getfilecontents(std::string filename);
-extern std::string ToOfficialName(std::string proj);
 extern bool LessVerbose(int iMax1000);
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
-
-static boost::thread_group* cpidThreads = NULL;
 
 ///////////////////////////////
 // Standard Boinc Projects ////
@@ -321,8 +288,6 @@ std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats 
 std::map<std::string, StructCPID> mvNetwork;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvCreditNodeCPID;        // Contains verified CPID Magnitudes;
-std::map<std::string, StructCPIDCache> mvCPIDCache; //Contains cached blocknumbers for CPID+Projects;
-std::map<std::string, StructCPIDCache> mvAppCache; //Contains cached blocknumbers for CPID+Projects;
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 
@@ -354,42 +319,17 @@ bool TimerMain(std::string timer_name, int max_ms)
 bool UpdateNeuralNetworkQuorumData()
 {
     if (!bGlobalcomInitialized) return false;
-    std::string errors1 = "";
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - superblock_time;
     std::string myNeuralHash = "";
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = mvApplicationCache["superblock;block_number"];
-    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::SetTestnetFlag(fTestNet);
+                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
     NN::ExecuteDotNetStringFunction("SetQuorumData",data);
-    return true;
-}
-
-bool PushGridcoinDiagnostics()
-{
-    if (!bGlobalcomInitialized) return false;
-    std::string errors1 = "";
-    LoadAdminMessages(false,errors1);
-    std::string cpiddata = GetListOf("beacon");
-    std::string sWhitelist = GetListOf("project");
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = mvApplicationCache["superblock;block_number"];
-    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
-    printf("Pushing diagnostic data...");
-    double lastblockage = PreviousBlockAge();
-    double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
-    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID><LASTBLOCKAGE>" + ToString(lastblockage) + "</LASTBLOCKAGE><DIFFICULTY>" + RoundToString(PORDiff,2) + "</DIFFICULTY></QUORUMDATA>";
-    NN::SetTestnetFlag(fTestNet);
-    double dResponse = Restarter::PushGridcoinDiagnosticData(data);
     return true;
 }
 
@@ -410,55 +350,309 @@ bool FullSyncWithDPORNodes()
     }
     std::string errors1;
     LoadAdminMessages(false,errors1);
-    std::string cpiddata = GetListOfWithConsensus("beacon");
+
+    const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+    const int64_t nLookback = 30 * 6 * 86400;
+    const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
+    std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
     std::string sWhitelist = GetListOf("project");
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
-    printf(" list of cpids %s \r\n",cpiddata.c_str());
+    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - superblock_time;
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = mvApplicationCache["superblock;block_number"];
-    std::string sTimestamp = TimestampToHRDate(mvApplicationCacheTimestamp["superblock;magnitudes"]);
+    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::SetTestnetFlag(fTestNet);
+                       + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
+                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
     NN::SynchronizeDPOR(data);
     return true;
 }
 
-double GetPoSKernelPS()
+double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
 {
-    int nPoSInterval = 72;
-    double dStakeKernelsTriedAvg = 0;
-    int nStakesHandled = 0, nStakesTime = 0;
+    // The number of stakes to include in the average has been reduced to 40 (default) from 72. 72 stakes represented 1.8 hours at
+    // standard spacing. This is too long. 40 blocks is nominally 1 hour.
+    double result;
 
-    CBlockIndex* pindex = pindexBest;;
-    CBlockIndex* pindexPrevStake = NULL;
+    // The constant below comes from (MaxHash / StandardDifficultyTarget) * 16 sec / 90 sec. If you divide it by 80 to convert to GRC you
+    // get the familiar 9544517.40667
+    result = 763561392.533 * GetAverageDifficulty(nPoSInterval);
+    if (fDebug10) LogPrintf("GetEstimatedNetworkWeight debug: Network Weight = %f", result);
+    if (fDebug10) LogPrintf("GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
+
+    return result;
+}
+
+double GetAverageDifficulty(unsigned int nPoSInterval)
+{
+    /*
+     * Diff is inversely related to Target (without the coinweight multiplier), but proportional to the
+     * effective number of coins on the network. This is tricky, if you want to get the average target value
+     * used over an interval you should use a harmonic average, since target is inversely related to diff. If
+     * on the other hand, you want to average diff in a way to also determine the average coins active in
+     * the network, you should simply use an arithmetic average. See the relation between diff and estimated
+     * network weight above. We do not need to take into account the actual spacing of the blocks, because this
+     * already handled by the retargeting in GetNextTargetRequiredV2, and in fact, given the random distribution
+     * of block spacing, it would be harmful to use a spacing correction for small nPoSInterval sizes.
+     *
+     * Also... The number of stakes to include in the average has been reduced to 40 (default) from 72.
+     * 72 stakes represented 1.8 hours at standard spacing. This is too long. 40 blocks is nominally 1 hour.
+     */
+
+    double dDiff = 1.0;
+    double dDiffSum = 0.0;
+    unsigned int nStakesHandled = 0;
+    double result;
+
+    CBlockIndex* pindex = pindexBest;
 
     while (pindex && nStakesHandled < nPoSInterval)
     {
         if (pindex->IsProofOfStake())
         {
-            dStakeKernelsTriedAvg += GetDifficulty(pindex) * 4294967296.0;
-            nStakesTime += pindexPrevStake ? (pindexPrevStake->nTime - pindex->nTime) : 0;
-            pindexPrevStake = pindex;
-            nStakesHandled++;
+            dDiff = GetDifficulty(pindex);
+            // dDiff should never be zero, but just in case, skip the block and move to the next one.
+            if (dDiff)
+            {
+                dDiffSum += dDiff;
+                nStakesHandled++;
+                if (fDebug10) LogPrintf("GetAverageDifficulty debug: dDiff = %f", dDiff);
+                if (fDebug10) LogPrintf("GetAverageDifficulty debug: nStakesHandled = %u", nStakesHandled);
+            }
         }
 
         pindex = pindex->pprev;
     }
 
-    double result = 0;
+    result = nStakesHandled ? dDiffSum / nStakesHandled : 0;
+    if (fDebug10) LogPrintf("GetAverageDifficulty debug: Average dDiff = %f", result);
 
-    if (nStakesTime)
-        result = dStakeKernelsTriedAvg / nStakesTime;
-
-    if (IsProtocolV2(nBestHeight))
-        result *= STAKE_TIMESTAMP_MASK + 1;
-
-    return result/100;
+    return result;
 }
+
+double GetEstimatedTimetoStake(double dDiff, double dConfidence)
+{
+    /*
+     * The algorithm below is an attempt to come up with a more accurate way of estimating Time to Stake (ETTS) based on
+     * the actual situation of the miner and UTXO's. A simple equation will not provide good results, because in mainnet,
+     * the cooldown period is 16 hours, and depending on how many UTXO's and where they are with respect to getting out of
+     * cooldown has a lot to do with the expected time to stake.
+     *
+     * The way to conceptualize the approach below is to think of the UTXO's as bars on a Gantt Chart. It is a negative Gantt
+     * chart, meaning that each UTXO bar is cooldown period long, and while the current time is in that bar, the staking probability
+     * for the UTXO is zero, and UnitStakingProbability elsewhere. A timestamp mask of 16x the normal mask is used to reduce
+     * the work in the nested loop, so that a 16 hour interval will have a maximum of 225 events, and most likely far less.
+     * This is important, because the inner loop will be the number of UTXO's. A future improvement to this algorithm would
+     * also be to quantize (group) the UTXO's themselves (the Gantt bars) so that the work would be further reduced.
+     * You will see that once the UTXO's are sorted in ascending order based on the time of the end of each of their cooldowns, this
+     * becomes a manageable algorithm to piece the probabilities together.
+     *
+     * You will note that the compound Poisson (geometric) recursive probability relation is used, since you cannot simply add
+     * the probabilities due to consideration of high confidence (CDF) values of 80% or more.
+     *
+     * Thin local data structures are used to hold the UTXO information. This minimizes the amount of time
+     * that locks on the wallet need to be held at the expense of a little memory consumption.
+     */
+
+    double result = 0.0;
+
+    // dDiff must be >= 0 and dConfidence must lie on the interval [0,1) otherwise this is an error.
+    assert(dDiff >= 0 && dConfidence >= 0 && dConfidence < 1);
+
+    // if dConfidence = 0, then the result must be 0.
+    if (!dConfidence)
+    {
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Confidence of 0 specified: ETTS = %f", result);
+        return result;
+    }
+
+    bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+    // Get out early if not staking and set return value of 0.
+    if (!staking)
+    {
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
+        return result;
+    }
+
+    int64_t nValue = 0;
+    int64_t nCurrentTime = GetAdjustedTime();
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nCurrentTime = %i", nCurrentTime);
+
+    CTxDB txdb("r");
+
+    // Here I am defining a time mask 16 times as long as the normal stake time mask. This is to quantize the UTXO's into a maximum of
+    // 16 hours * 3600 / 256 = 225 time bins for evaluation. Otherwise for a large number of UTXO's, this algorithm could become
+    // really expensive.
+    const int ETTS_TIMESTAMP_MASK = (16 * (STAKE_TIMESTAMP_MASK + 1)) - 1;
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS_TIMESTAMP_MASK = %x", ETTS_TIMESTAMP_MASK);
+
+    int64_t BalanceAvailForStaking = 0;
+    vector<COutput> vCoins;
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        BalanceAvailForStaking = pwalletMain->GetBalance() - nReserveBalance;
+
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: BalanceAvailForStaking = %u", BalanceAvailForStaking);
+
+        // Get out early if no balance available and set return value of 0. This should already have happened above, because with no
+        // balance left after reserve, staking should be disabled; however, just to be safe...
+        if (BalanceAvailForStaking <= 0)
+        {
+            if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: No balance available: ETTS = %f", result);
+            return result;
+        }
+
+        //reminder... void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
+        pwalletMain->AvailableCoins(vCoins, true, NULL, true);
+    }
+
+
+    // An efficient local structure to store the UTXO's with the bare minimum info we need.
+    typedef vector< std::pair<int64_t, int64_t> > vCoinsExt;
+    vCoinsExt vUTXO;
+    // A local ordered set to store the unique "bins" corresponding to the UTXO transaction times. We are going to use this
+    // for the outer loop.
+    std::set<int64_t> UniqueUTXOTimes;
+    // We want the first "event" to be the CurrentTime. This does not have to be quantized.
+    UniqueUTXOTimes.insert(nCurrentTime);
+
+    // Debug output cooldown...
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nStakeMinAge = %i", nStakeMinAge);
+
+    // If dDiff = 0 from supplied argument (which is also the default), then derive a smoothed difficulty over the default PoSInterval of 40 blocks by calling
+    // GetAverageDifficulty(40), otherwise let supplied argument dDiff stand.
+    if (!dDiff) dDiff = GetAverageDifficulty(40);
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dDiff = %f", dDiff);
+
+    // The stake probability per "throw" of 1 weight unit = target value at diff of 1.0 / (maxhash * diff). This happens effectively every STAKE_TIMESTAMP_MASK+1 sec.
+    double dUnitStakeProbability = 1 / (4295032833.0 * dDiff);
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dUnitStakeProbability = %e", dUnitStakeProbability);
+
+
+    int64_t nTime = 0;
+    for (const auto& out : vCoins)
+    {
+        CTxIndex txindex;
+        CBlock CoinBlock; //Block which contains CoinTx
+        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex))
+            continue; //error?
+
+        if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
+            continue;
+
+        // We are going to store as an event the time that the UTXO matures (is available for staking again.)
+        nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
+
+        nValue = out.tx->vout[out.i].nValue;
+
+        // Only consider UTXO's that are actually stakeable - which means that each one must be less than the available balance
+        // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,
+        // so eliminate UTXO's with less than 0.0125 GRC balances right here. The test with Satoshi units for that is
+        // nValue >= 1250000.
+        if(BalanceAvailForStaking >= nValue && nValue >= 1250000)
+        {
+        vUTXO.push_back(std::pair<int64_t, int64_t>( nTime, nValue));
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
+
+        // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
+        // by the nCurrentTime record that was already injected above.
+        if(nTime > nCurrentTime) UniqueUTXOTimes.insert(nTime);
+        }
+    }
+
+
+    int64_t nTimePrev = nCurrentTime;
+    int64_t nDeltaTime = 0;
+    int64_t nThrows = 0;
+    int64_t nCoinWeight = 0;
+    double dProbAccumulator = 0;
+    double dCumulativeProbability = 0;
+    // Note: Even though this is a compound Poisson process leading to a compound geometric distribution, and the individual probabilities are
+    // small, we are mounting to high CDFs. This means to be reasonably accurate, we cannot just add the probabilities, because the intersections
+    // become significant. The CDF of a compound geometric distribution as you do tosses with different probabilities follows the
+    // recursion relation... CDF.i = 1 - (1 - CDF.i-1)(1 - p.i). If all probabilities are the same, this reduces to the familiar
+    // CDF.k = 1 - (1 - p)^k where ^ is exponentiation.
+    for(const auto& itertime : UniqueUTXOTimes)
+    {
+
+        nTime = itertime;
+        dProbAccumulator = 0;
+
+        for( auto& iterUTXO : vUTXO)
+        {
+
+            if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Unique UTXO Time: %u, vector pair <%u, %u>", nTime, iterUTXO.first, iterUTXO.second);
+
+            // If the "negative Gantt chart bar" is ending or has ended for a UTXO, it now accumulates probability. (I.e. the event time being checked
+            // is greater than or equal to the cooldown expiration of the UTXO.)
+            // accumulation for that UTXO.
+            if(nTime >= iterUTXO.first)
+            {
+                // The below weight calculation is just like the CalculateStakeWeightV8 in kernel.cpp.
+                nCoinWeight = iterUTXO.second / 1250000;
+
+                dProbAccumulator = 1 - ((1 - dProbAccumulator) * (1 - (dUnitStakeProbability * nCoinWeight)));
+                if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
+            }
+
+        }
+        nDeltaTime = nTime - nTimePrev;
+        nThrows = nDeltaTime / (STAKE_TIMESTAMP_MASK + 1);
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
+        dCumulativeProbability = 1 - ((1 - dCumulativeProbability) * pow((1 - dProbAccumulator), nThrows));
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
+
+        if(dCumulativeProbability >= dConfidence)
+            break;
+
+        nTimePrev = nTime;
+    }
+
+    // If (dConfidence - dCumulativeProbability) > 0, it means we exited the negative Gantt chart area and the desired confidence level
+    // has not been reached. All of the eligible UTXO's are contributing probability, and this is the final dProbAccumulator value.
+    // If the loop above is degenerate (i.e. only the current time pass through), then dCumulativeProbability will be zero.
+    // If it was not degenerate and the positive reqions in the Gantt chart area contributed some probability, then dCumulativeProbability will
+    // be greater than zero. We must compute the amount of time beyond nTime that is required to bridge the gap between
+    // dCumulativeProbability and dConfidence. If (dConfidence - dCumulativeProbability) <= 0 then we overshot during the Gantt chart area,
+    // and we will back off by nThrows amount, which will now be negative.
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dProbAccumulator = %e", dProbAccumulator);
+
+    // Shouldn't happen because if we are down here, we are staking, and there have to be eligible UTXO's, but just in case...
+    if (dProbAccumulator == 0.0)
+    {
+        if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ERROR in dProbAccumulator calculations");
+        return result;
+    }
+
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dConfidence = %f", dConfidence);
+    // If nThrows is negative, this just means we overshot in the Gantt chart loop and have to backtrack by nThrows.
+    nThrows = (int64_t)((log(1 - dConfidence) - log(1 - dCumulativeProbability)) / log(1 - dProbAccumulator));
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nThrows = %i", nThrows);
+
+    nDeltaTime = nThrows * (STAKE_TIMESTAMP_MASK + 1);
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: nDeltaTime = %i", nDeltaTime);
+
+    // Because we are looking at the delta time required past nTime, which is where we exited the Gantt chart loop.
+    result = nDeltaTime + nTime - nCurrentTime;
+    if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS at %d confidence = %i", dConfidence, result);
+
+    // The old calculation for comparative purposes, only done if fDebug10 set. Note that this is the "fixed" old
+    // calculation, because the old network weight calculation was wrong too...
+    if (fDebug10)
+    {
+        double oldETTS = 0;
+
+        oldETTS = GetTargetSpacing(nBestHeight) * GetEstimatedNetworkWeight(40) / MinerStatus.WeightSum;
+        LogPrintf("GetEstimatedTimetoStake debug: oldETTS = %f", oldETTS);
+    }
+
+    return result;
+}
+
 
 void GetGlobalStatus()
 {
@@ -480,19 +674,58 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
+        // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
+        // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
+        double dETTS = GetEstimatedTimetoStake()/86400.0;
         LOCK(GlobalStatusStruct.lock);
         { LOCK(MinerStatus.lock);
         GlobalStatusStruct.blocks = ToString(nBestHeight);
         GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GetPoSKernelPS(),2);
+        GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
+        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
+        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        GlobalStatusStruct.status = msMiningErrors;
-        GlobalStatusStruct.poll = msPoll;
-        GlobalStatusStruct.errors =  MinerStatus.ReasonNotStaking + MinerStatus.Message + " " + msMiningErrors6 + " " + msMiningErrors7 + " " + msMiningErrors8;
+        try
+        {
+            GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
+        }
+        catch (std::exception &e)
+        {
+            GlobalStatusStruct.poll = _("No current polls");
+            LogPrintf("Error obtaining last poll: %s", e.what());
+        }
+
+        GlobalStatusStruct.status.clear();
+
+        if(MinerStatus.WeightSum)
+            GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
+
+        GlobalStatusStruct.errors.clear();
+        std::string Alerts = GetWarnings("statusbar");
+        if(!Alerts.empty())
+            GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
+
+        if (PORDiff < 0.1)
+            GlobalStatusStruct.errors +=  _("Low difficulty!; ");
+
+        if(!MinerStatus.ReasonNotStaking.empty())
+            GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
+
+        unsigned long stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
+        if(stk_dropped)
+            GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+
+        if(!msMiningErrors6.empty())
+            GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
+        if(!msMiningErrors7.empty())
+            GlobalStatusStruct.errors += msMiningErrors7 + "; ";
+        if(!msMiningErrors8.empty())
+            GlobalStatusStruct.errors += msMiningErrors8 + "; ";
+
         }
         return;
     }
@@ -500,14 +733,43 @@ void GetGlobalStatus()
     {
         msMiningErrors = _("Error obtaining status.");
 
-        printf("Error obtaining status\r\n");
+        LogPrintf("Error obtaining status");
         return;
     }
-    catch(...)
+}
+
+std::string GetCurrentOverviewTabPoll()
+{
+    std::string poll = "";
+    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
+    std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
+    uint64_t uPollExpiration = 0;
+    // Alerts are displayed as polls but do not have an expiration
+    if(sPollExpiration.empty())
     {
-        msMiningErrors = _("Error obtaining status (08-18-2014).");
-        return;
+        uPollExpiration = pindexBest->nTime;
     }
+    else
+    {
+        try
+        {
+            uPollExpiration = stoll(sPollExpiration);
+        }
+        catch(std::exception &e)
+        {
+            // Malformed poll expiration, don't display
+            uPollExpiration = 0;
+        }
+    }
+    if (uPollExpiration >= pindexBest->nTime)
+    {
+        poll = sMessageKey.substr(0,80);
+    }
+    else
+    {
+        poll = _("No current polls");
+    }
+    return poll;
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)
@@ -520,24 +782,6 @@ bool Timer_Main(std::string timer_name, int max_ms)
     }
     return false;
 }
-
-
-
-void WriteAppCache(std::string key, std::string value)
-{
-    StructCPIDCache setting = mvAppCache["cache"+key];
-    if (!setting.initialized)
-    {
-        setting.initialized=true;
-        setting.xml = "";
-        mvAppCache.insert(map<string,StructCPIDCache>::value_type("cache"+key,setting));
-        mvAppCache["cache"+key]=setting;
-    }
-    setting.xml = value;
-    mvAppCache["cache"+key]=setting;
-}
-
-
 
 void RegisterWallet(CWallet* pwalletIn)
 {
@@ -588,7 +832,7 @@ MiningCPID GetNextProject(bool bForce)
 
 
 
-    if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude > 1)
+    if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude >= 1)
     {
                 if (!Timer_Main("globalcpuminingcpid",10))
                 {
@@ -601,15 +845,14 @@ MiningCPID GetNextProject(bool bForce)
     std::string sBoincKey = GetArgument("boinckey","");
     if (!sBoincKey.empty())
     {
-        if (fDebug3 && LessVerbose(50)) printf("Using cached boinckey for project %s\r\n",GlobalCPUMiningCPID.projectname.c_str());
+        if (fDebug3 && LessVerbose(50)) LogPrintf("Using cached boinckey for project %s",GlobalCPUMiningCPID.projectname);
                     msMiningProject = GlobalCPUMiningCPID.projectname;
                     msMiningCPID = GlobalCPUMiningCPID.cpid;
-                    if (LessVerbose(5))
-                        printf("BoincKey - Mining project %s     RAC(%f)\r\n",  GlobalCPUMiningCPID.projectname.c_str(), GlobalCPUMiningCPID.rac);
+                    if (LessVerbose(5)) LogPrintf("BoincKey - Mining project %s     RAC(%f)",  GlobalCPUMiningCPID.projectname, GlobalCPUMiningCPID.rac);
                     double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                     GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
                     GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-                    if (fDebug3) printf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+                    if (fDebug3) LogPrintf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude);
                     msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? _("Staking Interest") : _("Mining");
                     GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
                     GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
@@ -626,20 +869,19 @@ MiningCPID GetNextProject(bool bForce)
 
 
 
-    if ( (IsInitialBlockDownload() || !bCPIDsLoaded) && !bForce)
+    if (IsInitialBlockDownload() && !bForce)
     {
-            if (LessVerbose(100))           printf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
-            MilliSleep(1);
-            return GlobalCPUMiningCPID;
+        if (LessVerbose(100)) LogPrintf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
+        MilliSleep(1);
+        return GlobalCPUMiningCPID;
     }
-
 
     try
     {
 
         if (mvCPIDs.size() < 1)
         {
-            if (fDebug && LessVerbose(10)) printf("Gridcoin has no CPIDs...");
+            if (fDebug && LessVerbose(10)) LogPrintf("Gridcoin has no CPIDs...");
             //Let control reach the investor area
         }
 
@@ -684,7 +926,7 @@ MiningCPID GetNextProject(bool bForce)
                                     bool checkcpid = IsCPIDValid_Retired(structcpid.cpid,GlobalCPUMiningCPID.enccpid);
                                     if (!checkcpid)
                                     {
-                                        printf("CPID invalid %s  1.  ",structcpid.cpid.c_str());
+                                        LogPrintf("CPID invalid %s  1.  ",structcpid.cpid);
                                         continue;
                                     }
 
@@ -693,7 +935,7 @@ MiningCPID GetNextProject(bool bForce)
 
                                         GlobalCPUMiningCPID.email = email;
 
-                                        if (LessVerbose(1) || fDebug || fDebug3) printf("Ready to CPU Mine project %s with CPID %s, RAC(%f) \r\n",
+                                        if (LessVerbose(1) || fDebug || fDebug3) LogPrintf("Ready to CPU Mine project %s with CPID %s, RAC(%f) ",
                                             structcpid.projectname.c_str(),structcpid.cpid.c_str(),
                                             structcpid.rac);
                                         //Required for project to be mined in a block:
@@ -705,20 +947,29 @@ MiningCPID GetNextProject(bool bForce)
 
 
                                         GlobalCPUMiningCPID.boincruntimepublickey = structcpid.cpidhash;
-                                        if(fDebug) printf("\r\n GNP: Setting bpk to %s\r\n",structcpid.cpidhash.c_str());
+                                        if(fDebug) LogPrintf("GNP: Setting bpk to %s",structcpid.cpidhash);
 
                                         uint256 pbh = 1;
                                         GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
                                         GlobalCPUMiningCPID.lastblockhash = "0";
                                         // Sign the block
                                         GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
-                                        GlobalCPUMiningCPID.BoincSignature = SignBlockWithCPID(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.lastblockhash);
-
-                                        if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
+                                        std::string sSignature;
+                                        std::string sError;
+                                        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sSignature, sError, true);
+#                                       if 0
+                                        if (!bResult)
                                         {
-                                            printf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.cpidv2.c_str());
+                                            LogPrintf("GetNextProject: failed to sign block with cpid -> %s", sError);
                                             continue;
                                         }
+                                        GlobalCPUMiningCPID.BoincSignature = sSignature;
+                                        if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
+                                        {
+                                            LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2);
+                                            continue;
+                                        }
+#                                       endif
 
 
                                         //Only used for global status:
@@ -728,7 +979,7 @@ MiningCPID GetNextProject(bool bForce)
                                         double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                                         GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
                                         GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-                                        if (fDebug && LessVerbose(2)) printf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid.c_str(),GlobalCPUMiningCPID.Magnitude);
+                                        if (fDebug && LessVerbose(2)) LogPrintf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
                                         //Reserved for GRC Speech Synthesis
                                         msMiningErrors = (msMiningCPID == "INVESTOR" || !IsResearcher(msPrimaryCPID) || msMiningCPID.empty()) ? _("Staking Interest") : _("Boinc Mining");
                                         GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
@@ -750,19 +1001,19 @@ MiningCPID GetNextProject(bool bForce)
         msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
-        if (fDebug10) printf("-Investor mode-");
+        if (fDebug10) LogPrintf("-Investor mode-");
 
         }
         catch (std::exception& e)
         {
             msMiningErrors = _("Error obtaining next project.  Error 16172014.");
 
-            printf("Error obtaining next project\r\n");
+            LogPrintf("Error obtaining next project");
         }
         catch(...)
         {
             msMiningErrors = _("Error obtaining next project.  Error 06172014.");
-            printf("Error obtaining next project 2.\r\n");
+            LogPrintf("Error obtaining next project 2.");
         }
         return GlobalCPUMiningCPID;
 
@@ -890,7 +1141,7 @@ bool AddOrphanTx(const CTransaction& tx)
 
     if (nSize > 5000)
     {
-        printf("ignoring large orphan tx (size: %" PRIszu ", hash: %s)\n", nSize, hash.ToString().substr(0,10).c_str());
+        LogPrint("mempool", "ignoring large orphan tx (size: %" PRIszu ", hash: %s)", nSize, hash.ToString().substr(0,10));
         return false;
     }
 
@@ -898,7 +1149,7 @@ bool AddOrphanTx(const CTransaction& tx)
     for (auto const& txin : tx.vin)
         mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
 
-    printf("stored orphan tx %s (mapsz %" PRIszu ")\n", hash.ToString().substr(0,10).c_str(),   mapOrphanTransactions.size());
+    LogPrint("mempool", "stored orphan tx %s (mapsz %" PRIszu ")", hash.ToString().substr(0,10), mapOrphanTransactions.size());
     return true;
 }
 
@@ -1227,7 +1478,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
     {
         vMerkleBranch.clear();
         nIndex = -1;
-        printf("ERROR: SetMerkleBranch() : couldn't find tx in block\n");
+        LogPrintf("ERROR: SetMerkleBranch() : couldn't find tx in block");
         return 0;
     }
 
@@ -1337,7 +1588,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
     // Verify beacon contract in tx if found
-    if (!VerifyBeaconContractTx(tx.hashBoinc))
+    if (!VerifyBeaconContractTx(tx))
         return tx.DoS(25, error("AcceptToMemoryPool : bad beacon contract in tx %s; rejected", tx.GetHash().ToString().c_str()));
 
     // Coinbase is only valid in a block, not as a loose transaction
@@ -1445,7 +1696,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 if (dFreeCount > GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
                     return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
                 if (fDebug)
-                    printf("Rate limit dFreeCount: %g => %g\n", dFreeCount, dFreeCount+nSize);
+                    LogPrint("mempool", "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
                 dFreeCount += nSize;
             }
         }
@@ -1457,7 +1708,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
             // If this happens repeatedly, purge peers
             if (TimerMain("AcceptToMemoryPool", 20))
             {
-                printf("\r\nAcceptToMemoryPool::CleaningInboundConnections\r\n");
+                LogPrint("mempool", "AcceptToMemoryPool::CleaningInboundConnections");
                 CleanInboundConnections(true);
             }
             if (fDebug || true)
@@ -1476,7 +1727,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         LOCK(pool.cs);
         if (ptxOld)
         {
-            printf("AcceptToMemoryPool : replacing tx %s with new version\n", ptxOld->GetHash().ToString().c_str());
+            LogPrint("mempool", "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
         pool.addUnchecked(hash, tx);
@@ -1486,7 +1737,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // If updated, erase old tx from wallet
     if (ptxOld)
         EraseFromWallets(ptxOld->GetHash());
-    if (fDebug)     printf("AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")\n",           hash.ToString().c_str(),           pool.mapTx.size());
+    if (fDebug)     LogPrint("mempool", "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")",           hash.ToString(), pool.mapTx.size());
     return true;
 }
 
@@ -1752,7 +2003,7 @@ int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
     //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
     int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
-        printf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64 "\n", FormatMoney(nSubsidy).c_str(), nSubsidy);
+        LogPrintf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64, FormatMoney(nSubsidy), nSubsidy);
     if (nSubsidy < (30*COIN)) nSubsidy=30*COIN;
     //Gridcoin Foundation Block:
     if (height==10)
@@ -1876,6 +2127,30 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 
 
 // miner's coin stake reward based on coin age spent (coin-days)
+int64_t GetConstantBlockReward(const CBlockIndex* index)
+{
+    // The constant block reward is set to a default, voted on value, but this can
+    // be overridden using an admin message. This allows us to change the reward
+    // amount without having to release a mandatory with updated rules. In the case
+    // there is a breach or leaked admin keys the rewards are clamped to twice that
+    // of the default value.    
+    const int64_t MIN_CBR = 0;
+    const int64_t MAX_CBR = DEFAULT_CBR * 2;
+
+    int64_t reward = DEFAULT_CBR;
+    AppCacheEntry oCBReward = ReadCache("protocol","blockreward1");
+
+    //TODO: refactor the expire checking to subroutine
+    //Note: time constant is same as GetBeaconPublicKey
+    if( (index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
+    {
+        reward = atoi64(oCBReward.value);
+    }
+
+    reward = std::max(reward, MIN_CBR);
+    reward = std::min(reward, MAX_CBR);
+    return reward;
+}
 
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
     bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
@@ -1890,8 +2165,8 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             int64_t nSubsidy  = nInterest + nBoinc;
             if (fDebug10 || GetBoolArg("-printcreation"))
             {
-                printf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   \n",
-                FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
+                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
+                FormatMoney(nSubsidy), nCoinAge, nBoinc);
             }
             int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
             int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
@@ -1916,12 +2191,18 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     {
             // Research Age Subsidy - PROD
             int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+            int64_t nInterest = 0;
 
             // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
             // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
             // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
             // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
+
+            /* Constant Block Reward */
+            if (pindexLast->nVersion>=10)
+                nInterest = GetConstantBlockReward(pindexLast);
+            else
+                nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 
             int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
 
@@ -1930,8 +2211,8 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 
             if (fDebug10 || GetBoolArg("-printcreation"))
             {
-                printf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   \n",
-                FormatMoney(nSubsidy).c_str(), nCoinAge, nBoinc);
+                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
+                FormatMoney(nSubsidy), nCoinAge, nBoinc);
             }
 
             int64_t nTotalSubsidy = nSubsidy + nFees;
@@ -2115,6 +2396,8 @@ bool CheckProofOfResearch(
         const CBlockIndex* pindexPrev, //previous block in chain index
         const CBlock &block)     //block to check
 {
+    /* In this function GetProofOfStakeReward is called with wrong pindex,
+     * which does not matter, because this one is no longer used */
     if(block.vtx.size() == 0 ||
        !block.IsProofOfStake() ||
        pindexPrev->nHeight <= nGrandfather ||
@@ -2156,12 +2439,12 @@ bool CheckProofOfResearch(
     {
         if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
         {
-            if (fDebug) printf("CheckProofOfResearch: Researchers Reward Pays too much : Retallying : "
-                                "claimedand %f vs calculated StakeReward %f for CPID %s\n",
-                                bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() );
+            if (fDebug) LogPrintf("CheckProofOfResearch: Researchers Reward Pays too much : Retallying : "
+                                "claimedand %f vs calculated StakeReward %f for CPID %s",
+                                bb.ResearchSubsidy, OUT_POR, bb.cpid);
 
-            BusyWaitForTally_retired();
-            StructCPID st1 = GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+            TallyResearchAverages(pindexBest);
+            GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
                                                         pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         }
@@ -2170,6 +2453,7 @@ bool CheckProofOfResearch(
 
     if (bb.ResearchSubsidy > ((OUT_POR*1.25)+1))
     {
+        if(fDebug) LogPrintf("CheckProofOfResearch: pHistorical was %s", GetHistoricalMagnitude(bb.cpid)->GetBlockHash().GetHex());
         return block.DoS(10,error("CheckProofOfResearch: Researchers Reward Pays too much : "
                             "claimed %f vs calculated %f for CPID %s",
                             bb.ResearchSubsidy, OUT_POR, bb.cpid.c_str() ));
@@ -2188,7 +2472,7 @@ int GetNumBlocksOfPeers()
 bool IsInitialBlockDownload()
 {
     LOCK(cs_main);
-    if (pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers())
+    if ((pindexBest == NULL || nBestHeight < GetNumBlocksOfPeers()) && nBestHeight<1185000)
         return true;
     static int64_t nLastUpdate;
     static CBlockIndex* pindexLastBest;
@@ -2213,15 +2497,15 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
     uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
     uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
 
-    printf("InvalidChainFound: invalid block=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-      pindexNew->GetBlockHash().ToString().substr(0,20).c_str(), pindexNew->nHeight,
-      CBigNum(pindexNew->nChainTrust).ToString().c_str(), nBestInvalidBlockTrust.Get64(),
-      DateTimeStrFormat("%x %H:%M:%S", pindexNew->GetBlockTime()).c_str());
-    printf("InvalidChainFound:  current best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-      hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
-      CBigNum(pindexBest->nChainTrust).ToString().c_str(),
+    LogPrintf("InvalidChainFound: invalid block=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
+      pindexNew->GetBlockHash().ToString().substr(0,20), pindexNew->nHeight,
+      CBigNum(pindexNew->nChainTrust).ToString(), nBestInvalidBlockTrust.Get64(),
+      DateTimeStrFormat("%x %H:%M:%S", pindexNew->GetBlockTime()));
+    LogPrintf("InvalidChainFound:  current best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
+      hashBestChain.ToString().substr(0,20), nBestHeight,
+      CBigNum(pindexBest->nChainTrust).ToString(),
       nBestBlockTrust.Get64(),
-      DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+      DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 }
 
 
@@ -2308,7 +2592,7 @@ bool CTransaction::FetchInputs(CTxDB& txdb, const map<uint256, CTxIndex>& mapTes
             // Get prev tx from single transactions in memory
             if (!mempool.lookup(prevout.hash, txPrev))
             {
-                if (fDebug) printf("FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10).c_str(),  prevout.hash.ToString().substr(0,10).c_str());
+                if (fDebug) LogPrintf("FetchInputs() : %s mempool Tx prev not found %s", GetHash().ToString().substr(0,10),  prevout.hash.ToString().substr(0,10));
                 return false;
             }
             if (!fFound)
@@ -2531,7 +2815,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
         {
             if (nValueIn < GetValueOut())
             {
-                printf("ConnectInputs(): VALUE IN < VALUEOUT \r\n");
+                LogPrintf("ConnectInputs(): VALUE IN < VALUEOUT ");
                 return DoS(100, error("ConnectInputs() : %s value in < value out", GetHash().ToString().substr(0,10).c_str()));
             }
 
@@ -2564,10 +2848,31 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         {
             bDiscTxFailed = true;
         }
+
+        /* Delete the contract.
+         * Previous version will be reloaded in reoranize. */
+        {
+            std::string sMType = ExtractXML(vtx[i].hashBoinc, "<MT>", "</MT>");
+            if(!sMType.empty())
+            {
+                std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
+                DeleteCache(sMType, sMKey);
+                if(fDebug)
+                    LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+
+                if("beacon"==sMType)
+                {
+                    sMKey=sMKey+"A";
+                    DeleteCache("beaconalt", sMKey+"."+ToString(vtx[i].nTime));
+                }
+            }
+        }
+
     }
 
     // Update block index on disk without changing it in memory.
     // The memory index structure will be changed after the db commits.
+    // Brod: I do not like this...
     if (pindex->pprev)
     {
         CDiskBlockIndex blockindexPrev(pindex->pprev);
@@ -2580,8 +2885,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     for (auto const& tx : vtx)
         SyncWithWallets(tx, this, false, false);
 
-    // We normally fail to disconnect a block if we can't find the previous input due to "DisconnectInputs() : ReadTxIndex failed".  Imo, I believe we should let this call succeed, otherwise a chain can never be re-organized in this circumstance.
-    if (bDiscTxFailed && fDebug3) printf("!DisconnectBlock()::Failed, recovering. ");
+    if (bDiscTxFailed) return error("DisconnectBlock(): Failed");
     return true;
 }
 
@@ -2699,87 +3003,6 @@ std::string ConvertBinToHex(std::string a)
       return sOut;
 }
 
-std::string UnpackBinarySuperblock(std::string sBlock)
-{
-    // 12-21-2015: R HALFORD: If the block is not binary, return the legacy format for backward compatibility
-    std::string sBinary = ExtractXML(sBlock,"<BINARY>","</BINARY>");
-    if (sBinary.empty()) return sBlock;
-    std::string sZero = ExtractXML(sBlock,"<ZERO>","</ZERO>");
-    double dZero = RoundFromString(sZero,0);
-    // Binary data support structure:
-    // Each CPID consumes 16 bytes and 2 bytes for magnitude: (Except CPIDs with zero magnitude - the count of those is stored in XML node <ZERO> to save space)
-    // 1234567890123456MM
-    // MM = Magnitude stored as 2 bytes
-    // No delimiter between CPIDs, Step Rate = 18
-    std::string sReconstructedMagnitudes = "";
-    for (unsigned int x = 0; x < sBinary.length(); x += 18)
-    {
-        if (sBinary.length() >= x+18)
-        {
-            std::string bCPID = sBinary.substr(x,16);
-            std::string bMagnitude = sBinary.substr(x+16,2);
-            std::string sCPID = ConvertBinToHex(bCPID);
-            std::string sHexMagnitude = ConvertBinToHex(bMagnitude);
-            double dMagnitude = ConvertHexToDouble("0x" + sHexMagnitude);
-            std::string sRow = sCPID + "," + RoundToString(dMagnitude,0) + ";";
-            sReconstructedMagnitudes += sRow;
-            // if (fDebug3) printf("\r\n HEX CPID %s, HEX MAG %s, dMag %f, Row %s   ",sCPID.c_str(),sHexMagnitude.c_str(),dMagnitude,sRow.c_str());
-        }
-    }
-    // Append zero magnitude researchers so the beacon count matches
-    for (double d0 = 1; d0 <= dZero; d0++)
-    {
-            std::string sZeroCPID = "0";
-            std::string sRow1 = sZeroCPID + ",15;";
-            sReconstructedMagnitudes += sRow1;
-    }
-    std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
-    std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
-    std::string sReconstructedBlock = "<AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES><MAGNITUDES>" + sReconstructedMagnitudes + "</MAGNITUDES>";
-    return sReconstructedBlock;
-}
-
-std::string PackBinarySuperblock(std::string sBlock)
-{
-    std::string sMagnitudes = ExtractXML(sBlock,"<MAGNITUDES>","</MAGNITUDES>");
-    std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
-    std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
-    // For each CPID in the superblock, convert data to binary
-    std::vector<std::string> vSuperblock = split(sMagnitudes.c_str(),";");
-    std::string sBinary = "";
-    double dZeroMagCPIDCount = 0;
-    for (unsigned int i = 0; i < vSuperblock.size(); i++)
-    {
-            if (vSuperblock[i].length() > 1)
-            {
-                std::string sPrefix = "00000000000000000000000000000000000" + ExtractValue(vSuperblock[i],",",0);
-                std::string sCPID = sPrefix.substr(sPrefix.length()-32,32);
-                double magnitude = RoundFromString(ExtractValue("0"+vSuperblock[i],",",1),0);
-                if (magnitude < 0)     magnitude=0;
-                if (magnitude > 32767) magnitude = 32767;  // Ensure we do not blow out the binary space (technically we can handle 0-65535)
-                std::string sBinaryCPID   = ConvertHexToBin(sCPID);
-                std::string sHexMagnitude = DoubleToHexStr(magnitude,4);
-                std::string sBinaryMagnitude = ConvertHexToBin(sHexMagnitude);
-                std::string sBinaryEntry  = sBinaryCPID+sBinaryMagnitude;
-                // if (fDebug3) printf("\r\n PackBinarySuperblock: DecMag %f HEX MAG %s bin_cpid_len %f bm_len %f be_len %f,",  magnitude,sHexMagnitude.c_str(),(double)sBinaryCPID.length(),(double)sBinaryMagnitude.length(),(double)sBinaryEntry.length());
-                if (sCPID=="00000000000000000000000000000000")
-                {
-                    dZeroMagCPIDCount += 1;
-                }
-                else
-                {
-                    sBinary += sBinaryEntry;
-                }
-
-            }
-    }
-    std::string sReconstructedBinarySuperblock = "<ZERO>" + RoundToString(dZeroMagCPIDCount,0) + "</ZERO><BINARY>" + sBinary + "</BINARY><AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES>";
-    return sReconstructedBinarySuperblock;
-}
-
-
-
-
 double ClientVersionNew()
 {
     double cv = BlockVersion(FormatFullVersion());
@@ -2810,7 +3033,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     while (pblockIndex->nHeight > nMinDepth)
     {
             pblockIndex = pblockIndex->pprev;
-            printf("Money Supply height %f",(double)pblockIndex->nHeight);
+            LogPrintf("Money Supply height %d", pblockIndex->nHeight);
 
             if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
             if (pblockIndex == pindexGenesisBlock)
@@ -2835,7 +3058,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
     if (!CheckBlock("ConnectBlock",pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
     {
-        printf("ConnectBlock::Failed - \r\n");
+        LogPrintf("ConnectBlock::Failed - ");
         return false;
     }
     //// issue here: it doesn't know the version
@@ -2853,10 +3076,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     int64_t nValueOut = 0;
     int64_t nStakeReward = 0;
     unsigned int nSigOps = 0;
-    double DPOR_Paid = 0;
 
     bool bIsDPOR = false;
 
+    if(nVersion>=8)
+    {
+        uint256 tmp_hashProof;
+        if(!CheckProofOfStakeV8(pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
+            return error("ConnectBlock(): check proof-of-stake failed");
+    }
 
     for (auto &tx : vtx)
     {
@@ -2925,24 +3153,25 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     {
                         nTotalCoinstake += tx.vout[i].nValue;
                     }
-                    if (fDebug10)   printf(" nHeight %f; nTCS %f; nTxValueOut %f     ",
-                        (double)pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
+                    if (fDebug10)   LogPrintf(" nHeight %d; nTCS %f; nTxValueOut %f",
+                        pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
                 }
 
-                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-                if (bIsDPOR && pindex->nHeight > nGrandfather)
+                if (pindex->nVersion >= 10)
                 {
+                    if (tx.vout.size() > 8)
+                        return DoS(100,error("Too many coinstake outputs"));
+                }
+                else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
+                {
+                    // Old rules, does not make sense
+                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
-                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                        if (fDebug10) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
                         if (Amount > 0)
                         {
-                            if (fDebug3) printf("Iterating Recipient #%f  %s with Amount %f \r\n,",(double)i,Recipient.c_str(),Amount);
-                            printf("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",Recipient.c_str(), Amount);
-                            return DoS(50,error("POR Payment results in an overpayment; Recipient %s, Amount %f \r\n",
-                                                Recipient.c_str(), Amount));
+                            return DoS(50,error("Coinstake output %u forbidden", i));
                         }
                     }
                 }
@@ -2967,12 +3196,26 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
     uint64_t nCoinAge = 0;
+    double dStakeReward = CoinToDouble(nStakeReward);
+    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward - nFees);
 
-    double dStakeReward = CoinToDouble(nStakeReward+nFees) - DPOR_Paid; //DPOR Recipients checked above already
-    double dStakeRewardWithoutFees = CoinToDouble(nStakeReward) - DPOR_Paid;
+    // Common coin validator
+    auto is_claim_valid = [this](
+            int64_t claim,
+            double por_owed,
+            double pos_owed,
+            int64_t fees)
+    {
+        // Round to Halfords to avoid epsilon errors.
+        int64_t max_owed = roundint64((por_owed * 1.25 + pos_owed) * COIN) + fees;
 
-    if (fDebug) printf("Stake Reward of %f B %f I %f F %.f %s %s  ",
-        dStakeReward,bb.ResearchSubsidy,bb.InterestSubsidy,(double)nFees,bb.cpid.c_str(),bb.Organization.c_str());
+        // Block version 9 and below allowed a 1 GRC wiggle.
+        if(nVersion < 10)
+            max_owed += 1 * COIN;
+
+        return claim <= max_owed;
+    };
+
 
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
@@ -2995,29 +3238,28 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
             double OUT_POR = 0;
             double OUT_INTEREST_OWED = 0;
+            double unused;
+            int64_t calculatedResearchReward = GetProofOfStakeReward(
+                        nCoinAge, nFees, bb.cpid, true, 1, nTime,
+                        pindex, "connectblock_investor",
+                        OUT_POR, OUT_INTEREST_OWED, unused, unused, unused);
 
-            double dAccrualAge = 0;
-            double dAccrualMagnitudeUnit = 0;
-            double dAccrualMagnitude = 0;
-
-            double dCalculatedResearchReward = CoinToDouble(GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                    pindex, "connectblock_investor",
-                    OUT_POR, OUT_INTEREST_OWED, dAccrualAge, dAccrualMagnitudeUnit, dAccrualMagnitude));
-            if (dStakeReward > (OUT_INTEREST_OWED+1+nFees) )
+            if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
             {
-                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : cpid %s (actual %f vs calculated %f), dCalcResearchReward %f, Fees %f",
-                    bb.cpid.c_str(), dStakeReward, OUT_INTEREST_OWED, dCalculatedResearchReward, (double)nFees));
+                if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
+                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : claimed %f vs calculated %f, Interest %f, Fees %f",
+                                         dStakeReward, CoinToDouble(calculatedResearchReward), OUT_INTEREST_OWED, CoinToDouble(nFees)));
+
+                LogPrintf("WARNING: ignoring invalid invalid claims on block %s", pindex->GetBlockHash().ToString());
             }
         }
-
     }
-
 
     AddCPIDBlockHash(bb.cpid, pindex->GetBlockHash());
 
     // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
-    if (fDebug10) printf (".TMS.");
+    if (fDebug10) LogPrintf (".TMS.");
 
     pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
@@ -3048,13 +3290,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (pindex->nHeight > nGrandfather && !fReorganizing)
     {
-        // Block Spamming
-        if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+        if(nVersion < 10)
         {
-            return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
-        }
+            // Block Spamming
+            if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
+            {
+                return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
+            }
 
-        if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
+            if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
+        }
 
         double OUT_POR = 0;
         double OUT_INTEREST = 0;
@@ -3065,87 +3310,108 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // ResearchAge 1:
         GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
             pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-        if (IsResearcher(bb.cpid) && dStakeReward > 1)
+        if (IsResearcher(bb.cpid))
         {
-
                 //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
                 double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
                 if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
 
                 if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                        return error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f and total Mint %f, [StakeReward] <> %f, with Out_Interest %f, OUT_POR %f, Fees %f, DPOR %f  for CPID %s does not match calculated research subsidy",
-                            (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dDrift,CoinToDouble(mint),dStakeRewardWithoutFees,
-                            (double)OUT_INTEREST,(double)OUT_POR,CoinToDouble(nFees),(double)DPOR_Paid,bb.cpid.c_str());
-
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
+                            bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
+                            dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
                 }
 
-				if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-				{
-							std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
-				}
-
-
-                if (IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(nTime))
+                if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
                 {
-						// Mitigate DPOR Relay attack
-						// bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
-						if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-						{
-							std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-							printf("\r\n\r\n ******  %s ***** \r\n",sNarr.c_str());
-							if (fTestNet || (pindex->nHeight > 975000)) return error(" %s ",sNarr.c_str());
+                            std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+                            LogPrintf("******  %s ***** ",sNarr);
+                }
+
+                if (IsResearchAgeEnabled(pindex->nHeight)
+                    && (BlockNeedsChecked(nTime) || nVersion>=9))
+                {
+
+                        // 6-4-2017 - Verify researchers stored block magnitude
+                        // 2018 02 04 - Moved here for better effect.
+                        double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+                        if( bb.Magnitude > 0
+                            && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
+                            && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
+                        {
+                            return DoS(20, error(
+                                "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                                bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
                         }
 
-                        if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
+                        // 2018 02 04 - Brod - Move cpid check here for better effect
+                        /* Only signature check is sufficient here, but kiss and
+                            call the function. The height is of previous block. */
+                        if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
+                        {
+                    if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
+                                return DoS(20, error(
+                                    "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                                     bb.cpid.c_str(), bb.cpidv2.c_str(),
+                                     bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
+                            else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
+                        }
+
+                        // Mitigate DPOR Relay attack
+                        // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
+                        if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                        {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+                            LogPrintf("******  %s ***** ", sNarr);
+                            if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
+                        }
+
+                if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                         {
                             StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
                             GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
                                         pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
-                            if (dStakeReward > ((OUT_POR*1.25)+OUT_INTEREST+1+CoinToDouble(nFees)))
+
+                    if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                             {
-
-                                if (fDebug3) printf("ConnectBlockError[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str());
-
-                                return DoS(10,error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
-                                    (double)bb.InterestSubsidy,(double)bb.ResearchSubsidy,dStakeReward,(double)OUT_POR,(double)OUT_INTEREST,bb.cpid.c_str()));
-                            }
+                        if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
+                            return DoS(10,error(
+                                       "ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                            bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str()));
+                            else
+                                LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
+                                                    bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
+                                }
                         }
                 }
         }
 
         //Approve first coinstake in DPOR block
-        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(),15) && !IsResearchAgeEnabled(pindex->nHeight))
+        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
         {
-                if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
-                {
-                        bDoTally_retired=true;
-                        if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
+            if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
+            {
+                    StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
+                    if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
+                    {
+                        double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
+                        if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
                         {
-                            StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
-                            if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
-                            {
-                                double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
-                                if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
-                                {
-                                        printf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                         deficit, bb.cpid.c_str(), (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                            LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                   deficit, bb.cpid, (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                                   OUT_POR, vtx[0].hashBoinc.c_str());
+                        }
+                        else
+                        {
+                            return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                         bb.cpid.c_str(), bb.ResearchSubsidy,
                                          OUT_POR, vtx[0].hashBoinc.c_str());
-                                }
-                                else
-                                {
-                                    return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                        bb.cpid.c_str(), bb.ResearchSubsidy,
-                                        OUT_POR, vtx[0].hashBoinc.c_str());
-                                }
-                            }
+                        }
                     }
                 }
+            }
         }
-
-    }
 
     //Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 30 blocks)
 
@@ -3156,7 +3422,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         if(nVersion >= 9)
         {
             // break away from block timing
-            if (fDebug) printf("ConnectBlock: Updating Neural Supermajority (v9 CB) height %d\n",pindex->nHeight);            ComputeNeuralNetworkSupermajorityHashes();
+            if (fDebug) LogPrintf("ConnectBlock: Updating Neural Supermajority (v9 CB) height %d",pindex->nHeight);
+            ComputeNeuralNetworkSupermajorityHashes();
             // Prevent duplicate superblocks
             if(nVersion >= 9 && !NeedASuperblock())
                 return error(("ConnectBlock: SuperBlock rcvd, but not Needed (too early)"));
@@ -3171,7 +3438,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if ((IsLockTimeWithinMinutes(GetBlockTime(),15) || nVersion>=9) && !fColdBoot)
+            if ((IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) || nVersion>=9) && !fColdBoot)
             {
                 // Let this take effect together with stakev8
                 if (nVersion>=8)
@@ -3192,7 +3459,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     }
                     catch (...)
                     {
-                        return error("ConnectBlock[] : Superblock stake check caused unknwon exception with GRC address %s", bb.GRCAddress.c_str());
+                        return error("ConnectBlock[] : Superblock stake check caused unknown exception with GRC address %s", bb.GRCAddress.c_str());
                     }
                 }
                 if (!VerifySuperblock(superblock, pindex))
@@ -3226,24 +3493,22 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
             if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
             {
-                    if (bb.superblock.length() > 20)
+                if (bb.superblock.length() > 20)
+                {
+                    std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                    if (VerifySuperblock(superblock, pindex))
                     {
-                            std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                            if (VerifySuperblock(superblock, pindex))
-                            {
-                                        LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
-                                        if (fDebug)
-                                            printf("ConnectBlock(): Superblock Loaded %d\n", pindex->nHeight);
-                                        if (!fColdBoot)
-                                        {
-                                            bDoTally_retired = true;
-                                        }
-                            }
-                            else
-                            {
-                                if (fDebug3) printf("ConnectBlock(): Superblock Not Loaded %d\r\n", pindex->nHeight);
-                            }
+                        LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
+                        if (fDebug)
+                            LogPrintf("ConnectBlock(): Superblock Loaded %d", pindex->nHeight);
+
+                        TallyResearchAverages(pindexBest);
                     }
+                    else
+                    {
+                        if (fDebug3) LogPrintf("ConnectBlock(): Superblock Not Loaded %d", pindex->nHeight);
+                    }
+                }
             }
             /*
                 -- Normal Superblocks are loaded during Tally
@@ -3254,13 +3519,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     //  End of Network Consensus
 
     // Gridcoin: Track payments to CPID, and last block paid
-    if (IsResearcher(bb.cpid) && pindex->nHeight > nNewIndex2)
+    if (pindex->nResearchSubsidy > 0 && IsResearcher(bb.cpid))
     {
         StructCPID stCPID = GetInitializedStructCPID2(bb.cpid,mvResearchAge);
+
         stCPID.InterestSubsidy += bb.InterestSubsidy;
         stCPID.ResearchSubsidy += bb.ResearchSubsidy;
-
-        if (pindex->nHeight > stCPID.LastBlock && pindex->nResearchSubsidy > 0)
+        if (pindex->nHeight > stCPID.LastBlock)
         {
                 stCPID.LastBlock = pindex->nHeight;
                 stCPID.BlockHash = pindex->GetBlockHash().GetHex();
@@ -3289,16 +3554,16 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     }
 
     // Slow down Retallying when in RA mode so we minimize disruption of the network
+    // TODO: Remove this if we can sync to v9 without it.
     if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
     {
-        if (fDebug3) printf("\r\n*BusyWaitForTally_retired*\r\n");
-        BusyWaitForTally_retired();
+        if(!IsV9Enabled_Tally(pindexBest->nHeight))
+            TallyResearchAverages(pindexBest);
     }
 
     if (IsResearchAgeEnabled(pindex->nHeight) && !OutOfSyncByAge())
     {
         fColdBoot = false;
-        bDoTally_retired=true;
     }
 
     if (fJustCheck)
@@ -3329,150 +3594,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 }
 
 
-
-
-bool static Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
-{
-    printf("REORGANIZE\n");
-    // Find the fork
-    CBlockIndex* pfork = pindexBest;
-    CBlockIndex* plonger = pindexNew;
-    while (pfork != plonger)
-    {
-        while (plonger->nHeight > pfork->nHeight)
-            if (!(plonger = plonger->pprev))
-                return error("Reorganize() : plonger->pprev is null");
-        if (pfork == plonger)
-            break;
-        if (!(pfork = pfork->pprev))
-            return error("Reorganize() : pfork->pprev is null");
-    }
-
-    // List of what to disconnect
-    vector<CBlockIndex*> vDisconnect;
-    for (CBlockIndex* pindex = pindexBest; pindex != pfork; pindex = pindex->pprev)
-        vDisconnect.push_back(pindex);
-
-    // List of what to connect
-    vector<CBlockIndex*> vConnect;
-    for (CBlockIndex* pindex = pindexNew; pindex != pfork; pindex = pindex->pprev)
-        vConnect.push_back(pindex);
-    reverse(vConnect.begin(), vConnect.end());
-
-    printf("REORGANIZE: Disconnect %" PRIszu " blocks; %s..%s\n", vDisconnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexBest->GetBlockHash().ToString().substr(0,20).c_str());
-    printf("REORGANIZE: Connect %" PRIszu " blocks; %s..%s\n", vConnect.size(), pfork->GetBlockHash().ToString().substr(0,20).c_str(), pindexNew->GetBlockHash().ToString().substr(0,20).c_str());
-
-    if (vDisconnect.size() > 0)
-    {
-        //Block was disconnected - User is Re-eligibile for staking
-
-        StructCPID sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
-
-        if (sMag.initialized)
-        {
-            sMag.LastPaymentTime = 0;
-            mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
-        }
-        nLastBlockSolved = 0;
-    }
-    printf("REORGANIZE Disc Size %f",(double)vDisconnect.size());
-
-    // Disconnect shorter branch
-    list<CTransaction> vResurrect;
-    set<string> vRereadCPIDs;
-    for( CBlockIndex* pindex : vDisconnect )
-    {
-        CBlock block;
-        if (!block.ReadFromDisk(pindex))
-            return error("Reorganize() : ReadFromDisk for disconnect failed");
-        if (!block.DisconnectBlock(txdb, pindex))
-            return error("Reorganize() : DisconnectBlock %s failed", pindex->GetBlockHash().ToString().substr(0,20).c_str());
-
-        // Queue memory transactions to resurrect.
-        // We only do this for blocks after the last checkpoint (reorganisation before that
-        // point should only happen with -reindex/-loadblock, or a misbehaving peer.
-        for (auto const& tx : boost::adaptors::reverse(block.vtx))
-            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindex->nHeight > Checkpoints::GetTotalBlocksEstimate())
-                vResurrect.push_front(tx);
-
-        // remeber the cpid to re-read later
-        vRereadCPIDs.insert(pindex->GetCPID());
-    }
-
-    // Re-read researchers history after all blocks disconnected
-    for( const string& sRereadCPID : vRereadCPIDs )
-    {
-        StructCPID stCPID = GetLifetimeCPID(sRereadCPID,"DisconnectBlock()");
-        (void)stCPID;
-    }
-
-    // Connect longer branch
-    vector<CTransaction> vDelete;
-    for (unsigned int i = 0; i < vConnect.size(); i++)
-    {
-        CBlockIndex* pindex = vConnect[i];
-        CBlock block;
-        if (!block.ReadFromDisk(pindex))
-            return error("Reorganize() : ReadFromDisk for connect failed");
-        if (!block.ConnectBlock(txdb, pindex, false, true))
-        {
-            // Invalid block
-            return error("Reorganize() : ConnectBlock %s failed", pindex->GetBlockHash().ToString().substr(0,20).c_str());
-        }
-
-        // Queue memory transactions to delete
-        for( const CTransaction& tx : block.vtx )
-            vDelete.push_back(tx);
-
-        if (!IsResearchAgeEnabled(pindex->nHeight))
-        {
-            //MiningCPID bb = GetInitializedMiningCPID(pindex->GetBlockHash().GetHex(), mvBlockIndex);
-            //bb = DeserializeBoincBlock(block.vtx[0].hashBoinc);
-            //mvBlockIndex[pindex->GetBlockHash().GetHex()] = bb;
-        }
-    }
-
-    if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
-        return error("Reorganize() : WriteHashBestChain failed");
-
-    // Make sure it's successfully written to disk before changing memory structure
-    if (!txdb.TxnCommit())
-        return error("Reorganize() : TxnCommit failed");
-
-    // Disconnect shorter branch
-    for( CBlockIndex* pindex : vDisconnect)
-    {
-        if (pindex->pprev)
-            pindex->pprev->pnext = NULL;
-    }
-
-    // Connect longer branch
-    for( CBlockIndex* pindex : vConnect)
-    {
-        if (pindex->pprev)
-            pindex->pprev->pnext = pindex;
-    }
-
-    // Resurrect memory transactions that were in the disconnected branch
-    for( CTransaction& tx : vResurrect)
-        AcceptToMemoryPool(mempool, tx, NULL);
-
-    // Delete redundant memory transactions that are in the connected branch
-    for( CTransaction& tx : vDelete)
-    {
-        mempool.remove(tx);
-        mempool.removeConflicts(tx);
-    }
-
-    // Gridcoin: Now that the chain is back in order, Fix the researchers who were disrupted:
-
-    printf("REORGANIZE: done\n");
-    return true;
-}
-
-
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew);
 bool ForceReorganizeToHash(uint256 NewHash)
 {
+    LOCK(cs_main);
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
@@ -3481,135 +3606,345 @@ bool ForceReorganizeToHash(uint256 NewHash)
 
     CBlockIndex* pindexCur = pindexBest;
     CBlockIndex* pindexNew = mapItem->second;
-    printf("\r\n** Force Reorganize **\r\n");
-    printf(" Current best height %i hash %s\n", pindexCur->nHeight,pindexCur->GetBlockHash().GetHex().c_str());
-    printf(" Target height %i hash %s\n", pindexNew->nHeight,pindexNew->GetBlockHash().GetHex().c_str());
+    LogPrintf("** Force Reorganize **");
+    LogPrintf(" Current best height %i hash %s", pindexCur->nHeight,pindexCur->GetBlockHash().GetHex());
+    LogPrintf(" Target height %i hash %s", pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
 
     CBlock blockNew;
     if (!blockNew.ReadFromDisk(pindexNew))
     {
-        printf("ForceReorganizeToHash: Fatal Error while reading new best block.\r\n");
+        LogPrintf("ForceReorganizeToHash: Fatal Error while reading new best block.");
         return false;
     }
 
-    //Re-process the last block to trigger orphan and shit
-    if (!blockNew.SetBestChain(txdb, pindexNew))
+    unsigned cnt_dis=0;
+    unsigned cnt_con=0;
+    bool success = false;
+
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+
+    if(pindexBest->nChainTrust < pindexCur->nChainTrust)
+        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less then before!");
+
+    if (!success)
     {
-        return error("ForceReorganizeToHash Fatal Error while setting best chain.\r\n");
+        return error("ForceReorganizeToHash: Fatal Error while setting best chain.");
     }
 
     AskForOutstandingBlocks(uint256(0));
-    printf("ForceReorganizeToHash: success! height %f hash %s\n\n",(double)pindexBest->nHeight,pindexBest->GetBlockHash().GetHex().c_str());
+    LogPrintf("ForceReorganizeToHash: success! height %d hash %s", pindexBest->nHeight,pindexBest->GetBlockHash().GetHex());
     return true;
 }
 
-// Called from inside SetBestChain: attaches a block to the new best chain being built
-bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew, bool fReorganizing)
+bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon)
 {
-    uint256 hash = GetHash();
-
-    // Adding to current best branch
-    if (!ConnectBlock(txdb, pindexNew, false, fReorganizing) || !txdb.WriteHashBestChain(hash))
+    set<string> vRereadCPIDs;
+    while(pindexBest != pcommon)
     {
-        txdb.TxnAbort();
-        if (fDebug3) printf("Invalid Chain Found.  Invalid block %s\r\n",hash.GetHex().c_str());
-        InvalidChainFound(pindexNew);
-        return false;
+        if(!pindexBest->pprev)
+            return error("DisconnectBlocksBatch: attempt to reorganize beyond genesis"); /*fatal*/
+
+        if (fDebug) LogPrintf("DisconnectBlocksBatch: %s",pindexBest->GetBlockHash().GetHex());
+
+        CBlock block;
+        if (!block.ReadFromDisk(pindexBest))
+            return error("DisconnectBlocksBatch: ReadFromDisk for disconnect failed"); /*fatal*/
+        if (!block.DisconnectBlock(txdb, pindexBest))
+            return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
+
+        // disconnect from memory
+        assert(!pindexBest->pnext);
+        if (pindexBest->pprev)
+            pindexBest->pprev->pnext = NULL;
+
+        // Queue memory transactions to resurrect.
+        // We only do this for blocks after the last checkpoint (reorganisation before that
+        // point should only happen with -reindex/-loadblock, or a misbehaving peer.
+        for (auto const& tx : boost::adaptors::reverse(block.vtx))
+            if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Checkpoints::GetTotalBlocksEstimate())
+                vResurrect.push_front(tx);
+
+        if(pindexBest->IsUserCPID())
+        {
+            // remeber the cpid to re-read later
+            vRereadCPIDs.insert(pindexBest->GetCPID());
+            // The user has no longer staked this block.
+            RemoveCPIDBlockHash(pindexBest->GetCPID(), pindexBest->GetBlockHash());
+        }
+
+        // New best block
+        cnt_dis++;
+        pindexBest = pindexBest->pprev;
+        hashBestChain = pindexBest->GetBlockHash();
+        blockFinder.Reset();
+        nBestHeight = pindexBest->nHeight;
+        nBestChainTrust = pindexBest->nChainTrust;
+
+        if (!txdb.WriteHashBestChain(pindexBest->GetBlockHash()))
+            return error("DisconnectBlocksBatch: WriteHashBestChain failed"); /*fatal*/
+
     }
-    if (!txdb.TxnCommit())
-        return error("SetBestChain() : TxnCommit failed");
 
-    // Add to current best branch
-    pindexNew->pprev->pnext = pindexNew;
-
-    // Delete redundant memory transactions
-    for (auto const& tx : vtx)
-        mempool.remove(tx);
-
-    return true;
-}
-
-bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
-{
-    uint256 hash = GetHash();
-
-    if (!txdb.TxnBegin())
-        return error("SetBestChain() : TxnBegin failed");
-
-    if (pindexGenesisBlock == NULL && hash == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+    /* fix up after disconnecting, prepare for new blocks */
+    if(cnt_dis>0)
     {
-        txdb.WriteHashBestChain(hash);
+
+        //Block was disconnected - User is Re-eligibile for staking
+        StructCPID sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
+        nLastBlockSolved = 0;
+        if (sMag.initialized)
+        {
+            sMag.LastPaymentTime = 0;
+            mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
+        }
+
+        // Resurrect memory transactions that were in the disconnected branch
+        for( CTransaction& tx : vResurrect)
+            AcceptToMemoryPool(mempool, tx, NULL);
+
         if (!txdb.TxnCommit())
-            return error("SetBestChain() : TxnCommit failed");
-        pindexGenesisBlock = pindexNew;
-    }
-    else if (hashPrevBlock == hashBestChain)
-    {
-        if (!SetBestChainInner(txdb, pindexNew, false))
+            return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
+
+        // Need to reload all contracts
+        if (fDebug10) LogPrintf("DisconnectBlocksBatch: LoadAdminMessages");
+        std::string admin_messages;
+        LoadAdminMessages(true, admin_messages);
+
+        // Tally research averages.
+        if(IsV9Enabled_Tally(nBestHeight))
         {
-            //int nResult = 0;
-            return error("SetBestChain() : SetBestChainInner failed");
+            assert(IsTallyTrigger(pindexBest));
+            if (fDebug) LogPrintf("DisconnectBlocksBatch: TallyResearchAverages (v9P %%%d) height %d", TALLY_GRANULARITY, nBestHeight);
+            TallyResearchAverages(pindexBest);
         }
-    }
-    else
-    {
-        // the first block in the new chain that will cause it to become the new best chain
-        CBlockIndex *pindexIntermediate = pindexNew;
-        // list of blocks that need to be connected afterwards
-        std::vector<CBlockIndex*> vpindexSecondary;
-        printf("\r\n**Reorganize**");
-
-        //10-6-2015 Make Reorganize work more gracefully - try up to 5 times to reorganize, each with an intermediate further back
-        for (int iRegression = 0; iRegression < 5; iRegression++)
+        else
         {
-            int rollback = iRegression * 100;
-
-            // Reorganize is costly in terms of db load, as it works in a single db transaction.
-            // Try to limit how much needs to be done inside
-            int rolled_back = 1;
-            while (pindexIntermediate->pprev && pindexIntermediate->pprev->nChainTrust > pindexBest->nChainTrust && rolled_back < rollback)
-            {
-                vpindexSecondary.push_back(pindexIntermediate);
-                pindexIntermediate = pindexIntermediate->pprev;
-                if (pindexIntermediate==pindexGenesisBlock) break;
-                rolled_back++;
-            }
-
-            if (!vpindexSecondary.empty())
-            printf("\r\nReorganizing Attempt #%f, regression to block #%f \r\n",(double)iRegression+1,(double)pindexIntermediate->nHeight);
-
-            printf("Postponing %" PRIszu " reconnects\n", vpindexSecondary.size());
-            if (iRegression==4 && !Reorganize(txdb, pindexIntermediate))
-            {
-                    printf("Failed to Reorganize during Attempt #%f \r\n",(double)iRegression+1);
-                    txdb.TxnAbort();
-                    InvalidChainFound(pindexNew);
-                    printf("\r\nReorg tally\r\n");
-                    BusyWaitForTally_retired();
-                    TallyNetworkAverages_v9();
-                    return error("SetBestChain() : Reorganize failed");
-            }
+            // todo: do something with retired tally? maybe?
         }
 
-        // Switch to new best branch
-        // Connect further blocks
-        for (auto &pindex : boost::adaptors::reverse(vpindexSecondary))
+        // Re-read researchers history after all blocks disconnected
+        if (fDebug10) LogPrintf("DisconnectBlocksBatch: GetLifetimeCPID");
+        for( const string& sRereadCPID : vRereadCPIDs )
+            GetLifetimeCPID(sRereadCPID,"DisconnectBlocksBatch");
+
+    }
+    return true;
+}
+
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew)
+{
+    assert(pindexNew);
+    //assert(!pindexNew->pnext);
+    //assert(pindexBest || hashBestChain == pindexBest->GetBlockHash());
+    //assert(nBestHeight = pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
+    //assert(!pindexBest->pnext);
+    assert(pindexNew->GetBlockHash()==blockNew.GetHash());
+    /* note: it was already determined that this chain is better than current best */
+    /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overriden by command */
+    assert( !pindexGenesisBlock == !pindexBest );
+
+    list<CTransaction> vResurrect;
+    list<CBlockIndex*> vConnect;
+    set<string> vRereadCPIDs;
+
+    /* find fork point */
+    CBlockIndex *pcommon = NULL;
+    if(pindexGenesisBlock)
+    {
+        pcommon = pindexNew;
+        while( pcommon->pnext==NULL && pcommon!=pindexBest )
         {
-            CBlock block;
+            pcommon = pcommon->pprev;
+
+            if(!pcommon)
+                return error("ReorganizeChain: unable to find fork root");
+        }
+
+        if(pcommon != pindexBest)
+        {
+            pcommon = FindTallyTrigger(pcommon);
+            if(!pcommon)
+                return error("ReorganizeChain: unable to find fork root with tally point");
+        }
+
+        if (pcommon!=pindexBest || pindexNew->pprev!=pcommon)
+        {
+            LogPrintf("ReorganizeChain: from {%s %d}\n"
+                     "ReorganizeChain: comm {%s %d}\n"
+                     "ReorganizeChain: to   {%s %d}\n"
+                     "REORGANIZE: disconnect %d, connect %d blocks"
+                ,pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight
+                ,pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight
+                ,pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight
+                ,pindexBest->nHeight - pcommon->nHeight
+                ,pindexNew->nHeight - pcommon->nHeight);
+        }
+    }
+
+    /* disconnect blocks */
+    if(pcommon!=pindexBest)
+    {
+        if (!txdb.TxnBegin())
+            return error("ReorganizeChain: TxnBegin failed");
+        if(!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon))
+        {
+            error("ReorganizeChain: DisconnectBlocksBatch() failed");
+            LogPrintf("This is fatal error. Chain index may be corrupt. Aborting.\n"
+                      "Please Reindex the chain and Restart.");
+            exit(1); //todo
+        }
+
+        int nMismatchSpent;
+        int64_t nBalanceInQuestion;
+        pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+    }
+
+    if (fDebug && cnt_dis>0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
+
+    for(CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev)
+        vConnect.push_front(p);
+
+    /* Connect blocks */
+    for(auto const pindex : vConnect)
+    {
+        CBlock block_load;
+        CBlock &block = (pindex==pindexNew)? blockNew : block_load;
+
+        if(pindex!=pindexNew)
+        {
             if (!block.ReadFromDisk(pindex))
-            {
-                printf("SetBestChain() : ReadFromDisk failed\n");
-                break;
-            }
-            if (!txdb.TxnBegin()) {
-                printf("SetBestChain() : TxnBegin 2 failed\n");
-                break;
-            }
-            // errors now are not fatal, we still did a reorganisation to a new chain in a valid way
-            if (!block.SetBestChainInner(txdb, pindex, true))
-                break;
+                return error("ReorganizeChain: ReadFromDisk for connect failed");
+            assert(pindex->GetBlockHash()==block.GetHash());
         }
+        else
+        {
+            assert(pindex==pindexNew);
+            assert(pindexNew->GetBlockHash()==block.GetHash());
+            assert(pindexNew->GetBlockHash()==blockNew.GetHash());
+        }
+
+        uint256 hash = block.GetHash();
+        uint256 nBestBlockTrust;
+
+        if (fDebug) LogPrintf("ReorganizeChain: connect %s",hash.ToString());
+
+        if (!txdb.TxnBegin())
+            return error("ReorganizeChain: TxnBegin failed");
+
+        if (pindexGenesisBlock == NULL)
+        {
+            if(hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+            {
+                txdb.TxnAbort();
+                return error("ReorganizeChain: genesis block hash does not match");
+            }
+            pindexGenesisBlock = pindex;
+        }
+        else
+        {
+            assert(pindex->GetBlockHash()==block.GetHash());
+            assert(pindex->pprev == pindexBest);
+            if (!block.ConnectBlock(txdb, pindex, false, false))
+            {
+                txdb.TxnAbort();
+                error("ReorganizeChain: ConnectBlock %s failed", hash.ToString().c_str());
+                LogPrintf("Previous block %s",pindex->pprev->GetBlockHash().ToString());
+                InvalidChainFound(pindex);
+                return false;
+            }
+        }
+
+        // Delete redundant memory transactions
+        for (auto const& tx : block.vtx)
+        {
+            mempool.remove(tx);
+            mempool.removeConflicts(tx);
+        }
+
+        if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
+        {
+            txdb.TxnAbort();
+            return error("ReorganizeChain: WriteHashBestChain failed");
+        }
+
+        // Make sure it's successfully written to disk before changing memory structure
+        if (!txdb.TxnCommit())
+            return error("ReorganizeChain: TxnCommit failed");
+
+        // Add to current best branch
+        if(pindex->pprev)
+        {
+            assert( !pindex->pprev->pnext );
+            pindex->pprev->pnext = pindex;
+            nBestBlockTrust = pindex->nChainTrust - pindex->pprev->nChainTrust;
+        }
+        else
+            nBestBlockTrust = pindex->nChainTrust;
+
+        // update best block
+        hashBestChain = hash;
+        pindexBest = pindex;
+        blockFinder.Reset();
+        nBestHeight = pindexBest->nHeight;
+        nBestChainTrust = pindexBest->nChainTrust;
+        nTimeBestReceived =  GetAdjustedTime();
+        cnt_con++;
+
+        // Load recent contracts
+        std::string admin_messages;
+        LoadAdminMessages(false, admin_messages);
+
+        if(IsV9Enabled_Tally(nBestHeight))
+        {
+            // quorum not needed
+            // Tally research averages.
+            if(IsTallyTrigger(pindexBest))
+            {
+                if (fDebug) LogPrintf("ReorganizeChain: TallyNetworkAverages (v9N %%%d) height %d",TALLY_GRANULARITY,nBestHeight);
+                TallyResearchAverages(pindexBest);
+            }
+        }
+        else
+        {
+            //TODO: do something with retired tally?
+        }
+
+        if(pindex->IsUserCPID()) // is this needed?
+            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
     }
+
+    if (fDebug && (cnt_dis>0 || cnt_con>1))
+        LogPrintf("ReorganizeChain: Disconnected %d and Connected %d blocks.",cnt_dis,cnt_con);
+
+    return true;
+}
+
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
+{
+    unsigned cnt_dis=0;
+    unsigned cnt_con=0;
+    bool success = false;
+    const auto origBestIndex = pindexBest;
+
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+
+    if(origBestIndex && origBestIndex->nChainTrust > nBestChainTrust)
+    {
+        LogPrintf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.");
+        CBlock origBlock;
+        if (!origBlock.ReadFromDisk(origBestIndex))
+            return error("SetBestChain: Fatal Error while reading original best block");
+        success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
+    }
+
+    if(!success)
+        return false;
+
+    /* Fix up after block connecting */
+
+
+    //std::set<uint128> connected_cpids;
+
 
     // Update best block in wallet (so we can detect restored wallets)
     bool fIsInitialDownload = IsInitialBlockDownload();
@@ -3619,52 +3954,47 @@ bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
         ::SetBestChain(locator);
     }
 
-    // New best block
-    hashBestChain = hash;
-    pindexBest = pindexNew;
-    blockFinder.Reset();
-    nBestHeight = pindexBest->nHeight;
-    nBestChainTrust = pindexNew->nChainTrust;
-    nTimeBestReceived =  GetAdjustedTime();
-
-    uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
+    if(IsV9Enabled_Tally(nBestHeight))
+    {
+        // Update quorum data.
+        if ((nBestHeight % 3) == 0)
+        {
+            if (fDebug) LogPrintf("SetBestChain: Updating Neural Supermajority (v9 %%3) height %d",nBestHeight);
+            ComputeNeuralNetworkSupermajorityHashes();
+        }
+        // Update quorum data.
+        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
+        {
+            if (fDebug) LogPrintf("SetBestChain: Updating Neural Quorum (v9 M) height %d",nBestHeight);
+            UpdateNeuralNetworkQuorumData();
+        }
+    }
+    else if (!fIsInitialDownload)
+        // Retally after reorganize to sync up amounts owed.
+        TallyResearchAverages(pindexNew);
 
     if (fDebug)
     {
-        printf("{SBC} SetBestChain: new best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s\n",
-          hashBestChain.ToString().substr(0,20).c_str(), nBestHeight,
-          CBigNum(nBestChainTrust).ToString().c_str(),
-          nBestBlockTrust.Get64(),
-          DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+        LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
+               hashBestChain.ToString(), nBestHeight,
+               CBigNum(nBestChainTrust).ToString(),
+               DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
     }
     else
-        printf("{SBC} new best=%s  height=%d ; ",hashBestChain.ToString().c_str(), nBestHeight);
-
-    // Check the version of the last 100 blocks to see if we need to upgrade:
-    if (!fIsInitialDownload)
-    {
-        int nUpgraded = 0;
-        const CBlockIndex* pindex = pindexBest;
-        for (int i = 0; i < 100 && pindex != NULL; i++)
-        {
-            if (pindex->nVersion > CBlock::CURRENT_VERSION)
-                ++nUpgraded;
-            pindex = pindex->pprev;
-        }
-        if (nUpgraded > 0)
-            printf("SetBestChain: %d of last 100 blocks above version %d\n", nUpgraded, CBlock::CURRENT_VERSION);
-        if (nUpgraded > 100/2)
-            // strMiscWarning is read by GetWarnings(), called by Qt and the JSON-RPC code to warn the user:
-            strMiscWarning = _("Warning: This version is obsolete, upgrade required!");
-    }
+        LogPrintf("{SBC} new best {%s %d} ; ",hashBestChain.ToString(), nBestHeight);
 
     std::string strCmd = GetArg("-blocknotify", "");
-
     if (!fIsInitialDownload && !strCmd.empty())
     {
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
+
+    // Perform Gridcoin services now that w have a new head.
+    // Remove V9 checks after the V9 switch.
+    // TODO: ???
+    if(IsV9Enabled(nBestHeight))
+        GridcoinServices();
 
     return true;
 }
@@ -3705,12 +4035,12 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
         bnCentSecond += CBigNum(nValueIn) * (nTime-txPrev.nTime) / CENT;
 
         if (fDebug && GetBoolArg("-printcoinage"))
-            printf("coin age nValueIn=%" PRId64 " nTimeDiff=%d bnCentSecond=%s\n", nValueIn, nTime - txPrev.nTime, bnCentSecond.ToString().c_str());
+            LogPrintf("coin age nValueIn=%" PRId64 " nTimeDiff=%d bnCentSecond=%s", nValueIn, nTime - txPrev.nTime, bnCentSecond.ToString());
     }
 
     CBigNum bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
     if (fDebug && GetBoolArg("-printcoinage"))
-        printf("coin age bnCoinDay=%s\n", bnCoinDay.ToString().c_str());
+        LogPrintf("coin age bnCoinDay=%s", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.getuint64();
     return true;
 }
@@ -3733,7 +4063,7 @@ bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
     if (nCoinAge == 0) // block coin age minimum 1 coin-day
         nCoinAge = 1;
     if (fDebug && GetBoolArg("-printcoinage"))
-        printf("block coin age total nCoinDays=%" PRIu64 "\n", nCoinAge);
+        LogPrintf("block coin age total nCoinDays=%" PRIu64, nCoinAge);
     return true;
 }
 
@@ -3771,7 +4101,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
     bool fGeneratedStakeModifier = false;
     if (!ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
     {
-        printf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
+        LogPrintf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
     }
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
     pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
@@ -3794,7 +4124,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
     // New best
     if (pindexNew->nChainTrust > nBestChainTrust)
-        if (!SetBestChain(txdb, pindexNew))
+        if (!SetBestChain(txdb, *this, pindexNew))
             return false;
 
     if (pindexNew == pindexBest)
@@ -3811,8 +4141,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
 bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
-
-    if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
@@ -3828,7 +4156,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     double blockdiff = GetBlockDifficulty(nBits);
     if (height1 > nGrandfather && blockdiff > 10000000000000000)
     {
-       return DoS(1, error("CheckBlock[] : Block Bits larger than 10000000000000000.\r\n"));
+       return DoS(1, error("CheckBlock[] : Block Bits larger than 10000000000000000."));
     }
 
     // First transaction must be coinbase, the rest must not be
@@ -3846,10 +4174,10 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         {
             double blockVersion = BlockVersion(bb.clientversion);
             double cvn = ClientVersionNew();
-            if (fDebug10) printf("BV %f, CV %f   ",blockVersion,cvn);
+            if (fDebug10) LogPrintf("BV %f, CV %f   ",blockVersion,cvn);
             // Enforce Beacon Age
             if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
-                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade ");
         }
 
         //Orphan Flood Attack
@@ -3857,10 +4185,10 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         {
             double bv = BlockVersion(bb.clientversion);
             double cvn = ClientVersionNew();
-            if (fDebug10) printf("BV %f, CV %f   ",bv,cvn);
+            if (fDebug10) LogPrintf("BV %f, CV %f   ",bv,cvn);
             // Enforce Beacon Age
             if (bv < 3588 && height1 > 860500 && !fTestNet)
-                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade \r\n");
+                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade ");
         }
     }
 
@@ -3869,16 +4197,40 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))
             return DoS(1,error("CheckBlock::PoR Project Name invalid"));
 
-        if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+        if (!fLoadingIndex)
         {
-            std::string sOut2;
-            LoadAdminMessages(false,sOut2);
-            if (!fLoadingIndex && !IsCPIDValidv2(bb,height1))
+            bool cpidresult = false;
+            int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
+            int cpidV3CutOverHeight = fTestNet ? 196300 : 725000;
+            if (height1 < cpidV2CutOverHeight)
             {
-                return error("Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc %s", height1,
-                             bb.cpid.c_str(), bb.cpidv2.c_str(),
-                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str());
+                cpidresult = IsCPIDValid_Retired(bb.cpid,bb.enccpid);
             }
+            else if (height1 <= cpidV3CutOverHeight)
+            {
+                cpidresult = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
+            }
+            else
+            {
+
+                cpidresult = (bb.lastblockhash.size()==64)
+                    && (bb.BoincSignature.size()>=16)
+                    && (bb.BoincSignature.find(' ')==std::string::npos);
+
+                /* This is not used anywhere, so let it be.
+                cpidresult = cpidresult
+                    && (bb.BoincPublicKey.size()==130)
+                    && (bb.BoincPublicKey.find(' ')==std::string::npos);
+                */
+
+                /* full "v3" signature check is performed in ConnectBlock */
+            }
+
+            if(!cpidresult)
+                return DoS(20, error(
+                            "Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                             height1, bb.cpid.c_str(), bb.cpidv2.c_str(),
+                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
         }
     }
 
@@ -3890,16 +4242,16 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         double mint1 = CoinToDouble(Mint);
         double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
         double limiter = MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime());
-        if (fDebug10) printf("CheckBlock[]: TotalSubsidy %f, Height %i, %s, %f, Res %f, Interest %f, hb: %s \r\n",
-                             total_subsidy, height1, bb.cpid.c_str(),
-                             mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
-        if (total_subsidy < limiter)
+        if (fDebug10) LogPrintf("CheckBlock[]: TotalSubsidy %f, Height %i, %s, %f, Res %f, Interest %f, hb: %s ",
+                             total_subsidy, height1, bb.cpid,
+                             mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
+        if ((nVersion < 10) && (total_subsidy < limiter))
         {
-            if (fDebug3) printf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s \r\n",bb.cpid.c_str(),
-                                mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
+            if (fDebug3) LogPrintf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s ",bb.cpid,
+                                mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
             //1-21-2015 - Prevent Hackers from spamming the network with small blocks
             return error("****CheckBlock[]: Total Mint too Small %f < %f Research %f Interest %f BOINC %s",
-                         total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc.c_str());
+                         total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
         }
 
         if (fCheckSig && !CheckBlockSignature())
@@ -3921,7 +4273,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         {
             if (vtx[i].IsCoinStake())
             {
-                printf("Found more than one coinstake in coinbase at location %f\r\n",(double)i);
+                LogPrintf("Found more than one coinstake in coinbase at location %d", i);
                 return DoS(100, error("CheckBlock[] : more than one coinstake"));
             }
         }
@@ -3936,11 +4288,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
-
-        // Verify beacon contract if a transaction contains a beacon contract
-        // Current bad contracts in chain would cause a fork on sync, skip them
-        if (nVersion>=9 && !VerifyBeaconContractTx(tx.hashBoinc) && !fLoadingIndex)
-            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -3965,7 +4312,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
         return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
 
-    //if (fDebug3) printf(".EOCB.");
+    //if (fDebug3) LogPrintf(".EOCB.");
     return true;
 }
 
@@ -3993,12 +4340,13 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if(       (IsProtocolV2(nHeight) && nVersion < 7)
               || (IsV8Enabled(nHeight) && nVersion < 8)
               || (IsV9Enabled(nHeight) && nVersion < 9)
+              || (IsV10Enabled(nHeight) && nVersion < 10)
               )
         return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
     else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
              ||(!IsV8Enabled(nHeight) && nVersion >= 8)
              ||(!IsV9Enabled(nHeight) && nVersion >= 9)
-             )
+             ||(!IsV10Enabled(nHeight) && nVersion >= 10))
         return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
 
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
@@ -4019,11 +4367,17 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
     }
 
-
-    // Check that all transactions are finalized
     for (auto const& tx : vtx)
+    {
+        // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
+
+        // Verify beacon contract if a transaction contains a beacon contract
+        // Current bad contracts in chain would cause a fork on sync, skip them
+        if (nVersion>=9 && !VerifyBeaconContractTx(tx))
+            return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
+    }
 
     // Check that the block chain matches the known block chain up to a checkpoint
     if (!Checkpoints::CheckHardened(nHeight, hash))
@@ -4037,9 +4391,9 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(),600) || nHeight >= 999000))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 600) || nHeight >= 999000))
                     {
-                        return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+                        return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
                     }
 
                 }
@@ -4049,18 +4403,24 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         //must be proof of stake
         //no grandfather exceptions
         //if (IsProofOfStake())
-        printf("AcceptBlock: Proof Of Stake V8 %d\n",nVersion);
         if(!CheckProofOfStakeV8(pindexPrev, *this, generated_by_me, hashProof))
         {
-            return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    \n", hash.ToString().c_str(),(double)nNonce);
+            error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
+            LogPrintf(" prev %s",pindexPrev->GetBlockHash().ToString());
+            return false;
         }
     }
 
-    // Verify proof of research.
-    if(!CheckProofOfResearch(pindexPrev, *this))
+    if(nVersion<9)
     {
-        return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i\n", hash.ToString().c_str(), nNonce);
+        // Verify proof of research.
+        if(!CheckProofOfResearch(pindexPrev, *this))
+        {
+            return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i", hash.ToString().c_str(), nNonce);
+        }
     }
+    /*else Do not check v9 rewards here as context here is insufficient and it is
+      checked again in ConnectBlock */
 
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
@@ -4102,7 +4462,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    if (fDebug) printf("{ACC}");
+    if (fDebug) LogPrintf("{ACC}");
     nLastAskedForBlocks=GetAdjustedTime();
     ResetTimerMain("OrphanBarrage");
     return true;
@@ -4141,13 +4501,13 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
     // Pre-condition checks.
     if(!parent)
     {
-        printf("Invalid block passed to VerifySuperblock");
+        LogPrintf("Invalid block passed to VerifySuperblock");
         return false;
     }
 
     if(superblock.length() <= 20)
     {
-        printf("Invalid superblock passed to VerifySuperblock");
+        LogPrintf("Invalid superblock passed to VerifySuperblock");
         return false;
     }
 
@@ -4185,8 +4545,7 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 
     if (!bPassed)
     {
-        if (fDebug) printf(" Verification of Superblock Failed ");
-        //if (fDebug3) printf("\r\n Verification of Superblock Failed outavg: %f, avg_mag %f, Height %f, Out_Beacon_count %f, Out_participant_count %f, block %s", (double)out_avg,(double)avg_mag,(double)nHeight,(double)out_beacon_count,(double)out_participant_count,superblock.c_str());
+        if (fDebug) LogPrintf(" Verification of Superblock Failed ");
     }
 
     return bPassed;
@@ -4195,7 +4554,7 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 bool NeedASuperblock()
 {
     bool bDireNeedOfSuperblock = false;
-    std::string superblock = ReadCache("superblock","all");
+    std::string superblock = ReadCache("superblock","all").value;
     if (superblock.length() > 20 && !OutOfSyncByAge())
     {
         if (!VerifySuperblock(superblock, pindexBest))
@@ -4208,7 +4567,7 @@ bool NeedASuperblock()
          */
     }
 
-    int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
         bDireNeedOfSuperblock = true;
 
@@ -4235,87 +4594,73 @@ void GridcoinServices()
 {
 
     //Dont do this on headless - SeP
-    #if defined(QT_GUI)
+    if(fQtActive)
+    {
        if ((nBestHeight % 125) == 0)
        {
             GetGlobalStatus();
             bForceUpdate=true;
             uiInterface.NotifyBlocksChanged();
        }
-    #endif
+    }
 
     // Services thread activity
 
     if(IsV9Enabled_Tally(nBestHeight))
     {
-        // Update quorum data.
-        if ((nBestHeight % 3) == 0)
-        {
-            if (fDebug) printf("SVC: Updating Neural Supermajority (v9 %%3) height %d\n",nBestHeight);
-            ComputeNeuralNetworkSupermajorityHashes();
-        }
-        // Update quorum data.
-        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
-        {
-            if (fDebug) printf("SVC: Updating Neural Quorum (v9 M) height %d\n",nBestHeight);
-            UpdateNeuralNetworkQuorumData();
-        }
-
-        // Tally research averages.
-        if ((nBestHeight % TALLY_GRANULARITY) == 0)
-        {
-            if (fDebug) printf("SVC: TallyNetworkAverages (v9 %%%d) height %d\n",TALLY_GRANULARITY,nBestHeight);
-            TallyNetworkAverages_v9();
-        }
+        // in SetBestChain
     }
     else
     {
-        int64_t superblock_age = GetAdjustedTime() - mvApplicationCacheTimestamp["superblock;magnitudes"];
+        int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
         bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
         if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
-        if (fDebug10) printf(" MRSA %" PRId64 ", BH %d\n", superblock_age, nBestHeight);
+        if (fDebug10) LogPrintf(" MRSA %" PRId64 ", BH %d", superblock_age, nBestHeight);
 
         if (bNeedSuperblock)
         {
             if ((nBestHeight % 3) == 0)
             {
-                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 A) height %d\n",nBestHeight);
+                if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 A) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
             }
             if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
             {
-                if (fDebug) printf("SVC: Updating Neural Quorum (v3 A) height %d\n",nBestHeight);
-                if (fDebug10) printf("#CNNSH# ");
+                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 A) height %d",nBestHeight);
+                if (fDebug10) LogPrintf("#CNNSH# ");
                 UpdateNeuralNetworkQuorumData();
             }
-            if ((nBestHeight % 20) == 0)
+
+            // Perform retired tallies between the V9 block switch (1144000) and the
+            // V9 tally switch (1144120) or else blocks will be rejected in between.
+            if (IsV9Enabled(nBestHeight) && (nBestHeight % 20) == 0)
             {
-                if (fDebug) printf("SVC: set off Tally (v3 B) height %d\n",nBestHeight);
-                if (fDebug10) printf("#TIB# ");
-                bDoTally_retired = true;
+                if (fDebug) LogPrintf("SVC: set off Tally (v3 B) height %d",nBestHeight);
+                if (fDebug10) LogPrintf("#TIB# ");
+                TallyResearchAverages(pindexBest);
             }
         }
         else
         {
             // When superblock is not old, Tally every N blocks:
             int nTallyGranularity = fTestNet ? 60 : 20;
-            if ((nBestHeight % nTallyGranularity) == 0)
+            if (IsV9Enabled(nBestHeight) && (nBestHeight % nTallyGranularity) == 0)
             {
-                if (fDebug) printf("SVC: set off Tally (v3 C) height %d\n",nBestHeight);
-                if (fDebug3) printf("TIB1 ");
-                bDoTally_retired = true;
+                if (fDebug) LogPrintf("SVC: set off Tally (v3 C) height %d",nBestHeight);
+                if (fDebug3) LogPrintf("TIB1 ");
+                TallyResearchAverages(pindexBest);
             }
 
             if ((nBestHeight % 5)==0)
             {
-                if (fDebug) printf("SVC: Updating Neural Supermajority (v3 D) height %d\n",nBestHeight);
+                if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 D) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
             }
             if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
             {
-                if (fDebug) printf("SVC: Updating Neural Quorum (v3 E) height %d\n",nBestHeight);
-                if (fDebug3) printf("CNNSH2 ");
+                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 E) height %d",nBestHeight);
+                if (fDebug3) LogPrintf("CNNSH2 ");
                 UpdateNeuralNetworkQuorumData();
             }
         }
@@ -4331,30 +4676,15 @@ void GridcoinServices()
     if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
         return;
 
-    if (fDebug) printf(" {SVC} ");
+    if (fDebug) LogPrintf(" {SVC} ");
 
     //Backup the wallet once per 900 blocks or as specified in config:
     int nWBI = GetArg("-walletbackupinterval", 900);
-    if (nWBI == 0)
-        nWBI = 900;
-
-   if (TimerMain("backupwallet", nWBI))
+    if (nWBI && TimerMain("backupwallet", nWBI))
     {
         bool bWalletBackupResults = BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"));
         bool bConfigBackupResults = BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"));
-        printf("Daily backup results: Wallet -> %s Config -> %s\r\n", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
-    }
-
-    if (TimerMain("ResetVars",30))
-    {
-        bTallyStarted_retired = false;
-    }
-
-    if (TimerMain("FixSpentCoins",60))
-    {
-            int nMismatchSpent;
-            int64_t nBalanceInQuestion;
-            pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+        LogPrintf("Daily backup results: Wallet -> %s Config -> %s", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
     if (TimerMain("MyNeuralMagnitudeReport",30))
@@ -4364,17 +4694,17 @@ void GridcoinServices()
             if (msNeuralResponse.length() < 25 && IsResearcher(msPrimaryCPID))
             {
                 AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                if (fDebug3) printf("Async explainmag sent for %s.",msPrimaryCPID.c_str());
+                if (fDebug3) LogPrintf("Async explainmag sent for %s.",msPrimaryCPID);
             }
-            if (fDebug3) printf("\r\n MR Complete \r\n");
+            if (fDebug3) LogPrintf("MR Complete");
         }
         catch (std::exception &e)
         {
-            printf("Error in MyNeuralMagnitudeReport1.");
+            LogPrintf("Error in MyNeuralMagnitudeReport1.");
         }
         catch(...)
         {
-            printf("Error in MyNeuralMagnitudeReport.");
+            LogPrintf("Error in MyNeuralMagnitudeReport.");
         }
     }
 
@@ -4388,7 +4718,7 @@ void GridcoinServices()
         // For effeciency, the network sleeps for 20 hours after a good superblock is accepted
         if (NeedASuperblock() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
         {
-            if (fDebug3) printf("FSWDPOR ");
+            if (fDebug3) LogPrintf("FSWDPOR ");
             FullSyncWithDPORNodes();
         }
     }
@@ -4408,11 +4738,13 @@ void GridcoinServices()
             }
     }
 
-
-    if (TimerMain("send_beacon",180))
+    /* Do this only for users with valid CPID */
+    if (TimerMain("send_beacon",180) && IsResearcher(GlobalCPUMiningCPID.cpid))
     {
         std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-        if (tBeaconPublicKey.empty() && IsResearcher(GlobalCPUMiningCPID.cpid))
+
+        /* If there is no public key, beacon needs advertising */
+        if (tBeaconPublicKey.empty())
         {
             std::string sOutPubKey = "";
             std::string sOutPrivKey = "";
@@ -4421,38 +4753,28 @@ void GridcoinServices()
             bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
             if (!fResult)
             {
-                printf("BEACON ERROR!  Unable to send beacon %s, %s\r\n",sError.c_str(), sMessage.c_str());
+                LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError, sMessage);
                 LOCK(MinerStatus.lock);
                 msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
             }
+        } else {
+            /* If public key is set, try to import it's private part from
+             * config. The function fails fast if there are none in config.
+             */
+            ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
         }
+
     }
 
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
 
-    if (TimerMain("check_for_autoupgrade",240))
-    {
-        if (fDebug3) printf("Checking for upgrade...");
-        bCheckedForUpgradeLive = true;
-    }
-
-    if (bCheckedForUpgradeLive && !fTestNet && bProjectsInitialized && bGlobalcomInitialized)
-    {
-        bCheckedForUpgradeLive=false;
-        printf("{Checking for Upgrade} ");
-        Restarter::CheckUpgrade();
-        printf("{Done checking for upgrade} ");
-    }
-    if (fDebug10) printf(" {/SVC} ");
-
+    if (fDebug10) LogPrintf(" {/SVC} ");
 }
-
-
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks,2)) return true;
+    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 2)) return true;
     nLastAskedForBlocks = GetAdjustedTime();
 
     int iAsked = 0;
@@ -4478,7 +4800,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
                                 return error("Unable to find block index %s",hashStart.ToString().c_str());
                             }
                         }
-                        printf(".B.");
+                        LogPrintf(".B.");
                         iAsked++;
                         if (iAsked > 10) break;
                 }
@@ -4501,7 +4823,7 @@ void ClearOrphanBlocks()
 
 void CleanInboundConnections(bool bClearAll)
 {
-        if (IsLockTimeWithinMinutes(nLastCleaned,10)) return;
+        if (IsLockTimeWithinMinutes(nLastCleaned, GetAdjustedTime(), 10)) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
         for(CNode* pNode : vNodes)
@@ -4512,7 +4834,7 @@ void CleanInboundConnections(bool bClearAll)
                         pNode->fDisconnect=true;
                 }
         }
-        printf("\r\n Cleaning inbound connections \r\n");
+        LogPrintf("Cleaning inbound connections");
 }
 
 bool WalletOutOfSync()
@@ -4582,7 +4904,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
                     setStakeSeenOrphan.clear();
                 }
 
-                printf("\r\nClearing mapAlreadyAskedFor.\r\n");
+                LogPrintf("Clearing mapAlreadyAskedFor.");
                 mapAlreadyAskedFor.clear();
                 AskForOutstandingBlocks(uint256(0));
             }
@@ -4593,7 +4915,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
             ResetTimerMain("CheckForFutileSync");
         }
 
-        printf("ProcessBlock: ORPHAN BLOCK, prev=%s\n", pblock->hashPrevBlock.ToString().c_str());
+        LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
         // ppcoin: check proof-of-stake
         if (pblock->IsProofOfStake())
         {
@@ -4652,8 +4974,12 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
     }
 
-    printf("{PB}: ACC; \r\n");
-    GridcoinServices();
+    LogPrintf("{PB}: ACC; ");
+
+    // Compatiblity while V8 is in use. Can be removed after the V9 switch.
+    if(IsV9Enabled(pindexBest->nHeight) == false)
+        GridcoinServices();
+
     return true;
 }
 
@@ -4695,7 +5021,7 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
         fShutdown = true;
         string strMessage = _("Warning: Disk space is low!");
         strMiscWarning = strMessage;
-        printf("*** %s\n", strMessage.c_str());
+        LogPrintf("*** %s", strMessage);
         uiInterface.ThreadSafeMessageBox(strMessage, "Gridcoin", CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         StartShutdown();
         return false;
@@ -4769,14 +5095,13 @@ bool LoadBlockIndex(bool fAllowNew)
         nGrandfather = 196550;
         nNewIndex = 10;
         nNewIndex2 = 36500;
-        bOPReturnEnabled = false;
         //1-24-2016
         MAX_OUTBOUND_CONNECTIONS = (int)GetArg("-maxoutboundconnections", 8);
     }
 
 
     std::string mode = fTestNet ? "TestNet" : "Prod";
-    printf("Mode=%s\r\n",mode.c_str());
+    LogPrintf("Mode=%s",mode);
 
 
     //
@@ -4830,11 +5155,11 @@ bool LoadBlockIndex(bool fAllowNew)
         //Official Launch time:
         block.nBits    = bnProofOfWorkLimit.GetCompact();
         block.nNonce = !fTestNet ? 130208 : 22436;
-        printf("starting Genesis Check...");
+        LogPrintf("starting Genesis Check...");
         // If genesis block hash does not match, then generate new genesis hash.
-        if (block.GetHash() != hashGenesisBlock)
+        if (block.GetHash() != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
         {
-            printf("Searching for genesis block...\n");
+            LogPrintf("Searching for genesis block...");
             // This will figure out a valid hash and Nonce if you're
             // creating a different genesis block: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000xFFF
             uint256 hashTarget = CBigNum().SetCompact(block.nBits).getuint256();
@@ -4846,18 +5171,18 @@ bool LoadBlockIndex(bool fAllowNew)
                     break;
                 if ((block.nNonce & 0xFFF) == 0)
                 {
-                    printf("nonce %08X: hash = %s (target = %s)\n", block.nNonce, thash.ToString().c_str(), hashTarget.ToString().c_str());
+                    LogPrintf("nonce %08X: hash = %s (target = %s)", block.nNonce, thash.ToString(), hashTarget.ToString());
                 }
                 ++block.nNonce;
                 if (block.nNonce == 0)
                 {
-                    printf("NONCE WRAPPED, incrementing time\n");
+                    LogPrintf("NONCE WRAPPED, incrementing time");
                     ++block.nTime;
                 }
             }
-            printf("block.nTime = %u \n", block.nTime);
-            printf("block.nNonce = %u \n", block.nNonce);
-            printf("block.GetHash = %s\n", block.GetHash().ToString().c_str());
+            LogPrintf("block.nTime = %u ", block.nTime);
+            LogPrintf("block.nNonce = %u ", block.nNonce);
+            LogPrintf("block.GetHash = %s", block.GetHash().ToString());
         }
 
 
@@ -4914,7 +5239,7 @@ std::string RetrieveMd5(std::string s1)
     }
     catch (std::exception &e)
     {
-        printf("MD5 INVALID!");
+        LogPrintf("MD5 INVALID!");
         return "";
     }
 }
@@ -4929,58 +5254,6 @@ int GetFilesize(FILE* file)
     return nFilesize;
 }
 
-bool WriteKey(std::string sKey, std::string sValue)
-{
-    // Allows Gridcoin to store the key value in the config file.
-    boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
-    if (!filesystem::exists(pathConfigFile))  return false;
-    boost::to_lower(sKey);
-    std::string sLine = "";
-    ifstream streamConfigFile;
-    streamConfigFile.open(pathConfigFile.string().c_str());
-    std::string sConfig = "";
-    bool fWritten = false;
-    if(streamConfigFile)
-    {
-       while(getline(streamConfigFile, sLine))
-       {
-            std::vector<std::string> vEntry = split(sLine,"=");
-            if (vEntry.size() == 2)
-            {
-                std::string sSourceKey = vEntry[0];
-                std::string sSourceValue = vEntry[1];
-                boost::to_lower(sSourceKey);
-
-                if (sSourceKey==sKey)
-                {
-                    sSourceValue = sValue;
-                    sLine = sSourceKey + "=" + sSourceValue;
-                    fWritten=true;
-                }
-            }
-            sLine = strReplace(sLine,"\r","");
-            sLine = strReplace(sLine,"\n","");
-            sLine += "\r\n";
-            sConfig += sLine;
-       }
-    }
-    if (!fWritten)
-    {
-        sLine = sKey + "=" + sValue + "\r\n";
-        sConfig += sLine;
-    }
-
-    streamConfigFile.close();
-
-    FILE *outFile = fopen(pathConfigFile.string().c_str(),"w");
-    fputs(sConfig.c_str(), outFile);
-    fclose(outFile);
-
-    ReadConfigFile(mapArgs, mapMultiArgs);
-    return true;
-}
-
 
 
 
@@ -4989,12 +5262,12 @@ std::string getfilecontents(std::string filename)
     std::string buffer;
     std::string line;
     ifstream myfile;
-    if (fDebug10) printf("loading file to string %s",filename.c_str());
+    if (fDebug10) LogPrintf("loading file to string %s",filename);
 
     filesystem::path path = filename;
 
     if (!filesystem::exists(path)) {
-        printf("the file does not exist %s",path.string().c_str());
+        LogPrintf("the file does not exist %s",path.string());
         return "-1";
     }
 
@@ -5006,13 +5279,13 @@ std::string getfilecontents(std::string filename)
      myfile.open(filename.c_str());
 
     buffer.reserve(fileSize);
-    if (fDebug10) printf("opening file %s",filename.c_str());
+    if (fDebug10) LogPrintf("opening file %s",filename);
 
     if(myfile)
     {
       while(getline(myfile, line))
       {
-            buffer = buffer + line + "\r\n";
+            buffer = buffer + line + "\n";
       }
     }
     myfile.close();
@@ -5027,6 +5300,29 @@ bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
     if (allow_investor) if (cpidv2 == "INVESTOR" || cpidv2=="investor") return true;
     if (cpidv2.length() < 34) return false;
     result = CPID_IsCPIDValid(cpidv2.substr(0,32),cpidv2,0);
+    return result;
+}
+
+std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
+{
+    int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+    std::set<std::string> result;
+
+    for(const auto& item : ReadCacheSection("beaconalt"))
+    {
+        const std::string& key = item.first;
+        const std::string& value = item.second.value;
+        if(!std::equal(cpid.begin(), cpid.end(), key.begin()))
+            continue;
+
+        const int64_t iAge = pindexBest != NULL
+            ? pindexBest->nTime - item.second.timestamp
+            : 0;
+        if (iAge > iMaxSeconds)
+            continue;
+
+        result.emplace(value);
+    }
     return result;
 }
 
@@ -5048,10 +5344,31 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     }
     else if (height >= cpidV3CutOverHeight)
     {
-        if (mc.cpid.empty()) return false;
-        if (!IsResearcher(mc.cpid)) return true;
-        // V3 requires a beacon, a beacon public key and a valid block signature signed by the CPID's private key
-        result = VerifyCPIDSignature(mc.cpid,mc.lastblockhash,mc.BoincSignature);
+        if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
+        if (!IsResearcher(mc.cpid)) return true; /* is investor? */
+
+        const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
+        bool kmval = sBPK_n == mc.BoincPublicKey;
+        const bool scval_n = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
+
+        result= scval_n;
+        if(!scval_n)
+        {
+            for(const std::string& key_alt : GetAlternativeBeaconKeys(mc.cpid))
+            {
+                const bool scval_alt = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, key_alt);
+                kmval = key_alt == mc.BoincPublicKey;
+                if(scval_alt)
+                {
+                    LogPrintf("WARNING: IsCPIDValidv2: good signature with alternative key");
+                    result= true;
+                }
+            }
+        }
+
+        if( !kmval )
+            LogPrintf("WARNING: IsCPIDValidv2: block key mismatch");
+
     }
 
     return result;
@@ -5075,30 +5392,30 @@ bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey)
     {
             if(cpid=="" || cpid.length() < 5)
             {
-                printf("CPID length empty.");
+                LogPrintf("CPID length empty.");
                 return false;
             }
             if (!IsResearcher(cpid)) return true;
             if (ENCboincpubkey == "" || ENCboincpubkey.length() < 5)
             {
-                    if (fDebug10) printf("ENCBpk length empty.");
+                    if (fDebug10) LogPrintf("ENCBpk length empty.");
                     return false;
             }
             std::string bpk = AdvancedDecrypt(ENCboincpubkey);
             std::string bpmd5 = RetrieveMd5(bpk);
             if (bpmd5==cpid) return true;
-            if (fDebug10) printf("Md5<>cpid, md5 %s cpid %s  root bpk %s \r\n     ",bpmd5.c_str(), cpid.c_str(),bpk.c_str());
+            if (fDebug10) LogPrintf("Md5<>cpid, md5 %s cpid %s  root bpk %s",bpmd5, cpid, bpk);
 
             return false;
     }
     catch (std::exception &e)
     {
-                printf("Error while resolving CPID\r\n");
+                LogPrintf("Error while resolving CPID");
                 return false;
     }
     catch(...)
     {
-                printf("Error while Resolving CPID[2].\r\n");
+                LogPrintf("Error while Resolving CPID[2].");
                 return false;
     }
     return false;
@@ -5153,19 +5470,19 @@ double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t lockt
     }
     catch (std::exception &e)
     {
-            printf("Error while Getting outstanding amount owed.");
+            LogPrintf("Error while Getting outstanding amount owed.");
             return 0;
     }
     catch(...)
     {
-            printf("Error while Getting outstanding amount owed.");
+            LogPrintf("Error while Getting outstanding amount owed.");
             return 0;
     }
 }
 
 bool BlockNeedsChecked(int64_t BlockTime)
 {
-    if (IsLockTimeWithin14days(BlockTime))
+    if (IsLockTimeWithin14days(BlockTime, GetAdjustedTime()))
     {
         if (fColdBoot) return false;
         bool fOut = OutOfSyncByAge();
@@ -5177,42 +5494,63 @@ bool BlockNeedsChecked(int64_t BlockTime)
     }
 }
 
-void AdjustTimestamps(StructCPID& strCPID, double timestamp, double subsidy)
-{
-        if (timestamp > strCPID.LastPaymentTime && subsidy > 0) strCPID.LastPaymentTime = timestamp;
-        if (timestamp < strCPID.EarliestPaymentTime) strCPID.EarliestPaymentTime = timestamp;
-}
-
 void AddResearchMagnitude(CBlockIndex* pIndex)
 {
-    if (pIndex->nResearchSubsidy <= 0)
+    // TODO: There are 3 different loops which do the same thing:
+    //  - this function
+    //  - LoadBlockIndex in txdb-leveldb.cpp
+    //  - CBlock::ConnectBlock in main.cpp.
+    //
+    // This function should be the only one and the other two uses should
+    // call it to update the data. At the same time, remove mvMagnitudesCopy
+    // (and the other struct copies) as they are no longer used in a multi
+    // threaded environment when the the tally thread is gone.
+
+
+    if (pIndex->IsUserCPID() == false || pIndex->nResearchSubsidy <= 0)
         return;
 
     try
     {
-        StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
-        stMag.cpid = pIndex->GetCPID();
+        const std::string& cpid = pIndex->GetCPID();
+        StructCPID stMag = GetInitializedStructCPID2(cpid, mvMagnitudesCopy);
+        stMag.InterestSubsidy += pIndex->nInterestSubsidy;
+        stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
         {
             stMag.LastBlock = pIndex->nHeight;
+            stMag.BlockHash = pIndex->GetBlockHash().GetHex();
         }
+
+        if(pIndex->nMagnitude > 0)
+        {
+            stMag.Accuracy++;
+            stMag.TotalMagnitude += pIndex->nMagnitude;
+            stMag.ResearchAverageMagnitude = stMag.TotalMagnitude/(stMag.Accuracy+.01);
+        }
+
+        if (pIndex->nTime > stMag.LastPaymentTime)
+            stMag.LastPaymentTime = pIndex->nTime;
+        if (pIndex->nTime < stMag.EarliestPaymentTime)
+            stMag.EarliestPaymentTime = pIndex->nTime;
+        if (pIndex->nTime < stMag.LowLockTime)
+            stMag.LowLockTime = pIndex->nTime;
+        if (pIndex->nTime > stMag.HighLockTime)
+            stMag.HighLockTime = pIndex->nTime;
+
         stMag.entries++;
         stMag.payments += pIndex->nResearchSubsidy;
         stMag.interestPayments += pIndex->nInterestSubsidy;
-
-        AdjustTimestamps(stMag,pIndex->nTime, pIndex->nResearchSubsidy);
-        stMag.Accuracy++;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag,
-                                              pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
+        stMag.owed = GetOutstandingAmountOwed(stMag, cpid, pIndex->nTime, total_owed, pIndex->nMagnitude);
 
         stMag.totalowed = total_owed;
-        mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
+        mvMagnitudesCopy[cpid] = stMag;
     }
     catch (const std::bad_alloc& ba)
     {
-        printf("\r\nBad Allocation in AddResearchMagnitude() \r\n");
+        LogPrintf("Bad Allocation in AddResearchMagnitude()");
     }
 }
 
@@ -5221,17 +5559,19 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 {
     if (nBestHeight < 15)
     {
-        mvApplicationCacheTimestamp["nGRCTime"] = GetAdjustedTime();
-        mvApplicationCacheTimestamp["nCPIDTime"] = GetAdjustedTime();
+        // Write entries in the cache to get a timestamp.
+        WriteCache("global", "nGRCTime", "", GetAdjustedTime());
+        WriteCache("global", "nCPIDTime", "", GetAdjustedTime());
         return true;
     }
 
-    if (IsLockTimeWithinMinutes(nLastGRCtallied,100) && (mvApplicationCacheTimestamp["nGRCTime"] > 0 ||
-         mvApplicationCacheTimestamp["nCPIDTime"] > 0))  return true;
+    int64_t nGRCTime = ReadCache("global", "nGRCTime").timestamp;
+    int64_t nCPIDTime = ReadCache("global", "nCPIDTime").timestamp;
+    if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
+        (nGRCTime > 0 || nCPIDTime > 0))
+        return true;
 
     nLastGRCtallied = GetAdjustedTime();
-    int64_t nGRCTime = 0;
-    int64_t nCPIDTime = 0;
     CBlock block;
     int64_t nStart = GetTimeMillis();
     LOCK(cs_main);
@@ -5276,10 +5616,12 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     if (nGRCTime <= 0)  nGRCTime = GetAdjustedTime();
     if (nCPIDTime <= 0) nCPIDTime = GetAdjustedTime();
 
-    printf("Loaded staketime from index in %f", (double)(GetTimeMillis() - nStart));
-    printf("CPIDTime %f, GRCTime %f, WalletTime %f \r\n",(double)nCPIDTime,(double)nGRCTime,(double)EarliestStakedWalletTx);
-    mvApplicationCacheTimestamp["nGRCTime"] = nGRCTime;
-    mvApplicationCacheTimestamp["nCPIDTime"] = nCPIDTime;
+    LogPrintf("Loaded staketime from index in %" PRId64, GetTimeMillis() - nStart);
+    LogPrintf("CPIDTime %" PRId64 ", GRCTime %" PRId64 ", WalletTime %" PRId64, nCPIDTime, nGRCTime, EarliestStakedWalletTx);
+
+    // Update caches with new timestamps.
+    WriteCache("global", "nGRCTime", "", nGRCTime);
+    WriteCache("global", "nCPIDTime", "", nCPIDTime);
     return true;
 }
 
@@ -5297,23 +5639,28 @@ void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
     mvCPIDBlockHashes[cpid].emplace(blockhash);
 }
 
+void RemoveCPIDBlockHash(const std::string& cpid, const uint256& blockhash)
+{
+   mvCPIDBlockHashes[cpid].erase(blockhash);
+}
+
 StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
 {
     //Eliminates issues with reorgs, disconnects, double counting, etc..
     if (!IsResearcher(cpid))
         return GetInitializedStructCPID2("INVESTOR",mvResearchAge);
 
-    if (fDebug10) printf("GetLifetimeCPID.BEGIN: %s %s",sCalledFrom.c_str(),cpid.c_str());
+    if (fDebug10) LogPrintf("GetLifetimeCPID.BEGIN: %s %s", sCalledFrom, cpid);
 
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
 
-
+    const uint128 cpid128(cpid);
     StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
         const uint256& uHash = *it;
-        if (fDebug10) printf("GetLifetimeCPID: trying %s\n",uHash.GetHex().c_str());
+        if (fDebug10) LogPrintf("GetLifetimeCPID: trying %s",uHash.GetHex());
 
         // Ensure that we have this block.
         auto mapItem = mapBlockIndex.find(uHash);
@@ -5324,34 +5671,43 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         CBlockIndex* pblockindex = mapItem->second;
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
-           pblockindex->GetCPID() != cpid)
+           pblockindex->IsUserCPID() == false ||
+           pblockindex->cpid != cpid128)
             continue;
 
         // Block located and verified.
         if (fDebug10)
-            printf("GetLifetimeCPID: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f\n",
+            LogPrintf("GetLifetimeCPID: verified %s height= %d LastBlock= %d nResearchSubsidy= %.3f",
             uHash.GetHex().c_str(),pblockindex->nHeight,(int)stCPID.LastBlock,pblockindex->nResearchSubsidy);
-        if (pblockindex->nHeight > stCPID.LastBlock && pblockindex->nResearchSubsidy > 0)
-        {
-            stCPID.LastBlock = pblockindex->nHeight;
-            stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
-            if (fDebug10) printf("GetLifetimeCPID: using it\n");
-        }
-        stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
-        stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
-        stCPID.Accuracy++;
-        if (pblockindex->nMagnitude > 0)
-        {
-            stCPID.TotalMagnitude += pblockindex->nMagnitude;
-            stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-        }
+        if(!pblockindex->pnext && pblockindex!=pindexBest)
+            LogPrintf("WARNING GetLifetimeCPID: index {%s %d} for cpid %s, "
+                "is not in the main chain",pblockindex->GetBlockHash().GetHex(),
+                pblockindex->nHeight,cpid);
 
-        if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
-        if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        if(pblockindex->nResearchSubsidy> 0)
+        {
+            stCPID.InterestSubsidy += pblockindex->nInterestSubsidy;
+            stCPID.ResearchSubsidy += pblockindex->nResearchSubsidy;
+            if(pblockindex->nHeight > stCPID.LastBlock)
+            {
+                stCPID.LastBlock = pblockindex->nHeight;
+                stCPID.BlockHash = pblockindex->GetBlockHash().GetHex();
+            }
+
+            if (pblockindex->nMagnitude > 0)
+            {
+                stCPID.Accuracy++;
+                stCPID.TotalMagnitude += pblockindex->nMagnitude;
+                stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+            }
+
+            if (pblockindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime  = pblockindex->nTime;
+            if (pblockindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pblockindex->nTime;
+        }
     }
 
     // Save updated CPID data holder.
-    if (fDebug10) printf("GetLifetimeCPID.END: %s set {%s %d}\n",cpid.c_str(),stCPID.BlockHash.c_str(),(int)stCPID.LastBlock);
+    if (fDebug10) LogPrintf("GetLifetimeCPID.END: %s set {%s %d}",cpid, stCPID.BlockHash, (int)stCPID.LastBlock);
     mvResearchAge[cpid] = stCPID;
     return stCPID;
 }
@@ -5378,6 +5734,7 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
         if (!cpid.initialized)
         {
             cpid = GetStructCPID();
+            cpid.cpid = name;
             cpid.initialized=true;
             cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
             cpid.HighLockTime = 0;
@@ -5390,11 +5747,11 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
     }
     catch (const std::bad_alloc& ba)
     {
-        printf("Bad alloc caught in GetInitializedStructCpid2 for %s",name.c_str());
+        LogPrintf("Bad alloc caught in GetInitializedStructCpid2 for %s", name);
     }
     catch(...)
     {
-        printf("Exception caught in GetInitializedStructCpid2 for %s",name.c_str());
+        LogPrintf("Exception caught in GetInitializedStructCpid2 for %s", name);
     }
 
     // Error during map's heap allocation. Return an empty object.
@@ -5404,19 +5761,22 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
 
 bool ComputeNeuralNetworkSupermajorityHashes()
 {
-    if (nBestHeight < 15)  return true;
+    if (nBestHeight < 15)
+        return true;
+    
     //Clear the neural network hash buffer
-    if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
-    if (mvNeuralVersion.size() > 0)  mvNeuralVersion.clear();
-    if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
+    mvNeuralNetworkHash.clear();
+    mvNeuralVersion.clear();
+    mvCurrentNeuralNetworkHash.clear();
 
-    //Clear the votes
-    /* ClearCache was no-op in previous version due to bug. Now it was fixed,
-        but we have to emulate the old behaviour to prevent early forks. */
-    if(pindexBest && pindexBest->nVersion>=9)
-    {
+    // ClearCache was no-op in previous version due to bug. Now it was fixed,	
+    // and we previously emulated the old behavior to prevent early forks when
+    // switching to v9. We want to clear these to avoid the data stacking up
+    // with time. If this causes an issue when syncing then considering making
+    // this >=v9 only again.
         ClearCache("neuralsecurity");
-    }
+    ClearCache("currentneuralsecurity");
+
     WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
     try
     {
@@ -5428,12 +5788,18 @@ bool ComputeNeuralNetworkSupermajorityHashes()
         CBlockIndex* pblockindex = pindexBest;
         while (pblockindex->nHeight > nMinDepth)
         {
-            if (!pblockindex || !pblockindex->pprev) return false;
+            if (!pblockindex || !pblockindex->pprev)
+                return false;
+            
             pblockindex = pblockindex->pprev;
-            if (pblockindex == pindexGenesisBlock) return false;
-            if (!pblockindex->IsInMainChain()) continue;
+            if (pblockindex == pindexGenesisBlock)
+                return false;
+            if (!pblockindex->IsInMainChain())
+                continue;
+            
             block.ReadFromDisk(pblockindex);
-            std::string hashboinc = "";
+            
+            std::string hashboinc;
             if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
             if (!hashboinc.empty())
             {
@@ -5452,32 +5818,44 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                 //Increment Neural Network Hashes Supermajority (over the last N blocks)
                 IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10,pblockindex);
                 IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
-
             }
         }
 
-        if (fDebug3) printf(".11.");
+        if (fDebug3) LogPrintf(".11.");
     }
     catch (std::exception &e)
     {
-            printf("Neural Error while memorizing hashes.\r\n");
+            LogPrintf("Neural Error while memorizing hashes.");
     }
-    catch(...)
-    {
-        printf("Neural error While Memorizing Hashes! [1]\r\n");
-    }
+    
     return true;
-
 }
 
-
-bool TallyResearchAverages_retired(bool Forcefully)
+bool TallyResearchAverages(CBlockIndex* index)
 {
-    if(IsV9Enabled_Tally(nBestHeight))
-        return error("TallyResearchAverages_retired: called while V9 tally enabled\n");
+    if(IsV9Enabled_Tally(index->nHeight))
+        return TallyResearchAverages_v9(index);
+    else if(IsResearchAgeEnabled(index->nHeight) && !IsV9Enabled_Tally(index->nHeight))
+        return TallyResearchAverages_retired(index);
+    else
+        return false;
+}
+
+bool TallyResearchAverages_retired(CBlockIndex* index)
+{
+    LogPrintf("Tally (retired)");
+
+    if (!index)
+    {
+        bNetAveragesLoaded = true;
+        return true;
+    }
+
+    if(IsV9Enabled_Tally(index->nHeight))
+        return error("TallyResearchAverages_retired: called while V9 tally enabled");
 
     //Iterate throught last 14 days, tally network averages
-    if (nBestHeight < 15)
+    if (index->nHeight < 15)
     {
         bNetAveragesLoaded = true;
         return true;
@@ -5491,128 +5869,103 @@ bool TallyResearchAverages_retired(bool Forcefully)
     double NetworkPayments = 0;
     double NetworkInterest = 0;
 
-                        //Consensus Start/End block:
-                        int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-                        int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
-                        int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
-                        if (fDebug3) printf("START BLOCK %f, END BLOCK %f ",(double)nMaxDepth,(double)nMinDepth);
-                        if (nMinDepth < 2)              nMinDepth = 2;
-    if(fDebug) printf("TallyResearchAverages_retired: beginning start %d end %d\n",nMaxDepth,nMinDepth);
-                        mvMagnitudesCopy.clear();
-                        int iRow = 0;
-                        //CBlock block;
-                        CBlockIndex* pblockindex = pindexBest;
-                        if (!pblockindex)
-                        {
-                                bTallyStarted_retired = false;
-                                bNetAveragesLoaded = true;
-                                return true;
-                        }
-                        while (pblockindex->nHeight > nMaxDepth)
-                        {
-                            if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;
-                            pblockindex = pblockindex->pprev;
-                        }
+    //Consensus Start/End block:
+    int nMaxDepth = (index->nHeight - CONSENSUS_LOOKBACK) - ( (index->nHeight - CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+    int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
+    int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % TALLY_GRANULARITY);
+    if (fDebug3) LogPrintf("START BLOCK %d, END BLOCK %d", nMaxDepth, nMinDepth);
+    if (nMinDepth < 2)              nMinDepth = 2;
+    if(fDebug) LogPrintf("TallyResearchAverages_retired: beginning start %d end %d",nMaxDepth,nMinDepth);
+    mvMagnitudesCopy.clear();
+    int iRow = 0;
 
-                        if (fDebug3) printf("Max block %f, seektime %f",(double)pblockindex->nHeight,(double)GetTimeMillis()-nStart);
-                        nStart=GetTimeMillis();
-
-
-                        // Headless critical section ()
-        try
-        {
-                        while (pblockindex->nHeight > nMinDepth)
-                        {
-                            if (!pblockindex || !pblockindex->pprev) return false;
-                            pblockindex = pblockindex->pprev;
-                            if (pblockindex == pindexGenesisBlock) return false;
-                            if (!pblockindex->IsInMainChain()) continue;
-                            NetworkPayments += pblockindex->nResearchSubsidy;
-                            NetworkInterest += pblockindex->nInterestSubsidy;
-                            AddResearchMagnitude(pblockindex);
-
-                            iRow++;
-                            if (IsSuperBlock(pblockindex) && !superblockloaded)
-                            {
-                                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-                                if (bb.superblock.length() > 20)
-                                {
-                                        std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                                        if (VerifySuperblock(superblock, pblockindex))
-                                        {
-                                                LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
-                                                superblockloaded=true;
-                                                if (fDebug)
-                                                   printf("TallyResearchAverages_retired: Superblock Loaded {%s %i}\n", pblockindex->GetBlockHash().GetHex().c_str(),pblockindex->nHeight);
-                                        }
-                                }
-                            }
-
-                        }
-                        // End of critical section
-                        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
-                        nStart=GetTimeMillis();
-
-
-                        if (pblockindex)
-                        {
-                            if (fDebug3)
-                               printf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
-
-                            StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
-                            network.projectname="NETWORK";
-                            network.payments = NetworkPayments;
-                            network.InterestSubsidy = NetworkInterest;
-                            mvNetworkCopy["NETWORK"] = network;
-                            if(fDebug3) printf(" TMIS1 ");
-                            TallyMagnitudesInSuperblock();
-                        }
-                        // 11-19-2015 Copy dictionaries to live RAM
-                        mvDPOR = mvDPORCopy;
-                        mvMagnitudes = mvMagnitudesCopy;
-                        mvNetwork = mvNetworkCopy;
-                        bTallyStarted_retired = false;
-                        bNetAveragesLoaded = true;
-                        return true;
-        }
-        catch (bad_alloc ba)
-        {
-            printf("Bad Alloc while tallying network averages. [1]\r\n");
-            bNetAveragesLoaded=true;
-        }
-        catch(...)
-        {
-            printf("Error while tallying network averages. [1]\r\n");
-            bNetAveragesLoaded=true;
-        }
-
-        if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
-
-        bNetAveragesLoaded=true;
-        return false;
-}
-
-
-
-bool TallyNetworkAverages_retired(bool Forcefully)
-{
-    if (IsResearchAgeEnabled(pindexBest->nHeight) && !IsV9Enabled_Tally(pindexBest->nHeight))
+    CBlockIndex* pblockindex = index;
+    while (pblockindex->nHeight > nMaxDepth)
     {
-        return TallyResearchAverages_retired(Forcefully);
+        if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return false;
+        pblockindex = pblockindex->pprev;
     }
 
+    if (fDebug3) LogPrintf("Max block %d, seektime %" PRId64, pblockindex->nHeight, GetTimeMillis()-nStart);
+    nStart=GetTimeMillis();
+
+
+    // Headless critical section ()
+    try
+    {
+        while (pblockindex->nHeight > nMinDepth)
+        {
+            if (!pblockindex || !pblockindex->pprev) return false;
+            pblockindex = pblockindex->pprev;
+            if (pblockindex == pindexGenesisBlock) return false;
+            if (!pblockindex->IsInMainChain()) continue;
+            NetworkPayments += pblockindex->nResearchSubsidy;
+            NetworkInterest += pblockindex->nInterestSubsidy;
+            AddResearchMagnitude(pblockindex);
+
+            iRow++;
+            if (IsSuperBlock(pblockindex) && !superblockloaded)
+            {
+                MiningCPID bb = GetBoincBlockByIndex(pblockindex);
+                if (bb.superblock.length() > 20)
+                {
+                    std::string superblock = UnpackBinarySuperblock(bb.superblock);
+                    if (VerifySuperblock(superblock, pblockindex))
+                    {
+                        LoadSuperblock(superblock,pblockindex->nTime,pblockindex->nHeight);
+                        superblockloaded=true;
+                        if (fDebug)
+                            LogPrintf("TallyResearchAverages_retired: Superblock Loaded {%s %i}", pblockindex->GetBlockHash().GetHex(), pblockindex->nHeight);
+                    }
+                }
+            }
+        }
+        // End of critical section
+
+        if (fDebug3) LogPrintf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
+        nStart=GetTimeMillis();
+
+        if (pblockindex)
+        {
+            if (fDebug3)
+                LogPrintf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
+
+            StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
+            network.projectname="NETWORK";
+            network.payments = NetworkPayments;
+            network.InterestSubsidy = NetworkInterest;
+            mvNetworkCopy["NETWORK"] = network;
+            if(fDebug3) LogPrintf(" TMIS1 ");
+            TallyMagnitudesInSuperblock();
+        }
+        // 11-19-2015 Copy dictionaries to live RAM
+        mvDPOR = mvDPORCopy;
+        mvMagnitudes = mvMagnitudesCopy;
+        mvNetwork = mvNetworkCopy;
+        bNetAveragesLoaded = true;
+        return true;
+    }
+    catch (bad_alloc ba)
+    {
+        LogPrintf("Bad Alloc while tallying network averages. [1]");
+        bNetAveragesLoaded=true;
+    }
+
+    if (fDebug3) LogPrintf("NA loaded in %" PRId64, GetTimeMillis() - nStart);
+
+    bNetAveragesLoaded=true;
     return false;
 }
 
-
-
-bool TallyResearchAverages_v9()
+bool TallyResearchAverages_v9(CBlockIndex* index)
 {
-    if(!IsV9Enabled_Tally(nBestHeight))
-        return error("TallyResearchAverages_v9: called while V9 tally disabled\n");
+    if(!IsV9Enabled_Tally(index->nHeight))
+        return error("TallyResearchAverages_v9: called while V9 tally disabled");
+
+    LogPrintf("Tally (v9)");
 
     //Iterate throught last 14 days, tally network averages
-    if (nBestHeight < 15)
+    if (index->nHeight < 15)
     {
         bNetAveragesLoaded = true;
         return true;
@@ -5621,23 +5974,23 @@ bool TallyResearchAverages_v9()
     //8-27-2016
     int64_t nStart = GetTimeMillis();
 
-    if (fDebug) printf("Tallying Research Averages (begin) ");
+    if (fDebug) LogPrintf("Tallying Research Averages (begin) ");
     bNetAveragesLoaded = false;
     double NetworkPayments = 0;
     double NetworkInterest = 0;
 
     //Consensus Start/End block:
-    int nMaxConensusDepth = nBestHeight - CONSENSUS_LOOKBACK;
+    int nMaxConensusDepth = index->nHeight - CONSENSUS_LOOKBACK;
     int nMaxDepth = nMaxConensusDepth - (nMaxConensusDepth % TALLY_GRANULARITY);
     int nLookback = BLOCKS_PER_DAY * 14; //Daily block count * Lookback in days
     int nMinDepth = nMaxDepth - nLookback;
     if (nMinDepth < 2)
         nMinDepth = 2;
 
-    if(fDebug) printf("TallyResearchAverages: start %d end %d\n",nMaxDepth,nMinDepth);
+    if(fDebug) LogPrintf("TallyResearchAverages: start %d end %d",nMaxDepth,nMinDepth);
 
     mvMagnitudesCopy.clear();
-    CBlockIndex* pblockindex = pindexBest;
+    CBlockIndex* pblockindex = index;
     if (!pblockindex)
     {
         bNetAveragesLoaded = true;
@@ -5651,7 +6004,7 @@ bool TallyResearchAverages_v9()
         pblockindex = pblockindex->pprev;
     }
 
-    if (fDebug3) printf("Max block %i, seektime %" PRId64, pblockindex->nHeight, GetTimeMillis()-nStart);
+    if (fDebug3) LogPrintf("Max block %i, seektime %" PRId64, pblockindex->nHeight, GetTimeMillis()-nStart);
     nStart=GetTimeMillis();
 
     // Load newest superblock in tally window
@@ -5672,7 +6025,7 @@ bool TallyResearchAverages_v9()
 
         LoadSuperblock(superblock, sbIndex->nTime, sbIndex->nHeight);
         if (fDebug)
-            printf("TallyResearchAverages_v9: Superblock Loaded {%s %i}\n", sbIndex->GetBlockHash().GetHex().c_str(), sbIndex->nHeight);
+            LogPrintf("TallyResearchAverages_v9: Superblock Loaded {%s %i}", sbIndex->GetBlockHash().GetHex(), sbIndex->nHeight);
         break;
     }
 
@@ -5690,7 +6043,7 @@ bool TallyResearchAverages_v9()
             AddResearchMagnitude(pblockindex);
         }
         // End of critical section
-        if (fDebug3) printf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
+        if (fDebug3) LogPrintf("TNA loaded in %" PRId64, GetTimeMillis()-nStart);
         nStart=GetTimeMillis();
 
 
@@ -5701,7 +6054,7 @@ bool TallyResearchAverages_v9()
             network.payments = NetworkPayments;
             network.InterestSubsidy = NetworkInterest;
             mvNetworkCopy["NETWORK"] = network;
-            if(fDebug3) printf(" TMIS1 ");
+            if(fDebug3) LogPrintf(" TMIS1 ");
             TallyMagnitudesInSuperblock();
         }
         // 11-19-2015 Copy dictionaries to live RAM
@@ -5711,38 +6064,17 @@ bool TallyResearchAverages_v9()
         bNetAveragesLoaded = true;
         return true;
     }
-    catch (bad_alloc ba)
+    catch (const std::bad_alloc& ba)
     {
-        printf("Bad Alloc while tallying network averages. [1]\r\n");
-        bNetAveragesLoaded=true;
-    }
-    catch(...)
-    {
-        printf("Error while tallying network averages. [1]\r\n");
+        LogPrintf("Bad Alloc while tallying network averages. [1]");
         bNetAveragesLoaded=true;
     }
 
-    if (fDebug3) printf("NA loaded in %f",(double)GetTimeMillis()-nStart);
+    if (fDebug3) LogPrintf("NA loaded in %" PRId64, GetTimeMillis() - nStart);
 
     bNetAveragesLoaded=true;
     return false;
 }
-
-
-
-bool TallyNetworkAverages_v9()
-{
-    if (IsResearchAgeEnabled(pindexBest->nHeight) && IsV9Enabled_Tally(pindexBest->nHeight))
-    {
-        return TallyResearchAverages_v9();
-    }
-
-    return false;
-}
-
-
-
-
 
 void PrintBlockTree()
 {
@@ -5769,25 +6101,25 @@ void PrintBlockTree()
         if (nCol > nPrevCol)
         {
             for (int i = 0; i < nCol-1; i++)
-                printf("| ");
-            printf("|\\\n");
+                LogPrintf("| ");
+            LogPrintf("|\\");
         }
         else if (nCol < nPrevCol)
         {
             for (int i = 0; i < nCol; i++)
-                printf("| ");
-            printf("|\n");
+                LogPrintf("| ");
+            LogPrintf("|");
        }
         nPrevCol = nCol;
 
         // print columns
         for (int i = 0; i < nCol; i++)
-            printf("| ");
+            LogPrintf("| ");
 
         // print item
         CBlock block;
         block.ReadFromDisk(pindex);
-        printf("%d (%u,%u) %s  %08x  %s  mint %7s  tx %" PRIszu "",
+        LogPrintf("%d (%u,%u) %s  %08x  %s  mint %7s  tx %" PRIszu "",
             pindex->nHeight,
             pindex->nFile,
             pindex->nBlockPos,
@@ -5868,11 +6200,11 @@ bool LoadExternalBlockFile(FILE* fileIn)
             }
         }
         catch (std::exception &e) {
-            printf("%s() : Deserialize or I/O error caught during load\n",
+            LogPrintf("%s() : Deserialize or I/O error caught during load",
                    __PRETTY_FUNCTION__);
         }
     }
-    printf("Loaded %i blocks from external file in %" PRId64 "ms\n", nLoaded, GetTimeMillis() - nStart);
+    LogPrintf("Loaded %i blocks from external file in %" PRId64 "ms", nLoaded, GetTimeMillis() - nStart);
     return nLoaded > 0;
 }
 
@@ -5959,54 +6291,6 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 }
 
 
-bool AcidTest(std::string precommand, std::string acid, CNode* pfrom)
-{
-    std::vector<std::string> vCommand = split(acid,",");
-    if (vCommand.size() >= 6)
-    {
-        std::string sboinchashargs = DefaultOrgKey(12);  //Use 12 characters for inter-client communication
-        std::string nonce =          vCommand[0];
-        std::string command =        vCommand[1];
-        std::string hash =           vCommand[2];
-        std::string org =            vCommand[3];
-        std::string pub_key_prefix = vCommand[4];
-        std::string bhrn =           vCommand[5];
-        std::string grid_pass =      vCommand[6];
-        std::string grid_pass_decrypted = AdvancedDecryptWithSalt(grid_pass,sboinchashargs);
-
-        if (grid_pass_decrypted != bhrn+nonce+org+pub_key_prefix)
-        {
-            if (fDebug10) printf("Decrypted gridpass %s <> hashed message",grid_pass_decrypted.c_str());
-            nonce="";
-            command="";
-        }
-
-        std::string pw1 = RetrieveMd5(nonce+","+command+","+org+","+pub_key_prefix+","+sboinchashargs);
-
-        if (precommand=="aries")
-        {
-            //pfrom->securityversion = pw1;
-        }
-        if (fDebug10) printf(" Nonce %s,comm %s,hash %s,pw1 %s \r\n",nonce.c_str(),command.c_str(),hash.c_str(),pw1.c_str());
-        if (false && hash != pw1)
-        {
-            //2/16 18:06:48 Acid test failed for 192.168.1.4:32749 1478973994,encrypt,1b089d19d23fbc911c6967b948dd8324,windows          if (fDebug) printf("Acid test failed for %s %s.",NodeAddress(pfrom).c_str(),acid.c_str());
-            double punishment = GetArg("-punishment", 10);
-            pfrom->Misbehaving(punishment);
-            return false;
-        }
-        return true;
-    }
-    else
-    {
-        if (fDebug2) printf("Message corrupted. Node %s partially banned.",NodeAddress(pfrom).c_str());
-        pfrom->Misbehaving(1);
-        return false;
-    }
-    return true;
-}
-
-
 
 
 // The message start string is designed to be unlikely to occur in normal data.
@@ -6052,31 +6336,15 @@ double ExtractMagnitudeFromExplainMagnitude()
 
 bool VerifyExplainMagnitudeResponse()
 {
-        if (msNeuralResponse.empty()) return false;
-        try
-        {
+    if (msNeuralResponse.empty())
+        return false;
+
             double dMag = ExtractMagnitudeFromExplainMagnitude();
             if (dMag==0)
-            {
-                    WriteCache("maginvalid","invalid",RoundToString(RoundFromString("0"+ReadCache("maginvalid","invalid"),0),0),GetAdjustedTime());
-                    double failures = RoundFromString("0"+ReadCache("maginvalid","invalid"),0);
-                    if (failures < 10)
-                    {
-                        msNeuralResponse = "";
-                    }
-            }
-            else
-            {
-                return true;
-            }
-        }
-        catch(...)
-        {
-            return false;
-        }
-        return false;
-}
+        msNeuralResponse.clear();
 
+    return dMag != 0;
+            }
 
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
@@ -6084,39 +6352,23 @@ bool SecurityTest(CNode* pfrom, bool acid_test)
     return false;
 }
 
-
-bool PreventCommandAbuse(std::string sNeuralRequestID, std::string sCommandName)
-{
-                bool bIgnore = false;
-                if (RoundFromString("0"+ReadCache(sCommandName,sNeuralRequestID),0) > 10)
-                {
-                    if (fDebug10) printf("Ignoring %s request for %s",sCommandName.c_str(),sNeuralRequestID.c_str());
-                    bIgnore = true;
-                }
-                if (!bIgnore)
-                {
-                    WriteCache(sCommandName,sNeuralRequestID,RoundToString(RoundFromString("0"+ReadCache(sCommandName,sNeuralRequestID),0),0),GetAdjustedTime());
-                }
-                return bIgnore;
-}
-
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     RandAddSeedPerfmon();
     if (fDebug10)
-        printf("received: %s (%" PRIszu " bytes)\n", strCommand.c_str(), vRecv.size());
+        LogPrintf("received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
     if (mapArgs.count("-dropmessagestest") && GetRand(atoi(mapArgs["-dropmessagestest"])) == 0)
     {
-        printf("dropmessagestest DROPPING RECV MESSAGE\n");
+        LogPrintf("dropmessagestest DROPPING RECV MESSAGE");
         return true;
     }
 
     // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup,15))
+    if (!IsLockTimeWithinMinutes(nBootup, GetAdjustedTime(), 15))
     {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks,5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
+        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
-            if(fDebug) printf("\r\nBootup\r\n");
+            if(fDebug) LogPrintf("Bootup");
             AskForOutstandingBlocks(uint256(0));
         }
     }
@@ -6140,40 +6392,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         std::string acid = "";
         vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
 
+        if (fDebug10)
+            LogPrintf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ..."
+                      ,pfrom->nVersion, pfrom->boinchashnonce, pfrom->boinchashpw
+                      ,pfrom->cpid.c_str(), pfrom->enccpid, acid);
 
-        //Halford - 12-26-2014 - Thwart Hackers
-        bool ver_valid = AcidTest(strCommand,acid,pfrom);
-        if (fDebug10) printf("Ver Acid %s, Validity %s ",acid.c_str(),YesNo(ver_valid).c_str());
-        if (!ver_valid)
-        {
-            pfrom->Misbehaving(100);
-            pfrom->fDisconnect = true;
-            return false;
-        }
+        int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
 
-        bool unauthorized = false;
-        double timedrift = std::abs(GetAdjustedTime() - nTime);
-
-        if (true)
-        {
             if (timedrift > (8*60))
             {
-                if (fDebug10) printf("Disconnecting unauthorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
-                unauthorized = true;
-            }
-        }
-        else
-        {
-            if (timedrift > (10*60) && LessVerbose(500))
-            {
-                if (fDebug10) printf("Disconnecting authorized peer with Network Time so far off by %f seconds!\r\n",(double)timedrift);
-                unauthorized = true;
-            }
-        }
-
-        if (unauthorized)
-        {
-            if (fDebug10) printf("  Disconnected unauthorized peer.         ");
+            if (fDebug10) LogPrintf("Disconnecting unauthorized peer with Network Time so far off by %" PRId64 " seconds!", timedrift);
             pfrom->Misbehaving(100);
             pfrom->fDisconnect = true;
             return false;
@@ -6184,7 +6412,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < 180321 && fTestNet)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) printf("Testnet partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug10) LogPrintf("Testnet partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -6192,7 +6420,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) printf("partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug10) LogPrintf("partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -6200,7 +6428,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion < 180323 && !fTestNet && pindexBest->nHeight > 860500)
         {
             // disconnect from peers older than this proto version - Enforce Beacon Age - 3-26-2017
-            if (fDebug10) printf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug10) LogPrintf("partner %s using obsolete version %i (before enforcing beacon age); disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
         }
@@ -6208,7 +6436,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!fTestNet && pfrom->nVersion < 180314 && IsResearchAgeEnabled(pindexBest->nHeight))
         {
             // disconnect from peers older than this proto version
-            if (fDebug10) printf("ResearchAge: partner %s using obsolete version %i; disconnecting\n", pfrom->addr.ToString().c_str(), pfrom->nVersion);
+            if (fDebug10) LogPrintf("ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
             pfrom->fDisconnect = true;
             return false;
        }
@@ -6233,30 +6461,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
 
                 // Note: Hacking attempts start in this area
-                if (false && pfrom->nStartingHeight < (nBestHeight/2) && LessVerbose(1) && !fTestNet)
-                {
-                    if (fDebug3) printf("Node with low height");
-                    pfrom->fDisconnect=true;
-                    return false;
-                }
-                /*
-
-                if (pfrom->nStartingHeight < 1 && LessVerbose(980) && !fTestNet)
-                {
-                    pfrom->Misbehaving(100);
-                    if (fDebug3) printf("Disconnecting possible hacker node.  Banned for 24 hours.\r\n");
-                    pfrom->fDisconnect=true;
-                    return false;
-                }
-                */
-
-
-                // End of critical Section
 
                 if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
                 {
                     pfrom->Misbehaving(100);
-                    if (fDebug3) printf("Disconnecting possible hacker node with no services.  Banned for 24 hours.\r\n");
+                    if (fDebug3) LogPrintf("Disconnecting possible hacker node with no services.  Banned for 24 hours.");
                     pfrom->fDisconnect=true;
                     return false;
                 }
@@ -6273,7 +6482,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect if we connected to ourself
         if (nNonce == nLocalHostNonce && nNonce > 1)
         {
-            if (fDebug3) printf("connected to self at %s, disconnecting\n", pfrom->addr.ToString().c_str());
+            if (fDebug3) LogPrintf("connected to self at %s, disconnecting", pfrom->addr.ToString());
             pfrom->fDisconnect = true;
             return true;
         }
@@ -6288,8 +6497,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fClient = !(pfrom->nServices & NODE_NETWORK);
 
+        // Moved the below from AddTimeData to here to follow bitcoin's approach.
+        int64_t nOffsetSample = nTime - GetTime();
         if (GetBoolArg("-synctime", true))
-            AddTimeData(pfrom->addr, nTime);
+            AddTimeData(pfrom->addr, nOffsetSample);
 
         // Change version
         pfrom->PushMessage("verack");
@@ -6318,7 +6529,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
             {
-                if (SecurityTest(pfrom,ver_valid))
+                if (SecurityTest(pfrom,true))
                 {
                     //Dont store the peer unless it passes the test
                     addrman.Add(addrFrom, addrFrom);
@@ -6338,7 +6549,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             nAskedForBlocks++;
             pfrom->PushGetBlocks(pindexBest, uint256(0), true);
-            if (fDebug3) printf("\r\nAsked For blocks.\r\n");
+            if (fDebug3) LogPrintf("Asked For blocks.");
         }
 
         // Relay alerts
@@ -6350,15 +6561,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        if (fDebug10) printf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s\n", pfrom->nVersion,
-            pfrom->nStartingHeight, addrMe.ToString().c_str(), addrFrom.ToString().c_str(), pfrom->addr.ToString().c_str());
+        if (fDebug10) LogPrintf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
+            pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
 
         cPeerBlockCounts.input(pfrom->nStartingHeight);
     }
     else if (pfrom->nVersion == 0)
     {
         // Must have a version message before anything else 1-10-2015 Halford
-        printf("Hack attempt from %s - %s (banned) \r\n",pfrom->addrName.c_str(),NodeAddress(pfrom).c_str());
+        LogPrintf("Hack attempt from %s - %s (banned) ",pfrom->addrName, NodeAddress(pfrom));
         pfrom->Misbehaving(100);
         pfrom->fDisconnect=true;
         return false;
@@ -6448,7 +6659,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (vInv.size() > MAX_INV_SZ)
         {
             pfrom->Misbehaving(50);
-            printf("\r\n **Hacker tried to send inventory > MAX_INV_SZ **\r\n");
             return error("message inv size() = %" PRIszu "", vInv.size());
         }
 
@@ -6460,6 +6670,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 break;
             }
         }
+
+        LOCK(cs_main);
         CTxDB txdb("r");
         for (unsigned int nInv = 0; nInv < vInv.size(); nInv++)
         {
@@ -6471,7 +6683,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
             if (fDebug10)
-                printf("  got inventory: %s  %s\n", inv.ToString().c_str(), fAlreadyHave ? "have" : "new");
+                LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
 
             if (!fAlreadyHave)
                 pfrom->AskFor(inv);
@@ -6483,7 +6695,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 // this situation and push another getblocks to continue.
                 pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(0), true);
                 if (fDebug10)
-                    printf("force getblock request: %s\n", inv.ToString().c_str());
+                    LogPrintf("force getblock request: %s", inv.ToString());
             }
 
             // Track requests for our stuff
@@ -6504,16 +6716,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         if (fDebugNet || (vInv.size() != 1))
         {
-            if (fDebug10)  printf("received getdata (%" PRIszu " invsz)\n", vInv.size());
+            if (fDebug10)  LogPrintf("received getdata (%" PRIszu " invsz)", vInv.size());
         }
 
+        LOCK(cs_main);
         for (auto const& inv : vInv)
         {
             if (fShutdown)
                 return true;
             if (fDebugNet || (vInv.size() == 1))
             {
-              if (fDebug10)   printf("received getdata for: %s\n", inv.ToString().c_str());
+              if (fDebug10)   LogPrintf("received getdata for: %s", inv.ToString());
             }
 
             if (inv.type == MSG_BLOCK)
@@ -6575,6 +6788,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint256 hashStop;
         vRecv >> locator >> hashStop;
 
+        LOCK(cs_main);
+
         // Find the last block the caller has in the main chain
         CBlockIndex* pindex = locator.GetBlockIndex();
 
@@ -6583,12 +6798,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pindex = pindex->pnext;
         int nLimit = 500;
 
-        if (fDebug3) printf("\r\ngetblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str(), nLimit);
+        if (fDebug3) LogPrintf("getblocks %d to %s limit %d", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20), nLimit);
         for (; pindex; pindex = pindex->pnext)
         {
             if (pindex->GetBlockHash() == hashStop)
             {
-                if (fDebug3) printf("\r\n  getblocks stopping at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug3) LogPrintf("getblocks stopping at %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
                 // ppcoin: tell downloading node about the latest block if it's
                 // without risk being rejected due to stake connection check
                 if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
@@ -6600,7 +6815,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // When this block is requested, we'll send an inv that'll make them
                 // getblocks the next batch of inventory.
-                if (fDebug3) printf("\r\n  getblocks stopping at limit %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20).c_str());
+                if (fDebug3) LogPrintf("getblocks stopping at limit %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
                 pfrom->hashContinue = pindex->GetBlockHash();
                 break;
             }
@@ -6611,6 +6826,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CBlockLocator locator;
         uint256 hashStop;
         vRecv >> locator >> hashStop;
+
+        LOCK(cs_main);
 
         CBlockIndex* pindex = NULL;
         if (locator.IsNull())
@@ -6631,7 +6848,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         vector<CBlock> vHeaders;
         int nLimit = 1000;
-        printf("\r\ngetheaders %d to %s\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20).c_str());
+        LogPrintf("getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
         for (; pindex; pindex = pindex->pnext)
         {
             vHeaders.push_back(pindex->GetBlockHeader());
@@ -6649,6 +6866,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         CInv inv(MSG_TX, tx.GetHash());
         pfrom->AddInventoryKnown(inv);
+
+        LOCK(cs_main);
 
         bool fMissingInputs = false;
         if (AcceptToMemoryPool(mempool, tx, &fMissingInputs))
@@ -6672,7 +6891,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
                     if (AcceptToMemoryPool(mempool, orphanTx, &fMissingInputs2))
                     {
-                        printf("   accepted orphan tx %s\n", orphanTxHash.ToString().substr(0,10).c_str());
+                        LogPrintf("   accepted orphan tx %s", orphanTxHash.ToString().substr(0,10));
                         RelayTransaction(orphanTx, orphanTxHash);
                         mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
                         vWorkQueue.push_back(orphanTxHash);
@@ -6683,7 +6902,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     {
                         // invalid orphan
                         vEraseQueue.push_back(orphanTxHash);
-                        printf("   removed invalid orphan tx %s\n", orphanTxHash.ToString().substr(0,10).c_str());
+                        LogPrintf("   removed invalid orphan tx %s", orphanTxHash.ToString().substr(0,10));
                     }
                 }
             }
@@ -6698,7 +6917,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // DoS prevention: do not allow mapOrphanTransactions to grow unbounded
             unsigned int nEvicted = LimitOrphanTxSize(MAX_ORPHAN_TRANSACTIONS);
             if (nEvicted > 0)
-                printf("mapOrphan overflow, removed %u tx\n", nEvicted);
+                LogPrintf("mapOrphan overflow, removed %u tx", nEvicted);
         }
         if (tx.nDoS) pfrom->Misbehaving(tx.nDoS);
     }
@@ -6713,20 +6932,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> block >> acid;
         uint256 hashBlock = block.GetHash();
 
-        bool block_valid = AcidTest(strCommand,acid,pfrom);
-        if (!block_valid)
-        {
-            printf("\r\n Acid test failed for block %s \r\n",hashBlock.ToString().c_str());
-            return false;
-        }
-
-        if (fDebug10) printf("Acid %s, Validity %s ",acid.c_str(),YesNo(block_valid).c_str());
-
-        printf(" Received block %s; ", hashBlock.ToString().c_str());
+        LogPrintf(" Received block %s; ", hashBlock.ToString());
         if (fDebug10) block.print();
 
         CInv inv(MSG_BLOCK, hashBlock);
         pfrom->AddInventoryKnown(inv);
+
+        LOCK(cs_main);
 
         if (ProcessBlock(pfrom, &block, false))
         {
@@ -6756,6 +6968,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == "mempool")
     {
+        LOCK(cs_main);
+
         std::vector<uint256> vtxid;
         mempool.queryHashes(vtxid);
         vector<CInv> vInv;
@@ -6789,72 +7003,40 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "neural")
     {
-        //printf("Received Neural Request \r\n");
+            std::string neural_request = "";
+            std::string neural_request_id = "";
+            vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
+            std::string neural_response = "generic_response";
 
-        std::string neural_request = "";
-        std::string neural_request_id = "";
-        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-        //printf("neural request %s \r\n",neural_request.c_str());
-        std::string neural_response = "generic_response";
-
-        if (neural_request=="neural_data")
-        {
-            if (!PreventCommandAbuse("neural_data",NodeAddress(pfrom)))
+            if (neural_request=="neural_data")
             {
-                // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
-                bool bIgnore = false;
-                if (RoundFromString("0"+ReadCache("explainmag",neural_request_id),0) > 10)
-                {
-                    if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
-                    pfrom->Misbehaving(1);
-                    bIgnore = true;
-                }
-                if (!bIgnore)
-                {
-                    WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
-                    // 7/11/2015 - Allow linux/mac to make neural requests
-                    neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-                    pfrom->PushMessage("expmag_nresp", neural_response);
-                }
-		//std::string contract = "";
-                //NN::SetTestnetFlag(fTestNet);
-                //pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
+                pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
             }
-        }
-        else if (neural_request=="neural_hash")
-        {
-            //printf("Neural response %s",neural_response.c_str());
+            else if (neural_request=="neural_hash")
+            {
+            if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
+            {
+                std::string r_hash;  vRecv >> r_hash;
+                supercfwd::SendResponse(pfrom,r_hash);
+            }
+            else
             pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
-        }
-        else if (neural_request=="explainmag")
-        {
-            // To prevent abuse, only respond to a certain amount of explainmag requests per day per cpid
-            bool bIgnore = false;
-            if (RoundFromString("0"+ReadCache("explainmag",neural_request_id),0) > 10)
-            {
-                if (fDebug10) printf("Ignoring explainmag request for %s",neural_request_id.c_str());
-                pfrom->Misbehaving(1);
-                bIgnore = true;
             }
-            if (!bIgnore)
+            else if (neural_request=="explainmag")
             {
-                WriteCache("explainmag",neural_request_id,RoundToString(RoundFromString("0"+ReadCache("explainmag",neural_request_id),0),0),GetAdjustedTime());
-                // 7/11/2015 - Allow linux/mac to make neural requests
-                neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
                 pfrom->PushMessage("expmag_nresp", neural_response);
-            }
-        }
-        else if (neural_request=="quorum")
-        {
-            // 7-12-2015 Resolve discrepencies in the neural network intelligently - allow nodes to speak to each other
-            std::string contract = "";
-            NN::SetTestnetFlag(fTestNet);
+                }
+            else if (neural_request=="quorum")
+            {
+            // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
-        }
-        else
-        {
-            neural_response="generic_response";
-        }
+            }
+            else if (neural_request=="supercfwdr")
+            {
+                // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
+                supercfwd::QuorumResponseHook(pfrom,neural_request_id);
+            }
     }
     else if (strCommand == "ping")
     {
@@ -6863,9 +7045,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             uint64_t nonce = 0;
             vRecv >> nonce >> acid;
-            bool pong_valid = AcidTest(strCommand,acid,pfrom);
-            if (!pong_valid) return false;
-            //if (fDebug10) printf("pong valid %s",YesNo(pong_valid).c_str());
 
             // Echo the message back with the nonce. This allows for two useful features:
             //
@@ -6926,10 +7105,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         if (!(sProblem.empty())) {
-            printf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %f bytes\n"
-                , pfrom->addr.ToString().c_str()
-                , pfrom->strSubVer.c_str()
-                , sProblem.c_str()                , pfrom->nPingNonceSent                , nonce                , (double)nAvail);
+            LogPrintf("pong %s %s: %s, %" PRIx64 " expected, %" PRIx64 " received, %" PRIu64 " bytes"
+                , pfrom->addr.ToString()
+                , pfrom->strSubVer
+                , sProblem, pfrom->nPingNonceSent, nonce, nAvail);
         }
         if (bPingFinished) {
             pfrom->nPingNonceSent = 0;
@@ -6942,7 +7121,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // if (pfrom->nNeuralRequestSent != 0)
             // nNeuralNonce must match request ID
             pfrom->NeuralHash = neural_response;
-            if (fDebug10) printf("hash_Neural Response %s \r\n",neural_response.c_str());
+            if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
+
+            // Hook into miner for delegated sb staking
+            supercfwd::HashResponseHook(pfrom, neural_response);
     }
     else if (strCommand == "expmag_nresp")
     {
@@ -6954,37 +7136,38 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 //If invalid, try again 10-20-2015
                 VerifyExplainMagnitudeResponse();
             }
-            if (fDebug10) printf("expmag_Neural Response %s \r\n",neural_response.c_str());
+            if (fDebug10) LogPrintf("expmag_Neural Response %s ",neural_response);
     }
     else if (strCommand == "quorum_nresp")
     {
             std::string neural_contract = "";
             vRecv >> neural_contract;
-            if (fDebug && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
+            if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
             if (neural_contract.length() > 10)
             {
-                std::string results = "";
-                //Resolve discrepancies
-                NN::SetTestnetFlag(fTestNet);
+                 std::string results = "";
+                 //Resolve discrepancies
                 results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
-                if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
+                 if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
             }
+
+            // Hook into miner for delegated sb staking
+            supercfwd::QuorumResponseHook(pfrom,neural_contract);
     }
     else if (strCommand == "ndata_nresp")
     {
             std::string neural_contract = "";
             vRecv >> neural_contract;
-            if (fDebug3 && neural_contract.length() > 100) printf("Quorum contract received %s",neural_contract.substr(0,80).c_str());
+            if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
             if (neural_contract.length() > 10)
             {
-                std::string results = "";
-                //Resolve discrepancies
-                NN::SetTestnetFlag(fTestNet);
-                printf("\r\n** Sync neural network data from supermajority **\r\n");
+                 std::string results = "";
+                 //Resolve discrepancies
+                LogPrintf("Sync neural network data from supermajority");
                 results = NN::ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
-                if (fDebug && !results.empty()) printf("Quorum Resolution: %s \r\n",results.c_str());
-                // Resume the full DPOR sync at this point now that we have the supermajority data
-                if (results=="SUCCESS")  FullSyncWithDPORNodes();
+                if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
+                 // Resume the full DPOR sync at this point now that we have the supermajority data
+                 if (results=="SUCCESS")  FullSyncWithDPORNodes();
             }
     }
     else if (strCommand == "alert")
@@ -7043,12 +7226,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 // requires LOCK(cs_vRecvMsg)
 bool ProcessMessages(CNode* pfrom)
 {
-    LOCK(cs_main);
-
-    TRY_LOCK(pfrom->cs_vRecvMsg, lockRecv);
-    if (!lockRecv)
-        return true;
-
     //
     // Message format
     //  (4) message start
@@ -7069,7 +7246,7 @@ bool ProcessMessages(CNode* pfrom)
         CNetMessage& msg = *it;
 
         //if (fDebug10)
-        //    printf("ProcessMessages(message %u msgsz, %zu bytes, complete:%s)\n",
+        //    LogPrintf("ProcessMessages(message %u msgsz, %zu bytes, complete:%s)",
         //            msg.hdr.nMessageSize, msg.vRecv.size(),
         //            msg.complete() ? "Y" : "N");
 
@@ -7082,7 +7259,7 @@ bool ProcessMessages(CNode* pfrom)
 
         // Scan for message start
         if (memcmp(msg.hdr.pchMessageStart, pchMessageStart, sizeof(pchMessageStart)) != 0) {
-            if (fDebug10) printf("\n\nPROCESSMESSAGE: INVALID MESSAGESTART\n\n");
+            if (fDebug10) LogPrintf("PROCESSMESSAGE: INVALID MESSAGESTART");
             fOk = false;
             break;
         }
@@ -7091,7 +7268,7 @@ bool ProcessMessages(CNode* pfrom)
         CMessageHeader& hdr = msg.hdr;
         if (!hdr.IsValid())
         {
-            printf("\n\nPROCESSMESSAGE: ERRORS IN HEADER %s\n\n\n", hdr.GetCommand().c_str());
+            LogPrintf("PROCESSMESSAGE: ERRORS IN HEADER %s", hdr.GetCommand());
             continue;
         }
         string strCommand = hdr.GetCommand();
@@ -7107,8 +7284,8 @@ bool ProcessMessages(CNode* pfrom)
         memcpy(&nChecksum, &hash, sizeof(nChecksum));
         if (nChecksum != hdr.nChecksum)
         {
-            printf("ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x\n",
-               strCommand.c_str(), nMessageSize, nChecksum, hdr.nChecksum);
+            LogPrintf("ProcessMessages(%s, %u bytes) : CHECKSUM ERROR nChecksum=%08x hdr.nChecksum=%08x",
+               strCommand, nMessageSize, nChecksum, hdr.nChecksum);
             continue;
         }
 
@@ -7116,7 +7293,7 @@ bool ProcessMessages(CNode* pfrom)
         bool fRet = false;
         try
         {
-           fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
+            fRet = ProcessMessage(pfrom, strCommand, vRecv, msg.nTime);
             if (fShutdown)
                 break;
         }
@@ -7125,12 +7302,12 @@ bool ProcessMessages(CNode* pfrom)
             if (strstr(e.what(), "end of data"))
             {
                 // Allow exceptions from under-length message on vRecv
-                printf("ProcessMessages(%s, %u bytes) : Exception '%s' caught, normally caused by a message being shorter than its stated length\n", strCommand.c_str(), nMessageSize, e.what());
+                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught, normally caused by a message being shorter than its stated length", strCommand, nMessageSize, e.what());
             }
             else if (strstr(e.what(), "size too large"))
             {
                 // Allow exceptions from over-long size
-                printf("ProcessMessages(%s, %u bytes) : Exception '%s' caught\n", strCommand.c_str(), nMessageSize, e.what());
+                LogPrintf("ProcessMessages(%s, %u bytes) : Exception '%s' caught", strCommand, nMessageSize, e.what());
             }
             else
             {
@@ -7145,7 +7322,7 @@ bool ProcessMessages(CNode* pfrom)
 
         if (!fRet)
         {
-           if (fDebug10)   printf("ProcessMessage(%s, %u bytes) FAILED\n", strCommand.c_str(), nMessageSize);
+           if (fDebug10) LogPrintf("ProcessMessage(%s, %u bytes) FAILED", strCommand, nMessageSize);
         }
     }
 
@@ -7188,8 +7365,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     int subsidy_places= BlockVersion<8 ? 2 : 8;
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
-        mcpid.Organization = DefaultOrg();
-        mcpid.OrganizationKey = DefaultBlockKey(8); //Only reveal 8 characters
+        mcpid.Organization = GetArg("-org", "windows");
+        mcpid.OrganizationKey = "12345678"; //Only reveal 8 characters
     }
     else
     {
@@ -7344,7 +7521,7 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
     }
     catch (...)
     {
-            printf("Deserialize ended with an error (06182014) \r\n");
+            LogPrintf("Deserialize ended with an error (06182014) ");
     }
     return surrogate;
 }
@@ -7367,8 +7544,7 @@ void InitializeProjectStruct(StructCPID& project)
     //Local CPID with struct
     //Must contain cpidv2, cpid, boincpublickey
     project.Iscpidvalid = IsLocalCPIDValid(project);
-    if (fDebug10) printf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname.c_str(),YesNo(project.Iscpidvalid).c_str());
-
+    if (fDebug10) LogPrintf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname, YesNo(project.Iscpidvalid));
 }
 
 bool ProjectIsValid(std::string sProject)
@@ -7378,11 +7554,10 @@ bool ProjectIsValid(std::string sProject)
 
     boost::to_lower(sProject);
 
-    for (const auto& item : AppCacheFilter("project"))
+    for (const auto& item : ReadCacheSection("project"))
     {
-        std::string sProjectKey = item.first;
-        std::vector<std::string> vProjectKey = split(sProjectKey, ";");
-        std::string sProjectName = ToOfficialName(vProjectKey[1]);
+        const AppCacheEntry& entry = item.second;
+        std::string sProjectName = ToOfficialName(entry.value);
 
         if (sProjectName == sProject)
             return true;
@@ -7391,36 +7566,13 @@ bool ProjectIsValid(std::string sProject)
     return false;
 }
 
-std::string ToOfficialName(std::string proj)
-{
-
-            return ToOfficialNameNew(proj);
-
-            /*
-            boost::to_lower(proj);
-            //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-            if (proj=="boincsimap")             proj = "simap";
-            if (proj=="pogs")                   proj = "theskynet pogs";
-            if (proj=="convector.fsv.cvut.cz")  proj = "convector";
-            if (proj=="distributeddatamining")  proj = "distributed data mining";
-            if (proj=="distrrtgen")             proj = "distributed rainbow table generator";
-            if (proj=="eon2")                   proj = "eon";
-            if (proj=="test4theory@home")       proj = "test4theory";
-            if (proj=="lhc@home")               proj = "lhc@home 1.0";
-            if (proj=="mindmodeling@beta")      proj = "mindmodeling@beta";
-            if (proj=="volpex@uh")              proj = "volpex";
-            if (proj=="oproject")               proj = "oproject@home";
-            if (proj=="universe@home test")     proj = "universe@home";
-            if (proj=="find@home")              proj = "fightmalaria";
-            if (proj=="virtuallhc@home")        proj = "vLHCathome";
-            return proj;
-            */
-}
-
 std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
 {
+    assert(oldStr.empty() == false && "Cannot replace an empty string");
+
   size_t pos = 0;
-  while((pos = str.find(oldStr, pos)) != std::string::npos){
+    while((pos = str.find(oldStr, pos)) != std::string::npos)
+    {
      str.replace(pos, oldStr.length(), newStr);
      pos += newStr.length();
   }
@@ -7434,39 +7586,30 @@ std::string LowerUnderscore(std::string data)
     return data;
 }
 
-std::string ToOfficialNameNew(std::string proj)
+std::string ToOfficialName(std::string proj)
 {
         proj = LowerUnderscore(proj);
         //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-        std::string sType = "projectmapping";
-        for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
+    for(const auto& item : ReadCacheSection("projectmapping"))
         {
-                std::string key_name  = (*ii).first;
-                if (key_name.length() > sType.length())
-                {
-                    if (key_name.substr(0,sType.length())==sType)
-                    {
-                            std::string key_value = mvApplicationCache[(*ii).first];
-                            std::vector<std::string> vKey = split(key_name,";");
-                            if (vKey.size() > 0)
-                            {
-                                std::string project_boinc   = vKey[1];
-                                std::string project_netsoft = key_value;
+        const std::string& key = item.first;
+        const AppCacheEntry& entry = item.second;
+
+        std::string project_boinc   = key;
+        std::string project_netsoft = entry.value;
                                 proj=LowerUnderscore(proj);
                                 project_boinc=LowerUnderscore(project_boinc);
                                 project_netsoft=LowerUnderscore(project_netsoft);
                                 if (proj==project_boinc) proj=project_netsoft;
                             }
-                     }
-                }
-        }
+
         return proj;
 }
 
 void HarvestCPIDs(bool cleardata)
 {
 
-    if (fDebug10) printf("loading BOINC cpids ...\r\n");
+    if (fDebug10) LogPrintf("loading BOINC cpids ...");
 
     //Remote Boinc Feature - R Halford
     std::string sBoincKey = GetArgument("boinckey","");
@@ -7474,12 +7617,12 @@ void HarvestCPIDs(bool cleardata)
     if (!sBoincKey.empty())
     {
         //Deserialize key into Global CPU Mining CPID 2-6-2015
-        printf("Using key %s \r\n",sBoincKey.c_str());
+        LogPrintf("Using key %s ",sBoincKey);
 
         std::string sDec=DecodeBase64(sBoincKey);
-        printf("Using key %s \r\n",sDec.c_str());
+        LogPrintf("Using key %s ",sDec);
 
-        if (sDec.empty()) printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
+        if (sDec.empty()) LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
         //Version not needed for keys for now
         GlobalCPUMiningCPID = DeserializeBoincBlock(sDec,7);
 
@@ -7487,17 +7630,17 @@ void HarvestCPIDs(bool cleardata)
 
         if (GlobalCPUMiningCPID.cpid.empty())
         {
-                 printf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.\r\n");
+                 LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
         }
         else
         {
-            printf("CPUMiningCPID Initialized.\r\n");
+            LogPrintf("CPUMiningCPID Initialized.");
         }
 
             GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
-            printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
+            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
             GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
-            printf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s \r\n",GlobalCPUMiningCPID.cpid.c_str(), GlobalCPUMiningCPID.email.c_str(), GlobalCPUMiningCPID.boincruntimepublickey.c_str(),GlobalCPUMiningCPID.cpidhash.c_str());
+            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
             StructCPID structcpid = GetStructCPID();
             structcpid.initialized = true;
             structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
@@ -7511,7 +7654,7 @@ void HarvestCPIDs(bool cleardata)
             structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
             structcpid.email = GlobalCPUMiningCPID.email;
             // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-            printf("GenBoincKey using email %s and cpidhash %s key %s \r\n",structcpid.email.c_str(),structcpid.cpidhash.c_str(),sDec.c_str());
+            LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", structcpid.email, structcpid.cpidhash, sDec);
             structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
             // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
             structcpid.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + structcpid.cpid;
@@ -7519,8 +7662,8 @@ void HarvestCPIDs(bool cleardata)
             mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
             // CreditCheck(structcpid.cpid,false);
             GetNextProject(false);
-            if (fDebug10) printf("GCMCPI %s",GlobalCPUMiningCPID.cpid.c_str());
-            if (fDebug10)           printf("Finished getting first remote boinc project\r\n");
+            if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
+            if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
         return;
   }
 
@@ -7531,14 +7674,14 @@ void HarvestCPIDs(bool cleardata)
     sout = getfilecontents(sourcefile);
     if (sout == "-1")
     {
-        printf("Unable to obtain Boinc CPIDs \r\n");
+        LogPrintf("Unable to obtain Boinc CPIDs ");
 
         if (mapArgs.count("-boincdatadir") && mapArgs["-boincdatadir"].length() > 0)
         {
-            printf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified \r\n");
+            LogPrintf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified ");
         }
 
-        else printf("Boinc data directory is not in the operating system's default location \r\nPlease move it there or specify its current location in gridcoinresearch.conf \r\n");
+        else LogPrintf("Boinc data directory is not in the operating system's default location \nPlease move it there or specify its current location in gridcoinresearch.conf");
 
         return;
     }
@@ -7546,7 +7689,6 @@ void HarvestCPIDs(bool cleardata)
     if (cleardata)
     {
         mvCPIDs.clear();
-        mvCPIDCache.clear();
     }
     std::string email = GetArgument("email","");
     boost::to_lower(email);
@@ -7591,7 +7733,9 @@ void HarvestCPIDs(bool cleardata)
                         structcpid.team = team;
                         InitializeProjectStruct(structcpid);
                         int64_t elapsed = GetTimeMillis()-nStart;
-                        if (fDebug3) printf("Enumerating boinc local project %s cpid %s valid %s, elapsed %f ",structcpid.projectname.c_str(),structcpid.cpid.c_str(),YesNo(structcpid.Iscpidvalid).c_str(),(double)elapsed);
+                        if (fDebug3)
+                            LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
+
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -7631,18 +7775,18 @@ void HarvestCPIDs(bool cleardata)
 
                         if (!externalcpid.empty())
                         {
-                            printf("\r\n** External CPID not empty %s **\r\n",externalcpid.c_str());
+                            LogPrintf("External CPID not empty %s", externalcpid);
 
                             bTestExternal = CPIDAcidTest2(cpidhash,externalcpid);
                             bTestInternal = CPIDAcidTest2(cpidhash,structcpid.cpid);
                             if (bTestExternal)
                             {
                                 structcpid.cpid = externalcpid;
-                                printf(" Setting CPID to %s ",structcpid.cpid.c_str());
+                                LogPrintf(" Setting CPID to %s ",structcpid.cpid);
                             }
                             else
                             {
-                                printf("External test failed.");
+                                LogPrintf("External test failed.");
                             }
 
 
@@ -7650,7 +7794,7 @@ void HarvestCPIDs(bool cleardata)
                             {
                                 structcpid.Iscpidvalid = false;
                                 structcpid.errors = "CPID corrupted Internal: %s, External: %s" + structcpid.cpid + "," + externalcpid.c_str();
-                                printf("CPID corrupted Internal: %s, External: %s \r\n",structcpid.cpid.c_str(),externalcpid.c_str());
+                                LogPrintf("CPID corrupted Internal: %s, External: %s", structcpid.cpid, externalcpid);
                             }
                             mvCPIDs[proj] = structcpid;
                         }
@@ -7663,13 +7807,13 @@ void HarvestCPIDs(bool cleardata)
                                     GlobalCPUMiningCPID.cpidhash = cpidhash;
                                     GlobalCPUMiningCPID.email = email;
                                     GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-                                    printf("\r\nSetting bpk to %s\r\n",cpidhash.c_str());
+                                    LogPrintf("Setting bpk to %s", cpidhash);
 
                                     if (structcpid.team=="gridcoin")
                                     {
                                         msPrimaryCPID = structcpid.cpid;
-                                        //Let the Neural Network know what your CPID is so it can be charted:
-                                        std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+                                            //Let the Neural Network know what your CPID is so it can be charted:
+                                            std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
                                         std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
                                         //Try to get a neural RAC report
                                         AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
@@ -7678,7 +7822,7 @@ void HarvestCPIDs(bool cleardata)
                         }
 
                         mvCPIDs[proj] = structcpid;
-                        if (fDebug10) printf("Adding Local Project %s \r\n",structcpid.cpid.c_str());
+                        if (fDebug10) LogPrintf("Adding Local Project %s ", structcpid.cpid);
 
                     }
 
@@ -7692,39 +7836,21 @@ void HarvestCPIDs(bool cleardata)
     }
     catch (std::exception &e)
     {
-             printf("Error while harvesting CPIDs.\r\n");
+             LogPrintf("Error while harvesting CPIDs.");
     }
     catch(...)
     {
-             printf("Error while harvesting CPIDs 2.\r\n");
+             LogPrintf("Error while harvesting CPIDs 2.");
     }
-
-
-
 }
 
-
-
-void ThreadCPIDs()
+void LoadCPIDs()
 {
-    RenameThread("grc-cpids");
-    bCPIDsLoaded = false;
+    LogPrintf("Load CPID; ");
     HarvestCPIDs(true);
-    bCPIDsLoaded = true;
-    //CreditCheck(GlobalCPUMiningCPID.cpid,false);
-    printf("Getting first project");
+    LogPrintf(" Getting first project;");
     GetNextProject(false);
-    printf("Finished getting first project");
-    bProjectsInitialized = true;
-}
-
-
-void LoadCPIDsInBackground()
-{
-      if (IsLockTimeWithinMinutes(nCPIDsLoaded,10)) return;
-      nCPIDsLoaded = GetAdjustedTime();
-      cpidThreads = new boost::thread_group();
-      cpidThreads->create_thread(boost::bind(&ThreadCPIDs));
+    LogPrintf(" Finished getting first project");
 }
 
 StructCPID GetStructCPID()
@@ -7793,32 +7919,12 @@ MiningCPID GetMiningCPID()
     return mc;
 }
 
-
-void TrackRequests(CNode* pfrom,std::string sRequestType)
-{
-        std::string sKey = "request_type" + sRequestType;
-        double dReqCt = RoundFromString(ReadCache(sKey,NodeAddress(pfrom)),0) + 1;
-        WriteCache(sKey,NodeAddress(pfrom),RoundToString(dReqCt,0),GetAdjustedTime());
-        if ( (dReqCt > 20 && !OutOfSyncByAge()) )
-        {
-                    printf(" Node requests for %s exceeded threshold (misbehaving) %s ",sRequestType.c_str(),NodeAddress(pfrom).c_str());
-                    //pfrom->Misbehaving(1);
-                    pfrom->fDisconnect = true;
-                    WriteCache(sKey,NodeAddress(pfrom),"0",GetAdjustedTime());
-        }
-}
-
-
 bool SendMessages(CNode* pto, bool fSendTrickle)
 {
     // Treat lock failures as send successes in case the caller disconnects
     // the node based on the return value.
     TRY_LOCK(cs_main, lockMain);
     if(!lockMain)
-        return true;
-
-    TRY_LOCK(pto->cs_vSend, lockSend);
-    if (!lockSend)
         return true;
 
     // Don't send anything until we get their version message
@@ -7983,7 +8089,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         const CInv& inv = (*pto->mapAskFor.begin()).second;
         if (!AlreadyHave(txdb, inv))
         {
-            if (fDebugNet)        printf("sending getdata: %s\n", inv.ToString().c_str());
+            if (fDebugNet)        LogPrintf("sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
             if (vGetData.size() >= 1000)
             {
@@ -8000,108 +8106,31 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-
-
-std::string ReadCache(std::string section, std::string key)
-{
-    if (section.empty() || key.empty()) return "";
-
-    try
-    {
-            std::string value = mvApplicationCache[section + ";" + key];
-            if (value.empty())
-            {
-                mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,""));
-                mvApplicationCache[section + ";" + key]="";
-                return "";
-            }
-            return value;
-    }
-    catch(...)
-    {
-        printf("readcache error %s",section.c_str());
-        return "";
-    }
-}
-
-
-void WriteCache(std::string section, std::string key, std::string value, int64_t locktime)
-{
-    if (section.empty() || key.empty()) return;
-    std::string temp_value = mvApplicationCache[section + ";" + key];
-    if (temp_value.empty())
-    {
-        mvApplicationCache.insert(map<std::string,std::string>::value_type(section + ";" + key,value));
-        mvApplicationCache[section + ";" + key]=value;
-    }
-    mvApplicationCache[section + ";" + key]=value;
-    // Record Cache Entry timestamp
-    int64_t temp_locktime = mvApplicationCacheTimestamp[section + ";" + key];
-    if (temp_locktime == 0)
-    {
-        mvApplicationCacheTimestamp.insert(map<std::string,int64_t>::value_type(section+";"+key,1));
-        mvApplicationCacheTimestamp[section+";"+key]=locktime;
-    }
-    mvApplicationCacheTimestamp[section+";"+key] = locktime;
-
-}
-
-
-void ClearCache(std::string section)
-{
-       for(map<string,string>::iterator ii=mvApplicationCache.begin(); ii!=mvApplicationCache.end(); ++ii)
-       {
-                const std::string& key_section = (*ii).first;
-                if (boost::algorithm::starts_with(key_section, section))
-                {
-                        mvApplicationCache[key_section]="";
-                        mvApplicationCacheTimestamp[key_section]=1;
-                }
-       }
-}
-
-
-void DeleteCache(std::string section, std::string keyname)
-{
-       std::string pk = section + ";" +keyname;
-       mvApplicationCache.erase(pk);
-       mvApplicationCacheTimestamp.erase(pk);
-}
-
-
-
 void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
-    if (NeuralHash.length() < 5) return;
-    double temp_hashcount = 0;
-    if (mvCurrentNeuralNetworkHash.size() > 0)
-    {
-            temp_hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
-    }
+    if (NeuralHash.length() < 5)
+        return;    
+
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("currentneuralsecurity",GRCAddress);
+    const std::string& Security = ReadCache("currentneuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
+    
     WriteCache("currentneuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
-    if (temp_hashcount == 0)
-    {
-        mvCurrentNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
-    }
-    double multiplier = 200;
-    if (distance < 40) multiplier = 400;
+
+    double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
-    temp_hashcount += votes;
-    mvCurrentNeuralNetworkHash[NeuralHash] = temp_hashcount;
+    mvCurrentNeuralNetworkHash[NeuralHash] += votes;
 }
-
-
 
 void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex)
 {
-    if (NeuralHash.length() < 5) return;
+    if (NeuralHash.length() < 5)
+        return;
+    
     if (pblockindex->nVersion >= 8)
     {
         try
@@ -8110,45 +8139,36 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
             bool validaddresstovote = address.IsValid();
             if (!validaddresstovote)
             {
-                printf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s\n", NeuralHash.c_str(), GRCAddress.c_str());
+                LogPrintf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s", NeuralHash, GRCAddress);
                 return;
             }
             if (!IsNeuralNodeParticipant(GRCAddress, pblockindex->nTime))
             {
-                printf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s\n", NeuralHash.c_str(), GRCAddress.c_str());
+                LogPrintf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s", NeuralHash, GRCAddress);
                 return;
             }
         }
         catch (const bignum_error& innse)
         {
-            printf("INNS : Exception: %s\n", innse.what());
+            LogPrintf("INNS : Exception: %s", innse.what());
             return;
         }
     }
-    double temp_hashcount = 0;
-    if (mvNeuralNetworkHash.size() > 0)
-    {
-            temp_hashcount = mvNeuralNetworkHash[NeuralHash];
-    }
+
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("neuralsecurity",GRCAddress);
+    const std::string& Security = ReadCache("neuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
+    
     WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
-    if (temp_hashcount == 0)
-    {
-        mvNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
-    }
-    double multiplier = 200;
-    if (distance < 40) multiplier = 400;
-    double votes = (1/distance)*multiplier;
-    temp_hashcount += votes;
-    mvNeuralNetworkHash[NeuralHash] = temp_hashcount;
-}
 
+    double multiplier = distance < 40 ? 400 : 200;
+    double votes = (1/distance)*multiplier;
+    mvNeuralNetworkHash[NeuralHash] += votes;
+}
 
 void IncrementVersionCount(const std::string& Version)
 {
@@ -8186,40 +8206,47 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
 
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
 {
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
     double highest_popularity = -1;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    std::string neural_hash;    
+    for(auto& entry : sorted_hashes)
     {
-                double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+        auto& hash = entry.first;
+        auto& popularity = entry.second;
+
                 // d41d8 is the hash of an empty magnitude contract - don't count it
-                if ( ((*ii).first != "d41d8cd98f00b204e9800998ecf8427e") && popularity > 0 && popularity > highest_popularity && (*ii).first != "TOTAL_VOTES")
+        if(popularity > 0 &&
+           popularity > highest_popularity &&
+           hash != "TOTAL_VOTES" &&
+           hash != "d41d8cd98f00b204e9800998ecf8427e")
                 {
                     highest_popularity = popularity;
-                    neural_hash = (*ii).first;
+            neural_hash = hash;
                 }
     }
+    
     out_popularity = highest_popularity;
     return neural_hash;
 }
-
-
-
-
-
 
 std::string GetNeuralNetworkReport()
 {
     //Returns a report of the networks neural hashes in order of popularity
     std::string neural_hash = "";
-    std::string report = "Neural_hash, Popularity\r\n";
+    std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
-    {
-                double popularity = mvNeuralNetworkHash[(*ii).first];
-                neural_hash = (*ii).first;
-                row = neural_hash+ "," + RoundToString(popularity,0);
-                report += row + "\r\n";
-    }
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
+        report += entry.first + "," + RoundToString(entry.second, 0) + "\n";
 
     return report;
 }
@@ -8230,8 +8257,6 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
     return Symbol;
 
 }
-
-
 
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
 {
@@ -8253,35 +8278,6 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     sMessageValue="";
               }
 
-              if (sMessageType=="beacon" && sMessageAction=="A")
-              {
-                  // If the Beacon Public Key is Not Empty - do not overwrite with a new beacon value unless the public key is the same
-                  std::string sBPK = GetBeaconPublicKey(sMessageKey,false);
-                  if (!sBPK.empty())
-                  {
-                      std::string out_cpid = "";
-                      std::string out_address = "";
-                      std::string out_publickey = "";
-                      GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                      if (fDebug10 && LessVerbose(50))
-                      {
-                          printf("\r\n**Beacon Debug Message : beaconpubkey %s, message key %s, cpid %s, addr %s, base64 pub key %s \r\n ",sBPK.c_str(),
-                                 sMessageKey.c_str(),out_cpid.c_str(),out_address.c_str(), out_publickey.c_str());
-                      }
-                      if (sBPK == out_publickey)
-                      {
-                          // allow key to be reloaded in since this is a refreshed beacon
-                          if (fDebug10) printf("\r\n**Beacon Being Overwritten %s \r\n %s : %s\r\n",sBPK.c_str(),sMessageKey.c_str(),sBPK.c_str());
-                      }
-                      else
-                      {
-                          // In this case, the current Beacon is not empty and the keys are different - Do not overwrite this beacon
-                          sMessageValue="";
-                          if (fDebug10) printf("\r\n**Beacon Public Key Not Empty %s : %s\r\n",sMessageKey.c_str(),sBPK.c_str());
-                      }
-                  }
-              }
-
               if (sMessageType=="superblock")
               {
                   // Deny access to superblock processing runtime data
@@ -8296,39 +8292,33 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                   if (Verified)
                   {
-
                         if (sMessageAction=="A")
                         {
-                                // Ensure we have the TXID of the contract in memory
-                                if (!(sMessageType=="project" || sMessageType=="projectmapping" || sMessageType=="beacon" ))
+                                /* With this we allow verifying blocks with stupid beacon */
+                                if("beacon"==sMessageType)
                                 {
-                                    WriteCache(sMessageType,sMessageKey+";Recipient",sRecipient,nTime);
-                                    WriteCache(sMessageType,sMessageKey+";BurnAmount",ToString(dAmount),nTime);
+                                    std::string out_cpid = "";
+                                    std::string out_address = "";
+                                    std::string out_publickey = "";
+                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                                    WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
                                 }
+
                                 WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                                if(fDebug && sMessageType=="beacon" ){
-                                    printf("BEACON add %s %s %s\r\n",sMessageKey.c_str(),DecodeBase64(sMessageValue).c_str(),TimestampToHRDate(nTime).c_str());
+                                if(fDebug10 && sMessageType=="beacon" ){
+                                    LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
                                 }
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
-                                        if (Contains(sMessageKey,"[Foundation"))
-                                        {
-                                                msPoll = "Foundation Poll: " + sMessageKey;
-
-                                        }
-                                        else
-                                        {
-                                                msPoll = "Poll: " + sMessageKey;
+                                    msPoll = msg;
                                         }
                                 }
-
-                        }
                         else if(sMessageAction=="D")
                         {
-                                if (fDebug10) printf("Deleting key type %s Key %s Value %s\r\n",sMessageType.c_str(),sMessageKey.c_str(),sMessageValue.c_str());
-                                if(fDebug && sMessageType=="beacon" ){
-                                    printf("BEACON DEL %s - %s\r\n",sMessageKey.c_str(),TimestampToHRDate(nTime).c_str());
+                                if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
+                                if(fDebug10 && sMessageType=="beacon" ){
+                                    LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
                                 }
                                 DeleteCache(sMessageType,sMessageKey);
                                 fMessageLoaded = true;
@@ -8342,120 +8332,12 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                         if(fDebug)
                             WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
-
                   }
-
                 }
-
     }
+
    return fMessageLoaded;
 }
-
-
-
-
-
-
-
-bool UnusualActivityReport()
-{
-
-    map<uint256, CTxIndex> mapQueuedChanges;
-    CTxDB txdb("r");
-    int nMaxDepth = nBestHeight;
-    CBlock block;
-    int nMinDepth = fTestNet ? 1 : 1;
-    if (nMaxDepth < nMinDepth || nMaxDepth < 10) return false;
-    nMinDepth = 50000;
-    nMaxDepth = nBestHeight;
-    int ii = 0;
-            for (ii = nMinDepth; ii <= nMaxDepth; ii++)
-            {
-                CBlockIndex* pblockindex = blockFinder.FindByHeight(ii);
-                if (block.ReadFromDisk(pblockindex))
-                {
-                    int64_t nFees = 0;
-                    int64_t nValueIn = 0;
-                    int64_t nValueOut = 0;
-                    int64_t nStakeReward = 0;
-                    //unsigned int nSigOps = 0;
-                    double DPOR_Paid = 0;
-                    bool bIsDPOR = false;
-                    std::string MainRecipient = "";
-                    double max_subsidy = GetMaximumBoincSubsidy(block.nTime)+50; //allow for
-                    for (auto &tx : block.vtx)
-                    {
-
-                            MapPrevTx mapInputs;
-                            if (tx.IsCoinBase())
-                                    nValueOut += tx.GetValueOut();
-                            else
-                            {
-                                     bool fInvalid;
-                                     bool TxOK = tx.FetchInputs(txdb, mapQueuedChanges, true, false, mapInputs, fInvalid);
-                                     if (!TxOK) continue;
-                                     int64_t nTxValueIn = tx.GetValueIn(mapInputs);
-                                     int64_t nTxValueOut = tx.GetValueOut();
-                                     nValueIn += nTxValueIn;
-                                     nValueOut += nTxValueOut;
-                                     if (!tx.IsCoinStake())             nFees += nTxValueIn - nTxValueOut;
-                                     if (tx.IsCoinStake())
-                                     {
-                                            nStakeReward = nTxValueOut - nTxValueIn;
-                                            if (tx.vout.size() > 2) bIsDPOR = true;
-                                            //DPOR Verification of each recipient (Recipients start at output position 2 (0=Coinstake flag, 1=coinstake)
-                                            if (tx.vout.size() > 2)
-                                            {
-                                                MainRecipient = PubKeyToAddress(tx.vout[2].scriptPubKey);
-                                            }
-                                            int iStart = 3;
-                                            if (ii > 267500) iStart=2;
-                                            if (bIsDPOR)
-                                            {
-                                                    for (unsigned int i = iStart; i < tx.vout.size(); i++)
-                                                    {
-                                                        std::string Recipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-                                                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                                                        if (Amount > GetMaximumBoincSubsidy(GetAdjustedTime()))
-                                                        {
-                                                        }
-
-                                                        if (Amount > max_subsidy)
-                                                        {
-                                                            printf("Block #%f:%f, Recipient %s, Paid %f\r\n",(double)ii,(double)i,Recipient.c_str(),Amount);
-                                                        }
-                                                        DPOR_Paid += Amount;
-
-                                                    }
-
-                                           }
-                                     }
-
-                                //if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))                return false;
-                            }
-
-                    }
-
-                    int64_t TotalMint = nValueOut - nValueIn + nFees;
-                    double subsidy = CoinToDouble(TotalMint);
-                    if (subsidy > max_subsidy)
-                    {
-                        std::string hb = block.vtx[0].hashBoinc;
-                        MiningCPID bb = DeserializeBoincBlock(hb,block.nVersion);
-                        if (IsResearcher(bb.cpid))
-                        {
-                                printf("Block #%f:%f, Recipient %s, CPID %s, Paid %f, StakeReward %f \r\n",(double)ii,(double)0,
-                                    bb.GRCAddress.c_str(), bb.cpid.c_str(), subsidy,(double)nStakeReward);
-                        }
-                }
-
-            }
-        }
-
-
-    return true;
-}
-
 
 double GRCMagnitudeUnit(int64_t locktime)
 {
@@ -8483,16 +8365,17 @@ double GRCMagnitudeUnit(int64_t locktime)
 
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
+    // If not a researcher save cpu cycles and return 0
+    if (!IsResearcher(cpid))
+        return 0;
+
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
-    if(fDebug && !bVerifyingBlock) printf("ComputeResearchAccrual.CRE.Begin: cpid=%s {%s %d} (best %d)\n",cpid.c_str(),pindexLast->GetBlockHash().GetHex().c_str(),pindexLast->nHeight,pindexBest->nHeight);
     if(pindexLast->nVersion>=9)
     {
         // Bugfix for newbie rewards always being around 1 GRC
         dMagnitudeUnit = GRCMagnitudeUnit(nTime);
     }
-    if(fDebug && !bVerifyingBlock) printf("CRE: dCurrentMagnitude= %.1f in.dMagnitudeUnit= %f\n",dCurrentMagnitude,dMagnitudeUnit);
     CBlockIndex* pHistorical = GetHistoricalMagnitude(cpid);
-    if(fDebug && !bVerifyingBlock) printf("CRE: pHistorical {%s %d} hasNext= %d nMagnitude= %.1f\n",pHistorical->GetBlockHash().GetHex().c_str(),pHistorical->nHeight,!!pHistorical->pnext,pHistorical->nMagnitude);
     bool bIsNewbie = (pHistorical->nHeight <= nNewIndex || pHistorical->nTime==0);
     if(pindexLast->nVersion<9)
     {
@@ -8502,36 +8385,34 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     if (bIsNewbie)
     {
         //No prior block exists... Newbies get .01 age to bootstrap the CPID (otherwise they will not have any prior block to refer to, thus cannot get started):
-        if(fDebug && !bVerifyingBlock) printf("CRE: No prior block exists...\n");
+        if(fDebug && !bVerifyingBlock) LogPrintf("CRE: No prior block exists...");
         if (!AreBinarySuperblocksEnabled(pindexLast->nHeight))
         {
-                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, Binary SB not enabled, "
-                    "dCurrentMagnitude= %.1f\n", dCurrentMagnitude);
-                return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
+                if(fDebug) LogPrintf("ComputeResearchAccrual: %s Newbie stake, Binary SB not enabled, dCurrentMagnitude= %.1f",
+                    cpid, dCurrentMagnitude);
+            return dCurrentMagnitude > 0 ? ((dCurrentMagnitude/100)*COIN) : 0;
         }
         else
         {
             // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
             // Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
             int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
-            if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6))
+            if (IsLockTimeWithinMinutes(iBeaconTimestamp, pindexBest->GetBlockTime(), 60*24*30*6))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
                 if ((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit) > 500)
                 {
-                    printf("ComputeResearchAccrual: Newbie special stake too high, reward=500GRC");
+                    LogPrintf("ComputeResearchAccrual: %s Newbie special stake too high, reward=500GRC", cpid);
                     return (500*COIN);
                 }
-                if (fDebug3) printf("\r\n ComputeResearchAccrual: Newbie Special First Stake for CPID %s, Age %f, Accrual %f \r\n",cpid.c_str(),dNewbieAccrualAge,(double)iAccrual);
-                if(fDebug && !bVerifyingBlock) printf("CRE: Newbie Stake, "
-                    "dNewbieAccrualAge= %f dCurrentMagnitude= %.1f dMagnitudeUnit= %f Accrual= %f\n",
-                    dNewbieAccrualAge, dCurrentMagnitude, dMagnitudeUnit, iAccrual/(double)COIN);
+                if(fDebug) LogPrintf("ComputeResearchAccrual: %s Newbie stake, unit=%f, age=%f, magnitude= %.1f -> %f",
+                    cpid, dMagnitudeUnit, dNewbieAccrualAge, dCurrentMagnitude, iAccrual/(double)COIN);
                 return iAccrual;
             }
             else
             {
-                if(fDebug && !bVerifyingBlock) printf("CRE: Invalid Beacon, Using 0.01 age bootstrap\n");
+                LogPrintf("ComputeResearchAccrual: %s Invalid Beacon, Using 0.01 age bootstrap", cpid);
                 return dCurrentMagnitude > 0 ? (((dCurrentMagnitude/100)*COIN) + (1*COIN)): 0;
             }
         }
@@ -8540,7 +8421,6 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
     int iRABlockSpan = pindexLast->nHeight - pHistorical->nHeight;
     StructCPID stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
     double dAvgMag = stCPID.ResearchAverageMagnitude;
-    if(fDebug && !bVerifyingBlock) printf("CRE: iRABlockSpan= %d  ResearchAverageMagnitude= %.1f\n",iRABlockSpan,dAvgMag);
     // ResearchAge: If the accrual age is > 20 days, add in the midpoint lifetime average magnitude to ensure the overall avg magnitude accurate:
     if (iRABlockSpan > (int)(BLOCKS_PER_DAY*20))
     {
@@ -8551,37 +8431,39 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             AvgMagnitude = (pHistorical->nMagnitude + dCurrentMagnitude) / 2;
     }
     if (AvgMagnitude > 20000) AvgMagnitude = 20000;
-    if(fDebug && !bVerifyingBlock) printf("CRE: AvgMagnitude= %.3f\n",AvgMagnitude);
 
     dAccrualAge = ((double)nTime - (double)pHistorical->nTime) / 86400;
     if (dAccrualAge < 0) dAccrualAge=0;
-    if(fDebug && !bVerifyingBlock) printf("CRE: dAccrualAge= %.8f\n",dAccrualAge);
     dMagnitudeUnit = GRCMagnitudeUnit(nTime);
-    if(fDebug && !bVerifyingBlock) printf("CRE: new.dMagnitudeUnit= %f\n",dMagnitudeUnit);
 
     int64_t Accrual = (int64_t)(dAccrualAge*AvgMagnitude*dMagnitudeUnit*COIN);
-    if(fDebug && !bVerifyingBlock) printf("CRE: Accrual= %f\n",Accrual/(double)COIN);
     // Double check researcher lifetime paid
     double days = (nTime - stCPID.LowLockTime) / 86400.0;
     double PPD = stCPID.ResearchSubsidy/(days+.01);
     double ReferencePPD = dMagnitudeUnit*dAvgMag;
-    if(fDebug && !bVerifyingBlock) printf("CRE: RSA$ "
-        "LowLockTime= %u days= %f stCPID.ResearchSubsidy= %f PPD= %f ReferencePPD= %f\n",
-        stCPID.LowLockTime,days,   stCPID.ResearchSubsidy,    PPD,    ReferencePPD );
+
     if ((PPD > ReferencePPD*5))
     {
-            printf("ComputeResearchAccrual: Researcher PPD %f > Reference PPD %f for CPID %s with Lifetime Avg Mag of %f, Days %f, MagUnit %f",
-                   PPD,ReferencePPD,cpid.c_str(),dAvgMag,days, dMagnitudeUnit);
-            Accrual = 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
-    }
-    // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
-    if (iRABlockSpan < 10 && iVerificationPhase != 2) Accrual = 0;
+        if(fDebug) LogPrintf("ComputeResearchAccrual: %s RA-PPD, PPD=%f, unit=%f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> Accrual 0 (would be %f)",
+                cpid, PPD, dMagnitudeUnit, stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
 
-    double verbosity = (operation == "createnewblock" || operation == "createcoinstake") ? 10 : 1000;
-    if ((fDebug && LessVerbose(verbosity)) || (fDebug3 && iVerificationPhase==2)) printf(" Operation %s, ComputedAccrual %f, StakeHeight %f, RABlockSpan %f, HistoryHeight%f, AccrualAge %f, AvgMag %f, MagUnit %f, PPD %f, Reference PPD %f  \r\n",
-        operation.c_str(),CoinToDouble(Accrual),(double)pindexLast->nHeight,(double)iRABlockSpan,
-        (double)pHistorical->nHeight,   dAccrualAge,AvgMagnitude,dMagnitudeUnit, PPD, ReferencePPD);
-    if(fDebug && !bVerifyingBlock) printf("CRE.End: Accrual= %f\n",Accrual/(double)COIN);
+        return 0; //Since this condition can occur when a user ramps up computing power, lets return 0 so as to not shortchange the researcher, but instead, owed will continue to accrue and will be paid later when PPD falls below 5
+    }
+
+    // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
+    if((pindexLast->nVersion >= 10 && iRABlockSpan < 10) ||
+       (pindexLast->nVersion < 10 && iRABlockSpan < 10 && iVerificationPhase != 2))
+    {
+        if(fDebug) LogPrintf("ComputeResearchAccrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %f)", cpid, iRABlockSpan, Accrual/(double)COIN);
+        if(fDebug2) LogPrintf(" pHistorical w %s", pHistorical->GetBlockHash().GetHex());
+
+        // Note that if the RA Block Span < 10, we want to return 0 for the Accrual Amount so the CPID can still receive an accurate accrual in the future
+        return 0;
+    }
+
+    if(fDebug) LogPrintf("ComputeResearchAccrual: %s Normal, unit=%f, Age=%f, AvgMagnitude=%f, Span=%d, CurMag=%.1f, OldMag=%.1f, RAAvgMag=%f, RASubsidy=%f, RALowLockTime=%d -> %d",
+        cpid, dMagnitudeUnit,dAccrualAge,AvgMagnitude,iRABlockSpan,dCurrentMagnitude,pHistorical->nMagnitude,
+        stCPID.ResearchAverageMagnitude,stCPID.ResearchSubsidy,stCPID.LowLockTime, Accrual/(double)COIN);
     return Accrual;
 }
 
@@ -8607,13 +8489,13 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
 
         CBlockIndex* pblockindex = mapItem->second;
         if(!pblockindex->pnext && pblockindex!=pindexBest)
-            printf("WARNING GetHistoricalMagnitude: index {%s %d} for cpid %s, "
-            "is not in the main chain\n",pblockindex->GetBlockHash().GetHex().c_str(),
+            LogPrintf("WARNING GetHistoricalMagnitude: index {%s %d} for cpid %s, "
+            "is not in the main chain",pblockindex->GetBlockHash().GetHex().c_str(),
             pblockindex->nHeight,cpid.c_str());
         if (pblockindex->nHeight < nMinIndex)
         {
             // In this case, the last staked block was Found, but it is over 6 months old....
-            printf("GetHistoricalMagnitude: Last staked block found at height %d, but cannot verify magnitude older than 6 months (min %d)!\n",pblockindex->nHeight,nMinIndex);
+            LogPrintf("GetHistoricalMagnitude: Last staked block found at height %d, but cannot verify magnitude older than 6 months (min %d)!",pblockindex->nHeight,nMinIndex);
             return pindexGenesisBlock;
         }
 
@@ -8649,7 +8531,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
 {
     int nMaxDepth = nBestHeight;
     int nMinDepth = fTestNet ? 1 : 164618;
-    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*6);
+    nMinDepth = pindexBest->nHeight - (BLOCKS_PER_DAY*30*12);
     if (nMinDepth < 2) nMinDepth=2;
     if (!bFullTableScan) nMinDepth = nMaxDepth-6;
     if (nMaxDepth < nMinDepth) return false;
@@ -8717,7 +8599,6 @@ std::string CPIDHash(double dMagIn, std::string sCPID)
     std::string sMagComponent1 = RoundToString(dMagIn/(dExponent+.01),0);
     std::string sSuffix = RoundToString(dMagLength * dExponent, 0);
     std::string sHash = sCPID + sMagComponent1 + sSuffix;
-    //  printf("%s, %s, %f, %f, %s\r\n",sCPID.c_str(), sMagComponent1.c_str(),dMagLength,dExponent,sSuffix.c_str());
     return sHash;
 }
 
@@ -8820,7 +8701,6 @@ std::string getHardDriveSerial()
         cmd1 = "ls /dev/disk/by-uuid";
     #endif
     std::string result = SystemCommand(cmd1.c_str());
-    //if (fDebug3) printf("result %s",result.c_str());
     msHDDSerial = result;
     return result;
 }
@@ -8849,20 +8729,24 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
     int address_day = GetDayOfYear(locktime);
     std::string address_tohash = addr + "_" + ToString(address_day);
     std::string address_day_hash = RetrieveMd5(address_tohash);
+
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
     uint256 uRef;
     if (IsResearchAgeEnabled(pindexBest->nHeight))
     {
-        uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+        uRef = fTestNet
+               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
     else
     {
-        uRef = fTestNet ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b") : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+        uRef = fTestNet
+               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
+
     uint256 uADH = uint256("0x" + address_day_hash);
-    //printf("%s < %s : %s",uADH.GetHex().c_str() ,uRef.GetHex().c_str(), YesNo(uADH  < uRef).c_str());
-    //printf("%s < %s : %s",uTest.GetHex().c_str(),uRef.GetHex().c_str(), YesNo(uTest < uRef).c_str());
     return (uADH < uRef);
 }
 
@@ -8881,3 +8765,4 @@ bool IsResearcher(const std::string& cpid)
 {
     return cpid.length() == 32;
 }
+

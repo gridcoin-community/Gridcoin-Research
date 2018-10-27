@@ -1,6 +1,8 @@
 #ifndef VOTINGDIALOG_H
 #define VOTINGDIALOG_H
 
+#include "contract/polls.h"
+
 #include <time.h>
 #include <QAbstractTableModel>
 #include <QDialog>
@@ -17,16 +19,15 @@
 #include <QListWidgetItem>
 #include <QDateTime>
 #include <QFuture>
-
 #include <QtGlobal>
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-#  include <QtWidgets>
-#else
-#  include <QtGui>
-#endif
+#include <QtWidgets>
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
 #include <QtCharts/QChartGlobal>
+#include <QtCharts>
+QT_CHARTS_BEGIN_NAMESPACE
+class QChart;
+QT_CHARTS_END_NAMESPACE
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -34,12 +35,6 @@ class QEvent;
 class QObject;
 class QResizeEvent;
 QT_END_NAMESPACE
-
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-QT_CHARTS_BEGIN_NAMESPACE
-class QChart;
-QT_CHARTS_END_NAMESPACE
-#endif
 
 #define VOTINGDIALOG_WIDTH_RowNumber          40
 #define VOTINGDIALOG_WIDTH_Title              225
@@ -57,7 +52,7 @@ public:
     QString shareType_;
     QString question_;
     QString answers_;
-    QString arrayOfAnswers_;
+    std::vector<polling::Vote> vectorOfAnswers_;
     unsigned int totalParticipants_;
     unsigned int totalShares_;
     QString url_;
@@ -107,6 +102,7 @@ public:
     void resetData(bool history);
 
 private:
+    std::vector<polling::Poll> Polls;
     QStringList columns_;
     QList<VotingItem *> data_;
 };
@@ -192,7 +188,7 @@ public:
 private:
     QLabel *question_;
     QLabel *url_;
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
     QtCharts::QChart *chart_;
 #endif
     QTableWidget *answerTable_;
@@ -221,7 +217,7 @@ private:
     QPushButton *voteButton;
     QString GetVoteValue(void);
     QString sVoteTitle;
-    
+
 private slots:
     void vote(void);
 };

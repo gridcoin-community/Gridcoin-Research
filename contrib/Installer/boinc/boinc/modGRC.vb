@@ -26,20 +26,9 @@ Module modGRC
     Public msRPCReply As String = ""
     Public mclsUtilization As Utilization
     Public mfrmMining As frmMining
-    Public mfrmProjects As frmNewUserWizard
-    Public mfrmSql As frmSQL
-    Public mfrmFAQ As frmFAQ
     Public mfrmConfig As frmConfiguration
 
-    Public mfrmTicketAdd As frmTicketAdd
-    Public mfrmFoundation As frmFoundation
-    Public mFrmDiagnostics As frmDiagnostics
-
-    Public mfrmTicketList As frmTicketList
-    Public mfrmLogin As frmLogin
-    Public mfrmTicker As frmLiveTicker
     Public mfrmWireFrame As frmGRCWireFrameCanvas
-    Public mfrmLeaderboard As frmLeaderboard
     Public MerkleRoot As String = "0xda43abf15a2fcd57ceae9ea0b4e0d872981e2c0b72244466650ce6010a14efb8"
     Public merkleroot2 As String = "0xda43abf15abcdefghjihjklmnopq872981e2c0b72244466650ce6010a14efb8"
 
@@ -56,28 +45,6 @@ Module modGRC
         If lPos > 0 Then sId = Mid(sTitle, lPos + Len("[foundation "), 36)
         If Len(Trim(sId)) <> 36 Then Return ""
         Return sId
-    End Function
-    Public Function NeedsUpgrade() As Boolean
-        Try
-            Dim sLocalPath As String = GetGRCAppDir() + "\"
-            Dim dr As SqlClient.SqlDataReader
-            Dim oGrcData As New GRCSec.GridcoinData
-            dr = oGrcData.mGetUpgradeFiles
-            Dim bNeedsUpgraded As Boolean = False
-            Do While dr.Read
-                Dim sFile As String = LCase("" & dr("filename"))
-                If sFile Like "*gridcoinresearch.exe*" Or sFile Like "*boincstake.dll*" Then
-                    'Get local hash
-                    Dim sLocalHash As String = GetMd5OfFile(sLocalPath + sFile)
-                    Dim sRemoteHash As String = dr("Hash")
-                    Dim bNeeds As Boolean = sLocalHash <> sRemoteHash
-                    If bNeeds Then bNeedsUpgraded = True
-                End If
-            Loop
-            Return bNeedsUpgraded
-        Catch ex As Exception
-            Return False
-        End Try
     End Function
 
     Public Function ExecuteRPCCommand(sCommand As String, sArg1 As String, sArg2 As String, sArg3 As String, sArg4 As String, sArg5 As String, sURL As String) As String
@@ -775,41 +742,6 @@ Module modGRC
         System.Threading.Thread.Sleep(500)
     End Sub
 
-    Public Sub InstallGalaza()
-        Dim sDestDir As String = GetGRCAppDir() + "\Galaza\"
-     
-        Try
-            System.IO.Directory.CreateDirectory(sDestDir)
-        Catch ex As Exception
-
-        End Try
-        Try
-            DownloadFile("galaza.zip", "modules/")
-        Catch ex As Exception
-            MsgBox("Unable to download Galaza " + ex.Message, MsgBoxStyle.Critical)
-            Exit Sub
-        End Try
-        Try
-            ExtractZipFile(GetGRCAppDir() + "\galaza.zip", sDestDir)
-            UpdateKey("galazaenabled", "true")
-            MsgBox("Installed Gridcoin Galaza Successfully! (Next time you restart gridcoin, Galaza will be on the Advanced menu)", MsgBoxStyle.Information)
-        Catch ex As Exception
-            Log("Error while installing Galaza " + ex.Message)
-            MsgBox("Error while installing Galaza " + ex.Message, MsgBoxStyle.Critical)
-        End Try
-    End Sub
-
-    Public Function RestartWallet1(sParams As String)
-        Dim p As Process = New Process()
-        Dim pi As ProcessStartInfo = New ProcessStartInfo()
-        pi.WorkingDirectory = GetGRCAppDir()
-        pi.UseShellExecute = True
-        Log("Restarting wallet with params " + sParams)
-        pi.Arguments = sParams
-        pi.FileName = Trim("GRCRestarter.exe")
-        p.StartInfo = pi
-        p.Start()
-    End Function
     Public Function ConfigPath() As String
         Dim sFolder As String
         sFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch"
@@ -820,9 +752,7 @@ Module modGRC
     End Function
     Public Function GetGridPath(ByVal sType As String) As String
         Dim sTemp As String
-        sTemp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\gridcoinresearch\" + sType
-        Dim sOverridden As String = KeyValue("datadir")
-        sTemp = IIf(Len(sOverridden) > 0, sOverridden, sTemp)
+        sTemp = GetGridFolder() + sType
         If System.IO.Directory.Exists(sTemp) = False Then
             Try
                 System.IO.Directory.CreateDirectory(sTemp)
@@ -830,7 +760,6 @@ Module modGRC
                 Log("Unable to create Gridcoin Path " + sTemp)
             End Try
         End If
-        If mbTestNet Then sTemp += "\Testnet\"
         Return sTemp
     End Function
     Public Function GetGridFolder() As String
@@ -948,20 +877,6 @@ Module modGRC
 
         End Try
     End Sub
-
-
-    Public Function GetNewId(sTable As String, mData As Sql) As Long
-        Try
-            Dim sql As String
-            sql = "Select max(id) as maxid from " + sTable
-            Dim vID As Long
-            vID = Val(mData.QueryFirstRow(sql, "maxid")) + 1
-            Return vID
-        Catch ex As Exception
-            Log("getnewid:" + ex.Message)
-        End Try
-    End Function
-
 
     Public Function RetrieveSiteSecurityInformation(sURL As String) As String
         Dim u As New Uri(sURL)

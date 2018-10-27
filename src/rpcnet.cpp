@@ -2,14 +2,14 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "net.h"
-#include "bitcoinrpc.h"
+#include "rpcserver.h"
+#include "rpcprotocol.h"
 #include "alert.h"
 #include "wallet.h"
 #include "db.h"
 #include "walletdb.h"
+#include "net.h"
 
-using namespace json_spirit;
 using namespace std;
 extern std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool RequestSupermajorityNeuralData();
@@ -18,14 +18,16 @@ extern void GatherNeuralHashes();
 extern bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 
 
-Value getconnectioncount(const Array& params, bool fHelp)
+UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getconnectioncount\n"
-            "Returns the number of connections to other nodes.");
+            "\n"
+            "Returns the number of connections to other node\n.");
 
     LOCK(cs_vNodes);
+
     return (int)vNodes.size();
 }
 
@@ -38,10 +40,9 @@ std::string NeuralRequest(std::string MyNeuralRequest)
     {
         if (Contains(pNode->strSubVer,"1999"))
         {
-            //printf("Node is a neural participant \r\n");
             std::string reqid = "reqid";
             pNode->PushMessage("neural", MyNeuralRequest, reqid);
-            if (fDebug3) printf(" PUSH ");
+            if (fDebug3) LogPrintf(" PUSH ");
         }
     }
     return "";
@@ -59,7 +60,7 @@ void GatherNeuralHashes()
             std::string reqid = "reqid";
             std::string command_name="neural_hash";
             pNode->PushMessage("neural", command_name, reqid);
-            if (fDebug10) printf(" Pushed ");
+            if (fDebug10) LogPrintf(" Pushed ");
         }
     }
 }
@@ -71,7 +72,7 @@ bool RequestSupermajorityNeuralData()
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
     std::string reqid = DefaultWalletAddress();
-            
+
     for (auto const& pNode : vNodes)
     {
         if (!pNode->NeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && pNode->NeuralHash == sCurrentNeuralSupermajorityHash)
@@ -84,24 +85,30 @@ bool RequestSupermajorityNeuralData()
     return false;
 }
 
-Value addnode(const Array& params, bool fHelp)
+UniValue addnode(const UniValue& params, bool fHelp)
 {
     string strCommand;
     if (params.size() == 2)
         strCommand = params[1].get_str();
     if (fHelp || params.size() != 2 ||
-        (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
+            (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
         throw runtime_error(
-            "addnode <node> <add|remove|onetry>\n"
-            "Attempts add or remove <node> from the addnode list or try a connection to <node> once.");
+                "addnode <node> <add|remove|onetry>\n"
+                "\n"
+                "Attempts add or remove <node> from the addnode list or try a connection to <node> once\n");
 
     string strNode = params[0].get_str();
 
     if (strCommand == "onetry")
     {
         CAddress addr;
-        ConnectNode(addr, strNode.c_str());
-        return Value::null;
+        CNode* pnode= ConnectNode(addr, strNode.c_str());
+        if(!pnode)
+            throw JSONRPCError(-23, "Error: Node connection failed");
+        //FIXME: should not the connection be release()d?
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("result", "ok");
+        return result;
     }
 
     LOCK(cs_vAddedNodes);
@@ -123,18 +130,21 @@ Value addnode(const Array& params, bool fHelp)
         vAddedNodes.erase(it);
     }
 
-    return Value::null;
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("result", "ok");
+    return result;
 }
 
-Value getaddednodeinfo(const Array& params, bool fHelp)
+UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getaddednodeinfo <dns> [node]\n"
-            "Returns information about the given added node, or all added nodes\n"
-            "(note that onetry addnodes are not listed here)\n"
-            "If dns is false, only a list of added nodes will be provided,\n"
-            "otherwise connected information will also be available.");
+                "getaddednodeinfo <dns> [node]\n"
+                "\n"
+                "Returns information about the given added node, or all added nodes\n"
+                "(note that onetry addnodes are not listed here)\n"
+                "If dns is false, only a list of added nodes will be provided,\n"
+                "otherwise connected information will also be available\n");
 
     bool fDns = params[0].get_bool();
 
@@ -161,13 +171,13 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
 
     if (!fDns)
     {
-        Object ret;
+        UniValue ret(UniValue::VOBJ);
         for (auto const& strAddNode : laddedNodes)
-            ret.push_back(Pair("addednode", strAddNode));
+            ret.pushKV("addednode", strAddNode);
         return ret;
     }
 
-    Array ret;
+    UniValue ret(UniValue::VOBJ);
 
     list<pair<string, vector<CService> > > laddedAddreses(0);
     for (auto const& strAddNode : laddedNodes)
@@ -177,41 +187,41 @@ Value getaddednodeinfo(const Array& params, bool fHelp)
             laddedAddreses.push_back(make_pair(strAddNode, vservNode));
         else
         {
-            Object obj;
-            obj.push_back(Pair("addednode", strAddNode));
-            obj.push_back(Pair("connected", false));
-            Array addresses;
-            obj.push_back(Pair("addresses", addresses));
+            UniValue obj(UniValue::VOBJ);
+            obj.pushKV("addednode", strAddNode);
+            obj.pushKV("connected", false);
+            UniValue addresses(UniValue::VARR);
+            obj.pushKV("addresses", addresses);
         }
     }
 
     LOCK(cs_vNodes);
     for (list<pair<string, vector<CService> > >::iterator it = laddedAddreses.begin(); it != laddedAddreses.end(); it++)
     {
-        Object obj;
-        obj.push_back(Pair("addednode", it->first));
+        UniValue obj(UniValue::VOBJ);
+        obj.pushKV("addednode", it->first);
 
-        Array addresses;
+        UniValue addresses(UniValue::VARR);
         bool fConnected = false;
         for (auto const& addrNode : it->second)
         {
             bool fFound = false;
-            Object node;
-            node.push_back(Pair("address", addrNode.ToString()));
+            UniValue node(UniValue::VOBJ);
+            node.pushKV("address", addrNode.ToString());
             for (auto const& pnode : vNodes)
                 if (pnode->addr == addrNode)
                 {
                     fFound = true;
                     fConnected = true;
-                    node.push_back(Pair("connected", pnode->fInbound ? "inbound" : "outbound"));
+                    node.pushKV("connected", pnode->fInbound ? "inbound" : "outbound");
                     break;
                 }
             if (!fFound)
-                node.push_back(Pair("connected", "false"));
+                node.pushKV("connected", "false");
             addresses.push_back(node);
         }
-        obj.push_back(Pair("connected", fConnected));
-        obj.push_back(Pair("addresses", addresses));
+        obj.pushKV("connected", fConnected);
+        obj.pushKV("addresses", addresses);
         ret.push_back(obj);
     }
 
@@ -231,29 +241,27 @@ bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
         {
             std::string reqid = cpid;
             pNode->PushMessage("neural", command_name, reqid);
-            //if (fDebug3) printf("Requested command %s \r\n",command_name.c_str());
             iContactCount++;
             if (iContactCount >= NodeLimit) return true;
         }
     }
-    if (iContactCount==0) 
+    if (iContactCount==0)
     {
-        printf("No neural network nodes online.");
+        LogPrintf("No neural network nodes online.");
         return false;
     }
     return true;
 }
 
-
-
-Value ping(const Array& params, bool fHelp)
+UniValue ping(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "ping\n"
-            "Requests that a ping be sent to all other nodes, to measure ping time.\n"
-            "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
-            "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping.");
+                "ping\n"
+                "\n"
+                "Requests that a ping be sent to all other nodes, to measure ping time.\n"
+                "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
+                "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping\n");
 
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
@@ -261,7 +269,7 @@ Value ping(const Array& params, bool fHelp)
         pNode->fPingQueued = true;
     }
 
-    return Value::null;
+    return NullUniValue;
 }
 
 static void CopyNodeStats(std::vector<CNodeStats>& vstats)
@@ -277,47 +285,52 @@ static void CopyNodeStats(std::vector<CNodeStats>& vstats)
     }
 }
 
-Value getpeerinfo(const Array& params, bool fHelp)
+UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "getpeerinfo\n"
-            "Returns data about each connected network node.");
+                "getpeerinfo\n"
+                "\n"
+                "Returns data about each connected network node.");
 
     vector<CNodeStats> vstats;
-    CopyNodeStats(vstats);
+    UniValue ret(UniValue::VARR);
 
-    Array ret;
+    {
+        LOCK(cs_vNodes);
+
+        CopyNodeStats(vstats);
+    }
+
     GatherNeuralHashes();
-    
-    for (auto const& stats : vstats) {
-        Object obj;
 
-        obj.push_back(Pair("addr", stats.addrName));
+    for (auto const& stats : vstats) {
+        UniValue obj(UniValue::VOBJ);
+
+        obj.pushKV("addr", stats.addrName);
 
           if (!(stats.addrLocal.empty()))
-            obj.push_back(Pair("addrlocal", stats.addrLocal));
+            obj.pushKV("addrlocal", stats.addrLocal);
 
-        obj.push_back(Pair("services", strprintf("%08" PRIx64, stats.nServices)));
-        obj.push_back(Pair("lastsend", stats.nLastSend));
-        obj.push_back(Pair("lastrecv", stats.nLastRecv));
-        obj.push_back(Pair("conntime", stats.nTimeConnected));
-        obj.push_back(Pair("pingtime", stats.dPingTime));
+        obj.pushKV("services", strprintf("%08" PRIx64, stats.nServices));
+        obj.pushKV("lastsend", stats.nLastSend);
+        obj.pushKV("lastrecv", stats.nLastRecv);
+        obj.pushKV("conntime", stats.nTimeConnected);
+        obj.pushKV("pingtime", stats.dPingTime);
         if (stats.dPingWait > 0.0)
-            obj.push_back(Pair("pingwait", stats.dPingWait));
-        obj.push_back(Pair("version", stats.nVersion));
-        obj.push_back(Pair("subver", stats.strSubVer));
-        obj.push_back(Pair("inbound", stats.fInbound));
-        obj.push_back(Pair("startingheight", stats.nStartingHeight));
-        obj.push_back(Pair("nTrust", stats.nTrust));
-        obj.push_back(Pair("banscore", stats.nMisbehavior));
+            obj.pushKV("pingwait", stats.dPingWait);
+        obj.pushKV("version", stats.nVersion);
+        obj.pushKV("subver", stats.strSubVer);
+        obj.pushKV("inbound", stats.fInbound);
+        obj.pushKV("startingheight", stats.nStartingHeight);
+        obj.pushKV("nTrust", stats.nTrust);
+        obj.pushKV("banscore", stats.nMisbehavior);
         bool bNeural = false;
         bNeural = Contains(stats.strSubVer, "1999");
-        obj.push_back(Pair("Neural Network", bNeural));
+        obj.pushKV("Neural Network", bNeural);
         if (bNeural)
         {
-            obj.push_back(Pair("Neural Hash", stats.NeuralHash));
-            obj.push_back(Pair("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime())));
+            obj.pushKV("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime()));
 
         }
         ret.push_back(obj);
@@ -326,42 +339,43 @@ Value getpeerinfo(const Array& params, bool fHelp)
     return ret;
 }
 
-
-
-Value getnettotals(const Array& params, bool fHelp)
+UniValue getnettotals(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "getnettotals\n"
-            "Returns information about network traffic, including bytes in, bytes out,\n"
-            "and current time.");
+                "getnettotals\n"
+                "\n"
+                "Returns information about network traffic, including bytes in, bytes out,\n"
+                "and current time\n");
 
-    Object obj;
-    obj.push_back(Pair("totalbytesrecv", CNode::GetTotalBytesRecv()));
-    obj.push_back(Pair("totalbytessent", CNode::GetTotalBytesSent()));
-    obj.push_back(Pair("timemillis", GetTimeMillis()));
+    UniValue obj(UniValue::VOBJ);
+    obj.pushKV("totalbytesrecv", CNode::GetTotalBytesRecv());
+    obj.pushKV("totalbytessent", CNode::GetTotalBytesSent());
+    obj.pushKV("timemillis", GetTimeMillis());
     return obj;
 }
 
 
 
-// ppcoin: send alert.  
+// ppcoin: send alert.
 // There is a known deadlock situation with ThreadMessageHandler
 // ThreadMessageHandler: holds cs_vSend and acquiring cs_main in SendMessages()
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
-Value sendalert(const Array& params, bool fHelp)
+UniValue sendalert(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 6)
         throw runtime_error(
             "sendalert <message> <privatekey> <minver> <maxver> <priority> <id> [cancelupto]\n"
-            "<message> is the alert text message\n"
-            "<privatekey> is hex string of alert master private key\n"
-            "<minver> is the minimum applicable internal client version\n"
-            "<maxver> is the maximum applicable internal client version\n"
-            "<priority> is integer priority number\n"
-            "<id> is the alert id\n"
-            "[cancelupto] cancels all alert id's up to this number\n"
-            "Returns true or false.");
+            "\n"
+            "<message> ----> is the alert text message\n"
+            "<privatekey> -> is hex string of alert master private key\n"
+            "<minver> -----> is the minimum applicable internal client version\n"
+            "<maxver> -----> is the maximum applicable internal client version\n"
+            "<priority> ---> is integer priority number\n"
+            "<id> ---------> is the alert id\n"
+            "[cancelupto] -> cancels all alert id's up to this number\n"
+            "\n"
+            "Returns true or false\n");
 
     CAlert alert;
     CKey key;
@@ -385,8 +399,8 @@ Value sendalert(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert
@@ -396,32 +410,34 @@ Value sendalert(const Array& params, bool fHelp)
             alert.RelayTo(pnode);
     }
 
-    Object result;
-    result.push_back(Pair("strStatusBar", alert.strStatusBar));
-    result.push_back(Pair("nVersion", alert.nVersion));
-    result.push_back(Pair("nMinVer", alert.nMinVer));
-    result.push_back(Pair("nMaxVer", alert.nMaxVer));
-    result.push_back(Pair("nPriority", alert.nPriority));
-    result.push_back(Pair("nID", alert.nID));
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("strStatusBar", alert.strStatusBar);
+    result.pushKV("nVersion", alert.nVersion);
+    result.pushKV("nMinVer", alert.nMinVer);
+    result.pushKV("nMaxVer", alert.nMaxVer);
+    result.pushKV("nPriority", alert.nPriority);
+    result.pushKV("nID", alert.nID);
     if (alert.nCancel > 0)
-        result.push_back(Pair("nCancel", alert.nCancel));
+        result.pushKV("nCancel", alert.nCancel);
     return result;
 }
 
-Value sendalert2(const Array& params, bool fHelp)
+UniValue sendalert2(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 7)
         throw runtime_error(
             //          0            1    2            3            4        5          6
-            "sendalert <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
-            "<message> is the alert text message\n"
-            "<privatekey> is hex string of alert master private key\n"
-            "<subverlist> comma separated list of versions warning applies to\n"
-            "<priority> integer, >1000->visible\n"
-            "<id> is the unique alert number\n"
-            "<cancellist> comma separated ids of alerts to cancel\n"
-            "<expire> alert expiration in days\n"
-            "Returns true or false.");
+            "sendalert2 <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
+            "\n"
+            "<privatekey> -> is hex string of alert master private key\n"
+            "<id> ---------> is the unique alert number\n"
+            "<subverlist> -> comma separated list of versions warning applies to\n"
+            "<cancellist> -> comma separated ids of alerts to cancel\n"
+            "<expire> -----> alert expiration in days\n"
+            "<priority> ---> integer, >1000->visible\n"
+            "<message> ---->is the alert text message\n"
+            "\n"
+            "Returns summary of what was done.");
 
     CAlert alert;
     CKey key;
@@ -434,14 +450,19 @@ Value sendalert2(const Array& params, bool fHelp)
     alert.nVersion = PROTOCOL_VERSION;
     alert.nRelayUntil = alert.nExpiration = GetAdjustedTime() + 24*60*60*params[4].get_int();
 
-    std::vector<std::string> split_subver = split(params[2].get_str(), ",");
-    alert.setSubVer.insert(split_subver.begin(),split_subver.end());
-
-    std::vector<std::string> split_cancel = split(params[3].get_str(), ",");
-    for(std::string &s : split_cancel)
+    if(params[2].get_str().length())
     {
-        int aver = RoundFromString(s, 0);
-        alert.setCancel.insert(aver);
+        std::vector<std::string> split_subver = split(params[2].get_str(), ",");
+        alert.setSubVer.insert(split_subver.begin(),split_subver.end());
+    }
+
+    if(params[3].get_str().length())
+    {
+        for(std::string &s : split(params[3].get_str(), ","))
+        {
+            int aver = RoundFromString(s, 0);
+            alert.setCancel.insert(aver);
+        }
     }
 
     CDataStream sMsg(SER_NETWORK, PROTOCOL_VERSION);
@@ -452,8 +473,8 @@ Value sendalert2(const Array& params, bool fHelp)
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(alert.vchMsg.begin(), alert.vchMsg.end()), alert.vchSig))
         throw runtime_error(
-            "Unable to sign alert, check private key?\n");  
-    if(!alert.ProcessAlert()) 
+            "Unable to sign alert, check private key?\n");
+    if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
     // Relay alert
@@ -463,8 +484,37 @@ Value sendalert2(const Array& params, bool fHelp)
             alert.RelayTo(pnode);
     }
 
-    Object result;
-    result.push_back(Pair("Content", alert.ToString()));
-    result.push_back(Pair("Success", true));
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("Content", alert.ToString());
+    result.pushKV("Success", true);
     return result;
+}
+
+UniValue getnetworkinfo(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "getnetworkinfo\n"
+                "\n"
+                "Displays network related information\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    proxyType proxy;
+    GetProxy(NET_IPV4, proxy);
+
+    LOCK(cs_main);
+
+    res.pushKV("version",         FormatFullVersion());
+    res.pushKV("minor_version",   CLIENT_VERSION_MINOR);
+    res.pushKV("protocolversion", PROTOCOL_VERSION);
+    res.pushKV("timeoffset",      GetTimeOffset());
+    res.pushKV("connections",     (int)vNodes.size());
+    res.pushKV("paytxfee",        ValueFromAmount(nTransactionFee));
+    res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
+    res.pushKV("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
+    res.pushKV("ip",              addrSeenByPeer.ToStringIP());
+    res.pushKV("errors",          GetWarnings("statusbar"));
+
+    return res;
 }

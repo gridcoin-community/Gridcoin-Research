@@ -1,27 +1,25 @@
 #include <boost/test/unit_test.hpp>
-#include "json/json_spirit_reader_template.h"
-#include "json/json_spirit_writer_template.h"
-#include "json/json_spirit_utils.h"
 
 #include "base58.h"
 #include "util.h"
 #include "data/base58_encode_decode.json.h"
+#include "data/base58_keys_valid.json.h"
 #include "data/base58_keys_invalid.json.h"
 
-using namespace json_spirit;
-extern Array read_json(std::string& jsondata);
+#include <univalue.h>
+
+extern UniValue read_json(std::string& jsondata);
 
 BOOST_AUTO_TEST_SUITE(base58_tests)
 
 // Goal: test low-level base58 encoding functionality
 BOOST_AUTO_TEST_CASE(base58_EncodeBase58)
 {
-    Array tests = read_json(json_tests::base58_encode_decode);
-
-    for(Value& tv : tests)
+    UniValue tests = read_json(json_tests::base58_encode_decode);
+    for (unsigned int idx = 0; idx < tests.size(); idx++)
     {
-        Array test = tv.get_array();
-        std::string strTest = write_string(tv, false);
+        UniValue test = tests[idx];
+        std::string strTest = test.write();
         if (test.size() < 2) // Allow for extra stuff (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);
@@ -38,13 +36,13 @@ BOOST_AUTO_TEST_CASE(base58_EncodeBase58)
 // Goal: test low-level base58 decoding functionality
 BOOST_AUTO_TEST_CASE(base58_DecodeBase58)
 {
-    Array tests = read_json(json_tests::base58_encode_decode);
+    UniValue tests = read_json(json_tests::base58_encode_decode);
     std::vector<unsigned char> result;
 
-    for(Value& tv : tests)
-    {
-        Array test = tv.get_array();
-        std::string strTest = write_string(tv, false);
+    for (unsigned int idx = 0; idx < tests.size(); idx++) {
+        UniValue test = tests[idx];
+        std::string strTest = test.write();
+
         if (test.size() < 2) // Allow for extra stuff (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);
@@ -103,24 +101,18 @@ public:
     }
 };
 
-// Gridcoin, 2017-03-18: Temporarily disable broken tests.
-// Possibly due to difference in nVersion from raw data.
-#if 0
-
 // Goal: check that parsed keys match test payload
 BOOST_AUTO_TEST_CASE(base58_keys_valid_parse)
 {
-    Array tests = read_json("base58_keys_valid.json");
+    UniValue tests = read_json(json_tests::base58_keys_valid);
     std::vector<unsigned char> result;
     CBitcoinSecret secret;
     CBitcoinAddress addr;
     // Save global state
     bool fTestNet_stored = fTestNet;
-
-    for(Value& tv : tests)
-    {
-        Array test = tv.get_array();
-        std::string strTest = write_string(tv, false);
+    for (unsigned int idx = 0; idx < tests.size(); idx++) {
+        UniValue test = tests[idx];
+        std::string strTest = test.write();
         if (test.size() < 3) // Allow for extra stuff (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);
@@ -128,7 +120,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_parse)
         }
         std::string exp_base58string = test[0].get_str();
         std::vector<unsigned char> exp_payload = ParseHex(test[1].get_str());
-        const Object &metadata = test[2].get_obj();
+        const UniValue &metadata = test[2].get_obj();
         bool isPrivkey = find_value(metadata, "isPrivkey").get_bool();
         bool isTestnet = find_value(metadata, "isTestnet").get_bool();
         fTestNet = isTestnet; // Override testnet flag
@@ -170,15 +162,13 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_parse)
 // Goal: check that generated keys match test vectors
 BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
 {
-    Array tests = read_json("base58_keys_valid.json");
+    UniValue tests = read_json(json_tests::base58_keys_valid);
     std::vector<unsigned char> result;
     // Save global state
     bool fTestNet_stored = fTestNet;
-
-    for(Value& tv : tests)
-    {
-        Array test = tv.get_array();
-        std::string strTest = write_string(tv, false);
+    for (unsigned int idx = 0; idx < tests.size(); idx++) {
+        UniValue test = tests[idx];
+        std::string strTest = test.write();
         if (test.size() < 3) // Allow for extra stuff (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);
@@ -186,7 +176,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
         }
         std::string exp_base58string = test[0].get_str();
         std::vector<unsigned char> exp_payload = ParseHex(test[1].get_str());
-        const Object &metadata = test[2].get_obj();
+        const UniValue &metadata = test[2].get_obj();
         bool isPrivkey = find_value(metadata, "isPrivkey").get_bool();
         bool isTestnet = find_value(metadata, "isTestnet").get_bool();
         fTestNet = isTestnet; // Override testnet flag
@@ -220,7 +210,7 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
             }
             CBitcoinAddress addrOut;
             BOOST_CHECK_MESSAGE(boost::apply_visitor(CBitcoinAddressVisitor(&addrOut), dest), "encode dest: " + strTest);
-            BOOST_CHECK_MESSAGE(addrOut.ToString() == exp_base58string, "mismatch: " + strTest);
+            BOOST_CHECK_MESSAGE(addrOut.ToString() == exp_base58string, "mismatch: " + strTest + addrOut.ToString());
         }
     }
 
@@ -233,20 +223,16 @@ BOOST_AUTO_TEST_CASE(base58_keys_valid_gen)
     fTestNet = fTestNet_stored;
 }
 
-#endif
-
 // Goal: check that base58 parsing code is robust against a variety of corrupted data
 BOOST_AUTO_TEST_CASE(base58_keys_invalid)
 {
-    Array tests = read_json(json_tests::base58_keys_invalid);
+    UniValue tests = read_json(json_tests::base58_keys_invalid);
     std::vector<unsigned char> result;
     CBitcoinSecret secret;
     CBitcoinAddress addr;
-
-    for(Value& tv : tests)
-    {
-        Array test = tv.get_array();
-        std::string strTest = write_string(tv, false);
+    for (unsigned int idx = 0; idx < tests.size(); idx++) {
+        UniValue test = tests[idx];
+        std::string strTest = test.write();
         if (test.size() < 1) // Allow for extra stuff (useful for comments)
         {
             BOOST_ERROR("Bad test: " << strTest);

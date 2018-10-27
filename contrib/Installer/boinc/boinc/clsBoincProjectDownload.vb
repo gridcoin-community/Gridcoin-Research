@@ -144,7 +144,6 @@ Public Class clsBoincProjectDownload
                     Dim iStatus As Integer = AnalyzeProjectHeader2(sTeamGzipURL, sEtag, sTeamEtagFilePath, sProject)
                     Dim sProjectMasterFileName As String = GetGridFolder() + "NeuralNetwork\" + sProject + ".master.dat"
                     'store etag by project also
-
                     If iStatus <> 1 Or Not File.Exists(sProjectMasterFileName) Then
                         Try
                             'Find out what our team ID is
@@ -154,7 +153,10 @@ Public Class clsBoincProjectDownload
                             'un-gzip the file
                             ExtractGZipInnerArchive(sTeamEtagFilePath, GetGridFolder() + "NeuralNetwork\")
                         Catch ex As Exception
-                            Log("Error while downloading master team gz file: " + ex.Message + ", Retrying.")
+                            Log("Error while processing master team gz file for " + sProject + " : " + ex.Message + ", Skipping project.")
+                            Log("Deleting master team gz file for " + sProject)
+                            File.Delete(sTeamEtagFilePath)
+                            Continue For
                         End Try
                     End If
 
@@ -174,7 +176,10 @@ Public Class clsBoincProjectDownload
                             End If
                         Catch ex As Exception
                             Dim sMsg As String = ex.Message
-                            Log("Error while downloading master project rac gz file : " + ex.Message + ", Retrying.")
+                            Log("Error while processing master project rac gz file for " + sProject + " : " + ex.Message + ", Skipping project.")
+                            Log("Deleting master project gz file for " + sProject)
+                            File.Delete(sRacEtagFilePath)
+                            Continue For
                         End Try
                     End If
                     'Scan for the Gridcoin team inside this project:

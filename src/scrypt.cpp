@@ -30,10 +30,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "util.h"
 #include "scrypt.h"
 #include "pbkdf2.h"
 
-#include "util.h"
 #include "net.h"
 #include "uint256.h"
 

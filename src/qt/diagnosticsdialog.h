@@ -21,15 +21,16 @@ public:
 private:
     Ui::DiagnosticsDialog *ui;
     void GetData();
-    int VarifyBoincPath();
-    int VerifyCPIDIsInNeuralNetwork();
-    int VarifyWalletIsSynced();
-    int VarifyCPIDHasRAC();
-    int VarifyAddNode();
-    int VarifyIsCPIDValid();
-    int FindCPID();
-    void VarifyClock();
-    void VarifyTCPPort();
+    void VerifyClock();
+    void VerifyTCPPort();
+    bool VerifyBoincPath();
+    bool VerifyCPIDIsInNeuralNetwork();
+    bool VerifyWalletIsSynced();
+    bool VerifyIsCPIDValid();
+    bool FindCPID();
+    bool VerifyCPIDHasRAC();
+    int VerifyCountSeedNodes();
+    int VerifyCountConnections();
     double GetTotalCPIDRAC(std::string cpid);
     double GetUserRAC(std::string cpid, int *projects);
     std::string KeyValue(std::string key);
@@ -43,6 +44,8 @@ private:
 private slots:
     void on_testBtn_clicked();
     void clkFinished();
+    void clkStateChanged(QAbstractSocket::SocketState state);
+    void clkSocketError(QAbstractSocket::SocketError error);
     void TCPFinished();
     void TCPFailed(QAbstractSocket::SocketError socketError);
     void getGithubVersionFinished(QNetworkReply *reply);

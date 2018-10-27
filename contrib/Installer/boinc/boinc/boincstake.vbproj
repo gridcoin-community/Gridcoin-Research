@@ -25,7 +25,7 @@
     <DocumentationFile>BoincStake.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
     <RegisterForComInterop>true</RegisterForComInterop>
-    <PlatformTarget>x86</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -36,7 +36,7 @@
     <DocumentationFile>BoincStake.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
     <RegisterForComInterop>true</RegisterForComInterop>
-    <PlatformTarget>x86</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup>
     <OptionExplicit>On</OptionExplicit>
@@ -53,22 +53,33 @@
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DocumentationFile>BoincStake.xml</DocumentationFile>
+    <RegisterForComInterop>true</RegisterForComInterop>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DocumentationFile>BoincStake.xml</DocumentationFile>
+    <Optimize>true</Optimize>
+    <RegisterForComInterop>true</RegisterForComInterop>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
   <ItemGroup>
-    <Reference Include="GRCSec, Version=1.0.0.2, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\GRCSec.dll</HintPath>
-    </Reference>
     <Reference Include="icsharpcode.sharpziplib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\release\icsharpcode.sharpziplib.dll</HintPath>
-    </Reference>
-    <Reference Include="openpopstake, Version=2.0.5.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\openpopstake.dll</HintPath>
-    </Reference>
-    <Reference Include="sqlitestake.net, Version=0.21.1869.3794, Culture=neutral, PublicKeyToken=c273bd375e695f9c">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\release\sqlitestake.net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -94,84 +105,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="clsBoincProjectDownload.vb" />
-    <Compile Include="clsMailFunctions.vb" />
     <Compile Include="clsQuorumHashingAlgorithm.cls" />
-    <Compile Include="frmUsername.Designer.vb">
-      <DependentUpon>frmUsername.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmUsername.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmDiagnostics.Designer.vb">
-      <DependentUpon>frmDiagnostics.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmDiagnostics.vb">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="frmRain.Designer.vb">
       <DependentUpon>frmRain.vb</DependentUpon>
     </Compile>
     <Compile Include="frmRain.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmAddAttachment.Designer.vb">
-      <DependentUpon>frmAddAttachment.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmAddAttachment.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmFaqAnswerView.Designer.vb">
-      <DependentUpon>frmFaqAnswerView.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmFaqAnswerView.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmAddFaqQuestion.Designer.vb">
-      <DependentUpon>frmAddFaqQuestion.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmAddFaqQuestion.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmAddFaqAnswer.Designer.vb">
-      <DependentUpon>frmAddFaqAnswer.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmAddFaqAnswer.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmFAQ.Designer.vb">
-      <DependentUpon>frmFAQ.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmFAQ.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmChangePassword.Designer.vb">
-      <DependentUpon>frmChangePassword.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmChangePassword.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmFoundation.Designer.vb">
-      <DependentUpon>frmFoundation.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmFoundation.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmAddExpense.Designer.vb">
-      <DependentUpon>frmAddExpense.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmAddExpense.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmPlaceVote.Designer.vb">
-      <DependentUpon>frmPlaceVote.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmPlaceVote.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmChartVotes.Designer.vb">
-      <DependentUpon>frmChartVotes.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmChartVotes.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="frmConfiguration.Designer.vb">
@@ -180,52 +118,10 @@
     <Compile Include="frmConfiguration.vb">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="frmRegister.Designer.vb">
-      <DependentUpon>frmRegister.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmRegister.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmVoting.Designer.vb">
-      <DependentUpon>frmVoting.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmVoting.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmLogin.Designer.vb">
-      <DependentUpon>frmLogin.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmLogin.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmTicketList.Designer.vb">
-      <DependentUpon>frmTicketList.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmTicketList.vb">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="frmGRCWireFrameCanvasRenderer.Designer.vb">
       <DependentUpon>frmGRCWireFrameCanvasRenderer.vb</DependentUpon>
     </Compile>
     <Compile Include="frmGRCWireFrameCanvasRenderer.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmLeaderboard.Designer.vb">
-      <DependentUpon>frmLeaderboard.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmLeaderboard.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmLiveTicker.Designer.vb">
-      <DependentUpon>frmLiveTicker.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmLiveTicker.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmMail.Designer.vb">
-      <DependentUpon>frmMail.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmMail.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="frmMining.Designer.vb">
@@ -234,31 +130,6 @@
     <Compile Include="frmMining.vb">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="frmNewEmail.Designer.vb">
-      <DependentUpon>frmNewEmail.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmNewEmail.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmNewUserWizard.Designer.vb">
-      <DependentUpon>frmNewUserWizard.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmNewUserWizard.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmSQL.Designer.vb">
-      <DependentUpon>frmSQL.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmSQL.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="frmTicketAdd.Designer.vb">
-      <DependentUpon>frmTicketAdd.vb</DependentUpon>
-    </Compile>
-    <Compile Include="frmTicketAdd.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="GRCDiagnostics.vb" />
     <Compile Include="GRCRunTimeInterpreter.vb" />
     <Compile Include="MD5.vb" />
     <Compile Include="modBoincLeaderboard.vb" />
@@ -271,16 +142,12 @@
     <Compile Include="modGRCWireFrameRender.vb" />
     <Compile Include="modGRCWireFrameState.vb" />
     <Compile Include="modGRCWireFrameVector.vb" />
-    <Compile Include="modLiveTicker.vb">
-      <SubType>Component</SubType>
-    </Compile>
     <Compile Include="modPersistedDataSystem.vb">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="modWinAPI.vb" />
     <Compile Include="Mutex.vb" />
     <Compile Include="SpeechSynthesis.vb" />
-    <Compile Include="Sql.vb" />
     <Compile Include="Utilization.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -299,97 +166,18 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="frmUsername.resx">
-      <DependentUpon>frmUsername.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmDiagnostics.resx">
-      <DependentUpon>frmDiagnostics.vb</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="frmRain.resx">
       <DependentUpon>frmRain.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmAddAttachment.resx">
-      <DependentUpon>frmAddAttachment.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmFaqAnswerView.resx">
-      <DependentUpon>frmFaqAnswerView.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmAddFaqQuestion.resx">
-      <DependentUpon>frmAddFaqQuestion.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmAddFaqAnswer.resx">
-      <DependentUpon>frmAddFaqAnswer.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmFAQ.resx">
-      <DependentUpon>frmFAQ.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmChangePassword.resx">
-      <DependentUpon>frmChangePassword.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmFoundation.resx">
-      <DependentUpon>frmFoundation.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmAddExpense.resx">
-      <DependentUpon>frmAddExpense.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmPlaceVote.resx">
-      <DependentUpon>frmPlaceVote.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmChartVotes.resx">
-      <DependentUpon>frmChartVotes.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmConfiguration.resx">
       <DependentUpon>frmConfiguration.vb</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="frmRegister.resx">
-      <DependentUpon>frmRegister.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmVoting.resx">
-      <DependentUpon>frmVoting.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmLogin.resx">
-      <DependentUpon>frmLogin.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmTicketList.resx">
-      <DependentUpon>frmTicketList.vb</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="frmGRCWireFrameCanvasRenderer.resx">
       <DependentUpon>frmGRCWireFrameCanvasRenderer.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmLeaderboard.resx">
-      <DependentUpon>frmLeaderboard.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmLiveTicker.resx">
-      <DependentUpon>frmLiveTicker.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmMail.resx">
-      <DependentUpon>frmMail.vb</DependentUpon>
-      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="frmMining.resx">
       <DependentUpon>frmMining.vb</DependentUpon>
       <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmNewEmail.resx">
-      <DependentUpon>frmNewEmail.vb</DependentUpon>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmNewUserWizard.resx">
-      <DependentUpon>frmNewUserWizard.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmSQL.resx">
-      <DependentUpon>frmSQL.vb</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="frmTicketAdd.resx">
-      <DependentUpon>frmTicketAdd.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
@@ -418,8 +206,6 @@
     <None Include="Resources\gradientmiddle.png" />
     <None Include="Resources\GradientU.png" />
     <None Include="Resources\gradient.jpg" />
-    <None Include="Resources\mining.jpg" />
-    <None Include="Resources\splash.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

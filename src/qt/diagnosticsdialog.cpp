@@ -1,7 +1,8 @@
-#include <fstream>
 #include "main.h"
-#include "util.h"
 #include "boinc.h"
+#include "appcache.h"
+#include "util.h"
+
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -10,9 +11,8 @@
 #include "ui_diagnosticsdialog.h"
 
 #include <numeric>
+#include <fstream>
 
-std::string GetListOf(std::string datatype);
-double PreviousBlockAge();
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
@@ -29,37 +29,37 @@ DiagnosticsDialog::~DiagnosticsDialog()
     delete ui;
 }
 
-int DiagnosticsDialog::VarifyBoincPath() {
+bool DiagnosticsDialog::VerifyBoincPath()
+{
     boost::filesystem::path boincPath = (boost::filesystem::path) GetBoincDataDir();
-    if(boincPath.empty())
+
+    if (boincPath.empty())
         boincPath = (boost::filesystem::path) GetArgument("boincdatadir", "");
 
     boincPath = boincPath / "client_state.xml";
 
-    if(boost::filesystem::exists(boincPath))
-        return 1;
-    else
-        return 0;
+    return boost::filesystem::exists(boincPath) ? true : false;
 }
 
-int DiagnosticsDialog::FindCPID() {
-    std::string cpid = GetArgument("cpid", "");
+bool DiagnosticsDialog::FindCPID()
+{
+    std::string cpid = GetArgument("PrimaryCPID", "");
 
-    if(cpid.length() != 0)
-        return 1;
-    else
-        return 0;
+    return IsResearcher(cpid) ? true : false;
 }
 
-int DiagnosticsDialog::VarifyIsCPIDValid() {
+bool DiagnosticsDialog::VerifyIsCPIDValid()
+{
     boost::filesystem::path clientStatePath = (boost::filesystem::path) GetBoincDataDir();
-    if(!clientStatePath.empty())
+
+    if (!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
+
     else
         clientStatePath = (boost::filesystem::path) GetArgument("boincdatadir", "") / "client_state.xml";
 
-    if(clientStatePath.empty())
-        return 0;
+    if (clientStatePath.empty())
+        return false;
 
     std::ifstream clientStateStream;
     std::string clientState;
@@ -70,265 +70,343 @@ int DiagnosticsDialog::VarifyIsCPIDValid() {
 
     size_t pos = 0;
     std::string cpid;
-    if((pos = clientState.find("<external_cpid>")) != std::string::npos) {
+
+    if ((pos = clientState.find("<external_cpid>")) != std::string::npos)
+    {
         cpid = clientState.substr(pos + 15, clientState.length());
         pos = cpid.find("</external_cpid>");
         cpid.erase(pos, cpid.length());
     }
 
-    if(GetArgument("cpid", "") == cpid)
-        return 1;
-    else
-        return 0;
+    return (msPrimaryCPID == cpid) ? true : false;
 }
 
-int DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork() {
+bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
+{
     std::string beacons = GetListOf("beacon");
     boost::algorithm::to_lower(beacons);
 
-    if(beacons.length() < 100)
-        return -1;
-
-    std::string cpid = GetArgument("cpid", "");
-    if(cpid != "" && beacons.find(cpid) != std::string::npos)
-        return 1;
-    else
-        return 0;
+    return IsResearcher(msPrimaryCPID) && beacons.find(msPrimaryCPID) != std::string::npos;
 }
 
-int DiagnosticsDialog::VarifyWalletIsSynced() {
-    std::string walletAgeString = ToString(PreviousBlockAge());
-    long int walletAge = std::stoi(walletAgeString,nullptr,10);
+bool DiagnosticsDialog::VerifyWalletIsSynced()
+{
+    int64_t nwalletAge = PreviousBlockAge();
 
-    if(walletAgeString.length() == 0)
-        return -1;
-    if(walletAge < (60 * 60))
-        return 1;
-    else
-        return 0;
-
+    return (nwalletAge < (60 * 60)) ? true : false;
 }
 
-int DiagnosticsDialog::VarifyCPIDHasRAC() {
+bool DiagnosticsDialog::VerifyCPIDHasRAC()
+{
+    double racValue = 0;
+
     boost::filesystem::path clientStatePath = (boost::filesystem::path) GetBoincDataDir();
-    if(!clientStatePath.empty())
+
+    if (!clientStatePath.empty())
         clientStatePath = clientStatePath / "client_state.xml";
+
     else
         clientStatePath = (boost::filesystem::path) GetArgument("boincdatadir", "") / "client_state.xml";
 
-    if(clientStatePath.empty())
-        return 0;
+    if (clientStatePath.empty())
+        return false;
 
     std::ifstream clientStateStream;
     std::string clientState;
     std::vector<std::string> racStrings;
-    std::vector<int> racValues;
 
     clientStateStream.open(clientStatePath.string());
     clientState.assign((std::istreambuf_iterator<char>(clientStateStream)), std::istreambuf_iterator<char>());
     clientStateStream.close();
 
-    if(clientState.length() > 0) {
+    if (clientState.length() > 0)
+    {
         size_t pos = 0;
         std::string delim = "</user_expavg_credit>";
         std::string line;
-        while ((pos = clientState.find(delim)) != std::string::npos) {
+
+        while ((pos = clientState.find(delim)) != std::string::npos)
+        {
             line = clientState.substr(0, pos);
             clientState.erase(0, pos + delim.length());
             pos = line.find("<user_expavg_credit>");
             racStrings.push_back(line.substr(pos + 20, line.length()));
         }
-        for(std::string racString : racStrings) {
-            racValues.push_back(std::stod(racString, nullptr));
+
+        for (auto const& racString : racStrings)
+        {
+            try
+            {
+                racValue += std::stod(racString);
+            }
+
+            catch (std::exception& ex)
+            {
+                continue;
+            }
         }
-        return (int) std::accumulate(racValues.begin(), racValues.end(), 0);
-    } else
-        return 0;
+    }
 
+    return (racValue >= 1) ? true : false;
 }
 
-int DiagnosticsDialog::VarifyAddNode() {
-    long int peersLength = boost::filesystem::file_size(GetDataDir(true) / "peers.dat");
-    std::string addNode = GetArgument("addnode", "");
+int DiagnosticsDialog::VerifyCountSeedNodes()
+{
+    LOCK(cs_vNodes);
 
-    if(addNode.length() == 0 && peersLength > 100)
-        return 2;
-    if(addNode.length() > 4 && peersLength == 0)
-        return 3;
-    if(peersLength > 100)
-        return 1;
-    if(peersLength == 0 && addNode == "")
-        return -1;
-    return 0;
+    int count = 0;
 
+    for (auto const& vnodes : vNodes)
+        if (!vnodes->fInbound)
+            count++;
+
+    return count;
 }
 
-void DiagnosticsDialog::VarifyClock() {
-    QHostInfo info = QHostInfo::fromName("pool.ntp.org");
+int DiagnosticsDialog::VerifyCountConnections()
+{
+    LOCK(cs_vNodes);
+
+    return (int)vNodes.size();
+}
+
+void DiagnosticsDialog::VerifyClock()
+{
+    QHostInfo NTPHost = QHostInfo::fromName("pool.ntp.org");
     udpSocket = new QUdpSocket(this);
 
-    connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
+    connect(udpSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(clkStateChanged(QAbstractSocket::SocketState)));
+    connect(udpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(clkSocketError(QAbstractSocket::SocketError)));
 
-    udpSocket->bind(QHostAddress::LocalHost, 123);
-
-    QByteArray sendBuffer = QByteArray(47, 0);
-    sendBuffer.insert(0, 35);
-
-    connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
-    udpSocket->writeDatagram(sendBuffer, info.addresses().first(), 123);
+    udpSocket->connectToHost(QHostAddress(NTPHost.addresses().first()), 123, QIODevice::ReadWrite);
 }
 
 
 
-void DiagnosticsDialog::VarifyTCPPort() {
+void DiagnosticsDialog::VerifyTCPPort()
+{
     tcpSocket = new QTcpSocket(this);
 
     connect(tcpSocket, SIGNAL(connected()), this, SLOT(TCPFinished()));
     connect(tcpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(TCPFailed(QAbstractSocket::SocketError)));
 
-    tcpSocket->connectToHost("london.grcnode.co.uk", 32749);
-
+    tcpSocket->connectToHost("portquiz.net", GetListenPort());
 }
 
-void DiagnosticsDialog::on_testBtn_clicked() {
+void DiagnosticsDialog::on_testBtn_clicked()
+{
     int result = 0;
-    //boinc path
+
+    //boin path
     ui->boincPathResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyBoincPath();
-    if(result == 1)
+
+    if (VerifyBoincPath())
         ui->boincPathResultLbl->setText("Passed");
+
     else
         ui->boincPathResultLbl->setText("Failed");
+
     //find cpid
-    ui->findCPIDReaultLbl->setText("Testing...");
+#ifndef WIN32
+    ui->findCPIDResultLbl->setText("N/A");
+#else
+    ui->findCPIDResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::FindCPID();
-    if(result == 1)
-        ui->findCPIDReaultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("cpid", "")));
+
+    if (FindCPID())
+        ui->findCPIDResultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("PrimaryCPID", "")));
+
     else
-        ui->findCPIDReaultLbl->setText("Failed (Is CPID in gridcoinresearch.conf?)");
+        ui->findCPIDResultLbl->setText("Failed (Is PrimaryCPID in gridcoinresearch.conf?)");
+#endif
     //cpid valid
-    ui->varifyCPIDValidResultLbl->setText("Testing...");
+    ui->verifyCPIDValidResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyIsCPIDValid();
-    if(result == 1)
-        ui->varifyCPIDValidResultLbl->setText("Passed");
+
+    if (VerifyIsCPIDValid())
+        ui->verifyCPIDValidResultLbl->setText("Passed");
+
     else
-        ui->varifyCPIDValidResultLbl->setText("Failed (BOINC CPID and gridcoinresearch.conf CPID do not match)");
+        ui->verifyCPIDValidResultLbl->setText("Failed (BOINC CPID does not match CPID)");
+
     //cpid has rac
-    ui->varifyCPIDHasRACResultLbl->setText("Testing...");
+    ui->verifyCPIDHasRACResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyCPIDHasRAC();
-    if(result > 0)
-        ui->varifyCPIDHasRACResultLbl->setText(QString::fromStdString("Passed RAC: " + std::to_string(result)));
+
+    if (VerifyCPIDHasRAC())
+        ui->verifyCPIDHasRACResultLbl->setText(QString::fromStdString("Passed"));
+
     else
-        ui->varifyCPIDHasRACResultLbl->setText("Failed");
+        ui->verifyCPIDHasRACResultLbl->setText("Failed");
+
     //cpid is in nn
-    ui->varifyCPIDIsInNNResultLbl->setText("Testing...");
+    ui->verifyCPIDIsInNNResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork();
-    if(result == 1)
-        ui->varifyCPIDIsInNNResultLbl->setText("Passed");
-    else if (result == -1)
-        ui->varifyCPIDIsInNNResultLbl->setText("Beacon data empty, sync wallet");
+
+    if (VerifyCPIDIsInNeuralNetwork())
+        ui->verifyCPIDIsInNNResultLbl->setText("Passed");
+
     else
-        ui->varifyCPIDIsInNNResultLbl->setText("Failed");
+        ui->verifyCPIDIsInNNResultLbl->setText("Failed");
+
     //wallet synced
-    ui->varifyWalletIsSyncedResultLbl->setText("Testing...");
+    ui->verifyWalletIsSyncedResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyWalletIsSynced();
-    if(result == 1)
-        ui->varifyWalletIsSyncedResultLbl->setText("Passed");
-    else if (result == -1)
-        ui->varifyWalletIsSyncedResultLbl->setText("Sync data empty");
+
+    if (VerifyWalletIsSynced())
+        ui->verifyWalletIsSyncedResultLbl->setText("Passed");
+
     else
-        ui->varifyWalletIsSyncedResultLbl->setText("Failed");
+        ui->verifyWalletIsSyncedResultLbl->setText("Failed");
+
     //clock
-    ui->varifyClkResultLbl->setText("Testing...");
+    ui->verifyClkResultLbl->setText("Testing...");
     this->repaint();
-    DiagnosticsDialog::VarifyClock();
-    //addnode
-    ui->varifyAddnodeResultLbl->setText("Testing...");
+
+    VerifyClock();
+
+    //seed nodes
+    ui->verifySeedNodesResultLbl->setText("Testing...");
     this->repaint();
-    result = DiagnosticsDialog::VarifyAddNode();
-    if(result == 1)
-        ui->varifyAddnodeResultLbl->setText("Passed");
-    else if(result == 2)
-        ui->varifyAddnodeResultLbl->setText("Passed (Addnode does not exist but peers are synced)");
-    else if(result == 3)
-        ui->varifyAddnodeResultLbl->setText("Passed (Addnode exists but peers not synced)");
-    else if(result == -1)
-        ui->varifyAddnodeResultLbl->setText("Failed (Please add addnode=node.gridcoin.us in conf file)");
+
+    result = VerifyCountSeedNodes();
+
+    if (result >= 1 && result < 3)
+        ui->verifySeedNodesResultLbl->setText("Warning: Count=" + QString::number(result) + " (Pass=3+)");
+
+    else if(result >= 3)
+        ui->verifySeedNodesResultLbl->setText("Passed: Count=" + QString::number(result));
+
     else
-        ui->varifyAddnodeResultLbl->setText("Failed");
-    //tcp port
-    ui->varifyTCPPortResultLbl->setText("Testing...");
+        ui->verifySeedNodesResultLbl->setText("Failed: Count=" + QString::number(result));
+
+    //connection count
+    ui->verifyConnectionsResultLbl->setText("Testing...");
     this->repaint();
-    DiagnosticsDialog::VarifyTCPPort();
+
+    result = VerifyCountConnections();
+
+    if (result <= 7 && result >= 1)
+        ui->verifyConnectionsResultLbl->setText("Warning: Count=" + QString::number(result) + " (Pass=8+)");
+
+    else if (result >=8)
+        ui->verifyConnectionsResultLbl->setText("Passed: Count=" + QString::number(result));
+
+    else
+        ui->verifyConnectionsResultLbl->setText("Failed: Count=" + QString::number(result));
+
+    //tcp port
+    ui->verifyTCPPortResultLbl->setText("Testing...");
+    this->repaint();
+
+    VerifyTCPPort();
+
     //client version
     ui->checkClientVersionResultLbl->setText("Testing...");
-    networkManager->get(QNetworkRequest(QUrl("https://api.github.com/repos/gridcoin/Gridcoin-Research/releases/latest")));
+    networkManager->get(QNetworkRequest(QUrl("https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest")));
 
+    return;
 }
 
-void DiagnosticsDialog::clkFinished() {
-    time_t ntpTime(0);
+void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
+{
+    if (state == QAbstractSocket::ConnectedState)
+    {
+        connect(udpSocket, SIGNAL(readyRead()), this, SLOT(clkFinished()));
 
-    while(udpSocket->pendingDatagramSize() != -1) {
-        char recvBuffer[udpSocket->pendingDatagramSize()];
-        udpSocket->readDatagram(&recvBuffer[0], 48, nullptr, nullptr);
-        if(sizeof(recvBuffer) == 48){
-            int count= 40;
-            unsigned long DateTimeIn= uchar(recvBuffer[count])+ (uchar(recvBuffer[count+ 1]) << 8)+ (uchar(recvBuffer[count+ 2]) << 16)+ (uchar(recvBuffer[count+ 3]) << 24);
-            ntpTime = ntohl((time_t)DateTimeIn);
-            ntpTime -= 2208988800U;
-        }
+        char NTPMessage[48] = {0x1b, 0, 0, 0 ,0, 0, 0, 0, 0};
+
+        udpSocket->writeDatagram(NTPMessage, sizeof(NTPMessage), udpSocket->peerAddress(), udpSocket->peerPort());
     }
+
+    return;
+}
+
+void DiagnosticsDialog::clkSocketError(QAbstractSocket::SocketError error)
+{
+    ui->verifyClkResultLbl->setText("Failed to make connection to NTP server");
 
     udpSocket->close();
 
-    boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
-    boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(ntpTime);
-
-    boost::posix_time::time_duration timeDiff = networkTime - localTime;
-
-    if(timeDiff.minutes() < 3)
-        ui->varifyClkResultLbl->setText("Passed");
-    else
-        ui->varifyClkResultLbl->setText("Failed (Sync local time with network)");
-
-    this->repaint();
+    return;
 }
 
-void DiagnosticsDialog::TCPFinished() {
+void DiagnosticsDialog::clkFinished()
+{
+    if (udpSocket->waitForReadyRead())
+    {
+        while (udpSocket->hasPendingDatagrams())
+        {
+            QByteArray BufferSocket = udpSocket->readAll();
+
+            if (BufferSocket.size() == 48)
+            {
+                int nNTPCount = 40;
+                unsigned long DateTimeIn = uchar(BufferSocket.at(nNTPCount)) + (uchar(BufferSocket.at(nNTPCount + 1)) << 8) + (uchar(BufferSocket.at(nNTPCount + 2)) << 16) + (uchar(BufferSocket.at(nNTPCount + 3)) << 24);
+                long tmit = ntohl((time_t)DateTimeIn);
+                tmit -= 2208988800U;
+
+                udpSocket->close();
+
+                boost::posix_time::ptime localTime = boost::posix_time::microsec_clock::universal_time();
+                boost::posix_time::ptime networkTime = boost::posix_time::from_time_t(tmit);
+                boost::posix_time::time_duration timeDiff = networkTime - localTime;
+
+                if (timeDiff.minutes() < 3)
+                    ui->verifyClkResultLbl->setText("Passed");
+
+                else
+                    ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
+
+                this->repaint();
+            }
+        }
+    }
+
+    return;
+}
+
+void DiagnosticsDialog::TCPFinished()
+{
     tcpSocket->close();
-    ui->varifyTCPPortResultLbl->setText("Passed");
+    ui->verifyTCPPortResultLbl->setText("Passed");
     this->repaint();
+
+    return;
 }
 
-void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket) {
-    ui->varifyTCPPortResultLbl->setText("Failed (Port 32749 may be blocked by your firewall)");
+void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket)
+{
+    ui->verifyTCPPortResultLbl->setText("Failed (Port 32749 may be blocked by your firewall)");
     this->repaint();
+
+    return;
 }
 
-void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
-    // Qt didn't get JSON support until 5.x. Ignore version checks when using
-    // Qt4 an drop this condition once we drop Qt4 support.
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-    ui->checkClientVersionResultLbl->setText("N/A");
-#else
+void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply)
+{
+    if (reply->error())
+    {
+        // Incase ssl dlls are not present or corrupted; avoid crash
+        ui->checkClientVersionResultLbl->setText("Failed (" + reply->errorString() + ")");
+
+        return;
+    }
+
     QByteArray data;
     data = reply->readAll();
     std::string newVersionString;
 
     QJsonDocument replyJson = QJsonDocument::fromJson(data);
     QJsonObject obj = replyJson.object();
-    if(!obj.empty()) {
+
+    if (!obj.empty())
+    {
         QJsonValue newVersionJVal = obj.value("name");
-        if(!newVersionJVal.isUndefined()) {
+
+        if (!newVersionJVal.isUndefined())
             newVersionString = newVersionJVal.toString().toStdString();
-        }
     }
 
     std::vector<std::string> newVersionStringSplit;
@@ -350,14 +428,28 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply) {
 
     int iNew;
     int iCurrent;
-    for(unsigned int i=0; i<newVersionList.size(); i++) {
-        iNew = std::stoi(newVersionList.at(i), nullptr, 10);
-        iCurrent = std::stoi(currentVersionList.at(i), nullptr, 10);
-        if(iNew > iCurrent) {
-            ui->checkClientVersionResultLbl->setText("Failed (An update is available, please update)");
-            return;
-        } else
-            ui->checkClientVersionResultLbl->setText("Up to date");
+
+    try
+    {
+        for (unsigned int i=0; i<newVersionList.size(); i++) {
+            iNew = std::stoi(newVersionList.at(i), nullptr, 10);
+            iCurrent = std::stoi(currentVersionList.at(i), nullptr, 10);
+
+            if (iNew > iCurrent) {
+                ui->checkClientVersionResultLbl->setText("Failed (An update is available, please update to " + QString::fromStdString(newVersionString) + ")");
+
+                return;
+            }
+
+            else
+                ui->checkClientVersionResultLbl->setText("Up to date");
+        }
     }
-#endif
+
+    catch (std::exception& ex)
+    {
+        ui->checkClientVersionResultLbl->setText("Failed: std exception occured -> " + QString::fromUtf8(ex.what()));
+    }
+
+    return;
 }

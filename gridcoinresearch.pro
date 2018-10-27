@@ -4,31 +4,18 @@ VERSION = 3.1.0.1
 INCLUDEPATH += src src/json src/qt
 DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd thread c++11 exceptions concurrent
-QT += core gui network
+QT += core gui network widgets concurrent
 
 win32 {
     DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501 __USE_MINGW_ANSI_STDIO
-    lessThan(QT_VERSION, 5.0.0) {
-        CONFIG += qaxcontainer
-    }
-    else {
-        QT += axcontainer
-    }
+    QT += axcontainer
 
     # Fix for boost.asio build error. See
     # https://stackoverflow.com/questions/20957727/boostasio-unregisterwaitex-has-not-been-declared
     DEFINES += _WIN32_WINNT=0x0501 WINVER=0x0501
 }
 
-greaterThan(QT_MAJOR_VERSION, 4) {
-    QT += widgets concurrent
-    DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
-} else {
-    # qmake from Qt4 has no C++11 config so it has to be specified manually.
-    QMAKE_CXXFLAGS += -std=gnu++0x
-}
-
-lessThan(QT_VERSION, 5.8.0) {
+lessThan(QT_MAJOR_VERSION, 5) | lessThan(QT_MINOR_VERSION, 8) {
     # Qt charts not available
 }else{
     QT += charts
@@ -272,6 +259,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/diagnosticsdialog.h \
     src/backup.h \
     src/appcache.h \
+    src/tally.h \
     src/grcrestarter.h \
     src/neuralnet.h \
     src/qt/clicklabel.h
@@ -354,6 +342,7 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/allocators.cpp \
     src/backup.cpp \
     src/appcache.cpp \
+    src/tally.cpp \
     src/grcrestarter.cpp \
     src/neuralnet.cpp \
     src/qt/clicklabel.cpp

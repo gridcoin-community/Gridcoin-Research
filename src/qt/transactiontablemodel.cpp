@@ -73,7 +73,7 @@ public:
      */
     void refreshWallet()
     {
-        if (fDebug) OutputDebugStringF("refreshWallet\n");
+        if (fDebug) LogPrintf("refreshWallet");
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
@@ -92,7 +92,7 @@ public:
      */
     void updateWallet(const uint256 &hash, int status)
     {
-        if (fDebug) OutputDebugStringF("updateWallet %s %i\n", hash.ToString().c_str(), status);
+        if (fDebug) LogPrintf("updateWallet %s %i", hash.ToString(), status);
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
@@ -122,7 +122,7 @@ public:
                     status = CT_DELETED; /* In model, but want to hide, treat as deleted */
             }
 
-            if (fDebug) OutputDebugStringF("   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i\n",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
+            if (fDebug) LogPrintf("   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i",                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
 
 
             switch(status)
@@ -130,12 +130,12 @@ public:
             case CT_NEW:
                 if(inModel)
                 {
-                    if (fDebug) OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is already in model\n");
+                    if (fDebug) LogPrintf("Warning: updateWallet: Got CT_NEW, but transaction is already in model");
                     break;
                 }
                 if(!inWallet)
                 {
-                    if (fDebug) OutputDebugStringF("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet\n");
+                    if (fDebug) LogPrintf("Warning: updateWallet: Got CT_NEW, but transaction is not in wallet");
                     break;
                 }
                 if(showTransaction)
@@ -159,7 +159,7 @@ public:
             case CT_DELETED:
                 if(!inModel)
                 {
-                    OutputDebugStringF("Warning: updateWallet: Got CT_DELETED, but transaction is not in model\n");
+                    LogPrintf("Warning: updateWallet: Got CT_DELETED, but transaction is not in model");
                     break;
                 }
                 // Removed -- remove entire transaction from table

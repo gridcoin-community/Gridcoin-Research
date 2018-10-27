@@ -7,7 +7,7 @@
 #include <QAction>
 #include <QApplication>
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
 	#include <QtCharts/QChartView>
 	#include <QtCharts/QPieSeries>
 #endif
@@ -29,15 +29,10 @@
 #include <QString>
 #include <QVBoxLayout>
 
-#include "json/json_spirit.h"
 #include "votingdialog.h"
 #include "util.h"
 
-
-extern json_spirit::Array GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string& out_export, bool bIncludeExpired);
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2);
-extern std::string ExecuteRPCCommand(std::string method, std::string arg1, std::string arg2, std::string arg3, std::string arg4, std::string arg5, std::string arg6);
 
 static std::string GetFoundationGuid(const std::string &sTitle)
 {
@@ -256,41 +251,29 @@ void VotingTableModel::resetData(bool history)
     // retrieve data
     std::vector<VotingItem *> items;
     std::string sVotingPayload;
-    GetJSONPollsReport(true, "", sVotingPayload, history);
+    Polls = GetPolls(true, history, "");
 
     //time_t now = time(NULL); // needed if history should be limited
 
-    std::vector<std::string> vPolls = split(sVotingPayload, "<POLL>");
-    for(size_t y=0; y < vPolls.size(); y++) {
-        // replace underscores with spaces
-        for(size_t nPos=0; (nPos=vPolls[y].find('_', nPos)) != std::string::npos; )
-            vPolls[y][nPos] = ' ';
-
-        std::string sTitle = ExtractXML(vPolls[y], "<TITLE>", "</TITLE>");
+    for(const auto& iterPoll: Polls)
+    {
+        std::string sTitle = iterPoll.title;
         std::string sId = GetFoundationGuid(sTitle);
-        if (sTitle.size() && (sId.empty())) {
-            QString sExpiration = QString::fromStdString(ExtractXML(vPolls[y], "<EXPIRATION>", "</EXPIRATION>"));
-            std::string sShareType = ExtractXML(vPolls[y], "<SHARETYPE>", "</SHARETYPE>");
-            std::string sQuestion = ExtractXML(vPolls[y], "<QUESTION>", "</QUESTION>");
-            std::string sAnswers = ExtractXML(vPolls[y], "<ANSWERS>", "</ANSWERS>");
-            std::string sArrayOfAnswers = ExtractXML(vPolls[y], "<ARRAYANSWERS>", "</ARRAYANSWERS>");
-            std::string sTotalParticipants = ExtractXML(vPolls[y], "<TOTALPARTICIPANTS>", "</TOTALPARTICIPANTS>");
-            std::string sTotalShares = ExtractXML(vPolls[y], "<TOTALSHARES>", "</TOTALSHARES>");
-            std::string sUrl = ExtractXML(vPolls[y], "<URL>", "</URL>");
-            std::string sBestAnswer = ExtractXML(vPolls[y], "<BESTANSWER>", "</BESTANSWER>");
-
+        if (sTitle.size() && (sId.empty()))
+        {
+            QString sExpiration = QString::fromStdString(iterPoll.expiration);
             VotingItem *item = new VotingItem;
             item->rowNumber_ = items.size() + 1;
-            item->title_ = QString::fromStdString(sTitle);
-            item->expiration_ = QDateTime::fromString(sExpiration, "M-d-yyyy HH:mm:ss");
-            item->shareType_ = QString::fromStdString(sShareType);
-            item->question_ = QString::fromStdString(sQuestion);
-            item->answers_ = QString::fromStdString(sAnswers);
-            item->arrayOfAnswers_ = QString::fromStdString(sArrayOfAnswers);
-            item->totalParticipants_ = std::stoul(sTotalParticipants);
-            item->totalShares_ = std::stoul(sTotalShares);
-            item->url_ = QString::fromStdString(sUrl);
-            item->bestAnswer_ = QString::fromStdString(sBestAnswer);
+            item->title_ = QString::fromStdString(iterPoll.title).replace("_"," ");
+            item->expiration_ = QDateTime::fromString(QString::fromStdString(iterPoll.expiration), "M-d-yyyy HH:mm:ss");
+            item->shareType_ = QString::fromStdString(iterPoll.sharetype);
+            item->question_ = QString::fromStdString(iterPoll.question).replace("_"," ");
+            item->answers_ = QString::fromStdString(iterPoll.sAnswers).replace("_"," ");
+            item->vectorOfAnswers_ = iterPoll.answers;
+            item->totalParticipants_ = iterPoll.total_participants;
+            item->totalShares_ = iterPoll.total_shares;
+            item->url_ = QString::fromStdString(iterPoll.url).replace("_"," ");
+            item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer).replace("_"," ");
             items.push_back(item);
         }
     }
@@ -407,13 +390,10 @@ VotingDialog::VotingDialog(QWidget *parent)
     tableView_->verticalHeader()->hide();
 
     tableView_->setModel(proxyModel_);
-
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    tableView_->setFont(QFont("Arial", 10));
     tableView_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-#else
-    tableView_->horizontalHeader()->setResizeMode(QHeaderView::Interactive);
-#endif
     tableView_->horizontalHeader()->setMinimumWidth(VOTINGDIALOG_WIDTH_RowNumber + VOTINGDIALOG_WIDTH_Title + VOTINGDIALOG_WIDTH_Expiration + VOTINGDIALOG_WIDTH_ShareType + VOTINGDIALOG_WIDTH_TotalParticipants + VOTINGDIALOG_WIDTH_TotalShares + VOTINGDIALOG_WIDTH_BestAnswer);
+    tableView_->verticalHeader()->setDefaultSectionSize(40);
 
     groupboxvlayout->addWidget(tableView_);
 
@@ -623,7 +603,7 @@ void VotingDialog::showNewPollDialog(void)
 //
 VotingChartDialog::VotingChartDialog(QWidget *parent)
     : QDialog(parent)
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
     ,chart_(0)
 #endif
     ,answerTable_(NULL)
@@ -676,7 +656,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
 
     QTabWidget *resTabWidget = new QTabWidget;
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
     chart_ = new QtCharts::QChart;
     chart_->legend()->setVisible(true);
     chart_->legend()->setAlignment(Qt::AlignRight);
@@ -690,11 +670,7 @@ VotingChartDialog::VotingChartDialog(QWidget *parent)
     answerTable_->setRowCount(0);
     answerTableHeader<<"Answer"<<"Shares"<<"Percentage";
     answerTable_->setHorizontalHeaderLabels(answerTableHeader);
-#if QT_VERSION < 0x050000
-    answerTable_->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
-#else
     answerTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-#endif
     answerTable_->setEditTriggers( QAbstractItemView::NoEditTriggers );
     resTabWidget->addTab(answerTable_, tr("List"));
     vlayout->addWidget(resTabWidget);
@@ -708,12 +684,10 @@ void VotingChartDialog::resetData(const VotingItem *item)
     answerTable_->setRowCount(0);
     answerTable_->setSortingEnabled(false);
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-    //chart_->removeAllSeries();
+#ifdef QT_CHARTS_LIB
     QList<QtCharts::QAbstractSeries *> oldSeriesList = chart_->series();
-    foreach (QtCharts::QAbstractSeries *oldSeries, oldSeriesList) {
+    foreach (QtCharts::QAbstractSeries *oldSeries, oldSeriesList)
         chart_->removeSeries(oldSeries);
-    }
 
     QtCharts::QPieSeries *series = new QtCharts::QPieSeries();
 #endif
@@ -722,19 +696,20 @@ void VotingChartDialog::resetData(const VotingItem *item)
     url_->setText("<a href=\""+item->url_+"\">"+item->url_+"</a>");
     answer_->setText(item->bestAnswer_);
 
-    std::string arrayOfAnswers = item->arrayOfAnswers_.toUtf8().constData();
-    std::vector<std::string> vAnswers = split(arrayOfAnswers, "<RESERVED>"); // the first entry is empty
-    answerTable_->setRowCount(vAnswers.size()-1);
+    std::vector<polling::Vote> vectorOfAnswers = item->vectorOfAnswers_;
+    answerTable_->setRowCount(vectorOfAnswers.size());
     std::vector<int> iShares;
     std::vector<QString> sAnswerNames;
     int sharesSum = 0;
-    for(size_t y=1; y < vAnswers.size(); y++) {
-        sAnswerNames.push_back(QString::fromStdString(ExtractXML(vAnswers[y], "<ANSWERNAME>", "</ANSWERNAME>")));
-        int iShare = atoi(ExtractXML(vAnswers[y], "<SHARES>", "</SHARES>").c_str());
-        iShares.push_back(iShare);
-        sharesSum += iShare;
+    //for(size_t y=1; y < vAnswers.size(); y++)
+    for(polling::Vote iterAnswer: vectorOfAnswers)
+    {
+        sAnswerNames.push_back(QString::fromStdString(iterAnswer.answer).replace("_"," "));
+        iShares.push_back(iterAnswer.shares);
+        sharesSum += iterAnswer.shares;
     }
-    for(size_t y=0; y < sAnswerNames.size(); y++) {
+    for(size_t y=0; y < sAnswerNames.size(); y++)
+    {
         answerTable_->setItem(y, 0, new QTableWidgetItem(sAnswerNames[y]));
         QTableWidgetItem *iSharesItem = new QTableWidgetItem();
         iSharesItem->setData(Qt::DisplayRole,iShares[y]);
@@ -743,20 +718,14 @@ void VotingChartDialog::resetData(const VotingItem *item)
         percentItem->setData(Qt::DisplayRole,(float)iShares[y]/(float)sharesSum*100);
         answerTable_->setItem(y, 2, percentItem);
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
+#ifdef QT_CHARTS_LIB
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
-        unsigned int num = rand();
-        int r = (num >>  0) % 0xFF;
-        int g = (num >>  8) % 0xFF;
-        int b = (num >> 16) % 0xFF;
-        slice->setColor(QColor(r, g, b));
         series->append(slice);
+        chart_->addSeries(series);
 #endif
     }
+
     answerTable_->setSortingEnabled(true);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
-    chart_->addSeries(series);
-#endif
 }
 
 // VotingVoteDialog
@@ -843,26 +812,27 @@ void VotingVoteDialog::resetData(const VotingItem *item)
     std::string listOfAnswers = item->answers_.toUtf8().constData();
     std::vector<std::string> vAnswers = split(listOfAnswers, ";");
     for(size_t y=0; y < vAnswers.size(); y++) {
-        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(vAnswers[y]),answerList_);
+        QListWidgetItem *answerItem = new QListWidgetItem(QString::fromStdString(vAnswers[y]).replace("_"," "),answerList_);
         answerItem->setCheckState(Qt::Unchecked);
     }
 }
 
 void VotingVoteDialog::vote(void)
 {
-    QString sVoteValue = GetVoteValue();
+    QString sAnswer = GetVoteValue();
     voteNote_->setStyleSheet("QLabel { color : red; }");
 
-    if(sVoteValue.isEmpty()){
+    if(sAnswer.isEmpty()){
         voteNote_->setText(tr("Vote failed! Select one or more items to vote."));
         return;
     }
 
     // replace spaces with underscores
-    sVoteValue.replace(" ","_");
+    sAnswer.replace(" ","_");
     sVoteTitle.replace(" ","_");
 
-    const std::string &sResult = ExecuteRPCCommand("vote", sVoteTitle.toStdString(), sVoteValue.toStdString());
+    std::pair<std::string,std::string> pollCreationResult = CreateVoteContract(sVoteTitle.toStdString(), sAnswer.toStdString());
+    const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
 
     if (sResult.find("Success") != std::string::npos) {
         voteNote_->setStyleSheet("QLabel { color : green; }");
@@ -1040,7 +1010,8 @@ void NewPollDialog::createPoll(void)
     sPollUrl.replace(" ","_");
     sPollAnswers.replace(" ","_");
 
-    const std::string &sResult = ExecuteRPCCommand("addpoll", sPollTitle.toStdString(), sPollDays.toStdString(),sPollQuestion.toStdString(),sPollAnswers.toStdString(),sPollShareType.toStdString(),sPollUrl.toStdString());
+	std::pair<std::string,std::string> pollCreationResult = CreatePollContract(sPollTitle.toStdString(), sPollDays.toInt(), sPollQuestion.toStdString(), sPollAnswers.toStdString(), sPollShareType.toInt(), sPollUrl.toStdString());
+    const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
 
     if (sResult.find("Success") != std::string::npos) {
         pollNote_->setStyleSheet("QLabel { color : green; }");
@@ -1095,6 +1066,3 @@ void NewPollDialog::showContextMenu(const QPoint &pos)
     menu.addAction("Remove Item", this, SLOT(removeItem()));
     menu.exec(globalPos);
 }
-
-
-
