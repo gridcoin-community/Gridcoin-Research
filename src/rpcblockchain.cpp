@@ -43,8 +43,6 @@ extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 extern std::string SuccessFail(bool f);
 extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
-std::string ConvertBinToHex(std::string a);
-std::string ConvertHexToBin(std::string a);
 bool bNetAveragesLoaded_retired;
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
