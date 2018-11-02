@@ -17,8 +17,6 @@
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 extern std::map<std::string, StructCPID> mvDPOR;
 extern std::string GetQuorumHash(const std::string& data);
-extern std::string ConvertHexToBin(std::string a);
-extern std::string ConvertBinToHex(std::string a);
 extern bool fTestNet;
 double RoundFromString(std::string s, int place);
 
@@ -98,30 +96,11 @@ BOOST_AUTO_TEST_CASE(gridcoin_ValidatePackBinarySuperblock)
     BOOST_CHECK_EQUAL(PackBinarySuperblock(contract), expected);
 }
 
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnackBinarySuperblock)
+BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnpackBinarySuperblock)
 {
     const std::string packed(superblock_packed_bin, superblock_packed_bin + superblock_packed_bin_len);
     const std::string expected(superblock_unpacked_txt, superblock_unpacked_txt + superblock_unpacked_txt_len);
     BOOST_CHECK_EQUAL(UnpackBinarySuperblock(packed), expected);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateConvertHexToBin)
-{
-    const std::string hex("7d0d73fe026d66fd4ab8d5d8da32a611");
-
-    // Trust that boost gets it right.
-    std::string expected;
-    boost::algorithm::unhex(hex, std::back_inserter(expected));
-    BOOST_CHECK_EQUAL(ConvertHexToBin(hex), expected);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateConvertBinToHex)
-{
-    const std::string hex("7d0d73fe026d66fd4ab8d5d8da32a611");
-    std::string bin;
-    boost::algorithm::unhex(hex, std::back_inserter(bin));
-
-    BOOST_CHECK_EQUAL(ConvertBinToHex(bin), hex);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)

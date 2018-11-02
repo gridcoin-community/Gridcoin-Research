@@ -42,8 +42,6 @@
 #include <math.h>
 
 extern std::string NodeAddress(CNode* pfrom);
-extern std::string ConvertBinToHex(std::string a);
-extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 bool ImportBeaconKeysFromConfig();
@@ -2929,86 +2927,11 @@ bool LoadSuperblock(std::string data, int64_t nTime, int height)
         return true;
 }
 
-std::string CharToString(char c)
-{
-    std::stringstream ss;
-    std::string sOut = "";
-    ss << c;
-    ss >> sOut;
-    return sOut;
-}
-
-
-template< typename T >
-std::string int_to_hex( T i )
-{
-  std::stringstream stream;
-  stream << "0x"
-         << std::setfill ('0') << std::setw(sizeof(T)*2)
-         << std::hex << i;
-  return stream.str();
-}
-
-std::string DoubleToHexStr(double d, int iPlaces)
-{
-    int nMagnitude = atoi(RoundToString(d,0).c_str());
-    std::string hex_string = int_to_hex(nMagnitude);
-    std::string sOut = "00000000" + hex_string;
-    std::string sHex = sOut.substr(sOut.length()-iPlaces,iPlaces);
-    return sHex;
-}
-
-int HexToInt(std::string sHex)
-{
-    int x;
-    std::stringstream ss;
-    ss << std::hex << sHex;
-    ss >> x;
-    return x;
-}
-std::string ConvertHexToBin(std::string a)
-{
-    if (a.empty()) return "";
-    std::string sOut = "";
-    for (unsigned int x = 1; x <= a.length(); x += 2)
-    {
-       std::string sChunk = a.substr(x-1,2);
-       int i = HexToInt(sChunk);
-       char c = (char)i;
-       sOut.push_back(c);
-    }
-    return sOut;
-}
-
-
-double ConvertHexToDouble(std::string hex)
-{
-    int d = HexToInt(hex);
-    double dOut = (double)d;
-    return dOut;
-}
-
-
-std::string ConvertBinToHex(std::string a)
-{
-      if (a.empty()) return "0";
-      std::string sOut = "";
-      for (unsigned int x = 1; x <= a.length(); x++)
-      {
-           char c = a[x-1];
-           int i = (int)c;
-           std::string sHex = DoubleToHexStr((double)i,2);
-           sOut += sHex;
-      }
-      return sOut;
-}
-
 double ClientVersionNew()
 {
     double cv = BlockVersion(FormatFullVersion());
     return cv;
 }
-
 
 int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
 {
@@ -6151,7 +6074,6 @@ void PrintBlockTree()
 bool LoadExternalBlockFile(FILE* fileIn)
 {
     int64_t nStart = GetTimeMillis();
-
     int nLoaded = 0;
     {
         LOCK(cs_main);
@@ -6194,6 +6116,7 @@ bool LoadExternalBlockFile(FILE* fileIn)
                     if (ProcessBlock(NULL,&block,false))
                     {
                         nLoaded++;
+                        LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
                         nPos += 4 + nSize;
                     }
                 }

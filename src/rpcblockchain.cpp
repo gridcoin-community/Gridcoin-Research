@@ -43,8 +43,6 @@ extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 extern std::string SuccessFail(bool f);
 extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
-std::string ConvertBinToHex(std::string a);
-std::string ConvertHexToBin(std::string a);
 bool bNetAveragesLoaded_retired;
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
@@ -213,7 +211,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("mint", mint);
     result.pushKV("MoneySupply", blockindex->nMoneySupply);
     result.pushKV("time", block.GetBlockTime());
-    result.pushKV("nonce", (int)block.nNonce);
+    result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
