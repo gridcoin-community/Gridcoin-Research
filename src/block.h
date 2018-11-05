@@ -36,7 +36,7 @@ public:
     //! \return The youngest block which is not older than \p time, or the
     //! head of the chain if it is older than \p time.
     //!
-    CBlockIndex* FindByTime(int64_t time);
+    CBlockIndex* FindByMinTime(int64_t time);
     
     //!
     //! \brief Reset finder cache.

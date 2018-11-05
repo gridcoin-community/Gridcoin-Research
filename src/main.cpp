@@ -8350,7 +8350,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
     // Find starting block. On full table scan we want to scan 6 months back.
     // On a shallow scan we can limit to 6 blocks back.
     CBlockIndex* pindex = bFullTableScan
-            ? blockFinder.FindByTime(pindexBest->nTime - MaxBeaconAge())
+            ? blockFinder.FindByMinTime(pindexBest->nTime - MaxBeaconAge())
             : blockFinder.FindByHeight(pindexBest->nHeight - 6);
 
     if(pindex->nHeight < (fTestNet ? 1 : 164618))

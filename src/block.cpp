@@ -35,7 +35,7 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
     return index;  
 }
 
-CBlockIndex* BlockFinder::FindByTime(int64_t time)
+CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
 {
     CBlockIndex *index = abs(time - pindexBest->nTime) < abs(time - pindexGenesisBlock->nTime)
             ? pindexBest
