@@ -8356,7 +8356,8 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
     if(pindex->nHeight < (fTestNet ? 1 : 164618))
        return true;
 
-    // These are memorized consecutively in order from oldest to newest
+    // These are memorized consecutively in order from oldest to newest.
+    // Chain head intentionally left out for backward compatibility.
     for(; pindex && pindex->pnext; pindex = pindex->pnext)
     {
         if (!pindex->IsInMainChain())
