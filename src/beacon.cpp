@@ -21,12 +21,12 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
     const std::string sBeaconPublicKey = GetBeaconPublicKey(cpid,false);
 
     if(!sBeaconPublicKey.empty())
-{
+    {
         CPubKey oldKey(ParseHex(sBeaconPublicKey));
         if(oldKey.IsValid())
-    {
-            if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
         {
+            if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
+            {
                 assert(outPrivPubKey.IsValid());//GetKey gives valid key or false
                 assert(outPrivPubKey.GetPubKey()==oldKey);//GetKey should return the key we ask for
                 LogPrintf("GenerateBeaconKeys: Reusing >5 <6 m old Key");
@@ -50,7 +50,7 @@ bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
     if (!pwalletMain->GetKey(keyID, outPrivPubKey))
         return error("GenerateBeaconKeys: Failed to get Private Key from Wallet");
 
-        return true;
+    return true;
 }
 
 bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
@@ -61,10 +61,10 @@ bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
     if(oldKey.IsValid())
     {
         if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
-{
+        {
             return outPrivPubKey.IsValid();
-}
-}
+        }
+    }
     return false;
 }
 
@@ -122,12 +122,12 @@ std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxS
     // Compare the age of the beacon to the age of the current block. If we have
     // no current block we assume that the beacon is valid.
     int64_t iAge = pindexBest != NULL
-          ? pindexBest->nTime - entry.timestamp
-          : 0;
+                                 ? pindexBest->nTime - entry.timestamp
+                                 : 0;
 
     return (iAge > iMaxSeconds)
-          ? ""
-          : entry.value;
+            ? ""
+            : entry.value;
 }
 
 bool VerifyBeaconContractTx(const CTransaction& tx)
@@ -165,8 +165,8 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     }
 
     int64_t chkiAge = pindexBest != NULL
-        ? tx.nLockTime - beaconEntry.timestamp
-        : 0;
+                                    ? tx.nLockTime - beaconEntry.timestamp
+                                    : 0;
     int64_t chkSecondsBase = 60 * 24 * 30 * 60;
 
     // Conditions
