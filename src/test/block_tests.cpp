@@ -72,6 +72,8 @@ BOOST_AUTO_TEST_CASE(FindBlockByTimeShouldReturnNextYoungestBlock)
     // Finding the block older than time 10 should return block #2
     // which has time 20.
     BOOST_CHECK_EQUAL(&chain.blocks[2], finder.FindByTime(11));
+    BOOST_CHECK_EQUAL(&chain.blocks[2], finder.FindByTime(10));
+    BOOST_CHECK_EQUAL(&chain.blocks[1], finder.FindByTime(9));
 }
 
 BOOST_AUTO_TEST_CASE(FindBlockByTimeShouldReturnLastBlockIfOlderThanTime)
