@@ -9,11 +9,11 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
 
-bool WhitelistPopulated(bool fScraperStandalone);
+bool WhitelistPopulated();
 bool UserpassPopulated();
-bool DownloadProjectTeamFiles(bool fScraperStandalone);
+bool DownloadProjectTeamFiles();
 int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag);
-bool DownloadProjectRacFiles(bool fScraperStandalone);
+bool DownloadProjectRacFiles();
 bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_t teamid);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
@@ -42,7 +42,7 @@ void Scraper(bool fScraperStandalone)
 
         gridcoinrpc data;
 
-        int64_t sbage = data.sbage(fScraperStandalone);
+        int64_t sbage = data.sbage();
 
         // Give 300 seconds before superblock needed before we sync
         if (sbage <= 86100 && sbage >= 0)
@@ -53,7 +53,7 @@ void Scraper(bool fScraperStandalone)
 
         else
         {
-            if (!data.wlimport(fScraperStandalone))
+            if (!data.wlimport())
                 _log(WARNING, "main", "Refreshing of whitelist failed.. using old data");
 
             else
@@ -61,9 +61,9 @@ void Scraper(bool fScraperStandalone)
 
             AuthenticationETagClear();
 
-            DownloadProjectTeamFiles(fScraperStandalone);
+            DownloadProjectTeamFiles();
 
-            DownloadProjectRacFiles(fScraperStandalone);
+            DownloadProjectRacFiles();
 
         }
 
@@ -254,7 +254,7 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
 * Populate Whitelist  *
 **********************/
 
-bool WhitelistPopulated(bool fScraperStandalone)
+bool WhitelistPopulated()
 {
     if (vwhitelist.empty())
     {
@@ -262,7 +262,7 @@ bool WhitelistPopulated(bool fScraperStandalone)
 
         gridcoinrpc data;
 
-        if (data.wlimport(fScraperStandalone))
+        if (data.wlimport())
             _log(INFO, "WhitelistPopulated", "Successfully populated whitelist vector");
 
         else
@@ -318,11 +318,11 @@ bool UserpassPopulated()
 * Project Team Files  *
 **********************/
 
-bool DownloadProjectTeamFiles(bool fScraperStandalone)
+bool DownloadProjectTeamFiles()
 {
     vprojectteamids.clear();
 
-        if (!WhitelistPopulated(fScraperStandalone))
+        if (!WhitelistPopulated())
         {
             _log(CRITICAL, "DownloadProjectTeamFiles", "Whitelist is not populated");
 
@@ -658,9 +658,9 @@ int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag)
 * Project RAC Files   *
 **********************/
 
-bool DownloadProjectRacFiles(bool fScraperStandalone)
+bool DownloadProjectRacFiles()
 {
-        if (!WhitelistPopulated(fScraperStandalone))
+        if (!WhitelistPopulated())
         {
             _log(CRITICAL, "DownloadProjectRacFiles", "Whitelist is not populated");
 
@@ -1012,6 +1012,4 @@ void testdata(const std::string& etag)
     {
         printf("data: %s\n", line.c_str());
     }
-
-
 }

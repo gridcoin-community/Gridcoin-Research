@@ -21,14 +21,15 @@
 //#include <expat.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <sstream>
-//#include <json/json.h>
-#include <jsoncpp/json/json.h>
 
 #include "appcache.h"
+#include "beacon.h"
 
 #ifndef SCRAPER_STANDALONE 
 #include "util.h"
 #else
+#include <json/json.h>
+//#include <jsoncpp/json/json.h>
 extern int64_t GetAdjustedTime();
 extern bool Contains(const std::string& data, const std::string& instring);
 #endif
@@ -73,6 +74,7 @@ std::string rpcauth = "boinc:test";
 std::string rpcip = "http://127.0.0.1:9334/";
 int64_t ndownloadsize = 0;
 int64_t nuploadsize = 0;
+
 /*********************
 * Scraper            *
 *********************/
@@ -605,145 +607,139 @@ public:
     ~gridcoinrpc()
     {}
 
-    bool wlimport(bool fScraperStandalone)
+    bool wlimport()
     {
-        if(fScraperStandalone)
+#ifdef SCRAPER_STANDALONE
+        whitelistrpcdata = "";
+        Json::Value jsonvalue;
+        Json::Reader jsonreader;
+        Json::StreamWriterBuilder valuestring;
+        Json::Value::const_iterator jsondata;
+        // Call RPC for the data
+        statscurl wl;
+
+        if (!wl.rpccall("listdata", "project", whitelistrpcdata))
         {
-            whitelistrpcdata = "";
-            Json::Value jsonvalue;
-            Json::Reader jsonreader;
-            Json::StreamWriterBuilder valuestring;
-            Json::Value::const_iterator jsondata;
-            // Call RPC for the data
-            statscurl wl;
+            _log(ERROR, "whitelist_data_import", "Failed to receive RPC reply for whitelist data");
 
-            if (!wl.rpccall("listdata", "project", whitelistrpcdata))
-            {
-                _log(ERROR, "whitelist_data_import", "Failed to receive RPC reply for whitelist data");
+            return false;
+        }
 
-                return false;
-            }
+        if (whitelistrpcdata.find("\"result\":null") != std::string::npos)
+        {
+            _log(ERROR, "whitelist_data_import", "RPC replied with error (" + whitelistrpcdata + ")");
 
-            if (whitelistrpcdata.find("\"result\":null") != std::string::npos)
-            {
-                _log(ERROR, "whitelist_data_import", "RPC replied with error (" + whitelistrpcdata + ")");
+            return false;
+        }
 
-                return false;
-            }
+        // Try to parse json data.
 
-            // Try to parse json data.
+        bool successparse = jsonreader.parse(whitelistrpcdata, jsonvalue);
 
-            bool successparse = jsonreader.parse(whitelistrpcdata, jsonvalue);
+        if (!successparse)
+        {
+            printf("Failed to parse\n");
+            return false;
+        }
 
-            if (!successparse)
-            {
-                printf("Failed to parse\n");
-                return false;
-            }
+        const Json::Value whitelist = jsonvalue["result"];
 
-            const Json::Value whitelist = jsonvalue["result"];
+        // Populate the beacon report data into scraper since we got a reply of whitelist
+        vwhitelist.clear();
 
-            // Populate the beacon report data into scraper since we got a reply of whitelist
-            vwhitelist.clear();
+        for (jsondata = whitelist.begin() ; jsondata != whitelist.end(); jsondata++)
+        {
 
-            for (jsondata = whitelist.begin() ; jsondata != whitelist.end(); jsondata++)
+            valuestring.settings_["indentation"] = "";
+            std::string outurl = Json::writeString(valuestring, *jsondata);
+
+            if (jsondata.key().asString() == "Key Type")
+                continue;
+
+            vwhitelist.push_back(std::make_pair(jsondata.key().asString(), outurl.substr(1, (outurl.size() - 2))));
+        }
+
+        return true;
+#else
+        vwhitelist.clear();
+
+        for(const auto& item : ReadCacheSection("project"))
+            vwhitelist.push_back(std::make_pair(item.first, item.second.value));
+
+        return true;
+#endif
+    }
+
+    int64_t sbage()
+    {
+#ifdef SCRAPER_STANDALONE
+        Json::Value jsonvalue;
+        Json::Reader jsonreader;
+        Json::StreamWriterBuilder valuestring;
+        Json::Value::const_iterator jsondata;
+        superblockage = "";
+        // Call RPC for the data
+        statscurl age;
+
+        if (!age.rpccall("superblockage", "", superblockage))
+        {
+            _log(ERROR, "superblockage_data_import", "Failed to receive RPC reply for superblock data");
+
+            return -1;
+        }
+
+        if (superblockage.find("\"result\":null") != std::string::npos)
+        {
+            _log(ERROR, "superblockage_data_import", "RPC replied with error (" + superblockage + ")");
+
+            return -2;
+        }
+
+        // Try to parse json data.
+
+        bool successparse = jsonreader.parse(superblockage, jsonvalue);
+
+        if (!successparse)
+        {
+            printf("Failed to parse\n");
+            return -3;
+        }
+
+        try
+        {
+            const Json::Value superblockdata = jsonvalue["result"];
+
+            for (jsondata = superblockdata.begin() ; jsondata != superblockdata.end(); jsondata++)
             {
 
                 valuestring.settings_["indentation"] = "";
-                std::string outurl = Json::writeString(valuestring, *jsondata);
+                std::string sSBage = Json::writeString(valuestring, *jsondata);
 
-                if (jsondata.key().asString() == "Key Type")
-                    continue;
-
-                vwhitelist.push_back(std::make_pair(jsondata.key().asString(), outurl.substr(1, (outurl.size() - 2))));
-            }
-
-            return true;
-        }
-        else
-        {
-            vwhitelist.clear();
-
-            for(const auto& item : ReadCacheSection("project"))
-                vwhitelist.push_back(std::make_pair(item.first, item.second.value));
-
-            return true;
-        }
-    }
-
-    int64_t sbage(bool fScraperStandalone)
-    {
-        if (fScraperStandalone)
-        {
-            Json::Value jsonvalue;
-            Json::Reader jsonreader;
-            Json::StreamWriterBuilder valuestring;
-            Json::Value::const_iterator jsondata;
-            superblockage = "";
-            // Call RPC for the data
-            statscurl age;
-
-            if (!age.rpccall("superblockage", "", superblockage))
-            {
-                _log(ERROR, "superblockage_data_import", "Failed to receive RPC reply for superblock data");
-
-                return -1;
-            }
-
-            if (superblockage.find("\"result\":null") != std::string::npos)
-            {
-                _log(ERROR, "superblockage_data_import", "RPC replied with error (" + superblockage + ")");
-
-                return -2;
-            }
-
-            // Try to parse json data.
-
-            bool successparse = jsonreader.parse(superblockage, jsonvalue);
-
-            if (!successparse)
-            {
-                printf("Failed to parse\n");
-                return -3;
-            }
-
-            try
-            {
-                const Json::Value superblockdata = jsonvalue["result"];
-
-                for (jsondata = superblockdata.begin() ; jsondata != superblockdata.end(); jsondata++)
+                if (jsondata.key().asString() == "Superblock Age")
                 {
+                    printf("Outage is %s\n", sSBage.c_str());
 
-                    valuestring.settings_["indentation"] = "";
-                    std::string sSBage = Json::writeString(valuestring, *jsondata);
-
-                    if (jsondata.key().asString() == "Superblock Age")
-                    {
-                        printf("Outage is %s\n", sSBage.c_str());
-
-                        return std::stoll(sSBage);
-                    }
+                    return std::stoll(sSBage);
                 }
-
-                return -4;
             }
 
-            catch (std::exception& ex)
-            {
-                _log(ERROR, "superblockage_data_import", "Exception occured (" + std::string(ex.what()) + ")");
-
-                return -5;
-            }
-
-            return -6;
+            return -4;
         }
-        else
+
+        catch (std::exception& ex)
         {
-            int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
-            int64_t nSBage = GetAdjustedTime() - superblock_time;
+            _log(ERROR, "superblockage_data_import", "Exception occured (" + std::string(ex.what()) + ")");
 
-            return nSBage;
+            return -5;
         }
+
+        return -6;
+#else
+        int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+        int64_t nSBage = GetAdjustedTime() - superblock_time;
+
+        return nSBage;
+#endif
     }
 };
 
