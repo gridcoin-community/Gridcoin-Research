@@ -8,13 +8,16 @@ std::string lowercase(std::string s);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
+Manifest mManifest;
 
 bool WhitelistPopulated();
 bool UserpassPopulated();
 bool DownloadProjectTeamFiles();
 int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag);
 bool DownloadProjectRacFiles();
+bool DownloadProjectRacFilesByCPID();
 bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_t teamid);
+bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
 
@@ -33,6 +36,8 @@ unsigned int nScraperSleep = 60000;
 boost::filesystem::path pathScraper = fs::current_path() / "Scraper";
 
 extern void MilliSleep(int64_t n);
+extern BeaconMap GetConsensusBeaconList();
+
 
 void Scraper(bool fScraperStandalone)
 {
@@ -42,10 +47,13 @@ void Scraper(bool fScraperStandalone)
 
         gridcoinrpc data;
 
+        StoreBeaconList(pathScraper / "BeaconList.csv.gz");
+        
         int64_t sbage = data.sbage();
 
         // Give 300 seconds before superblock needed before we sync
-        if (sbage <= 86100 && sbage >= 0)
+        if (//sbage <= 86100 && sbage >= 0
+            false)
             _log(INFO, "main", "Superblock not needed. age=" + std::to_string(sbage));
 
         else if (sbage <= -1)
@@ -61,9 +69,11 @@ void Scraper(bool fScraperStandalone)
 
             AuthenticationETagClear();
 
-            DownloadProjectTeamFiles();
+            //DownloadProjectTeamFiles();
 
-            DownloadProjectRacFiles();
+            //DownloadProjectRacFiles();
+
+            DownloadProjectRacFilesByCPID();
 
         }
 
@@ -248,6 +258,27 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
     log.output(sOut);
 
     return;
+}
+
+
+// Insert entry into Manifest
+bool InsertManifestEntry(ManifestEntry entry)
+{
+    // This less readable form is so we know whether the element already existed or not.
+    std::pair<Manifest::iterator,bool> ret;
+    ret = mManifest.insert(std::make_pair(entry.hash, entry));
+
+    // True if insert was sucessful, false if entry with key (hash) already exists in map.
+    return ret.second;
+}
+
+// Delete entry from Manifest
+unsigned int DeleteManifestEntry(ManifestEntry entry)
+{
+    unsigned int ret = mManifest.erase(entry.hash);
+
+    // Returns number of elements erased, either 0 or 1.
+    return ret;
 }
 
 /**********************
@@ -481,7 +512,7 @@ int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag)
     out.push(boostio::gzip_compressor());
     std::stringstream stream;
 
-    _log(INFO, "ProccessProjectTeamFile", "Started processing " + file.string());
+    _log(INFO, "ProcessProjectTeamFile", "Started processing " + file.string());
 
     stringbuilder outdata;
     outdata.nlappend("<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>");
@@ -587,8 +618,8 @@ int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag)
         return false;
     }
 
-    _log(INFO, "ProccessProjectTeamFile", "Finished processing " + file.string());
-    _log(INFO, "ProccessProjectTeamFile", "Started processing team data and stripping");
+    _log(INFO, "ProcessProjectTeamFile", "Finished processing " + file.string());
+    _log(INFO, "ProcessProjectTeamFile", "Started processing team data and stripping");
 
     // Strip the team xml data to contain only what we need to be compressed from vector
     // We Need:
@@ -616,7 +647,7 @@ int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag)
         steamid = sid;
     }
 
-    _log(INFO, "ProccessProjectTeamFile", "Finished processing team rac data; stripping complete");
+    _log(INFO, "ProcessProjectTeamFile", "Finished processing team rac data; stripping complete");
 
     out.push(stream);
     boost::iostreams::copy(out, outgzfile);
@@ -624,7 +655,7 @@ int64_t ProcessProjectTeamFile(const fs::path& file, const std::string& etag)
     outgzfile.flush();
     outgzfile.close();
 
-    _log(INFO, "ProccessProjectTeamFile", "Complete Process");
+    _log(INFO, "ProcessProjectTeamFile", "Complete Process");
 
     try
     {
@@ -689,7 +720,7 @@ bool DownloadProjectRacFiles()
 //            if (fs::exists(rac_file))
 //                fs::remove(rac_file);
 
-            // Grab ETag of team file
+            // Grab ETag of rac file
             statscurl racetagcurl;
             std::string sRacETag;
 
@@ -806,6 +837,158 @@ bool DownloadProjectRacFiles()
     return true;
 }
 
+
+
+bool DownloadProjectRacFilesByCPID()
+{
+    if (!WhitelistPopulated())
+    {
+        _log(CRITICAL, "DownloadProjectRacFiles", "Whitelist is not populated");
+
+        return false;
+    }
+
+    if (!UserpassPopulated())
+    {
+        _log(CRITICAL, "DownloadProjectRacFiles", "Userpass is not populated");
+
+        return false;
+    }
+
+    for (const auto& prjs : vwhitelist)
+    {
+        _log(INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.first);
+
+        std::vector<std::string> vPrjUrl = split(prjs.second, "@");
+
+        std::string sUrl = urlsanity(vPrjUrl[0], "user");
+
+        std::string rac_file_name = prjs.first + +"-user.gz";
+
+        fs::path rac_file = pathScraper / rac_file_name.c_str();
+
+//            if (fs::exists(rac_file))
+//                fs::remove(rac_file);
+
+        // Grab ETag of rac file
+        statscurl racetagcurl;
+        std::string sRacETag;
+
+        bool buserpass = false;
+        std::string userpass;
+
+        for (const auto& up : vuserpass)
+        {
+            if (up.first == prjs.first)
+            {
+                buserpass = true;
+
+                userpass = up.second;
+
+                break;
+            }
+        }
+
+        if (buserpass)
+        {
+            if (!racetagcurl.http_header(sUrl, sRacETag, userpass))
+            {
+                _log(ERROR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
+
+                continue;
+            }
+        }
+
+        else
+            if (!racetagcurl.http_header(sUrl, sRacETag))
+            {
+                _log(ERROR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
+
+                continue;
+            }
+
+        if (sRacETag.empty())
+        {
+            _log(ERROR, "DownloadProjectRacFiles", "ETag for project is empty" + prjs.first);
+
+            continue;
+        }
+
+        else
+        _log(INFO, "DownloadProjectRacFiles", "Successfully pulled rac header file for " + prjs.first);
+
+        if (buserpass)
+        {
+            authdata ad(lowercase(prjs.first));
+
+            ad.setoutputdata("user", prjs.first, sRacETag);
+
+            if (!ad.xport())
+                _log(CRITICAL, "DownloadProjectRacFiles", "Failed to export etag for " + prjs.first + " to authentication file");
+        }
+
+        std::string chketagfile = prjs.first + "-" + sRacETag + "-ByCPID" + ".gz";
+        fs::path chkfile = pathScraper / chketagfile.c_str();
+
+        if (fs::exists(chkfile))
+        {
+            _log(INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
+
+            _nntester(INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
+
+            continue;
+        }
+
+        else
+            fs::remove(chkfile);
+
+        _nntester(INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
+
+        statscurl raccurl;
+
+        if (buserpass)
+        {
+            if (!raccurl.http_download(sUrl, rac_file.string(), userpass))
+            {
+                _log(ERROR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
+
+                continue;
+            }
+        }
+
+        else
+            if (!raccurl.http_download(sUrl, rac_file.string()))
+            {
+                _log(ERROR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
+
+                continue;
+            }
+/*
+        int64_t team_id = 0;
+
+        for (auto const& vprj : vprojectteamids)
+        {
+            if (vprj.first != prjs.first)
+                continue;
+
+            else
+                team_id = vprj.second;
+        }
+
+        if (team_id == 0)
+        {
+            _log(ERROR, "DownloadProjectRacFiles", "TEAM ID was not found for project " + prjs.first);
+
+            continue;
+        }
+*/            //ProcessProjectRacFile(rac_file.string(), sRacETag, team_id);
+        ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag);
+    }
+
+    return true;
+}
+
+
 bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_t teamid)
 {
     std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
@@ -841,7 +1024,7 @@ bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_
     out.push(boostio::gzip_compressor());
     std::stringstream stream;
 
-    _log(INFO, "ProccessProjectRacFile", "Started processing " + file.string());
+    _log(INFO, "ProcessProjectRacFile", "Started processing " + file.string());
 
     stringbuilder outdata;
     outdata.nlappend("<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>");
@@ -927,8 +1110,8 @@ bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_
         return false;
     }
 
-    _log(INFO, "ProccessProjectRacFile", "Finished processing " + file.string());
-    _log(INFO, "ProccessProjectRacFile", "Started processing team rac data and stripping");
+    _log(INFO, "ProcessProjectRacFile", "Finished processing " + file.string());
+    _log(INFO, "ProcessProjectRacFile", "Started processing team rac data and stripping");
 
     // Strip the team rac xml data to contain only why we need to be compressed from vector
     // We Need:
@@ -964,7 +1147,7 @@ bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_
 
     stream << xmlout.value();
 
-    _log(INFO, "ProccessProjectRacFile", "Finished processing team rac data; stripping complete");
+    _log(INFO, "ProcessProjectRacFile", "Finished processing team rac data; stripping complete");
 
     out.push(stream);
     boost::iostreams::copy(out, outgzfile);
@@ -992,10 +1175,219 @@ bool ProcessProjectRacFile(const fs::path& file, const std::string& etag, int64_
 
     fs::remove(file);
 
-    _log(INFO, "ProccessProjectRacFile", "Complete Process");
+    _log(INFO, "ProcessProjectRacFile", "Complete Process");
 
     return true;
 }
+
+
+// This version uses a consensus beacon map rather than the teamid to filter statistics.
+bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag)
+{
+    // Get a consensus map of Beacons.
+    BeaconMap mBeaconMap = GetConsensusBeaconList();
+    
+    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+
+    if (!ingzfile)
+    {
+        _log(ERROR, "ProcessProjectRacFileByCPID", "Failed to open rac gzip file (" + file.string() + ")");
+
+        return false;
+    }
+
+    _log(INFO, "ProcessProjectRacFileByCPID", "Opening rac file (" + file.string() + ")");
+
+    boostio::filtering_istream in;
+
+    in.push(boostio::gzip_decompressor());
+    in.push(ingzfile);
+
+    std::string gzetagfile = "";
+
+    // If einstein we store different
+    if (file.string().find("einstein") != std::string::npos)
+        gzetagfile = "einstein_user.gz";
+
+    else
+        gzetagfile = project + "-" + etag + "-ByCPID" + ".gz";
+
+    gzetagfile = ((fs::path)(pathScraper / gzetagfile)).c_str();
+
+    std::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
+
+    boostio::filtering_istream out;
+    out.push(boostio::gzip_compressor());
+    std::stringstream stream;
+
+    _log(INFO, "ProcessProjectRacFileByCPID", "Started processing " + file.string());
+
+    stringbuilder outdata;
+    outdata.nlappend("<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>");
+    stream << outdata.value();
+
+    bool bcomplete = false;
+    bool bfileerror = false;
+    std::vector<std::string> vXML;
+
+    while (!bcomplete && !bfileerror)
+    {
+        // Find users block
+        std::string line;
+
+        while (std::getline(in, line))
+        {
+            if (line != "<users>")
+                continue;
+
+            else
+                break;
+        }
+        // <users> block found
+        // Lets vector the  <user> blocks
+
+        while (std::getline(in, line))
+        {
+            if (bcomplete)
+                break;
+
+            if (line == "</users>")
+            {
+                bcomplete = true;
+
+                break;
+            }
+
+            if (line == "<user>")
+            {
+                stringbuilder userdata;
+
+                userdata.nlappend(line);
+
+                while (std::getline(in, line))
+                {
+                    if (line == "</user>")
+                    {
+                        userdata.nlappend(line);
+
+                        // This uses the beacon map rather than the teamid to select the statistics.
+                        if (mBeaconMap.count(ExtractXML(userdata.value(), "<cpid>", "</cpid>")) >= 1)
+                            vXML.push_back(userdata.value());
+
+                        break;
+                    }
+
+                    userdata.nlcleanappend(line);
+                }
+            }
+        }
+
+        // If the file is complete/incomplete we will reach here. however bcomplete would be true to break this outter most loop.
+        // In case where we reach here but the bool for bcomplete is not true then the file was incomplete!
+        if (!bcomplete)
+            bfileerror = true;
+    }
+
+    if (bfileerror)
+    {
+        _log(CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
+
+        std::string efile = etag + ".gz";
+        fs::path fsepfile = pathScraper/ efile;
+        ingzfile.close();
+        outgzfile.flush();
+        outgzfile.close();
+
+        if (fs::exists(fsepfile))
+            fs::remove(fsepfile);
+
+        if (fs::exists(file))
+            fs::remove(file);
+
+        return false;
+    }
+
+    _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing " + file.string());
+    _log(INFO, "ProcessProjectRacFileByCPID", "Started processing CPID rac data and stripping");
+
+    // Strip the rac xml data to contain only why we need to be compressed from vector
+    // We Need:
+    // total_credit, expavg_time, expavg_credit, teamid, cpid
+    // We Don't need:
+    // id, country, name, url
+    // In reality we DO NOT need total_credit till TCD
+    // In reality we DO NOT need expavg_time but this will make nn compatible
+    // I've also opted to save 1 byte a line by not doing newlines since this a scraper
+
+    stringbuilder xmlout;
+
+    xmlout.nlappend("<users>");
+
+    for (auto const& vv : vXML)
+    {
+        std::string stotal_credit = ExtractXML(vv, "<total_credit>", "</total_credit>");
+        std::string sexpavg_time = ExtractXML(vv, "<expavg_time>", "</expavg_time>");
+        std::string sexpavg_credit = ExtractXML(vv, "<expavg_credit>", "</expavg_credit>");
+        std::string scpid = ExtractXML(vv, "<cpid>", "</cpid>");
+
+        xmlout.nlappend("<user>");
+        xmlout.xmlappend("total_credit", stotal_credit);
+        xmlout.xmlappend("expavg_time", sexpavg_time);
+        xmlout.xmlappend("expavg_credit", sexpavg_credit);
+        xmlout.xmlappend("cpid", scpid);
+        xmlout.nlappend("</user>");
+    }
+
+    xmlout.nlappend("</users>");
+
+    stream << xmlout.value();
+
+    _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing team rac data; stripping complete");
+
+    out.push(stream);
+
+    std::string sHashCheck;
+    out >> sHashCheck;
+
+    CHashWriter ss(0,0);
+
+    ss << sHashCheck;
+
+    uint256 nFileHash = ss.GetHash();
+
+    _log(INFO, "ProcessProjectRacFileByCPID", "FileHash " + nFileHash.ToString());
+
+    boost::iostreams::copy(out, outgzfile);
+    ingzfile.close();
+    outgzfile.flush();
+    outgzfile.close();
+
+    try
+    {
+    size_t filea = fs::file_size(file);
+    fs::path temp = gzetagfile.c_str();
+    size_t fileb = fs::file_size(temp);
+
+    _nntester(INFO, "ProcessProjectRacFileByCPID", "Processing new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
+
+    ndownloadsize += (int64_t)filea;
+    nuploadsize += (int64_t)fileb;
+
+    }
+
+    catch (fs::filesystem_error& e)
+    {
+        _log(INFO, "ProcessProjectRacFileByCPID", "FS Error -> " + std::string(e.what()));
+    }
+
+    fs::remove(file);
+
+    _log(INFO, "ProcessProjectRacFileByCPID", "Complete Process");
+
+    return true;
+}
+
+
 
 void testdata(const std::string& etag)
 {
@@ -1012,4 +1404,50 @@ void testdata(const std::string& etag)
     {
         printf("data: %s\n", line.c_str());
     }
+}
+
+
+bool StoreBeaconList(const fs::path& file)
+{
+    if (fs::exists(file))
+        fs::remove(file);
+
+     std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+    if (!outgzfile)
+    {
+        _log(ERROR, "StoreBeaconList", "Failed to open beacon list gzip file (" + file.string() + ")");
+
+        return false;
+    }
+
+    boostio::filtering_istream out;
+    out.push(boostio::gzip_compressor());
+    std::stringstream stream;
+
+    _log(INFO, "StoreBeaconList", "Started processing " + file.string());
+
+    stringbuilder outdata;
+    
+    BeaconMap mBeaconMap = GetConsensusBeaconList();
+    
+    _log(INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection("beacon").size()));
+    _log(INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
+    
+    for (auto const& entry : mBeaconMap)
+    {
+        std::string sBeaconEntry = entry.first + "," + std::to_string(entry.second.timestamp) + "," + entry.second.value + "\n";
+        stream << sBeaconEntry;
+    }
+
+    _log(INFO, "StoreBeaconList", "Finished processing beacon data from map.");
+
+    out.push(stream);
+    boost::iostreams::copy(out, outgzfile);
+    outgzfile.flush();
+    outgzfile.close();
+
+    _log(INFO, "StoreBeaconList", "Process Complete.");
+
+    return true;
 }

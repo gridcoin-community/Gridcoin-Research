@@ -58,6 +58,7 @@ enum logattribute {
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
+bool StoreBeaconList(const fs::path& file);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 extern AppCacheSection ReadCacheSection(const std::string& section);
 
@@ -74,6 +75,16 @@ std::string rpcauth = "boinc:test";
 std::string rpcip = "http://127.0.0.1:9334/";
 int64_t ndownloadsize = 0;
 int64_t nuploadsize = 0;
+
+struct ManifestEntry
+{
+    uint256 hash; // hash of file
+    std::string filename; // Filename
+    int64_t timestamp;
+};
+
+typedef std::map<uint256, ManifestEntry> Manifest;
+
 
 /*********************
 * Scraper            *
@@ -156,7 +167,7 @@ public:
             _log(ERROR, "httpcode", "Server returned a http code of Bad Request <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "401")
-            _log(ERROR, "httpcode", "Server returned a http code of Unauthroized <prjurl=" + url + ", code=" + response + ">");
+            _log(ERROR, "httpcode", "Server returned a http code of Unauthorized <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "403")
             _log(ERROR, "httpcode", "Server returned a http code of Forbidden <prjurl=" + url + ", code=" + response + ">");
