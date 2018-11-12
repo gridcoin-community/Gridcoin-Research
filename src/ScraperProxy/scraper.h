@@ -18,8 +18,10 @@
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/serialization/binary_object.hpp>
 //#include <expat.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <fstream>
 #include <sstream>
 
 #include "appcache.h"
@@ -61,6 +63,8 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
 bool StoreBeaconList(const fs::path& file);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 extern AppCacheSection ReadCacheSection(const std::string& section);
+uint256 GetFileHash(const fs::path& inputfile);
+bool StoreManifest(const fs::path& file);
 
 /*********************
 * Global Vars        *

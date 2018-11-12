@@ -41,31 +41,37 @@ extern BeaconMap GetConsensusBeaconList();
 
 void Scraper(bool fScraperStandalone)
 {
+
+    //uint256 nBeaconListHash, nPrevBeaconListHash;
+    //uint256 nManifestHash, nPreviousManifestHash;
+
     while (fScraperStandalone || !fShutdown)
     {
-        // Refresh the whitelist if its available
-
         gridcoinrpc data;
 
-        StoreBeaconList(pathScraper / "BeaconList.csv.gz");
+        if(!StoreBeaconList(pathScraper / "BeaconList.csv.gz"))
+            _log(ERROR, "Scraper", "StoreBeaconList error occurred");
+        else
+            _log(INFO, "Scraper", "Stored Beacon List");
         
         int64_t sbage = data.sbage();
 
         // Give 300 seconds before superblock needed before we sync
         if (//sbage <= 86100 && sbage >= 0
             false)
-            _log(INFO, "main", "Superblock not needed. age=" + std::to_string(sbage));
+            _log(INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
 
         else if (sbage <= -1)
-            _log(ERROR, "main", "RPC error occured, check logs");
+            _log(ERROR, "Scraper", "RPC error occured, check logs");
 
         else
         {
+            // Refresh the whitelist if its available
             if (!data.wlimport())
-                _log(WARNING, "main", "Refreshing of whitelist failed.. using old data");
+                _log(WARNING, "Scraper", "Refreshing of whitelist failed.. using old data");
 
             else
-                _log(INFO, "main", "Refreshing of whitelist completed");
+                _log(INFO, "Scraper", "Refreshing of whitelist completed");
 
             AuthenticationETagClear();
 
@@ -74,12 +80,16 @@ void Scraper(bool fScraperStandalone)
             //DownloadProjectRacFiles();
 
             DownloadProjectRacFilesByCPID();
-
+            
+            if(!StoreManifest(pathScraper / "Manifest.csv.gz"))
+                _log(ERROR, "Scraper", "StoreManifest error occurred");
+            else
+                _log(INFO, "Scraper", "Stored Manifest");
         }
 
-        _nntester(INFO, "MAIN", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
+        _nntester(INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
-        _log(INFO, "MAIN", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
+        _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
 
         MilliSleep(nScraperSleep);
     }
@@ -1346,21 +1356,39 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     out.push(stream);
 
-    std::string sHashCheck;
-    out >> sHashCheck;
-
-    CHashWriter ss(0,0);
-
-    ss << sHashCheck;
-
-    uint256 nFileHash = ss.GetHash();
-
-    _log(INFO, "ProcessProjectRacFileByCPID", "FileHash " + nFileHash.ToString());
-
+    // Copy out to file.
     boost::iostreams::copy(out, outgzfile);
+
     ingzfile.close();
     outgzfile.flush();
     outgzfile.close();
+
+    // Hash the file.
+
+    /*
+    std::ifstream strm(gzetagfile, std::ios::binary);
+
+    std::ostringstream sstream;
+    sstream << strm.rdbuf();
+    const std::string str(sstream.str());
+
+    strm.close();
+
+    // Verify the string is not messing things up.
+    //std::ofstream ostrm(gzetagfile + ".out", std::ios::binary);
+    //ostrm << str;
+    //ostrm.flush();
+    //ostrm.close();
+
+    CHashWriter ss(0,0);
+    ss << str;
+    uint256 nFileHash = ss.GetHash();
+    _log(INFO, "ProcessProjectRacFileByCPID", "FileHash by CHashWriter " + nFileHash2.ToString());
+    */
+    
+    uint256 nFileHash = GetFileHash(gzetagfile);
+    _log(INFO, "ProcessProjectRacFileByCPID", "FileHash by GetFileHash " + nFileHash.ToString());
+
 
     try
     {
@@ -1382,10 +1410,52 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     fs::remove(file);
 
+    ManifestEntry ManifestEntry;
+
+    ManifestEntry.hash = nFileHash;
+    ManifestEntry.filename = gzetagfile;
+    ManifestEntry.timestamp = GetAdjustedTime();
+
+    if(!InsertManifestEntry(ManifestEntry))
+        _log(WARNING, "ProcessProjectRacFileByCPID", "Manifest entry already exists for " + nFileHash.ToString() + " " + gzetagfile);
+    else
+        _log(INFO, "ProcessProjectRacFileByCPID", "Created manifest entry for " + nFileHash.ToString() + " " + gzetagfile);
+
     _log(INFO, "ProcessProjectRacFileByCPID", "Complete Process");
 
     return true;
 }
+
+
+
+
+
+uint256 GetFileHash(const fs::path& inputfile)
+{
+    // open input file, and associate with CAutoFile
+    FILE *file = fopen(inputfile.string().c_str(), "rb");
+    CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+    if (!filein)
+        return error("FileHash() : open failed");
+
+    // use file size to size memory buffer
+    int fileSize = boost::filesystem::file_size(inputfile);
+    int dataSize = fileSize - sizeof(uint256);
+    // Don't try to resize to a negative number if file is small
+    if ( dataSize < 0 ) dataSize = 0;
+    std::vector<unsigned char> vchData;
+    vchData.resize(dataSize);
+
+    filein.fclose();
+
+    CDataStream ssFile(vchData, SER_DISK, CLIENT_VERSION);
+
+    uint256 nHash = Hash(ssFile.begin(), ssFile.end());
+
+    return nHash;
+}
+
+
 
 
 
@@ -1409,10 +1479,15 @@ void testdata(const std::string& etag)
 
 bool StoreBeaconList(const fs::path& file)
 {
+    BeaconMap mBeaconMap = GetConsensusBeaconList();
+    
+    _log(INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection("beacon").size()));
+    _log(INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
+
     if (fs::exists(file))
         fs::remove(file);
 
-     std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -1427,13 +1502,6 @@ bool StoreBeaconList(const fs::path& file)
 
     _log(INFO, "StoreBeaconList", "Started processing " + file.string());
 
-    stringbuilder outdata;
-    
-    BeaconMap mBeaconMap = GetConsensusBeaconList();
-    
-    _log(INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection("beacon").size()));
-    _log(INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
-    
     for (auto const& entry : mBeaconMap)
     {
         std::string sBeaconEntry = entry.first + "," + std::to_string(entry.second.timestamp) + "," + entry.second.value + "\n";
@@ -1448,6 +1516,47 @@ bool StoreBeaconList(const fs::path& file)
     outgzfile.close();
 
     _log(INFO, "StoreBeaconList", "Process Complete.");
+
+    return true;
+}
+
+
+bool StoreManifest(const fs::path& file)
+{
+    if (fs::exists(file))
+        fs::remove(file);
+
+    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+    if (!outgzfile)
+    {
+        _log(ERROR, "StoreManifest", "Failed to open manifest gzip file (" + file.string() + ")");
+
+        return false;
+    }
+
+    boostio::filtering_istream out;
+    out.push(boostio::gzip_compressor());
+    std::stringstream stream;
+
+    _log(INFO, "StoreManifest", "Started processing " + file.string());
+
+    for (auto const& entry : mManifest)
+    {
+        uint256 nEntryHash = entry.first;
+
+        std::string sManifestEntry = nEntryHash.GetHex() + "," + std::to_string(entry.second.timestamp) + "," + entry.second.filename + "\n";
+        stream << sManifestEntry;
+    }
+
+    _log(INFO, "StoreManifest", "Finished processing manifest from map.");
+
+    out.push(stream);
+    boost::iostreams::copy(out, outgzfile);
+    outgzfile.flush();
+    outgzfile.close();
+
+    _log(INFO, "StoreManifest", "Process Complete.");
 
     return true;
 }
