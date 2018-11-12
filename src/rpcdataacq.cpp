@@ -6,6 +6,7 @@
 
 #include "main.h"
 #include "rpcserver.h"
+#include "rpcprotocol.h"
 #include "cpid.h"
 #include "kernel.h"
 #include "block.h"
@@ -81,7 +82,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     double researchtotal = 0;
     double interesttotal = 0;
     int64_t minttotal = 0;
-    //int64_t stakeinputtotal = 0;
+    int64_t stakeoutputtotal = 0;
     int64_t poscount = 0;
     int64_t emptyblockscount = 0;
     int64_t l_first = INT_MAX;
@@ -92,6 +93,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     unsigned size_max_blk=0;
     uint64_t size_sum_blk=0;
     double diff_sum = 0;
+    double diff_invsum = 0;
     double diff_max=0;
     double diff_min=INT_MAX;
     int64_t super_count = 0;
@@ -126,9 +128,10 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             if(block.vtx[1].IsCoinStake())
             {
                 poscount++;
-                //stakeinputtotal+=block.vtx[1].vin[0].nValue;
+                stakeoutputtotal+=block.vtx[1].GetValueOut();
                 double diff = GetDifficulty(cur);
                 diff_sum += diff;
+                diff_invsum += (1.0/diff);
                 diff_max=std::max(diff_max,diff);
                 diff_min=std::min(diff_min,diff);
             }
@@ -155,16 +158,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 
     {
         UniValue result(UniValue::VOBJ);
-        result.pushKV("blocks", blockcount);
-        result.pushKV("first_height", l_first);
-        result.pushKV("last_height", l_last);
-        result.pushKV("first_time", TimestampToHRDate(l_first_time));
-        result.pushKV("last_time", TimestampToHRDate(l_last_time));
         result.pushKV("time_span_hour", ((double)l_last_time-(double)l_first_time)/(double)3600);
-        result.pushKV("min_blocksizek", size_min_blk/(double)1024);
-        result.pushKV("max_blocksizek", size_max_blk/(double)1024);
-        result.pushKV("min_posdiff", diff_min);
-        result.pushKV("max_posdiff", diff_max);
         result1.pushKV("general", result);
     }
     {
@@ -179,26 +173,42 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     }
     {
         UniValue result(UniValue::VOBJ);
-        result.pushKV("block", blockcount);
         result.pushKV("research", researchtotal);
         result.pushKV("interest", interesttotal);
         result.pushKV("mint", minttotal/(double)COIN);
-        //result.pushKV("stake_input", stakeinputtotal/(double)COIN);
+        result.pushKV("stake_output", stakeoutputtotal/(double)COIN);
         result.pushKV("blocksizek", size_sum_blk/(double)1024);
         result.pushKV("posdiff", diff_sum);
         result1.pushKV("totals", result);
     }
     {
         UniValue result(UniValue::VOBJ);
+        result.pushKV("height", l_first);
+        result.pushKV("time", TimestampToHRDate(l_first_time));
+        result.pushKV("blocksizek", size_min_blk/(double)1024);
+        result.pushKV("posdiff", diff_min);
+        result1.pushKV("lowest", result);
+    }
+    {
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("height", l_last);
+        result.pushKV("time", TimestampToHRDate(l_last_time));
+        result.pushKV("blocksizek", size_max_blk/(double)1024);
+        result.pushKV("posdiff", diff_max);
+        result1.pushKV("highest", result);
+    }
+    {
+        UniValue result(UniValue::VOBJ);
         result.pushKV("research", researchtotal/(double)researchcount);
         result.pushKV("interest", interesttotal/(double)blockcount);
         result.pushKV("mint", (minttotal/(double)blockcount)/(double)COIN);
-        //result.pushKV("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN);
+        result.pushKV("stake_output", (stakeoutputtotal/(double)poscount)/(double)COIN);
         result.pushKV("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount);
         result.pushKV("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time));
         result.pushKV("transaction", transactioncount/(double)(blockcount-emptyblockscount));
         result.pushKV("blocksizek", size_sum_blk/(double)blockcount/(double)1024);
         result.pushKV("posdiff", diff_sum/(double)poscount);
+        result.pushKV("posdiff_harmonic", (double)poscount/diff_invsum);
         if (super_count > 0)
             result.pushKV("super_spacing_hrs", ((l_last_time-l_first_time)/(double)super_count)/3600.0);
 
@@ -300,8 +310,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
 
         if (mapBlockIndex.count(hash) == 0)
         {
-            result1.pushKV("error","Block hash not found in block index");
-            return result1;
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         }
 
 
@@ -424,18 +433,34 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
     if(fHelp)
         throw runtime_error(
-            "exportstats1 [maxblocks agregate [endblock]] \n");
+            "exportstats2 [maxblocks agregate [endblock]] \n");
     /* count, high */
-    long endblock= INT_MAX;
     long maxblocks= 805;
-    int  smoothing= 23;
+    int  smoothing= 3600;
     if(params.size()>=2)
     {
         maxblocks= RoundFromString(params[0].get_str(),0);
         smoothing= RoundFromString(params[1].get_str(),0);
     }
+
+    CBlockIndex* cur;
     if(params.size()>=3)
-        endblock= RoundFromString(params[2].get_str(),0);
+    {
+        LOCK(cs_main);
+        std::string strHash = params[2].get_str();
+        uint256 hash(strHash);
+
+        if (mapBlockIndex.count(hash) == 0)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+        cur = mapBlockIndex[hash];
+    }
+    else
+    {
+        LOCK(cs_main);
+        cur= pindexBest;
+    }
+
     if( (smoothing<1) || (smoothing%2) )
         throw runtime_error(
             "smoothing must be even positive\n");
@@ -444,162 +469,159 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         throw runtime_error(
             "maxblocks not a smoothing multiple\n");
     */
-    CBlockIndex* cur;
     UniValue result1(UniValue::VOBJ);
-    {
-        LOCK(cs_main);
-        cur= pindexBest;
-    }
 
-    double sum_diff = 0;
-    double min_diff = INT_MAX;
-    double max_diff = 0;
-    double sum_spacing = 0;
-    double min_spacing = INT_MAX;
-    double max_spacing = 0;
-    double sum_size = 0;
-    double min_size = INT_MAX;
-    double max_size = 0;
-    double sum_research = 0;
-    double max_research = 0;
-    double sum_interest = 0;
-    double max_interest = 0;
-    double sum_magnitude = 0;
-    unsigned long cnt_empty = 0;
-    unsigned long cnt_investor = 0;
-    unsigned long cnt_trans = 0;
-    unsigned long cnt_research = 0;
-    unsigned long cnt_neuralvote = 0;
-    unsigned long cnt_neuralcurr = 0;
-    unsigned long cnt_contract = 0;
+    unsigned int top_height = 0;
+    /* align start block */
+    while( cur && cur->pprev
+        && ( (cur->pprev->nTime%smoothing)<(cur->nTime%smoothing) ))
+    {
+        cur= cur->pprev;
+        top_height = cur->nHeight;
+    }
 
     int64_t blockcount = 0;
     unsigned long points = 0;
-    double samples = 0; /* this is double for easy division */
     std::ofstream Output;
-    boost::filesystem::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
+    boost::filesystem::path o_path = GetDataDir() / "reports" / ( "export_"
+        + std::to_string(top_height) + "_"
+        + std::to_string(maxblocks) + "_"
+        + std::to_string(smoothing) + "_"
+        + ".txt" );
     boost::filesystem::create_directories(o_path.parent_path());
     Output.open (o_path.string().c_str());
     Output.imbue(std::locale::classic());
     Output << std::fixed << std::setprecision(4);
-    Output << "#midheight  ave_diff min_diff max_diff  "
-    "ave_spacing min_spacing max_spacing  ave_size min_size max_size  "
-    "ave_research avenz_research max_research  ave_interest max_interest  "
-    "fra_empty cnt_empty  fra_investor cnt_investor  ave_trans avenz_trans cnt_trans  "
-    "fra_research cnt_research  fra_contract cnt_contract  "
-    "fra_neuralvote cnt_neuralvote fra_neuralcur cnt_neuralcurr  "
-    "avenz_magnitude  \n";
+    Output << "#midtime top_height samples  "
+        "ave_diff harmonic_mean_diff min_diff max_diff  "
+        "ave_spacing min_spacing max_spacing  "
+        "sum_size max_size  "
+        "sum_research cnt_research max_research  "
+        "sum_magnitude  "
+        "sum_interest max_interest  "
+        "cnt_empty cnt_investor cnt_bcontract cnt_neuralvote cnt_neuralcurr  "
+        "\n#diff_to_net_weight_grc=9544517.40667\n";
 
-    while( (blockcount < maxblocks) && cur && cur->pprev )
+    /* Block with this time or lower will end the current bin. */
+    unsigned int stop_time = cur->nTime - smoothing;
+
+    while((blockcount < maxblocks) && cur && cur->pprev)
     {
-        if(cur->nHeight>endblock)
-            continue;
+        double samples = 0; /* this is double for easy division */
+        top_height = cur->nHeight;
+        double sum_diff = 0;
+        double invsum_diff = 0;
+        double min_diff = INT_MAX;
+        double max_diff = 0;
+        double sum_spacing = 0;
+        double min_spacing = INT_MAX;
+        double max_spacing = 0;
+        double sum_size = 0;
+        double min_size = INT_MAX;
+        double max_size = 0;
+        double sum_research = 0;
+        double max_research = 0;
+        double sum_interest = 0;
+        double max_interest = 0;
+        double sum_magnitude = 0;
+        unsigned long cnt_empty = 0;
+        unsigned long cnt_investor = 0;
+        unsigned long cnt_trans = 0;
+        unsigned long cnt_research = 0;
+        unsigned long cnt_neuralvote = 0;
+        unsigned long cnt_neuralcurr = 0;
+        unsigned long cnt_bcontract = 0;
+        //double sum_stakeoutput = 0;
+        //double sum_transoutput = 0;
+        //TODO: Merge this data acquisition with the getblockstats into some reusable inremental filter object.
 
-        double i_diff = GetDifficulty(cur);
-        sum_diff= sum_diff + i_diff;
-        min_diff=std::min(min_diff,i_diff);
-        max_diff=std::max(max_diff,i_diff);
-
-        const double i_spacing = (double)cur->nTime - (double)cur->pprev->nTime;
-        sum_spacing= sum_spacing + i_spacing;
-        min_spacing=std::min(min_spacing,i_spacing);
-        max_spacing=std::max(max_spacing,i_spacing);
-
-        cnt_investor += !! (cur->nFlags & CBlockIndex::INVESTOR_CPID);
-        cnt_contract += !! cur->nIsContract;
-
-        CBlock block;
-        if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
-            throw runtime_error("failed to read block");
-
-        cnt_trans += block.vtx.size()-2; /* 2 transactions are special */
-        cnt_empty += ( block.vtx.size()<=2 );
-        double i_size = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
-        sum_size= sum_size + i_size;
-        min_size=std::min(min_size,i_size);
-        max_size=std::max(max_size,i_size);
-
-        const MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
-        cnt_neuralvote += (bb.NeuralHash.size()>0);
-        if( bb.CurrentNeuralHash.size()>0
-            && bb.CurrentNeuralHash != "d41d8cd98f00b204e9800998ecf8427e"
-            && bb.CurrentNeuralHash != "TOTAL_VOTES" )
+        while(cur && cur->pprev
+            && (cur->nTime > stop_time))
         {
-            cnt_neuralcurr += 1;
+
+            double i_diff = GetDifficulty(cur);
+            sum_diff= sum_diff + i_diff;
+            invsum_diff+= 1/i_diff;
+            min_diff=std::min(min_diff,i_diff);
+            max_diff=std::max(max_diff,i_diff);
+
+            const double i_spacing = (double)cur->nTime - (double)cur->pprev->nTime;
+            sum_spacing= sum_spacing + i_spacing;
+            min_spacing=std::min(min_spacing,i_spacing);
+            max_spacing=std::max(max_spacing,i_spacing);
+
+            cnt_investor += !! (cur->nFlags & CBlockIndex::INVESTOR_CPID);
+            cnt_bcontract += !! cur->nIsContract;
+
+            CBlock block;
+            if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
+                throw runtime_error("failed to read block");
+
+            cnt_trans += block.vtx.size()-2; /* 2 transactions are special */
+            cnt_empty += ( block.vtx.size()<=2 );
+            double i_size = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
+            sum_size= sum_size + i_size;
+            min_size=std::min(min_size,i_size);
+            max_size=std::max(max_size,i_size);
+
+            const MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+            cnt_neuralvote += (bb.NeuralHash.size()>0);
+            if( bb.CurrentNeuralHash.size()>0
+                && bb.CurrentNeuralHash != "d41d8cd98f00b204e9800998ecf8427e"
+                && bb.CurrentNeuralHash != "TOTAL_VOTES" )
+            {
+                cnt_neuralcurr += 1;
+            }
+
+            const double i_research = bb.ResearchSubsidy;
+            sum_research= sum_research + i_research;
+            max_research=std::max(max_research,i_research);
+            const double i_interest = bb.InterestSubsidy;
+            sum_interest= sum_interest + i_interest;
+            max_interest=std::max(max_interest,i_interest);
+
+            if(i_research>0)
+            {
+                const double i_magnitude = cur->nMagnitude;
+                sum_magnitude= sum_magnitude + i_magnitude;
+                cnt_research += 1;
+            }
+
+            /* This is wery important */
+            cur = cur->pprev;
+            blockcount++;
+            samples++;
         }
 
-        const double i_research = bb.ResearchSubsidy;
-        sum_research= sum_research + i_research;
-        max_research=std::max(max_research,i_research);
-        const double i_interest = bb.InterestSubsidy;
-        sum_interest= sum_interest + i_interest;
-        max_interest=std::max(max_interest,i_interest);
+        /* Set stop time for the next bin. Use the previous value, instead of current,
+         * to avoid drift.  */
+        stop_time = stop_time - smoothing;
 
-        if(i_research>0)
+        /* It can happen that there are no samples in the current bin. */
+        if(samples)
         {
-            const double i_magnitude = cur->nMagnitude;
-            sum_magnitude= sum_magnitude + i_magnitude;
-            cnt_research += 1;
-        }
-
-        blockcount++;
-        samples++;
-        if(samples>=smoothing)
-        {
-            int midheight = cur->nHeight + (smoothing/2);
-            double samples_w_cpid = samples - cnt_investor;
-            if(samples == cnt_investor)
-                samples_w_cpid = std::numeric_limits<double>::max();
-            double samples_w_research = cnt_research;
-            if(cnt_research==0)
-                samples_w_research = std::numeric_limits<double>::max();
-            double samples_w_trans = (samples-cnt_empty);
-            if(samples==cnt_empty)
-                samples_w_trans = std::numeric_limits<double>::max();
+            unsigned int midtime = stop_time + (smoothing/2);
             points++;
-            Output << midheight << "  ";
 
-            Output << (sum_diff / samples) << " " << min_diff << " " << max_diff << "  ";
+            Output << midtime << " " << top_height << " " << samples << "  ";
+
+            Output << (sum_diff / samples) << " " << (samples / invsum_diff)
+                << " " << min_diff << " " << max_diff << "  ";
             Output << (sum_spacing / samples) << " " << min_spacing << " " << max_spacing << "  ";
-            Output << (sum_size / samples) << " " << min_size << " " << max_size << "  ";
-            Output << (sum_research / samples) << " " << (sum_research / samples_w_research) << " " << max_research << "  ";
-            Output << (sum_interest / samples) << " " << max_interest << "  ";
-            Output << (cnt_empty / samples) << " " << cnt_empty << "  ";
-            Output << (cnt_investor / samples) << " " << cnt_investor << "  ";
-            Output << (cnt_trans / samples) << " " << (cnt_trans / samples_w_trans) << " " << cnt_trans << "  ";
-            Output << (cnt_research / samples) << " " << cnt_research << "  ";
-            Output << (cnt_contract / samples) << " " << cnt_contract << "  ";
-            Output << (cnt_neuralvote / samples) << " " << cnt_neuralvote << "  ";
-            Output << (cnt_neuralcurr / samples) << " " << cnt_neuralcurr << "  ";
-            Output << (sum_magnitude / samples_w_cpid) << "  ";
-            // missing: trans, empty, size, neural
+            Output << sum_size << " " << max_size << "  ";
 
+            Output << sum_research << " " << cnt_research << " " << max_research << "  ";
+            Output << sum_magnitude << "  ";
+            Output << sum_interest << " " << max_interest << "  ";
+
+            Output << cnt_empty << " " << cnt_investor << " " << cnt_bcontract
+                << " " << cnt_neuralvote << " " << cnt_neuralcurr << "  ";
+
+            Output << cnt_trans << "  ";
+            // missing: contract_trans, netweight, stake_output, trx_output
             Output << "\n";
-            samples = 0;
-            sum_diff = 0;
-            min_diff = INT_MAX;
-            max_diff = 0;
-            cnt_empty = 0;
-            cnt_investor = 0;
-            sum_spacing = 0;
-            min_spacing = INT_MAX;
-            max_spacing = 0;
-            sum_size = 0;
-            min_size = INT_MAX;
-            max_size = 0;
-            cnt_trans = 0;
-            sum_research = 0;
-            max_research = 0;
-            sum_interest = 0;
-            max_interest = 0;
-            sum_magnitude = 0;
-            cnt_research = 0;
-            cnt_neuralvote = 0;
-            cnt_neuralcurr = 0;
-            cnt_contract = 0;
         }
-        /* This is wery important */
-        cur = cur->pprev;
+
     }
 
     result1.pushKV("file", o_path.string());
@@ -612,15 +634,16 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 {
-    if(fHelp || params.size() < 1 || params.size() > 3 )
+    if(fHelp || params.size() < 2 || params.size() > 3 )
         throw runtime_error(
-            "getrecentblocks detail count\n"
+            "getrecentblocks detail count [endblock]\n"
             "Show list of <count> recent block hashes and optional details.\n"
             "detail 0 -> height and hash dict\n"
             "detail 1,2 -> text data from blockindex\n"
             "detail 20,21 -> text data from index and block\n"
             "detail 100 -> json from index\n"
             "detail 120 -> json from index and block\n"
+            "endblock: hash of the block to start from\n"
         );
 
     long detail= RoundFromString(params[0].get_str(),0);
@@ -629,6 +652,15 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 
     CBlockIndex* cur;
     UniValue result1(UniValue::VOBJ);
+    if(params.size()>=3)
+    {
+        LOCK(cs_main);
+        uint256 hash(params[2].get_str());
+        if (mapBlockIndex.count(hash) == 0)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+        cur = mapBlockIndex[hash];
+    }
+    else
     {
         LOCK(cs_main);
         cur= pindexBest;

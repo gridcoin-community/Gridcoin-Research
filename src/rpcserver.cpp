@@ -369,7 +369,7 @@ static const CRPCCommand vRPCCommands[] =
     { "debug4",                  &debug4,                  true,   cat_developer     },
     { "debugnet",                &debugnet,                true,   cat_developer     },
     { "dportally",               &dportally,               false,  cat_developer     },
-    { "exportstats1",            &rpc_exportstats,         false,  cat_developer     },
+    { "exportstats2",            &rpc_exportstats,         false,  cat_developer     },
     { "forcequorum",             &forcequorum,             false,  cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      false,  cat_developer     },
     { "genboinckey",             &genboinckey,             false,  cat_developer     },
