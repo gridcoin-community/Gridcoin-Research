@@ -67,6 +67,18 @@ uint256 GetFileHash(const fs::path& inputfile);
 bool StoreManifest(const fs::path& file);
 bool LoadManifest(const fs::path& file);
 
+struct ManifestEntry
+{
+    uint256 hash; // hash of file
+    std::string filename; // Filename
+    int64_t timestamp;
+};
+
+typedef std::map<uint256, ManifestEntry> Manifest;
+
+bool InsertManifestEntry(ManifestEntry entry);
+unsigned int DeleteManifestEntry(ManifestEntry entry);
+
 /*********************
 * Global Vars        *
 *********************/
@@ -80,16 +92,6 @@ std::string rpcauth = "boinc:test";
 std::string rpcip = "http://127.0.0.1:9334/";
 int64_t ndownloadsize = 0;
 int64_t nuploadsize = 0;
-
-struct ManifestEntry
-{
-    uint256 hash; // hash of file
-    std::string filename; // Filename
-    int64_t timestamp;
-};
-
-typedef std::map<uint256, ManifestEntry> Manifest;
-
 
 /*********************
 * Scraper            *
