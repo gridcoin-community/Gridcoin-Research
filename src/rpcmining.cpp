@@ -70,7 +70,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("errors",        GetWarnings("statusbar"));
     obj.pushKV("pooledtx",      (uint64_t)mempool.size());
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
-    obj.pushKV("stakeinterest", GetCoinYearReward( GetAdjustedTime())/(double)COIN);
     obj.pushKV("testnet",       fTestNet);
     double neural_popularity = 0;
     std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
