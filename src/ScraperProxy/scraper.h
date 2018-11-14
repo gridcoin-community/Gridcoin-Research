@@ -65,6 +65,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim);
 extern AppCacheSection ReadCacheSection(const std::string& section);
 uint256 GetFileHash(const fs::path& inputfile);
 bool StoreManifest(const fs::path& file);
+bool LoadManifest(const fs::path& file);
 
 /*********************
 * Global Vars        *

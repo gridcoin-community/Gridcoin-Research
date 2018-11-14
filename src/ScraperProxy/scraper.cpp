@@ -42,8 +42,13 @@ extern BeaconMap GetConsensusBeaconList();
 void Scraper(bool fScraperStandalone)
 {
 
-    //uint256 nBeaconListHash, nPrevBeaconListHash;
-    //uint256 nManifestHash, nPreviousManifestHash;
+    // This loads the manifest file from the Scraper directory for persistence.
+
+    _log(INFO, "Scraper", "Loading Manifest");
+    if(!LoadManifest(pathScraper / "Manifest.csv.gz"))
+        _log(ERROR, "Scraper", "Error occurred loading manifest");
+    else
+        _log(INFO, "Scraper", "Loaded Manifest file into map.");
 
     while (fScraperStandalone || !fShutdown)
     {
@@ -80,11 +85,6 @@ void Scraper(bool fScraperStandalone)
             //DownloadProjectRacFiles();
 
             DownloadProjectRacFilesByCPID();
-            
-            if(!StoreManifest(pathScraper / "Manifest.csv.gz"))
-                _log(ERROR, "Scraper", "StoreManifest error occurred");
-            else
-                _log(INFO, "Scraper", "Stored Manifest");
         }
 
         _nntester(INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
@@ -1421,6 +1421,16 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     else
         _log(INFO, "ProcessProjectRacFileByCPID", "Created manifest entry for " + nFileHash.ToString() + " " + gzetagfile);
 
+    // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
+    // The manifest file is actually very small though, and this primitive implementation will suffice. I could
+    // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
+    // sync if the wallet is ended during the middle of pulling the files.
+    _log(INFO, "Scraper", "Persisting manifest entry to disk.");
+    if(!StoreManifest(pathScraper / "Manifest.csv.gz"))
+        _log(ERROR, "Scraper", "StoreManifest error occurred");
+    else
+        _log(INFO, "Scraper", "Stored Manifest");
+
     _log(INFO, "ProcessProjectRacFileByCPID", "Complete Process");
 
     return true;
@@ -1557,6 +1567,53 @@ bool StoreManifest(const fs::path& file)
     outgzfile.close();
 
     _log(INFO, "StoreManifest", "Process Complete.");
+
+    return true;
+}
+
+
+bool LoadManifest(const fs::path& file)
+{
+    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+
+    if (!ingzfile)
+    {
+        _log(ERROR, "LoadManifest", "Failed to open manifest gzip file (" + file.string() + ")");
+
+        return false;
+    }
+
+    boostio::filtering_istream in;
+    in.push(boostio::gzip_decompressor());
+    in.push(ingzfile);
+
+    std::string line;
+
+    ManifestEntry LoadEntry;
+
+    int64_t ntimestamp;
+
+    while (std::getline(in, line))
+    {
+
+        std::vector<std::string> vline = split(line, ",");
+
+        //std::istringstream sshash(vline[0]);
+        //sshash >> nhash;
+        //LoadEntry.hash = nhash;
+        
+        uint256 nhash;
+        nhash.SetHex(vline[0].c_str());
+        LoadEntry.hash = nhash;
+
+        std::istringstream sstimestamp(vline[1]);
+        sstimestamp >> ntimestamp;
+        LoadEntry.timestamp = ntimestamp;
+        
+        LoadEntry.filename = vline[2];
+
+        InsertManifestEntry(LoadEntry);
+    }
 
     return true;
 }
