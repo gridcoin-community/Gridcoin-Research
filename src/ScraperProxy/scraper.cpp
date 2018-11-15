@@ -10,6 +10,8 @@ std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
 Manifest mManifest;
 
+CCriticalSection cs_mManifest;
+
 bool WhitelistPopulated();
 bool UserpassPopulated();
 bool DownloadProjectRacFilesByCPID();
@@ -59,17 +61,22 @@ void Scraper(bool fScraperStandalone)
 
             // Align the Scraper directory with the Manifest file.
             // First remove orphan files with no Manifest entry.
-            for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
+            // Lock the manifest while it is being manipulated.
             {
-                // Check to see if the file exists in the manifest. If it doesn't
-                // remove it.
-                Manifest::iterator entry;
-
-                if(dir.path().filename() != "Manifest.csv.gz" && dir.path().filename() != "Beacon.csv.gz" && fs::is_regular_file(dir))
+                LOCK(cs_mManifest);
+                
+                for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
                 {
-                    entry = mManifest.find(dir.path().filename().c_str());
-                    if (entry == mManifest.end())
-                        fs::remove(dir.path());
+                    // Check to see if the file exists in the manifest. If it doesn't
+                    // remove it.
+                    Manifest::iterator entry;
+
+                    if(dir.path().filename() != "Manifest.csv.gz" && dir.path().filename() != "Beacon.csv.gz" && fs::is_regular_file(dir))
+                    {
+                        entry = mManifest.find(dir.path().filename().c_str());
+                        if (entry == mManifest.end())
+                            fs::remove(dir.path());
+                    }
                 }
             }
 
@@ -826,7 +833,11 @@ bool InsertManifestEntry(ManifestEntry entry)
 {
     // This less readable form is so we know whether the element already existed or not.
     std::pair<Manifest::iterator,bool> ret;
-    ret = mManifest.insert(std::make_pair(entry.filename, entry));
+    {
+        LOCK(cs_mManifest);
+        
+        ret = mManifest.insert(std::make_pair(entry.filename, entry));
+    }
 
     // True if insert was sucessful, false if entry with key (hash) already exists in map.
     return ret.second;
@@ -835,7 +846,12 @@ bool InsertManifestEntry(ManifestEntry entry)
 // Delete entry from Manifest
 unsigned int DeleteManifestEntry(ManifestEntry entry)
 {
-    unsigned int ret = mManifest.erase(entry.filename);
+    unsigned int ret;
+    {
+        LOCK(cs_mManifest);
+
+        ret = mManifest.erase(entry.filename);
+    }
 
     // Returns number of elements erased, either 0 or 1.
     return ret;
@@ -910,12 +926,17 @@ bool StoreManifest(const fs::path& file)
 
     _log(INFO, "StoreManifest", "Started processing " + file.string());
 
-    for (auto const& entry : mManifest)
+    //Lock mManifest during serialize to string.
     {
-        uint256 nEntryHash = entry.second.hash;
+        LOCK(cs_mManifest);
+        
+        for (auto const& entry : mManifest)
+        {
+            uint256 nEntryHash = entry.second.hash;
 
-        std::string sManifestEntry = nEntryHash.GetHex() + "," + std::to_string(entry.second.timestamp) + "," + entry.first + "\n";
-        stream << sManifestEntry;
+            std::string sManifestEntry = nEntryHash.GetHex() + "," + std::to_string(entry.second.timestamp) + "," + entry.first + "\n";
+            stream << sManifestEntry;
+        }
     }
 
     _log(INFO, "StoreManifest", "Finished processing manifest from map.");

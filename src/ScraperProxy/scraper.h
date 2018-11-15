@@ -24,6 +24,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "sync.h"
 #include "appcache.h"
 #include "beacon.h"
 
