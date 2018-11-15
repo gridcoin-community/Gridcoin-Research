@@ -15,7 +15,6 @@ class CBlockIndex;
 
 #include "global_objects_noui.hpp"
 #include "checkpoints.h"
-#include "util.h"
 
 void StartRPCThreads();
 void StopRPCThreads();

@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_WALLET_H
 #define BITCOIN_WALLET_H
+
 #include <string>
 #include <vector>
 #include <stdlib.h>
@@ -13,7 +14,6 @@
 #include "script.h"
 #include "ui_interface.h"
 #include "walletdb.h"
-#include "util.h"
 
 extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
