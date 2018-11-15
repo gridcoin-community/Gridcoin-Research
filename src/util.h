@@ -25,8 +25,8 @@
 #include <boost/thread/condition_variable.hpp>
 
 #include <compat.h>
+
 #include "fwd.h"
-#include "serialize.h"
 #include "tinyformat.h"
 
 #ifndef WIN32
