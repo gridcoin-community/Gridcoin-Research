@@ -6,6 +6,9 @@
 #include <thread>
 #include <chrono>
 
+#include <boost/filesystem.hpp>
+
+
 bool fShutdown = false;
 bool fDebug = true;
 
@@ -52,4 +55,9 @@ int64_t GetAdjustedTime()
 bool Contains(const std::string& data, const std::string& instring)
 {
     return data.find(instring) != std::string::npos;
+}
+
+boost::filesystem::path GetDataDir()
+{
+    return boost::filesystem::current_path();
 }

@@ -71,11 +71,18 @@ void Scraper(bool fScraperStandalone)
                     // remove it.
                     Manifest::iterator entry;
 
-                    if(dir.path().filename() != "Manifest.csv.gz" && dir.path().filename() != "Beacon.csv.gz" && fs::is_regular_file(dir))
+                    std::string filename = dir.path().filename().c_str();
+
+                    if(dir.path().filename() != "Manifest.csv.gz" && dir.path().filename() != "BeaconList.csv.gz" && fs::is_regular_file(dir))
                     {
+                        _log(INFO, "Scraper", "Checking files in Scraper directory to see if in Manifest: " + filename);
+                        
                         entry = mManifest.find(dir.path().filename().c_str());
                         if (entry == mManifest.end())
+                        {
                             fs::remove(dir.path());
+                            _log(WARNING, "Scraper", "Removing orphan file not in Manifest: " + filename);
+                        }
                     }
                 }
             }
@@ -83,8 +90,14 @@ void Scraper(bool fScraperStandalone)
             // Now iterate through the Manifest map and remove Manifest entries with no file.
             for (auto const& entry : mManifest)
             {
+                _log(INFO, "Scraper", "Checking mManifest entries to see if corresponding file is present in Scraper directory: " + entry.first);
+                
                 if(!fs::exists(pathScraper / entry.first))
+                {
+                    _log(WARNING, "Scraper", "Removing orphan mManifest entry: " + entry.first);
+                    
                     mManifest.erase(entry.first);
+                }
             }
         }
      }
@@ -524,10 +537,10 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     std::string gzetagfile = "";
 
     // If einstein we store different
-    if (file.string().find("einstein") != std::string::npos)
-        gzetagfile = "einstein_user.gz";
+//    if (file.string().find("einstein") != std::string::npos)
+//        gzetagfile = "einstein_user-ByCPID.gz";
 
-    else
+//    else
         gzetagfile = project + "-" + etag + "-ByCPID" + ".gz";
 
     std::string gzetagfile_no_path = gzetagfile;

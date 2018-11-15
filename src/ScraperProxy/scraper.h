@@ -33,6 +33,7 @@
 #else
 #include <json/json.h>
 //#include <jsoncpp/json/json.h>
+#include "uint256.h"
 extern int64_t GetAdjustedTime();
 extern bool Contains(const std::string& data, const std::string& instring);
 #endif
@@ -508,7 +509,7 @@ public:
 
     logger()
     {
-        fs::path plogfile = fs::current_path() / "scraper.log";
+        fs::path plogfile = GetDataDir() / "scraper.log";
 
         logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
 
@@ -778,7 +779,7 @@ public:
     {
         vuserpass.clear();
 
-        fs::path plistfile = fs::current_path() / "userpass.dat";
+        fs::path plistfile = GetDataDir() / "userpass.dat";
 
         userpassfile.open(plistfile.c_str(), std::ios_base::in);
 
@@ -836,7 +837,7 @@ public:
     authdata(const std::string& project)
     {
         std::string outfile = project + "_auth.dat";
-        fs::path poutfile = fs::current_path() / outfile.c_str();
+        fs::path poutfile = GetDataDir() / outfile.c_str();
 
         oauthdata.open(poutfile.c_str(), std::ios_base::out | std::ios_base::app);
 
@@ -902,7 +903,7 @@ public:
 
     nntester()
     {
-        fs::path plogfile = fs::current_path() / "scraper.time";
+        fs::path plogfile = GetDataDir() / "scraper.time";
 
         logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
 
