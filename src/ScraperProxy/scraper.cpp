@@ -26,9 +26,10 @@ int GetDayOfYear(int64_t timestamp);
 
 void testdata(const std::string& etag);
 
-// Note these two are initialized here for standalone mode compile, but will be overwritten by
+// Note these three are initialized here for standalone mode compile, but will be overwritten by
 // the values from GetArg in init.cpp when compiled as part of the wallet.
 unsigned int nScraperSleep = 60000;
+unsigned int nActiveBeforeSB = 300;
 boost::filesystem::path pathScraper = fs::current_path() / "Scraper";
 
 extern void MilliSleep(int64_t n);
@@ -37,29 +38,72 @@ extern BeaconMap GetConsensusBeaconList();
 // This is the scraper thread...
 void Scraper(bool fScraperStandalone)
 {
-    // This loads the manifest file from the Scraper directory for persistence.
+    // Check to see if the Scraper directory exists and is a directory. If not create it.
+    if(fs::exists(pathScraper))
+    {
+        // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
+        if(fs::is_regular_file(pathScraper))
+        {
+            fs::remove(pathScraper);
+            fs::create_directory(pathScraper);
+        }
+        else
+        {
+            // Load the manifest file from the Scraper directory info mManifest.
 
-    _log(INFO, "Scraper", "Loading Manifest");
-    if(!LoadManifest(pathScraper / "Manifest.csv.gz"))
-        _log(ERROR, "Scraper", "Error occurred loading manifest");
+            _log(INFO, "Scraper", "Loading Manifest");
+            if (!LoadManifest(pathScraper / "Manifest.csv.gz"))
+                _log(ERROR, "Scraper", "Error occurred loading manifest");
+            else
+                _log(INFO, "Scraper", "Loaded Manifest file into map.");
+
+            // Align the Scraper directory with the Manifest file.
+            // First remove orphan files with no Manifest entry.
+            for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
+            {
+                // Check to see if the file exists in the manifest. If it doesn't
+                // remove it.
+                Manifest::iterator entry;
+
+                if(dir.path().filename() != "Manifest.csv.gz" && dir.path().filename() != "Beacon.csv.gz" && fs::is_regular_file(dir))
+                {
+                    entry = mManifest.find(dir.path().filename().c_str());
+                    if (entry == mManifest.end())
+                        fs::remove(dir.path());
+                }
+            }
+
+            // Now iterate through the Manifest map and remove Manifest entries with no file.
+            for (auto const& entry : mManifest)
+            {
+                if(!fs::exists(pathScraper / entry.first))
+                    mManifest.erase(entry.first);
+            }
+        }
+     }
     else
-        _log(INFO, "Scraper", "Loaded Manifest file into map.");
+        fs::create_directory(pathScraper);
 
+
+    // The scraper thread loop...
     while (fScraperStandalone || !fShutdown)
     {
         gridcoinrpc data;
-
-        if(!StoreBeaconList(pathScraper / "BeaconList.csv.gz"))
-            _log(ERROR, "Scraper", "StoreBeaconList error occurred");
-        else
-            _log(INFO, "Scraper", "Stored Beacon List");
         
         int64_t sbage = data.sbage();
 
-        // Give 300 seconds before superblock needed before we sync
-        if (//sbage <= 86100 && sbage >= 0
-            false)
+        // Give nActiveBeforeSB seconds before superblock needed before we sync
+        if (sbage <= (86400 - nActiveBeforeSB) && sbage >= 0)
+        {
             _log(INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
+
+            // Don't let nBeforeSBSleep go less than zero, which could happen without max if wallet
+            // started with sbage already older than 86400 - nActiveBeforeSB.
+            int64_t nBeforeSBSleep = std::max(86400 - nActiveBeforeSB - sbage, (int64_t) 0);
+            _log(INFO, "Scraper", "Sleeping for " + std::to_string(nBeforeSBSleep) + " seconds.");
+
+            MilliSleep(nBeforeSBSleep * 1000);
+        }
 
         else if (sbage <= -1)
             _log(ERROR, "Scraper", "RPC error occured, check logs");
@@ -75,9 +119,10 @@ void Scraper(bool fScraperStandalone)
 
             AuthenticationETagClear();
 
-            //DownloadProjectTeamFiles();
-
-            //DownloadProjectRacFiles();
+            if (!StoreBeaconList(pathScraper / "BeaconList.csv.gz"))
+                _log(ERROR, "Scraper", "StoreBeaconList error occurred");
+            else
+                _log(INFO, "Scraper", "Stored Beacon List");
 
             DownloadProjectRacFilesByCPID();
         }
@@ -649,9 +694,9 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     ManifestEntry ManifestEntry;
 
-    ManifestEntry.hash = nFileHash;
     // Don't include path in Manifest, because this is local node dependent.
     ManifestEntry.filename = gzetagfile_no_path;
+    ManifestEntry.hash = nFileHash;
     ManifestEntry.timestamp = GetAdjustedTime();
 
     if(!InsertManifestEntry(ManifestEntry))
@@ -781,7 +826,7 @@ bool InsertManifestEntry(ManifestEntry entry)
 {
     // This less readable form is so we know whether the element already existed or not.
     std::pair<Manifest::iterator,bool> ret;
-    ret = mManifest.insert(std::make_pair(entry.hash, entry));
+    ret = mManifest.insert(std::make_pair(entry.filename, entry));
 
     // True if insert was sucessful, false if entry with key (hash) already exists in map.
     return ret.second;
@@ -790,7 +835,7 @@ bool InsertManifestEntry(ManifestEntry entry)
 // Delete entry from Manifest
 unsigned int DeleteManifestEntry(ManifestEntry entry)
 {
-    unsigned int ret = mManifest.erase(entry.hash);
+    unsigned int ret = mManifest.erase(entry.filename);
 
     // Returns number of elements erased, either 0 or 1.
     return ret;
@@ -867,9 +912,9 @@ bool StoreManifest(const fs::path& file)
 
     for (auto const& entry : mManifest)
     {
-        uint256 nEntryHash = entry.first;
+        uint256 nEntryHash = entry.second.hash;
 
-        std::string sManifestEntry = nEntryHash.GetHex() + "," + std::to_string(entry.second.timestamp) + "," + entry.second.filename + "\n";
+        std::string sManifestEntry = nEntryHash.GetHex() + "," + std::to_string(entry.second.timestamp) + "," + entry.first + "\n";
         stream << sManifestEntry;
     }
 

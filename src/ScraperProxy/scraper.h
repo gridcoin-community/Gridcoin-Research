@@ -69,12 +69,12 @@ bool LoadManifest(const fs::path& file);
 
 struct ManifestEntry
 {
-    uint256 hash; // hash of file
     std::string filename; // Filename
+    uint256 hash; // hash of file
     int64_t timestamp;
 };
 
-typedef std::map<uint256, ManifestEntry> Manifest;
+typedef std::map<std::string, ManifestEntry> Manifest;
 
 bool InsertManifestEntry(ManifestEntry entry);
 unsigned int DeleteManifestEntry(ManifestEntry entry);
