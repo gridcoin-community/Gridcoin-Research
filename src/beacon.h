@@ -6,6 +6,7 @@
 
 #include "fwd.h"
 #include <string>
+#include <map>
 
 //!
 //! \brief Generate beacon key pair.
@@ -59,3 +60,12 @@ bool VerifyBeaconContractTx(const CTransaction& tx);
 //! \return \c false on failure.
 //!
 bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet);
+
+// This is modelled after AppCacheEntry/Section but named separately.
+struct BeaconEntry
+{
+    std::string value; //!< Value of entry.
+    int64_t timestamp; //!< Timestamp of entry.
+};
+
+typedef std::map<std::string, BeaconEntry> BeaconMap;

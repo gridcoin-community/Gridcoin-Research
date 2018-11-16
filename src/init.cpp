@@ -48,7 +48,10 @@ extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
+extern unsigned int nScraperSleep;
+extern unsigned int nActiveBeforeSB;
 extern bool fUseFastIndex;
+extern boost::filesystem::path pathScraper;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -376,6 +379,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
+    // Default to 60 sec, clamp to 30 minimum, 600 maximum - converted to milliseconds.
+    nScraperSleep = std::min(std::max(GetArg("-scrapersleep", 60), (int64_t) 30), (int64_t) 600) * 1000;
+    // Default to 300 sec, clamp to 180 minimum, 86400 maximum (meaning active all of the time).
+    nActiveBeforeSB = std::min(std::max(GetArg("-activebeforesb", 300), (int64_t) 180), (int64_t) 86400);
+
     nDerivationMethodIndex = 0;
     fTestNet = GetBoolArg("-testnet");
 
@@ -531,6 +539,15 @@ bool AppInit2(ThreadHandlerPtr threads)
     static boost::interprocess::file_lock lock(pathLockFile.string().c_str());
     if (!lock.try_lock())
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
+
+    if (GetBoolArg("-scraper"))
+    {
+        // If the scraper is going to be run, then set the scraper file staging directory.
+        boost::filesystem::path pathScraper = GetDataDir() / "Scraper";
+        ;
+    }
+
+
 
 #if !defined(WIN32) 
     if (fDaemon)

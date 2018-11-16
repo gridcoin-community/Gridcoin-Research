@@ -5219,6 +5219,42 @@ std::string getfilecontents(std::string filename)
 }
 
 
+
+BeaconMap GetConsensusBeaconList()
+{
+    BeaconMap mBeaconMap;
+
+    BlockFinder MaxConsensusLadder;
+
+    CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
+                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+    const int64_t maxTime = pMaxConsensusLadder->nTime;
+    const int64_t minTime = maxTime - BEACON_LOOKBACK;
+
+    for(const auto& item : ReadCacheSection("beacon"))
+    {
+        const std::string& key = item.first;
+        BeaconEntry beaconentry;
+
+        beaconentry.timestamp = item.second.timestamp;
+        beaconentry.value = item.second.value;
+
+        // Compare age restrictions if specified.
+        if((minTime && beaconentry.timestamp <= minTime) ||
+           (maxTime && beaconentry.timestamp >= maxTime))
+            continue;
+
+        // Skip invalid beacons.
+        if (Contains("INVESTOR", beaconentry.value))
+            continue;
+
+        mBeaconMap[key] = beaconentry;
+    }
+
+    return mBeaconMap;
+}
+
+
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 {
     // Used for checking the local cpid

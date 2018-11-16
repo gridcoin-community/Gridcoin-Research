@@ -56,6 +56,7 @@ void ThreadMapPort2(void* parg);
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
 
+extern void Scraper(bool fScraperStandalone);
 
 struct LocalServiceInfo {
     int nScore;
@@ -1611,6 +1612,28 @@ void static ThreadStakeMiner(void* parg)
     LogPrintf("ThreadStakeMiner exited");
 }
 
+void static ThreadScraper(void* parg)
+{
+    if (fDebug10) LogPrintf("ThreadSraper starting");
+    try
+    {
+        Scraper(false);
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadScraper()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        LogPrintf("ThreadScraper exited (interrupt)");
+        return;
+    }
+    catch (...)
+    {
+        PrintException(NULL, "ThreadScraper()");
+    }
+    LogPrintf("ThreadScraper exited");
+}
 
 
 void CNode::RecordBytesRecv(uint64_t bytes)
@@ -2187,6 +2210,13 @@ void StartNode(void* parg)
     else
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
+
+    // Run the scraper
+    if (!GetBoolArg("-scraper"))
+        LogPrintf("Scraper disabled");
+    else
+        if (!netThreads->createThread(ThreadScraper,NULL,"ThreadScraper"))
+            LogPrintf("Error: createThread(ThreadScraper) failed");
 }
 
 bool StopNode()

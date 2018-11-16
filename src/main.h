@@ -33,6 +33,7 @@ extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
+static const int64_t BEACON_LOOKBACK = 30 * 6 * 86400; // 180 days in seconds
 static const int64_t DEFAULT_CBR = 10 * COIN;
 
 static const double NeuralNetworkMultiplier = 115000;
