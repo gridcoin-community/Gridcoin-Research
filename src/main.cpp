@@ -27,6 +27,7 @@
 #include "tally.h"
 #include "contract/contract.h"
 #include "contract/superblock.h"
+#include "scraper_net.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -967,6 +968,8 @@ MiningCPID GetNextProject(bool bForce)
                                             LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2);
                                             continue;
                                         }
+#                                       else
+                                        (void)bResult;
 #                                       endif
 
 
@@ -5904,7 +5907,7 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
         bNetAveragesLoaded = true;
         return true;
     }
-    catch (bad_alloc ba)
+    catch (bad_alloc& ba)
     {
         LogPrintf("Bad Alloc while tallying network averages. [1]");
         bNetAveragesLoaded=true;
@@ -6518,6 +6521,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 item.second.RelayTo(pfrom);
         }
 
+        /* Notify the peer about statsscraper blobs we have */
+        CScraperManifest::PushInvTo(pfrom);
+
         pfrom->fSuccessfullyConnected = true;
 
         if (fDebug10) LogPrintf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
@@ -6641,6 +6647,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->AddInventoryKnown(inv);
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
+
+            /* Check also the scraper data propagation system to see if it needs
+             * this inventory object */
+            fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+
             if (fDebug10)
                 LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
 
@@ -6713,7 +6724,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                 }
             }
-             else if (inv.IsKnownType())
+            else if (inv.IsKnownType())
             {
                 // Send stream from relay memory
                 bool pushed = false;
@@ -6733,6 +6744,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         ss << tx;
                         pfrom->PushMessage("tx", ss);
                     }
+                }
+                else if(!pushed && MSG_PART == inv.type ) {
+                    CSplitBlob::SendPartTo(pfrom, inv.hash);
+                }
+                else if(!pushed && MSG_SCRAPERINDEX == inv.type ) {
+                    CScraperManifest::SendManifestTo(pfrom, inv.hash);
                 }
             }
 
@@ -7157,6 +7174,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 pfrom->Misbehaving(10);
             }
         }
+    }
+
+    else if (strCommand == "scraperindex0")
+    {
+        CScraperManifest::RecvManifest(pfrom,vRecv);
+    }
+    else if (strCommand == "part")
+    {
+        CSplitBlob::RecvPart(pfrom,vRecv);
     }
 
 
@@ -8046,7 +8072,12 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     while (!pto->mapAskFor.empty() && (*pto->mapAskFor.begin()).first <= nNow)
     {
         const CInv& inv = (*pto->mapAskFor.begin()).second;
-        if (!AlreadyHave(txdb, inv))
+
+        // Brod: do not request stuff if it was already removed from this map
+        // TODO: check thread safety
+        const auto iaaf= mapAlreadyAskedFor.find(inv);
+
+        if ( iaaf!=mapAlreadyAskedFor.end() && !AlreadyHave(txdb, inv) )
         {
             if (fDebugNet)        LogPrintf("sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
@@ -8055,7 +8086,8 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 pto->PushMessage("getdata", vGetData);
                 vGetData.clear();
             }
-            mapAlreadyAskedFor[inv] = nNow;
+
+            // mapAlreadyAskedFor[inv] = nNow; //TODO: check why this was here
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }

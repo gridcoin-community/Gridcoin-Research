@@ -220,9 +220,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
     if (blockindex->pnext)
         result.pushKV("nextblockhash", blockindex->pnext->GetBlockHash().GetHex());
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
-    uint256 blockhash = block.GetPoWHash();
-    std::string sblockhash = blockhash.GetHex();
+    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);    
     bool IsPoR = false;
     IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
     std::string PoRNarr = "";
