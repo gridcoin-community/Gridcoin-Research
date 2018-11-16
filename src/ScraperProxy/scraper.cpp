@@ -19,11 +19,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
 
-// No header storage by day number gz
-// bool xDownloadProjectTeamFiles();
-// int64_t xProcessProjectTeamFile(const fs::path& file);
-// bool xDownloadProjectRacFiles();
-// bool xProcessProjectRacFile(const fs::path& file, int64_t teamid);
 int GetDayOfYear(int64_t timestamp);
 
 void testdata(const std::string& etag);
@@ -64,11 +59,11 @@ void Scraper(bool fScraperStandalone)
             // Lock the manifest while it is being manipulated.
             {
                 LOCK(cs_mManifest);
-                
+
+                // Check to see if the file exists in the manifest. If it doesn't
+                // remove it.
                 for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
                 {
-                    // Check to see if the file exists in the manifest. If it doesn't
-                    // remove it.
                     Manifest::iterator entry;
 
                     std::string filename = dir.path().filename().c_str();
@@ -85,22 +80,22 @@ void Scraper(bool fScraperStandalone)
                         }
                     }
                 }
-            }
 
-            // Now iterate through the Manifest map and remove Manifest entries with no file.
-            for (auto const& entry : mManifest)
-            {
-                _log(INFO, "Scraper", "Checking mManifest entries to see if corresponding file is present in Scraper directory: " + entry.first);
-                
-                if(!fs::exists(pathScraper / entry.first))
+                // Now iterate through the Manifest map and remove Manifest entries with no file.
+                for (auto const& entry : mManifest)
                 {
-                    _log(WARNING, "Scraper", "Removing orphan mManifest entry: " + entry.first);
+                    _log(INFO, "Scraper", "Checking mManifest entries to see if corresponding file is present in Scraper directory: " + entry.first);
                     
-                    mManifest.erase(entry.first);
+                    if(!fs::exists(pathScraper / entry.first))
+                    {
+                        _log(WARNING, "Scraper", "Removing orphan mManifest entry: " + entry.first);
+                        
+                        mManifest.erase(entry.first);
+                    }
                 }
             }
         }
-     }
+    }
     else
         fs::create_directory(pathScraper);
 
@@ -712,27 +707,47 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     fs::remove(file);
 
-    ManifestEntry ManifestEntry;
+    ManifestEntry NewRecord;
 
     // Don't include path in Manifest, because this is local node dependent.
-    ManifestEntry.filename = gzetagfile_no_path;
-    ManifestEntry.hash = nFileHash;
-    ManifestEntry.timestamp = GetAdjustedTime();
+    NewRecord.filename = gzetagfile_no_path;
+    NewRecord.project = project;
+    NewRecord.hash = nFileHash;
+    NewRecord.timestamp = GetAdjustedTime();
+    // By definition the record we are about to insert is current. If a new file is downloaded for
+    // a given project, it has to be more up to date than any others.
+    NewRecord.current = true;
+    
+    // Code block to lock mManifest during record insertion and delete because we want this atomic.
+    {
+        LOCK(cs_mManifest);
+        
+        // Iterate mManifest to find any prior records for the same project and change current flag to false.
+        Manifest::iterator entry;
+        for (entry = mManifest.begin(); entry != mManifest.end(); ++entry)
+        {
+            if (entry->second.project == project)
+            {
+                _log(INFO, "ProcessProjectRacFileByCPID", "Marking old project manifest entry as current = false.");
+                entry->second.current = false;
+            }
+        }
 
-    if(!InsertManifestEntry(ManifestEntry))
-        _log(WARNING, "ProcessProjectRacFileByCPID", "Manifest entry already exists for " + nFileHash.ToString() + " " + gzetagfile);
-    else
-        _log(INFO, "ProcessProjectRacFileByCPID", "Created manifest entry for " + nFileHash.ToString() + " " + gzetagfile);
+        if(!InsertManifestEntry(NewRecord))
+            _log(WARNING, "ProcessProjectRacFileByCPID", "Manifest entry already exists for " + nFileHash.ToString() + " " + gzetagfile);
+        else
+            _log(INFO, "ProcessProjectRacFileByCPID", "Created manifest entry for " + nFileHash.ToString() + " " + gzetagfile);
 
-    // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
-    // The manifest file is actually very small though, and this primitive implementation will suffice. I could
-    // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
-    // sync if the wallet is ended during the middle of pulling the files.
-    _log(INFO, "Scraper", "Persisting manifest entry to disk.");
-    if(!StoreManifest(pathScraper / "Manifest.csv.gz"))
-        _log(ERROR, "Scraper", "StoreManifest error occurred");
-    else
-        _log(INFO, "Scraper", "Stored Manifest");
+        // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
+        // The manifest file is actually very small though, and this primitive implementation will suffice. I could
+        // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
+        // sync if the wallet is ended during the middle of pulling the files.
+        _log(INFO, "Scraper", "Persisting manifest entry to disk.");
+        if(!StoreManifest(pathScraper / "Manifest.csv.gz"))
+            _log(ERROR, "Scraper", "StoreManifest error occurred");
+        else
+            _log(INFO, "Scraper", "Stored Manifest");
+    }
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Complete Process");
 
@@ -841,14 +856,12 @@ bool StoreBeaconList(const fs::path& file)
 ************************/
 
 
-// Insert entry into Manifest
+// Insert entry into Manifest. Note that cs_mManifest needs to be taken before calling.
 bool InsertManifestEntry(ManifestEntry entry)
 {
     // This less readable form is so we know whether the element already existed or not.
     std::pair<Manifest::iterator,bool> ret;
     {
-        LOCK(cs_mManifest);
-        
         ret = mManifest.insert(std::make_pair(entry.filename, entry));
     }
 
@@ -856,13 +869,11 @@ bool InsertManifestEntry(ManifestEntry entry)
     return ret.second;
 }
 
-// Delete entry from Manifest
+// Delete entry from Manifest. Note that cs_mManifest needs to be taken before calling.
 unsigned int DeleteManifestEntry(ManifestEntry entry)
 {
     unsigned int ret;
     {
-        LOCK(cs_mManifest);
-
         ret = mManifest.erase(entry.filename);
     }
 
@@ -898,19 +909,19 @@ bool LoadManifest(const fs::path& file)
 
         std::vector<std::string> vline = split(line, ",");
 
-        //std::istringstream sshash(vline[0]);
-        //sshash >> nhash;
-        //LoadEntry.hash = nhash;
-        
         uint256 nhash;
         nhash.SetHex(vline[0].c_str());
         LoadEntry.hash = nhash;
 
-        std::istringstream sstimestamp(vline[1]);
+        LoadEntry.current = std::stoi(vline[1]);
+
+        std::istringstream sstimestamp(vline[2]);
         sstimestamp >> ntimestamp;
         LoadEntry.timestamp = ntimestamp;
+
+        LoadEntry.project = vline[3];
         
-        LoadEntry.filename = vline[2];
+        LoadEntry.filename = vline[4];
 
         InsertManifestEntry(LoadEntry);
     }
@@ -947,7 +958,11 @@ bool StoreManifest(const fs::path& file)
         {
             uint256 nEntryHash = entry.second.hash;
 
-            std::string sManifestEntry = nEntryHash.GetHex() + "," + std::to_string(entry.second.timestamp) + "," + entry.first + "\n";
+            std::string sManifestEntry = nEntryHash.GetHex() + ","
+                   + std::to_string(entry.second.current) + ","
+                   + std::to_string(entry.second.timestamp) + ","
+                   + entry.second.project + ","
+                   + entry.first + "\n";
             stream << sManifestEntry;
         }
     }

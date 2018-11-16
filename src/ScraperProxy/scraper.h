@@ -72,8 +72,10 @@ bool LoadManifest(const fs::path& file);
 struct ManifestEntry
 {
     std::string filename; // Filename
+    std::string project;
     uint256 hash; // hash of file
     int64_t timestamp;
+    bool current;
 };
 
 typedef std::map<std::string, ManifestEntry> Manifest;
