@@ -968,6 +968,8 @@ MiningCPID GetNextProject(bool bForce)
                                             LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2);
                                             continue;
                                         }
+#                                       else
+                                        (void)bResult;
 #                                       endif
 
 
@@ -5869,7 +5871,7 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
         bNetAveragesLoaded = true;
         return true;
     }
-    catch (bad_alloc ba)
+    catch (bad_alloc& ba)
     {
         LogPrintf("Bad Alloc while tallying network averages. [1]");
         bNetAveragesLoaded=true;
@@ -6686,7 +6688,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                 }
             }
-             else if (inv.IsKnownType())
+            else if (inv.IsKnownType())
             {
                 // Send stream from relay memory
                 bool pushed = false;
