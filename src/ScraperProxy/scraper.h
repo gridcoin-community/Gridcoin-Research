@@ -84,6 +84,13 @@ bool InsertManifestEntry(ManifestEntry entry);
 unsigned int DeleteManifestEntry(ManifestEntry entry);
 
 /*********************
+* Global Constants   *
+*********************/
+
+// Define 48 hour retention time for stats files, current or not...
+static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+
+/*********************
 * Global Vars        *
 *********************/
 
