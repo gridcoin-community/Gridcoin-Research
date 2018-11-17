@@ -23,10 +23,11 @@ int GetDayOfYear(int64_t timestamp);
 
 void testdata(const std::string& etag);
 
-// Note these three are initialized here for standalone mode compile, but will be overwritten by
+// Note these four are initialized here for standalone mode compile, but will be overwritten by
 // the values from GetArg in init.cpp when compiled as part of the wallet.
 unsigned int nScraperSleep = 60000;
 unsigned int nActiveBeforeSB = 300;
+bool fScraperRetainNonCurrentFiles = false;
 boost::filesystem::path pathScraper = fs::current_path() / "Scraper";
 
 extern void MilliSleep(int64_t n);
@@ -62,16 +63,16 @@ void Scraper(bool fScraperStandalone)
 
                 // Check to see if the file exists in the manifest. If it doesn't
                 // remove it.
+                Manifest::iterator entry;
+
                 for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
                 {
-                    Manifest::iterator entry;
+
 
                     std::string filename = dir.path().filename().c_str();
 
                     if(dir.path().filename() != "Manifest.csv.gz" && dir.path().filename() != "BeaconList.csv.gz" && fs::is_regular_file(dir))
                     {
-                        _log(INFO, "Scraper", "Checking files in Scraper directory to see if in Manifest: " + filename);
-                        
                         entry = mManifest.find(dir.path().filename().c_str());
                         if (entry == mManifest.end())
                         {
@@ -81,16 +82,19 @@ void Scraper(bool fScraperStandalone)
                     }
                 }
 
-                // Now iterate through the Manifest map and remove Manifest entries with no file.
-                for (auto const& entry : mManifest)
+                // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
+                // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
+                //if fScraperRetainNonCurrentFiles is false.
+                for (entry = mManifest.begin(); entry != mManifest.end(); )
                 {
-                    _log(INFO, "Scraper", "Checking mManifest entries to see if corresponding file is present in Scraper directory: " + entry.first);
-                    
-                    if(!fs::exists(pathScraper / entry.first))
+                    Manifest::iterator entry_copy = entry++;
+
+                    if (!fs::exists(pathScraper / entry_copy->first)
+                            || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
+                            || (!fScraperRetainNonCurrentFiles && entry_copy->second.current == false))
                     {
-                        _log(WARNING, "Scraper", "Removing orphan mManifest entry: " + entry.first);
-                        
-                        mManifest.erase(entry.first);
+                        _log(WARNING, "Scraper", "Removing stale or orphan manifest entry: " + entry_copy->first);
+                        DeleteManifestEntry(entry_copy->second);
                     }
                 }
             }
@@ -722,14 +726,27 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     {
         LOCK(cs_mManifest);
         
-        // Iterate mManifest to find any prior records for the same project and change current flag to false.
+        // Iterate mManifest to find any prior records for the same project and change current flag to false,
+        // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
+        // is false.
+
         Manifest::iterator entry;
-        for (entry = mManifest.begin(); entry != mManifest.end(); ++entry)
+        for (entry = mManifest.begin(); entry != mManifest.end(); )
         {
-            if (entry->second.project == project)
+            Manifest::iterator entry_copy = entry++;
+
+            if (entry_copy->second.project == project && entry_copy->second.current == true)
             {
                 _log(INFO, "ProcessProjectRacFileByCPID", "Marking old project manifest entry as current = false.");
-                entry->second.current = false;
+                entry_copy->second.current = false;
+            }
+
+            // If records are older than SCRAPER_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
+            // delete all non-current records, including the one just marked non-current.
+            if (((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
+                    || (entry_copy->second.project == project && entry_copy->second.current == false && !fScraperRetainNonCurrentFiles))
+            {
+                DeleteManifestEntry(entry_copy->second);
             }
         }
 
@@ -869,13 +886,16 @@ bool InsertManifestEntry(ManifestEntry entry)
     return ret.second;
 }
 
-// Delete entry from Manifest. Note that cs_mManifest needs to be taken before calling.
+// Delete entry from Manifest and corresponding file if it exists. Note that cs_mManifest needs to be taken before calling.
 unsigned int DeleteManifestEntry(ManifestEntry entry)
 {
     unsigned int ret;
-    {
-        ret = mManifest.erase(entry.filename);
-    }
+
+    // Delete corresponding file if it exists.
+    if(fs::exists(pathScraper / entry.filename))
+        fs::remove(pathScraper /entry.filename);
+
+    ret = mManifest.erase(entry.filename);
 
     // Returns number of elements erased, either 0 or 1.
     return ret;
