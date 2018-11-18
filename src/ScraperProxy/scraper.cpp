@@ -153,7 +153,10 @@ void Scraper(bool fScraperStandalone)
 
         _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
 
-        StoreStats(pathScraper / "Stats.csv.gz", mScraperStats);
+        if (!StoreStats(pathScraper / "Stats.csv.gz", mScraperStats))
+            _log(ERROR, "Scraper", "StoreStats error occurred");
+        else
+            _log(INFO, "Scraper", "Stored stats.");
 
         _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
 
@@ -1234,21 +1237,16 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     double dProjectRAC = 0.0;
     for (auto const& vv : vXML)
     {
-        ScraperObjectStats statsentry;
-
-        statsentry.statsvalue.dTC = 0.0;
-        statsentry.statsvalue.dRAT = 0.0;
-        statsentry.statsvalue.dRAC = 0.0;
-        statsentry.statsvalue.dMag = 0.0;
+        ScraperObjectStats statsentry = {};
 
         std::string sTC = ExtractXML(vv, "<total_credit>", "</total_credit>");
         std::string sRAT = ExtractXML(vv, "<expavg_time>", "</expavg_time>");
         std::string sRAC = ExtractXML(vv, "<expavg_credit>", "</expavg_credit>");
 
         // Replace blank strings with zeros.
-        statsentry.statsvalue.dTC = (sTC == "") ? 0.0 : std::stod(sTC);
-        statsentry.statsvalue.dRAT = (sRAT == "") ? 0.0 : std::stod(sRAT);
-        statsentry.statsvalue.dRAC = (sRAC == "") ? 0.0 : std::stod(sRAC);
+        statsentry.statsvalue.dTC = (sTC.empty()) ? 0.0 : std::stod(sTC);
+        statsentry.statsvalue.dRAT = (sRAT.empty()) ? 0.0 : std::stod(sRAT);
+        statsentry.statsvalue.dRAC = (sRAC.empty()) ? 0.0 : std::stod(sRAC);
         // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
 
         statsentry.statskey.objecttype = byCPIDbyProject;
@@ -1283,15 +1281,11 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     }
 
     // Due to rounding to MAG_ROUND, the actual total project magnitude will not be exactly projectmag,
-    // but it should be very close. Roll up project statstics.
-    ScraperObjectStats ProjectStatsEntry;
+    // but it should be very close. Roll up project statistics.
+    ScraperObjectStats ProjectStatsEntry = {};
 
     ProjectStatsEntry.statskey.objecttype = byProject;
     ProjectStatsEntry.statskey.objectID = project;
-    ProjectStatsEntry.statsvalue.dTC = 0.0;
-    ProjectStatsEntry.statsvalue.dRAT = 0.0;
-    ProjectStatsEntry.statsvalue.dRAC = 0.0;
-    ProjectStatsEntry.statsvalue.dMag = 0.0;
 
     for (auto const& entry : mScraperStats)
     {
@@ -1356,26 +1350,18 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     // Now are are going to cut across projects and group by CPID.
 
     //Also track the network wide rollup.
-    ScraperObjectStats NetworkWideStatsEntry;
+    ScraperObjectStats NetworkWideStatsEntry = {};
 
     NetworkWideStatsEntry.statskey.objecttype = NetworkWide;
     // ObjectID is blank string for network-wide.
     NetworkWideStatsEntry.statskey.objectID = "";
-    NetworkWideStatsEntry.statsvalue.dTC = 0.0;
-    NetworkWideStatsEntry.statsvalue.dRAT = 0.0;
-    NetworkWideStatsEntry.statsvalue.dRAC = 0.0;
-    NetworkWideStatsEntry.statsvalue.dMag = 0.0;
 
     for (auto const& beaconentry : mBeaconMap)
     {
-        ScraperObjectStats CPIDStatsEntry;
+        ScraperObjectStats CPIDStatsEntry = {};
 
         CPIDStatsEntry.statskey.objecttype = byCPID;
         CPIDStatsEntry.statskey.objectID = beaconentry.first;
-        CPIDStatsEntry.statsvalue.dTC = 0.0;
-        CPIDStatsEntry.statsvalue.dRAT = 0.0;
-        CPIDStatsEntry.statsvalue.dRAC = 0.0;
-        CPIDStatsEntry.statsvalue.dMag = 0.0;
 
         for (auto const& innerentry : mScraperStats)
         {
