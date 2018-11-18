@@ -784,35 +784,63 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
 
 
-
+///*
 uint256 GetFileHash(const fs::path& inputfile)
 {
     // open input file, and associate with CAutoFile
     FILE *file = fopen(inputfile.string().c_str(), "rb");
     CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+    uint256 nHash = 0;
+    
     if (!filein)
-        return error("FileHash() : open failed");
+        return nHash;
 
     // use file size to size memory buffer
-    int fileSize = boost::filesystem::file_size(inputfile);
-    int dataSize = fileSize - sizeof(uint256);
-    // Don't try to resize to a negative number if file is small
-    if ( dataSize < 0 ) dataSize = 0;
+    int dataSize = boost::filesystem::file_size(inputfile);
     std::vector<unsigned char> vchData;
     vchData.resize(dataSize);
+
+    // read data and checksum from file
+    try
+    {
+        filein.read((char *)&vchData[0], dataSize);
+    }
+    catch (std::exception &e)
+    {
+        return nHash;
+    }
 
     filein.fclose();
 
     CDataStream ssFile(vchData, SER_DISK, CLIENT_VERSION);
 
+    nHash = Hash(ssFile.begin(), ssFile.end());
+
+    return nHash;
+}
+//*/
+
+/*
+uint256 GetFileHash(const fs::path& inputfile)
+{
+    std::ifstream infile(inputfile.string().c_str(), std::ios_base::in | std::ios_base::binary);
+
+    if (!infile)
+    {
+        _log(ERROR, "ProcessProjectRacFileByCPID", "Failed to open rac gzip file (" + inputfile.string() + ")");
+
+        return false;
+    }
+
+    CDataStream ssFile(0, 0);
+
+    ssFile << infile;
+
     uint256 nHash = Hash(ssFile.begin(), ssFile.end());
 
     return nHash;
 }
-
-
-
-
+*/
 
 void testdata(const std::string& etag)
 {
