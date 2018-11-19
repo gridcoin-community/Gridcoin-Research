@@ -930,13 +930,6 @@ public:
         return *this;
     }
 
-    friend CDataStream operator+(const CDataStream& a, const CDataStream& b)
-    {
-        CDataStream ret = a;
-        ret += b;
-        return (ret);
-    }
-
 
     //
     // Vector subset
