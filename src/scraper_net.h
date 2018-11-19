@@ -17,6 +17,8 @@ class CSplitBlob
     CPart(const uint256& ihash)
       :hash(ihash)
       {}
+    CReaderStream getReader() const { return CReaderStream(&data); }
+    bool present() const {return !this->data.empty();}
   };
 
   /** Process a message containing Part of Blob.

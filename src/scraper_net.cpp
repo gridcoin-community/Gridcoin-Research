@@ -188,7 +188,7 @@ void CScraperManifest::Complete()
 {
   /* Do something */
   std::string bodystr;
-  CReaderStream(vParts[0]->data) >> bodystr;
+  vParts[0]->getReader() >> bodystr;
   printf("CScraperManifest::Complete(): %s %s\n",testName.c_str(),bodystr.c_str());
 }
 
