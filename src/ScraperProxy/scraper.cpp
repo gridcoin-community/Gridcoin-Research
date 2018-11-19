@@ -61,7 +61,7 @@ void Scraper(bool fScraperStandalone)
             {
                 LOCK(cs_mScraperFileManifest);
 
-                // Check to see if the file exists in the manifest. If it doesn't
+                // Check to see if the file exists in the manifest and if the hash matches. If it doesn't
                 // remove it.
                 ScraperFileManifest::iterator entry;
 
@@ -79,6 +79,13 @@ void Scraper(bool fScraperStandalone)
                         {
                             fs::remove(dir.path());
                             _log(WARNING, "Scraper", "Removing orphan file not in Manifest: " + filename);
+                            continue;
+                        }
+
+                        if (entry->second.hash != GetFileHash(dir))
+                        {
+                            _log(INFO, "Scraper", "File failed hash check. Removing file.");
+                            fs::remove(dir.path());
                         }
                     }
                 }
@@ -818,29 +825,7 @@ uint256 GetFileHash(const fs::path& inputfile)
 
     return nHash;
 }
-//*/
 
-/*
-uint256 GetFileHash(const fs::path& inputfile)
-{
-    std::ifstream infile(inputfile.string().c_str(), std::ios_base::in | std::ios_base::binary);
-
-    if (!infile)
-    {
-        _log(ERROR, "ProcessProjectRacFileByCPID", "Failed to open rac gzip file (" + inputfile.string() + ")");
-
-        return false;
-    }
-
-    CDataStream ssFile(0, 0);
-
-    ssFile << infile;
-
-    uint256 nHash = Hash(ssFile.begin(), ssFile.end());
-
-    return nHash;
-}
-*/
 
 void testdata(const std::string& etag)
 {
