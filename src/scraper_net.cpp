@@ -1,6 +1,8 @@
 /* scraper_net.cpp */
 #include <memory>
 #include "net.h"
+#include "rpcserver.h"
+#include "rpcprotocol.h"
 #include "scraper_net.h"
 
 //Globals
@@ -286,3 +288,59 @@ void CScraperManifest::Complete()
  * parts from the node.
 */
 
+UniValue CScraperManifest::ToJson() const
+{
+  UniValue result(UniValue::VOBJ);
+  result.pushKV("testName",testName);
+  UniValue parts(UniValue::VARR);
+  for( const CPart* part : vParts )
+    parts.push_back(part->hash.GetHex());
+  result.pushKV("parts",parts);
+  return result;
+}
+
+UniValue listmanifests(const UniValue& params, bool fHelp)
+{
+  if(fHelp || params.size() != 0 )
+    throw std::runtime_error(
+        "listmanifests\n"
+        "Show detailed list of known ScraperManifest objects.\n"
+    );
+  UniValue result1(UniValue::VOBJ);
+  for(const auto& pair : CScraperManifest::mapManifest)
+  {
+    const uint256& hash= pair.first;
+    const CScraperManifest& manifest= *pair.second;
+    result1.pushKV(hash.GetHex(),manifest.ToJson());
+  }
+  return result1;
+}
+
+UniValue getmpart(const UniValue& params, bool fHelp)
+{
+  if(fHelp || params.size() != 1 )
+    throw std::runtime_error(
+        "getmpart <hash>\n"
+        "Show content of CPart object.\n"
+    );
+  auto ipart= CSplitBlob::mapParts.find(uint256(params[0].get_str()));
+  if(ipart == CSplitBlob::mapParts.end())
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");
+  return UniValue(std::string(ipart->second.data.begin(),ipart->second.data.end()));
+}
+
+UniValue sendmanifest(const UniValue& params, bool fHelp)
+{
+  if(fHelp || params.size() != 1 )
+    throw std::runtime_error(
+        "sendmanifest <test>\n"
+        "Send a new CScraperManifest object.\n"
+    );
+  auto manifest=  std::unique_ptr<CScraperManifest>(new CScraperManifest());
+  manifest->testName= params[0].get_str();
+  CDataStream part(SER_NETWORK,1);
+  part << std::string("SampleText") << rand();
+  manifest->addPartData(std::move(part));
+  CScraperManifest::addManifest(std::move(manifest));
+  return UniValue(true);
+}

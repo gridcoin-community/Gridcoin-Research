@@ -401,6 +401,10 @@ static const CRPCCommand vRPCCommands[] =
     { "versionreport",           &versionreport,           false,  cat_developer     },
     { "writedata",               &writedata,               false,  cat_developer     },
 
+    { "listmanifests",           &listmanifests,           false,  cat_developer     },
+    { "getmpart",                &getmpart,                false,  cat_developer     },
+    { "sendmanifest",            &sendmanifest,            false,  cat_developer     },
+
   // Network commands
     { "addnode",                 &addnode,                 false,  cat_network       },
     { "addpoll",                 &addpoll,                 false,  cat_network       },

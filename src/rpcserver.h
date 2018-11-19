@@ -221,6 +221,11 @@ extern UniValue updatequorumdata(const UniValue& params, bool fHelp);
 extern UniValue versionreport(const UniValue& params, bool fhelp);
 extern UniValue writedata(const UniValue& params, bool fHelp);
 
+extern UniValue listmanifests(const UniValue& params, bool fHelp);
+extern UniValue getmanifest(const UniValue& params, bool fHelp);
+extern UniValue getmpart(const UniValue& params, bool fHelp);
+extern UniValue sendmanifest(const UniValue& params, bool fHelp);
+
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
 extern UniValue addpoll(const UniValue& params, bool fHelp);
