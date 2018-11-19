@@ -7176,7 +7176,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
     }
 
-    else if (strCommand == "scraperindex0")
+    else if (strCommand == "scraperindex")
     {
         CScraperManifest::RecvManifest(pfrom,vRecv);
     }
@@ -8077,7 +8077,13 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // TODO: check thread safety
         const auto iaaf= mapAlreadyAskedFor.find(inv);
 
-        if ( iaaf!=mapAlreadyAskedFor.end() && !AlreadyHave(txdb, inv) )
+        bool fAlreadyHave = AlreadyHave(txdb, inv);
+
+        /* Check also the scraper data propagation system to see if it needs
+         * this inventory object */
+        fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(0, inv);
+
+        if ( iaaf!=mapAlreadyAskedFor.end() && !fAlreadyHave )
         {
             if (fDebugNet)        LogPrintf("sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);

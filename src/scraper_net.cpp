@@ -124,7 +124,7 @@ bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
   {
     if(ipart->second.present())
     {
-      pto->PushMessage("part",ipart->second.data);
+      pto->PushMessage("part",ipart->second.getReader());
       return true;
     }
   }
@@ -133,6 +133,11 @@ bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
 
 bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
 {
+  if( MSG_PART ==inv.type )
+  {
+    //TODO: move
+    return false;
+  }
   if( MSG_SCRAPERINDEX !=inv.type )
   {
     /* For any other objects, just say that we do not need it: */
@@ -172,7 +177,7 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
   auto it= mapManifest.find(hash);
   if(it==mapManifest.end())
     return false;
-  pto->PushMessage("scraperindex0", *it->second);
+  pto->PushMessage("scraperindex", *it->second);
   return true;
 }
 

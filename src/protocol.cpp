@@ -17,7 +17,7 @@ static const char* ppszTypeName[] =
     "tx",
     "block",
     "part",
-    "scraperindex0",
+    "scraperindex",
 };
 
 CMessageHeader::CMessageHeader()
