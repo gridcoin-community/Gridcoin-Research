@@ -42,25 +42,27 @@ class CSplitBlob
   /** Add a part reference to vParts. Creates a CPart if necessary. */
   void addPart(const uint256& ihash);
 
+  /** Create a part from specified data and add reference to it into vParts. */
+  bool addPartData(CDataStream&& vData);
+
   /** Unref all parts referenced by this. Removes parts with no references */
   ~CSplitBlob();
 
-  private:
   /* We could store the parts in mapRelay and have getdata service for free. */
   /** map from part hash to scraper Index, so we can attach incoming Part in Index */
   static std::map<uint256,CPart> mapParts;
-  unsigned cntPartsRcvd;
+  unsigned cntPartsRcvd =0;
 
 };
 
 /** A objects holding info about the scraper data file we have or are downloading. */
 class CScraperManifest
-  : CSplitBlob
+  : public CSplitBlob
 {
-  /** map from index hash to scraper Index, so we can process Inv messages */
-  static std::map< uint256, CScraperManifest > mapManifest;
-
   public: /* static methods */
+
+  /** map from index hash to scraper Index, so we can process Inv messages */
+  static std::map< uint256, std::unique_ptr<CScraperManifest> > mapManifest;
 
   /** Process a message containing Index of Scraper Data.
    * @returns whether the data was useful and valid
@@ -83,8 +85,12 @@ class CScraperManifest
   */
   static bool SendManifestTo(CNode* pfrom, const uint256& hash);
 
-  public: /* fields */
-  //uint256 hash;
+  /** Add new manifest object into list of known manifests */
+  static bool addManifest(std::unique_ptr<CScraperManifest>&& m);
+
+  public: /*==== fields ====*/
+
+  const uint256* phash;
   std::string testName;
 
   public: /* public methods */
