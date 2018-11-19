@@ -831,6 +831,8 @@ class CReaderStream
             if (vchro->size() > nReadPos)
                 nSize = vchro->size() - nReadPos;
                 else nSize= 0;
+            assert((nReadPos + nSize) == vchro->size());
+            nReadPosNext= nReadPos + nSize;
         }
         memcpy(pch, &(*vchro)[nReadPos], nSize);
         nReadPos = nReadPosNext;
