@@ -546,7 +546,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (GetBoolArg("-scraper"))
     {
         // If the scraper is going to be run, then set the scraper file staging directory.
-        boost::filesystem::path pathScraper = GetDataDir() / "Scraper";
+        pathScraper = GetDataDir() / "Scraper";
         ;
     }
 

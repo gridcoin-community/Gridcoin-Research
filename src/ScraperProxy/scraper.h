@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <vector>
+#include <unordered_map>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
@@ -56,39 +57,19 @@ enum logattribute {
     CRITICAL
 };
 
-/*********************
-* Functions          *
-*********************/
-
-void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
-void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
-bool StoreBeaconList(const fs::path& file);
-std::vector<std::string> split(const std::string& s, const std::string& delim);
-extern AppCacheSection ReadCacheSection(const std::string& section);
-uint256 GetFileHash(const fs::path& inputfile);
-bool StoreManifest(const fs::path& file);
-bool LoadManifest(const fs::path& file);
-
-struct ManifestEntry
-{
-    std::string filename; // Filename
-    std::string project;
-    uint256 hash; // hash of file
-    int64_t timestamp;
-    bool current;
+enum statsobjecttype {
+    NetworkWide,
+    byCPID,
+    byProject,
+    byCPIDbyProject
 };
 
-typedef std::map<std::string, ManifestEntry> Manifest;
+static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 
-bool InsertManifestEntry(ManifestEntry entry);
-unsigned int DeleteManifestEntry(ManifestEntry entry);
-
-/*********************
-* Global Constants   *
-*********************/
-
-// Define 48 hour retention time for stats files, current or not...
-static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+const std::string GetTextForstatsobjecttype(int EnumValue)
+{
+  return vstatsobjecttypestrings[EnumValue];
+}
 
 /*********************
 * Global Vars        *
@@ -103,6 +84,80 @@ std::string rpcauth = "boinc:test";
 std::string rpcip = "http://127.0.0.1:9334/";
 int64_t ndownloadsize = 0;
 int64_t nuploadsize = 0;
+
+struct ScraperFileManifestEntry
+{
+    std::string filename; // Filename
+    std::string project;
+    uint256 hash; // hash of file
+    int64_t timestamp;
+    bool current;
+};
+
+typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifest;
+
+struct ScraperObjectStatsKey
+{
+    statsobjecttype objecttype;
+    std::string objectID;
+};
+
+struct ScraperObjectStatsValue
+{
+    double dTC;
+    double dRAT;
+    double dRAC;
+    double dMag;
+};
+
+struct ScraperObjectStats
+{
+    ScraperObjectStatsKey statskey;
+    ScraperObjectStatsValue statsvalue;
+};
+
+struct ScraperObjectStatsKeyComp
+{
+    bool operator() ( ScraperObjectStatsKey a, ScraperObjectStatsKey b ) const
+    {
+        return std::make_pair(a.objecttype, a.objectID) < std::make_pair(b.objecttype, b.objectID);
+    }
+};
+
+typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKeyComp> ScraperStats;
+
+/*********************
+* Global Constants   *
+*********************/
+
+// Define 48 hour retention time for stats files, current or not...
+static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+static const double MAG_ROUND = 0.01;
+static const double NEURALNETWORKMULTIPLIER = 115000;
+
+/*********************
+* Functions          *
+*********************/
+
+void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
+void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
+bool StoreBeaconList(const fs::path& file);
+bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
+std::vector<std::string> split(const std::string& s, const std::string& delim);
+extern AppCacheSection ReadCacheSection(const std::string& section);
+uint256 GetFileHash(const fs::path& inputfile);
+bool StoreScraperFileManifest(const fs::path& file);
+bool LoadScraperFileManifest(const fs::path& file);
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry);
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry);
+ScraperStats GetScraperStatsByConsensusBeaconList();
+bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
+
+double MagRound(double dMag)
+{
+    return round(dMag / MAG_ROUND) * MAG_ROUND;
+}
 
 /*********************
 * Scraper            *
