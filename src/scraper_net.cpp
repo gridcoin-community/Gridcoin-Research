@@ -1,8 +1,15 @@
 /* scraper_net.cpp */
+
+/* Define this if you want to show pubkey as address, otherwise hex id */
+#define SCRAPER_NET_PK_AS_ADDRESS
+
 #include <memory>
 #include "net.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
+#ifdef SCRAPER_NET_PK_AS_ADDRESS
+#include "base58.h"
+#endif
 #include "scraper_net.h"
 
 //Globals
@@ -188,6 +195,7 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
 {
   ss << testName;
+  ss << pubkey;
   for( const CPart* part : vParts )
     ss << part->hash;
 }
@@ -195,11 +203,21 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
 void CScraperManifest::UnserializeCheck(CReaderStream& ss)
 {
   uint256 rh;
+  const auto pbegin = ss.begin();
   ss >> testName;
+  ss >> pubkey;
   ss >> rh;
   addPart(rh);
   if(0==1)
     throw error("kek");
+
+  uint256 hash(Hash(pbegin,ss.begin()));
+  ss >> signature;
+  CKey mkey;
+  if(!mkey.SetPubKey(pubkey))
+    throw error("CScraperManifest: Invalid manifest key");
+  if(!mkey.Verify(hash, signature))
+    throw error("CScraperManifest: Invalid manifest signature");
 }
 
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
@@ -248,11 +266,19 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
   return true;
 }
 
-bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m)
+bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
+  m->pubkey= keySign.GetPubKey();
+
   /* serialize and hash the object */
   CDataStream ss(SER_NETWORK,1);
   ss << *m;
+
+  /* sign the serialized manifest and append the signature */
+  uint256 hash(Hash(ss.begin(),ss.end()));
+  keySign.Sign(hash, m->signature);
+  ss << m->signature;
+
 #if 1
   LogPrint("manifest", "adding new local manifest");
   /* at this point it is easier to pretent like it was received from network */
@@ -307,6 +333,11 @@ UniValue CScraperManifest::ToJson() const
 {
   UniValue result(UniValue::VOBJ);
   result.pushKV("testName",testName);
+  #ifdef SCRAPER_NET_PK_AS_ADDRESS
+  result.pushKV("pubkey",CBitcoinAddress(pubkey.GetID()).ToString());
+  #else
+  result.pushKV("pubkey",pubkey.GetID().ToString());
+  #endif
   UniValue parts(UniValue::VARR);
   for( const CPart* part : vParts )
     parts.push_back(part->hash.GetHex());
@@ -356,6 +387,10 @@ UniValue sendmanifest(const UniValue& params, bool fHelp)
   CDataStream part(SER_NETWORK,1);
   part << std::string("SampleText") << rand();
   manifest->addPartData(std::move(part));
-  CScraperManifest::addManifest(std::move(manifest));
+
+  CKey key;
+  std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
+  key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
+  CScraperManifest::addManifest(std::move(manifest), key);
   return UniValue(true);
 }

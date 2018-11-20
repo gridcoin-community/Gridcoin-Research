@@ -86,12 +86,14 @@ class CScraperManifest
   static bool SendManifestTo(CNode* pfrom, const uint256& hash);
 
   /** Add new manifest object into list of known manifests */
-  static bool addManifest(std::unique_ptr<CScraperManifest>&& m);
+  static bool addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign);
 
   public: /*==== fields ====*/
 
   const uint256* phash;
   std::string testName;
+  CPubKey pubkey;
+  std::vector<unsigned char> signature;
 
   public: /* public methods */
 
