@@ -15,6 +15,7 @@
 #include "util.h"
 
 #include <memory>
+#include <algorithm>
 
 using namespace std;
 
@@ -600,7 +601,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             txnew.vout.push_back(CTxOut(0, CScript())); // First Must be empty
             txnew.vout.push_back(CTxOut(nCredit, scriptPubKeyOut));
-            //txnew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
             LogPrintf("CreateCoinStake: added kernel type=%d credit=%f", whichType,CoinToDouble(nCredit));
 
@@ -623,6 +623,207 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
     return false;
 }
+
+
+
+void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
+    SideStakeAlloc &vSideStakeAlloc, int64_t &nMinStakeSplitValue, double &dEfficiency)
+{
+    // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
+    // and there will be a single coinstake output (besides the empty one) that has the combined stake + research
+    // reward. This function does the following...
+    // 1. Perform reward payment to specified addresses ("sidestaking") in the following manner...
+    //      a. Check if both flags false and if so return with no action.
+    //      b. Limit number of outputs based on bv. 3 for <=9 and 8 for >= 10.
+    //      c. Pull the nValue from the original output and store locally. (nReward was passed in.)
+    //      d. Pop the existing outputs.
+    //      e. Validate each address provided for redirection in turn. If valid, create an output of the
+    //         reward * the specified percentage at the validated address. Keep a running total of the reward
+    //         redirected. If the percentages add up to less than 100%, then the running total will be less
+    //         than the original specified reward after pushing up to two reward outputs. Check before each allocation
+    //         that 100% will not be exceeded. If there is a residual reward left, then add (nReward - running total)
+    //         back to the base coinstake. This also works beautifully if the redirection is disabled, because then
+    //         no reward outputs will be created, the accumulated total of redirected rewards will be zero,
+    //         and therefore the subtraction will put the entire rewards back on the base coinstake.
+    // 2. Perform stake output splitting of remaining value.
+    //      a. With the remainder value left which is now the original coinstake minus (rewards outputs pushed
+    //         - up to two), call GGetNumberOfStakeOutputs(int64_t nValue, unsigned int nOutputsAlreadyPushed)
+    //         to determine how many pieces to split into, limiting to 8 - OutputsAlreadyPushed.
+    //      b. SplitCoinStakeOutput will then push the remaining value into the determined number of outputs
+    //         of equal size using the original coinstake input address.
+    //      c. The outputs will be in the wrong order, so add the empty vout to the end and then reverse
+    //         vout.begin() to vout.end() to make sure the empty vout is in [0] position and a coinstake
+    //         vout is in the [1] position. This is required by block validation.
+
+    // If somehow we got here and both flags are false, return immediately. This should not happen if called
+    // from StakeMiner, because one or both of the flags must be set to trigger the call, but check anyway.
+    if (!fEnableStakeSplit && !fEnableSideStaking)
+        return;
+
+    // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert immediately.
+    assert(blocknew.vtx[1].vout.size() == 2);
+    
+    // Record the script public key for the base coinstake so we can reuse.
+    CScript CoinStakeScriptPubKey = blocknew.vtx[1].vout[1].scriptPubKey;
+    
+    // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
+    // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively.
+    unsigned int nMaxOutputs = (blocknew.nVersion >= 10) ? 8 : 3;
+    // Set the maximum number of sidestake ouputs to two less than the maximum allowable coinstake outputs
+    // to ensure outputs are reserved for the coinstake output itself and the empty one. Any sidestake
+    // addresses and percentages in excess of this number will be ignored.
+    unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;
+    // Initialize nOutputUsed at 1, because one is already used for the empty coinstake flag output.
+    unsigned int nOutputsUsed = 1;
+    
+    // Initialize remaining stake output value to the total value of output for stake, which also includes
+    // (interest or CBR) and research rewards.
+    int64_t nRemainingStakeOutputValue = blocknew.vtx[1].vout[1].nValue;
+
+    // Remove the existing single stake output and the empty coinstake to prepare for splitting. (The empty one
+    // needs to be removed too, because we need to reverse the order of the outputs at the end. See the bottom of
+    // this function.
+    blocknew.vtx[1].vout.pop_back();
+    blocknew.vtx[1].vout.pop_back();
+    
+    CScript SideStakeScriptPubKey;
+    double dSumAllocation = 0.0;
+    
+    if (fEnableSideStaking)
+    {
+        // Iterate through passed in SideStake vector until either all elements processed, the maximum number of
+        // sidestake outputs is reached, or accumulated allocation will exceed 100%.
+        for(auto iterSideStake = vSideStakeAlloc.begin(); (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs); ++iterSideStake)
+        {
+            CBitcoinAddress address(iterSideStake->first);
+            if (!address.IsValid())
+            {
+                LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.", iterSideStake->first.c_str());
+                continue;
+            }
+
+            // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into the coinstake below.
+            // Prevents dust build-up.
+            if (nReward * iterSideStake->second < CENT)
+            {
+                LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.", CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
+                continue;
+            }
+            
+            if (dSumAllocation + iterSideStake->second > 1.0)
+            {
+                LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100\%, ending sidestake allocations.");
+                break;
+            }
+
+            // Push to an output the (reward times the allocation) to the address, increment the accumulator for allocation,
+            // decrement the remaining stake output value, and increment outputs used.
+            SideStakeScriptPubKey.SetDestination(address.Get());
+            
+            // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake entries
+            // if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that case. The
+            // coins should flow down to the coinstake outputs and be returned there. This will also simplify the display logic in
+            // the UI, because it makes the sidestake and coinstake outputs disjoint from an address point of view.
+            if (SideStakeScriptPubKey == CoinStakeScriptPubKey)
+                continue;
+            blocknew.vtx[1].vout.push_back(CTxOut(nReward * iterSideStake->second, SideStakeScriptPubKey));
+            LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s", nOutputsUsed, CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
+            dSumAllocation += iterSideStake->second;
+            nRemainingStakeOutputValue -= nReward * iterSideStake->second;
+            nOutputsUsed++;
+        }
+        // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
+        // was in the vSideStakeAlloc vector. (Note that this is also in the parsing routine in StakeMiner, so it will show
+        // up when the wallet is first started, but also needs to be here, to remind the user periodically that something
+        // is amiss.)
+        if (dSumAllocation == 0.0)
+            LogPrintf("WARN: SplitCoinStakeOutput: enablesidestaking was set in config but nothing has been allocated for distribution!");
+    }
+    
+    // By this point, if SideStaking was used and 100% was allocated nRemainingStakeOutputValue will be
+    // the original base coinstake. The other extreme is no sidestaking, in which case nRemainingStakeOutputValue is the
+    // base coinstake + all of the reward. In any case, we will now compute the number of split stake outputs needed,
+    // limiting actual number of split stake outputs to remaining available (nMaxOutputs - nOutputsUsed). There will be
+    // at least one available, because if sidestaking is activated, it is limited to nMaxOutputs - 2.
+    // Don't do any work here except pushing a single output if flag is false.
+    if (fEnableStakeSplit)
+    {
+        unsigned int nSplitStakeOutputs = min((nMaxOutputs - nOutputsUsed), GetNumberOfStakeOutputs(nRemainingStakeOutputValue, nMinStakeSplitValue, dEfficiency));
+        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nStakeOutputs = %u", nSplitStakeOutputs);
+
+        // Set Actual Stake output value for split stakes to remaining output value divided by the number of split
+        // stake outputs.
+        int64_t nActualStakeOutputValue = nRemainingStakeOutputValue / nSplitStakeOutputs;
+
+        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nSplitStakeOutputs = %f", nSplitStakeOutputs);
+        if (fDebug2) LogPrintf("SplitCoinStakeOutput: nActualStakeOutputValue = %f", CoinToDouble(nActualStakeOutputValue));
+
+        int64_t nSumStakeOutputValue = 0;
+        for (unsigned int i = 1; i < nSplitStakeOutputs; i++)
+        {
+            blocknew.vtx[1].vout.push_back(CTxOut(nActualStakeOutputValue, CoinStakeScriptPubKey));
+            LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed, CoinToDouble(nActualStakeOutputValue));
+            nOutputsUsed++;
+            nSumStakeOutputValue += nActualStakeOutputValue;
+        }
+        // For the last UTXO, subtract the running sum from the desired total, which does not include the last UTXO
+        // so far, to recover anything lost from rounding. This will be a very small difference from the others.
+        // The reason we go through this trouble is that integer division rounds down, and we don't even want
+        // to have the wallet lose 1 Halford.
+        blocknew.vtx[1].vout.push_back(CTxOut((nRemainingStakeOutputValue - nSumStakeOutputValue), CoinStakeScriptPubKey));
+        LogPrintf("SplitCoinStakeOutput: create stake UTXO %i value %f", nOutputsUsed, CoinToDouble(nRemainingStakeOutputValue - nSumStakeOutputValue));
+    }
+    else
+    {
+        // Stake splitting flag is false, so just push back a single output with the remaining output value.
+        blocknew.vtx[1].vout.push_back(CTxOut(nRemainingStakeOutputValue, CoinStakeScriptPubKey));
+    }
+
+    // Now, the outputs are in the wrong order. We had to do the rewards distribution first
+    // because it can be of variable number of elements, and if someone puts an address on the list,
+    // there is a reasonable expectation it should succeed, while the stake splitting is a luxury.
+    // One of the coinstake outputs MUST be at vout[1] to pass block validation, so we will
+    // add the empty one at the end. And then use std::reverse to reverse vout.begin() to vout.end().
+    // This will put the correct vout[0] and vout[1] in the right place.
+    blocknew.vtx[1].vout.push_back(CTxOut(0, CScript()));
+    reverse(blocknew.vtx[1].vout.begin(), blocknew.vtx[1].vout.end());
+}
+
+
+
+unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency)
+{
+    int64_t nDesiredStakeOutputValue = 0;
+    unsigned int nStakeOutputs = 1;
+
+    // For the definition of the constant G, please see
+    // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
+    // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
+    const double G = 9942.2056;
+
+    // If the stake output provided to GetNumberofStakeOutputs is not greater than nMinStakeSplitValue then there will
+    // be only one output, so skip calculations and return(nStakeOutputs) which is initialized to 1.
+    if (nValue > nMinStakeSplitValue)
+    {
+        // Set Desired UTXO size post stake based on passed in efficiency and difficulty, but do not allow to go below
+        // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
+        // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
+        // equation (27) on page 10 as a reference for the below formula.
+        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
+
+        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
+
+        // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
+        nStakeOutputs = max((int64_t) 1, nValue / nDesiredStakeOutputValue);
+
+        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
+    }
+
+    return(nStakeOutputs);
+}
+
+
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
 {
@@ -907,7 +1108,7 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     return;
 }
 
-bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev)
+bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev, int64_t &nReward)
 {
     //remove fees from coinbase
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
@@ -924,7 +1125,7 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     // Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
 
 
-    int64_t nReward = GetProofOfStakeReward(
+        nReward = GetProofOfStakeReward(
         nCoinAge, nFees, GlobalCPUMiningCPID.cpid, false, 0,
         pindexPrev->nTime, pindexPrev,"createcoinstake",
         OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
@@ -1027,6 +1228,108 @@ void StakeMiner(CWallet *pwallet)
     RenameThread("grc-stake-miner");
 
     MinerAutoUnlockFeature(pwallet);
+    
+    // Parse StakeSplit and SideStaking flags.
+    bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
+    LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
+
+    bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
+    LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
+
+    vector<string> vSubParam;
+    SideStakeAlloc vSideStakeAlloc;
+    std::string sAddress;
+    int64_t nMinStakeSplitValue;
+    double dEfficiency;
+    double dAllocation = 0.0;
+    double dSumAllocation = 0.0;
+    
+    // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
+    // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
+    if (fEnableSideStaking)
+    {
+        if (mapArgs.count("-sidestake") && mapMultiArgs["-sidestake"].size() > 0)
+        {
+            for (auto const& sSubParam : mapMultiArgs["-sidestake"])
+            {
+                ParseString(sSubParam, ',', vSubParam);
+                if (vSubParam.size() != 2)
+                {
+                    LogPrintf("WARN: StakeMiner: Incompletely SideStake Allocation specified. Skipping SideStake entry.");
+                    vSubParam.clear();
+                    continue;
+                }
+                   
+                sAddress = vSubParam[0];
+
+                CBitcoinAddress address(sAddress);
+                if (!address.IsValid())
+                {
+                    LogPrintf("WARN: StakeMiner: ignoring sidestake invalid address %s.", sAddress.c_str());
+                    vSubParam.clear();
+                    continue;
+                }
+
+                try
+                {
+                    dAllocation = stof(vSubParam[1]) / 100.0;
+                }
+                catch(...)
+                {
+                    LogPrintf("WARN: StakeMiner: Invalid allocation provided. Skipping allocation.");
+                    vSubParam.clear();
+                    continue;
+                }
+                
+                if (dAllocation <= 0)
+                {
+                    LogPrintf("WARN: StakeMiner: Negative or zero allocation provided. Skipping allocation.");
+                    vSubParam.clear();
+                    continue;
+                }
+
+                // The below will stop allocations if someone has made a mistake and the total adds up to more than 100%.
+                // Note this same check is also done in SplitCoinStakeOutput, but it needs to be done here for two reasons:
+                // 1. Early alertment in the debug log, rather than when the first kernel is found, and 2. When the UI is
+                // hooked up, the SideStakeAlloc vector will be filled in by other than reading the config file and will
+                // skip the above code.
+                dSumAllocation += dAllocation;
+                if (dSumAllocation > 1.0)
+                {
+                    LogPrintf("WARN: StakeMiner: allocation percentage over 100\%, ending sidestake allocations.");
+                    break;
+                }
+
+                vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
+                LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
+
+                vSubParam.clear();   
+            }
+        }
+        // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
+        // was provided in the config file, so warn in the debug log.
+        if (!dSumAllocation)
+            LogPrintf("WARN: StakeMiner: enablesidestaking was set in config but nothing has been allocated for distribution!");
+    }
+
+    // If stake output splitting is enabled, determine efficiency and minimum stake split value.
+    if (fEnableStakeSplit)
+    {
+        // Pull efficiency for UTXO staking from config, but constrain to the interval [0.75, 0.98]. Use default of 0.90.
+        dEfficiency = (double)GetArg("-stakingefficiency", 90) / 100;
+        if (dEfficiency > 0.98)
+            dEfficiency = 0.98;
+        else if (dEfficiency < 0.75)
+            dEfficiency = 0.75;
+
+        LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
+
+        // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
+        // Default to 800 and do not allow it to be specified below 800 GRC.
+        nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
+
+        LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
+    }
 
     supercfwd::fEnable= GetBoolArg("-supercfwd",true);
     if(fDebug) LogPrintf("supercfwd::fEnable= %d",supercfwd::fEnable);
@@ -1086,15 +1389,21 @@ void StakeMiner(CWallet *pwallet)
             continue;
         StakeBlock.nTime= StakeTX.nTime;
 
-        // * create rest of the block
+        // * create rest of the block. This needs to be moved to after CreateGridcoinReward,
+        // because stake output splitting needs to be done beforehand for size considerations.
         if( !CreateRestOfTheBlock(StakeBlock,pindexPrev) )
             continue;
         LogPrintf("StakeMiner: created rest of the block");
 
-        // * add gridcoin reward to coinstake
-        if( !CreateGridcoinReward(StakeBlock,BoincData,StakeCoinAge,pindexPrev) )
+        // * add gridcoin reward to coinstake, fill-in nReward
+        int64_t nReward = 0;
+        if( !CreateGridcoinReward(StakeBlock, BoincData, StakeCoinAge, pindexPrev, nReward) )
             continue;
         LogPrintf("StakeMiner: added gridcoin reward to coinstake");
+        
+        // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
+        if (fEnableStakeSplit || fEnableSideStaking)
+            SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
 
         AddNeuralContractOrVote(StakeBlock, BoincData);
 

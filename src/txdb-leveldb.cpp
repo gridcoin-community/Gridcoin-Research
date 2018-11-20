@@ -466,12 +466,7 @@ bool CTxDB::LoadBlockIndex()
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
-    if (fTestNet) nCheckDepth = 3000; //Check the last 3000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
 
-    if (nCheckDepth == 0)
-        nCheckDepth = 1000000000; // suffices until the year 19000
-    if (nCheckDepth > nBestHeight)
-        nCheckDepth = nBestHeight;
     LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
     CBlockIndex* pindexFork = NULL;
     map<pair<unsigned int, unsigned int>, CBlockIndex*> mapBlockPos;
@@ -619,12 +614,10 @@ bool CTxDB::LoadBlockIndex()
     if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
     {
         LogPrintf(" RA Starting %i %i %i ", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
-        while (pindex->nHeight < pindexBest->nHeight)
+        for(; pindex != NULL; pindex = pindex->pnext)
         {
-            if (!pindex || !pindex->pnext) break;
-            pindex = pindex->pnext;
-            if (pindex == pindexBest) break;
-            if (pindex==NULL || !pindex->IsInMainChain()) continue;
+            if (!pindex->IsInMainChain())
+                continue;
 
             if(fQtActive)
             {

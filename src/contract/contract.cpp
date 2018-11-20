@@ -49,13 +49,10 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     return bValid;
 }
 
-std::string SignMessage(std::string sMsg, std::string sPrivateKey)
+std::string SignMessage(const std::string& sMsg, CKey& key)
 {
-    CKey key;
     std::vector<unsigned char> vchMsg = std::vector<unsigned char>(sMsg.begin(), sMsg.end());
-    std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
     std::vector<unsigned char> vchSig;
-    key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
     if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
     {
         return "Unable to sign message, check private key.";
@@ -63,6 +60,14 @@ std::string SignMessage(std::string sMsg, std::string sPrivateKey)
     const std::string sig(vchSig.begin(), vchSig.end());
     std::string SignedMessage = EncodeBase64(sig);
     return SignedMessage;
+}
+
+std::string SignMessage(std::string sMsg, std::string sPrivateKey)
+{
+    CKey key;
+    std::vector<unsigned char> vchPrivKey = ParseHex(sPrivateKey);
+    key.SetPrivKey(CPrivKey(vchPrivKey.begin(), vchPrivKey.end())); // if key is not correct openssl may crash
+    return SignMessage(sMsg, key);
 }
 
 std::string SendMessage(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
@@ -106,9 +111,14 @@ bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, 
         return false;
     }
     // Returns the Signature of the CPID+BlockHash message.
-    std::string sPrivateKey = GetStoredBeaconPrivateKey(sCPID);
+    CKey keyBeacon;
+    if(!GetStoredBeaconPrivateKey(sCPID, keyBeacon))
+    {
+        sError = "No beacon key";
+        return false;
+    }
     std::string sMessage = sCPID + sBlockHash;
-    sSignature = SignMessage(sMessage,sPrivateKey);
+    sSignature = SignMessage(sMessage,keyBeacon);
     // If we failed to sign then return false
     if (sSignature == "Unable to sign message, check private key.")
     {

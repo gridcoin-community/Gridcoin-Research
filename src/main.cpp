@@ -26,6 +26,7 @@
 #include "appcache.h"
 #include "tally.h"
 #include "contract/contract.h"
+#include "contract/superblock.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -41,11 +42,9 @@
 #include <math.h>
 
 extern std::string NodeAddress(CNode* pfrom);
-extern std::string ConvertBinToHex(std::string a);
-extern std::string ConvertHexToBin(std::string a);
 extern bool WalletOutOfSync();
-extern bool WriteKey(std::string sKey, std::string sValue);
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
@@ -202,10 +201,9 @@ int64_t nTransactionFee = MIN_TX_FEE;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
-std::map<std::string, double> mvNeuralNetworkHash;
-std::map<std::string, double> mvCurrentNeuralNetworkHash;
-
-std::map<std::string, double> mvNeuralVersion;
+std::unordered_map<std::string, double> mvNeuralNetworkHash;
+std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
+std::unordered_map<std::string, double> mvNeuralVersion;
 
 std::map<std::string, StructCPID> mvDPOR;
 std::map<std::string, StructCPID> mvDPORCopy;
@@ -689,7 +687,15 @@ void GetGlobalStatus()
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        GlobalStatusStruct.poll = msPoll;
+        try
+        {
+            GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
+        }
+        catch (std::exception &e)
+        {
+            GlobalStatusStruct.poll = _("No current polls");
+            LogPrintf("Error obtaining last poll: %s", e.what());
+        }
 
         GlobalStatusStruct.status.clear();
 
@@ -728,6 +734,40 @@ void GetGlobalStatus()
         LogPrintf("Error obtaining status");
         return;
     }
+}
+
+std::string GetCurrentOverviewTabPoll()
+{
+    std::string poll = "";
+    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
+    std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
+    uint64_t uPollExpiration = 0;
+    // Alerts are displayed as polls but do not have an expiration
+    if(sPollExpiration.empty())
+    {
+        uPollExpiration = pindexBest->nTime;
+    }
+    else
+    {
+        try
+        {
+            uPollExpiration = stoll(sPollExpiration);
+        }
+        catch(std::exception &e)
+        {
+            // Malformed poll expiration, don't display
+            uPollExpiration = 0;
+        }
+    }
+    if (uPollExpiration >= pindexBest->nTime)
+    {
+        poll = sMessageKey.substr(0,80);
+    }
+    else
+    {
+        poll = _("No current polls");
+    }
+    return poll;
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)
@@ -1957,7 +1997,7 @@ double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstr
 
 // miner's coin base reward
 int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
-{    
+{
     //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
     int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
     if (fDebug && GetBoolArg("-printcreation"))
@@ -2887,165 +2927,11 @@ bool LoadSuperblock(std::string data, int64_t nTime, int height)
         return true;
 }
 
-std::string CharToString(char c)
-{
-    std::stringstream ss;
-    std::string sOut = "";
-    ss << c;
-    ss >> sOut;
-    return sOut;
-}
-
-
-template< typename T >
-std::string int_to_hex( T i )
-{
-  std::stringstream stream;
-  stream << "0x"
-         << std::setfill ('0') << std::setw(sizeof(T)*2)
-         << std::hex << i;
-  return stream.str();
-}
-
-std::string DoubleToHexStr(double d, int iPlaces)
-{
-    int nMagnitude = atoi(RoundToString(d,0).c_str());
-    std::string hex_string = int_to_hex(nMagnitude);
-    std::string sOut = "00000000" + hex_string;
-    std::string sHex = sOut.substr(sOut.length()-iPlaces,iPlaces);
-    return sHex;
-}
-
-int HexToInt(std::string sHex)
-{
-    int x;
-    std::stringstream ss;
-    ss << std::hex << sHex;
-    ss >> x;
-    return x;
-}
-std::string ConvertHexToBin(std::string a)
-{
-    if (a.empty()) return "";
-    std::string sOut = "";
-    for (unsigned int x = 1; x <= a.length(); x += 2)
-    {
-       std::string sChunk = a.substr(x-1,2);
-       int i = HexToInt(sChunk);
-       char c = (char)i;
-       sOut.push_back(c);
-    }
-    return sOut;
-}
-
-
-double ConvertHexToDouble(std::string hex)
-{
-    int d = HexToInt(hex);
-    double dOut = (double)d;
-    return dOut;
-}
-
-
-std::string ConvertBinToHex(std::string a)
-{
-      if (a.empty()) return "0";
-      std::string sOut = "";
-      for (unsigned int x = 1; x <= a.length(); x++)
-      {
-           char c = a[x-1];
-           int i = (int)c;
-           std::string sHex = DoubleToHexStr((double)i,2);
-           sOut += sHex;
-      }
-      return sOut;
-}
-
-std::string UnpackBinarySuperblock(std::string sBlock)
-{
-    // 12-21-2015: R HALFORD: If the block is not binary, return the legacy format for backward compatibility
-    std::string sBinary = ExtractXML(sBlock,"<BINARY>","</BINARY>");
-    if (sBinary.empty()) return sBlock;
-    std::string sZero = ExtractXML(sBlock,"<ZERO>","</ZERO>");
-    double dZero = RoundFromString(sZero,0);
-    // Binary data support structure:
-    // Each CPID consumes 16 bytes and 2 bytes for magnitude: (Except CPIDs with zero magnitude - the count of those is stored in XML node <ZERO> to save space)
-    // 1234567890123456MM
-    // MM = Magnitude stored as 2 bytes
-    // No delimiter between CPIDs, Step Rate = 18
-    std::string sReconstructedMagnitudes = "";
-    for (unsigned int x = 0; x < sBinary.length(); x += 18)
-    {
-        if (sBinary.length() >= x+18)
-        {
-            std::string bCPID = sBinary.substr(x,16);
-            std::string bMagnitude = sBinary.substr(x+16,2);
-            std::string sCPID = ConvertBinToHex(bCPID);
-            std::string sHexMagnitude = ConvertBinToHex(bMagnitude);
-            double dMagnitude = ConvertHexToDouble("0x" + sHexMagnitude);
-            std::string sRow = sCPID + "," + RoundToString(dMagnitude,0) + ";";
-            sReconstructedMagnitudes += sRow;
-        }
-    }
-    // Append zero magnitude researchers so the beacon count matches
-    for (double d0 = 1; d0 <= dZero; d0++)
-    {
-            std::string sZeroCPID = "0";
-            std::string sRow1 = sZeroCPID + ",15;";
-            sReconstructedMagnitudes += sRow1;
-    }
-    std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
-    std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
-    std::string sReconstructedBlock = "<AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES><MAGNITUDES>" + sReconstructedMagnitudes + "</MAGNITUDES>";
-    return sReconstructedBlock;
-}
-
-std::string PackBinarySuperblock(std::string sBlock)
-{
-    std::string sMagnitudes = ExtractXML(sBlock,"<MAGNITUDES>","</MAGNITUDES>");
-    std::string sAverages   = ExtractXML(sBlock,"<AVERAGES>","</AVERAGES>");
-    std::string sQuotes     = ExtractXML(sBlock,"<QUOTES>","</QUOTES>");
-    // For each CPID in the superblock, convert data to binary
-    std::vector<std::string> vSuperblock = split(sMagnitudes.c_str(),";");
-    std::string sBinary = "";
-    double dZeroMagCPIDCount = 0;
-    for (unsigned int i = 0; i < vSuperblock.size(); i++)
-    {
-            if (vSuperblock[i].length() > 1)
-            {
-                std::string sPrefix = "00000000000000000000000000000000000" + ExtractValue(vSuperblock[i],",",0);
-                std::string sCPID = sPrefix.substr(sPrefix.length()-32,32);
-                double magnitude = RoundFromString(ExtractValue("0"+vSuperblock[i],",",1),0);
-                if (magnitude < 0)     magnitude=0;
-                if (magnitude > 32767) magnitude = 32767;  // Ensure we do not blow out the binary space (technically we can handle 0-65535)
-                std::string sBinaryCPID   = ConvertHexToBin(sCPID);
-                std::string sHexMagnitude = DoubleToHexStr(magnitude,4);
-                std::string sBinaryMagnitude = ConvertHexToBin(sHexMagnitude);
-                std::string sBinaryEntry  = sBinaryCPID+sBinaryMagnitude;
-                if (sCPID=="00000000000000000000000000000000")
-                {
-                    dZeroMagCPIDCount += 1;
-                }
-                else
-                {
-                    sBinary += sBinaryEntry;
-                }
-
-            }
-    }
-    std::string sReconstructedBinarySuperblock = "<ZERO>" + RoundToString(dZeroMagCPIDCount,0) + "</ZERO><BINARY>" + sBinary + "</BINARY><AVERAGES>" + sAverages + "</AVERAGES><QUOTES>" + sQuotes + "</QUOTES>";
-    return sReconstructedBinarySuperblock;
-}
-
-
-
-
 double ClientVersionNew()
 {
     double cv = BlockVersion(FormatFullVersion());
     return cv;
 }
-
 
 int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
 {
@@ -3069,21 +2955,21 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     if (nMinDepth < 12) nMinDepth=12;
     while (pblockIndex->nHeight > nMinDepth)
     {
-        pblockIndex = pblockIndex->pprev;
-        LogPrintf("Money Supply height %d", pblockIndex->nHeight);
+            pblockIndex = pblockIndex->pprev;
+            LogPrintf("Money Supply height %d", pblockIndex->nHeight);
 
-        if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
-        if (pblockIndex == pindexGenesisBlock)
-        {
-            return nGenesisSupply;
-        }
-        if (pblockIndex->nMoneySupply > nGenesisSupply)
-        {
-            //Set index back to original pointer
-            pindexcurrent = pblockMemory;
-            //Return last valid money supply
-            return pblockIndex->nMoneySupply;
-        }
+            if (pblockIndex == NULL || !pblockIndex->IsInMainChain()) continue;
+            if (pblockIndex == pindexGenesisBlock)
+            {
+                return nGenesisSupply;
+            }
+            if (pblockIndex->nMoneySupply > nGenesisSupply)
+            {
+                //Set index back to original pointer
+                pindexcurrent = pblockMemory;
+                //Return last valid money supply
+                return pblockIndex->nMoneySupply;
+            }
     }
     // At this point, we fall back to the old logic with a minimum of the genesis supply (should never happen - if it did, blockchain will need rebuilt anyway due to other fields being invalid):
     pindexcurrent = pblockMemory;
@@ -3191,7 +3077,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                         nTotalCoinstake += tx.vout[i].nValue;
                     }
                     if (fDebug10)   LogPrintf(" nHeight %d; nTCS %f; nTxValueOut %f",
-                                              pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
+                        pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
                 }
 
                 if (pindex->nVersion >= 10)
@@ -3227,8 +3113,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // Check coinbase reward
         if (vtx[0].GetValueOut() > nReward)
             return DoS(50, error("ConnectBlock[] : coinbase reward exceeded (actual=%" PRId64 " vs calculated=%" PRId64 ")",
-                                 vtx[0].GetValueOut(),
-                       nReward));
+                   vtx[0].GetValueOut(),
+                   nReward));
     }
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
@@ -3256,7 +3142,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
-        // ppcoin: coin stake tx earns reward instead of paying fee
+            // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
@@ -3346,72 +3232,72 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         // ResearchAge 1:
         GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                              pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+            pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         if (IsResearcher(bb.cpid))
         {
-            //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
-            double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
-            if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
+                //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
+                double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? bb.ResearchSubsidy*.15 : 1;
+                if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
 
-            if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
-            {
-                return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
-                                     bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
-                                     dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
-            }
-
-            if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
-            {
-                std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-                LogPrintf("******  %s ***** ",sNarr);
-            }
-
-            if (IsResearchAgeEnabled(pindex->nHeight)
-                && (BlockNeedsChecked(nTime) || nVersion>=9))
-            {
-
-                // 6-4-2017 - Verify researchers stored block magnitude
-                // 2018 02 04 - Moved here for better effect.
-                double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
-                if( bb.Magnitude > 0
-                    && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
-                    && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
+                if ((bb.ResearchSubsidy + bb.InterestSubsidy + dDrift) < dStakeRewardWithoutFees)
                 {
-                    return DoS(20, error(
-                                   "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
-                                   bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
+                        return DoS(20, error("ConnectBlock[] : Researchers Interest %f + Research %f + TimeDrift %f = %f exceeded by StakeRewardWithoutFees %f, with mint %f, Out_Interest %f, OUT_POR %f, Fees %f, for CPID %s",
+                            bb.InterestSubsidy, bb.ResearchSubsidy, dDrift, bb.ResearchSubsidy + bb.InterestSubsidy + dDrift,
+                            dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), bb.cpid.c_str()));
                 }
 
-                // 2018 02 04 - Brod - Move cpid check here for better effect
-                /* Only signature check is sufficient here, but kiss and
-                            call the function. The height is of previous block. */
-                if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
-                {
-                    if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
-                        return DoS(20, error(
-                                       "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
-                                       bb.cpid.c_str(), bb.cpidv2.c_str(),
-                                       bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
-                    else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
-                }
-
-                // Mitigate DPOR Relay attack
-                // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
                 if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
                 {
-                    std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-                    LogPrintf("******  %s ***** ", sNarr);
-                    if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
+                            std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
+                            LogPrintf("******  %s ***** ",sNarr);
                 }
 
-                if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
+                if (IsResearchAgeEnabled(pindex->nHeight)
+                    && (BlockNeedsChecked(nTime) || nVersion>=9))
                 {
-                    StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
-                    GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                                          pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+
+                        // 6-4-2017 - Verify researchers stored block magnitude
+                        // 2018 02 04 - Moved here for better effect.
+                        double dNeuralNetworkMagnitude = CalculatedMagnitude2(bb.cpid, nTime, false);
+                        if( bb.Magnitude > 0
+                            && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000))
+                            && bb.Magnitude > (dNeuralNetworkMagnitude*1.25) )
+                        {
+                            return DoS(20, error(
+                                "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
+                                bb.Magnitude, dNeuralNetworkMagnitude, bb.cpid.c_str()));
+                        }
+
+                        // 2018 02 04 - Brod - Move cpid check here for better effect
+                        /* Only signature check is sufficient here, but kiss and
+                            call the function. The height is of previous block. */
+                        if( !IsCPIDValidv2(bb,pindex->nHeight-1) )
+                        {
+                    if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
+                                return DoS(20, error(
+                                    "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                                     bb.cpid.c_str(), bb.cpidv2.c_str(),
+                                     bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
+                            else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
+                        }
+
+                        // Mitigate DPOR Relay attack
+                        // bb.LastBlockhash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
+                        if (bb.lastblockhash != pindex->pprev->GetBlockHash().GetHex())
+                        {
+                            std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
+                            LogPrintf("******  %s ***** ", sNarr);
+                            if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
+                        }
+
+                if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
+                        {
+                            StructCPID st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
+                            GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
+                                        pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
                     if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
-                    {
+                            {
                         if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
                             return DoS(10,error(
                                        "ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
@@ -3419,9 +3305,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else
                                 LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                                     bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
-                    }
+                                }
+                        }
                 }
-            }
         }
 
         //Approve first coinstake in DPOR block
@@ -3429,26 +3315,26 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
             if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
             {
-                StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
-                if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
-                {
-                    double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
-                    if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
+                    StructCPID strUntrustedHost = GetInitializedStructCPID2(bb.cpid,mvMagnitudes);
+                    if (bb.ResearchSubsidy > strUntrustedHost.totalowed)
                     {
-                        LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                  deficit, bb.cpid, (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
-                                  OUT_POR, vtx[0].hashBoinc.c_str());
-                    }
-                    else
-                    {
-                        return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                     bb.cpid.c_str(), bb.ResearchSubsidy,
-                                     OUT_POR, vtx[0].hashBoinc.c_str());
+                        double deficit = strUntrustedHost.totalowed - bb.ResearchSubsidy;
+                        if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
+                        {
+                            LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                   deficit, bb.cpid, (double)strUntrustedHost.Accuracy, bb.ResearchSubsidy,
+                                   OUT_POR, vtx[0].hashBoinc.c_str());
+                        }
+                        else
+                        {
+                            return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
+                                         bb.cpid.c_str(), bb.ResearchSubsidy,
+                                         OUT_POR, vtx[0].hashBoinc.c_str());
+                        }
                     }
                 }
             }
         }
-    }
 
     //Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 30 blocks)
 
@@ -3502,14 +3388,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 if (!VerifySuperblock(superblock, pindex))
                 {
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
-                                 neural_hash.c_str(), consensus_hash.c_str());
+                                        neural_hash.c_str(), consensus_hash.c_str());
                 }
                 if (!IsResearchAgeEnabled(pindex->nHeight))
                 {
                     if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                     neural_hash.c_str(), consensus_hash.c_str());
+                                        neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
                 else
@@ -3517,7 +3403,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     if (consensus_hash != neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                     neural_hash.c_str(), consensus_hash.c_str());
+                                        neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
 
@@ -3564,15 +3450,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         stCPID.ResearchSubsidy += bb.ResearchSubsidy;
         if (pindex->nHeight > stCPID.LastBlock)
         {
-            stCPID.LastBlock = pindex->nHeight;
-            stCPID.BlockHash = pindex->GetBlockHash().GetHex();
+                stCPID.LastBlock = pindex->nHeight;
+                stCPID.BlockHash = pindex->GetBlockHash().GetHex();
         }
 
         if (pindex->nMagnitude > 0)
         {
-            stCPID.Accuracy++;
-            stCPID.TotalMagnitude += pindex->nMagnitude;
-            stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
+                stCPID.Accuracy++;
+                stCPID.TotalMagnitude += pindex->nMagnitude;
+                stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
         }
 
         if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
@@ -4178,8 +4064,6 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
 bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
-
-    if (GetHash()==hashGenesisBlock || GetHash()==hashGenesisBlockTestNet) return true;
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
@@ -4777,11 +4661,13 @@ void GridcoinServices()
             }
     }
 
-
-    if (TimerMain("send_beacon",180))
+    /* Do this only for users with valid CPID */
+    if (TimerMain("send_beacon",180) && IsResearcher(GlobalCPUMiningCPID.cpid))
     {
         std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-        if (tBeaconPublicKey.empty() && IsResearcher(GlobalCPUMiningCPID.cpid))
+
+        /* If there is no public key, beacon needs advertising */
+        if (tBeaconPublicKey.empty())
         {
             std::string sOutPubKey = "";
             std::string sOutPrivKey = "";
@@ -4794,7 +4680,13 @@ void GridcoinServices()
                 LOCK(MinerStatus.lock);
                 msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
             }
+        } else {
+            /* If public key is set, try to import it's private part from
+             * config. The function fails fast if there are none in config.
+             */
+            ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
         }
+
     }
 
     if (TimerMain("gather_cpids",480))
@@ -5285,58 +5177,6 @@ int GetFilesize(FILE* file)
     return nFilesize;
 }
 
-bool WriteKey(std::string sKey, std::string sValue)
-{
-    // Allows Gridcoin to store the key value in the config file.
-    boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
-    if (!filesystem::exists(pathConfigFile))  return false;
-    boost::to_lower(sKey);
-    std::string sLine = "";
-    ifstream streamConfigFile;
-    streamConfigFile.open(pathConfigFile.string().c_str());
-    std::string sConfig = "";
-    bool fWritten = false;
-    if(streamConfigFile)
-    {
-       while(getline(streamConfigFile, sLine))
-       {
-            std::vector<std::string> vEntry = split(sLine,"=");
-            if (vEntry.size() == 2)
-            {
-                std::string sSourceKey = vEntry[0];
-                std::string sSourceValue = vEntry[1];
-                boost::to_lower(sSourceKey);
-
-                if (sSourceKey==sKey)
-                {
-                    sSourceValue = sValue;
-                    sLine = sSourceKey + "=" + sSourceValue;
-                    fWritten=true;
-                }
-            }
-            sLine = strReplace(sLine,"\r","");
-            sLine = strReplace(sLine,"\n","");
-            sLine += "\n";
-            sConfig += sLine;
-       }
-    }
-    if (!fWritten)
-    {
-        sLine = sKey + "=" + sValue + "\n";
-        sConfig += sLine;
-    }
-
-    streamConfigFile.close();
-
-    FILE *outFile = fopen(pathConfigFile.string().c_str(),"w");
-    fputs(sConfig.c_str(), outFile);
-    fclose(outFile);
-
-    ReadConfigFile(mapArgs, mapMultiArgs);
-    return true;
-}
-
 
 
 
@@ -5595,7 +5435,8 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
     try
     {
-        StructCPID stMag = GetInitializedStructCPID2(pIndex->GetCPID(),mvMagnitudesCopy);
+        const std::string& cpid = pIndex->GetCPID();
+        StructCPID stMag = GetInitializedStructCPID2(cpid, mvMagnitudesCopy);
         stMag.InterestSubsidy += pIndex->nInterestSubsidy;
         stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
         if (pIndex->nHeight > stMag.LastBlock)
@@ -5625,11 +5466,10 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
         stMag.interestPayments += pIndex->nInterestSubsidy;
         stMag.AverageRAC = stMag.rac / (stMag.entries+.01);
         double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag,
-                                              pIndex->GetCPID(), pIndex->nTime, total_owed, pIndex->nMagnitude);
+        stMag.owed = GetOutstandingAmountOwed(stMag, cpid, pIndex->nTime, total_owed, pIndex->nMagnitude);
 
         stMag.totalowed = total_owed;
-        mvMagnitudesCopy[pIndex->GetCPID()] = stMag;
+        mvMagnitudesCopy[cpid] = stMag;
     }
     catch (const std::bad_alloc& ba)
     {
@@ -5738,7 +5578,7 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
     const HashSet& hashes = GetCPIDBlockHashes(cpid);
     ZeroOutResearcherTotals(cpid);
 
-
+    const uint128 cpid128(cpid);
     StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
     for (HashSet::iterator it = hashes.begin(); it != hashes.end(); ++it)
     {
@@ -5754,7 +5594,8 @@ StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFr
         CBlockIndex* pblockindex = mapItem->second;
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
-           pblockindex->GetCPID() != cpid)
+           pblockindex->IsUserCPID() == false ||
+           pblockindex->cpid != cpid128)
             continue;
 
         // Block located and verified.
@@ -5843,19 +5684,22 @@ StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::stri
 
 bool ComputeNeuralNetworkSupermajorityHashes()
 {
-    if (nBestHeight < 15)  return true;
+    if (nBestHeight < 15)
+        return true;
+    
     //Clear the neural network hash buffer
-    if (mvNeuralNetworkHash.size() > 0)  mvNeuralNetworkHash.clear();
-    if (mvNeuralVersion.size() > 0)  mvNeuralVersion.clear();
-    if (mvCurrentNeuralNetworkHash.size() > 0) mvCurrentNeuralNetworkHash.clear();
+    mvNeuralNetworkHash.clear();
+    mvNeuralVersion.clear();
+    mvCurrentNeuralNetworkHash.clear();
 
-    //Clear the votes
-    /* ClearCache was no-op in previous version due to bug. Now it was fixed,
-        but we have to emulate the old behaviour to prevent early forks. */
-    if(pindexBest && pindexBest->nVersion>=9)
-    {
+    // ClearCache was no-op in previous version due to bug. Now it was fixed,	
+    // and we previously emulated the old behavior to prevent early forks when
+    // switching to v9. We want to clear these to avoid the data stacking up
+    // with time. If this causes an issue when syncing then considering making
+    // this >=v9 only again.
         ClearCache("neuralsecurity");
-    }
+    ClearCache("currentneuralsecurity");
+
     WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
     try
     {
@@ -5867,12 +5711,18 @@ bool ComputeNeuralNetworkSupermajorityHashes()
         CBlockIndex* pblockindex = pindexBest;
         while (pblockindex->nHeight > nMinDepth)
         {
-            if (!pblockindex || !pblockindex->pprev) return false;
+            if (!pblockindex || !pblockindex->pprev)
+                return false;
+            
             pblockindex = pblockindex->pprev;
-            if (pblockindex == pindexGenesisBlock) return false;
-            if (!pblockindex->IsInMainChain()) continue;
+            if (pblockindex == pindexGenesisBlock)
+                return false;
+            if (!pblockindex->IsInMainChain())
+                continue;
+            
             block.ReadFromDisk(pblockindex);
-            std::string hashboinc = "";
+            
+            std::string hashboinc;
             if (block.vtx.size() > 0) hashboinc = block.vtx[0].hashBoinc;
             if (!hashboinc.empty())
             {
@@ -5891,7 +5741,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                 //Increment Neural Network Hashes Supermajority (over the last N blocks)
                 IncrementNeuralNetworkSupermajority(bb.NeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10,pblockindex);
                 IncrementCurrentNeuralNetworkSupermajority(bb.CurrentNeuralHash,bb.GRCAddress,(nMaxDepth-pblockindex->nHeight)+10);
-
             }
         }
 
@@ -5901,12 +5750,8 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     {
             LogPrintf("Neural Error while memorizing hashes.");
     }
-    catch(...)
-    {
-        LogPrintf("Neural error While Memorizing Hashes! [1]");
-    }
+    
     return true;
-
 }
 
 bool TallyResearchAverages(CBlockIndex* index)
@@ -6229,7 +6074,6 @@ void PrintBlockTree()
 bool LoadExternalBlockFile(FILE* fileIn)
 {
     int64_t nStart = GetTimeMillis();
-
     int nLoaded = 0;
     {
         LOCK(cs_main);
@@ -6272,6 +6116,7 @@ bool LoadExternalBlockFile(FILE* fileIn)
                     if (ProcessBlock(NULL,&block,false))
                     {
                         nLoaded++;
+                        LogPrintf("Blocks/s: %f", nLoaded / ((GetTimeMillis() - nStart) / 1000.0));
                         nPos += 4 + nSize;
                     }
                 }
@@ -8186,36 +8031,29 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
 void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance)
 {
-    if (NeuralHash.length() < 5) return;
-    double temp_hashcount = 0;
-    if (mvCurrentNeuralNetworkHash.size() > 0)
-    {
-            temp_hashcount = mvCurrentNeuralNetworkHash[NeuralHash];
-    }
+    if (NeuralHash.length() < 5)
+        return;    
+
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("currentneuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache("currentneuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
+    
     WriteCache("currentneuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
-    if (temp_hashcount == 0)
-    {
-        mvCurrentNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
-    }
-    double multiplier = 200;
-    if (distance < 40) multiplier = 400;
+
+    double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
-    temp_hashcount += votes;
-    mvCurrentNeuralNetworkHash[NeuralHash] = temp_hashcount;
+    mvCurrentNeuralNetworkHash[NeuralHash] += votes;
 }
-
-
 
 void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex)
 {
-    if (NeuralHash.length() < 5) return;
+    if (NeuralHash.length() < 5)
+        return;
+    
     if (pblockindex->nVersion >= 8)
     {
         try
@@ -8239,30 +8077,21 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
             return;
         }
     }
-    double temp_hashcount = 0;
-    if (mvNeuralNetworkHash.size() > 0)
-    {
-            temp_hashcount = mvNeuralNetworkHash[NeuralHash];
-    }
+
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    std::string Security = ReadCache("neuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache("neuralsecurity",GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
+    
     WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
-    if (temp_hashcount == 0)
-    {
-        mvNeuralNetworkHash.insert(map<std::string,double>::value_type(NeuralHash,0));
-    }
-    double multiplier = 200;
-    if (distance < 40) multiplier = 400;
-    double votes = (1/distance)*multiplier;
-    temp_hashcount += votes;
-    mvNeuralNetworkHash[NeuralHash] = temp_hashcount;
-}
 
+    double multiplier = distance < 40 ? 400 : 200;
+    double votes = (1/distance)*multiplier;
+    mvNeuralNetworkHash[NeuralHash] += votes;
+}
 
 void IncrementVersionCount(const std::string& Version)
 {
@@ -8300,26 +8129,32 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
 
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
 {
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
     double highest_popularity = -1;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    std::string neural_hash;    
+    for(auto& entry : sorted_hashes)
     {
-                double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
+        auto& hash = entry.first;
+        auto& popularity = entry.second;
+
                 // d41d8 is the hash of an empty magnitude contract - don't count it
-                if ( ((*ii).first != "d41d8cd98f00b204e9800998ecf8427e") && popularity > 0 && popularity > highest_popularity && (*ii).first != "TOTAL_VOTES")
+        if(popularity > 0 &&
+           popularity > highest_popularity &&
+           hash != "TOTAL_VOTES" &&
+           hash != "d41d8cd98f00b204e9800998ecf8427e")
                 {
                     highest_popularity = popularity;
-                    neural_hash = (*ii).first;
+            neural_hash = hash;
                 }
     }
+    
     out_popularity = highest_popularity;
     return neural_hash;
 }
-
-
-
-
-
 
 std::string GetNeuralNetworkReport()
 {
@@ -8327,13 +8162,14 @@ std::string GetNeuralNetworkReport()
     std::string neural_hash = "";
     std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
-    {
-                double popularity = mvNeuralNetworkHash[(*ii).first];
-                neural_hash = (*ii).first;
-                row = neural_hash+ "," + RoundToString(popularity,0);
-                report += row + "\n";
-    }
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
+        report += entry.first + "," + RoundToString(entry.second, 0) + "\n";
 
     return report;
 }
@@ -8344,8 +8180,6 @@ std::string GetOrgSymbolFromFeedKey(std::string feedkey)
     return Symbol;
 
 }
-
-
 
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
 {
@@ -8400,16 +8234,9 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
-                                        if (Contains(sMessageKey,"[Foundation"))
-                                        {
-                                                msPoll = "Foundation Poll: " + sMessageKey.substr(0,80);
-                                        }
-                                        else
-                                        {
-                                                msPoll = "Poll: " + sMessageKey.substr(0,80);
+                                    msPoll = msg;
                                         }
                                 }
-                        }
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
@@ -8461,6 +8288,10 @@ double GRCMagnitudeUnit(int64_t locktime)
 
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
+    // If not a researcher save cpu cycles and return 0
+    if (!IsResearcher(cpid))
+        return 0;
+
     double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
     if(pindexLast->nVersion>=9)
     {

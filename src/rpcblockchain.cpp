@@ -37,17 +37,13 @@ std::string PubKeyToAddress(const CScript& scriptPubKey);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 extern std::string GetProvableVotingWeightXML();
 bool AskForOutstandingBlocks(uint256 hashStart);
-bool WriteKey(std::string sKey, std::string sValue);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 extern std::string SuccessFail(bool f);
 extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
-std::string ConvertBinToHex(std::string a);
-std::string ConvertHexToBin(std::string a);
 bool bNetAveragesLoaded_retired;
-std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue, int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(std::string cpid);
@@ -215,7 +211,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("mint", mint);
     result.pushKV("MoneySupply", blockindex->nMoneySupply);
     result.pushKV("time", block.GetBlockTime());
-    result.pushKV("nonce", (int)block.nNonce);
+    result.pushKV("nonce", (uint64_t)block.nNonce);
     result.pushKV("bits", strprintf("%08x", block.nBits));
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
@@ -224,9 +220,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
     if (blockindex->pnext)
         result.pushKV("nextblockhash", blockindex->pnext->GetBlockHash().GetHex());
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
-    uint256 blockhash = block.GetPoWHash();
-    std::string sblockhash = blockhash.GetHex();
+    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);    
     bool IsPoR = false;
     IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
     std::string PoRNarr = "";
@@ -768,6 +762,7 @@ bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
 
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {
+    sOutPrivKey = "BUG! deprecated field used";
     LOCK(cs_main);
     {
         GetNextProject(false);
@@ -795,6 +790,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             sError = _("A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.");
             return false;
         }
+
         uint256 hashRand = GetRandHash();
         std::string email = GetArgument("email", "NA");
         boost::to_lower(email);
@@ -815,18 +811,15 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             return false;
         }
 
-        if (!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey))
+        CKey keyBeacon;
+        if(!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, keyBeacon))
         {
-            sError = "Failed to generate beacon keys. See debug.log or GenerateBeaconKeys.";
+            sError = "GEN_KEY_FAIL";
             return false;
         }
 
-        // Verify the Private key and Public Key are not empty after success of generating beacon keys
-        if (sOutPrivKey.empty() || sOutPubKey.empty())
-        {
-            sError = "Keypair is empty.";
-            return false;
-        }
+        // Convert the new pubkey into legacy hex format
+        sBeaconPublicKey= HexStr(keyBeacon.GetPubKey().Raw());
 
         GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
         std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
@@ -841,21 +834,10 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         try
         {
             // Backup config with old keys like a normal backup
+            // not needed, but extra backup does not hurt
             if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf")))
             {
                 sError = "Failed to backup old configuration file. Beacon not sent.";
-                return false;
-            }
-            // Backup config with new keys with beacon suffix
-            if (!StoreBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey))
-            {
-                sError = "Failed to store keys in configuration file. Beacon not sent.";
-                return false;
-            }
-            // Since keys successfully stored; backup the new beacon config
-            if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf", "beacon")))
-            {
-                sError = "Failed to back up configuration file. Beacon not sent, please manually roll back to previous configuration.";
                 return false;
             }
 
@@ -863,8 +845,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             sMessage = SendContract(sType,sName,sBase);
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
-            // Activate Beacon Keys in memory. This process is not automatic and has caused users who have a new keys while old ones exist in memory to perform a restart of wallet.
-            ActivateBeaconKeys(GlobalCPUMiningCPID.cpid, sOutPubKey, sOutPrivKey);
 
             return true;
         }
@@ -908,138 +888,6 @@ UniValue backupprivatekeys(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue burn2(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 4)
-        throw runtime_error(
-                "burn2 <burnaddress> <burnamount> <burnkey> <burndetail>\n"
-                "\n"
-                "<burnaddress> -> Address where the coins will be burned\n"
-                "<burnamount>  -> Amount of coins to be burned\n"
-                "<burnaddress> -> Burn key to be used\n"
-                "<burndetails> -> Details of the burn\n"
-                "\n"
-                "Burn coins on the network\n");
-
-    UniValue res(UniValue::VOBJ);
-    std::string sAddress = params[0].get_str();
-    double dAmount  = Round(params[1].get_real(), 6);
-    std::string sKey     = params[2].get_str();
-    std::string sDetail  = params[3].get_str();
-    CBitcoinAddress address(sAddress);
-    bool isValid = address.IsValid();
-
-    if (!isValid)
-    {
-        res.pushKV("Error", "Invalid GRC Burn Address");
-
-        return res;
-    }
-
-    if (dAmount == 0 || dAmount < 0)
-    {
-        res.pushKV("Error", "Burn amount must be > 0");
-
-        return res;
-    }
-
-    if (sKey.empty() || sDetail.empty())
-    {
-        res.pushKV("Error", "Burn Key and Burn Detail must be populated");
-
-        return res;
-    }
-
-    std::string sContract = "<KEY>" + sKey + "</KEY><DETAIL>" + sDetail + "</DETAIL>";
-
-    std::string sResult = BurnCoinsWithNewContract(true, "burn", sKey, sContract, AmountFromValue(1), dAmount, "", sAddress);
-
-    res.pushKV("Burn_Response", sResult);
-
-    return res;
-}
-
-UniValue encrypt(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "encrypt <walletpassphrase>\n"
-                "\n"
-                "<walletpassphrase> -> The password of your encrypted wallet\n"
-                "\n"
-                "Encrypts a walletpassphrase\n");
-
-    UniValue res(UniValue::VOBJ);
-    //Encrypt a phrase
-    std::string sParam = params[0].get_str();
-    std::string encrypted = AdvancedCryptWithHWID(sParam);
-
-    res.pushKV("Passphrase",encrypted);
-    res.pushKV("[Specify in config file] autounlock=",encrypted);
-
-    return res;
-}
-
-UniValue newburnaddress(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "newburnaddress [burntemplate]\n"
-                "\n"
-                "[burntemplate] -> Allow a vanity burn address\n"
-                "\n"
-                "Creates a new burn address\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    //3-12-2016 - R Halford - Allow the user to make vanity GRC Burn Addresses that have no corresponding private key
-    std::string sBurnTemplate = "GRCBurnAddressGRCBurnAddressGRCBurnAddress";
-
-    if (params.size() > 0)
-        sBurnTemplate = params[0].get_str();
-
-    // Address must start with the correct base58 network flag and address type for GRC
-    std::string sPrefix = (fTestNet) ? "mp" : "Rx";
-    std::string t34 = sPrefix + sBurnTemplate + "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-    t34 = t34.substr(0,34); // Template must be 34 characters
-    std::vector<unsigned char> vchDecoded34;
-    DecodeBase58(t34, vchDecoded34);
-    //Now we have the 34 digit address decoded from base58 to binary
-    std::string sDecoded34(vchDecoded34.begin(), vchDecoded34.end());
-    //Now we have a binary string - Chop off all but last 4 bytes (save space for the checksum)
-    std::string sDecoded30 = sDecoded34.substr(0,sDecoded34.length()-4);
-    //Convert to Hex first
-    vector<unsigned char> vchDecoded30(sDecoded30.begin(), sDecoded30.end());
-    std::string sDecodedHex = ConvertBinToHex(sDecoded30);
-    // Get sha256 Checksum of DecodedHex
-    uint256 hash = Hash(vchDecoded30.begin(), vchDecoded30.end());
-    // The BTC address spec calls for double SHA256 hashing
-    uint256 DoubleHash = Hash(hash.begin(),hash.end());
-    std::string sSha256 = DoubleHash.GetHex();
-    // Only use the first 8 hex bytes to retrieve the checksum
-    sSha256  = sSha256.substr(0,8);
-    // Combine the Hex Address prefix and the Sha256 Checksum to form the Hex version of the address (Note: There is no private key)
-    std::string combined = sDecodedHex + sSha256;
-    std::string sBinary = ConvertHexToBin(combined);
-    vector<unsigned char> v(sBinary.begin(), sBinary.end());
-    //Make the new address so that it passes base 58 Checks
-    std::string encoded1 = EncodeBase58(v);
-    std::string encoded2 = EncodeBase58Check(vchDecoded30);
-
-    res.pushKV("CombinedHex",combined);
-
-    if (encoded2.length() != 34)
-    {
-        res.pushKV("Burn Address Creation failed","NOTE: the input phrase must not include zeroes, or nonbase58 characters.");
-
-        return res;
-    }
-    // Give the user the new vanity burn address
-    res.pushKV("Burn Address",encoded2);
-
-    return res;
-}
-
 UniValue rain(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -1053,6 +901,139 @@ UniValue rain(const UniValue& params, bool fHelp)
     UniValue res(UniValue::VOBJ);
     std::string sNarr = executeRain(params[0].get_str());
     res.pushKV("Response", sNarr);
+    return res;
+}
+
+UniValue rainbymagnitude(const UniValue& params, bool fHelp)
+{
+    if (fHelp || (params.size() < 1 || params.size() > 2))
+        throw runtime_error(
+                "rainbymagnitude <amount> [message]\n"
+                "\n"
+                "<amount> --> Required: Specify amount of coints in double to be rained\n"
+                "[message] -> Optional: Provide a message rained to all rainees\n"
+                "\n"
+                "rain coins by magnitude on network");
+
+    UniValue res(UniValue::VOBJ);
+
+    double dAmount = params[0].get_real();
+
+    if (dAmount <= 0)
+        throw runtime_error("Amount must be greater then 0");
+
+    std::string sMessage = "";
+
+    if (params.size() > 1)
+        sMessage = params[1].get_str();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CWalletTx wtx;
+    wtx.mapValue["comment"] = "Rain By Magnitude";
+    std::set<CBitcoinAddress> setAddress;
+    std::vector<std::pair<CScript, int64_t> > vecSend;
+
+    wtx.hashBoinc = "<NARR>Rain By Magnitude: " + MakeSafeMessage(sMessage) + "</NARR>";
+
+    // Gather Magnitude data
+//    std::string sSuperblock = ReadCache("superblock", "magnitudes").value;
+
+//    if (sSuperblock.empty())
+//        throw runtime_error("Unable to load superblock data");
+
+//    std::vector<std::string> vSuperblock = split(sSuperblock, ";");
+
+    double dTotalAmount = 0;
+    int64_t nTotalAmount = 0;
+
+    StructCPID structcpid = mvNetwork["NETWORK"];
+
+    // Use total network magnitude here as using 115000 can results in a lower then intended sent amount due to a missing project
+    double dTotalNetworkMagnitude = structcpid.NetworkMagnitude;
+
+    for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
+    {
+        StructCPID structMag = mvMagnitudes[(*ii).first];
+
+        if (structMag.initialized &&
+            !structMag.cpid.empty() &&
+            structMag.Magnitude > 0
+           )
+        {
+            // Find beacon grc address
+            std::string scacheContract = ReadCache("beacon", structMag.cpid).value;
+
+            // Should never occur but we know seg faults can occur in some cases
+            if (scacheContract.empty())
+                continue;
+
+            std::string sContract = DecodeBase64(scacheContract);
+            std::string sGRCAddress = ExtractValue(sContract, ";", 2);
+
+            double dPayout = (structMag.Magnitude / dTotalNetworkMagnitude) * dAmount;
+
+            if (dPayout <= 0)
+                continue;
+
+            dTotalAmount += dPayout;
+
+            CBitcoinAddress address(sGRCAddress);
+
+            if (!address.IsValid())
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Gridcoin address: ") + sGRCAddress);
+
+            setAddress.insert(address);
+
+            CScript scriptPubKey;
+            scriptPubKey.SetDestination(address.Get());
+
+            int64_t nAmount = roundint64(dPayout * COIN);
+            nTotalAmount += nAmount;
+
+            vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
+        }
+    }
+
+    EnsureWalletIsUnlocked();
+    // Check funds
+    double dBalance = GetTotalBalance();
+
+    if (dTotalAmount > dBalance)
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
+    // Send
+    CReserveKey keyChange(pwalletMain);
+
+    int64_t nFeeRequired = 0;
+    bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired);
+
+    LogPrintf("Rain By Magnitude Transaction Created.");
+
+    if (!fCreated)
+    {
+        if (nTotalAmount + nFeeRequired > pwalletMain->GetBalance())
+            throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+
+        throw JSONRPCError(RPC_WALLET_ERROR, "Transaction creation failed");
+    }
+
+    LogPrintf("Committing.");
+    // Rain the recipients
+    if (!pwalletMain->CommitTransaction(wtx, keyChange))
+    {
+        LogPrintf("Rain By Magnitude Commit failed.");
+
+        throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
+    }
+    res.pushKV("Rain By Magnitude",  "Sent");
+    res.pushKV("TXID", wtx.GetHash().GetHex());
+    res.pushKV("Rain Amount Sent", dTotalAmount);
+    res.pushKV("TX Fee", ((double)nFeeRequired) / COIN);
+    res.pushKV("# of Recipients", (uint64_t)vecSend.size());
+
+    if (!sMessage.empty())
+        res.pushKV("Message", sMessage);
+
     return res;
 }
 
@@ -1081,6 +1062,13 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
+    /* Try to copy key from config. The call is no-op if already imported or
+     * nothing to import. This saves a migrating users from copy-pasting
+     * the key string to importprivkey command.
+     */
+    bool importResult= ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
+    res.pushKV("ConfigKeyImported", importResult);
+
     std::string sOutPubKey = "";
     std::string sOutPrivKey = "";
     std::string sError = "";
@@ -1088,7 +1076,6 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
     res.pushKV("Result",SuccessFail(fResult));
-    res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
     res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
     res.pushKV("Message",sMessage.c_str());
 
@@ -1101,7 +1088,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     else
     {
         res.pushKV("Public Key",sOutPubKey.c_str());
-        res.pushKV("Warning!","Your public and private research keys have been stored in gridcoinresearch.conf.  Do not lose your private key (It is non-recoverable).  It is recommended that you back up your gridcoinresearch.conf file on a regular basis.");
+        res.pushKV("Warning!","Your keys to research rewards have been stored in your wallet. It is recommended that you back up your files on a regular basis.");
     }
 
     return res;
@@ -1144,7 +1131,6 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
-    std::string sPrivKey = GetStoredBeaconPrivateKey(sCPID);
     int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
     std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
     bool hasBeacon = HasActiveBeacon(sCPID);
@@ -1153,25 +1139,12 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     res.pushKV("Beacon Exists",YesNo(hasBeacon));
     res.pushKV("Beacon Timestamp",timestamp.c_str());
     res.pushKV("Public Key", sPubKey.c_str());
-    res.pushKV("Private Key", sPrivKey.c_str());
+    res.pushKV("Private Key", "not-shown"); //TODO: show the key?
 
     std::string sErr = "";
 
     if (sPubKey.empty())
         sErr += "Public Key Missing. ";
-    if (sPrivKey.empty())
-        sErr += "Private Key Missing. ";
-
-    // Verify the users Local Public Key matches the Beacon Public Key
-    std::string sLocalPubKey = GetStoredBeaconPublicKey(sCPID);
-
-    res.pushKV("Local Configuration Public Key", sLocalPubKey.c_str());
-
-    if (sLocalPubKey.empty())
-        sErr += "Local configuration file Public Key missing. ";
-
-    if (sLocalPubKey != sPubKey && !sPubKey.empty())
-        sErr += "Local configuration public key does not match beacon public key.  This can happen if you copied the wrong public key into your configuration file.  Please request that your beacon is deleted, or look into walletbackups for the correct keypair. ";
 
     // Prior superblock Magnitude
     double dMagnitude = GetMagnitudeByCpidFromLastSuperblock(sCPID);
@@ -1210,60 +1183,12 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     if (!sErr.empty())
     {
         res.pushKV("Errors", sErr);
-        res.pushKV("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: execute advertisebeacon.");
+        res.pushKV("Help", "Note: If your beacon is missing its public key, or is not in the chain, you may try: advertisebeacon.");
         res.pushKV("Configuration Status","FAIL");
     }
 
     else
         res.pushKV("Configuration Status", "SUCCESSFUL");
-
-    return res;
-}
-
-UniValue cpids(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "cpids\n"
-                "\n"
-                "Displays information on your cpids\n");
-
-    UniValue res(UniValue::VARR);
-
-    //Dump vectors:
-
-    LOCK(cs_main);
-
-    if (mvCPIDs.size() < 1)
-        HarvestCPIDs(false);
-
-    LogPrintf("Generating cpid report");
-
-    for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-    {
-
-        StructCPID structcpid = mvCPIDs[(*ii).first];
-
-        if (structcpid.initialized)
-        {
-            if ((GlobalCPUMiningCPID.cpid.length() > 3 &&
-                 structcpid.cpid == GlobalCPUMiningCPID.cpid)
-                || IsResearcher(structcpid.cpid) || IsResearcher(GlobalCPUMiningCPID.cpid))
-            {
-                UniValue entry(UniValue::VOBJ);
-
-                entry.pushKV("Project",structcpid.projectname);
-                entry.pushKV("CPID",structcpid.cpid);
-                entry.pushKV("RAC",structcpid.rac);
-                entry.pushKV("Team",structcpid.team);
-                entry.pushKV("CPID Link",structcpid.link);
-                entry.pushKV("Debug Info",structcpid.errors);
-                entry.pushKV("Project Settings Valid for Gridcoin",structcpid.Iscpidvalid);
-
-                res.push_back(entry);
-            }
-        }
-    }
 
     return res;
 }
@@ -1408,10 +1333,15 @@ UniValue magnitude(const UniValue& params, bool fHelp)
 
     UniValue results(UniValue::VARR);
 
-    std::string cpid;
+    const std::string cpid = (params.size() > 0 &&
+                              !params[0].isNull() &&
+                              !params[0].get_str().empty()
+                             )
+            ? params[0].get_str()
+            : msPrimaryCPID;
 
-    if (params.size() > 0)
-        cpid = params[0].get_str();
+    if(cpid.empty())
+       throw runtime_error("CPID appears to be empty; unable to request magnitude report");
 
     {
         LOCK(cs_main);
@@ -1419,34 +1349,6 @@ UniValue magnitude(const UniValue& params, bool fHelp)
         results.push_back(MagnitudeReport(cpid));
     }
 
-    return results;
-}
-
-UniValue mymagnitude(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "mymagnitude\n"
-                "\n"
-                "Displays information for your magnitude in the network\n");
-
-    UniValue results(UniValue::VARR);
-
-    if (msPrimaryCPID.empty())
-    {
-        UniValue res(UniValue::VOBJ);
-
-        res.pushKV("Error", "Your CPID appears to be empty");
-
-        results.push_back(res);
-    }
-
-    else
-    {
-        LOCK(cs_main);
-
-        results = MagnitudeReport(msPrimaryCPID);
-    }
     return results;
 }
 
@@ -1502,50 +1404,6 @@ UniValue neuralreport(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue proveownership(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "proveownership\n"
-                "\n"
-                "Prove ownership of your CPID\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    HarvestCPIDs(true);
-    GetNextProject(true);
-
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    std::string sLongCPID = ComputeCPIDv2(email, GlobalCPUMiningCPID.boincruntimepublickey,1);
-    std::string sShortCPID = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey + email);
-    std::string sEmailMD5 = RetrieveMd5(email);
-    std::string sBPKMD5 = RetrieveMd5(GlobalCPUMiningCPID.boincruntimepublickey);
-
-    res.pushKV("Boinc E-Mail", email);
-    res.pushKV("Boinc Public Key", GlobalCPUMiningCPID.boincruntimepublickey);
-    res.pushKV("CPID", GlobalCPUMiningCPID.cpid);
-    res.pushKV("Computed Email Hash", sEmailMD5);
-    res.pushKV("Computed BPK", sBPKMD5);
-    res.pushKV("Computed CPID", sLongCPID);
-    res.pushKV("Computed Short CPID", sShortCPID);
-
-    bool fResult = CPID_IsCPIDValid(sShortCPID, sLongCPID, 1);
-
-    if (GlobalCPUMiningCPID.boincruntimepublickey.empty())
-    {
-        fResult = false;
-
-        res.pushKV("Error", "Boinc Public Key empty.  Try mounting your boinc project first, and ensure the gridcoin datadir setting is set if boinc is not in the default location.");
-    }
-
-    res.pushKV("CPID Valid", fResult);
-
-    return res;
-}
-
 UniValue resetcpids(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1562,52 +1420,6 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
     HarvestCPIDs(true);
     GetNextProject(true);
     res.pushKV("Reset", 1);
-
-    return res;
-}
-
-UniValue rsa(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "rsa\n"
-                "\n"
-                "Displays RSA report for your CPID\n");
-
-    UniValue res(UniValue::VARR);
-
-    if (msPrimaryCPID.empty() || msPrimaryCPID == "INVESTOR")
-        throw runtime_error(
-                "PrimaryCPID is empty or INVESTOR; No RSA available for this condition\n");
-
-    LOCK(cs_main);
-
-    res = MagnitudeReport(msPrimaryCPID);
-
-    return res;
-}
-
-UniValue rsaweight(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "rsaweight\n"
-                "\n"
-                "Display Rsaweight for your CPID\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    double out_magnitude = 0;
-    double out_owed = 0;
-
-    LOCK(cs_main);
-
-    int64_t RSAWEIGHT = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-    out_magnitude = GetUntrustedMagnitude(GlobalCPUMiningCPID.cpid, out_owed);
-
-    res.pushKV("RSA Weight", RSAWEIGHT);
-    res.pushKV("Magnitude", out_magnitude);
-    res.pushKV("RSA Owed", out_owed);
 
     return res;
 }
@@ -1716,55 +1528,6 @@ UniValue upgradedbeaconreport(const UniValue& params, bool fHelp)
     UniValue aUpgBR = GetUpgradedBeaconReport();
 
     return aUpgBR;
-}
-
-UniValue validcpids(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "validcpids\n"
-                "\n"
-                "Displays information about valid CPIDs collected from BOINC\n");
-
-    UniValue res(UniValue::VARR);
-
-    LOCK(cs_main);
-
-    //Dump vectors:
-    if (mvCPIDs.size() < 1)
-        HarvestCPIDs(false);
-
-    for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-    {
-        StructCPID structcpid = mvCPIDs[(*ii).first];
-
-        if (structcpid.initialized)
-        {
-            if (structcpid.cpid == GlobalCPUMiningCPID.cpid || !IsResearcher(structcpid.cpid))
-            {
-                if (structcpid.team == "gridcoin")
-                {
-                    UniValue entry(UniValue::VOBJ);
-
-                    entry.pushKV("Project", structcpid.projectname);
-                    entry.pushKV("CPID", structcpid.cpid);
-                    entry.pushKV("CPIDhash", structcpid.cpidhash);
-                    entry.pushKV("UTC", structcpid.utc);
-                    entry.pushKV("RAC", structcpid.rac);
-                    entry.pushKV("Team", structcpid.team);
-                    entry.pushKV("RecTime", structcpid.rectime);
-                    entry.pushKV("Age", structcpid.age);
-                    entry.pushKV("Is my CPID Valid?", structcpid.Iscpidvalid);
-                    entry.pushKV("CPID Link", structcpid.link);
-                    entry.pushKV("Errors", structcpid.errors);
-
-                    res.push_back(entry);
-                }
-            }
-        }
-    }
-
-    return res;
 }
 
 UniValue addkey(const UniValue& params, bool fHelp)
@@ -1994,13 +1757,13 @@ UniValue dportally(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue forcequorom(const UniValue& params, bool fHelp)
+UniValue forcequorum(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "forcequorom\n"
+                "forcequorum\n"
                 "\n"
-                "Requests neural network for force a quorom among nodes\n");
+                "Requests neural network for force a quorum among nodes\n");
 
     UniValue res(UniValue::VOBJ);
 
@@ -2220,11 +1983,14 @@ UniValue projects(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "projects\n"
                 "\n"
-                "Displays information on projects in the network\n");
+                "Displays information on projects in the network as well as researcher data if available\n");
 
     UniValue res(UniValue::VARR);
 
     LOCK(cs_main);
+
+    if (mvCPIDs.empty())
+        HarvestCPIDs(false);
 
     for (const auto& item : ReadCacheSection("project"))
     {
@@ -2247,6 +2013,25 @@ UniValue projects(const UniValue& params, bool fHelp)
 
         entry.pushKV("Project", sProjectName);
         entry.pushKV("URL", sProjectURL);
+
+        if (!mvCPIDs.empty())
+        {
+            StructCPID structcpid = mvCPIDs[sProjectName];
+
+                if (structcpid.initialized && IsResearcher(structcpid.cpid) && IsResearcher(GlobalCPUMiningCPID.cpid))
+                {
+                    UniValue researcher(UniValue::VOBJ);
+
+                    researcher.pushKV("CPID", structcpid.cpid);
+                    researcher.pushKV("Team", structcpid.team);
+                    researcher.pushKV("Valid for Research", (structcpid.team == "gridcoin" && structcpid.Iscpidvalid ? "true" : "false"));
+
+                    if (!structcpid.errors.empty())
+                        researcher.pushKV("Errors", structcpid.errors);
+
+                    entry.pushKV("Researcher", researcher);
+                }
+        }
 
         res.push_back(entry);
     }
@@ -2495,13 +2280,13 @@ UniValue testnewcontract(const UniValue& params, bool fHelp)
 }
 #endif
 
-UniValue updatequoromdata(const UniValue& params, bool fHelp)
+UniValue updatequorumdata(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-                "updatequoromdata\n"
+                "updatequorumdata\n"
                 "\n"
-                "Requests update of neural network quorom data\n");
+                "Requests update of neural network quorum data\n");
 
     UniValue res(UniValue::VOBJ);
 
@@ -2607,7 +2392,7 @@ UniValue currenttime(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "currenttime\n"
                 "\n"
-                "Displays UTC unix time as well as date and time in UTC\n");
+                "Displays UTC Unix time as well as date and time in UTC\n");
 
     UniValue res(UniValue::VOBJ);
 
@@ -2791,6 +2576,7 @@ UniValue MagnitudeReport(std::string cpid)
                         entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
                         entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
                         entry.pushKV("Research Payments (14 days)",structMag.payments);
+                        entry.pushKV("Owed",(structMag.owed <= 0) ? 0 : structMag.owed);
                         entry.pushKV("Daily Paid",structMag.payments/14);
                         // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                         double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
@@ -3131,18 +2917,26 @@ UniValue GetJSONBeaconReport()
 double GetTotalNeuralNetworkHashVotes()
 {
     double total = 0;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
     {
-        double popularity = mvNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
+        auto& neural_hash = entry.first;
+        auto& popularity = entry.second;
+
         // d41d8 is the hash of an empty magnitude contract - don't count it
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
+        if(popularity >= 0.01 &&
+           neural_hash != "TOTAL_VOTES" &&
+           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             total += popularity;
         }
-
     }
+    
     return total;
 }
 
@@ -3150,18 +2944,26 @@ double GetTotalNeuralNetworkHashVotes()
 double GetTotalCurrentNeuralNetworkHashVotes()
 {
     double total = 0;
-    std::string neural_hash = "";
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
+    for(auto& entry : sorted_hashes)
     {
-        double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
+        auto& neural_hash = entry.first;
+        auto& popularity = entry.second;
+        
         // d41d8 is the hash of an empty magnitude contract - don't count it
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity >= .01)
+        if(popularity >= .01 &&
+           neural_hash != "TOTAL_VOTES" &&
+           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             total += popularity;
         }
-
     }
+    
     return total;
 }
 
@@ -3170,7 +2972,6 @@ UniValue GetJSONNeuralNetworkReport()
 {
     UniValue results(UniValue::VARR);
     //Returns a report of the networks neural hashes in order of popularity
-    std::string neural_hash = "";
     std::string report = "Neural_hash, Popularity\n";
     std::string row = "";
     double pct = 0;
@@ -3178,18 +2979,25 @@ UniValue GetJSONNeuralNetworkReport()
     entry.pushKV("Neural Hash","Popularity,Percent %");
     double votes = GetTotalNeuralNetworkHashVotes();
 
-    for(map<std::string,double>::iterator ii=mvNeuralNetworkHash.begin(); ii!=mvNeuralNetworkHash.end(); ++ii)
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvNeuralNetworkHash.begin(),
+                mvNeuralNetworkHash.end());
+    
+    for(auto& hash : sorted_hashes)
     {
-        double popularity = mvNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
-
+        auto& neural_hash = hash.first;
+        auto& popularity = hash.second;
+        
         //If the hash != empty_hash: >= .01
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+        if (popularity > 0 &&
+            neural_hash != "TOTAL_VOTES" &&
+            neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             row = neural_hash + "," + RoundToString(popularity,0);
             report += row + "\n";
             pct = (((double)popularity)/(votes+.01))*100;
-                  entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+            entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
         }
     }
     // If we have a pending superblock, append it to the report:
@@ -3231,20 +3039,28 @@ UniValue GetJSONCurrentNeuralNetworkReport()
     entry.pushKV("Neural Hash","Popularity,Percent %");
     double votes = GetTotalCurrentNeuralNetworkHashVotes();
 
-    for(map<std::string,double>::iterator ii=mvCurrentNeuralNetworkHash.begin(); ii!=mvCurrentNeuralNetworkHash.end(); ++ii)
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_hashes(
+                mvCurrentNeuralNetworkHash.begin(),
+                mvCurrentNeuralNetworkHash.end());
+    
+    for(auto& hash : sorted_hashes)
     {
-        double popularity = mvCurrentNeuralNetworkHash[(*ii).first];
-        neural_hash = (*ii).first;
-
+        auto& neural_hash = hash.first;
+        auto& popularity = hash.second;
+        
         //If the hash != empty_hash: >= .01
-        if (neural_hash != "d41d8cd98f00b204e9800998ecf8427e" && neural_hash != "TOTAL_VOTES" && popularity > 0)
+        if(popularity > 0 &&
+           neural_hash != "TOTAL_VOTES" &&
+           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             row = neural_hash + "," + RoundToString(popularity,0);
             report += row + "\n";
             pct = (((double)popularity)/(votes+.01))*100;
-                  entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+            entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
         }
     }
+    
     // If we have a pending superblock, append it to the report:
     std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
     if (!SuperblockHeight.empty() && SuperblockHeight != "0")
@@ -3276,60 +3092,39 @@ UniValue GetJSONVersionReport()
 {
     UniValue results(UniValue::VARR);
     //Returns a report of the GRC Version staking blocks over the last 100 blocks
-    std::string neural_ver = "";
     std::string report = "Version, Popularity\n";
     std::string row = "";
     double pct = 0;
     UniValue entry(UniValue::VOBJ);
     entry.pushKV("Version","Popularity,Percent %");
-
+    
     double votes = 0;
     for(auto it : mvNeuralVersion)
         votes += it.second;
-
-    for(map<std::string,double>::iterator ii=mvNeuralVersion.begin(); ii!=mvNeuralVersion.end(); ++ii)
+    
+    // Copy to a sorted map.
+    std::map<std::string, double> sorted_versions(
+                mvNeuralVersion.begin(),
+                mvNeuralVersion.end());
+    
+    for(auto& version : sorted_versions)
     {
-        double popularity = mvNeuralVersion[(*ii).first];
-        neural_ver = (*ii).first;
+        auto& neural_ver = version.first;
+        auto& popularity = version.second;        
+        
         //If the hash != empty_hash:
         if (popularity > 0)
         {
             row = neural_ver + "," + RoundToString(popularity,0);
             report += row + "\n";
             pct = popularity/(votes+.01)*100;
-                  entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+            entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
         }
     }
+    
     results.push_back(entry);
     return results;
 }
-
-std::string BurnCoinsWithNewContract(bool bAdd, std::string sType, std::string sPrimaryKey, std::string sValue,
-                                     int64_t MinimumBalance, double dFees, std::string strPublicKey, std::string sBurnAddress)
-{
-    CBitcoinAddress address(sBurnAddress);
-    if (!address.IsValid())       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-    std::string sMasterKey = (sType=="project" || sType=="projectmapping" || sType=="smart_contract") ? GetArgument("masterprojectkey", msMasterMessagePrivateKey) : msMasterMessagePrivateKey;
-
-    int64_t nAmount = AmountFromValue(dFees);
-    // Wallet comments
-    CWalletTx wtx;
-    if (pwalletMain->IsLocked())  throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-    std::string sMessageType      = "<MT>" + sType  + "</MT>";  //Project or Smart Contract
-    std::string sMessageKey       = "<MK>" + sPrimaryKey   + "</MK>";
-    std::string sMessageValue     = "<MV>" + sValue + "</MV>";
-    std::string sMessagePublicKey = "<MPK>"+ strPublicKey + "</MPK>";
-    std::string sMessageAction    = bAdd ? "<MA>A</MA>" : "<MA>D</MA>"; //Add or Delete
-    //Sign Message
-    std::string sSig = SignMessage(sType+sPrimaryKey+sValue,sMasterKey);
-    std::string sMessageSignature = "<MS>" + sSig + "</MS>";
-    wtx.hashBoinc = sMessageType+sMessageKey+sMessageValue+sMessageAction+sMessagePublicKey+sMessageSignature;
-    string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, MinimumBalance, wtx);
-    if (!strError.empty())        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-    return wtx.GetHash().GetHex().c_str();
-}
-
-
 
 std::string SendReward(std::string sAddress, int64_t nAmount)
 {

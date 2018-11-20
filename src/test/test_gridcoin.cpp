@@ -17,7 +17,6 @@ struct TestingSetup {
         fUseFastIndex = true; // Don't verify block hashes when loading
         noui_connect();
         bitdb.MakeMock();
-        LoadBlockIndex(true);
         bool fFirstRun;
         pwalletMain = new CWallet("wallet.dat");
         pwalletMain->LoadWallet(fFirstRun);

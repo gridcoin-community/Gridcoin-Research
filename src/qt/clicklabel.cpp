@@ -3,7 +3,8 @@
 
 ClickLabel::ClickLabel(QWidget *parent, Qt::WindowFlags f)
 : QLabel(parent){
-
+        this->setMouseTracking(true);
+        this->setCursor(Qt::PointingHandCursor);
 }
 
 ClickLabel::~ClickLabel() {}
