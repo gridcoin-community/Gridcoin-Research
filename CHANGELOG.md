@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.0.0.2] Unreleased
+### Added
+ - Valgrind suppressions file, #1245 (@practicalswift).
+ - Feedback for addnode command, #1060 (@tomasbrod).
+ - Linux nodes can now stake superblocks using forwarded contracts,
+   #1060 (@tomasbrod).
+ - Bad blocks exception list for testnet, #1268 (@quezacoatl1).
+ - functinality of cpids/validcpids into projects rpc, #1232 (@Foggyx420).
+ - owed field to magnitude rpc, #1232 (@Foggyx420).
+ - rainbymagnitude rpc, #1235 (@Foggyx420).
+ - automatic UTXO size optimization for staking, #1265 (@jamescowens).
+ - sending fraction of rewards to selected address(es), #1265 (@jamescowens).
+ - missing translations, #1262 (@Foggyx420).
+ - plural support for labelBlocksIcon tooltip, #1304 (@scribblemaniac).
+
+### Removed
+ - DPOR_Paid variable and logs, #1267 (@Foggyx420).
+ - mint limiter, #1212 (@tomasbrod).
+ - newburnaddress, burn2, cpid, mymagnitude, rsa, rsaweight, proveownership,
+   encrypt, BurnCoinsWithNewContract, cpids, validcpids, #1232 (@Foggyx420).
+ - BoincMonteCarlo, (@denravonska).
+ - unnecessary includes and scrypt calculations, (@denravonska).
+
+### Changed
+ - Raise CoinStake output count limit to 8, #1261 (@tomasbrod).
+ - Configuration options case sensitivity to insensitive, #1258 (@Foggyx420).
+ - Beacon keys are now stored in wallet.dat, #1088 (@tomasbrod).
+
+ - Optimize ComputeResearchAccrual, #1229 (@Foggyx420).
+ - Update translations, #1243 (@Foggyx420).
+ - URLs in aboutdialog, #1246 (@Peppernrino).
+ - Modify ValueFromAmount mirroring what bitcoin does, #1272 (@Foggyx420).
+ - Refactor superblock pack/unpack, #1194 (@denravonska).
+ - Optimize neuralsecurity, #1255 (@denravonska).
+ - minor optimizations in block checking code, #1206 (@denravonska).
+ - pie chart colors, #1333 (@chrstphrchvz).
+ - link, formatting and text of README.md, #1337 (@Peppernrino).
+
+### Fixed
+ - Spelling #1253 (@NeuralMiner)
+ - do not replace underscores by spaces in URLs, #1327 (@tomasbrod)
+ - Incorrect condition check in sendtoaddress, #1266 (@Foggyx420).
+ - expired polls showing in overview page, #1250 (@PersonThingMan2).
+ - NN issues with contacting scraper, #1330 (@Foggyx420)
+ - off-by-one error during init RA, #1299 (@denravonska).
+ - outdated example command in beaconstatus help message, #1312 (@chrstphrchvz).
+ - wallet shutdown behavior on Windows, #1309 (@jamescowens).
+ - address of grcpool.com bootstrap node, #1314 (@wilkart)
+ - Show hand cursor when hovering ClickLabel, #1332 (@chrstphrchvz)
+ - integer overflow with displayed nonce, getblock rpc, #1297 (@personthingman2)
+
+
 ## [4.0.0.0] 2018-10-19, mandatory
 ### Added
  - Linux nodes can now stake superblocks using forwarded contracts,
