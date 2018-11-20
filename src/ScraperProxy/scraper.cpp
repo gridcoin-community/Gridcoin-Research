@@ -1412,3 +1412,150 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     return mScraperStats;
 }
 
+
+
+
+/***********************
+* Scraper networking   *
+************************/
+
+///*
+bool ScraperSaveCScraperManifestToFiles()
+{
+    fs::path savepath = pathScraper / "incoming";
+
+
+    // Check to see if the Scraper incoming directory exists and is a directory. If not create it.
+    if(fs::exists(savepath))
+    {
+        // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
+        if(fs::is_regular_file(savepath))
+        {
+            fs::remove(savepath);
+            fs::create_directory(savepath);
+        }
+    }
+    else
+        fs::create_directory(savepath);
+
+    for(const auto& pair : CScraperManifest::mapManifest)
+    {
+        // const uint256& hash = pair.first;
+        const CScraperManifest& manifest = *pair.second;
+
+        std::string outputfile = manifest.testName;
+
+        fs::path outputfilewpath = savepath / outputfile;
+
+        std::ofstream outfile(outputfilewpath.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+        if (!outfile)
+        {
+            _log(ERROR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
+
+            return false;
+        }
+
+        std::vector<unsigned char> vchData;
+        std::vector<unsigned char>::iterator it;
+        it = vchData.begin();
+
+        std::copy(manifest.vParts[0]->data.begin(), manifest.vParts[0]->data.end(), it);
+
+        int datasize = vchData.size();
+
+        outfile.write((const char*)vchData.data(), datasize);
+
+        outfile.flush();
+        outfile.close();
+    }
+
+    return true;
+}
+//*/
+
+
+
+
+bool ScraperSendFileManifestContents()
+{
+    // This "broadcasts" the current ScraperFileManifest contents to the network.
+
+    for (auto const& entry : mScraperFileManifest)
+    {
+        fs::path inputfile = entry.first;
+
+        fs::path inputfilewpath = pathScraper / inputfile;
+
+        // open input file, and associate with CAutoFile
+        FILE *file = fopen(inputfilewpath.c_str(), "rb");
+        CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+
+        if (!filein)
+        {
+            _log(ERROR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
+            return false;
+        }
+
+        // use file size to size memory buffer
+        int dataSize = boost::filesystem::file_size(inputfilewpath);
+        std::vector<unsigned char> vchData;
+        vchData.resize(dataSize);
+
+        // read data and checksum from file
+        try
+        {
+            filein.read((char *)&vchData[0], dataSize);
+        }
+        catch (std::exception &e)
+        {
+            _log(ERROR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
+            return false;
+        }
+
+        filein.fclose();
+
+        auto manifest = std::unique_ptr<CScraperManifest>(new CScraperManifest());
+
+        // This should be replaced with the proper field name...
+        manifest->testName = inputfile.string();
+
+        CDataStream part(vchData, SER_NETWORK, 1);
+        manifest->addPartData(std::move(part));
+        CScraperManifest::addManifest(std::move(manifest));
+    }
+
+    return true;
+}
+
+
+
+
+
+UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
+{
+    if(fHelp || params.size() != 0 )
+        throw std::runtime_error(
+                "sendscraperfilemanifest\n"
+                "Send a CScraperManifest object with the ScraperFileManifest.\n"
+                );
+
+    bool ret = ScraperSendFileManifestContents();
+
+    return UniValue(ret);
+}
+
+
+
+UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
+{
+    if(fHelp || params.size() != 0 )
+        throw std::runtime_error(
+                "savescraperfilemanifest\n"
+                "Send a CScraperManifest object with the ScraperFileManifest.\n"
+                );
+
+    bool ret = ScraperSaveCScraperManifestToFiles();
+
+    return UniValue(ret);
+}

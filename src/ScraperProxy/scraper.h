@@ -29,6 +29,13 @@
 #include "appcache.h"
 #include "beacon.h"
 
+#include <memory>
+#include "net.h"
+// Do not include rpcserver.h yet, as it includes conflicting ExtractXML functions. To do: remove duplicates.
+//#include "rpcserver.h"
+#include "rpcprotocol.h"
+#include "scraper_net.h"
+
 #ifndef SCRAPER_STANDALONE 
 #include "util.h"
 #else
@@ -153,6 +160,8 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
+bool ScraperSaveCScraperManifestToFiles();
+bool ScraperSendFileManifestContents();
 
 double MagRound(double dMag)
 {

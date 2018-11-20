@@ -224,6 +224,8 @@ extern UniValue listmanifests(const UniValue& params, bool fHelp);
 extern UniValue getmanifest(const UniValue& params, bool fHelp);
 extern UniValue getmpart(const UniValue& params, bool fHelp);
 extern UniValue sendmanifest(const UniValue& params, bool fHelp);
+extern UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
+extern UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
 
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
