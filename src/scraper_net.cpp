@@ -28,6 +28,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     assert(vRecv.size()>0);
     if(!part.present())
     {
+      LogPrint("manifest", "received part %s %u refs", hash.GetHex(),(unsigned)part.refs.size());
       part.data= CSerializeData(vRecv.begin(),vRecv.end()); //TODO: replace with move constructor
       for( const auto& ref : part.refs )
       {
@@ -41,11 +42,12 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
       }
       return true;
     } else {
-      return error("Duplicate part received!");
+      LogPrint("manifest", "received duplicate part %s", hash.GetHex());
+      return false;
     }
   } else {
-    pfrom->Misbehaving(10);
-    return error("Unknown part received!");
+    if(pfrom)  pfrom->Misbehaving(10);
+    return error("Spurious part received!");
   }
 }
 
@@ -157,6 +159,7 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
   }
   else
   {
+    if(pfrom)  LogPrint("manifest", "new manifest %s from %s", inv.hash.GetHex(), pfrom->addrName);
     return false;
   }
 }
@@ -224,11 +227,14 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     manifest.UnserializeCheck(vRecv);
   } catch(bool& e) {
     mapManifest.erase(hash);
+    LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
     return false;
   } catch(std::ios_base::failure& e) {
     mapManifest.erase(hash);
+    LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
     return false;
   }
+  LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
   if( manifest.cntPartsRcvd == manifest.vParts.size() )
   {
     /* If we already got all the parts in memory, signal completition */
@@ -246,6 +252,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m)
   CDataStream ss(SER_NETWORK,1);
   ss << *m;
 #if 1
+  LogPrint("manifest", "adding new local manifest");
   /* at this point it is easier to pretent like it was received from network */
   return CScraperManifest::RecvManifest(0, ss);
 #else
@@ -268,6 +275,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m)
 void CScraperManifest::Complete()
 {
   /* Notify peers that we have a new manifest */
+  LogPrint("manifest", "manifest %s complete with %u parts", phash->GetHex(),(unsigned)vParts.size());
   {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes)
