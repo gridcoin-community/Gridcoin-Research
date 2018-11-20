@@ -228,10 +228,12 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
   } catch(bool& e) {
     mapManifest.erase(hash);
     LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+    if(pfrom)  pfrom->Misbehaving(50);
     return false;
   } catch(std::ios_base::failure& e) {
     mapManifest.erase(hash);
     LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+    if(pfrom)  pfrom->Misbehaving(50);
     return false;
   }
   LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
