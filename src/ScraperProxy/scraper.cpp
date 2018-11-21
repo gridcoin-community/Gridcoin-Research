@@ -1445,30 +1445,36 @@ bool ScraperSaveCScraperManifestToFiles()
 
         std::string outputfile = manifest.testName;
 
-        fs::path outputfilewpath = savepath / outputfile;
-
-        std::ofstream outfile(outputfilewpath.string().c_str(), std::ios_base::out | std::ios_base::binary);
-
-        if (!outfile)
+        if(outputfile.find(".gz") != std::string::npos)
         {
-            _log(ERROR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
+            fs::path outputfilewpath = savepath / outputfile;
 
-            return false;
+            std::ofstream outfile(outputfilewpath.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+            if (!outfile)
+            {
+                _log(ERROR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
+
+                return false;
+            }
+
+            std::vector<unsigned char> vchData;
+            vchData.resize(manifest.vParts[0]->data.size());
+
+            std::vector<unsigned char>::iterator it;
+            it = vchData.begin();
+
+            std::copy(manifest.vParts[0]->data.begin(), manifest.vParts[0]->data.end(), it);
+
+            int datasize = vchData.size();
+
+            outfile.write((const char*)vchData.data(), datasize);
+
+            outfile.flush();
+            outfile.close();
         }
-
-        std::vector<unsigned char> vchData;
-        std::vector<unsigned char>::iterator it;
-        it = vchData.begin();
-
-        std::copy(manifest.vParts[0]->data.begin(), manifest.vParts[0]->data.end(), it);
-
-        int datasize = vchData.size();
-
-        outfile.write((const char*)vchData.data(), datasize);
-
-        outfile.flush();
-        outfile.close();
     }
+
 
     return true;
 }
