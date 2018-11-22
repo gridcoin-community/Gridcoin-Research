@@ -148,6 +148,7 @@ static const double NEURALNETWORKMULTIPLIER = 115000;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
+bool ScraperDirectorySanity();
 bool StoreBeaconList(const fs::path& file);
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
 std::vector<std::string> split(const std::string& s, const std::string& delim);

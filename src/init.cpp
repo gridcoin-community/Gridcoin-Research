@@ -543,12 +543,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!lock.try_lock())
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
 
-    if (GetBoolArg("-scraper"))
-    {
-        // If the scraper is going to be run, then set the scraper file staging directory.
-        pathScraper = GetDataDir() / "Scraper";
-        ;
-    }
+    // Set the scraper file staging directory.
+    pathScraper = GetDataDir() / "Scraper";
 
 
 

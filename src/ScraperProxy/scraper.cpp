@@ -237,6 +237,29 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
     return extraction;
 }
 
+
+bool ScraperDirectorySanity()
+{
+    // Check for the existence and proper form of the Scraper subdirectory (pathScraper), and make if necessary.
+    if(fs::exists(pathScraper))
+    {
+        // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
+        if(fs::is_regular_file(pathScraper))
+        {
+            fs::remove(pathScraper);
+            fs::create_directory(pathScraper);
+        }
+    }
+    else
+        fs::create_directory(pathScraper);
+
+    // Need to implement error handling. For now, returns true.
+
+    return true;
+}
+
+
+
 /**********************
 * Scraper Logger      *
 **********************/
@@ -1419,11 +1442,13 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 * Scraper networking   *
 ************************/
 
-///*
 bool ScraperSaveCScraperManifestToFiles()
 {
-    fs::path savepath = pathScraper / "incoming";
+    // Make sure the Scraper directory itself exists, because this function could be called from outside
+    // the scraper thread loop, and therefore the directory may not have been set up yet.
+    ScraperDirectorySanity();
 
+    fs::path savepath = pathScraper / "incoming";
 
     // Check to see if the Scraper incoming directory exists and is a directory. If not create it.
     if(fs::exists(savepath))
@@ -1458,27 +1483,15 @@ bool ScraperSaveCScraperManifestToFiles()
                 return false;
             }
 
-            std::vector<unsigned char> vchData;
-            vchData.resize(manifest.vParts[0]->data.size());
-
-            std::vector<unsigned char>::iterator it;
-            it = vchData.begin();
-
-            std::copy(manifest.vParts[0]->data.begin(), manifest.vParts[0]->data.end(), it);
-
-            int datasize = vchData.size();
-
-            outfile.write((const char*)vchData.data(), datasize);
+            outfile.write((const char*)manifest.vParts[0]->data.data(), manifest.vParts[0]->data.size());
 
             outfile.flush();
             outfile.close();
         }
     }
 
-
     return true;
 }
-//*/
 
 
 
@@ -1489,6 +1502,10 @@ bool ScraperSendFileManifestContents()
 
     for (auto const& entry : mScraperFileManifest)
     {
+        // Only include current files to send across the network.
+        if (!entry.second.current)
+            continue;
+
         fs::path inputfile = entry.first;
 
         fs::path inputfilewpath = pathScraper / inputfile;
