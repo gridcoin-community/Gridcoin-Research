@@ -1793,40 +1793,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
     double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
-
-    // Non Research Age - RSA Mode - Legacy (before 10-20-2015)
-    if (!IsResearchAgeEnabled(pindexLast->nHeight))
-    {
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-            int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
-            int64_t nSubsidy  = nInterest + nBoinc;
-            if (fDebug10 || GetBoolArg("-printcreation"))
-            {
-                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
-                FormatMoney(nSubsidy), nCoinAge, nBoinc);
-            }
-            int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
-            int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
-            int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
-            if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-            int64_t nTotalSubsidy = nSubsidy + nFees;
-            // This rule does not apply in v11
-            if (nBoinc > 1 && pindexLast->nVersion <= 10)
-            {
-                std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-
-                if (sTotalSubsidy.length() > 7)
-                {
-                    sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-                }
-            }
-            OUT_POR = CoinToDouble(nBoinc);
-            OUT_INTEREST = CoinToDouble(nInterest);
-            return nTotalSubsidy;
-    }
-    else
-    {
             // Research Age Subsidy - PROD
             int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
             int64_t nInterest = 0;
@@ -1869,7 +1835,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             OUT_INTEREST = CoinToDouble(nInterest);
             return nTotalSubsidy;
     }
-}
 
 
 
@@ -1959,8 +1924,7 @@ bool CheckProofOfResearch(
      * which does not matter, because this one is no longer used */
     if(block.vtx.size() == 0 ||
        !block.IsProofOfStake() ||
-       pindexPrev->nHeight <= nGrandfather ||
-       !IsResearchAgeEnabled(pindexPrev->nHeight))
+       pindexPrev->nHeight <= nGrandfather)
         return true;
 
     const NN::Claim& claim = block.GetClaim();
@@ -2627,7 +2591,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 nStakeReward = nTxValueOut - nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
                 // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
-                if (IsResearchAgeEnabled(pindex->nHeight) && fDebug10)
+                if (fDebug10)
                 {
                     int64_t nTotalCoinstake = 0;
                     for (unsigned int i = 0; i < tx.vout.size(); i++)
@@ -2698,13 +2662,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         double dCalcStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nFees, nTime));
 
-        if (dStakeReward > dCalcStakeReward+1 && !IsResearchAgeEnabled(pindex->nHeight))
-            return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward));
-
         //9-3-2015
         double dMaxResearchAgeReward = CoinToDouble(GetMaximumBoincSubsidy(nTime) * COIN * 255);
 
-        if (claim.m_research_subsidy > dMaxResearchAgeReward && IsResearchAgeEnabled(pindex->nHeight))
+        if (claim.m_research_subsidy > dMaxResearchAgeReward)
             return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeRewardWithoutFees, dMaxResearchAgeReward));
 
         if (!claim.HasResearchReward() && dStakeReward > 1)
@@ -2773,8 +2734,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         if (claim.HasResearchReward())
         {
             //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
-            double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? claim.m_research_subsidy * .15 : 1;
-            if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
+            double dDrift = claim.m_research_subsidy * .15;
+            if (dDrift < 10) dDrift = 10;
 
             if ((claim.TotalSubsidy() + dDrift) < dStakeRewardWithoutFees)
             {
@@ -2783,10 +2744,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                      dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), cpid));
             }
 
-            if (IsResearchAgeEnabled(pindex->nHeight)
-                && (BlockNeedsChecked(nTime) || nVersion>=9))
+            if (BlockNeedsChecked(nTime) || nVersion>=9)
             {
-
                 // 6-4-2017 - Verify researchers stored block magnitude
                 // 2018 02 04 - Moved here for better effect.
                 double dNeuralNetworkMagnitude = CalculatedMagnitude2(cpid, nTime);
@@ -2827,31 +2786,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else
                                 LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                                     claim.m_block_subsidy, claim.m_research_subsidy, dStakeReward, OUT_POR, OUT_INTEREST, cpid);
-                    }
-                }
-            }
-        }
-
-        //Approve first coinstake in DPOR block
-        if (claim.HasResearchReward() && IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) && !IsResearchAgeEnabled(pindex->nHeight))
-        {
-            if (claim.m_research_subsidy > (GetOwedAmount(cpid) + 1))
-            {
-                StructCPID& strUntrustedHost = GetInitializedStructCPID2(cpid, mvMagnitudes);
-                if (claim.m_research_subsidy > strUntrustedHost.totalowed)
-                {
-                    double deficit = strUntrustedHost.totalowed - claim.m_research_subsidy;
-                    if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
-                    {
-                        LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                  deficit, cpid, (double)strUntrustedHost.Accuracy, claim.m_research_subsidy,
-                                  OUT_POR, vtx[0].hashBoinc.c_str());
-                    }
-                    else
-                    {
-                        return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                     cpid, claim.m_research_subsidy,
-                                     OUT_POR, vtx[0].hashBoinc.c_str());
                     }
                 }
             }
@@ -2912,31 +2846,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
                                  neural_hash.c_str(), consensus_hash.c_str());
                 }
-                if (!IsResearchAgeEnabled(pindex->nHeight))
-                {
-                    if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
-                    {
-                        return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                     neural_hash.c_str(), consensus_hash.c_str());
-                    }
-                }
-                else
-                {
                     if (consensus_hash != neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
                                      neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
-
-            }
         }
 
         if(nVersion<9)
         {
             //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
             // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
-            if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
+            if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && pindex->nHeight > nGrandfather)
             {
                 if (claim.ContainsSuperblock())
                 {
@@ -2977,13 +2899,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     // Slow down Retallying when in RA mode so we minimize disruption of the network
     // TODO: Remove this if we can sync to v9 without it.
-    if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
+    if ( (pindex->nHeight % 60 == 0) && BlockNeedsChecked(pindex->nTime))
     {
         if(!IsV9Enabled_Tally(pindexBest->nHeight))
             TallyResearchAverages(pindexBest);
     }
 
-    if (IsResearchAgeEnabled(pindex->nHeight) && !OutOfSyncByAge())
+    if (!OutOfSyncByAge())
     {
         fColdBoot = false;
     }
@@ -4930,10 +4852,8 @@ bool TallyResearchAverages(CBlockIndex* index)
 {
     if(IsV9Enabled_Tally(index->nHeight))
         return TallyResearchAverages_v9(index);
-    else if(IsResearchAgeEnabled(index->nHeight) && !IsV9Enabled_Tally(index->nHeight))
-        return TallyResearchAverages_retired(index);
     else
-        return false;
+        return TallyResearchAverages_retired(index);
 }
 
 bool TallyResearchAverages_retired(CBlockIndex* index)
@@ -5521,7 +5441,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (!fTestNet && pfrom->nVersion < 180314 && IsResearchAgeEnabled(pindexBest->nHeight))
+        if (!fTestNet && pfrom->nVersion < 180314)
         {
             // disconnect from peers older than this proto version
             if (fDebug10) LogPrintf("ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
@@ -6724,7 +6644,7 @@ void IncrementCurrentNeuralNetworkSupermajority(
         //This node has already voted, throw away the vote
         return;
     }
-
+    
     WriteCache(Section::CURRENTNEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
@@ -6774,7 +6694,7 @@ void IncrementNeuralNetworkSupermajority(
         //This node has already voted, throw away the vote
         return;
     }
-
+    
     WriteCache(Section::NEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
@@ -7263,21 +7183,11 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
 
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
-    uint256 uRef;
-    if (IsResearchAgeEnabled(pindexBest->nHeight))
-    {
-        uRef = fTestNet
-               ? uint256S("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-               : uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-    }
-    else
-    {
-        uRef = fTestNet
-               ? uint256S("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-               : uint256S("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-    }
+    arith_uint256 uRef = fTestNet
+       ? arith_uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+       : arith_uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
 
-    uint256 uADH = uint256S("0x" + address_day_hash);
+    arith_uint256 uADH("0x" + address_day_hash);
     return (uADH < uRef);
 }
 
