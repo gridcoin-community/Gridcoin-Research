@@ -287,14 +287,6 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
 
 int64_t GetRSAWeightByCPID(std::string cpid)
 {
-
-    if (IsResearchAgeEnabled(pindexBest->nHeight) && AreBinarySuperblocksEnabled(pindexBest->nHeight))
-    {
-            return GetRSAWeightByCPIDWithRA(cpid);
-            //ToDo : During next mandatory, retire this old function.
-    }
-
-
     double weight = 0;
     if (!IsResearcher(cpid)) return 5000;
     if (mvMagnitudes.size() > 0)
@@ -312,7 +304,7 @@ int64_t GetRSAWeightByCPID(std::string cpid)
                         {
                                 weight = (UntrustedHost.owed*14) + UntrustedHost.Magnitude;
                                 if (fTestNet && weight < 0) weight = 0;
-                                if (IsResearchAgeEnabled(pindexBest->nHeight) && weight < 0) weight=0;
+                                if (weight < 0) weight=0;
                         }
 
             }
@@ -379,7 +371,7 @@ int64_t GetRSAWeightByBlock(MiningCPID boincblock)
     }
 
     if (fTestNet && rsa_weight < 0) rsa_weight = 0;
-    if (IsResearchAgeEnabled(pindexBest->nHeight) && rsa_weight < 0) rsa_weight = 0;
+    if (rsa_weight < 0) rsa_weight = 0;
     return rsa_weight;
 }
 
