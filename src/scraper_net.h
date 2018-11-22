@@ -26,6 +26,9 @@ class CSplitBlob
   */
   static bool RecvPart(CNode* pfrom, CDataStream& vRecv);
 
+  bool isComplete() const
+  { return cntPartsRcvd == (long)vParts.size(); }
+
   /** Notification that this Split object is fully received. */
   virtual void Complete() = 0;
 
@@ -43,7 +46,7 @@ class CSplitBlob
   void addPart(const uint256& ihash);
 
   /** Create a part from specified data and add reference to it into vParts. */
-  bool addPartData(CDataStream&& vData);
+  long addPartData(CDataStream&& vData);
 
   /** Unref all parts referenced by this. Removes parts with no references */
   ~CSplitBlob();
@@ -51,7 +54,7 @@ class CSplitBlob
   /* We could store the parts in mapRelay and have getdata service for free. */
   /** map from part hash to scraper Index, so we can attach incoming Part in Index */
   static std::map<uint256,CPart> mapParts;
-  unsigned cntPartsRcvd =0;
+  long cntPartsRcvd =0;
 
 };
 
@@ -95,10 +98,32 @@ class CScraperManifest
   CPubKey pubkey;
   std::vector<unsigned char> signature;
 
+  struct dentry {
+    std::string project;
+    std::string ETag;
+    unsigned int LastModified =0;
+    long part1 =-1;
+    unsigned partc =0;
+    long GridcoinTeamID =-1;
+    bool current =0;
+    bool last =0;
+
+    void Serialize(CDataStream& s, int nType, int nVersion) const;
+    void Unserialize(CReaderStream& s, int nType, int nVersion);
+    UniValue ToJson() const;
+  };
+
+  std::vector<dentry> projects;
+
+  long BeaconList =-1;
+  unsigned BeaconList_c =0;
+  uint256 ConsensusBlock;
+  unsigned int nTime =0;
+
   public: /* public methods */
 
   /** Hook called when all parts are available */
-  virtual void Complete() override;
+  void Complete() override;
 
   /** Serialize this object for seding over the network. */
   void Serialize(CDataStream& s, int nType, int nVersion) const;

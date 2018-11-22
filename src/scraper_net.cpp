@@ -41,8 +41,8 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
       {
         CSplitBlob& split= *ref.first;
         ++split.cntPartsRcvd;
-        assert(split.cntPartsRcvd <= split.vParts.size());
-        if( split.cntPartsRcvd == split.vParts.size() )
+        assert(split.cntPartsRcvd <= (long)split.vParts.size());
+        if( split.isComplete() )
         {
           split.Complete();
         }
@@ -72,7 +72,7 @@ void CSplitBlob::addPart(const uint256& ihash)
   part.refs.emplace(this, n);
 }
 
-bool CSplitBlob::addPartData(CDataStream&& vData)
+long CSplitBlob::addPartData(CDataStream&& vData)
 {
   uint256 hash(Hash(vData.begin(), vData.end()));
 
@@ -92,11 +92,10 @@ bool CSplitBlob::addPartData(CDataStream&& vData)
     /* missing data; use the supplied data */
     /* prevent calling the Complete callback FIXME: make this look better */
     cntPartsRcvd--;
-    bool rc= CSplitBlob::RecvPart(0, vData);
+    CSplitBlob::RecvPart(0, vData);
     cntPartsRcvd++;
-    return rc;
   }
-  else return false;
+  return n;
 }
 
 CSplitBlob::~CSplitBlob()
@@ -192,24 +191,63 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 }
 
 
-void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+
+void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersion) const
+{ /* TODO: remove this redundant code */
+  ss<< project;
+  ss<< ETag;
+  ss<< LastModified;
+  ss<< part1 << partc;
+  ss<< GridcoinTeamID;
+  ss<< current;
+  ss<< last;
+}
+void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVersion)
 {
-  ss << testName;
-  ss << pubkey;
-  for( const CPart* part : vParts )
-    ss << part->hash;
+  ss>> project;
+  ss>> ETag;
+  ss>> LastModified;
+  ss>> part1 >> partc;
+  ss>> GridcoinTeamID;
+  ss>> current;
+  ss>> last;
 }
 
+void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+{
+  WriteCompactSize(ss, vParts.size());
+  for( const CPart* part : vParts )
+    ss << part->hash;
+  ss<< pubkey;
+  ss<< testName;
+  ss<< nTime;
+  ss<< ConsensusBlock;
+  ss<< BeaconList << BeaconList_c;
+  ss<< projects;
+}
 void CScraperManifest::UnserializeCheck(CReaderStream& ss)
 {
-  uint256 rh;
   const auto pbegin = ss.begin();
-  ss >> testName;
-  ss >> pubkey;
-  ss >> rh;
-  addPart(rh);
-  if(0==1)
-    throw error("kek");
+
+  vector<uint256> vph;
+  ss>>vph;
+  ss>> pubkey;
+  #if 0
+  if( pubkey not in authorized scraper key list )
+    throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
+  #endif
+
+  ss>> testName;
+  ss>> nTime;
+  ss>> ConsensusBlock;
+  ss>> BeaconList >> BeaconList_c;
+  ss>> projects;
+
+  if(BeaconList+BeaconList_c>(long)vph.size())
+    throw error("CScraperManifest::UnserializeCheck: part out of range");
+  for(const dentry& prj : projects)
+    if(prj.part1+prj.partc>(long)vph.size())
+      throw error("CScraperManifest::UnserializeCheck: part out of range");
 
   uint256 hash(Hash(pbegin,ss.begin()));
   ss >> signature;
@@ -218,6 +256,8 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     throw error("CScraperManifest: Invalid manifest key");
   if(!mkey.Verify(hash, signature))
     throw error("CScraperManifest: Invalid manifest signature");
+  for( const uint256& ph : vph )
+    addPart(ph);
 }
 
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
@@ -245,17 +285,17 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     manifest.UnserializeCheck(vRecv);
   } catch(bool& e) {
     mapManifest.erase(hash);
-    LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+    LogPrint("manifest", "invalid manifest %s receiveD", hash.GetHex());
     if(pfrom)  pfrom->Misbehaving(50);
     return false;
   } catch(std::ios_base::failure& e) {
     mapManifest.erase(hash);
-    LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+    LogPrint("manifest", "invalid manifest %s receivEd", hash.GetHex());
     if(pfrom)  pfrom->Misbehaving(50);
     return false;
   }
   LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
-  if( manifest.cntPartsRcvd == manifest.vParts.size() )
+  if( manifest.isComplete() )
   {
     /* If we already got all the parts in memory, signal completition */
     manifest.Complete();
@@ -331,18 +371,41 @@ void CScraperManifest::Complete()
 
 UniValue CScraperManifest::ToJson() const
 {
-  UniValue result(UniValue::VOBJ);
-  result.pushKV("testName",testName);
+  UniValue r(UniValue::VOBJ);
   #ifdef SCRAPER_NET_PK_AS_ADDRESS
-  result.pushKV("pubkey",CBitcoinAddress(pubkey.GetID()).ToString());
+  r.pushKV("pubkey",CBitcoinAddress(pubkey.GetID()).ToString());
   #else
-  result.pushKV("pubkey",pubkey.GetID().ToString());
+  r.pushKV("pubkey",pubkey.GetID().ToString());
   #endif
+  r.pushKV("testName",testName);
+
+  r.pushKV("nTime",(int64_t)nTime);
+  r.pushKV("nTime",DateTimeStrFormat(nTime));
+  r.pushKV("ConsensusBlock",ConsensusBlock.GetHex());
+  r.pushKV("BeaconList",BeaconList); r.pushKV("BeaconList_c",(long)BeaconList_c);
+
+  UniValue projects(UniValue::VARR);
+  for( const dentry& part : this->projects )
+    projects.push_back(part.ToJson());
+  r.pushKV("projects",projects);
+
   UniValue parts(UniValue::VARR);
-  for( const CPart* part : vParts )
+  for( const CPart* part : this->vParts )
     parts.push_back(part->hash.GetHex());
-  result.pushKV("parts",parts);
-  return result;
+  r.pushKV("parts",parts);
+  return r;
+}
+UniValue CScraperManifest::dentry::ToJson() const
+{
+  UniValue r(UniValue::VOBJ);
+  r.pushKV("project",project);
+  r.pushKV("ETag",ETag);
+  r.pushKV("LastModified",DateTimeStrFormat(LastModified));
+  r.pushKV("part1",part1); r.pushKV("partc",(long)partc);
+  r.pushKV("GridcoinTeamID",GridcoinTeamID);
+  r.pushKV("current",current);
+  r.pushKV("last",last);
+  return r;
 }
 
 UniValue listmanifests(const UniValue& params, bool fHelp)
@@ -372,7 +435,7 @@ UniValue getmpart(const UniValue& params, bool fHelp)
   auto ipart= CSplitBlob::mapParts.find(uint256(params[0].get_str()));
   if(ipart == CSplitBlob::mapParts.end())
     throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");
-  return UniValue(std::string(ipart->second.data.begin(),ipart->second.data.end()));
+  return UniValue(HexStr(ipart->second.data.begin(),ipart->second.data.end()));
 }
 
 UniValue sendmanifest(const UniValue& params, bool fHelp)
