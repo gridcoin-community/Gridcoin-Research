@@ -621,6 +621,17 @@ bool CTxDB::LoadBlockIndex()
     {
         AddRARewardBlock(pindex);
 
+        if( pindex->IsUserCPID() && pindex->cpid == uint128(0) )
+        {
+            /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
+            auto bb = GetBoincBlockByIndex(pindex);
+            if( bb.cpid == "INVESTOR" )
+            {
+                LogPrintf("WARNING: BlockIndex contains zero CPID where INVESTOR should have been on block {%s %d}",
+                    pindex->GetBlockHash().GetHex(), pindex->nHeight );
+            }
+        }
+
         if(fQtActive)
         {
             if ((pindex->nHeight % 10000) == 0)

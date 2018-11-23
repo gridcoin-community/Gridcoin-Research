@@ -301,6 +301,7 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
 void AddRARewardBlock(const CBlockIndex* pIndex);
+MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
