@@ -1727,42 +1727,6 @@ int64_t GetProofOfStakeMaxReward(uint64_t nCoinAge, int64_t nFees, int64_t lockt
     return nSubsidy + nFees;
 }
 
-double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
-{
-
-        StructCPID& mag = GetInitializedStructCPID2(cpid,mvMagnitudes);
-
-        if (!mag.initialized) return 0;
-        double owed = (mag.owed*1.0);
-        if (owed < 0) owed = 0;
-        // Coarse Payment Rule (helps prevent sync problems):
-        if (!VerifyingBlock)
-        {
-            //If owed less than 4% of max subsidy, assess at 0:
-            if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/50))
-            {
-                owed = 0;
-            }
-            //Coarse payment rule:
-            if (mag.totalowed > (GetMaximumBoincSubsidy(GetAdjustedTime())*2))
-            {
-                //If owed more than 2* Max Block, pay normal amount
-                owed = (owed*1);
-            }
-            else
-            {
-                owed = owed/2;
-            }
-
-            if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime());
-
-
-        }
-        //End of Coarse Payment Rule
-        return owed * COIN;
-}
-
-
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetConstantBlockReward(const CBlockIndex* index)
 {
