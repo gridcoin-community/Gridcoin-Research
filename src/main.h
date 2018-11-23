@@ -150,9 +150,6 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
 
-typedef std::set<uint256> HashSet;
-extern std::map<std::string, HashSet> mvCPIDBlockHashes;
-
 struct BlockHasher
 {
     size_t operator()(const uint256& hash) const { return hash.Get64(); }
@@ -303,6 +300,8 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
 double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
+void AddRARewardBlock(const CBlockIndex* pIndex);
+
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
 int GetNumBlocksOfPeers();
@@ -323,7 +322,8 @@ int64_t PreviousBlockAge();
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
-StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
+StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
+StructCPID& GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom);
 bool IsResearcher(const std::string& cpid);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 
