@@ -62,11 +62,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-created", MinerStatus.CreatedCnt);
         obj.pushKV("mining-accepted", MinerStatus.AcceptedCnt);
         obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
-        // Avoid calculating coinage of all coins just to get interest,
-        // reuse value found by miner which has to load blocks anyway
-        double dInterest = MinerStatus.CoinAgeSum * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-        obj.pushKV("InterestPending",dInterest/(double)COIN);
-
         obj.pushKV("kernel-diff-best",MinerStatus.KernelDiffMax);
         obj.pushKV("kernel-diff-sum",MinerStatus.KernelDiffSum);
     }
@@ -75,7 +70,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("errors",        GetWarnings("statusbar"));
     obj.pushKV("pooledtx",      (uint64_t)mempool.size());
     //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
-    obj.pushKV("stakeinterest", GetCoinYearReward( GetAdjustedTime())/(double)COIN);
     obj.pushKV("testnet",       fTestNet);
     double neural_popularity = 0;
     std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
