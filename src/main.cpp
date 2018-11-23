@@ -1717,16 +1717,6 @@ double GetMagnitudeMultiplier(int64_t nTime)
     return magnitude_multiplier;
 }
 
-
-int64_t GetProofOfStakeMaxReward(uint64_t nCoinAge, int64_t nFees, int64_t locktime)
-{
-    int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-    nInterest += 10*COIN;
-    int64_t nBoinc    = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
-    int64_t nSubsidy  = nInterest + nBoinc;
-    return nSubsidy + nFees;
-}
-
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetConstantBlockReward(const CBlockIndex* index)
 {
@@ -2623,8 +2613,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         // ppcoin: coin stake tx earns reward instead of paying fee
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
-
-        double dCalcStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nFees, nTime));
 
         //9-3-2015
         double dMaxResearchAgeReward = CoinToDouble(GetMaximumBoincSubsidy(nTime) * COIN * 255);
