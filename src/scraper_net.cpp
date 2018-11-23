@@ -1,8 +1,15 @@
 /* scraper_net.cpp */
+
+/* Define this if you want to show pubkey as address, otherwise hex id */
+#define SCRAPER_NET_PK_AS_ADDRESS
+
 #include <memory>
 #include "net.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
+#ifdef SCRAPER_NET_PK_AS_ADDRESS
+#include "base58.h"
+#endif
 #include "scraper_net.h"
 
 //Globals
@@ -28,24 +35,26 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     assert(vRecv.size()>0);
     if(!part.present())
     {
+      LogPrint("manifest", "received part %s %u refs", hash.GetHex(),(unsigned)part.refs.size());
       part.data= CSerializeData(vRecv.begin(),vRecv.end()); //TODO: replace with move constructor
       for( const auto& ref : part.refs )
       {
         CSplitBlob& split= *ref.first;
         ++split.cntPartsRcvd;
-        assert(split.cntPartsRcvd <= split.vParts.size());
-        if( split.cntPartsRcvd == split.vParts.size() )
+        assert(split.cntPartsRcvd <= (long)split.vParts.size());
+        if( split.isComplete() )
         {
           split.Complete();
         }
       }
       return true;
     } else {
-      return error("Duplicate part received!");
+      LogPrint("manifest", "received duplicate part %s", hash.GetHex());
+      return false;
     }
   } else {
-    pfrom->Misbehaving(10);
-    return error("Unknown part received!");
+    if(pfrom)  pfrom->Misbehaving(10);
+    return error("Spurious part received!");
   }
 }
 
@@ -63,7 +72,7 @@ void CSplitBlob::addPart(const uint256& ihash)
   part.refs.emplace(this, n);
 }
 
-bool CSplitBlob::addPartData(CDataStream&& vData)
+long CSplitBlob::addPartData(CDataStream&& vData)
 {
   uint256 hash(Hash(vData.begin(), vData.end()));
 
@@ -83,11 +92,10 @@ bool CSplitBlob::addPartData(CDataStream&& vData)
     /* missing data; use the supplied data */
     /* prevent calling the Complete callback FIXME: make this look better */
     cntPartsRcvd--;
-    bool rc= CSplitBlob::RecvPart(0, vData);
+    CSplitBlob::RecvPart(0, vData);
     cntPartsRcvd++;
-    return rc;
   }
-  else return false;
+  return n;
 }
 
 CSplitBlob::~CSplitBlob()
@@ -157,6 +165,7 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
   }
   else
   {
+    if(pfrom)  LogPrint("manifest", "new manifest %s from %s", inv.hash.GetHex(), pfrom->addrName);
     return false;
   }
 }
@@ -182,21 +191,73 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 }
 
 
-void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+
+void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersion) const
+{ /* TODO: remove this redundant code */
+  ss<< project;
+  ss<< ETag;
+  ss<< LastModified;
+  ss<< part1 << partc;
+  ss<< GridcoinTeamID;
+  ss<< current;
+  ss<< last;
+}
+void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVersion)
 {
-  ss << testName;
-  for( const CPart* part : vParts )
-    ss << part->hash;
+  ss>> project;
+  ss>> ETag;
+  ss>> LastModified;
+  ss>> part1 >> partc;
+  ss>> GridcoinTeamID;
+  ss>> current;
+  ss>> last;
 }
 
+void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+{
+  WriteCompactSize(ss, vParts.size());
+  for( const CPart* part : vParts )
+    ss << part->hash;
+  ss<< pubkey;
+  ss<< testName;
+  ss<< nTime;
+  ss<< ConsensusBlock;
+  ss<< BeaconList << BeaconList_c;
+  ss<< projects;
+}
 void CScraperManifest::UnserializeCheck(CReaderStream& ss)
 {
-  uint256 rh;
-  ss >> testName;
-  ss >> rh;
-  addPart(rh);
-  if(0==1)
-    throw error("kek");
+  const auto pbegin = ss.begin();
+
+  vector<uint256> vph;
+  ss>>vph;
+  ss>> pubkey;
+  #if 0
+  if( pubkey not in authorized scraper key list )
+    throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
+  #endif
+
+  ss>> testName;
+  ss>> nTime;
+  ss>> ConsensusBlock;
+  ss>> BeaconList >> BeaconList_c;
+  ss>> projects;
+
+  if(BeaconList+BeaconList_c>(long)vph.size())
+    throw error("CScraperManifest::UnserializeCheck: part out of range");
+  for(const dentry& prj : projects)
+    if(prj.part1+prj.partc>(long)vph.size())
+      throw error("CScraperManifest::UnserializeCheck: part out of range");
+
+  uint256 hash(Hash(pbegin,ss.begin()));
+  ss >> signature;
+  CKey mkey;
+  if(!mkey.SetPubKey(pubkey))
+    throw error("CScraperManifest: Invalid manifest key");
+  if(!mkey.Verify(hash, signature))
+    throw error("CScraperManifest: Invalid manifest signature");
+  for( const uint256& ph : vph )
+    addPart(ph);
 }
 
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
@@ -224,12 +285,17 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     manifest.UnserializeCheck(vRecv);
   } catch(bool& e) {
     mapManifest.erase(hash);
+    LogPrint("manifest", "invalid manifest %s receiveD", hash.GetHex());
+    if(pfrom)  pfrom->Misbehaving(50);
     return false;
   } catch(std::ios_base::failure& e) {
     mapManifest.erase(hash);
+    LogPrint("manifest", "invalid manifest %s receivEd", hash.GetHex());
+    if(pfrom)  pfrom->Misbehaving(50);
     return false;
   }
-  if( manifest.cntPartsRcvd == manifest.vParts.size() )
+  LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
+  if( manifest.isComplete() )
   {
     /* If we already got all the parts in memory, signal completition */
     manifest.Complete();
@@ -240,12 +306,21 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
   return true;
 }
 
-bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m)
+bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
+  m->pubkey= keySign.GetPubKey();
+
   /* serialize and hash the object */
   CDataStream ss(SER_NETWORK,1);
   ss << *m;
+
+  /* sign the serialized manifest and append the signature */
+  uint256 hash(Hash(ss.begin(),ss.end()));
+  keySign.Sign(hash, m->signature);
+  ss << m->signature;
+
 #if 1
+  LogPrint("manifest", "adding new local manifest");
   /* at this point it is easier to pretent like it was received from network */
   return CScraperManifest::RecvManifest(0, ss);
 #else
@@ -268,6 +343,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m)
 void CScraperManifest::Complete()
 {
   /* Notify peers that we have a new manifest */
+  LogPrint("manifest", "manifest %s complete with %u parts", phash->GetHex(),(unsigned)vParts.size());
   {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes)
@@ -295,13 +371,41 @@ void CScraperManifest::Complete()
 
 UniValue CScraperManifest::ToJson() const
 {
-  UniValue result(UniValue::VOBJ);
-  result.pushKV("testName",testName);
+  UniValue r(UniValue::VOBJ);
+  #ifdef SCRAPER_NET_PK_AS_ADDRESS
+  r.pushKV("pubkey",CBitcoinAddress(pubkey.GetID()).ToString());
+  #else
+  r.pushKV("pubkey",pubkey.GetID().ToString());
+  #endif
+  r.pushKV("testName",testName);
+
+  r.pushKV("nTime",(int64_t)nTime);
+  r.pushKV("nTime",DateTimeStrFormat(nTime));
+  r.pushKV("ConsensusBlock",ConsensusBlock.GetHex());
+  r.pushKV("BeaconList",BeaconList); r.pushKV("BeaconList_c",(long)BeaconList_c);
+
+  UniValue projects(UniValue::VARR);
+  for( const dentry& part : this->projects )
+    projects.push_back(part.ToJson());
+  r.pushKV("projects",projects);
+
   UniValue parts(UniValue::VARR);
-  for( const CPart* part : vParts )
+  for( const CPart* part : this->vParts )
     parts.push_back(part->hash.GetHex());
-  result.pushKV("parts",parts);
-  return result;
+  r.pushKV("parts",parts);
+  return r;
+}
+UniValue CScraperManifest::dentry::ToJson() const
+{
+  UniValue r(UniValue::VOBJ);
+  r.pushKV("project",project);
+  r.pushKV("ETag",ETag);
+  r.pushKV("LastModified",DateTimeStrFormat(LastModified));
+  r.pushKV("part1",part1); r.pushKV("partc",(long)partc);
+  r.pushKV("GridcoinTeamID",GridcoinTeamID);
+  r.pushKV("current",current);
+  r.pushKV("last",last);
+  return r;
 }
 
 UniValue listmanifests(const UniValue& params, bool fHelp)
@@ -331,7 +435,7 @@ UniValue getmpart(const UniValue& params, bool fHelp)
   auto ipart= CSplitBlob::mapParts.find(uint256(params[0].get_str()));
   if(ipart == CSplitBlob::mapParts.end())
     throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");
-  return UniValue(std::string(ipart->second.data.begin(),ipart->second.data.end()));
+  return UniValue(HexStr(ipart->second.data.begin(),ipart->second.data.end()));
 }
 
 UniValue sendmanifest(const UniValue& params, bool fHelp)
@@ -346,6 +450,10 @@ UniValue sendmanifest(const UniValue& params, bool fHelp)
   CDataStream part(SER_NETWORK,1);
   part << std::string("SampleText") << rand();
   manifest->addPartData(std::move(part));
-  CScraperManifest::addManifest(std::move(manifest));
+
+  CKey key;
+  std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
+  key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
+  CScraperManifest::addManifest(std::move(manifest), key);
   return UniValue(true);
 }
