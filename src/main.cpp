@@ -3256,7 +3256,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // 12-20-2015 : Add support for Binary Superblocks
             std::string superblock = UnpackBinarySuperblock(bb.superblock);
             std::string neural_hash = GetQuorumHash(superblock);
-            std::string legacy_neural_hash = RetrieveMd5(superblock);
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
