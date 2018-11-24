@@ -1495,7 +1495,7 @@ bool ScraperSaveCScraperManifestToFiles()
 
 
 
-
+/*
 bool ScraperSendFileManifestContents()
 {
     // This "broadcasts" the current ScraperFileManifest contents to the network.
@@ -1545,25 +1545,142 @@ bool ScraperSendFileManifestContents()
 
         CDataStream part(vchData, SER_NETWORK, 1);
         manifest->addPartData(std::move(part));
-        CScraperManifest::addManifest(std::move(manifest));
+
+        CKey key;
+        std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
+        key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
+
+        CScraperManifest::addManifest(std::move(manifest), key);
     }
+
+    return true;
+}
+*/
+
+
+
+
+
+bool ScraperSendFileManifestContents(std::string sCManifestName)
+{
+    // This "broadcasts" the current ScraperFileManifest contents to the network.
+
+    auto manifest = std::unique_ptr<CScraperManifest>(new CScraperManifest());
+
+    // This should be replaced with the proper field name...
+    manifest->testName = sCManifestName;
+
+    // This will have to be changed to support files bigger than 32 MB, where more than one
+    // part per object will be required.
+    long nPartNum = 0;
+    for (auto const& entry : mScraperFileManifest)
+    {
+        // Only include current files to send across the network.
+        if (!entry.second.current)
+            continue;
+
+        fs::path inputfile = entry.first;
+
+        fs::path inputfilewpath = pathScraper / inputfile;
+
+        // open input file, and associate with CAutoFile
+        FILE *file = fopen(inputfilewpath.c_str(), "rb");
+        CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+
+        if (!filein)
+        {
+            _log(ERROR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
+            return false;
+        }
+
+        // use file size to size memory buffer
+        int dataSize = boost::filesystem::file_size(inputfilewpath);
+        std::vector<unsigned char> vchData;
+        vchData.resize(dataSize);
+
+        // read data and checksum from file
+        try
+        {
+            filein.read((char *)&vchData[0], dataSize);
+        }
+        catch (std::exception &e)
+        {
+            _log(ERROR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
+            return false;
+        }
+
+        filein.fclose();
+
+
+        CScraperManifest::dentry ProjectEntry;
+
+        ProjectEntry.project = entry.second.project;
+        std::string sProject = entry.second.project + "-";
+
+        std::string sinputfile = inputfile.string();
+        std::string suffix = "-ByCPID.gz";
+
+        std::string ETag = sinputfile.erase(sinputfile.find(sProject), sProject.length());
+        ETag = sinputfile.erase(sinputfile.find(suffix), suffix.length());
+
+        ProjectEntry.ETag = ETag;
+
+        ProjectEntry.LastModified = entry.second.timestamp;
+
+        // For now each object will only have one part.
+        ProjectEntry.part1 = nPartNum;
+        ProjectEntry.partc = 1;
+        ProjectEntry.GridcoinTeamID = -1; //Not used anymore
+
+        ProjectEntry.current = entry.second.current;
+
+        ProjectEntry.last = 1;
+
+        manifest->projects.push_back(ProjectEntry);
+
+        CDataStream part(vchData, SER_NETWORK, 1);
+
+        manifest->addPartData(std::move(part));
+
+        nPartNum++;
+    }
+
+    CKey key;
+    std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
+    key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
+
+    CScraperManifest::addManifest(std::move(manifest), key);
 
     return true;
 }
 
 
 
+bool ScraperDeleteCScaperManifest(uint256 nHash)
+{
+    // This delete a manifest.
+
+    auto pair = CScraperManifest::mapManifest.find(nHash);
+
+    // const uint256& hash = pair.first;
+    CScraperManifest& manifest = *pair->second;
+
+    manifest.~CSplitBlob();
+
+    return true;
+}
+
 
 
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    if(fHelp || params.size() != 0 )
+    if(fHelp || params.size() != 1 )
         throw std::runtime_error(
                 "sendscraperfilemanifest\n"
                 "Send a CScraperManifest object with the ScraperFileManifest.\n"
                 );
 
-    bool ret = ScraperSendFileManifestContents();
+    bool ret = ScraperSendFileManifestContents(params[0].get_str());
 
     return UniValue(ret);
 }
@@ -1582,3 +1699,17 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
 
     return UniValue(ret);
 }
+
+
+UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
+{
+    if(fHelp || params.size() != 1 )
+        throw std::runtime_error(
+                "deletecscrapermanifest <hash>\n"
+                "delete manifest object.\n"
+                );
+    bool ret = ScraperDeleteCScaperManifest((uint256(params[0].get_str())));
+    return UniValue(ret);
+}
+
+

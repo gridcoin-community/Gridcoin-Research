@@ -4,6 +4,9 @@
  * that to parent class. Sice it will be all in one file there will not be any
  * polymorfism.
 */
+
+#include <key.h>
+
 /** Abstract class for blobs that are split into parts. */
 class CSplitBlob
 {

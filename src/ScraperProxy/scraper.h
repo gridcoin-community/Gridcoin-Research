@@ -83,6 +83,7 @@ const std::string GetTextForstatsobjecttype(int EnumValue)
 *********************/
 
 extern bool fDebug;
+extern std::string msMasterMessagePrivateKey;
 std::vector<std::pair<std::string, std::string>> vwhitelist;
 std::vector<std::pair<std::string, std::string>> vuserpass;
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
@@ -162,7 +163,8 @@ ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles();
-bool ScraperSendFileManifestContents();
+bool ScraperSendFileManifestContents(std::string CManifestName);
+bool ScraperDeleteCScaperManifest();
 
 double MagRound(double dMag)
 {
