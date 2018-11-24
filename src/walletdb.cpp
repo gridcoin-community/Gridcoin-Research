@@ -6,8 +6,6 @@
 #include "walletdb.h"
 #include "wallet.h"
 #include "init.h"
-#include <boost/version.hpp>
-#include <boost/filesystem.hpp>
 #include <fstream>
 
 using namespace std;

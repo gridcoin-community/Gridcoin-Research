@@ -34,7 +34,7 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
 
 std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::string sAnswer);
 
-std::string GetPollContractByTitle(std::string objecttype, std::string title);
+std::string GetPollContractByTitle(std::string title);
 
 bool PollExists(std::string pollname);
 

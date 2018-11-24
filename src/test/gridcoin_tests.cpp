@@ -17,8 +17,6 @@
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 extern std::map<std::string, StructCPID> mvDPOR;
 extern std::string GetQuorumHash(const std::string& data);
-extern std::string ConvertHexToBin(std::string a);
-extern std::string ConvertBinToHex(std::string a);
 extern bool fTestNet;
 double RoundFromString(std::string s, int place);
 std::string LowerUnderscore(std::string data);
@@ -99,30 +97,11 @@ BOOST_AUTO_TEST_CASE(gridcoin_ValidatePackBinarySuperblock)
     BOOST_CHECK_EQUAL(PackBinarySuperblock(contract), expected);
 }
 
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnackBinarySuperblock)
+BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnpackBinarySuperblock)
 {
     const std::string packed(superblock_packed_bin, superblock_packed_bin + superblock_packed_bin_len);
     const std::string expected(superblock_unpacked_txt, superblock_unpacked_txt + superblock_unpacked_txt_len);
     BOOST_CHECK_EQUAL(UnpackBinarySuperblock(packed), expected);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateConvertHexToBin)
-{
-    const std::string hex("7d0d73fe026d66fd4ab8d5d8da32a611");
-
-    // Trust that boost gets it right.
-    std::string expected;
-    boost::algorithm::unhex(hex, std::back_inserter(expected));
-    BOOST_CHECK_EQUAL(ConvertHexToBin(hex), expected);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ValidateConvertBinToHex)
-{
-    const std::string hex("7d0d73fe026d66fd4ab8d5d8da32a611");
-    std::string bin;
-    boost::algorithm::unhex(hex, std::back_inserter(bin));
-
-    BOOST_CHECK_EQUAL(ConvertBinToHex(bin), hex);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_LowerUnderscoreShouldConvertToLowerCaseAndReplaceUnderscoresWithSpaces)
@@ -184,7 +163,7 @@ struct GridcoinCBRTestConfig
     GridcoinCBRTestConfig()
     {
         // Clear out previous CBR settings.
-        DeleteCache("protocol", "blockreward1");
+        DeleteCache(Section::PROTOCOL, "blockreward1");
     }
 };
 
@@ -207,7 +186,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
     index.nVersion = 10;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(cbr), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
 }
 
@@ -217,7 +196,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(-1 * COIN), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
 }
 
@@ -227,7 +206,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
@@ -239,7 +218,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
 
     // Make the block reward message 1 second older than the max age
     // relative to the block.
-    WriteCache("protocol", "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
 
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
 }

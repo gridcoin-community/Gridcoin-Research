@@ -272,7 +272,7 @@ void VotingTableModel::resetData(bool history)
             item->vectorOfAnswers_ = iterPoll.answers;
             item->totalParticipants_ = iterPoll.total_participants;
             item->totalShares_ = iterPoll.total_shares;
-            item->url_ = QString::fromStdString(iterPoll.url).replace("_"," ");
+            item->url_ = QString::fromStdString(iterPoll.url);
             item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer).replace("_"," ");
             items.push_back(item);
         }

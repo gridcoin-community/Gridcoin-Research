@@ -801,24 +801,24 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
     // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
     const double G = 9942.2056;
 
-    // If the stake output provided to GetNumberofStakeOutputs is less than or equal to nMinStakeSplitValue then there will
-    // be only one output, so return(1) immediately.
-    if (nValue <= nMinStakeSplitValue)
-        return(1);
+    // If the stake output provided to GetNumberofStakeOutputs is not greater than nMinStakeSplitValue then there will
+    // be only one output, so skip calculations and return(nStakeOutputs) which is initialized to 1.
+    if (nValue > nMinStakeSplitValue)
+    {
+        // Set Desired UTXO size post stake based on passed in efficiency and difficulty, but do not allow to go below
+        // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
+        // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
+        // equation (27) on page 10 as a reference for the below formula.
+        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
 
-    // Set Desired UTXO size post stake based on passed in efficiency and difficulty, but do not allow to go below
-    // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
-    // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
-    // equation (27) on page 10 as a reference for the below formula.
-    nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
-    nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
+        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
 
-    if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nDesiredStakeOutputValue = %f", CoinToDouble(nDesiredStakeOutputValue));
+        // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
+        nStakeOutputs = max((int64_t) 1, nValue / nDesiredStakeOutputValue);
 
-    // Divide nValue by nDesiredStakeUTXOValue. We purposely want this to be integer division to round down.
-    nStakeOutputs = nValue / nDesiredStakeOutputValue;
-
-    if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
+        if (fDebug2) LogPrintf("GetNumberOfStakeOutputs: nStakeOutputs = %u", nStakeOutputs);
+    }
 
     return(nStakeOutputs);
 }
@@ -1048,7 +1048,7 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
         return;
     }
 
-    int pending_height = RoundFromString(ReadCache("neuralsecurity","pending").value, 0);
+    int pending_height = RoundFromString(ReadCache(Section::NEURALSECURITY, "pending").value, 0);
 
     if (pending_height>=(pindexBest->nHeight-200))
     {
