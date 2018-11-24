@@ -49,13 +49,6 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="btnViewAttachment">
-       <property name="text">
-        <string>View Attachment</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="btnExecute">
        <property name="enabled">
         <bool>true</bool>
