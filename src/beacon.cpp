@@ -97,7 +97,7 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
     AssertLockHeld(cs_main);
-    const AppCacheEntry& entry =  ReadCache("beacon", cpid);
+    const AppCacheEntry& entry =  ReadCache(Section::BEACON, cpid);
     std::string sBeacon = entry.value;
     int64_t iLocktime = entry.timestamp;
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
@@ -117,17 +117,17 @@ bool HasActiveBeacon(const std::string& cpid)
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
     AssertLockHeld(cs_main);
-    const AppCacheEntry& entry = ReadCache("beacon", cpid);
+    const AppCacheEntry& entry = ReadCache(Section::BEACON, cpid);
 
     // Compare the age of the beacon to the age of the current block. If we have
     // no current block we assume that the beacon is valid.
     int64_t iAge = pindexBest != NULL
-          ? pindexBest->nTime - entry.timestamp
-          : 0;
+                                 ? pindexBest->nTime - entry.timestamp
+                                 : 0;
 
     return (iAge > iMaxSeconds)
-          ? ""
-          : entry.value;
+            ? ""
+            : entry.value;
 }
 
 bool VerifyBeaconContractTx(const CTransaction& tx)
@@ -155,7 +155,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     if (tx_out_cpid.empty() || tx_out_address.empty() || tx_out_publickey.empty() || chkMessageContractCPID.empty())
         return false; // Incomplete contract
 
-    const AppCacheEntry& beaconEntry = ReadCache("beacon", chkMessageContractCPID);
+    const AppCacheEntry& beaconEntry = ReadCache(Section::BEACON, chkMessageContractCPID);
     if (beaconEntry.value.empty())
     {
         if (fDebug10)
@@ -165,8 +165,8 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     }
 
     int64_t chkiAge = pindexBest != NULL
-        ? tx.nLockTime - beaconEntry.timestamp
-        : 0;
+                                    ? tx.nLockTime - beaconEntry.timestamp
+                                    : 0;
     int64_t chkSecondsBase = 60 * 24 * 30 * 60;
 
     // Conditions

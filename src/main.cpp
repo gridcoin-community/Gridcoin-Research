@@ -317,13 +317,13 @@ bool TimerMain(std::string timer_name, int max_ms)
 bool UpdateNeuralNetworkQuorumData()
 {
     if (!bGlobalcomInitialized) return false;
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     std::string myNeuralHash = "";
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
@@ -352,14 +352,14 @@ bool FullSyncWithDPORNodes()
     const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
     const int64_t nLookback = 30 * 6 * 86400;
     const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-    std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
-    std::string sWhitelist = GetListOf("project");
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    std::string cpiddata = GetListOf(Section::BEACON, iStartTime, iEndTime);
+    std::string sWhitelist = GetListOf(Section::PROJECT);
+    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
@@ -2136,7 +2136,7 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
     const int64_t MAX_CBR = DEFAULT_CBR * 2;
 
     int64_t reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = ReadCache("protocol","blockreward1");
+    AppCacheEntry oCBReward = ReadCache(Section::PROTOCOL, "blockreward1");
 
     //TODO: refactor the expire checking to subroutine
     //Note: time constant is same as GetBeaconPublicKey
@@ -2198,7 +2198,15 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 
             /* Constant Block Reward */
             if (pindexLast->nVersion>=10)
-                nInterest = GetConstantBlockReward(pindexLast);
+            {
+                AppCacheEntry oCBReward= ReadCache(Section::PROTOCOL, "blockreward1");
+                //TODO: refactor the expire checking to subroutine
+                //Note: time constant is same as GetBeaconPublicKey
+                if( (pindexLast->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
+                {
+                    nInterest= atoi64(oCBReward.value);
+                }
+            }
             else
                 nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 
@@ -2854,14 +2862,22 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             if(!sMType.empty())
             {
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-                DeleteCache(sMType, sMKey);
+                
+                try
+                {
+                DeleteCache(StringToSection(sMType), sMKey);
                 if(fDebug)
                     LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+                }
+                catch(const std::runtime_error& e)
+                {
+                    error("Attempting to delete from unknown cache: %s", sMType);
+                }
 
                 if("beacon"==sMType)
                 {
                     sMKey=sMKey+"A";
-                    DeleteCache("beaconalt", sMKey+"."+ToString(vtx[i].nTime));
+                    DeleteCache(Section::BEACONALT, sMKey+"."+ToString(vtx[i].nTime));
                 }
             }
         }
@@ -2919,11 +2935,11 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
 
 bool LoadSuperblock(std::string data, int64_t nTime, int height)
 {
-        WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
-        WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
-        WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
-        WriteCache("superblock","all",data,nTime);
-        WriteCache("superblock","block_number",ToString(height),nTime);
+    WriteCache(Section::SUPERBLOCK, "magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
+    WriteCache(Section::SUPERBLOCK, "averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
+    WriteCache(Section::SUPERBLOCK, "quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
+    WriteCache(Section::SUPERBLOCK, "all",data,nTime);
+    WriteCache(Section::SUPERBLOCK, "block_number",ToString(height),nTime);
         return true;
 }
 
@@ -3088,7 +3104,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
                     // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
@@ -3305,10 +3321,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else
                                 LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                                     bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
-                                }
+                            }
+                        }
                         }
                 }
-        }
 
         //Approve first coinstake in DPOR block
         if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
@@ -4477,7 +4493,7 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 bool NeedASuperblock()
 {
     bool bDireNeedOfSuperblock = false;
-    std::string superblock = ReadCache("superblock","all").value;
+    std::string superblock = ReadCache(Section::SUPERBLOCK, "all").value;
     if (superblock.length() > 20 && !OutOfSyncByAge())
     {
         if (!VerifySuperblock(superblock, pindexBest))
@@ -4490,7 +4506,7 @@ bool NeedASuperblock()
          */
     }
 
-    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
         bDireNeedOfSuperblock = true;
 
@@ -4535,7 +4551,7 @@ void GridcoinServices()
     }
     else
     {
-        int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+        int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
         bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
         if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
@@ -4588,12 +4604,6 @@ void GridcoinServices()
             }
         }
     }
-
-    if (TimerMain("clearcache",1000))
-    {
-        ClearCache("neural_data");
-    }
-
 
     //Dont perform the following functions if out of sync
     if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
@@ -5231,7 +5241,7 @@ std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
     int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
     std::set<std::string> result;
 
-    for(const auto& item : ReadCacheSection("beaconalt"))
+    for(const auto& item : ReadCacheSection(Section::BEACONALT))
     {
         const std::string& key = item.first;
         const std::string& value = item.second.value;
@@ -5483,13 +5493,13 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     if (nBestHeight < 15)
     {
         // Write entries in the cache to get a timestamp.
-        WriteCache("global", "nGRCTime", "", GetAdjustedTime());
-        WriteCache("global", "nCPIDTime", "", GetAdjustedTime());
+        WriteCache(Section::GLOBAL, "nGRCTime", "", GetAdjustedTime());
+        WriteCache(Section::GLOBAL, "nCPIDTime", "", GetAdjustedTime());
         return true;
     }
 
-    int64_t nGRCTime = ReadCache("global", "nGRCTime").timestamp;
-    int64_t nCPIDTime = ReadCache("global", "nCPIDTime").timestamp;
+    int64_t nGRCTime = ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
+    int64_t nCPIDTime = ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
     if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
         (nGRCTime > 0 || nCPIDTime > 0))
         return true;
@@ -5543,8 +5553,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     LogPrintf("CPIDTime %" PRId64 ", GRCTime %" PRId64 ", WalletTime %" PRId64, nCPIDTime, nGRCTime, EarliestStakedWalletTx);
 
     // Update caches with new timestamps.
-    WriteCache("global", "nGRCTime", "", nGRCTime);
-    WriteCache("global", "nCPIDTime", "", nCPIDTime);
+    WriteCache(Section::GLOBAL, "nGRCTime", "", nGRCTime);
+    WriteCache(Section::GLOBAL, "nCPIDTime", "", nCPIDTime);
     return true;
 }
 
@@ -5697,10 +5707,9 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     // switching to v9. We want to clear these to avoid the data stacking up
     // with time. If this causes an issue when syncing then considering making
     // this >=v9 only again.
-        ClearCache("neuralsecurity");
-    ClearCache("currentneuralsecurity");
+    ClearCache(Section::NEURALSECURITY);
+    WriteCache(Section::NEURALSECURITY, "pending","0",GetAdjustedTime());
 
-    WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
     try
     {
         int nMaxDepth = nBestHeight;
@@ -5733,7 +5742,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                     std::string superblock = UnpackBinarySuperblock(bb.superblock);
                     if (VerifySuperblock(superblock, pblockindex))
                     {
-                        WriteCache("neuralsecurity","pending",ToString(pblockindex->nHeight),GetAdjustedTime());
+                        WriteCache(Section::NEURALSECURITY, "pending",ToString(pblockindex->nHeight),GetAdjustedTime());
                     }
                 }
 
@@ -7477,7 +7486,7 @@ bool ProjectIsValid(std::string sProject)
 
     boost::to_lower(sProject);
 
-    for (const auto& item : ReadCacheSection("project"))
+    for (const auto& item : ReadCacheSection(Section::PROJECT))
     {
         const AppCacheEntry& entry = item.second;
         std::string sProjectName = ToOfficialName(entry.value);
@@ -7493,13 +7502,13 @@ std::string strReplace(std::string& str, const std::string& oldStr, const std::s
 {
     assert(oldStr.empty() == false && "Cannot replace an empty string");
 
-  size_t pos = 0;
+    size_t pos = 0;
     while((pos = str.find(oldStr, pos)) != std::string::npos)
     {
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+    return str;
 }
 
 std::string LowerUnderscore(std::string data)
@@ -7513,7 +7522,7 @@ std::string ToOfficialName(std::string proj)
 {
         proj = LowerUnderscore(proj);
         //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-    for(const auto& item : ReadCacheSection("projectmapping"))
+    for(const auto& item : ReadCacheSection(Section::PROJECTMAPPING))
         {
         const std::string& key = item.first;
         const AppCacheEntry& entry = item.second;
@@ -7658,7 +7667,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-
+                        
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -8035,14 +8044,14 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
         return;    
 
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    const std::string& Security = ReadCache("currentneuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache(Section::CURRENTNEURALSECURITY, GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
-    
-    WriteCache("currentneuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
+
+    WriteCache(Section::CURRENTNEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
@@ -8079,14 +8088,14 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
     }
 
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    const std::string& Security = ReadCache("neuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache(Section::NEURALSECURITY, GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
-    
-    WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
+
+    WriteCache(Section::NEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
@@ -8224,28 +8233,43 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                                     std::string out_address = "";
                                     std::string out_publickey = "";
                                     GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                                    WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
+                        WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
                                 }
 
-                                WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                                if(fDebug10 && sMessageType=="beacon" ){
+                    try
+                    {
+                    WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
+                        if(fDebug10 && sMessageType=="beacon" )
                                     LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
                                 }
+                    catch(const std::runtime_error& e)
+                    {
+                        error("Attempting to add to unknown cache: %s", sMessageType);
+                    }
+
                                 fMessageLoaded = true;
                                 if (sMessageType=="poll")
                                 {
                                     msPoll = msg;
-                                        }
                                 }
+                        }
                         else if(sMessageAction=="D")
                         {
                                 if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
                                 if(fDebug10 && sMessageType=="beacon" ){
                                     LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
                                 }
-                                DeleteCache(sMessageType,sMessageKey);
+                    
+                    try
+                    {                    
+                    DeleteCache(StringToSection(sMessageType), sMessageKey);
                                 fMessageLoaded = true;
                         }
+                    catch(const std::runtime_error& e)
+                    {
+                        error("Attempting to add to unknown cache: %s", sMessageType);
+                    }
+                }
                         // If this is a boinc project, load the projects into the coin:
                         if (sMessageType=="project" || sMessageType=="projectmapping")
                         {
@@ -8254,10 +8278,10 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                         }
 
                         if(fDebug)
-                            WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
+                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
+            }
                   }
                 }
-    }
 
    return fMessageLoaded;
 }

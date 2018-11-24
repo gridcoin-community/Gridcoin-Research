@@ -83,7 +83,7 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
 
 bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
 {
-    std::string beacons = GetListOf("beacon");
+    std::string beacons = GetListOf(Section::BEACON);
     boost::algorithm::to_lower(beacons);
 
     return IsResearcher(msPrimaryCPID) && beacons.find(msPrimaryCPID) != std::string::npos;
