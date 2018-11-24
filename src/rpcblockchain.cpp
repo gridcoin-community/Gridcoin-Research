@@ -97,7 +97,6 @@ void qtSyncWithDPORNodes(std::string data);
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
 
-std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
@@ -110,10 +109,7 @@ std::string getfilecontents(std::string filename);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
-
 std::string getfilecontents(std::string filename);
-
-std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -121,7 +117,7 @@ BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
 {
-    projectname = strReplace(projectname,"_"," ");
+    boost::replace_all(projectname, "_", " ");
     if (mvNetwork.size() < 1)   return 0;
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;
@@ -131,7 +127,7 @@ double GetNetworkAvgByProject(std::string projectname)
 
 double GetNetworkTotalByProject(std::string projectname)
 {
-    projectname = strReplace(projectname,"_"," ");
+    boost::replace_all(projectname, "_", " ");
     if (mvNetwork.size() < 1)   return 0;
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;
@@ -1997,7 +1993,7 @@ UniValue projects(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
-        std::string sProjectName = ToOfficialName(item.first);
+        std::string sProjectName = item.first;
 
         if (sProjectName.empty())
             continue;
