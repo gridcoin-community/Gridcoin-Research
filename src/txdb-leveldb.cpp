@@ -639,11 +639,6 @@ bool CTxDB::LoadBlockIndex()
                     error("LoadBlockIndex: writing CDiskBlockIndex failed");
                 #endif
             }
-            if( bb.cpid == "INVESTOR" )
-            {
-                LogPrintf("WARNING: BlockIndex contains zero CPID where INVESTOR should have been on block {%s %d}",
-                    pindex->GetBlockHash().GetHex(), pindex->nHeight );
-            }
         }
 
         if(fQtActive)
