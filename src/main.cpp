@@ -8125,96 +8125,96 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 {
     const std::string &msg = tx.hashBoinc;
     const int64_t &nTime = tx.nTime;
-          if (msg.empty()) return false;
-          bool fMessageLoaded = false;
+    if (msg.empty()) return false;
+    bool fMessageLoaded = false;
 
-          if (Contains(msg,"<MT>"))
-          {
-              std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-              std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-              std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-              std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-              std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-              std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-              if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
-              {
-                    sMessageValue="";
-              }
+    if (Contains(msg,"<MT>"))
+    {
+        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
+        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
+        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
+        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
+        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
+        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
+        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
+        {
+            sMessageValue="";
+        }
 
-              if (sMessageType=="superblock")
-              {
-                  // Deny access to superblock processing runtime data
-                  sMessageValue="";
-              }
+        if (sMessageType=="superblock")
+        {
+            // Deny access to superblock processing runtime data
+            sMessageValue="";
+        }
 
-              if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
-              {
-                  //Verify sig first
-                  bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                      sSignature,sMessagePublicKey);
+        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
+        {
+            //Verify sig first
+            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
+                                                  sSignature,sMessagePublicKey);
 
-                  if (Verified)
-                  {
-                        if (sMessageAction=="A")
-                        {
-                                /* With this we allow verifying blocks with stupid beacon */
-                                if("beacon"==sMessageType)
-                                {
-                                    std::string out_cpid = "";
-                                    std::string out_address = "";
-                                    std::string out_publickey = "";
-                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+            if (Verified)
+            {
+                if (sMessageAction=="A")
+                {
+                    /* With this we allow verifying blocks with stupid beacon */
+                    if("beacon"==sMessageType)
+                    {
+                        std::string out_cpid = "";
+                        std::string out_address = "";
+                        std::string out_publickey = "";
+                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
                         WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                                }
+                    }
 
                     try
                     {
-                    WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
+                        WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
                         if(fDebug10 && sMessageType=="beacon" )
-                                    LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                                }
+                            LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
                     }
 
-                                fMessageLoaded = true;
-                                if (sMessageType=="poll")
-                                {
-                                    msPoll = msg;
-                                }
-                        }
-                        else if(sMessageAction=="D")
-                        {
-                                if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
-                                if(fDebug10 && sMessageType=="beacon" ){
-                                    LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
-                                }
+                    fMessageLoaded = true;
+                    if (sMessageType=="poll")
+                    {
+                        msPoll = msg;
+                    }
+                }
+                else if(sMessageAction=="D")
+                {
+                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
+                    if(fDebug10 && sMessageType=="beacon" ){
+                        LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
+                    }
                     
                     try
-                    {                    
-                    DeleteCache(StringToSection(sMessageType), sMessageKey);
-                                fMessageLoaded = true;
-                        }
+                    {
+                        DeleteCache(StringToSection(sMessageType), sMessageKey);
+                        fMessageLoaded = true;
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
                     }
                 }
-                        // If this is a boinc project, load the projects into the coin:
-                        if (sMessageType=="project" || sMessageType=="projectmapping")
-                        {
-                            //Reserved
-                            fMessageLoaded = true;
-                        }
-
-                        if(fDebug)
-                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
-            }
-                  }
+                // If this is a boinc project, load the projects into the coin:
+                if (sMessageType=="project" || sMessageType=="projectmapping")
+                {
+                    //Reserved
+                    fMessageLoaded = true;
                 }
 
-   return fMessageLoaded;
+                if(fDebug)
+                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
+            }
+        }
+    }
+
+    return fMessageLoaded;
 }
 
 double GRCMagnitudeUnit(int64_t locktime)
