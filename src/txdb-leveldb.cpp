@@ -621,10 +621,24 @@ bool CTxDB::LoadBlockIndex()
     {
         AddRARewardBlock(pindex);
 
-        if( pindex->IsUserCPID() && pindex->cpid == uint128(0) )
+        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
         {
             /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
             auto bb = GetBoincBlockByIndex(pindex);
+            if( bb.cpid != pindex->GetCPID() )
+            {
+                LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                    pindex->GetCPID(), bb.cpid,
+                    pindex->GetBlockHash().GetHex(), pindex->nHeight );
+
+                /* Repair the cpid field */
+                pindex->SetCPID(bb.cpid);
+
+                #if 0
+                if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+                    error("LoadBlockIndex: writing CDiskBlockIndex failed");
+                #endif
+            }
             if( bb.cpid == "INVESTOR" )
             {
                 LogPrintf("WARNING: BlockIndex contains zero CPID where INVESTOR should have been on block {%s %d}",
