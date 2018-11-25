@@ -1364,6 +1364,36 @@ public:
 
     CBlockIndex()
     {
+        SetNull();
+    }
+
+    CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
+    {
+        SetNull();
+
+        nFile = nFileIn;
+        nBlockPos = nBlockPosIn;        
+        if (block.IsProofOfStake())
+        {
+            SetProofOfStake();
+            prevoutStake = block.vtx[1].vin[0].prevout;
+            nStakeTime = block.vtx[1].nTime;
+        }
+        else
+        {
+            prevoutStake.SetNull();
+            nStakeTime = 0;
+        }
+
+        nVersion       = block.nVersion;
+        hashMerkleRoot = block.hashMerkleRoot;
+        nTime          = block.nTime;
+        nBits          = block.nBits;
+        nNonce         = block.nNonce;
+    }
+
+    void SetNull()
+    {
         phashBlock = NULL;
         pprev = NULL;
         pnext = NULL;
@@ -1385,46 +1415,12 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
-		//7-11-2015 - Gridcoin - New Accrual Fields
-		nResearchSubsidy = 0;
-		nInterestSubsidy = 0;
-		nMagnitude = 0;
-		nIsSuperBlock = 0;
-		nIsContract = 0;
-    }
-
-    CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
-    {
-        phashBlock = NULL;
-        pprev = NULL;
-        pnext = NULL;
-        nFile = nFileIn;
-        nBlockPos = nBlockPosIn;
-        nHeight = 0;
-        nChainTrust = 0;
-        nMint = 0;
-        nMoneySupply = 0;
-        nFlags = EMPTY_CPID;
-        nStakeModifier = 0;
-        nStakeModifierChecksum = 0;
-        hashProof = 0;
-        if (block.IsProofOfStake())
-        {
-            SetProofOfStake();
-            prevoutStake = block.vtx[1].vin[0].prevout;
-            nStakeTime = block.vtx[1].nTime;
-        }
-        else
-        {
-            prevoutStake.SetNull();
-            nStakeTime = 0;
-        }
-
-        nVersion       = block.nVersion;
-        hashMerkleRoot = block.hashMerkleRoot;
-        nTime          = block.nTime;
-        nBits          = block.nBits;
-        nNonce         = block.nNonce;
+        //7-11-2015 - Gridcoin - New Accrual Fields
+        nResearchSubsidy = 0;
+        nInterestSubsidy = 0;
+        nMagnitude = 0;
+        nIsSuperBlock = 0;
+        nIsContract = 0;
     }
 
     CBlock GetBlockHeader() const
