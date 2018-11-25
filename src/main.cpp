@@ -5679,6 +5679,9 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 
 void AddRARewardBlock(const CBlockIndex* pindex)
 {
+    if(!IsResearchAgeEnabled(pindex->nHeight))
+        return;
+
     // this is from LoadBlockIndex
     if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
     {
