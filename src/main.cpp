@@ -2154,84 +2154,75 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     // Non Research Age - RSA Mode - Legacy (before 10-20-2015)
     if (!IsResearchAgeEnabled(pindexLast->nHeight))
     {
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-            int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
-            int64_t nSubsidy  = nInterest + nBoinc;
-            if (fDebug10 || GetBoolArg("-printcreation"))
+        int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+        int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
+        int64_t nSubsidy  = nInterest + nBoinc;
+        if (fDebug10 || GetBoolArg("-printcreation"))
+        {
+            LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
+                      FormatMoney(nSubsidy), nCoinAge, nBoinc);
+        }
+        int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
+        int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
+        int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
+        if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
+        int64_t nTotalSubsidy = nSubsidy + nFees;
+        if (nBoinc > 1)
+        {
+            std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+            if (sTotalSubsidy.length() > 7)
             {
-                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
-                FormatMoney(nSubsidy), nCoinAge, nBoinc);
+                sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+                nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
             }
-            int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
-            int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
-            int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
-            if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-            int64_t nTotalSubsidy = nSubsidy + nFees;
-            if (nBoinc > 1)
-            {
-                std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-                if (sTotalSubsidy.length() > 7)
-                {
-                    sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-                }
-            }
+        }
 
-            OUT_POR = CoinToDouble(nBoinc);
-            OUT_INTEREST = CoinToDouble(nInterest);
-            return nTotalSubsidy;
+        OUT_POR = CoinToDouble(nBoinc);
+        OUT_INTEREST = CoinToDouble(nInterest);
+        return nTotalSubsidy;
     }
     else
     {
-            // Research Age Subsidy - PROD
-            int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-            int64_t nInterest = 0;
+        // Research Age Subsidy - PROD
+        int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+        int64_t nInterest = 0;
 
-            // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
-            // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
-            // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
-            // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
+        // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
+        // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
+        // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
+        // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
 
-            /* Constant Block Reward */
-            if (pindexLast->nVersion>=10)
+        /* Constant Block Reward */
+        if (pindexLast->nVersion>=10)
+            nInterest = GetConstantBlockReward(pindexLast);
+        else
+            nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+
+        int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
+
+        if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
+        int64_t nSubsidy = nInterest + nBoinc;
+
+        if (fDebug10 || GetBoolArg("-printcreation"))
+        {
+            LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
+                      FormatMoney(nSubsidy), nCoinAge, nBoinc);
+        }
+
+        int64_t nTotalSubsidy = nSubsidy + nFees;
+        if (nBoinc > 1)
+        {
+            std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+            if (sTotalSubsidy.length() > 7)
             {
-                AppCacheEntry oCBReward= ReadCache(Section::PROTOCOL, "blockreward1");
-                //TODO: refactor the expire checking to subroutine
-                //Note: time constant is same as GetBeaconPublicKey
-                if( (pindexLast->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
-                {
-                    nInterest= atoi64(oCBReward.value);
-                }
+                sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+                nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
             }
-            else
-                nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+        }
 
-            int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
-
-            if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
-            int64_t nSubsidy = nInterest + nBoinc;
-
-            if (fDebug10 || GetBoolArg("-printcreation"))
-            {
-                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
-                FormatMoney(nSubsidy), nCoinAge, nBoinc);
-            }
-
-            int64_t nTotalSubsidy = nSubsidy + nFees;
-            if (nBoinc > 1)
-            {
-                std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-                if (sTotalSubsidy.length() > 7)
-                {
-                    sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-                }
-            }
-
-            OUT_POR = CoinToDouble(nBoinc);
-            OUT_INTEREST = CoinToDouble(nInterest);
-            return nTotalSubsidy;
-
+        OUT_POR = CoinToDouble(nBoinc);
+        OUT_INTEREST = CoinToDouble(nInterest);
+        return nTotalSubsidy;
     }
 }
 
