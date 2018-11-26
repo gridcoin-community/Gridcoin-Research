@@ -619,7 +619,6 @@ bool CTxDB::LoadBlockIndex()
     nLoaded=pindex->nHeight;
     for ( ; pindex ; pindex= pindex->pnext )
     {
-        AddRARewardBlock(pindex);
 
         if( pindex->IsUserCPID() && pindex->cpid == uint128() )
         {
@@ -627,9 +626,10 @@ bool CTxDB::LoadBlockIndex()
             auto bb = GetBoincBlockByIndex(pindex);
             if( bb.cpid != pindex->GetCPID() )
             {
-                LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                    pindex->GetCPID(), bb.cpid,
-                    pindex->GetBlockHash().GetHex(), pindex->nHeight );
+                if(fDebug)
+                    LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                        pindex->GetCPID(), bb.cpid,
+                        pindex->GetBlockHash().GetHex(), pindex->nHeight );
 
                 /* Repair the cpid field */
                 pindex->SetCPID(bb.cpid);
@@ -640,6 +640,8 @@ bool CTxDB::LoadBlockIndex()
                 #endif
             }
         }
+
+        AddRARewardBlock(pindex);
 
         if(fQtActive)
         {
