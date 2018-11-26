@@ -641,6 +641,9 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
+        /* Note: AddRARewardBlock is called here even for non-RA blocks. Non-RA
+         * blocks are ignored in AddRARewardBlock so this is not a problem.
+         * The range of this loop should be adjusted to save some time. */
         AddRARewardBlock(pindex);
 
         if(fQtActive)
