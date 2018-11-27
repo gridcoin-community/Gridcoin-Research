@@ -5705,7 +5705,7 @@ void AddRARewardBlock(const CBlockIndex* pindex)
         if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
 
         // Add block hash to CPID hash set.
-        stCPID . vRewardBlocs . emplace(pindex);
+        stCPID.rewardBlocks.emplace(pindex);
         // Store the updated struct. (implicit)
     }
 }
@@ -5713,14 +5713,14 @@ void AddRARewardBlock(const CBlockIndex* pindex)
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex)
 {
     //TODO: is copying involved here?
-    GetInitializedStructCPID2(cpid, mvResearchAge) . vRewardBlocs . erase(pindex);
+    GetInitializedStructCPID2(cpid, mvResearchAge) . rewardBlocks . erase(pindex);
 }
 
 void RescanLifetimeCPID(StructCPID& stCPID)
 {
     if (fDebug10) LogPrintf("GetLifetimeCPID.BEGIN: %s", stCPID.cpid);
 
-    const auto& hashes = stCPID.vRewardBlocs;
+    const auto& hashes = stCPID.rewardBlocks;
 
     ZeroOutResearcherTotals(stCPID);
 

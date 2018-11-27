@@ -67,7 +67,7 @@ struct StructCPID
     std::string boincruntimepublickey;
     std::string cpidv2;
     std::string BlockHash;
-    std::set<const CBlockIndex*> vRewardBlocs;
+    std::set<const CBlockIndex*> rewardBlocks;
 };
 
 struct MiningCPID
