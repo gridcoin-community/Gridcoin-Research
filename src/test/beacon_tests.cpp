@@ -1,4 +1,3 @@
-#include "global_objects_noui.hpp"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"

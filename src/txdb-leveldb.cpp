@@ -610,58 +610,52 @@ bool CTxDB::LoadBlockIndex()
     //Gridcoin - In order, set up Research Age hashes and lifetime fields
     CBlockIndex* pindex = BlockFinder().FindByHeight(1);
 
+    LogPrintf("RA Starting %i %i %i \n", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
     nLoaded=pindex->nHeight;
-    if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
+    for ( ; pindex ; pindex= pindex->pnext )
     {
-        LogPrintf(" RA Starting %i %i %i ", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
-        for(; pindex != NULL; pindex = pindex->pnext)
+
+        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
         {
-            if (!pindex->IsInMainChain())
-                continue;
-
-            if(fQtActive)
+            /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
+            auto bb = GetBoincBlockByIndex(pindex);
+            if( bb.cpid != pindex->GetCPID() )
             {
-                if ((pindex->nHeight % 10000) == 0)
-                {
-                    nLoaded +=10000;
-                    if (nLoaded > nHighest) nHighest=nLoaded;
-                    if (nHighest < nGrandfather) nHighest=nGrandfather;
-                    std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
-                    uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
-                }
-            }
+                if(fDebug)
+                    LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                        pindex->GetCPID(), bb.cpid,
+                        pindex->GetBlockHash().GetHex(), pindex->nHeight );
 
-            if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
-            {
-                const std::string& scpid = pindex->GetCPID();
-                StructCPID stCPID = GetInitializedStructCPID2(scpid, mvResearchAge);
+                /* Repair the cpid field */
+                pindex->SetCPID(bb.cpid);
 
-                stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-                stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-                if (pindex->nHeight > stCPID.LastBlock)
-                {
-                    stCPID.LastBlock = pindex->nHeight;
-                    stCPID.BlockHash = pindex->GetBlockHash().GetHex();
-                }
-
-                if (pindex->nMagnitude > 0)
-                {
-                    stCPID.Accuracy++;
-                    stCPID.TotalMagnitude += pindex->nMagnitude;
-                    stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-                }
-
-                if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
-                if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
-
-                // Store the updated struct.
-                mvResearchAge[scpid] = stCPID;
-                AddCPIDBlockHash(scpid, pindex->GetBlockHash());
+                #if 0
+                if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+                    error("LoadBlockIndex: writing CDiskBlockIndex failed");
+                #endif
             }
         }
+
+        /* Note: AddRARewardBlock is called here even for non-RA blocks. Non-RA
+         * blocks are ignored in AddRARewardBlock so this is not a problem.
+         * The range of this loop should be adjusted to save some time. */
+        AddRARewardBlock(pindex);
+
+        if(fQtActive)
+        {
+            if ((pindex->nHeight % 10000) == 0)
+            {
+                nLoaded +=10000;
+                if (nLoaded > nHighest) nHighest=nLoaded;
+                if (nHighest < nGrandfather) nHighest=nGrandfather;
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
+                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+            }
+        }
+
     }
 
-    LogPrintf("RA Complete - RA Time %15" PRId64 "ms", GetTimeMillis() - nStart);
+    LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     return true;
 }

@@ -150,9 +150,6 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 extern std::map<std::string, StructCPID> mvResearchAge;
 extern std::map<std::string, MiningCPID> mvBlockIndex;
 
-typedef std::set<uint256> HashSet;
-extern std::map<std::string, HashSet> mvCPIDBlockHashes;
-
 struct BlockHasher
 {
     size_t operator()(const uint256& hash) const { return hash.Get64(); }
@@ -303,6 +300,9 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
 double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
+void AddRARewardBlock(const CBlockIndex* pIndex);
+MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
+
 unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
 unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
 int GetNumBlocksOfPeers();
@@ -323,7 +323,8 @@ int64_t PreviousBlockAge();
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
-StructCPID GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
+StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
+StructCPID& GetLifetimeCPID(const std::string& cpid);
 bool IsResearcher(const std::string& cpid);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 
@@ -1363,6 +1364,36 @@ public:
 
     CBlockIndex()
     {
+        SetNull();
+    }
+
+    CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
+    {
+        SetNull();
+
+        nFile = nFileIn;
+        nBlockPos = nBlockPosIn;        
+        if (block.IsProofOfStake())
+        {
+            SetProofOfStake();
+            prevoutStake = block.vtx[1].vin[0].prevout;
+            nStakeTime = block.vtx[1].nTime;
+        }
+        else
+        {
+            prevoutStake.SetNull();
+            nStakeTime = 0;
+        }
+
+        nVersion       = block.nVersion;
+        hashMerkleRoot = block.hashMerkleRoot;
+        nTime          = block.nTime;
+        nBits          = block.nBits;
+        nNonce         = block.nNonce;
+    }
+
+    void SetNull()
+    {
         phashBlock = NULL;
         pprev = NULL;
         pnext = NULL;
@@ -1384,46 +1415,12 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
-		//7-11-2015 - Gridcoin - New Accrual Fields
-		nResearchSubsidy = 0;
-		nInterestSubsidy = 0;
-		nMagnitude = 0;
-		nIsSuperBlock = 0;
-		nIsContract = 0;
-    }
-
-    CBlockIndex(unsigned int nFileIn, unsigned int nBlockPosIn, CBlock& block)
-    {
-        phashBlock = NULL;
-        pprev = NULL;
-        pnext = NULL;
-        nFile = nFileIn;
-        nBlockPos = nBlockPosIn;
-        nHeight = 0;
-        nChainTrust = 0;
-        nMint = 0;
-        nMoneySupply = 0;
-        nFlags = EMPTY_CPID;
-        nStakeModifier = 0;
-        nStakeModifierChecksum = 0;
-        hashProof = 0;
-        if (block.IsProofOfStake())
-        {
-            SetProofOfStake();
-            prevoutStake = block.vtx[1].vin[0].prevout;
-            nStakeTime = block.vtx[1].nTime;
-        }
-        else
-        {
-            prevoutStake.SetNull();
-            nStakeTime = 0;
-        }
-
-        nVersion       = block.nVersion;
-        hashMerkleRoot = block.hashMerkleRoot;
-        nTime          = block.nTime;
-        nBits          = block.nBits;
-        nNonce         = block.nNonce;
+        //7-11-2015 - Gridcoin - New Accrual Fields
+        nResearchSubsidy = 0;
+        nInterestSubsidy = 0;
+        nMagnitude = 0;
+        nIsSuperBlock = 0;
+        nIsContract = 0;
     }
 
     CBlock GetBlockHeader() const

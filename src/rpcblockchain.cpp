@@ -85,8 +85,6 @@ extern std::string PollAnswers(std::string pollname);
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
-
 extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
 
 extern UniValue GetJSONBeaconReport();
@@ -661,12 +659,12 @@ bool TallyMagnitudesInSuperblock()
                 double magnitude = RoundFromString(ExtractValue(vSuperblock[i],",",1),0);
                 if (cpid.length() > 10)
                 {
-                    StructCPID stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
+                    StructCPID& stCPID = GetInitializedStructCPID2(cpid,mvDPORCopy);
                     stCPID.TotalMagnitude = magnitude;
                     stCPID.Magnitude = magnitude;
                     stCPID.cpid = cpid;
                     mvDPORCopy[cpid]=stCPID;
-                    StructCPID stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
+                    StructCPID& stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
                     stMagg.cpid = cpid;
                     stMagg.Magnitude = stCPID.Magnitude;
                     stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
@@ -689,7 +687,7 @@ bool TallyMagnitudesInSuperblock()
         if (fDebug3) LogPrintf(".TMIS41.");
         double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
         // Store the Total Network Magnitude:
-        StructCPID network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
+        StructCPID& network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
         network.projectname="NETWORK";
         network.NetworkMagnitude = TotalNetworkMagnitude;
         network.NetworkAvgMagnitude = NetworkAvgMagnitude;
@@ -716,7 +714,7 @@ bool TallyMagnitudesInSuperblock()
                     double avg = RoundFromString(ExtractValue("0" + vProjects[i],",",1),0);
                     if (project.length() > 1)
                     {
-                        StructCPID stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
+                        StructCPID& stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
                         stProject.projectname = project;
                         stProject.AverageRAC = avg;
                         //As of 7-16-2015, start pulling in Total RAC
@@ -1309,9 +1307,10 @@ UniValue lifetime(const UniValue& params, bool fHelp)
             res.pushKV(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2));
     }
     //8-14-2015
-    StructCPID stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
+    StructCPID& stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
 
-    res.pushKV("Average Magnitude", stCPID.ResearchAverageMagnitude);
+    res.pushKV("RA Magnitude Sum", stCPID.TotalMagnitude);
+    res.pushKV("RA Accuracy", stCPID.Accuracy);
     results.push_back(res);
 
     return results;
@@ -2566,10 +2565,10 @@ UniValue MagnitudeReport(std::string cpid)
                     if (IsResearchAgeEnabled(pindexBest->nHeight))
                     {
 
-                        StructCPID stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
+                        StructCPID& stCPID = GetLifetimeCPID(structMag.cpid);
                         double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                         entry.pushKV("CPID",structMag.cpid);
-                        StructCPID UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
+                        StructCPID& UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
                         entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
                         entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
                         entry.pushKV("Research Payments (14 days)",structMag.payments);
@@ -2586,7 +2585,8 @@ UniValue MagnitudeReport(std::string cpid)
 
                         entry.pushKV("CPID Lifetime Interest Paid", stCPID.InterestSubsidy);
                         entry.pushKV("CPID Lifetime Research Paid", stCPID.ResearchSubsidy);
-                        entry.pushKV("CPID Lifetime Avg Magnitude", stCPID.ResearchAverageMagnitude);
+                        entry.pushKV("CPID Lifetime Magnitude Sum", stCPID.TotalMagnitude);
+                        entry.pushKV("CPID Lifetime Accuracy", stCPID.Accuracy);
 
                         entry.pushKV("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01));
                         entry.pushKV("Last Blockhash Paid", stCPID.BlockHash);
@@ -2671,7 +2671,7 @@ UniValue GetJsonUnspentReport()
     //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
+        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
         CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
         UniValue entry1(UniValue::VOBJ);
         entry1.pushKV("Researcher Magnitude",pHistorical->nMagnitude);

@@ -1,7 +1,7 @@
-#include "global_objects_noui.hpp"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
+#include "global_objects_noui.hpp"
 #include "appcache.h"
 #include "contract/superblock.h"
 
@@ -31,7 +31,7 @@ namespace
       GridcoinTestsConfig()
       {
          // Create a fake CPID
-         StructCPID cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
+         StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
          cpid.projectname = "My Simple Test Project";
          cpid.entries = 1;
          cpid.cpid = TEST_CPID;
@@ -40,7 +40,7 @@ namespace
          mvMagnitudes[TEST_CPID] = cpid;
 
          // Create a fake DPOR
-         StructCPID dpor = GetInitializedStructCPID2(TEST_CPID, mvDPOR);
+         StructCPID& dpor = GetInitializedStructCPID2(TEST_CPID, mvDPOR);
          dpor.Magnitude = 125;
          mvDPOR[TEST_CPID] = dpor;
       }
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_SUITE(gridcoin_tests)
 BOOST_AUTO_TEST_CASE(gridcoin_GetOutstandingAmountOwedShouldReturnCorrectSum)
 {
    // Update the CPID earliest pay time to 24 hours ago.
-   StructCPID cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
+   StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
    cpid.EarliestPaymentTime = GetAdjustedTime() - 24 * 3600;
    mvMagnitudes[TEST_CPID] = cpid;
 
