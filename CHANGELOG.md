@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [4.0.0.2] Unreleased
+## [4.0.1.1] Unreleased
 ### Added
  - Valgrind suppressions file, #1245 (@practicalswift).
  - Feedback for addnode command, #1060 (@tomasbrod).
@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
  - Wrong RA scan range causing Reward calculation disagreements and forks
+ - RA inconsistency on testnet, #1368, (@denravonska).
+ - crash while voting, #1369, (@denravonska).
+
 ## [4.0.0.0] 2018-10-19, mandatory
 ### Added
  - Linux nodes can now stake superblocks using forwarded contracts,
