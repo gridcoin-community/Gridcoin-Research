@@ -228,11 +228,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         CWalletTx wtx;
         CReserveKey keyChange(wallet);
         int64_t nFeeRequired = 0;
-		if (!msAttachmentGuid.empty())
-		{
-				LogPrintf("Adding attachment to tx %s",wtx.hashBoinc);
-				wtx.hashBoinc += "<ATTACHMENT><TXID>" + wtx.GetHash().ToString() + "</TXID><ATTACHMENTGUID>" + msAttachmentGuid + "</ATTACHMENTGUID></ATTACHMENT>";
-		}
 		wtx.hashBoinc += messages;
 		bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 

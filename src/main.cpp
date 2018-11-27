@@ -105,8 +105,6 @@ extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
 std::string DefaultBlockKey(int key_length);
 
-extern std::string ToOfficialName(std::string proj);
-
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;
 
@@ -227,7 +225,6 @@ bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern void GetGlobalStatus();
-extern bool ProjectIsValid(std::string project);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -256,7 +253,6 @@ std::string    msMiningErrors5;
 std::string    msMiningErrors6;
 std::string    msMiningErrors7;
 std::string    msMiningErrors8;
-std::string    msAttachmentGuid;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
 std::string    msNeuralResponse;
@@ -317,13 +313,13 @@ bool TimerMain(std::string timer_name, int max_ms)
 bool UpdateNeuralNetworkQuorumData()
 {
     if (!bGlobalcomInitialized) return false;
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     std::string myNeuralHash = "";
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
@@ -352,14 +348,14 @@ bool FullSyncWithDPORNodes()
     const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
     const int64_t nLookback = 30 * 6 * 86400;
     const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-    std::string cpiddata = GetListOf("beacon", iStartTime, iEndTime);
-    std::string sWhitelist = GetListOf("project");
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    std::string cpiddata = GetListOf(Section::BEACON, iStartTime, iEndTime);
+    std::string sWhitelist = GetListOf(Section::PROJECT);
+    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
     std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache("superblock", "block_number").value;
+    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
@@ -2136,7 +2132,7 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
     const int64_t MAX_CBR = DEFAULT_CBR * 2;
 
     int64_t reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = ReadCache("protocol","blockreward1");
+    AppCacheEntry oCBReward = ReadCache(Section::PROTOCOL, "blockreward1");
 
     //TODO: refactor the expire checking to subroutine
     //Note: time constant is same as GetBeaconPublicKey
@@ -2158,76 +2154,75 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     // Non Research Age - RSA Mode - Legacy (before 10-20-2015)
     if (!IsResearchAgeEnabled(pindexLast->nHeight))
     {
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-            int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
-            int64_t nSubsidy  = nInterest + nBoinc;
-            if (fDebug10 || GetBoolArg("-printcreation"))
+        int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+        int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
+        int64_t nSubsidy  = nInterest + nBoinc;
+        if (fDebug10 || GetBoolArg("-printcreation"))
+        {
+            LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
+                      FormatMoney(nSubsidy), nCoinAge, nBoinc);
+        }
+        int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
+        int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
+        int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
+        if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
+        int64_t nTotalSubsidy = nSubsidy + nFees;
+        if (nBoinc > 1)
+        {
+            std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+            if (sTotalSubsidy.length() > 7)
             {
-                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
-                FormatMoney(nSubsidy), nCoinAge, nBoinc);
+                sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+                nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
             }
-            int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
-            int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
-            int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
-            if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-            int64_t nTotalSubsidy = nSubsidy + nFees;
-            if (nBoinc > 1)
-            {
-                std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-                if (sTotalSubsidy.length() > 7)
-                {
-                    sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-                }
-            }
+        }
 
-            OUT_POR = CoinToDouble(nBoinc);
-            OUT_INTEREST = CoinToDouble(nInterest);
-            return nTotalSubsidy;
+        OUT_POR = CoinToDouble(nBoinc);
+        OUT_INTEREST = CoinToDouble(nInterest);
+        return nTotalSubsidy;
     }
     else
     {
-            // Research Age Subsidy - PROD
-            int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-            int64_t nInterest = 0;
+        // Research Age Subsidy - PROD
+        int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+        int64_t nInterest = 0;
 
-            // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
-            // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
-            // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
-            // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
+        // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
+        // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
+        // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
+        // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
 
-            /* Constant Block Reward */
-            if (pindexLast->nVersion>=10)
-                nInterest = GetConstantBlockReward(pindexLast);
-            else
-                nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+        /* Constant Block Reward */
+        if (pindexLast->nVersion>=10)
+            nInterest = GetConstantBlockReward(pindexLast);
+        else
+            nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 
-            int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
+        int64_t maxStakeReward = GetMaximumBoincSubsidy(nTime) * COIN * 255;
 
-            if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
-            int64_t nSubsidy = nInterest + nBoinc;
+        if (nBoinc > maxStakeReward) nBoinc = maxStakeReward;
+        int64_t nSubsidy = nInterest + nBoinc;
 
-            if (fDebug10 || GetBoolArg("-printcreation"))
+        if (fDebug10 || GetBoolArg("-printcreation"))
+        {
+            LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
+                      FormatMoney(nSubsidy), nCoinAge, nBoinc);
+        }
+
+        int64_t nTotalSubsidy = nSubsidy + nFees;
+        if (nBoinc > 1)
+        {
+            std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
+            if (sTotalSubsidy.length() > 7)
             {
-                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
-                FormatMoney(nSubsidy), nCoinAge, nBoinc);
+                sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
+                nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
             }
+        }
 
-            int64_t nTotalSubsidy = nSubsidy + nFees;
-            if (nBoinc > 1)
-            {
-                std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-                if (sTotalSubsidy.length() > 7)
-                {
-                    sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-                }
-            }
-
-            OUT_POR = CoinToDouble(nBoinc);
-            OUT_INTEREST = CoinToDouble(nInterest);
-            return nTotalSubsidy;
-
+        OUT_POR = CoinToDouble(nBoinc);
+        OUT_INTEREST = CoinToDouble(nInterest);
+        return nTotalSubsidy;
     }
 }
 
@@ -2854,14 +2849,22 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             if(!sMType.empty())
             {
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-                DeleteCache(sMType, sMKey);
+                
+                try
+                {
+                DeleteCache(StringToSection(sMType), sMKey);
                 if(fDebug)
                     LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+                }
+                catch(const std::runtime_error& e)
+                {
+                    error("Attempting to delete from unknown cache: %s", sMType);
+                }
 
                 if("beacon"==sMType)
                 {
                     sMKey=sMKey+"A";
-                    DeleteCache("beaconalt", sMKey+"."+ToString(vtx[i].nTime));
+                    DeleteCache(Section::BEACONALT, sMKey+"."+ToString(vtx[i].nTime));
                 }
             }
         }
@@ -2919,11 +2922,11 @@ std::string PubKeyToAddress(const CScript& scriptPubKey)
 
 bool LoadSuperblock(std::string data, int64_t nTime, int height)
 {
-        WriteCache("superblock","magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
-        WriteCache("superblock","averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
-        WriteCache("superblock","quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
-        WriteCache("superblock","all",data,nTime);
-        WriteCache("superblock","block_number",ToString(height),nTime);
+    WriteCache(Section::SUPERBLOCK, "magnitudes",ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>"),nTime);
+    WriteCache(Section::SUPERBLOCK, "averages",ExtractXML(data,"<AVERAGES>","</AVERAGES>"),nTime);
+    WriteCache(Section::SUPERBLOCK, "quotes",ExtractXML(data,"<QUOTES>","</QUOTES>"),nTime);
+    WriteCache(Section::SUPERBLOCK, "all",data,nTime);
+    WriteCache(Section::SUPERBLOCK, "block_number",ToString(height),nTime);
         return true;
 }
 
@@ -3088,7 +3091,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
                     // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
+                // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
                     for (unsigned int i = 3; i < tx.vout.size(); i++)
                     {
                         double      Amount    = CoinToDouble(tx.vout[i].nValue);
@@ -3305,10 +3308,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                             else
                                 LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %f and Research %f and StakeReward %f, OUT_POR %f, with Out_Interest %f for CPID %s ",
                                                     bb.InterestSubsidy, bb.ResearchSubsidy, dStakeReward, OUT_POR, OUT_INTEREST,bb.cpid.c_str());
-                                }
+                            }
+                        }
                         }
                 }
-        }
 
         //Approve first coinstake in DPOR block
         if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
@@ -4477,7 +4480,7 @@ bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 bool NeedASuperblock()
 {
     bool bDireNeedOfSuperblock = false;
-    std::string superblock = ReadCache("superblock","all").value;
+    std::string superblock = ReadCache(Section::SUPERBLOCK, "all").value;
     if (superblock.length() > 20 && !OutOfSyncByAge())
     {
         if (!VerifySuperblock(superblock, pindexBest))
@@ -4490,7 +4493,7 @@ bool NeedASuperblock()
          */
     }
 
-    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
         bDireNeedOfSuperblock = true;
 
@@ -4535,7 +4538,7 @@ void GridcoinServices()
     }
     else
     {
-        int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+        int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
         bool bNeedSuperblock = (superblock_age > (GetSuperblockAgeSpacing(nBestHeight)));
         if ( nBestHeight % 3 == 0 && NeedASuperblock() ) bNeedSuperblock=true;
 
@@ -4588,12 +4591,6 @@ void GridcoinServices()
             }
         }
     }
-
-    if (TimerMain("clearcache",1000))
-    {
-        ClearCache("neural_data");
-    }
-
 
     //Dont perform the following functions if out of sync
     if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
@@ -5231,7 +5228,7 @@ std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
     int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
     std::set<std::string> result;
 
-    for(const auto& item : ReadCacheSection("beaconalt"))
+    for(const auto& item : ReadCacheSection(Section::BEACONALT))
     {
         const std::string& key = item.first;
         const std::string& value = item.second.value;
@@ -5483,13 +5480,13 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     if (nBestHeight < 15)
     {
         // Write entries in the cache to get a timestamp.
-        WriteCache("global", "nGRCTime", "", GetAdjustedTime());
-        WriteCache("global", "nCPIDTime", "", GetAdjustedTime());
+        WriteCache(Section::GLOBAL, "nGRCTime", "", GetAdjustedTime());
+        WriteCache(Section::GLOBAL, "nCPIDTime", "", GetAdjustedTime());
         return true;
     }
 
-    int64_t nGRCTime = ReadCache("global", "nGRCTime").timestamp;
-    int64_t nCPIDTime = ReadCache("global", "nCPIDTime").timestamp;
+    int64_t nGRCTime = ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
+    int64_t nCPIDTime = ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
     if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
         (nGRCTime > 0 || nCPIDTime > 0))
         return true;
@@ -5543,8 +5540,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     LogPrintf("CPIDTime %" PRId64 ", GRCTime %" PRId64 ", WalletTime %" PRId64, nCPIDTime, nGRCTime, EarliestStakedWalletTx);
 
     // Update caches with new timestamps.
-    WriteCache("global", "nGRCTime", "", nGRCTime);
-    WriteCache("global", "nCPIDTime", "", nCPIDTime);
+    WriteCache(Section::GLOBAL, "nGRCTime", "", nGRCTime);
+    WriteCache(Section::GLOBAL, "nCPIDTime", "", nCPIDTime);
     return true;
 }
 
@@ -5697,10 +5694,9 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     // switching to v9. We want to clear these to avoid the data stacking up
     // with time. If this causes an issue when syncing then considering making
     // this >=v9 only again.
-        ClearCache("neuralsecurity");
-    ClearCache("currentneuralsecurity");
+    ClearCache(Section::NEURALSECURITY);
+    WriteCache(Section::NEURALSECURITY, "pending","0",GetAdjustedTime());
 
-    WriteCache("neuralsecurity","pending","0",GetAdjustedTime());
     try
     {
         int nMaxDepth = nBestHeight;
@@ -5733,7 +5729,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
                     std::string superblock = UnpackBinarySuperblock(bb.superblock);
                     if (VerifySuperblock(superblock, pblockindex))
                     {
-                        WriteCache("neuralsecurity","pending",ToString(pblockindex->nHeight),GetAdjustedTime());
+                        WriteCache(Section::NEURALSECURITY, "pending",ToString(pblockindex->nHeight),GetAdjustedTime());
                     }
                 }
 
@@ -5868,7 +5864,7 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
         bNetAveragesLoaded = true;
         return true;
     }
-    catch (bad_alloc ba)
+    catch (const std::bad_alloc& ba)
     {
         LogPrintf("Bad Alloc while tallying network averages. [1]");
         bNetAveragesLoaded=true;
@@ -6242,7 +6238,7 @@ double ExtractMagnitudeFromExplainMagnitude()
                     if (vMyMag.size() > 0)
                     {
                         std::string sSubMag = vMyMag[1];
-                        sSubMag = strReplace(sSubMag," ","");
+                        boost::replace_all(sSubMag, " ", "");
                         double dMag = RoundFromString("0"+sSubMag,0);
                         return dMag;
                     }
@@ -7455,84 +7451,28 @@ void InitializeProjectStruct(StructCPID& project)
     std::string email = GetArgument("email", "NA");
     boost::to_lower(email);
 
-    project.email = email;
     std::string cpid_non = project.cpidhash+email;
-    project.boincruntimepublickey = project.cpidhash;
     project.cpid = CPID(cpid_non).hexdigest();
     std::string ENCbpk = AdvancedCrypt(cpid_non);
     project.boincpublickey = ENCbpk;
     project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
-    // (Old netsoft link) project.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + project.cpid;
-    project.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + project.cpid;
     //Local CPID with struct
     //Must contain cpidv2, cpid, boincpublickey
     project.Iscpidvalid = IsLocalCPIDValid(project);
     if (fDebug10) LogPrintf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname, YesNo(project.Iscpidvalid));
 }
 
-bool ProjectIsValid(std::string sProject)
-{
-    if (sProject.empty())
-        return false;
-
-    boost::to_lower(sProject);
-
-    for (const auto& item : ReadCacheSection("project"))
-    {
-        const AppCacheEntry& entry = item.second;
-        std::string sProjectName = ToOfficialName(entry.value);
-
-        if (sProjectName == sProject)
-            return true;
-    }
-
-    return false;
-}
-
-std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
-{
-    assert(oldStr.empty() == false && "Cannot replace an empty string");
-
-  size_t pos = 0;
-    while((pos = str.find(oldStr, pos)) != std::string::npos)
-    {
-     str.replace(pos, oldStr.length(), newStr);
-     pos += newStr.length();
-  }
-  return str;
-}
-
 std::string LowerUnderscore(std::string data)
 {
     boost::to_lower(data);
-    data = strReplace(data,"_"," ");
+    boost::replace_all(data, "_", " ");
     return data;
-}
-
-std::string ToOfficialName(std::string proj)
-{
-        proj = LowerUnderscore(proj);
-        //Convert local XML project name [On the Left] to official [Netsoft] projectname:
-    for(const auto& item : ReadCacheSection("projectmapping"))
-        {
-        const std::string& key = item.first;
-        const AppCacheEntry& entry = item.second;
-
-        std::string project_boinc   = key;
-        std::string project_netsoft = entry.value;
-                                proj=LowerUnderscore(proj);
-                                project_boinc=LowerUnderscore(project_boinc);
-                                project_netsoft=LowerUnderscore(project_netsoft);
-                                if (proj==project_boinc) proj=project_netsoft;
-                            }
-
-        return proj;
 }
 
 void HarvestCPIDs(bool cleardata)
 {
-
-    if (fDebug10) LogPrintf("loading BOINC cpids ...");
+    if (fDebug10)
+        LogPrintf("loading BOINC cpids ...");
 
     //Remote Boinc Feature - R Halford
     std::string sBoincKey = GetArgument("boinckey","");
@@ -7553,80 +7493,74 @@ void HarvestCPIDs(bool cleardata)
 
         if (GlobalCPUMiningCPID.cpid.empty())
         {
-                 LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
+            LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
         }
         else
         {
             LogPrintf("CPUMiningCPID Initialized.");
         }
 
-            GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            StructCPID structcpid = GetStructCPID();
-            structcpid.initialized = true;
-            structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
-            structcpid.projectname = GlobalCPUMiningCPID.projectname;
-            structcpid.team = "gridcoin"; //Will be verified later during Netsoft Call
-            structcpid.verifiedteam = "gridcoin";
-            structcpid.rac = GlobalCPUMiningCPID.rac;
-            structcpid.cpid = GlobalCPUMiningCPID.cpid;
-            structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
-            structcpid.boincruntimepublickey = structcpid.cpidhash;
-            structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-            structcpid.email = GlobalCPUMiningCPID.email;
-            // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-            LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", structcpid.email, structcpid.cpidhash, sDec);
-            structcpid.cpidv2 = ComputeCPIDv2(structcpid.email, structcpid.cpidhash, 0);
-            // Old link: structcpid.link = "http://boinc.netsoft-online.com/get_user.php?cpid=" + structcpid.cpid;
-            structcpid.link = "http://boinc.netsoft-online.com/e107_plugins/boinc/get_user.php?cpid=" + structcpid.cpid;
-            structcpid.Iscpidvalid = true;
-            mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
-            // CreditCheck(structcpid.cpid,false);
-            GetNextProject(false);
-            if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
-            if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
+        GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
+        LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
+        GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
+        LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
+        StructCPID structcpid = GetStructCPID();
+        structcpid.initialized = true;
+        structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
+        structcpid.projectname = GlobalCPUMiningCPID.projectname;
+        structcpid.team = "gridcoin";
+        structcpid.rac = GlobalCPUMiningCPID.rac;
+        structcpid.cpid = GlobalCPUMiningCPID.cpid;
+        structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
+        structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
+        // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
+        LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", GlobalCPUMiningCPID.email, structcpid.cpidhash, sDec);
+        structcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, structcpid.cpidhash, 0);
+        structcpid.Iscpidvalid = true;
+        mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
+        // CreditCheck(structcpid.cpid,false);
+        GetNextProject(false);
+        if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
+        if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
         return;
-  }
+    }
 
- try
- {
-    std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-    std::string sout = "";
-    sout = getfilecontents(sourcefile);
-    if (sout == "-1")
+    try
     {
-        LogPrintf("Unable to obtain Boinc CPIDs ");
-
-        if (mapArgs.count("-boincdatadir") && mapArgs["-boincdatadir"].length() > 0)
+        std::string sourcefile = GetBoincDataDir() + "client_state.xml";
+        std::string sout = "";
+        sout = getfilecontents(sourcefile);
+        if (sout == "-1")
         {
-            LogPrintf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified ");
+            LogPrintf("Unable to obtain Boinc CPIDs ");
+
+            if (mapArgs.count("-boincdatadir") && mapArgs["-boincdatadir"].length() > 0)
+            {
+                LogPrintf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified ");
+            }
+
+            else LogPrintf("Boinc data directory is not in the operating system's default location \nPlease move it there or specify its current location in gridcoinresearch.conf");
+
+            return;
         }
 
-        else LogPrintf("Boinc data directory is not in the operating system's default location \nPlease move it there or specify its current location in gridcoinresearch.conf");
+        if (cleardata)
+        {
+            mvCPIDs.clear();
+        }
+        std::string email = GetArgument("email","");
+        boost::to_lower(email);
 
-        return;
-    }
+        int iRow = 0;
+        std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
+        std::string investor = GetArgument("investor","false");
 
-    if (cleardata)
-    {
-        mvCPIDs.clear();
-    }
-    std::string email = GetArgument("email","");
-    boost::to_lower(email);
-
-    int iRow = 0;
-    std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
-    std::string investor = GetArgument("investor","false");
-
-    if (investor=="true")
-    {
+        if (investor=="true")
+        {
             msPrimaryCPID="INVESTOR";
-    }
-    else
-    {
-
+        }
+        else
+        {
             if (vCPID.size() > 0)
             {
                 for (unsigned int i = 0; i < vCPID.size(); i++)
@@ -7640,9 +7574,7 @@ void HarvestCPIDs(bool cleardata)
                     std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
                     std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
 
-                    boost::to_lower(proj);
-                    proj = ToOfficialName(proj);
-                    ProjectIsValid(proj);
+                    proj = LowerUnderscore(proj);
                     int64_t nStart = GetTimeMillis();
                     if (cpidhash.length() > 5 && proj.length() > 3)
                     {
@@ -7658,7 +7590,7 @@ void HarvestCPIDs(bool cleardata)
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-
+                        
                         structcpid.rac = RoundFromString(rac,0);
                         structcpid.verifiedrac = RoundFromString(rac,0);
                         std::string sLocalClientEmailHash = RetrieveMd5(email);
@@ -7668,7 +7600,6 @@ void HarvestCPIDs(bool cleardata)
                             structcpid.errors = "Gridcoin Email setting does not match project Email.  Check Gridcoin e-mail address setting or boinc project e-mail setting.";
                             structcpid.Iscpidvalid=false;
                         }
-
 
                         if (!structcpid.Iscpidvalid)
                         {
@@ -7724,24 +7655,24 @@ void HarvestCPIDs(bool cleardata)
 
                         if (structcpid.Iscpidvalid)
                         {
-                                // Verify the CPID is a valid researcher:
-                                if (IsResearcher(structcpid.cpid))
-                                {
-                                    GlobalCPUMiningCPID.cpidhash = cpidhash;
-                                    GlobalCPUMiningCPID.email = email;
-                                    GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-                                    LogPrintf("Setting bpk to %s", cpidhash);
+                            // Verify the CPID is a valid researcher:
+                            if (IsResearcher(structcpid.cpid))
+                            {
+                                GlobalCPUMiningCPID.cpidhash = cpidhash;
+                                GlobalCPUMiningCPID.email = email;
+                                GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+                                LogPrintf("Setting bpk to %s", cpidhash);
 
-                                    if (structcpid.team=="gridcoin")
-                                    {
-                                        msPrimaryCPID = structcpid.cpid;
-                                            //Let the Neural Network know what your CPID is so it can be charted:
-                                            std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-                                        std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
-                                        //Try to get a neural RAC report
-                                        AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                                    }
+                                if (structcpid.team=="gridcoin")
+                                {
+                                    msPrimaryCPID = structcpid.cpid;
+                                    //Let the Neural Network know what your CPID is so it can be charted:
+                                    std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
+                                    std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
+                                    //Try to get a neural RAC report
+                                    AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                 }
+                            }
                         }
 
                         mvCPIDs[proj] = structcpid;
@@ -7753,17 +7684,17 @@ void HarvestCPIDs(bool cleardata)
 
             }
             // If no valid boinc projects were found:
-            if (msPrimaryCPID.empty()) msPrimaryCPID="INVESTOR";
-
+            if (msPrimaryCPID.empty())
+                msPrimaryCPID="INVESTOR";
         }
     }
     catch (std::exception &e)
     {
-             LogPrintf("Error while harvesting CPIDs.");
+        LogPrintf("Error while harvesting CPIDs.");
     }
     catch(...)
     {
-             LogPrintf("Error while harvesting CPIDs 2.");
+        LogPrintf("Error while harvesting CPIDs 2.");
     }
 }
 
@@ -8035,14 +7966,14 @@ void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::str
         return;    
 
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    const std::string& Security = ReadCache("currentneuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache(Section::CURRENTNEURALSECURITY, GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
-    
-    WriteCache("currentneuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
+
+    WriteCache(Section::CURRENTNEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
@@ -8079,14 +8010,14 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
     }
 
     // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    const std::string& Security = ReadCache("neuralsecurity",GRCAddress).value;
+    const std::string& Security = ReadCache(Section::NEURALSECURITY, GRCAddress).value;
     if (Security == NeuralHash)
     {
         //This node has already voted, throw away the vote
         return;
     }
-    
-    WriteCache("neuralsecurity",GRCAddress,NeuralHash,GetAdjustedTime());
+
+    WriteCache(Section::NEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
     double votes = (1/distance)*multiplier;
@@ -8185,81 +8116,96 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 {
     const std::string &msg = tx.hashBoinc;
     const int64_t &nTime = tx.nTime;
-          if (msg.empty()) return false;
-          bool fMessageLoaded = false;
+    if (msg.empty()) return false;
+    bool fMessageLoaded = false;
 
-          if (Contains(msg,"<MT>"))
-          {
-              std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-              std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-              std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-              std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-              std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-              std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-              if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
-              {
-                    sMessageValue="";
-              }
+    if (Contains(msg,"<MT>"))
+    {
+        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
+        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
+        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
+        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
+        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
+        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
+        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
+        {
+            sMessageValue="";
+        }
 
-              if (sMessageType=="superblock")
-              {
-                  // Deny access to superblock processing runtime data
-                  sMessageValue="";
-              }
+        if (sMessageType=="superblock")
+        {
+            // Deny access to superblock processing runtime data
+            sMessageValue="";
+        }
 
-              if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
-              {
-                  //Verify sig first
-                  bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                      sSignature,sMessagePublicKey);
+        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
+        {
+            //Verify sig first
+            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
+                                                  sSignature,sMessagePublicKey);
 
-                  if (Verified)
-                  {
-                        if (sMessageAction=="A")
-                        {
-                                /* With this we allow verifying blocks with stupid beacon */
-                                if("beacon"==sMessageType)
-                                {
-                                    std::string out_cpid = "";
-                                    std::string out_address = "";
-                                    std::string out_publickey = "";
-                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                                    WriteCache("beaconalt",sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                                }
+            if (Verified)
+            {
+                if (sMessageAction=="A")
+                {
+                    /* With this we allow verifying blocks with stupid beacon */
+                    if("beacon"==sMessageType)
+                    {
+                        std::string out_cpid = "";
+                        std::string out_address = "";
+                        std::string out_publickey = "";
+                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+                        WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
+                    }
 
-                                WriteCache(sMessageType,sMessageKey,sMessageValue,nTime);
-                                if(fDebug10 && sMessageType=="beacon" ){
-                                    LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                                }
-                                fMessageLoaded = true;
-                                if (sMessageType=="poll")
-                                {
-                                    msPoll = msg;
-                                        }
-                                }
-                        else if(sMessageAction=="D")
-                        {
-                                if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
-                                if(fDebug10 && sMessageType=="beacon" ){
-                                    LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
-                                }
-                                DeleteCache(sMessageType,sMessageKey);
-                                fMessageLoaded = true;
-                        }
-                        // If this is a boinc project, load the projects into the coin:
-                        if (sMessageType=="project" || sMessageType=="projectmapping")
-                        {
-                            //Reserved
-                            fMessageLoaded = true;
-                        }
+                    try
+                    {
+                        WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
+                        if(fDebug10 && sMessageType=="beacon" )
+                            LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
+                    }
+                    catch(const std::runtime_error& e)
+                    {
+                        error("Attempting to add to unknown cache: %s", sMessageType);
+                    }
 
-                        if(fDebug)
-                            WriteCache("TrxID;"+sMessageType,sMessageKey,tx.GetHash().GetHex(),nTime);
-                  }
+                    fMessageLoaded = true;
+                    if (sMessageType=="poll")
+                    {
+                        msPoll = msg;
+                    }
                 }
+                else if(sMessageAction=="D")
+                {
+                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
+                    if(fDebug10 && sMessageType=="beacon" ){
+                        LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
+                    }
+                    
+                    try
+                    {
+                        DeleteCache(StringToSection(sMessageType), sMessageKey);
+                        fMessageLoaded = true;
+                    }
+                    catch(const std::runtime_error& e)
+                    {
+                        error("Attempting to add to unknown cache: %s", sMessageType);
+                    }
+                }
+                // If this is a boinc project, load the projects into the coin:
+                if (sMessageType=="project" || sMessageType=="projectmapping")
+                {
+                    //Reserved
+                    fMessageLoaded = true;
+                }
+
+                if(fDebug)
+                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
+            }
+        }
     }
 
-   return fMessageLoaded;
+    return fMessageLoaded;
 }
 
 double GRCMagnitudeUnit(int64_t locktime)

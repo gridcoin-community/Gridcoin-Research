@@ -97,7 +97,6 @@ void qtSyncWithDPORNodes(std::string data);
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
 
-std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 extern std::string TimestampToHRDate(double dtm);
@@ -110,10 +109,7 @@ std::string getfilecontents(std::string filename);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
-
 std::string getfilecontents(std::string filename);
-
-std::string ToOfficialName(std::string proj);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -121,7 +117,7 @@ BlockFinder RPCBlockFinder;
 
 double GetNetworkAvgByProject(std::string projectname)
 {
-    projectname = strReplace(projectname,"_"," ");
+    boost::replace_all(projectname, "_", " ");
     if (mvNetwork.size() < 1)   return 0;
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;
@@ -131,7 +127,7 @@ double GetNetworkAvgByProject(std::string projectname)
 
 double GetNetworkTotalByProject(std::string projectname)
 {
-    projectname = strReplace(projectname,"_"," ");
+    boost::replace_all(projectname, "_", " ");
     if (mvNetwork.size() < 1)   return 0;
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;
@@ -604,7 +600,7 @@ void GetSuperblockProjectCount(std::string data, double& out_project_count, doub
     // This is reserved in case we ever want to resync prematurely when the last superblock contains < .75% of whitelisted projects (remember we allow superblocks with up to .50% of the whitelisted projects, in case some project sites are being ddossed)
     std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
     double avg_of_projects = GetAverageInList(avgs, out_project_count);
-    out_whitelist_count = GetCountOf("project");
+    out_whitelist_count = GetCountOf(Section::PROJECT);
     if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f", out_project_count, out_whitelist_count);
 }
 
@@ -619,8 +615,8 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (mags.empty()) return 0;
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
-        if (!bIgnoreBeacons) out_beacon_count = GetCountOf("beacon");
-        double out_project_count = GetCountOf("project");
+        if (!bIgnoreBeacons) out_beacon_count = GetCountOf(Section::BEACON);
+        double out_project_count = GetCountOf(Section::PROJECT);
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
@@ -649,7 +645,7 @@ bool TallyMagnitudesInSuperblock()
 {
     try
     {
-        std::string superblock = ReadCache("superblock","magnitudes").value;
+        std::string superblock = ReadCache(Section::SUPERBLOCK, "magnitudes").value;
         if (superblock.empty()) return false;
         std::vector<std::string> vSuperblock = split(superblock.c_str(),";");
         double TotalNetworkMagnitude = 0;
@@ -698,13 +694,13 @@ bool TallyMagnitudesInSuperblock()
         network.NetworkMagnitude = TotalNetworkMagnitude;
         network.NetworkAvgMagnitude = NetworkAvgMagnitude;
         if (fDebug)
-            LogPrintf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s", TotalNetworkEntries, ReadCache("superblock","block_number").value);
+            LogPrintf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s", TotalNetworkEntries, ReadCache(Section::SUPERBLOCK, "block_number").value);
 
         double TotalProjects = 0;
         double TotalRAC = 0;
         double AVGRac = 0;
         // Load boinc project averages from neural network
-        std::string projects = ReadCache("superblock","averages").value;
+        std::string projects = ReadCache(Section::SUPERBLOCK, "averages").value;
         if (projects.empty()) return false;
         std::vector<std::string> vProjects = split(projects.c_str(),";");
         if (vProjects.size() > 0)
@@ -905,7 +901,7 @@ UniValue rain(const UniValue& params, bool fHelp)
 }
 
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
-{
+    {
     if (fHelp || (params.size() < 1 || params.size() > 2))
         throw runtime_error(
                 "rainbymagnitude <amount> [message]\n"
@@ -960,9 +956,9 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             !structMag.cpid.empty() &&
             structMag.Magnitude > 0
            )
-        {
+    {
             // Find beacon grc address
-            std::string scacheContract = ReadCache("beacon", structMag.cpid).value;
+            std::string scacheContract = ReadCache(Section::BEACON, structMag.cpid).value;
 
             // Should never occur but we know seg faults can occur in some cases
             if (scacheContract.empty())
@@ -1024,7 +1020,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         LogPrintf("Rain By Magnitude Commit failed.");
 
         throw JSONRPCError(RPC_WALLET_ERROR, "Transaction commit failed");
-    }
+}
     res.pushKV("Rain By Magnitude",  "Sent");
     res.pushKV("TXID", wtx.GetHash().GetHex());
     res.pushKV("Rain Amount Sent", dTotalAmount);
@@ -1440,8 +1436,8 @@ UniValue staketime(const UniValue& params, bool fHelp)
     std::string GRCAddress = DefaultWalletAddress();
     GetEarliestStakeTime(GRCAddress, cpid);
 
-    res.pushKV("GRCTime", ReadCache("global", "nGRCTime").timestamp);
-    res.pushKV("CPIDTime", ReadCache("global", "nCPIDTime").timestamp);
+    res.pushKV("GRCTime", ReadCache(Section::GLOBAL, "nGRCTime").timestamp);
+    res.pushKV("CPIDTime", ReadCache(Section::GLOBAL, "nCPIDTime").timestamp);
 
     return res;
 }
@@ -1456,13 +1452,13 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_time = ReadCache(Section::SUPERBLOCK,  "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
 
     res.pushKV("Superblock Age", superblock_age);
     res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock_time));
-    res.pushKV("Superblock Block Number", ReadCache("superblock", "block_number").value);
-    res.pushKV("Pending Superblock Height", ReadCache("neuralsecurity", "pending").value);
+    res.pushKV("Superblock Block Number", ReadCache(Section::SUPERBLOCK,  "block_number").value);
+    res.pushKV("Pending Superblock Height", ReadCache(Section::NEURALSECURITY, "pending").value);
 
     return res;
 }
@@ -1505,7 +1501,7 @@ UniValue syncdpor2(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    bool bFull = GetCountOf("beacon") < 50 ? true : false;
+    bool bFull = GetCountOf(Section::BEACON) < 50 ? true : false;
 
     LoadAdminMessages(bFull, sOut);
     FullSyncWithDPORNodes();
@@ -1843,7 +1839,7 @@ UniValue getlistof(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    res.pushKV("Data", GetListOf(sType));
+    res.pushKV("Data", GetListOf(StringToSection(sType)));
 
     return res;
 }
@@ -1885,7 +1881,8 @@ UniValue listdata(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    for(const auto& item : ReadCacheSection(sType))
+    Section section = StringToSection(sType);
+    for(const auto& item : ReadCacheSection(section))
         res.pushKV(item.first, item.second.value);
 
     return res;
@@ -1992,11 +1989,11 @@ UniValue projects(const UniValue& params, bool fHelp)
     if (mvCPIDs.empty())
         HarvestCPIDs(false);
 
-    for (const auto& item : ReadCacheSection("project"))
+    for (const auto& item : ReadSortedCacheSection(Section::PROJECT))
     {
         UniValue entry(UniValue::VOBJ);
 
-        std::string sProjectName = ToOfficialName(item.first);
+        std::string sProjectName = item.first;
 
         if (sProjectName.empty())
             continue;
@@ -2186,12 +2183,12 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    std::string superblock = ReadCache("superblock", "all").value;
+    std::string superblock = ReadCache(Section::SUPERBLOCK,  "all").value;
     double out_beacon_count = 0;
     double out_participant_count = 0;
     double out_avg = 0;
     double avg = GetSuperblockAvgMag(superblock, out_beacon_count, out_participant_count, out_avg, false, nBestHeight);
-    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK,  "magnitudes").timestamp;
     bool bDireNeed = NeedASuperblock();
 
     res.pushKV("avg", avg);
@@ -2874,7 +2871,7 @@ UniValue GetUpgradedBeaconReport()
     std::string row = "";
     int iBeaconCount = 0;
     int iUpgradedBeaconCount = 0;
-    for(const auto& item : ReadCacheSection("beacon"))
+    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
     {
         const AppCacheEntry& entry = item.second;
         std::string contract = DecodeBase64(entry.value);
@@ -2899,7 +2896,7 @@ UniValue GetJSONBeaconReport()
     UniValue entry(UniValue::VOBJ);
     entry.pushKV("CPID","GRCAddress");
     std::string row;
-    for(const auto& item : ReadCacheSection("beacon"))
+    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
     {
         const std::string& key = item.first;
         const AppCacheEntry& cache = item.second;
@@ -3001,12 +2998,12 @@ UniValue GetJSONNeuralNetworkReport()
         }
     }
     // If we have a pending superblock, append it to the report:
-    std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
+    std::string SuperblockHeight = ReadCache(Section::NEURALSECURITY, "pending").value;
     if (!SuperblockHeight.empty() && SuperblockHeight != "0")
     {
         entry.pushKV("Pending",SuperblockHeight);
     }
-    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK,  "magnitudes").timestamp;
 
     entry.pushKV("Superblock Age",superblock_age);
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
@@ -3062,12 +3059,12 @@ UniValue GetJSONCurrentNeuralNetworkReport()
     }
     
     // If we have a pending superblock, append it to the report:
-    std::string SuperblockHeight = ReadCache("neuralsecurity","pending").value;
+    std::string SuperblockHeight = ReadCache(Section::NEURALSECURITY, "pending").value;
     if (!SuperblockHeight.empty() && SuperblockHeight != "0")
     {
         entry.pushKV("Pending",SuperblockHeight);
     }
-    int64_t superblock_age = GetAdjustedTime() - ReadCache("superblock", "magnitudes").timestamp;
+    int64_t superblock_age = GetAdjustedTime() - ReadCache(Section::SUPERBLOCK,  "magnitudes").timestamp;
 
     entry.pushKV("Superblock Age",superblock_age);
     if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
