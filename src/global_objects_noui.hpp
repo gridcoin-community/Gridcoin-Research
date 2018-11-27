@@ -67,7 +67,7 @@ struct StructCPID
     std::string boincruntimepublickey;
     std::string cpidv2;
     std::string BlockHash;
-    std::set<const CBlockIndex*> vRewardBlocs;
+    std::set<const CBlockIndex*> rewardBlocks;
 };
 
 struct MiningCPID
@@ -113,15 +113,11 @@ struct MiningCPID
 
 //User CPIDs
 extern std::map<std::string, StructCPID> mvCPIDs;
-//Verified CPIDs
-extern std::map<std::string, StructCPID> mvCreditNode;
 //Network Averages
 extern std::map<std::string, StructCPID> mvNetwork;
 extern std::map<std::string, StructCPID> mvNetworkCopy;
 extern std::map<std::string, StructCPID> mvMagnitudes;
 extern std::map<std::string, StructCPID> mvMagnitudesCopy;
-extern std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
-extern std::map<std::string, StructCPID> mvCreditNodeCPID;  //Contains verified CPID total Magnitude;
 
 //Global CPU Mining CPID:
 extern MiningCPID GlobalCPUMiningCPID;

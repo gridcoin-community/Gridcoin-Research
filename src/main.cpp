@@ -280,10 +280,8 @@ int nBoincUtilization = 0;
 std::string sRegVer;
 
 std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
-std::map<std::string, StructCPID> mvCreditNode;   //Contains the verified stats at the user level
 std::map<std::string, StructCPID> mvNetwork;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project stats at the network level
-std::map<std::string, StructCPID> mvCreditNodeCPID;        // Contains verified CPID Magnitudes;
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 std::map<std::string, StructCPID> mvMagnitudesCopy; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
 
@@ -2398,7 +2396,7 @@ bool CheckProofOfResearch(
                                 bb.ResearchSubsidy, OUT_POR, bb.cpid);
 
             TallyResearchAverages(pindexBest);
-            GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+            GetLifetimeCPID(bb.cpid);
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
                                                         pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         }
@@ -3400,7 +3398,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
-                    StructCPID& st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
+                    StructCPID& st1 = GetLifetimeCPID(pindex->GetCPID());
                     GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
                                           pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
@@ -3733,7 +3731,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // Re-read researchers history after all blocks disconnected
         if (fDebug10) LogPrintf("DisconnectBlocksBatch: GetLifetimeCPID");
         for( const string& sRereadCPID : vRereadCPIDs )
-            GetLifetimeCPID(sRereadCPID,"DisconnectBlocksBatch");
+            GetLifetimeCPID(sRereadCPID);
 
     }
     return true;
@@ -3918,7 +3916,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         if(pindex->IsUserCPID()) // is this needed?
-            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
+            GetLifetimeCPID(pindex->cpid.GetHex());
     }
 
     if (fDebug && (cnt_dis>0 || cnt_con>1))
@@ -5707,7 +5705,7 @@ void AddRARewardBlock(const CBlockIndex* pindex)
         if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
 
         // Add block hash to CPID hash set.
-        stCPID . vRewardBlocs . emplace(pindex);
+        stCPID.rewardBlocks.emplace(pindex);
         // Store the updated struct. (implicit)
     }
 }
@@ -5715,14 +5713,14 @@ void AddRARewardBlock(const CBlockIndex* pindex)
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex)
 {
     //TODO: is copying involved here?
-    GetInitializedStructCPID2(cpid, mvResearchAge) . vRewardBlocs . erase(pindex);
+    GetInitializedStructCPID2(cpid, mvResearchAge) . rewardBlocks . erase(pindex);
 }
 
 void RescanLifetimeCPID(StructCPID& stCPID)
 {
     if (fDebug10) LogPrintf("GetLifetimeCPID.BEGIN: %s", stCPID.cpid);
 
-    const auto& hashes = stCPID.vRewardBlocs;
+    const auto& hashes = stCPID.rewardBlocks;
 
     ZeroOutResearcherTotals(stCPID);
 
@@ -5754,7 +5752,7 @@ void RescanLifetimeCPID(StructCPID& stCPID)
     if (fDebug10) LogPrintf("GetLifetimeCPID.END: %s set {%s %d}",stCPID.cpid, stCPID.BlockHash, (int)stCPID.LastBlock);
 }
 
-StructCPID& GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
+StructCPID& GetLifetimeCPID(const std::string& cpid)
 {
     //Eliminates issues with reorgs, disconnects, double counting, etc..
     if (!IsResearcher(cpid))

@@ -279,7 +279,7 @@ std::string GetProvableVotingWeightXML()
     //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
+        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
         CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
