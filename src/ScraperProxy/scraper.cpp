@@ -1570,6 +1570,11 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
     // This should be replaced with the proper field name...
     manifest->testName = sCManifestName;
 
+    manifest->nTime = GetAdjustedTime();
+
+    manifest->BeaconList = 0;
+    manifest->BeaconList_c = 0;
+
     // This will have to be changed to support files bigger than 32 MB, where more than one
     // part per object will be required.
     long nPartNum = 0;
@@ -1629,7 +1634,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
         // For now each object will only have one part.
         ProjectEntry.part1 = nPartNum;
-        ProjectEntry.partc = 1;
+        ProjectEntry.partc = 0;
         ProjectEntry.GridcoinTeamID = -1; //Not used anymore
 
         ProjectEntry.current = entry.second.current;

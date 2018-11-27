@@ -244,10 +244,10 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
   ss>> projects;
 
   if(BeaconList+BeaconList_c>(long)vph.size())
-    throw error("CScraperManifest::UnserializeCheck: part out of range");
+    throw error("CScraperManifest::UnserializeCheck: beacon part out of range");
   for(const dentry& prj : projects)
     if(prj.part1+prj.partc>(long)vph.size())
-      throw error("CScraperManifest::UnserializeCheck: part out of range");
+      throw error("CScraperManifest::UnserializeCheck: project part out of range");
 
   uint256 hash(Hash(pbegin,ss.begin()));
   ss >> signature;
@@ -382,7 +382,7 @@ UniValue CScraperManifest::ToJson() const
   r.pushKV("nTime",(int64_t)nTime);
   r.pushKV("nTime",DateTimeStrFormat(nTime));
   r.pushKV("ConsensusBlock",ConsensusBlock.GetHex());
-  r.pushKV("BeaconList",BeaconList); r.pushKV("BeaconList_c",(long)BeaconList_c);
+  r.pushKV("BeaconList",(int64_t)BeaconList); r.pushKV("BeaconList_c",(int64_t)BeaconList_c);
 
   UniValue projects(UniValue::VARR);
   for( const dentry& part : this->projects )
@@ -401,8 +401,8 @@ UniValue CScraperManifest::dentry::ToJson() const
   r.pushKV("project",project);
   r.pushKV("ETag",ETag);
   r.pushKV("LastModified",DateTimeStrFormat(LastModified));
-  r.pushKV("part1",part1); r.pushKV("partc",(long)partc);
-  r.pushKV("GridcoinTeamID",GridcoinTeamID);
+  r.pushKV("part1",(int64_t)part1); r.pushKV("partc",(int64_t)partc);
+  r.pushKV("GridcoinTeamID",(int64_t)GridcoinTeamID);
   r.pushKV("current",current);
   r.pushKV("last",last);
   return r;
