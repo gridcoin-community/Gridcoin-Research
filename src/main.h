@@ -324,7 +324,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
-StructCPID& GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom);
+StructCPID& GetLifetimeCPID(const std::string& cpid);
 bool IsResearcher(const std::string& cpid);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 

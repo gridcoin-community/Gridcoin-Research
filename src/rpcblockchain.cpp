@@ -2783,7 +2783,7 @@ UniValue MagnitudeReport(std::string cpid)
                     if (IsResearchAgeEnabled(pindexBest->nHeight))
                     {
 
-                        StructCPID& stCPID = GetLifetimeCPID(structMag.cpid,"MagnitudeReport");
+                        StructCPID& stCPID = GetLifetimeCPID(structMag.cpid);
                         double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                         entry.pushKV("CPID",structMag.cpid);
                         StructCPID& UH = GetInitializedStructCPID2(cpid,mvMagnitudes);
@@ -2888,7 +2888,7 @@ UniValue GetJsonUnspentReport()
     //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID,"GetUnspentReport()");
+        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
         CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
         UniValue entry1(UniValue::VOBJ);
         entry1.pushKV("Researcher Magnitude",pHistorical->nMagnitude);

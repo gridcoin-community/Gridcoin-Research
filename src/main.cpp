@@ -2396,7 +2396,7 @@ bool CheckProofOfResearch(
                                 bb.ResearchSubsidy, OUT_POR, bb.cpid);
 
             TallyResearchAverages(pindexBest);
-            GetLifetimeCPID(bb.cpid,"CheckProofOfResearch()");
+            GetLifetimeCPID(bb.cpid);
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
                                                         pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         }
@@ -3398,7 +3398,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
-                    StructCPID& st1 = GetLifetimeCPID(pindex->GetCPID(),"ConnectBlock()");
+                    StructCPID& st1 = GetLifetimeCPID(pindex->GetCPID());
                     GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
                                           pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
@@ -3731,7 +3731,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // Re-read researchers history after all blocks disconnected
         if (fDebug10) LogPrintf("DisconnectBlocksBatch: GetLifetimeCPID");
         for( const string& sRereadCPID : vRereadCPIDs )
-            GetLifetimeCPID(sRereadCPID,"DisconnectBlocksBatch");
+            GetLifetimeCPID(sRereadCPID);
 
     }
     return true;
@@ -3916,7 +3916,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         if(pindex->IsUserCPID()) // is this needed?
-            GetLifetimeCPID(pindex->cpid.GetHex(), "ReorganizeChain");
+            GetLifetimeCPID(pindex->cpid.GetHex());
     }
 
     if (fDebug && (cnt_dis>0 || cnt_con>1))
@@ -5752,7 +5752,7 @@ void RescanLifetimeCPID(StructCPID& stCPID)
     if (fDebug10) LogPrintf("GetLifetimeCPID.END: %s set {%s %d}",stCPID.cpid, stCPID.BlockHash, (int)stCPID.LastBlock);
 }
 
-StructCPID& GetLifetimeCPID(const std::string& cpid, const std::string& sCalledFrom)
+StructCPID& GetLifetimeCPID(const std::string& cpid)
 {
     //Eliminates issues with reorgs, disconnects, double counting, etc..
     if (!IsResearcher(cpid))
