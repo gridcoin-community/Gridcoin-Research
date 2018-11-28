@@ -3293,7 +3293,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
     // Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
-    if (pindex->nHeight > nNewIndex2)
+    if(IsResearchAgeEnabled(pindex->nHeight))
     {
         pindex->SetCPID(bb.cpid);
         pindex->nMagnitude = bb.Magnitude;

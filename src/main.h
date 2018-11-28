@@ -85,7 +85,7 @@ inline bool IsProtocolV2(int nHeight)
 
 inline bool IsResearchAgeEnabled(int nHeight)
 {
-	return (fTestNet ?  nHeight > 0 : nHeight > 364500);
+    return (fTestNet ?  nHeight > 36500 : nHeight > 364500);
 }
 
 // TODO: Move this and the other height thresholds to their own files.
