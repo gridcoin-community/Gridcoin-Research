@@ -31,6 +31,7 @@
 
 #include "votingdialog.h"
 #include "util.h"
+#include "rpcprotocol.h"
 
 extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
@@ -836,13 +837,28 @@ void VotingVoteDialog::vote(void)
     sAnswer.replace(" ","_");
     sVoteTitle.replace(" ","_");
 
-    std::pair<std::string,std::string> pollCreationResult = CreateVoteContract(sVoteTitle.toStdString(), sAnswer.toStdString());
-    const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
+    // Voting current throws JSON RPC errors which is incorrect since they
+    // aren't really JSON RPC calls. This should be changed to throw an
+    // std exception instead, and the actual RPC calls should be wrapped
+    // to only validate input, forward the call to CreateVoteContract and
+    // translate the exception if necessary.
+    try
+    {
+        std::pair<std::string,std::string> pollCreationResult = CreateVoteContract(sVoteTitle.toStdString(), sAnswer.toStdString());
+        const std::string &sResult = pollCreationResult.first + pollCreationResult.second;
 
-    if (sResult.find("Success") != std::string::npos) {
-        voteNote_->setStyleSheet("QLabel { color : green; }");
+        if (sResult.find("Success") != std::string::npos) {
+            voteNote_->setStyleSheet("QLabel { color : green; }");
+        }
+        voteNote_->setText(QString::fromStdString(sResult));
     }
-    voteNote_->setText(QString::fromStdString(sResult));
+    catch(const UniValue& e)
+    {
+        voteNote_->setText(
+                    QString("Vote error: %1 (%2)")
+                        .arg(e["message"].get_str().c_str())
+                        .arg(e["code"].get_int()));
+    }
 }
 
 QString VotingVoteDialog::GetVoteValue(void)
