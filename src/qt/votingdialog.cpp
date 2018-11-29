@@ -855,9 +855,8 @@ void VotingVoteDialog::vote(void)
     catch(const UniValue& e)
     {
         voteNote_->setText(
-                    QString("Vote error: %1 (%2)")
-                        .arg(e["message"].get_str().c_str())
-                        .arg(e["code"].get_int()));
+                    QString("Vote error: %1")
+                        .arg(e["message"].get_str().c_str()));
     }
 }
 
