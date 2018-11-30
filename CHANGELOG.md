@@ -5,10 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
-## [4.0.1.0] Unreleased - hotfix
-
+## [4.0.1.0] 2018-11-30, leisure
 ### Fixed
- - Wrong RA scan range causing Reward calculation disagreements and forks
+ - Wrong RA scan range causing reward calculation disagreements and forks
+   #1366, (@tomasbrod, @jamescowens, @denravonska).
+ - Fix crashes when voting in polls #1369 (@denravonska).
 
 ## [4.0.0.0] 2018-10-19, mandatory
 ### Added
