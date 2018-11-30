@@ -374,15 +374,12 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nNonce         = diskindex.nNonce;
 
         //9-26-2016 - Gridcoin - New Accrual Fields
-        if (diskindex.nHeight > nNewIndex)
-        {
-            pindexNew->cpid              = diskindex.cpid;
-            pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
-            pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
-            pindexNew->nMagnitude        = diskindex.nMagnitude;
-            pindexNew->nIsContract       = diskindex.nIsContract;
-            pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
-        }
+        pindexNew->cpid              = diskindex.cpid;
+        pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
+        pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
+        pindexNew->nMagnitude        = diskindex.nMagnitude;
+        pindexNew->nIsContract       = diskindex.nIsContract;
+        pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
 
         nBlockCount++;
         // Watch for genesis block
@@ -614,32 +611,31 @@ bool CTxDB::LoadBlockIndex()
     nLoaded=pindex->nHeight;
     for ( ; pindex ; pindex= pindex->pnext )
     {
-
-        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
+        if(IsResearchAgeEnabled(pindex->nHeight))
         {
-            /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
-            auto bb = GetBoincBlockByIndex(pindex);
-            if( bb.cpid != pindex->GetCPID() )
+            if( pindex->IsUserCPID() && pindex->cpid == uint128() )
             {
-                if(fDebug)
-                    LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                        pindex->GetCPID(), bb.cpid,
-                        pindex->GetBlockHash().GetHex(), pindex->nHeight );
+                /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
+                auto bb = GetBoincBlockByIndex(pindex);
+                if( bb.cpid != pindex->GetCPID() )
+                {
+                    if(fDebug)
+                        LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                            pindex->GetCPID(), bb.cpid,
+                            pindex->GetBlockHash().GetHex(), pindex->nHeight );
 
-                /* Repair the cpid field */
-                pindex->SetCPID(bb.cpid);
+                    /* Repair the cpid field */
+                    pindex->SetCPID(bb.cpid);
 
-                #if 0
-                if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
-                    error("LoadBlockIndex: writing CDiskBlockIndex failed");
-                #endif
+                    #if 0
+                    if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+                        error("LoadBlockIndex: writing CDiskBlockIndex failed");
+                    #endif
+                }
             }
-        }
 
-        /* Note: AddRARewardBlock is called here even for non-RA blocks. Non-RA
-         * blocks are ignored in AddRARewardBlock so this is not a problem.
-         * The range of this loop should be adjusted to save some time. */
-        AddRARewardBlock(pindex);
+            AddRARewardBlock(pindex);
+        }
 
         if(fQtActive)
         {
@@ -652,7 +648,6 @@ bool CTxDB::LoadBlockIndex()
                 uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         }
-
     }
 
     LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
