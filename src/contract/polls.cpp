@@ -18,7 +18,6 @@ double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 bool WalletOutOfSync();
 
 std::string GetShareType(double dShareType)
@@ -99,7 +98,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     }
     std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID, pindexBest->nVersion);
     std::string GRCAddress = DefaultWalletAddress();
-    StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
+    StructCPID& structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
     double dmag = structMag.Magnitude;
     double poll_duration = PollDuration(sTitle) * 86400;
 
@@ -110,7 +109,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
     double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
 
-    StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
+    StructCPID& structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
     LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f", cpid_age, stake_age, poll_duration);
     double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
@@ -280,7 +279,7 @@ std::string GetProvableVotingWeightXML()
     //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
+        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
         CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {

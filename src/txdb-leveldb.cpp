@@ -374,15 +374,12 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nNonce         = diskindex.nNonce;
 
         //9-26-2016 - Gridcoin - New Accrual Fields
-        if (diskindex.nHeight > nNewIndex)
-        {
-            pindexNew->cpid              = diskindex.cpid;
-            pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
-            pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
-            pindexNew->nMagnitude        = diskindex.nMagnitude;
-            pindexNew->nIsContract       = diskindex.nIsContract;
-            pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
-        }
+        pindexNew->cpid              = diskindex.cpid;
+        pindexNew->nResearchSubsidy  = diskindex.nResearchSubsidy;
+        pindexNew->nInterestSubsidy  = diskindex.nInterestSubsidy;
+        pindexNew->nMagnitude        = diskindex.nMagnitude;
+        pindexNew->nIsContract       = diskindex.nIsContract;
+        pindexNew->nIsSuperBlock     = diskindex.nIsSuperBlock;
 
         nBlockCount++;
         // Watch for genesis block
@@ -615,60 +612,50 @@ bool CTxDB::LoadBlockIndex()
     //Gridcoin - In order, set up Research Age hashes and lifetime fields
     CBlockIndex* pindex = BlockFinder().FindByHeight(1);
 
+    LogPrintf("RA Starting %i %i %i \n", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
     nLoaded=pindex->nHeight;
-    if (pindex && pindexBest && pindexBest->nHeight > 10 && pindex->pnext)
+    for ( ; pindex ; pindex= pindex->pnext )
     {
-        LogPrintf(" RA Starting %i %i %i ", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
-        while (pindex->nHeight < pindexBest->nHeight)
+        if(IsResearchAgeEnabled(pindex->nHeight))
         {
-            if (!pindex || !pindex->pnext) break;
-            pindex = pindex->pnext;
-            if (pindex == pindexBest) break;
-            if (pindex==NULL || !pindex->IsInMainChain()) continue;
-
-            if(fQtActive)
+            if( pindex->IsUserCPID() && pindex->cpid == uint128() )
             {
-                if ((pindex->nHeight % 10000) == 0)
+                /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
+                auto bb = GetBoincBlockByIndex(pindex);
+                if( bb.cpid != pindex->GetCPID() )
                 {
-                    nLoaded +=10000;
-                    if (nLoaded > nHighest) nHighest=nLoaded;
-                    if (nHighest < nGrandfather) nHighest=nGrandfather;
-                    std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
-                    uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+                    if(fDebug)
+                        LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                            pindex->GetCPID(), bb.cpid,
+                            pindex->GetBlockHash().GetHex(), pindex->nHeight );
+
+                    /* Repair the cpid field */
+                    pindex->SetCPID(bb.cpid);
+
+                    #if 0
+                    if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+                        error("LoadBlockIndex: writing CDiskBlockIndex failed");
+                    #endif
                 }
             }
 
-            if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
+            AddRARewardBlock(pindex);
+        }
+
+        if(fQtActive)
+        {
+            if ((pindex->nHeight % 10000) == 0)
             {
-                const std::string& scpid = pindex->GetCPID();
-                StructCPID stCPID = GetInitializedStructCPID2(scpid, mvResearchAge);
-
-                stCPID.InterestSubsidy += pindex->nInterestSubsidy;
-                stCPID.ResearchSubsidy += pindex->nResearchSubsidy;
-                if (pindex->nHeight > stCPID.LastBlock)
-                {
-                    stCPID.LastBlock = pindex->nHeight;
-                    stCPID.BlockHash = pindex->GetBlockHash().GetHex();
-                }
-
-                if (pindex->nMagnitude > 0)
-                {
-                    stCPID.Accuracy++;
-                    stCPID.TotalMagnitude += pindex->nMagnitude;
-                    stCPID.ResearchAverageMagnitude = stCPID.TotalMagnitude/(stCPID.Accuracy+.01);
-                }
-
-                if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
-                if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
-
-                // Store the updated struct.
-                mvResearchAge[scpid] = stCPID;
-                AddCPIDBlockHash(scpid, pindex->GetBlockHash());
+                nLoaded +=10000;
+                if (nLoaded > nHighest) nHighest=nLoaded;
+                if (nHighest < nGrandfather) nHighest=nGrandfather;
+                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
+                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         }
     }
 
-    LogPrintf("RA Complete - RA Time %15" PRId64 "ms", GetTimeMillis() - nStart);
+    LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     return true;
 }
