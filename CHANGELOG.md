@@ -35,13 +35,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - NN issues with contacting scraper, #1330 (@Foggyx420)
  - wallet shutdown behavior on Windows, #1309 (@jamescowens).
 
-
-## [4.0.1.0] Unreleased - hotfix
-
+## [4.0.1.0] 2018-11-30, leisure
 ### Fixed
- - Wrong RA scan range causing Reward calculation disagreements and forks
- - RA inconsistency on testnet, #1368, (@denravonska).
- - crash while voting, #1369, (@denravonska).
+ - Wrong RA scan range causing reward calculation disagreements and forks
+   #1366, (@tomasbrod, @jamescowens, @denravonska).
+ - Fix crashes when voting in polls #1369 (@denravonska).
 
 ## [4.0.0.0] 2018-10-19, mandatory
 ### Added
