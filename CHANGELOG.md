@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.0.1.1] Unreleased
+### Added
+ - Valgrind suppressions file, #1245 (@practicalswift).
+ - Feedback for addnode command, #1060 (@tomasbrod).
+ - Linux nodes can now stake superblocks using forwarded contracts,
+   #1060 (@tomasbrod).
+ - Bad blocks exception list for testnet, #1268 (@quezacoatl1).
+ - functinality of cpids/validcpids into projects rpc, #1232 (@Foggyx420).
+ - owed field to magnitude rpc, #1232 (@Foggyx420).
+ - rainbymagnitude rpc, #1235 (@Foggyx420).
+ - automatic UTXO size optimization for staking, #1265 (@jamescowens).
+ - sending fraction of rewards to selected address(es), #1265 (@jamescowens).
+
+### Removed
+ - mint limiter, #1212 (@tomasbrod).
+ - newburnaddress, burn2, cpid, mymagnitude, rsa, rsaweight, proveownership,
+   encrypt, BurnCoinsWithNewContract, cpids, validcpids, #1232 (@Foggyx420).
+ - BoincMonteCarlo, (@denravonska).
+
+### Changed
+ - Raise CoinStake output count limit to 8, #1261 (@tomasbrod).
+ - Configuration options case sensitivity to insensitive, #1258 (@Foggyx420).
+ - Beacon keys are now stored in wallet.dat, #1088 (@tomasbrod).
+ - various speed improvements
+
+### Fixed
+ - do not replace underscores by spaces in URLs, #1327 (@tomasbrod)
+ - expired polls showing in overview page, #1250 (@PersonThingMan2).
+ - NN issues with contacting scraper, #1330 (@Foggyx420)
+ - wallet shutdown behavior on Windows, #1309 (@jamescowens).
 
 ## [4.0.1.0] 2018-11-30, leisure
 ### Fixed
