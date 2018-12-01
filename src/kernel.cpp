@@ -276,8 +276,8 @@ int64_t GetRSAWeightByCPIDWithRA(std::string cpid)
         return 0;
 
     double dWeight = 0;
-    StructCPID stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
-    StructCPID stLifetime  = GetInitializedStructCPID2(cpid,mvResearchAge);
+    StructCPID& stMagnitude = GetInitializedStructCPID2(cpid,mvMagnitudes);
+    StructCPID& stLifetime  = GetInitializedStructCPID2(cpid,mvResearchAge);
     if (stMagnitude.Magnitude > 0 && stLifetime.ResearchSubsidy == 0)
     {
         dWeight = 100000;

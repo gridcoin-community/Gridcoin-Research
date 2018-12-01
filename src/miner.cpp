@@ -29,7 +29,6 @@ unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double CoinToDouble(double surrogate);
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
 
