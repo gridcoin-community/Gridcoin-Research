@@ -759,7 +759,7 @@ public:
 #else
         vwhitelist.clear();
 
-        for(const auto& item : ReadCacheSection("project"))
+        for(const auto& item : ReadCacheSection(Section::PROJECT))
             vwhitelist.push_back(std::make_pair(item.first, item.second.value));
 
         return true;
@@ -831,7 +831,7 @@ public:
 
         return -6;
 #else
-        int64_t superblock_time = ReadCache("superblock", "magnitudes").timestamp;
+        int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
         int64_t nSBage = GetAdjustedTime() - superblock_time;
 
         return nSBage;

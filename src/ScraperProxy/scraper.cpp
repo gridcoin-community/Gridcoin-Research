@@ -921,7 +921,7 @@ bool StoreBeaconList(const fs::path& file)
 {
     BeaconMap mBeaconMap = GetConsensusBeaconList();
     
-    _log(INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection("beacon").size()));
+    _log(INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection(Section::BEACON).size()));
     _log(INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
 
     if (fs::exists(file))

@@ -5197,7 +5197,7 @@ BeaconMap GetConsensusBeaconList()
     const int64_t maxTime = pMaxConsensusLadder->nTime;
     const int64_t minTime = maxTime - BEACON_LOOKBACK;
 
-    for(const auto& item : ReadCacheSection("beacon"))
+    for(const auto& item : ReadCacheSection(Section::BEACON))
     {
         const std::string& key = item.first;
         BeaconEntry beaconentry;
