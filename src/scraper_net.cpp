@@ -262,6 +262,7 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
   uint256 hash = Hash(pbegin, ss.begin());
   //uint256 hash = Hash(pbegin, ss.end());
   ss >> signature;
+  LogPrintf("CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
 
   CKey mkey;
   if(!mkey.SetPubKey(pubkey))
@@ -331,6 +332,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
   uint256 hash(Hash(ss.begin(),ss.end()));
   keySign.Sign(hash, m->signature);
   ss << m->signature;
+  LogPrintf("CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
 #if 1
   LogPrint("manifest", "adding new local manifest");
