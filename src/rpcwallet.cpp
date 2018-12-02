@@ -130,7 +130,6 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
-    diff.pushKV("proof-of-work",  GetDifficulty());
     diff.pushKV("proof-of-stake", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
     obj.pushKV("difficulty",    diff);
 

@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <algorithm>
+#include <tuple>
 
 using namespace std;
 
@@ -28,7 +29,6 @@ unsigned int nMinerSleep;
 MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double CoinToDouble(double surrogate);
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 
 void ThreadTopUpKeyPool(void* parg);
 
@@ -81,7 +81,7 @@ void CMinerStatus::Clear()
 CMinerStatus MinerStatus;
 
 // We want to sort transactions by priority and fee, so:
-typedef boost::tuple<double, double, CTransaction*> TxPriority;
+typedef std::tuple<double, double, CTransaction*> TxPriority;
 class TxPriorityCompare
 {
     bool byFee;
@@ -91,15 +91,15 @@ public:
     {
         if (byFee)
         {
-            if (a.get<1>() == b.get<1>())
-                return a.get<0>() < b.get<0>();
-            return a.get<1>() < b.get<1>();
+            if (std::get<1>(a) == std::get<1>(b))
+                return std::get<0>(a) < std::get<0>(b);
+            return std::get<1>(a) < std::get<1>(b);
         }
         else
         {
-            if (a.get<0>() == b.get<0>())
-                return a.get<1>() < b.get<1>();
-            return a.get<0>() < b.get<0>();
+            if (std::get<0>(a) == std::get<0>(b))
+                return std::get<1>(a) < std::get<1>(b);
+            return std::get<0>(a) < std::get<0>(b);
         }
     }
 };
@@ -285,9 +285,9 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
         while (!vecPriority.empty())
         {
             // Take highest priority transaction off the priority queue:
-            double dPriority = vecPriority.front().get<0>();
-            double dFeePerKb = vecPriority.front().get<1>();
-            CTransaction& tx = *(vecPriority.front().get<2>());
+            double dPriority = std::get<0>(vecPriority.front());
+            double dFeePerKb = std::get<1>(vecPriority.front());
+            CTransaction& tx = *(std::get<2>(vecPriority.front()));
 
             std::pop_heap(vecPriority.begin(), vecPriority.end(), comparer);
             vecPriority.pop_back();
@@ -1048,7 +1048,7 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
         return;
     }
 
-    int pending_height = RoundFromString(ReadCache("neuralsecurity","pending").value, 0);
+    int pending_height = RoundFromString(ReadCache(Section::NEURALSECURITY, "pending").value, 0);
 
     if (pending_height>=(pindexBest->nHeight-200))
     {

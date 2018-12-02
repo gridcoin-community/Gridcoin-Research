@@ -1,8 +1,10 @@
 #ifndef GLOBAL_OBJECTS_NOUI_HPP
 #define GLOBAL_OBJECTS_NOUI_HPP
 
+#include "fwd.h"
 #include <string>
 #include <map>
+#include <set>
 
 extern int nBoincUtilization;
 extern std::string sRegVer;
@@ -46,7 +48,7 @@ struct StructCPID
     double totalowed;
     double LastPaymentTime;
     double ResearchSubsidy;
-    double ResearchAverageMagnitude;
+    /* double ResearchAverageMagnitude; TotalMagnitude / (Accuracy+0.01) */
     double EarliestPaymentTime;
     double InterestSubsidy;
     double PaymentTimespan;
@@ -54,18 +56,14 @@ struct StructCPID
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
     std::string cpid;
-    std::string emailhash;
     std::string cpidhash;
     std::string projectname;
     std::string team;
-    std::string verifiedteam;
     std::string boincpublickey;
-    std::string link;
     std::string errors;
-    std::string email;
-    std::string boincruntimepublickey;
     std::string cpidv2;
     std::string BlockHash;
+    std::set<const CBlockIndex*> rewardBlocks;
 };
 
 struct MiningCPID
@@ -111,15 +109,11 @@ struct MiningCPID
 
 //User CPIDs
 extern std::map<std::string, StructCPID> mvCPIDs;
-//Verified CPIDs
-extern std::map<std::string, StructCPID> mvCreditNode;
 //Network Averages
 extern std::map<std::string, StructCPID> mvNetwork;
 extern std::map<std::string, StructCPID> mvNetworkCopy;
 extern std::map<std::string, StructCPID> mvMagnitudes;
 extern std::map<std::string, StructCPID> mvMagnitudesCopy;
-extern std::map<std::string, StructCPID> mvCreditNodeCPIDProject; //Contains verified CPID+Projects;
-extern std::map<std::string, StructCPID> mvCreditNodeCPID;  //Contains verified CPID total Magnitude;
 
 //Global CPU Mining CPID:
 extern MiningCPID GlobalCPUMiningCPID;

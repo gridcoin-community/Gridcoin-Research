@@ -1,4 +1,3 @@
-#include "global_objects_noui.hpp"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
@@ -66,15 +65,15 @@ struct GridcoinBeaconTestsFixture
         // setup function
         /* Add cpid beacon, so it is valid (age 10 minutes)
          * pk: 04a143881f40abb34b928efada2873f6571dbf7583b33359eb128beee309aff25b4e0ca5e9a1d8350791705392cb9445d23cfecce84cbf101344f4f1cd1f877f4b */
-        WriteCache("beacon","b67846ea8547cedd2d61ce492fe14102",
+        WriteCache(Section::BEACON, "b67846ea8547cedd2d61ce492fe14102",
             "YjY3ODQ2ZWE4NTQ3Y2VkZDJkNjFjZTQ5MmZlMTQxMDIzNTM4MzgzZDlhOWEzZWM5OTZjYTk3Mzk0MDM5OTUzNmM3NmM2NjZjMzQ5NDQxYzkzZTlkOTM2OTZkM2M0MjZiNzk2MjZlNmE2ZjZlNzA0MTcwNmU2ZjZhNzU2NjY0NjkyZjZmNjY3NTs3MmQzMDlhMDI5OGJmNjc0NTI2ZmI1NDI3NjMxY2NjZWIyNGQzMDA4NjVlOTM0Mjg1NjJiODIwZGMxNTA2MGQyO21tejQ4UFBBcGhWNk15ZmFxRGlZaTd6OUMzTkVnWGFTajU7MDRhMTQzODgxZjQwYWJiMzRiOTI4ZWZhZGEyODczZjY1NzFkYmY3NTgzYjMzMzU5ZWIxMjhiZWVlMzA5YWZmMjViNGUwY2E1ZTlhMWQ4MzUwNzkxNzA1MzkyY2I5NDQ1ZDIzY2ZlY2NlODRjYmYxMDEzNDRmNGYxY2QxZjg3N2Y0Yg==",
             beacon1_time);
         /* Beacon that is valid, but renewable */
-        WriteCache("beacon","bc0621a4ac4610ffa400a0d298c02e23",
+        WriteCache(Section::BEACON, "bc0621a4ac4610ffa400a0d298c02e23",
             "YmMwNjIxYTRhYzQ2MTBmZmE0MDBhMGQyOThjMDJlMjNjYWMyOWEzZGM1OTc2N2M4OTk5OWM0M2M0MjNjYzM0MzM5NzAzYjk4NjgzMmM4YzgzODk5Njk5Nzk3M2U2NTk4NmI2MjZlNjY3NDcwNzg2NjZmNzQ0MTcwNzE3NTcwNmY2ZDZhNmY2NjJmNmY2Njc1OzBlNWQwODg1ODllYmU3MTBjODBlOWM2YjU1YjgwYWQzOTZkOTk2ZWUxNzBlMGVkNjQyMmVhMWI1ZTk5NDVlYjg7bW42Mm9rNzl2RmFOc3N6ZUVxZGUybldWUXRKVmdaUHo2RjswNGYyMTU1OWViY2Q2NzhmYTg3N2RiZThhYjAwOWE4YjZlNWNkODA3ZWE3Y2FlMzAxNDNiMjU1YTYyNjRmYmMxMjUzMmM2NGZjZGYyMjcxOTk2ODk2ZDQ3NTIzNGYzN2E5YjhjOWE4YTQzMjlhMDQyNGVlMjg2M2NiY2NlMWY1MmRm",
             beacon2_time);
         /* Ensure this cpid is not present */
-        DeleteCache("beacon","363d6c820aef2dbbe082768b40feed0d");
+        DeleteCache(Section::BEACON, "363d6c820aef2dbbe082768b40feed0d");
     }
     ~GridcoinBeaconTestsFixture()
     {     // teardown function
@@ -111,7 +110,7 @@ BOOST_FIXTURE_TEST_CASE(Generate_Retrieve_integration, GridcoinBeaconTestsFixtur
     BOOST_CHECK( GenerateBeaconKeys(TEST_CPID, generatedKey) );
 
     //Simulate that a beacon was accepted
-    WriteCache("beacon",TEST_CPID,
+    WriteCache(Section::BEACON, TEST_CPID,
         EncodeBase64(TEST_CPID+";stuff1;stuff2;"+HexStr(generatedKey.GetPubKey().Raw())),
         pindexBest->nTime - 600);
 
@@ -200,13 +199,13 @@ struct GridcoinBeaconSigningFixture
         CKey generatedKey;
         BOOST_CHECK( GenerateBeaconKeys(TEST_CPID, generatedKey) );
         //Simulate that a beacon was accepted
-        WriteCache("beacon",TEST_CPID,
+        WriteCache(Section::BEACON, TEST_CPID,
             EncodeBase64(TEST_CPID+";stuff1;stuff2;"+HexStr(generatedKey.GetPubKey().Raw())),
             pindexBest->nTime - 600);
     }
     ~GridcoinBeaconSigningFixture()
     {     // teardown function
-        DeleteCache("beacon",TEST_CPID);
+        DeleteCache(Section::BEACON, TEST_CPID);
     }
 };
 

@@ -18,7 +18,6 @@ double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
-StructCPID GetLifetimeCPID(const std::string& cpid, const std::string& sFrom);
 bool WalletOutOfSync();
 
 std::string GetShareType(double dShareType)
@@ -99,7 +98,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     }
     std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID, pindexBest->nVersion);
     std::string GRCAddress = DefaultWalletAddress();
-    StructCPID structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
+    StructCPID& structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
     double dmag = structMag.Magnitude;
     double poll_duration = PollDuration(sTitle) * 86400;
 
@@ -107,10 +106,10 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     std::string cpid1 = GlobalCPUMiningCPID.cpid;
     std::string GRCAddress1 = DefaultWalletAddress();
     GetEarliestStakeTime(GRCAddress1, cpid1);
-    double cpid_age = GetAdjustedTime() - ReadCache("global", "nCPIDTime").timestamp;
-    double stake_age = GetAdjustedTime() - ReadCache("global", "nGRCTime").timestamp;
+    double cpid_age = GetAdjustedTime() - ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
+    double stake_age = GetAdjustedTime() - ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
 
-    StructCPID structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
+    StructCPID& structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
     LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f", cpid_age, stake_age, poll_duration);
     double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
@@ -141,9 +140,9 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     }
 }
 
-std::string GetPollContractByTitle(std::string objecttype, std::string title)
+std::string GetPollContractByTitle(std::string title)
 {
-    for(const auto& item : ReadCacheSection(objecttype))
+    for(const auto& item : ReadCacheSection(Section::POLL))
     {
         const std::string& contract = item.second.value;
         const std::string& PollTitle = ExtractXML(contract,"<TITLE>","</TITLE>");
@@ -155,13 +154,13 @@ std::string GetPollContractByTitle(std::string objecttype, std::string title)
 
 bool PollExists(std::string pollname)
 {
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     return contract.length() > 10 ? true : false;
 }
 
 bool PollExpired(std::string pollname)
 {
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
     return (expiration < (double)GetAdjustedTime()) ? true : false;
 }
@@ -169,14 +168,14 @@ bool PollExpired(std::string pollname)
 bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 {
     // If the expiration is after July 1 2017, use the new security features.
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     double expiration = RoundFromString(ExtractXML(contract,"<EXPIRATION>","</EXPIRATION>"),0);
     return (expiration > 1498867200) ? true : false;
 }
 
 double PollDuration(std::string pollname)
 {
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     double days = RoundFromString(ExtractXML(contract,"<DAYS>","</DAYS>"),0);
     return days;
 }
@@ -215,7 +214,7 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
     double total_shares = 0;
     out_participants = 0;
     double MoneySupplyFactor = GetMoneySupplyFactor();
-    for(const auto& item : ReadCacheSection("vote"))
+    for(const auto& item : ReadCacheSection(Section::VOTE))
     {
         const std::string& contract = item.second.value;
         const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
@@ -236,14 +235,14 @@ double VotesCount(std::string pollname, std::string answer, double sharetype, do
 
 std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2)
 {
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     std::string sElement = ExtractXML(contract,XMLElement1,XMLElement2);
     return sElement;
 }
 
 bool PollAcceptableAnswer(std::string pollname, std::string answer)
 {
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     std::string answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
     std::vector<std::string> vAnswers = split(answers.c_str(),";");
     //Allow multiple choice voting:
@@ -269,7 +268,7 @@ bool PollAcceptableAnswer(std::string pollname, std::string answer)
 
 std::string PollAnswers(std::string pollname)
 {
-    std::string contract = GetPollContractByTitle("poll",pollname);
+    std::string contract = GetPollContractByTitle(pollname);
     std::string answers = ExtractXML(contract,"<ANSWERS>","</ANSWERS>");
     return answers;
 
@@ -280,7 +279,7 @@ std::string GetProvableVotingWeightXML()
     //Retrieve the historical magnitude
     if (IsResearcher(msPrimaryCPID))
     {
-        StructCPID st1 = GetLifetimeCPID(msPrimaryCPID,"ProvableMagnitude()");
+        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
         CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
@@ -501,7 +500,7 @@ std::vector<polling::Poll> GetPolls(bool bDetail, bool includeExpired, std::stri
     std::vector<std::string> vAnswers;
     boost::to_lower(byTitle);
 
-    for( const auto& item: ReadCacheSection("poll"))
+    for( const auto& item: ReadCacheSection(Section::POLL))
     {
         polling::Poll poll;
         poll.pollnumber = 0;
@@ -579,7 +578,7 @@ UniValue GetJSONPollsReport(bool bDetail, std::string QueryByTitle, std::string&
     std::string sExportRow;
     out_export.clear();
 
-    for(const auto& item : ReadCacheSection("poll"))
+    for(const auto& item : ReadCacheSection(Section::POLL))
     {
         const std::string& title = boost::to_lower_copy(item.first);
         const std::string& contract = item.second.value;
@@ -682,13 +681,13 @@ UniValue GetJsonVoteDetailsReport(std::string pollname)
     entry.pushKV("GRCAddress,CPID,Question,Answer,ShareType,URL", "Shares");
 
     boost::to_lower(pollname);
-    for(const auto& item : ReadCacheSection("vote"))
+    for(const auto& item : ReadCacheSection(Section::VOTE))
     {
         const std::string& contract = item.second.value;
         const std::string& Title = ExtractXML(contract,"<TITLE>","</TITLE>");
         if(boost::iequals(pollname, Title))
         {
-            const std::string& OriginalContract = GetPollContractByTitle("poll",Title);
+            const std::string& OriginalContract = GetPollContractByTitle(Title);
             const std::string& Question = ExtractXML(OriginalContract,"<QUESTION>","</QUESTION>");
             const std::string& GRCAddress = ExtractXML(contract,"<GRCADDRESS>","</GRCADDRESS>");
             const std::string& CPID = ExtractXML(contract,"<CPID>","</CPID>");

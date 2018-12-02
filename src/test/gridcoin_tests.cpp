@@ -1,7 +1,7 @@
-#include "global_objects_noui.hpp"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
+#include "global_objects_noui.hpp"
 #include "appcache.h"
 #include "contract/superblock.h"
 
@@ -19,6 +19,7 @@ extern std::map<std::string, StructCPID> mvDPOR;
 extern std::string GetQuorumHash(const std::string& data);
 extern bool fTestNet;
 double RoundFromString(std::string s, int place);
+std::string LowerUnderscore(std::string data);
 
 namespace
 {
@@ -30,7 +31,7 @@ namespace
       GridcoinTestsConfig()
       {
          // Create a fake CPID
-         StructCPID cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
+         StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
          cpid.projectname = "My Simple Test Project";
          cpid.entries = 1;
          cpid.cpid = TEST_CPID;
@@ -39,7 +40,7 @@ namespace
          mvMagnitudes[TEST_CPID] = cpid;
 
          // Create a fake DPOR
-         StructCPID dpor = GetInitializedStructCPID2(TEST_CPID, mvDPOR);
+         StructCPID& dpor = GetInitializedStructCPID2(TEST_CPID, mvDPOR);
          dpor.Magnitude = 125;
          mvDPOR[TEST_CPID] = dpor;
       }
@@ -60,7 +61,7 @@ BOOST_AUTO_TEST_SUITE(gridcoin_tests)
 BOOST_AUTO_TEST_CASE(gridcoin_GetOutstandingAmountOwedShouldReturnCorrectSum)
 {
    // Update the CPID earliest pay time to 24 hours ago.
-   StructCPID cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
+   StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
    cpid.EarliestPaymentTime = GetAdjustedTime() - 24 * 3600;
    mvMagnitudes[TEST_CPID] = cpid;
 
@@ -101,6 +102,11 @@ BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnpackBinarySuperblock)
     const std::string packed(superblock_packed_bin, superblock_packed_bin + superblock_packed_bin_len);
     const std::string expected(superblock_unpacked_txt, superblock_unpacked_txt + superblock_unpacked_txt_len);
     BOOST_CHECK_EQUAL(UnpackBinarySuperblock(packed), expected);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_LowerUnderscoreShouldConvertToLowerCaseAndReplaceUnderscoresWithSpaces)
+{
+    BOOST_CHECK_EQUAL("hello test string", LowerUnderscore("Hello_TEST_string"));
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)
@@ -157,7 +163,7 @@ struct GridcoinCBRTestConfig
     GridcoinCBRTestConfig()
     {
         // Clear out previous CBR settings.
-        DeleteCache("protocol", "blockreward1");
+        DeleteCache(Section::PROTOCOL, "blockreward1");
     }
 };
 
@@ -180,7 +186,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
     index.nVersion = 10;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(cbr), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
 }
 
@@ -190,7 +196,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(-1 * COIN), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
 }
 
@@ -200,7 +206,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache("protocol", "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
@@ -212,7 +218,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
 
     // Make the block reward message 1 second older than the max age
     // relative to the block.
-    WriteCache("protocol", "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
+    WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
 
     BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
 }
