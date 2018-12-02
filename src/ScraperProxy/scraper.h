@@ -162,7 +162,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
-bool ScraperSaveCScraperManifestToFiles();
+bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool ScraperSendFileManifestContents(std::string CManifestName);
 bool ScraperDeleteCScaperManifest();
 

@@ -97,7 +97,7 @@ class CScraperManifest
   public: /*==== fields ====*/
 
   const uint256* phash;
-  std::string testName;
+  std::string sCManifestName;
   CPubKey pubkey;
   std::vector<unsigned char> signature;
 

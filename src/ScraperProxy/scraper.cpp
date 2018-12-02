@@ -814,7 +814,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
 
 
-///*
 uint256 GetFileHash(const fs::path& inputfile)
 {
     // open input file, and associate with CAutoFile
@@ -892,6 +891,9 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
     std::string line;
 
     int64_t ntimestamp;
+    
+    // Header -- throw away.
+    std::getline(in, line);
 
     while (std::getline(in, line))
     {
@@ -939,6 +941,9 @@ bool StoreBeaconList(const fs::path& file)
     std::stringstream stream;
 
     _log(INFO, "StoreBeaconList", "Started processing " + file.string());
+    
+    // Header
+    stream << "CPID," << "Time," << "Beacon\n";
 
     for (auto const& entry : mBeaconMap)
     {
@@ -1012,6 +1017,9 @@ bool LoadScraperFileManifest(const fs::path& file)
 
     int64_t ntimestamp;
 
+    // Header - throw away.
+    std::getline(in, line);
+    
     while (std::getline(in, line))
     {
 
@@ -1061,6 +1069,9 @@ bool StoreScraperFileManifest(const fs::path& file)
     //Lock mScraperFileManifest during serialize to string.
     {
         LOCK(cs_mScraperFileManifest);
+        
+        // Header.
+        stream << "Hash," << "Current," << "Time," << "Project," << "Filename\n";
         
         for (auto const& entry : mScraperFileManifest)
         {
@@ -1183,8 +1194,6 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     boostio::filtering_istream in;
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
-
-    //_log(INFO, "LoadProjectFileToStatsByCPID", "mBeaconMap entries: " + std::to_string(mBeaconMap.size()));
 
     bool bcomplete = false;
     bool bfileerror = false;
@@ -1442,7 +1451,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 * Scraper networking   *
 ************************/
 
-bool ScraperSaveCScraperManifestToFiles()
+bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
     // Make sure the Scraper directory itself exists, because this function could be called from outside
     // the scraper thread loop, and therefore the directory may not have been set up yet.
@@ -1468,7 +1477,7 @@ bool ScraperSaveCScraperManifestToFiles()
         // const uint256& hash = pair.first;
         const CScraperManifest& manifest = *pair.second;
 
-        std::string outputfile = manifest.testName;
+        std::string outputfile = manifest.sCManifestName;
 
         if(outputfile.find(".gz") != std::string::npos)
         {
@@ -1495,71 +1504,6 @@ bool ScraperSaveCScraperManifestToFiles()
 
 
 
-/*
-bool ScraperSendFileManifestContents()
-{
-    // This "broadcasts" the current ScraperFileManifest contents to the network.
-
-    for (auto const& entry : mScraperFileManifest)
-    {
-        // Only include current files to send across the network.
-        if (!entry.second.current)
-            continue;
-
-        fs::path inputfile = entry.first;
-
-        fs::path inputfilewpath = pathScraper / inputfile;
-
-        // open input file, and associate with CAutoFile
-        FILE *file = fopen(inputfilewpath.c_str(), "rb");
-        CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
-
-        if (!filein)
-        {
-            _log(ERROR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
-            return false;
-        }
-
-        // use file size to size memory buffer
-        int dataSize = boost::filesystem::file_size(inputfilewpath);
-        std::vector<unsigned char> vchData;
-        vchData.resize(dataSize);
-
-        // read data and checksum from file
-        try
-        {
-            filein.read((char *)&vchData[0], dataSize);
-        }
-        catch (std::exception &e)
-        {
-            _log(ERROR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
-            return false;
-        }
-
-        filein.fclose();
-
-        auto manifest = std::unique_ptr<CScraperManifest>(new CScraperManifest());
-
-        // This should be replaced with the proper field name...
-        manifest->testName = inputfile.string();
-
-        CDataStream part(vchData, SER_NETWORK, 1);
-        manifest->addPartData(std::move(part));
-
-        CKey key;
-        std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
-        key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
-
-        CScraperManifest::addManifest(std::move(manifest), key);
-    }
-
-    return true;
-}
-*/
-
-
-
-
 
 bool ScraperSendFileManifestContents(std::string sCManifestName)
 {
@@ -1568,16 +1512,56 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
     auto manifest = std::unique_ptr<CScraperManifest>(new CScraperManifest());
 
     // This should be replaced with the proper field name...
-    manifest->testName = sCManifestName;
+    manifest->sCManifestName = sCManifestName;
 
     manifest->nTime = GetAdjustedTime();
 
-    manifest->BeaconList = 0;
-    manifest->BeaconList_c = 0;
-
     // This will have to be changed to support files bigger than 32 MB, where more than one
     // part per object will be required.
-    long nPartNum = 0;
+    long iPartNum = 0;
+
+    // Read in BeaconList
+    fs::path inputfile = "BeaconList.csv.gz";
+    fs::path inputfilewpath = pathScraper / inputfile;
+    
+    // open input file, and associate with CAutoFile
+    FILE *file = fopen(inputfilewpath.c_str(), "rb");
+    CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+
+    if (!filein)
+    {
+        _log(ERROR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
+        return false;
+    }
+
+    // use file size to size memory buffer
+    int dataSize = boost::filesystem::file_size(inputfilewpath);
+    std::vector<unsigned char> vchData;
+    vchData.resize(dataSize);
+
+    // read data from file
+    try
+    {
+        filein.read((char *)&vchData[0], dataSize);
+    }
+    catch (std::exception &e)
+    {
+        _log(ERROR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
+        return false;
+    }
+
+    filein.fclose();
+
+    // The first part number will be the BeaconList.
+    manifest->BeaconList = iPartNum;
+    manifest->BeaconList_c = 0;
+
+    CDataStream part(vchData, SER_NETWORK, 1);
+
+    manifest->addPartData(std::move(part));
+
+    iPartNum++;
+
     for (auto const& entry : mScraperFileManifest)
     {
         // Only include current files to send across the network.
@@ -1603,7 +1587,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
         std::vector<unsigned char> vchData;
         vchData.resize(dataSize);
 
-        // read data and checksum from file
+        // read data from file
         try
         {
             filein.read((char *)&vchData[0], dataSize);
@@ -1633,7 +1617,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
         ProjectEntry.LastModified = entry.second.timestamp;
 
         // For now each object will only have one part.
-        ProjectEntry.part1 = nPartNum;
+        ProjectEntry.part1 = iPartNum;
         ProjectEntry.partc = 0;
         ProjectEntry.GridcoinTeamID = -1; //Not used anymore
 
@@ -1647,9 +1631,10 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
         manifest->addPartData(std::move(part));
 
-        nPartNum++;
+        iPartNum++;
     }
 
+    // Sign and "send".
     CKey key;
     std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
     key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
@@ -1663,7 +1648,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
 bool ScraperDeleteCScaperManifest(uint256 nHash)
 {
-    // This delete a manifest.
+    // This deletes a manifest.
 
     auto pair = CScraperManifest::mapManifest.find(nHash);
 
@@ -1681,7 +1666,7 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
     if(fHelp || params.size() != 1 )
         throw std::runtime_error(
-                "sendscraperfilemanifest\n"
+                "sendscraperfilemanifest <name>\n"
                 "Send a CScraperManifest object with the ScraperFileManifest.\n"
                 );
 
@@ -1694,13 +1679,13 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 
 UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    if(fHelp || params.size() != 0 )
+    if(fHelp || params.size() != 1 )
         throw std::runtime_error(
-                "savescraperfilemanifest\n"
+                "savescraperfilemanifest <hash>\n"
                 "Send a CScraperManifest object with the ScraperFileManifest.\n"
                 );
 
-    bool ret = ScraperSaveCScraperManifestToFiles();
+    bool ret = ScraperSaveCScraperManifestToFiles(uint256(params[0].get_str()));
 
     return UniValue(ret);
 }
@@ -1713,7 +1698,7 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
                 "deletecscrapermanifest <hash>\n"
                 "delete manifest object.\n"
                 );
-    bool ret = ScraperDeleteCScaperManifest((uint256(params[0].get_str())));
+    bool ret = ScraperDeleteCScaperManifest(uint256(params[0].get_str()));
     return UniValue(ret);
 }
 

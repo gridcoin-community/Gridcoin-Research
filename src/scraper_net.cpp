@@ -219,7 +219,7 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
   for( const CPart* part : vParts )
     ss << part->hash;
   ss<< pubkey;
-  ss<< testName;
+  ss<< sCManifestName;
   ss<< nTime;
   ss<< ConsensusBlock;
   ss<< BeaconList << BeaconList_c;
@@ -237,7 +237,7 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
   #endif
 
-  ss>> testName;
+  ss>> sCManifestName;
   ss>> nTime;
   ss>> ConsensusBlock;
   ss>> BeaconList >> BeaconList_c;
@@ -249,8 +249,10 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     if(prj.part1+prj.partc>(long)vph.size())
       throw error("CScraperManifest::UnserializeCheck: project part out of range");
 
-  uint256 hash(Hash(pbegin,ss.begin()));
+  uint256 hash = Hash(pbegin, ss.begin());
+  //uint256 hash = Hash(pbegin, ss.end());
   ss >> signature;
+
   CKey mkey;
   if(!mkey.SetPubKey(pubkey))
     throw error("CScraperManifest: Invalid manifest key");
@@ -353,7 +355,7 @@ void CScraperManifest::Complete()
   /* Do something with the complete manifest */
   std::string bodystr;
   vParts[0]->getReader() >> bodystr;
-  printf("CScraperManifest::Complete(): %s %s\n",testName.c_str(),bodystr.c_str());
+  printf("CScraperManifest::Complete(): %s %s\n",sCManifestName.c_str(),bodystr.c_str());
 }
 
 /* how?
@@ -377,7 +379,7 @@ UniValue CScraperManifest::ToJson() const
   #else
   r.pushKV("pubkey",pubkey.GetID().ToString());
   #endif
-  r.pushKV("testName",testName);
+  r.pushKV("sCManifestName",sCManifestName);
 
   r.pushKV("nTime",(int64_t)nTime);
   r.pushKV("nTime",DateTimeStrFormat(nTime));
@@ -446,7 +448,9 @@ UniValue sendmanifest(const UniValue& params, bool fHelp)
         "Send a new CScraperManifest object.\n"
     );
   auto manifest=  std::unique_ptr<CScraperManifest>(new CScraperManifest());
-  manifest->testName= params[0].get_str();
+  manifest->sCManifestName= params[0].get_str();
+  // Because if BeaconList is -1 it will fail the out of range test.
+  manifest->BeaconList = 0;
   CDataStream part(SER_NETWORK,1);
   part << std::string("SampleText") << rand();
   manifest->addPartData(std::move(part));
