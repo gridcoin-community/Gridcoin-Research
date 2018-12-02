@@ -213,7 +213,7 @@ void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVe
   ss>> last;
 }
 
-void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int nVersion) const
 {
   WriteCompactSize(ss, vParts.size());
   for( const CPart* part : vParts )
@@ -225,6 +225,16 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
   ss<< BeaconList << BeaconList_c;
   ss<< projects;
 }
+
+
+void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+{
+  SerializeWithoutSignature(ss, nType, nVersion);
+  ss << signature;
+}
+
+
+
 void CScraperManifest::UnserializeCheck(CReaderStream& ss)
 {
   const auto pbegin = ss.begin();
@@ -314,7 +324,8 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
 
   /* serialize and hash the object */
   CDataStream ss(SER_NETWORK,1);
-  ss << *m;
+  m->SerializeWithoutSignature(ss, SER_NETWORK, 1);
+  //ss << *m;
 
   /* sign the serialized manifest and append the signature */
   uint256 hash(Hash(ss.begin(),ss.end()));

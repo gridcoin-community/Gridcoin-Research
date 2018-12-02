@@ -130,6 +130,7 @@ class CScraperManifest
 
   /** Serialize this object for seding over the network. */
   void Serialize(CDataStream& s, int nType, int nVersion) const;
+  void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
   void UnserializeCheck(CReaderStream& s);
   UniValue ToJson() const;
 
