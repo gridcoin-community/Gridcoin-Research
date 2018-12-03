@@ -260,7 +260,6 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
       throw error("CScraperManifest::UnserializeCheck: project part out of range");
 
   uint256 hash = Hash(pbegin, ss.begin());
-  //uint256 hash = Hash(pbegin, ss.end());
   ss >> signature;
   LogPrintf("CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
 

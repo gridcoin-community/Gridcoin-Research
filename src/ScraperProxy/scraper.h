@@ -102,7 +102,14 @@ struct ScraperFileManifestEntry
     bool current;
 };
 
-typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifest;
+typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
+
+struct ScraperFileManifest
+{
+    ScraperFileManifestMap mScraperFileManifest;
+    uint256 nConsensusBlockHash;
+    int64_t timestamp;
+};
 
 struct ScraperObjectStatsKey
 {

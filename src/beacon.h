@@ -5,6 +5,7 @@
 #pragma once
 
 #include "fwd.h"
+#include "util.h"
 #include <string>
 #include <map>
 
@@ -69,3 +70,10 @@ struct BeaconEntry
 };
 
 typedef std::map<std::string, BeaconEntry> BeaconMap;
+
+struct BeaconConsensus
+{
+    uint256 nBlockHash;
+    BeaconMap mBeaconMap;
+};
+

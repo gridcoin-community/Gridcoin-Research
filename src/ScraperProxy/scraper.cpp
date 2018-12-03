@@ -8,9 +8,9 @@ std::string lowercase(std::string s);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
-ScraperFileManifest mScraperFileManifest;
+ScraperFileManifest StructScraperFileManifest;
 
-CCriticalSection cs_mScraperFileManifest;
+CCriticalSection cs_StructScraperFileManifest;
 
 bool WhitelistPopulated();
 bool UserpassPopulated();
@@ -31,7 +31,7 @@ bool fScraperRetainNonCurrentFiles = false;
 boost::filesystem::path pathScraper = fs::current_path() / "Scraper";
 
 extern void MilliSleep(int64_t n);
-extern BeaconMap GetConsensusBeaconList();
+extern BeaconConsensus GetConsensusBeaconList();
 
 // This is the scraper thread...
 void Scraper(bool fScraperStandalone)
@@ -47,7 +47,7 @@ void Scraper(bool fScraperStandalone)
         }
         else
         {
-            // Load the manifest file from the Scraper directory info mScraperFileManifest.
+            // Load the manifest file from the Scraper directory into mScraperFileManifest.
 
             _log(INFO, "Scraper", "Loading Manifest");
             if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
@@ -59,11 +59,11 @@ void Scraper(bool fScraperStandalone)
             // First remove orphan files with no Manifest entry.
             // Lock the manifest while it is being manipulated.
             {
-                LOCK(cs_mScraperFileManifest);
+                LOCK(cs_StructScraperFileManifest);
 
                 // Check to see if the file exists in the manifest and if the hash matches. If it doesn't
                 // remove it.
-                ScraperFileManifest::iterator entry;
+                ScraperFileManifestMap::iterator entry;
 
                 for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
                 {
@@ -74,8 +74,8 @@ void Scraper(bool fScraperStandalone)
                             && dir.path().filename() != "Stats.csv.gz"
                             && fs::is_regular_file(dir))
                     {
-                        entry = mScraperFileManifest.find(dir.path().filename().c_str());
-                        if (entry == mScraperFileManifest.end())
+                        entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().c_str());
+                        if (entry == StructScraperFileManifest.mScraperFileManifest.end())
                         {
                             fs::remove(dir.path());
                             _log(WARNING, "Scraper", "Removing orphan file not in Manifest: " + filename);
@@ -93,9 +93,9 @@ void Scraper(bool fScraperStandalone)
                 // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
                 // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
                 //if fScraperRetainNonCurrentFiles is false.
-                for (entry = mScraperFileManifest.begin(); entry != mScraperFileManifest.end(); )
+                for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
                 {
-                    ScraperFileManifest::iterator entry_copy = entry++;
+                    ScraperFileManifestMap::iterator entry_copy = entry++;
 
                     if (!fs::exists(pathScraper / entry_copy->first)
                             || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
@@ -146,6 +146,8 @@ void Scraper(bool fScraperStandalone)
 
             AuthenticationETagClear();
 
+            // Note a lock on cs_StructScraperFileManifest is taken in StoreBeaconList,
+            // and the block hash for the consensus block height is updated in the struct.
             if (!StoreBeaconList(pathScraper / "BeaconList.csv.gz"))
                 _log(ERROR, "Scraper", "StoreBeaconList error occurred");
             else
@@ -545,6 +547,12 @@ bool DownloadProjectRacFilesByCPID()
         ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag);
     }
 
+    // After processing, update global structure with timestamp of run.
+    {
+        LOCK(cs_StructScraperFileManifest);
+
+        StructScraperFileManifest.timestamp = GetAdjustedTime();
+    }
     return true;
 }
 
@@ -555,7 +563,7 @@ bool DownloadProjectRacFilesByCPID()
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag)
 {
     // Get a consensus map of Beacons.
-    BeaconMap mBeaconMap = GetConsensusBeaconList();
+    BeaconConsensus Consensus = GetConsensusBeaconList();
     
     std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
 
@@ -643,7 +651,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                         userdata.nlappend(line);
 
                         // This uses the beacon map rather than the teamid to select the statistics.
-                        if (mBeaconMap.count(ExtractXML(userdata.value(), "<cpid>", "</cpid>")) >= 1)
+                        if (Consensus.mBeaconMap.count(ExtractXML(userdata.value(), "<cpid>", "</cpid>")) >= 1)
                             vXML.push_back(userdata.value());
 
                         break;
@@ -762,18 +770,18 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // a given project, it has to be more up to date than any others.
     NewRecord.current = true;
     
-    // Code block to lock mScraperFileManifest during record insertion and delete because we want this atomic.
+    // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
     {
-        LOCK(cs_mScraperFileManifest);
+        LOCK(cs_StructScraperFileManifest);
         
         // Iterate mScraperFileManifest to find any prior records for the same project and change current flag to false,
         // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
         // is false.
 
-        ScraperFileManifest::iterator entry;
-        for (entry = mScraperFileManifest.begin(); entry != mScraperFileManifest.end(); )
+        ScraperFileManifestMap::iterator entry;
+        for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
         {
-            ScraperFileManifest::iterator entry_copy = entry++;
+            ScraperFileManifestMap::iterator entry_copy = entry++;
 
             if (entry_copy->second.project == project && entry_copy->second.current == true)
             {
@@ -919,10 +927,18 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 
 bool StoreBeaconList(const fs::path& file)
 {
-    BeaconMap mBeaconMap = GetConsensusBeaconList();
+    BeaconConsensus Consensus = GetConsensusBeaconList();
     
     _log(INFO, "StoreBeaconList", "ReadCacheSection element count: " + std::to_string(ReadCacheSection(Section::BEACON).size()));
-    _log(INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
+    _log(INFO, "StoreBeaconList", "mBeaconMap element count: " + std::to_string(Consensus.mBeaconMap.size()));
+
+    // Update block hash for block at consensus height to StructScraperFileManifest.
+    // Requires a lock.
+    {
+        LOCK(cs_StructScraperFileManifest);
+
+        StructScraperFileManifest.nConsensusBlockHash = Consensus.nBlockHash;
+    }
 
     if (fs::exists(file))
         fs::remove(file);
@@ -945,7 +961,7 @@ bool StoreBeaconList(const fs::path& file)
     // Header
     stream << "CPID," << "Time," << "Beacon\n";
 
-    for (auto const& entry : mBeaconMap)
+    for (auto const& entry : Consensus.mBeaconMap)
     {
         std::string sBeaconEntry = entry.first + "," + std::to_string(entry.second.timestamp) + "," + entry.second.value + "\n";
         stream << sBeaconEntry;
@@ -966,20 +982,20 @@ bool StoreBeaconList(const fs::path& file)
 
 
 
-// Insert entry into Manifest. Note that cs_mScraperFileManifest needs to be taken before calling.
+// Insert entry into Manifest. Note that cs_StructScraperFileManifest needs to be taken before calling.
 bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry)
 {
     // This less readable form is so we know whether the element already existed or not.
-    std::pair<ScraperFileManifest::iterator,bool> ret;
+    std::pair<ScraperFileManifestMap::iterator,bool> ret;
     {
-        ret = mScraperFileManifest.insert(std::make_pair(entry.filename, entry));
+        ret = StructScraperFileManifest.mScraperFileManifest.insert(std::make_pair(entry.filename, entry));
     }
 
     // True if insert was sucessful, false if entry with key (hash) already exists in map.
     return ret.second;
 }
 
-// Delete entry from Manifest and corresponding file if it exists. Note that cs_mScraperFileManifest needs to be taken before calling.
+// Delete entry from Manifest and corresponding file if it exists. Note that cs_StructScraperFileManifest needs to be taken before calling.
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry)
 {
     unsigned int ret;
@@ -988,7 +1004,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry)
     if(fs::exists(pathScraper / entry.filename))
         fs::remove(pathScraper /entry.filename);
 
-    ret = mScraperFileManifest.erase(entry.filename);
+    ret = StructScraperFileManifest.mScraperFileManifest.erase(entry.filename);
 
     // Returns number of elements erased, either 0 or 1.
     return ret;
@@ -1039,7 +1055,13 @@ bool LoadScraperFileManifest(const fs::path& file)
         
         LoadEntry.filename = vline[4];
 
-        InsertScraperFileManifestEntry(LoadEntry);
+        // Lock cs_StructScraperFileManifest before updating
+        // global structure.
+        {
+            LOCK(cs_StructScraperFileManifest);
+
+            InsertScraperFileManifestEntry(LoadEntry);
+        }
     }
 
     return true;
@@ -1066,14 +1088,14 @@ bool StoreScraperFileManifest(const fs::path& file)
 
     _log(INFO, "StoreScraperFileManifest", "Started processing " + file.string());
 
-    //Lock mScraperFileManifest during serialize to string.
+    //Lock StructScraperFileManifest during serialize to string.
     {
-        LOCK(cs_mScraperFileManifest);
+        LOCK(cs_StructScraperFileManifest);
         
         // Header.
         stream << "Hash," << "Current," << "Time," << "Project," << "Filename\n";
         
-        for (auto const& entry : mScraperFileManifest)
+        for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
             uint256 nEntryHash = entry.second.hash;
 
@@ -1359,35 +1381,43 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     // constructed starting with the whitelist, and then using only the current files, this
     // will always be less than or equal to the whitelist count from vwhitelist.
     unsigned int nActiveProjects = 0;
-    for (auto const& entry : mScraperFileManifest)
     {
-        if (entry.second.current)
-            nActiveProjects++;
-    }
+        LOCK(cs_StructScraperFileManifest);
 
+        for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
+        {
+            if (entry.second.current)
+                nActiveProjects++;
+        }
+    }
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
     //Get the Consensus Beacon map and initialize mScraperStats.
-    BeaconMap mBeaconMap = GetConsensusBeaconList();
+    BeaconConsensus Consensus = GetConsensusBeaconList();
+
     ScraperStats mScraperStats;
 
-    for (auto const& entry : mScraperFileManifest)
     {
+        LOCK(cs_StructScraperFileManifest);
 
-        if (entry.second.current)
+        for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
-            std::string project = entry.first;
-            fs::path file = pathScraper / entry.second.filename;
-            ScraperStats mProjectScraperStats;
 
-            _log(INFO, "GetScraperStatsByConsensusBeaconList", "Processing stats for project: " + project);
-
-            LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, mBeaconMap, mProjectScraperStats);
-
-            // Insert into overall map.
-            for (auto const& entry : mProjectScraperStats)
+            if (entry.second.current)
             {
-                mScraperStats[entry.first] = entry.second;
+                std::string project = entry.first;
+                fs::path file = pathScraper / entry.second.filename;
+                ScraperStats mProjectScraperStats;
+
+                _log(INFO, "GetScraperStatsByConsensusBeaconList", "Processing stats for project: " + project);
+
+                LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, Consensus.mBeaconMap, mProjectScraperStats);
+
+                // Insert into overall map.
+                for (auto const& entry : mProjectScraperStats)
+                {
+                    mScraperStats[entry.first] = entry.second;
+                }
             }
         }
     }
@@ -1401,7 +1431,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     // ObjectID is blank string for network-wide.
     NetworkWideStatsEntry.statskey.objectID = "";
 
-    for (auto const& beaconentry : mBeaconMap)
+    for (auto const& beaconentry : Consensus.mBeaconMap)
     {
         ScraperObjectStats CPIDStatsEntry = {};
 
@@ -1514,7 +1544,8 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
     // This should be replaced with the proper field name...
     manifest->sCManifestName = sCManifestName;
 
-    manifest->nTime = GetAdjustedTime();
+    manifest->nTime = StructScraperFileManifest.timestamp;
+    manifest->ConsensusBlock = StructScraperFileManifest.nConsensusBlockHash;
 
     // This will have to be changed to support files bigger than 32 MB, where more than one
     // part per object will be required.
@@ -1562,7 +1593,8 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
     iPartNum++;
 
-    for (auto const& entry : mScraperFileManifest)
+    // Hmm... should we take a lock on cs_StructScraperFileManifest here?
+    for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
         // Only include current files to send across the network.
         if (!entry.second.current)
@@ -1649,13 +1681,8 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 bool ScraperDeleteCScaperManifest(uint256 nHash)
 {
     // This deletes a manifest.
-
-    auto pair = CScraperManifest::mapManifest.find(nHash);
-
-    // const uint256& hash = pair.first;
-    CScraperManifest& manifest = *pair->second;
-
-    manifest.~CSplitBlob();
+    // Note this just deletes the local copy. TODO: Implement manifest delete message.
+    CScraperManifest::mapManifest.erase(nHash);
 
     return true;
 }

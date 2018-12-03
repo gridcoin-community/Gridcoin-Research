@@ -5186,14 +5186,18 @@ std::string getfilecontents(std::string filename)
 
 
 
-BeaconMap GetConsensusBeaconList()
+BeaconConsensus GetConsensusBeaconList()
 {
-    BeaconMap mBeaconMap;
+    //BeaconMap mBeaconMap;
+    BeaconConsensus Consensus;
 
     BlockFinder MaxConsensusLadder;
 
     CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
                                                                         - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+
+    Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
+
     const int64_t maxTime = pMaxConsensusLadder->nTime;
     const int64_t minTime = maxTime - BEACON_LOOKBACK;
 
@@ -5214,10 +5218,10 @@ BeaconMap GetConsensusBeaconList()
         if (Contains("INVESTOR", beaconentry.value))
             continue;
 
-        mBeaconMap[key] = beaconentry;
+        Consensus.mBeaconMap[key] = beaconentry;
     }
 
-    return mBeaconMap;
+    return Consensus;
 }
 
 
