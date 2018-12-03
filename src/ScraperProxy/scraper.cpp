@@ -36,6 +36,15 @@ extern BeaconConsensus GetConsensusBeaconList();
 // This is the scraper thread...
 void Scraper(bool fScraperStandalone)
 {
+    // Hash check
+    std::string sHashCheck = "Hello world";
+    uint256 nHashCheck = Hash(sHashCheck.begin(), sHashCheck.end());
+
+    if (nHashCheck.GetHex() == "fe65ee46e01d18cebec555978abe82e021e5399171ce470e464996114d72dcf6")
+        _log(INFO, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is correct.");
+    else
+        _log(ERROR, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is NOT correct.");
+
     // Check to see if the Scraper directory exists and is a directory. If not create it.
     if(fs::exists(pathScraper))
     {
