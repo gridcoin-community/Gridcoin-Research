@@ -1511,31 +1511,41 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     else
         fs::create_directory(savepath);
 
-    for(const auto& pair : CScraperManifest::mapManifest)
+
+    // Select manifest based on provided hash.
+    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
+    const CScraperManifest& manifest = *pair->second;
+
+    // Write out to files the parts. Note this assumes one-to-one part to file. Needs to
+    // be fixed for more than one part per file.
+    int iPartNum = 0;
+    for(const auto& iter : manifest.vParts)
     {
-        // const uint256& hash = pair.first;
-        const CScraperManifest& manifest = *pair.second;
+        std::string outputfile;
+        fs::path outputfilewpath;
 
-        std::string outputfile = manifest.sCManifestName;
+        if (iPartNum == 0)
+            outputfile = "BeaconList.csv.gz";
+        else
+            outputfile = manifest.projects[iPartNum-1].project + "-" + manifest.projects[iPartNum-1].ETag + "-ByCPID.gz";
 
-        if(outputfile.find(".gz") != std::string::npos)
+        outputfilewpath = savepath / outputfile;
+
+        std::ofstream outfile(outputfilewpath.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+        if (!outfile)
         {
-            fs::path outputfilewpath = savepath / outputfile;
+            _log(ERROR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
 
-            std::ofstream outfile(outputfilewpath.string().c_str(), std::ios_base::out | std::ios_base::binary);
-
-            if (!outfile)
-            {
-                _log(ERROR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
-
-                return false;
-            }
-
-            outfile.write((const char*)manifest.vParts[0]->data.data(), manifest.vParts[0]->data.size());
-
-            outfile.flush();
-            outfile.close();
+            return false;
         }
+
+        outfile.write((const char*)iter->data.data(), iter->data.size());
+
+        outfile.flush();
+        outfile.close();
+
+        iPartNum++;
     }
 
     return true;
