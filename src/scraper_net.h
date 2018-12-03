@@ -30,7 +30,7 @@ class CSplitBlob
   static bool RecvPart(CNode* pfrom, CDataStream& vRecv);
 
   bool isComplete() const
-  { return cntPartsRcvd == (long)vParts.size(); }
+  { return cntPartsRcvd == vParts.size(); }
 
   /** Notification that this Split object is fully received. */
   virtual void Complete() = 0;
@@ -49,7 +49,7 @@ class CSplitBlob
   void addPart(const uint256& ihash);
 
   /** Create a part from specified data and add reference to it into vParts. */
-  long addPartData(CDataStream&& vData);
+  int addPartData(CDataStream&& vData);
 
   /** Unref all parts referenced by this. Removes parts with no references */
   ~CSplitBlob();
@@ -57,7 +57,7 @@ class CSplitBlob
   /* We could store the parts in mapRelay and have getdata service for free. */
   /** map from part hash to scraper Index, so we can attach incoming Part in Index */
   static std::map<uint256,CPart> mapParts;
-  long cntPartsRcvd =0;
+  int cntPartsRcvd =0;
 
 };
 
@@ -105,9 +105,9 @@ class CScraperManifest
     std::string project;
     std::string ETag;
     unsigned int LastModified =0;
-    long part1 =-1;
+    int part1 =-1;
     unsigned partc =0;
-    long GridcoinTeamID =-1;
+    int GridcoinTeamID =-1;
     bool current =0;
     bool last =0;
 
@@ -118,7 +118,7 @@ class CScraperManifest
 
   std::vector<dentry> projects;
 
-  long BeaconList =-1;
+  int BeaconList =-1;
   unsigned BeaconList_c =0;
   uint256 ConsensusBlock;
   unsigned int nTime =0;

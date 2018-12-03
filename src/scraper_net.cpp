@@ -41,7 +41,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
       {
         CSplitBlob& split= *ref.first;
         ++split.cntPartsRcvd;
-        assert(split.cntPartsRcvd <= (long)split.vParts.size());
+        assert(split.cntPartsRcvd <= split.vParts.size());
         if( split.isComplete() )
         {
           split.Complete();
@@ -72,7 +72,7 @@ void CSplitBlob::addPart(const uint256& ihash)
   part.refs.emplace(this, n);
 }
 
-long CSplitBlob::addPartData(CDataStream&& vData)
+int CSplitBlob::addPartData(CDataStream&& vData)
 {
   uint256 hash(Hash(vData.begin(), vData.end()));
 
@@ -253,10 +253,10 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
   ss>> BeaconList >> BeaconList_c;
   ss>> projects;
 
-  if(BeaconList+BeaconList_c>(long)vph.size())
+  if(BeaconList+BeaconList_c>vph.size())
     throw error("CScraperManifest::UnserializeCheck: beacon part out of range");
   for(const dentry& prj : projects)
-    if(prj.part1+prj.partc>(long)vph.size())
+    if(prj.part1+prj.partc>vph.size())
       throw error("CScraperManifest::UnserializeCheck: project part out of range");
 
   uint256 hash = Hash(pbegin, ss.begin());

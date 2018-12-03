@@ -1558,7 +1558,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
     // This will have to be changed to support files bigger than 32 MB, where more than one
     // part per object will be required.
-    long iPartNum = 0;
+    int iPartNum = 0;
 
     // Read in BeaconList
     fs::path inputfile = "BeaconList.csv.gz";
