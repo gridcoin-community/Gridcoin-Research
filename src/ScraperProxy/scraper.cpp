@@ -153,6 +153,35 @@ void Scraper(bool fScraperStandalone)
             else
                 _log(INFO, "Scraper", "Refreshing of whitelist completed");
 
+            // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
+            {
+                LOCK(cs_StructScraperFileManifest);
+
+                ScraperFileManifestMap::iterator entry;
+
+                for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
+                {
+                    ScraperFileManifestMap::iterator entry_copy = entry++;
+
+                    // Set flag to false. If entry project matches a whitelist project then mark true and break.
+                    bool bOnWhitelist = false;
+                    for (const auto& wlproject : vwhitelist)
+                    {
+                        if(entry_copy->second.project == wlproject.first)
+                        {
+                            bOnWhitelist = true;
+                            break;
+                        }
+                    }
+
+                    if (!bOnWhitelist)
+                    {
+                        _log(INFO, "Scraper", "Removing manifest entry for non-whitelisted project: " + entry_copy->first);
+                        DeleteScraperFileManifestEntry(entry_copy->second);
+                    }
+                }
+            }
+
             AuthenticationETagClear();
 
             // Note a lock on cs_StructScraperFileManifest is taken in StoreBeaconList,
@@ -556,11 +585,17 @@ bool DownloadProjectRacFilesByCPID()
         ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag);
     }
 
-    // After processing, update global structure with timestamp of run.
+    // After processing, update global structure with the timestamp of the latest file in the manifest.
     {
         LOCK(cs_StructScraperFileManifest);
 
-        StructScraperFileManifest.timestamp = GetAdjustedTime();
+        int64_t nMaxTime = 0;
+        for (const auto& entry : StructScraperFileManifest.mScraperFileManifest)
+        {
+            nMaxTime = std::max(nMaxTime, entry.second.timestamp);
+        }
+
+        StructScraperFileManifest.timestamp = nMaxTime;
     }
     return true;
 }

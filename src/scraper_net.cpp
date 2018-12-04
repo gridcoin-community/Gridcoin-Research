@@ -224,6 +224,16 @@ void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int
   ss<< ConsensusBlock;
   ss<< BeaconList << BeaconList_c;
   ss<< projects;
+  ss<< nContentHash;
+}
+
+// This is to compare manifest content quickly. We just need the parts and the consensus block.
+void CScraperManifest::SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const
+{
+  WriteCompactSize(ss, vParts.size());
+  for( const CPart* part : vParts )
+    ss << part->hash;
+  ss<< ConsensusBlock;
 }
 
 
@@ -259,9 +269,12 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     if(prj.part1+prj.partc>vph.size())
       throw error("CScraperManifest::UnserializeCheck: project part out of range");
 
+  ss >> nContentHash;
+
   uint256 hash = Hash(pbegin, ss.begin());
+
   ss >> signature;
-  LogPrintf("CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
+  LogPrint("Manifest", "CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
 
   CKey mkey;
   if(!mkey.SetPubKey(pubkey))
@@ -321,6 +334,11 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
   m->pubkey= keySign.GetPubKey();
+
+  // serialize the content for comparison purposes and put in manifest.
+  CDataStream sscomp(SER_NETWORK,1);
+  m->SerializeForManifestCompare(sscomp, SER_NETWORK, 1);
+  m->nContentHash = Hash(sscomp.begin(), sscomp.end());
 
   /* serialize and hash the object */
   CDataStream ss(SER_NETWORK,1);
@@ -396,6 +414,7 @@ UniValue CScraperManifest::ToJson() const
   r.pushKV("nTime",(int64_t)nTime);
   r.pushKV("nTime",DateTimeStrFormat(nTime));
   r.pushKV("ConsensusBlock",ConsensusBlock.GetHex());
+  r.pushKV("nContentHash",nContentHash.GetHex());
   r.pushKV("BeaconList",(int64_t)BeaconList); r.pushKV("BeaconList_c",(int64_t)BeaconList_c);
 
   UniValue projects(UniValue::VARR);

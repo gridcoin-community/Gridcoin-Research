@@ -121,7 +121,9 @@ class CScraperManifest
   int BeaconList =-1;
   unsigned BeaconList_c =0;
   uint256 ConsensusBlock;
-  unsigned int nTime =0;
+  int64_t nTime = 0;
+
+  uint256 nContentHash;
 
   public: /* public methods */
 
@@ -131,6 +133,7 @@ class CScraperManifest
   /** Serialize this object for seding over the network. */
   void Serialize(CDataStream& s, int nType, int nVersion) const;
   void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
+  void SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const;
   void UnserializeCheck(CReaderStream& s);
   UniValue ToJson() const;
 
