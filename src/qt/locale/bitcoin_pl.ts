@@ -6,7 +6,7 @@
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
         <source>About Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>O GridCoin</translation>
     </message>
     <message>
         <location line="+42"/>
@@ -24,9 +24,9 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>
 Oprogramowanie eksperymentalne.
 
-Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
+Rozprowadzane na licencji MIT/X11, zobacz plik 'COPYING' lub http://www.opensource.org/licenses/mit-license.php.
 
-This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</translation>
+Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w OpenSSL Toolkit (http://www.openssl.org/), oprogramowanie kryptograficzne napisane przez Eric'a Young (eay@cryptsoft.com) i oprogramowanie UPnP napisane przez Thomas'a Bernard.</translation>
     </message>
 </context>
 <context>
@@ -34,17 +34,17 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location filename="../forms/addressbookpage.ui" line="+14"/>
         <source>Address Book</source>
-        <translation>Ksi??ka Adresowa</translation>
+        <translation>Książka Adresowa</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation type="unfinished"></translation>
+        <translation>To są twoje adresy Gridcoin do odbierania płatności. Możesz zechcieć dać inny adres każdemu wysyłającemu, żeby mieć punkt odniesienia, kto dokonał płatności.</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Double-click to edit address or label</source>
-        <translation>Kliknij dwukrotnie, aby edytowa? adres lub etykiet?</translation>
+        <translation>Kliknij dwukrotnie, aby edytować adres lub etykietę</translation>
     </message>
     <message>
         <location line="+27"/>
@@ -74,22 +74,22 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+11"/>
         <source>Sign a message to prove you own a Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Podpisz wiadomość aby udowodnić, że posiadasz ten adres Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Sign &amp;Message</source>
-        <translation>Podpisz &amp;Wiadomo??</translation>
+        <translation>Podpisz &amp;Wiadomość</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Verify a message to ensure it was signed with a specified Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Zweryfikuj wiadomość aby upewnić się, że została podpisana określonym adresem Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Verify Message</source>
-        <translation>&amp;Zweryfikuj wiadomo??</translation>
+        <translation>&amp;Zweryfikuj wiadomość</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -114,17 +114,17 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+250"/>
         <source>Export Address Book Data</source>
-        <translation>Exportuj Ksi??k? Adresow?</translation>
+        <translation>Exportuj Książkę Adresową</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Error exporting</source>
-        <translation>B??d exportowania</translation>
+        <translation>Błąd exportowania</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Nie mog? zapisa? do pliku %1</translation>
+        <translation>Nie można zapisać do pliku %1</translation>
     </message>
     <message>
         <location line="-13"/>
@@ -180,7 +180,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+3"/>
         <source>For staking only</source>
-        <translation type="unfinished"></translation>
+        <translation>Tylko do gromadzenia ("staking")</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+37"/>
@@ -220,17 +220,17 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Enter the old and new passphrase to the wallet.</source>
-        <translation>Podaj stare i nowe has?o do portfela.</translation>
+        <translation>Podaj stare i nowe hasło do portfela.</translation>
     </message>
     <message>
         <location line="+46"/>
         <source>Warning: If you encrypt your wallet and lose your passphrase, you will &lt;b&gt;LOSE ALL OF YOUR COINS&lt;/b&gt;!</source>
-        <translation>Uwaga: Je?li zaszyfrujesz swój portfel i zgubisz has?o, wtedy&lt;b&gt;UTRACISZ SWOJE MONETY!&lt;/b&gt;!</translation>
+        <translation>Uwaga: Jeżli zaszyfrujesz swój portfel i zgubisz hasło, wtedy&lt;b&gt;UTRACISZ SWOJE MONETY!&lt;/b&gt;!</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Portfel teraz się zamknie w celu dokończenia procesu szyfrowania. Uwaga! Zaszyfrowanie portfela nie gwarantuje, że twoje pieniądze nie zostaną skradzione jeśli twój komputer jest zainfekowany malware.</translation>
     </message>
     <message>
         <location line="-12"/>
@@ -321,12 +321,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+5"/>
         <source>Send coins to a Gridcoin address</source>
-        <translation type="unfinished"></translation>
+        <translation>Zrób przelew na adres Gridcoin</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Show the list of addresses for receiving payments</source>
-        <translation>Poka? list? adresów do odbierania wp?at</translation>
+        <translation>Pokaż listę adresów do odbierania wpłat</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -341,48 +341,48 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+4"/>
         <source>&amp;Address Book</source>
-        <translation>&amp;Ksi??ka Adresowa</translation>
+        <translation>&amp;Książka Adresowa</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Edit the list of stored addresses and labels</source>
-        <translation>Edytuj list? przechowywanych adresów i etykiet</translation>
+        <translation>Edytuj listę przechowywanych adresów i etykiet</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>&amp;Block Explorer</source>
-        <translation type="unfinished"></translation>
+        <translation>Przegląd bloków</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Block Explorer</source>
-        <translation type="unfinished"></translation>
+        <translation>Przegląd bloków</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Exchange</source>
-        <translation type="unfinished"></translation>
+        <translation>Giełda</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+4"/>
         <source>Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>Strona internetowa</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>&amp;Web Site</source>
-        <translation type="unfinished"></translation>
+        <translation>Strona internetowa</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;GRC Chat Room</source>
-        <translation type="unfinished"></translation>
+        <translation>Chat GRC</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>GRC Chatroom</source>
-        <translation type="unfinished"></translation>
+        <translation>Chat GRC</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -392,7 +392,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Gridcoin rewards distributed computing with BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation>Nagrody Gridcoin przekazane za obliczenia BOINC</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -442,22 +442,22 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation type="unfinished"></translation>
+        <translation>Odblokuj portfel...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Unlock wallet</source>
-        <translation type="unfinished">Odblokuj portfel</translation>
+        <translation>Odblokuj portfel</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&amp;Lock Wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Zablokuj portfel</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Lock wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Zablokuj portfel</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -467,7 +467,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Export the data in the current tab to a file</source>
-        <translation type="unfinished">Eksportuj dane z aktywnej karty do pliku</translation>
+        <translation>Eksportuj dane z aktywnej zakładki do pliku</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -507,103 +507,103 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+65"/>
         <source>&amp;Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>Odbuduj łańcuch bloków</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
+        <translation>Odbuduj łańcuch bloków</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>Pobierz bloki</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Download Blocks</source>
-        <translation type="unfinished"></translation>
+        <translation>Pobierz bloki</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>Aktualizuj program</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Upgrade Client</source>
-        <translation type="unfinished"></translation>
+        <translation>Aktualizuj program</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;About Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>O Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Show information about Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Pokaż informacje o Gridcoin</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Neural Network</source>
-        <translation type="unfinished"></translation>
+        <translation>Sieć neuronowa</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Neural Network</source>
-        <translation type="unfinished"></translation>
+        <translation>Sieć neuronowa</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>Konfiguracja zaawansowana</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Advanced Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>Konfiguracja zaawansowana</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;New User Wizard</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Nowy kreator użytkownika</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+590"/>
         <source>New User Wizard</source>
-        <translation type="unfinished"></translation>
+        <translation>Nowy kreator użytkownika</translation>
     </message>
     <message>
         <location line="-665"/>
         <source>&amp;Voting</source>
-        <translation type="unfinished"></translation>
+        <translation>Głosowanie</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Voting</source>
-        <translation type="unfinished"></translation>
+        <translation>Głosowanie</translation>
     </message>
     <message>
         <location line="+77"/>
         <source>&amp;Foundation</source>
-        <translation type="unfinished"></translation>
+        <translation>Fundacja</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Foundation</source>
-        <translation type="unfinished"></translation>
+        <translation>Fundacja</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>Diagnostyka</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>Diagnostyka</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -613,12 +613,12 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <location line="+1"/>
         <source>Interactive FAQ</source>
-        <translation type="unfinished"></translation>
+        <translation>Interaktywne FAQ</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Modify configuration options for Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Zmień konfigurację dla Gridcoin</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -635,67 +635,67 @@ This product includes software developed by the OpenSSL Project for use in the O
         <location line="+0"/>
         <location line="+64"/>
         <source>Gridcoin client</source>
-        <translation type="unfinished"></translation>
+        <translation>Klient Gridcoin</translation>
     </message>
     <message>
         <location line="+82"/>
         <source>%1 active connection(s) to Gridcoin network</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 aktywnych połączeń do sieci Gridcoin</translation>
     </message>
     <message>
         <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 sekund(y) temu</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 minut(y) temu</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 godzin(y) temu</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 dni temu</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Last received block was generated %1.</source>
-        <translation type="unfinished"></translation>
+        <translation>Ostatni odebrany blok został wygenerowany %1.</translation>
     </message>
     <message>
         <location line="+68"/>
         <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation type="unfinished"></translation>
+        <translation>Ta transakcja jest poza limitem. Wciąż możesz ją wysłać za opłatą %1, która zostanie przekazana do gałęzi, które przetwarzają twoją transakcję i wesprze sieć. Czy chcesz uiścić opłatę?</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Confirm transaction fee</source>
-        <translation type="unfinished"></translation>
+        <translation>Potwierdź opłatę tranzakcyjną</translation>
     </message>
     <message>
         <location line="+69"/>
         <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation type="unfinished"></translation>
+        <translation>Proszę wprowadzić swój adres e-mail zarejestrowany w BOINC, lub kliknij Anuluj aby pominąć.</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Created new Configuration File Successfully. </source>
-        <translation type="unfinished"></translation>
+        <translation>Z powodzeniem utworzono nowy plik konfiguracyjny.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>New Account Created - Welcome Aboard!</source>
-        <translation type="unfinished"></translation>
+        <translation>Nowe konto utworzone - Witamy na pokładzie!</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation type="unfinished"></translation>
+        <translation>Aby rozpocząć z BOINC, uruchom aplikację BOINC, wybierz projekty, następnie wpisz swój adres e-mail (BOINC) w pliku gridcoinresearch.conf w %appdata%\GridcoinResearch. Aby uruchomić ponownie ten kreator, proszę usunąć plik gridcoinresearch.conf.</translation>
     </message>
     <message>
         <location line="+1"/>
