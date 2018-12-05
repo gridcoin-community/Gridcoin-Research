@@ -37,12 +37,17 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
 
 CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
 {
+    // Select starting point depending on time proximity. While this is not as
+    // accurate as in the FindByHeight case it will still give us a reasonable
+    // estimate.
     CBlockIndex *index = abs(time - pindexBest->nTime) < abs(time - pindexGenesisBlock->nTime)
             ? pindexBest
             : pindexGenesisBlock;
 
     if(index != nullptr)
     {
+        // If we have a cache that's closer to target than our current index,
+        // use it.
         if(cache && abs(time - index->nTime) > abs(time - int64_t(cache->nTime)))
             index = cache;
 
