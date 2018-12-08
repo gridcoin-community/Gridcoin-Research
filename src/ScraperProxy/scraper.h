@@ -148,10 +148,10 @@ typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKe
 * Global Constants   *
 *********************/
 
-// Define 48 hour retention time for stats files, current or not...
+// Define 48 hour retention time for stats files, current or not.
 static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
-// Define CManifest scraper object retention time as 12 hours.
-static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 12 * 3600;
+// Define CManifest scraper object retention time.
+static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 3 * 3600;
 static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
 
@@ -170,9 +170,9 @@ uint256 GetFileHash(const fs::path& inputfile);
 uint256 GetmScraperFileManifestHash();
 bool StoreScraperFileManifest(const fs::path& file);
 bool LoadScraperFileManifest(const fs::path& file);
-bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry);
-unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry);
-bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry entry);
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);

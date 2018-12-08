@@ -237,6 +237,7 @@ void Scraper(bool fScraperStandalone)
                 if (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
                         || !CScraperManifest::mapManifest.size())
                 {
+                    _log(INFO, "Scraper", "Publishing new CScraperManifest.");
                     ScraperSendFileManifestContents(sDefaultKey);
                 }
 
@@ -252,7 +253,10 @@ void Scraper(bool fScraperStandalone)
                     CScraperManifest& manifest = *iter_copy->second;
 
                     if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
+                    {
+                        _log(INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter_copy->first.GetHex());
                         ScraperDeleteCScraperManifest(iter_copy->first);
+                    }
                 }
             }
         }
@@ -1099,7 +1103,7 @@ bool StoreBeaconList(const fs::path& file)
 
 
 // Insert entry into Manifest. Note that cs_StructScraperFileManifest needs to be taken before calling.
-bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry)
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 {
     // This less readable form is so we know whether the element already existed or not.
     std::pair<ScraperFileManifestMap::iterator, bool> ret;
@@ -1116,7 +1120,7 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry)
 }
 
 // Delete entry from Manifest and corresponding file if it exists. Note that cs_StructScraperFileManifest needs to be taken before calling.
-unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry)
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 {
     unsigned int ret;
 
@@ -1139,7 +1143,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry)
 // Mark manifest entry non-current. The reason this is encapsulated in a function is
 // to  ensure the rehash is done. Note that cs_StructScraperFileManifest needs to be
 // taken before calling.
-bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry entry)
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
 {
     entry.current = false;
 
