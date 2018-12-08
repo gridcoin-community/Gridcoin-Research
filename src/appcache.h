@@ -17,8 +17,7 @@ enum class Section
     POLL,
     VOTE,
     PROJECT,
-    PROJECTMAPPING,
-    
+
     // Enum counting entry. Using it will throw.
     NUM_CACHES
 };
