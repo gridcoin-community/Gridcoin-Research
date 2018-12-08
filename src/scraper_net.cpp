@@ -285,6 +285,15 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     addPart(ph);
 }
 
+bool CScraperManifest::DeleteManifest(const uint256& nHash)
+{
+    if(mapManifest.erase(nHash))
+        return true;
+    else
+        return false;
+}
+
+
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 {
   /* Index object for scraper data.

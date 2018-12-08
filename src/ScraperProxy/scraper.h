@@ -28,6 +28,7 @@
 #include "sync.h"
 #include "appcache.h"
 #include "beacon.h"
+#include "wallet.h"
 
 #include <memory>
 #include "net.h"
@@ -84,6 +85,7 @@ const std::string GetTextForstatsobjecttype(int EnumValue)
 
 extern bool fDebug;
 extern std::string msMasterMessagePrivateKey;
+extern CWallet* pwalletMain;
 std::vector<std::pair<std::string, std::string>> vwhitelist;
 std::vector<std::pair<std::string, std::string>> vuserpass;
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
@@ -107,6 +109,7 @@ typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
 struct ScraperFileManifest
 {
     ScraperFileManifestMap mScraperFileManifest;
+    uint256 nFileManifestMapHash;
     uint256 nConsensusBlockHash;
     int64_t timestamp;
 };
@@ -147,6 +150,8 @@ typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKe
 
 // Define 48 hour retention time for stats files, current or not...
 static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+// Define CManifest scraper object retention time as 12 hours.
+static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 12 * 3600;
 static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
 
@@ -162,16 +167,19 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 extern AppCacheSection ReadCacheSection(const std::string& section);
 uint256 GetFileHash(const fs::path& inputfile);
+uint256 GetmScraperFileManifestHash();
 bool StoreScraperFileManifest(const fs::path& file);
 bool LoadScraperFileManifest(const fs::path& file);
 bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry);
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry);
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry entry);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
+bool IsScraperAuthorizedToBroadcastManifests();
 bool ScraperSendFileManifestContents(std::string CManifestName);
-bool ScraperDeleteCScaperManifest();
+bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 
 double MagRound(double dMag)
 {

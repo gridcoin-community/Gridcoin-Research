@@ -93,6 +93,9 @@ class CScraperManifest
 
   /** Add new manifest object into list of known manifests */
   static bool addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign);
+  
+  /** Delete Manifest **/
+  bool DeleteManifest(const uint256& nHash);
 
   public: /*==== fields ====*/
 

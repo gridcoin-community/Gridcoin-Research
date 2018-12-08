@@ -5,7 +5,7 @@ extern bool fShutdown;
 bool find(const std::string& s, const std::string& find);
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
+std::string ExtractXML(const std::string XMLdata, const std::string key, const std::string key_end);
 std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
 ScraperFileManifest StructScraperFileManifest;
@@ -121,6 +121,8 @@ void Scraper(bool fScraperStandalone)
         fs::create_directory(pathScraper);
 
 
+    uint256 nmScraperFileManifestHash = 0;
+
     // The scraper thread loop...
     while (fScraperStandalone || !fShutdown)
     {
@@ -207,6 +209,54 @@ void Scraper(bool fScraperStandalone)
 
         _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
 
+
+        // This is the section to send out manifests. Only do if authorized.
+        if (IsScraperAuthorizedToBroadcastManifests())
+        {
+            // This will push out a new CScraperManifest if the hash has changed of mScraperFileManifestHash.
+            // The idea here is to run the scraper loop a number of times over a period of time approaching
+            // the due time for the superblock. A number of stats files only update once per day, but a few update
+            // as often as once per hour. If one of these file changes during the run up to the superblock, a
+            // new manifest should be published, but the older ones retained up to the SCRAPER_CMANIFEST_RETENTION_TIME limit
+            // to provide additional matching options.
+
+            // Get default wallet public key
+            std::string sDefaultKey;
+            {
+                LOCK(pwalletMain->cs_wallet);
+
+                sDefaultKey = pwalletMain->vchDefaultKey.GetID().ToString();
+
+            }
+
+            // Publish or local delete CScraperManifests.
+            {
+                LOCK(cs_StructScraperFileManifest);
+
+                // If the hash doesn't match (a new one is available), or there are none, then publish a new one.
+                if (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
+                        || !CScraperManifest::mapManifest.size())
+                {
+                    ScraperSendFileManifestContents(sDefaultKey);
+                }
+
+                nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
+
+                // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then
+                // delete.
+                for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
+                {
+                    // Copy iterator for deletion operation and increment iterator.
+                    auto iter_copy = iter++;
+
+                    CScraperManifest& manifest = *iter_copy->second;
+
+                    if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
+                        ScraperDeleteCScraperManifest(iter_copy->first);
+                }
+            }
+        }
+
         MilliSleep(nScraperSleep);
     }
 }
@@ -259,7 +309,8 @@ std::string lowercase(std::string s)
     return s;
 }
 
-
+// Removed ExtractXML from here... because defined in main.h/cpp.
+/*
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end)
 {
 
@@ -276,7 +327,7 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 
     return extraction;
 }
-
+*/
 
 bool ScraperDirectorySanity()
 {
@@ -830,7 +881,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             if (entry_copy->second.project == project && entry_copy->second.current == true)
             {
                 _log(INFO, "ProcessProjectRacFileByCPID", "Marking old project manifest entry as current = false.");
-                entry_copy->second.current = false;
+                MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
             }
 
             // If records are older than SCRAPER_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
@@ -896,6 +947,27 @@ uint256 GetFileHash(const fs::path& inputfile)
     CDataStream ssFile(vchData, SER_DISK, CLIENT_VERSION);
 
     nHash = Hash(ssFile.begin(), ssFile.end());
+
+    return nHash;
+}
+
+
+// Note that cs_StructScraperFileManifest needs to be taken before calling.
+uint256 GetmScraperFileManifestHash()
+{
+    uint256 nHash;
+    CDataStream ss(SER_NETWORK, 1);
+
+    for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
+    {
+        ss << entry.second.filename
+           << entry.second.project
+           << entry.second.hash
+           << entry.second.timestamp
+           << entry.second.current;
+    }
+
+    nHash = Hash(ss.begin(), ss.end());
 
     return nHash;
 }
@@ -1030,9 +1102,13 @@ bool StoreBeaconList(const fs::path& file)
 bool InsertScraperFileManifestEntry(ScraperFileManifestEntry entry)
 {
     // This less readable form is so we know whether the element already existed or not.
-    std::pair<ScraperFileManifestMap::iterator,bool> ret;
+    std::pair<ScraperFileManifestMap::iterator, bool> ret;
     {
         ret = StructScraperFileManifest.mScraperFileManifest.insert(std::make_pair(entry.filename, entry));
+        // If successful insert, rehash map and record in struct for easy comparison later. If already
+        // exists, hash is unchanged.
+        if (ret.second)
+            StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
     }
 
     // True if insert was sucessful, false if entry with key (hash) already exists in map.
@@ -1050,10 +1126,27 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry entry)
 
     ret = StructScraperFileManifest.mScraperFileManifest.erase(entry.filename);
 
+    // If an element was deleted then rehash the map and store hash in struct.
+    if (ret)
+        StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
+
     // Returns number of elements erased, either 0 or 1.
     return ret;
 }
 
+
+
+// Mark manifest entry non-current. The reason this is encapsulated in a function is
+// to  ensure the rehash is done. Note that cs_StructScraperFileManifest needs to be
+// taken before calling.
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry entry)
+{
+    entry.current = false;
+
+    StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
+
+    return true;
+}
 
 
 bool LoadScraperFileManifest(const fs::path& file)
@@ -1587,8 +1680,14 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 }
 
 
+bool IsScraperAuthorizedToBroadcastManifests()
+{
+    // Stub for check against public key in AppCache to authorize sending manifests.
+    return true;
+}
 
 
+// A lock needs to be taken on cs_StructScraperFileManifest for this function.
 bool ScraperSendFileManifestContents(std::string sCManifestName)
 {
     // This "broadcasts" the current ScraperFileManifest contents to the network.
@@ -1647,7 +1746,6 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
     iPartNum++;
 
-    // Hmm... should we take a lock on cs_StructScraperFileManifest here?
     for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
         // Only include current files to send across the network.
@@ -1732,13 +1830,18 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
 
 
-bool ScraperDeleteCScaperManifest(uint256 nHash)
+bool ScraperDeleteCScraperManifest(uint256 nManifestHash)
 {
     // This deletes a manifest.
     // Note this just deletes the local copy. TODO: Implement manifest delete message.
-    CScraperManifest::mapManifest.erase(nHash);
+    
+    // Select manifest based on provided hash.
+    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
+    CScraperManifest& manifest = *pair->second;
 
-    return true;
+    bool ret = manifest.DeleteManifest(nManifestHash);
+
+    return ret;
 }
 
 
@@ -1779,7 +1882,7 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
                 "deletecscrapermanifest <hash>\n"
                 "delete manifest object.\n"
                 );
-    bool ret = ScraperDeleteCScaperManifest(uint256(params[0].get_str()));
+    bool ret = ScraperDeleteCScraperManifest(uint256(params[0].get_str()));
     return UniValue(ret);
 }
 

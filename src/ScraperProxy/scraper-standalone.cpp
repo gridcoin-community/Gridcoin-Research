@@ -42,6 +42,23 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
     return elems;
 }
 
+std::string ExtractXML(const std::string XMLdata, const std::string key, const std::string key_end)
+{
+
+    std::string extraction = "";
+    std::string::size_type loc = XMLdata.find( key, 0 );
+
+    if(loc != std::string::npos)
+    {
+        std::string::size_type loc_end = XMLdata.find(key_end, loc+3);
+
+        if (loc_end != std::string::npos)
+            extraction = XMLdata.substr(loc+(key.length()),loc_end-loc-(key.length()));
+    }
+
+    return extraction;
+}
+
 void MilliSleep(int64_t n)
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(n));
