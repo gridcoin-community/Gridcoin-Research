@@ -131,18 +131,30 @@ void Scraper(bool fScraperStandalone)
         gridcoinrpc data;
         
         int64_t sbage = data.sbage();
+        int64_t nScraperThreadStartTime = GetAdjustedTime();
 
         // Give nActiveBeforeSB seconds before superblock needed before we sync
+        // Note there is a small while loop here to cull incoming manifests from
+        // other scrapers while this one is quiescent. An unlikely but possible
+        // situation because the nActiveBeforeSB may be set differently on other
+        // scrapers.
         if (sbage <= (86400 - nActiveBeforeSB) && sbage >= 0)
         {
-            _log(INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
-
             // Don't let nBeforeSBSleep go less than zero, which could happen without max if wallet
             // started with sbage already older than 86400 - nActiveBeforeSB.
             int64_t nBeforeSBSleep = std::max(86400 - nActiveBeforeSB - sbage, (int64_t) 0);
-            _log(INFO, "Scraper", "Sleeping for " + std::to_string(nBeforeSBSleep) + " seconds.");
 
-            MilliSleep(nBeforeSBSleep * 1000);
+            _log(INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
+
+            while (GetAdjustedTime() - nScraperThreadStartTime < nBeforeSBSleep)
+            {
+                // The only thing we do here while quiescent is cull manifests received
+                // from other scrapers.
+                ScraperDeleteCScraperManifests();
+
+                _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
+                MilliSleep(nScraperSleep);
+            }
         }
 
         else if (sbage <= -1)
