@@ -209,8 +209,6 @@ void Scraper(bool fScraperStandalone)
         else
             _log(INFO, "Scraper", "Stored stats.");
 
-        _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
-
 
         // This is the section to send out manifests. Only do if authorized.
         if (IsScraperAuthorizedToBroadcastManifests())
@@ -250,6 +248,7 @@ void Scraper(bool fScraperStandalone)
             }
         }
 
+        _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
         MilliSleep(nScraperSleep);
     }
 }
@@ -262,16 +261,21 @@ void NeuralNetwork()
 {
     _log(INFO, "NeuralNetwork", "Starting Neural Network thread (new C++ implementation).");
 
-    // These items are only run in this thread if not handled by the Scraper() thread.
-    if (!fScraperActive)
+    while(!fShutdown)
     {
-        // Currently just cull outdated CScraperManifests received
+        // These items are only run in this thread if not handled by the Scraper() thread.
+        if (!fScraperActive)
+        {
+            // Currently just cull outdated CScraperManifests received
 
-        ScraperDeleteCScraperManifests();
+            ScraperDeleteCScraperManifests();
+        }
+
+        // Use the same sleep interval as the scraper. This defaults to 60 seconds.
+        _log(INFO, "NeuralNetwork", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
+
+        MilliSleep(nScraperSleep);
     }
-
-    // Use the same sleep interval as the scraper. This defaults to 60 seconds.
-    MilliSleep(nScraperSleep);
 }
 
 
