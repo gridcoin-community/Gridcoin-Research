@@ -57,6 +57,9 @@ void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
 
 extern void Scraper(bool fScraperStandalone);
+extern void NeuralNetwork();
+
+extern bool fScraperActive;
 
 struct LocalServiceInfo {
     int nScore;
@@ -1617,24 +1620,51 @@ void static ThreadScraper(void* parg)
     if (fDebug10) LogPrintf("ThreadSraper starting");
     try
     {
+        fScraperActive = true;
         Scraper(false);
     }
     catch (std::exception& e)
     {
+        fScraperActive = false;
         PrintException(&e, "ThreadScraper()");
     }
     catch(boost::thread_interrupted&)
     {
+        fScraperActive = false;
         LogPrintf("ThreadScraper exited (interrupt)");
         return;
     }
     catch (...)
     {
+        fScraperActive = false;
         PrintException(NULL, "ThreadScraper()");
     }
+    fScraperActive = false;
     LogPrintf("ThreadScraper exited");
 }
 
+void static ThreadNeuralNetwork(void* parg)
+{
+    if (fDebug10) LogPrintf("ThreadNeuralNetwork starting");
+    try
+    {
+        NeuralNetwork();
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadNeuralNetwork()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        LogPrintf("ThreadNeuralNetwork exited (interrupt)");
+        return;
+    }
+    catch (...)
+    {
+        PrintException(NULL, "ThreadNeuralNetwork()");
+    }
+    LogPrintf("ThreadNeuralNetwork exited");
+}
 
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
@@ -2217,6 +2247,11 @@ void StartNode(void* parg)
     else
         if (!netThreads->createThread(ThreadScraper,NULL,"ThreadScraper"))
             LogPrintf("Error: createThread(ThreadScraper) failed");
+
+    // Run the neural network thread (this is currently NOT the same as the GridcoinServices() stuff from main).
+        if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
+            LogPrintf("Error: createThread(NeuralNetwork) failed");
+
 }
 
 bool StopNode()

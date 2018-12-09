@@ -36,6 +36,8 @@ extern BeaconConsensus GetConsensusBeaconList();
 // This is the scraper thread...
 void Scraper(bool fScraperStandalone)
 {
+    _log(INFO, "Scraper", "Starting Scraper thread.");
+
     // Hash check
     std::string sHashCheck = "Hello world";
     uint256 nHashCheck = Hash(sHashCheck.begin(), sHashCheck.end());
@@ -229,7 +231,7 @@ void Scraper(bool fScraperStandalone)
 
             }
 
-            // Publish or local delete CScraperManifests.
+            // Publish and/or local delete CScraperManifests.
             {
                 LOCK(cs_StructScraperFileManifest);
 
@@ -243,27 +245,36 @@ void Scraper(bool fScraperStandalone)
 
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
-                // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then
-                // delete.
-                for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
-                {
-                    // Copy iterator for deletion operation and increment iterator.
-                    auto iter_copy = iter++;
-
-                    CScraperManifest& manifest = *iter_copy->second;
-
-                    if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
-                    {
-                        _log(INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter_copy->first.GetHex());
-                        ScraperDeleteCScraperManifest(iter_copy->first);
-                    }
-                }
+                // Cull CScraperManifests.
+                ScraperDeleteCScraperManifests();
             }
         }
 
         MilliSleep(nScraperSleep);
     }
 }
+
+
+
+
+// This is the non-scraper "neural-network" node thread...
+void NeuralNetwork()
+{
+    _log(INFO, "NeuralNetwork", "Starting Neural Network thread (new C++ implementation).");
+
+    // These items are only run in this thread if not handled by the Scraper() thread.
+    if (!fScraperActive)
+    {
+        // Currently just cull outdated CScraperManifests received
+
+        ScraperDeleteCScraperManifests();
+    }
+
+    // Use the same sleep interval as the scraper. This defaults to 60 seconds.
+    MilliSleep(nScraperSleep);
+}
+
+
 
 /**********************
 * Sanity              *
@@ -313,25 +324,6 @@ std::string lowercase(std::string s)
     return s;
 }
 
-// Removed ExtractXML from here... because defined in main.h/cpp.
-/*
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end)
-{
-
-    std::string extraction = "";
-    std::string::size_type loc = XMLdata.find( key, 0 );
-
-    if(loc != std::string::npos)
-    {
-        std::string::size_type loc_end = XMLdata.find(key_end, loc+3);
-
-        if (loc_end != std::string::npos)
-            extraction = XMLdata.substr(loc+(key.length()),loc_end-loc-(key.length()));
-    }
-
-    return extraction;
-}
-*/
 
 bool ScraperDirectorySanity()
 {
@@ -384,7 +376,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
 
     stringbuilder string;
 
-    string.append(std::to_string(time(NULL)));
+    string.append(std::to_string(GetAdjustedTime()));
     string.append(" [");
     string.append(sType);
     string.append("] <");
@@ -1752,11 +1744,13 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
     for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
-        // Only include current files to send across the network.
-        if (!entry.second.current)
+        // If SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES is false, only include current files to send across the network.
+        if (!SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES && !entry.second.current)
             continue;
 
         fs::path inputfile = entry.first;
+
+        //_log(INFO, "ScraperSendFileManifestContents", "Input file for CScraperManifest is " + inputfile.string());
 
         fs::path inputfilewpath = pathScraper / inputfile;
 
@@ -1831,6 +1825,91 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
     return true;
 }
+
+
+
+bool ScraperDeleteCScraperManifests()
+{
+    // Apply the SCRAPER_CMANIFEST_RETAIN_NONCURRENT bool and if false delete any existing
+    // CScraperManifests.
+
+    _log(INFO, "ScraperDeleteCScraperManifests", "Deleting old CScraperManifests.");
+
+    if (!SCRAPER_CMANIFEST_RETAIN_NONCURRENT)
+    {
+        // Right now this is using sCManifestName, but needs to be changed to pubkey once the pubkey part is finished.
+        std::map<std::string, std::multimap<int64_t, uint256>> mmCSManifestsBinnedByScraper;
+
+        // Make use of the ordered element feature of above map to bin by scraper and then order by manifest time.
+        for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); ++iter)
+        {
+            CScraperManifest& manifest = *iter->second;
+
+            std::string sManifestName = manifest.sCManifestName;
+            int64_t nTime = manifest.nTime;
+            uint256 nHash = *manifest.phash;
+
+            std::multimap<int64_t, uint256> mManifestInner;
+
+            auto BinIter = mmCSManifestsBinnedByScraper.find(sManifestName);
+
+            // No scraper bin yet - so new insert.
+            if (BinIter == mmCSManifestsBinnedByScraper.end())
+            {
+                mManifestInner.insert(std::make_pair(nTime, nHash));
+                mmCSManifestsBinnedByScraper.insert(std::make_pair(sManifestName, mManifestInner));
+            }
+            else
+            {
+                mManifestInner = BinIter->second;
+                mManifestInner.insert(std::make_pair(nTime, nHash));
+                std::swap(mManifestInner, BinIter->second);
+            }
+        }
+
+        _log(INFO, "ScraperDeleteCScraperManifests", "mmCSManifestsBinnedByScraper size = " + std::to_string(mmCSManifestsBinnedByScraper.size()));
+
+        // For each scraper, delete every manifest EXCEPT the latest.
+        std::map<std::string, std::multimap<int64_t, uint256>>::iterator iter;
+        for (iter = mmCSManifestsBinnedByScraper.begin(); iter != mmCSManifestsBinnedByScraper.end(); ++iter)
+        {
+            std::multimap<int64_t, uint256> mManifestInner = iter->second;
+
+            _log(INFO, "ScraperDeleteCScraperManifests", "mManifestInner size = " + std::to_string(mManifestInner.size()) +
+                 " for " + iter->first + " scraper");
+
+            // This preserves the LATEST CScraperManifest entry for the given scraper (because of the reverse iterator),
+            // and deletes all others for that scraper source.
+            for (auto iter_inner = ++mManifestInner.rbegin() ;iter_inner != mManifestInner.rend(); ++iter_inner)
+            {
+                _log(INFO, "ScraperDeleteCScraperManifests", "Deleting non-current manifest " + iter_inner->second.GetHex()
+                     + " from scraper source " + iter->first);
+                ScraperDeleteCScraperManifest(iter_inner->second);
+            }
+        }
+    }
+
+
+    // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then
+    // delete.
+    for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
+    {
+        // Copy iterator for deletion operation and increment iterator.
+        auto iter_copy = iter++;
+
+        CScraperManifest& manifest = *iter_copy->second;
+
+        if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
+        {
+            _log(INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter_copy->first.GetHex());
+            ScraperDeleteCScraperManifest(iter_copy->first);
+        }
+    }
+
+    // TODO: Error handling.
+    return true;
+}
+
 
 
 

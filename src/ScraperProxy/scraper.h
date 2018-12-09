@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <vector>
+#include <map>
 #include <unordered_map>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -94,6 +95,7 @@ std::string rpcauth = "boinc:test";
 std::string rpcip = "http://127.0.0.1:9334/";
 int64_t ndownloadsize = 0;
 int64_t nuploadsize = 0;
+bool fScraperActive = false;
 
 struct ScraperFileManifestEntry
 {
@@ -150,8 +152,11 @@ typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKe
 
 // Define 48 hour retention time for stats files, current or not.
 static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+// Define whether prior CScraperManifests are kept.
+static bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = false;
 // Define CManifest scraper object retention time.
 static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 3 * 3600;
+static bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = true;
 static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
 
@@ -179,6 +184,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool IsScraperAuthorizedToBroadcastManifests();
 bool ScraperSendFileManifestContents(std::string CManifestName);
+bool ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 
 double MagRound(double dMag)
