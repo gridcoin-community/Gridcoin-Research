@@ -693,74 +693,41 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     gzetagfile = ((fs::path)(pathScraper / gzetagfile)).c_str();
 
     std::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
-
-    boostio::filtering_istream out;
+    boostio::filtering_ostream out;
     out.push(boostio::gzip_compressor());
-    std::stringstream stream;
+    out.push(outgzfile);
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Started processing " + file.string());
 
-    std::vector<std::string> vXML;
-    bool bcomplete = false;
-    bool bfileerror = false;
-    while (!bcomplete && !bfileerror)
+    std::string line;
+    stringbuilder builder;
+    out << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
+    while (std::getline(in, line))
     {
-        // Find users block
-        std::string line;
-
-        while (std::getline(in, line))
+        if(line == "<user>")
+            builder.clear();
+        else if(line == "</user>")
         {
-            if (line != "<users>")
+            const std::string& data = builder.value();
+            builder.clear();
+
+            const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
+            if (Consensus.mBeaconMap.count(cpid) < 1)
                 continue;
 
-            else
-                break;
+            // User beacon verified. Append its statistics to the CSV output.
+            out << ExtractXML(data, "<total_credit>", "</total_credit>") << ","
+                << ExtractXML(data, "<expavg_time>", "</expavg_time>") << ","
+                << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
+                << cpid
+                << std::endl;
         }
-        // <users> block found
-        // Lets vector the  <user> blocks
-
-        while (std::getline(in, line))
-        {
-            if (bcomplete)
-                break;
-
-            if (line == "</users>")
-            {
-                bcomplete = true;
-
-                break;
-            }
-
-            if (line == "<user>")
-            {
-                stringbuilder userdata;
-
-                userdata.nlappend(line);
-
-                while (std::getline(in, line))
-                {
-                    if (line == "</user>")
-                    {
-                        userdata.nlappend(line);
-
-                        // This uses the beacon map rather than the teamid to select the statistics.
-                        if (Consensus.mBeaconMap.count(ExtractXML(userdata.value(), "<cpid>", "</cpid>")) >= 1)
-                            vXML.push_back(userdata.value());
-
-                        break;
-                    }
-
-                    userdata.nlcleanappend(line);
-                }
-            }
-        }
-
-        // If the file is complete/incomplete we will reach here. however bcomplete would be true to break this outter most loop.
-        // In case where we reach here but the bool for bcomplete is not true then the file was incomplete!
-        if (!bcomplete)
-            bfileerror = true;
+        else
+            builder.append(line);
     }
 
+    // TODO: Error out on stream errors.
+    /*
     if (bfileerror)
     {
         _log(CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
@@ -778,37 +745,14 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             fs::remove(file);
 
         return false;
-    }
+    }*/
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing " + file.string());
     _log(INFO, "ProcessProjectRacFileByCPID", "Started processing CPID rac data and stripping");
 
-    // Strip the rac xml data to contain only why we need to be compressed from vector
-    // We Need:
-    // total_credit, expavg_time, expavg_credit, teamid, cpid
-    // We Don't need:
-    // id, country, name, url
-    // In reality we DO NOT need total_credit till TCD
-    // In reality we DO NOT need expavg_time but this will make nn compatible
-    // I've also opted to save 1 byte a line by not doing newlines since this a scraper
-    stream << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
-    for (auto const& vv : vXML)
-    {
-        stream << ExtractXML(vv, "<total_credit>", "</total_credit>") << ","
-               << ExtractXML(vv, "<expavg_time>", "</expavg_time>") << ","
-               << ExtractXML(vv, "<expavg_credit>", "</expavg_credit>") << ","
-               << ExtractXML(vv, "<cpid>", "</cpid>") << std::endl;
-    }
-
-    _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing team rac data; stripping complete");
-
-    out.push(stream);
-
-    // Copy out to file.
-    boost::iostreams::copy(out, outgzfile);
-
     ingzfile.close();
-    outgzfile.flush();
+    out.flush();
+    out.reset();
     outgzfile.close();
 
     // Hash the file.
