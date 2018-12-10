@@ -68,6 +68,18 @@ bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
     return false;
 }
 
+int64_t MaxBeaconAge()
+{
+    // 6 months in seconds.
+    return 3600 * 24 * 30 * 6;
+}
+
+int64_t BeaconAgeAdvertiseThreshold()
+{
+    // 5 months in seconds.
+    return 3600 * 24 * 30 * 5;    
+}
+
 void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::string& out_address, std::string& out_publickey)
 {
     if (sBeacon.empty()) return;
@@ -81,11 +93,14 @@ void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::s
 
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 {
-    //3-26-2017 - Ensure beacon public key is within 6 months of network age (If advertising, let it be returned as missing after 5 months, to ensure the public key is renewed seamlessly).
-    int iMonths = bAdvertisingBeacon ? 5 : 6;
-    int64_t iMaxSeconds = 60 * 24 * 30 * iMonths * 60;
+    // 3-26-2017 - Ensure beacon public key is within 6 months of network age
+    // (If advertising, let it be returned as missing after 5 months, to
+    // ensure the public key is renewed seamlessly).
+    int64_t iMaxSeconds = bAdvertisingBeacon ? BeaconAgeAdvertiseThreshold() : MaxBeaconAge();
     std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
-    if (sBeacon.empty()) return "";
+    if (sBeacon.empty())
+        return "";
+    
     // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
     std::string sContract = DecodeBase64(sBeacon);
     std::vector<std::string> vContract = split(sContract.c_str(),";");

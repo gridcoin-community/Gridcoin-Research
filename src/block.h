@@ -24,6 +24,19 @@ public:
     //! \a nullptr is returned.
     //!
     CBlockIndex* FindByHeight(int height);
+
+    //!
+    //! \brief Find block by time.
+    //! 
+    //! Traverses the chain in the same way as FindByHeight() and stops at the
+    //! block which is not older than \p time, or the youngest block if it is
+    //! older than \p time.
+    //! 
+    //! \param time Block time to search for.
+    //! \return The youngest block which is not older than \p time, or the
+    //! head of the chain if it is older than \p time.
+    //!
+    CBlockIndex* FindByMinTime(int64_t time);
     
     //!
     //! \brief Reset finder cache.
