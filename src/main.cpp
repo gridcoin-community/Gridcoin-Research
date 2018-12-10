@@ -5649,6 +5649,7 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     // with time. If this causes an issue when syncing then considering making
     // this >=v9 only again.
     ClearCache(Section::NEURALSECURITY);
+    ClearCache(Section::CURRENTNEURALSECURITY);
     WriteCache(Section::NEURALSECURITY, "pending","0",GetAdjustedTime());
 
     try

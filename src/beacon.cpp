@@ -233,7 +233,7 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
         return error("ImportBeaconKeysFromConfig: Invalid private key");
     CKeyID vchAddress = key.GetPubKey().GetID();
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet->cs_wallet);
 
     // Don't throw error in case a key is already there
     if (!wallet->HaveKey(vchAddress))

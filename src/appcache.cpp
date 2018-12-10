@@ -25,8 +25,7 @@ namespace
         { "trxid", Section::TRXID },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
-        { "project", Section::PROJECT },
-        { "projectmapping", Section::PROJECTMAPPING }
+        { "project", Section::PROJECT }
     };
     
     //static_assert(section_name_map.size() == NumCaches, "Section name table size mismatch");
