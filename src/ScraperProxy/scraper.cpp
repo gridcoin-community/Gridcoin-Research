@@ -760,7 +760,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     }*/
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing " + file.string());
-    _log(INFO, "ProcessProjectRacFileByCPID", "Started processing CPID rac data and stripping");
 
     ingzfile.close();
     out.flush();
