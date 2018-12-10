@@ -1,5 +1,8 @@
 #include "scraper.h"
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+
 extern bool fShutdown;
 
 bool find(const std::string& s, const std::string& find);
@@ -702,79 +705,41 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     gzetagfile = ((fs::path)(pathScraper / gzetagfile)).c_str();
 
     std::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
-
-    boostio::filtering_istream out;
+    boostio::filtering_ostream out;
     out.push(boostio::gzip_compressor());
-    std::stringstream stream;
+    out.push(outgzfile);
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Started processing " + file.string());
 
-    stringbuilder outdata;
-    outdata.nlappend("<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>");
-    stream << outdata.value();
-
-    bool bcomplete = false;
-    bool bfileerror = false;
-    std::vector<std::string> vXML;
-
-    while (!bcomplete && !bfileerror)
+    std::string line;
+    stringbuilder builder;
+    out << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
+    while (std::getline(in, line))
     {
-        // Find users block
-        std::string line;
-
-        while (std::getline(in, line))
+        if(line == "<user>")
+            builder.clear();
+        else if(line == "</user>")
         {
-            if (line != "<users>")
+            const std::string& data = builder.value();
+            builder.clear();
+
+            const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
+            if (Consensus.mBeaconMap.count(cpid) < 1)
                 continue;
 
-            else
-                break;
+            // User beacon verified. Append its statistics to the CSV output.
+            out << ExtractXML(data, "<total_credit>", "</total_credit>") << ","
+                << ExtractXML(data, "<expavg_time>", "</expavg_time>") << ","
+                << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
+                << cpid
+                << std::endl;
         }
-        // <users> block found
-        // Lets vector the  <user> blocks
-
-        while (std::getline(in, line))
-        {
-            if (bcomplete)
-                break;
-
-            if (line == "</users>")
-            {
-                bcomplete = true;
-
-                break;
-            }
-
-            if (line == "<user>")
-            {
-                stringbuilder userdata;
-
-                userdata.nlappend(line);
-
-                while (std::getline(in, line))
-                {
-                    if (line == "</user>")
-                    {
-                        userdata.nlappend(line);
-
-                        // This uses the beacon map rather than the teamid to select the statistics.
-                        if (Consensus.mBeaconMap.count(ExtractXML(userdata.value(), "<cpid>", "</cpid>")) >= 1)
-                            vXML.push_back(userdata.value());
-
-                        break;
-                    }
-
-                    userdata.nlcleanappend(line);
-                }
-            }
-        }
-
-        // If the file is complete/incomplete we will reach here. however bcomplete would be true to break this outter most loop.
-        // In case where we reach here but the bool for bcomplete is not true then the file was incomplete!
-        if (!bcomplete)
-            bfileerror = true;
+        else
+            builder.append(line);
     }
 
+    // TODO: Error out on stream errors.
+    /*
     if (bfileerror)
     {
         _log(CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
@@ -792,52 +757,14 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             fs::remove(file);
 
         return false;
-    }
+    }*/
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing " + file.string());
     _log(INFO, "ProcessProjectRacFileByCPID", "Started processing CPID rac data and stripping");
 
-    // Strip the rac xml data to contain only why we need to be compressed from vector
-    // We Need:
-    // total_credit, expavg_time, expavg_credit, teamid, cpid
-    // We Don't need:
-    // id, country, name, url
-    // In reality we DO NOT need total_credit till TCD
-    // In reality we DO NOT need expavg_time but this will make nn compatible
-    // I've also opted to save 1 byte a line by not doing newlines since this a scraper
-
-    stringbuilder xmlout;
-
-    xmlout.nlappend("<users>");
-
-    for (auto const& vv : vXML)
-    {
-        std::string stotal_credit = ExtractXML(vv, "<total_credit>", "</total_credit>");
-        std::string sexpavg_time = ExtractXML(vv, "<expavg_time>", "</expavg_time>");
-        std::string sexpavg_credit = ExtractXML(vv, "<expavg_credit>", "</expavg_credit>");
-        std::string scpid = ExtractXML(vv, "<cpid>", "</cpid>");
-
-        xmlout.nlappend("<user>");
-        xmlout.xmlappend("total_credit", stotal_credit);
-        xmlout.xmlappend("expavg_time", sexpavg_time);
-        xmlout.xmlappend("expavg_credit", sexpavg_credit);
-        xmlout.xmlappend("cpid", scpid);
-        xmlout.nlappend("</user>");
-    }
-
-    xmlout.nlappend("</users>");
-
-    stream << xmlout.value();
-
-    _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing team rac data; stripping complete");
-
-    out.push(stream);
-
-    // Copy out to file.
-    boost::iostreams::copy(out, outgzfile);
-
     ingzfile.close();
-    outgzfile.flush();
+    out.flush();
+    out.reset();
     outgzfile.close();
 
     // Hash the file.
@@ -1370,94 +1297,28 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     bool bfileerror = false;
     std::vector<std::string> vXML;
 
-    while (!bcomplete && !bfileerror)
-    {
-        // Find users block
-        std::string line;
-
-        while (std::getline(in, line))
-        {
-            if (line != "<users>")
-                continue;
-
-            else
-                break;
-        }
-        // <users> block found
-        // Lets vector the  <user> blocks
-
-        while (std::getline(in, line))
-        {
-            if (bcomplete)
-                break;
-
-            if (line == "</users>")
-            {
-                bcomplete = true;
-
-                break;
-            }
-
-            if (line == "<user>")
-            {
-                stringbuilder userdata;
-
-                userdata.nlappend(line);
-
-                //_log(INFO, "\nLoadProjectFileToStatsByCPID", "Line: " + line);
-
-                while (std::getline(in, line))
-                {
-                    //_log(INFO, "LoadProjectFileToStatsByCPID", "Line: " + line);
-
-                    if (line == "</user>")
-                    {
-                        userdata.nlappend(line);
-
-                        //_log(INFO, "LoadProjectFileToStatsByCPID", "userdata: \n" + userdata.value());
-
-                        std::string sCPID = ExtractXML(userdata.value(), "<cpid>", "</cpid>");
-
-                        //_log(INFO, "LoadProjectFileToStatsByCPID", "CPID: " + sCPID);
-
-                        // This uses the passed in beacon map to refilter the statistics.
-                        if (mBeaconMap.count(sCPID) >= 1)
-                            vXML.push_back(userdata.value());
-
-                        break;
-                    }
-
-                    userdata.nlappend(line);
-                }
-            }
-        }
-
-        // If the file is complete/incomplete we will reach here. however bcomplete would be true to break this outter most loop.
-        // In case where we reach here but the bool for bcomplete is not true then the file was incomplete!
-        if (!bcomplete)
-            bfileerror = true;
-    }
-
-    ingzfile.close();
-
-    if (bfileerror)
-    {
-        _log(CRITICAL, "LoadProjectFileToStatsByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
-        return false;
-    }
-
-    // Iterate through vector elements and populate map for byCPIDbyProject statistics. Compute project totals at the same time, because
-    // we will need it next to compute magnitudes.
+    // Lets vector the user blocks
+    std::string line;
     double dProjectTC = 0.0;
     double dProjectRAT = 0.0;
     double dProjectRAC = 0.0;
-    for (auto const& vv : vXML)
+    while (std::getline(in, line))
     {
+        if(line[0] == '#')
+            continue;
+
+        std::vector<std::string> fields;
+        boost::split(fields, line, boost::is_any_of(","), boost::token_compress_on);
+
+        if(fields.size() < 4)
+            continue;
+
         ScraperObjectStats statsentry = {};
 
-        std::string sTC = ExtractXML(vv, "<total_credit>", "</total_credit>");
-        std::string sRAT = ExtractXML(vv, "<expavg_time>", "</expavg_time>");
-        std::string sRAC = ExtractXML(vv, "<expavg_credit>", "</expavg_credit>");
+        const std::string& sTC = fields[0];
+        const std::string& sRAT = fields[1];
+        const std::string& sRAC = fields[2];
+        const std::string& cpid = fields[3];
 
         // Replace blank strings with zeros.
         statsentry.statsvalue.dTC = (sTC.empty()) ? 0.0 : std::stod(sTC);
@@ -1466,7 +1327,7 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
         // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
 
         statsentry.statskey.objecttype = byCPIDbyProject;
-        statsentry.statskey.objectID = project + "," + ExtractXML(vv, "<cpid>", "</cpid>");
+        statsentry.statskey.objectID = project + "," + cpid;
 
         // Insert stats entry into map by the key.
         mScraperStats[statsentry.statskey] = statsentry;
@@ -1477,7 +1338,9 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
         dProjectRAC += statsentry.statsvalue.dRAC;
     }
 
-        _log(INFO, "LoadProjectFileToStatsByCPID", "There are " + std::to_string(mScraperStats.size()) + " CPID entries for " + project);
+    ingzfile.close();
+
+    _log(INFO, "LoadProjectFileToStatsByCPID", "There are " + std::to_string(mScraperStats.size()) + " CPID entries for " + project);
 
     // The mScraperStats here is scoped to only this project so we do not need project filtering here.
     ScraperStats::iterator entry;
