@@ -611,7 +611,7 @@ bool DownloadProjectRacFilesByCPID()
                 _log(CRITICAL, "DownloadProjectRacFiles", "Failed to export etag for " + prjs.first + " to authentication file");
         }
 
-        std::string chketagfile = prjs.first + "-" + sRacETag + "-ByCPID" + ".gz";
+        std::string chketagfile = prjs.first + "-" + sRacETag + ".csv" + ".gz";
         fs::path chkfile = pathScraper / chketagfile.c_str();
 
         if (fs::exists(chkfile))
@@ -695,10 +695,10 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     // If einstein we store different
 //    if (file.string().find("einstein") != std::string::npos)
-//        gzetagfile = "einstein_user-ByCPID.gz";
+//        gzetagfile = "einstein_user.csv.gz";
 
 //    else
-        gzetagfile = project + "-" + etag + "-ByCPID" + ".gz";
+        gzetagfile = project + "-" + etag + ".csv" + ".gz";
 
     std::string gzetagfile_no_path = gzetagfile;
     // Put path in.
@@ -1529,7 +1529,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         if (iPartNum == 0)
             outputfile = "BeaconList.csv.gz";
         else
-            outputfile = manifest.projects[iPartNum-1].project + "-" + manifest.projects[iPartNum-1].ETag + "-ByCPID.gz";
+            outputfile = manifest.projects[iPartNum-1].project + "-" + manifest.projects[iPartNum-1].ETag + ".csv.gz";
 
         outputfilewpath = savepath / outputfile;
 
@@ -1667,7 +1667,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
         std::string sProject = entry.second.project + "-";
 
         std::string sinputfile = inputfile.string();
-        std::string suffix = "-ByCPID.gz";
+        std::string suffix = ".csv.gz";
 
         std::string ETag = sinputfile.erase(sinputfile.find(sProject), sProject.length());
         ETag = sinputfile.erase(sinputfile.find(suffix), suffix.length());
