@@ -1921,7 +1921,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+2"/>
         <source>%1 h %2 m</source>
-        <translatio>%1 g %2 m</translation>
+        <translation>%1 g %2 m</translation>
     </message>
     <message>
         <location filename="../forms/rpcconsole.ui" line="-717"/>
