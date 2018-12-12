@@ -6,12 +6,12 @@
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
         <source>About Gridcoin</source>
-        <translation>O GridCoin</translation>
+        <translation>O oprogramowaniu GridCoin</translation>
     </message>
     <message>
         <location line="+42"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin </translation>
     </message>
     <message>
         <location line="+58"/>
@@ -24,9 +24,9 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>
 Oprogramowanie eksperymentalne.
 
-Rozprowadzane na licencji MIT/X11, zobacz plik 'COPYING' lub http://www.opensource.org/licenses/mit-license.php.
+Rozprowadzane na licencji MIT/X11, zobacz plik &apos;COPYING&apos; lub http://www.opensource.org/licenses/mit-license.php.
 
-Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w OpenSSL Toolkit (http://www.openssl.org/), oprogramowanie kryptograficzne napisane przez Eric'a Young (eay@cryptsoft.com) i oprogramowanie UPnP napisane przez Thomas'a Bernard.</translation>
+Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku przez OpenSSL Toolkit (http://www.openssl.org/). Oprogramowanie kryptograficzne napisane przez Eric&apos;a Young (eay@cryptsoft.com) i oprogramowanie UPnP napisane przez Thomas&apos;a Bernard.</translation>
     </message>
 </context>
 <context>
@@ -39,7 +39,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+6"/>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
-        <translation>To są twoje adresy Gridcoin do odbierania płatności. Możesz zechcieć dać inny adres każdemu wysyłającemu, żeby mieć punkt odniesienia, kto dokonał płatności.</translation>
+        <translation>To są twoje adresy Gridcoin, służące do odbierania płatności. Dobrym pomysłem jest podanie każdemu wysyłającemu innego adresu, żeby mieć punkt odniesienia, kto dokonał płatności.</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -69,7 +69,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+11"/>
         <source>Show &amp;QR Code</source>
-        <translation>Poka? &amp;Kod QR</translation>
+        <translation>Pokaż Kod &amp;QR</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -79,7 +79,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>Sign &amp;Message</source>
-        <translation>Podpisz &amp;Wiadomość</translation>
+        <translation>Podpisz Wiado&amp;mość</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -104,7 +104,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location filename="../addressbookpage.cpp" line="+65"/>
         <source>Copy &amp;Label</source>
-        <translation>Kopiuj &amp;Etykietę</translation>
+        <translation>Kopiuj Etykietę (&amp;L)</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -114,17 +114,17 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+250"/>
         <source>Export Address Book Data</source>
-        <translation>Exportuj Książkę Adresową</translation>
+        <translation>Eksportuj Książkę Adresową</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Error exporting</source>
-        <translation>Błąd exportowania</translation>
+        <translation>Błąd eksportowania</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Nie można zapisać do pliku %1</translation>
+        <translation>Nie można zapisać do pliku %1.</translation>
     </message>
     <message>
         <location line="-13"/>
@@ -155,12 +155,12 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location filename="../forms/askpassphrasedialog.ui" line="+26"/>
         <source>Passphrase Dialog</source>
-        <translation>Okienko Hasła</translation>
+        <translation>Okno Hasła</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Enter passphrase</source>
-        <translation>Wpisz hasło</translation>
+        <translation>Aktualne hasło</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -175,17 +175,17 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+33"/>
         <source>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</source>
-        <translation type="unfinished"></translation>
+        <translation>Zabezpiecza przed zwykłym wysyłaniem pieniędzy, jeśli system został przejęty. Nie daje żadnej rzeczywistej ochrony.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>For staking only</source>
-        <translation>Tylko do gromadzenia ("staking")</translation>
+        <translation>Tylko do gromadzenia (staking)</translation>
     </message>
     <message>
         <location filename="../askpassphrasedialog.cpp" line="+37"/>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation>Wprowadź nowe hasło do portfela.&lt;br/&gt;Proszę używać hasła złożonego z &lt;b&gt;10 lub więcej losowych znaków&lt;/b&gt; albo &lt;b&gt;8 lub więcej słów.&lt;/b&gt;</translation>
+        <translation>Wprowadź nowe hasło do portfela.&lt;br/&gt;Proszę używać hasła złożonego z &lt;b&gt;10 lub więcej losowych znaków&lt;/b&gt; albo &lt;b&gt;8 lub więcej słów&lt;/b&gt;.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -341,7 +341,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+4"/>
         <source>&amp;Address Book</source>
-        <translation>&amp;Książka Adresowa</translation>
+        <translation>Książka &amp;Adresowa</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -351,7 +351,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+9"/>
         <source>&amp;Block Explorer</source>
-        <translation>Przegląd bloków</translation>
+        <translation>Przegląd &amp;bloków</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -361,7 +361,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;Exchange</source>
-        <translation>Giełda</translation>
+        <translation>Gi&amp;ełda</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -372,12 +372,12 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="-1"/>
         <source>&amp;Web Site</source>
-        <translation>Strona internetowa</translation>
+        <translation>Strona interneto&amp;wa</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>&amp;GRC Chat Room</source>
-        <translation>Chat GRC</translation>
+        <translation>Chat &amp;GRC</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -387,7 +387,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;BOINC</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+1"/>
@@ -412,17 +412,17 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+4"/>
         <source>&amp;Encrypt Wallet...</source>
-        <translation>Zaszyfruj Portf&amp;el</translation>
+        <translation>Zaszyfruj Portf&amp;el...</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Encrypt or decrypt wallet</source>
-        <translation type="unfinished"></translation>
+        <translation>Zaszyfruj lub rozszyfruj portfel</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>&amp;Backup Wallet...</source>
-        <translation>Wykonaj kopię zapasową...</translation>
+        <translation>&amp;Wykonaj kopię zapasową...</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -432,7 +432,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="-1"/>
         <source>Backup wallet to another location</source>
-        <translation>Zapasowy portfel w innej lokalizacji</translation>
+        <translation>Wykonaj kopię zapasową portfela w inne miejsce</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -442,7 +442,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+1"/>
         <source>&amp;Unlock Wallet...</source>
-        <translation>Odblokuj portfel...</translation>
+        <translation>&amp;Odblokuj portfel...</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -452,7 +452,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+1"/>
         <source>&amp;Lock Wallet</source>
-        <translation>Zablokuj portfel</translation>
+        <translation>Zab&amp;lokuj portfel</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -462,7 +462,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+4"/>
         <source>&amp;Export...</source>
-        <translation>&amp;Exportuj</translation>
+        <translation>&amp;Eksportuj...</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -472,7 +472,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+1"/>
         <source>&amp;Debug window</source>
-        <translation>&amp;Okno debugowania</translation>
+        <translation>Okno &amp;debugowania</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -492,12 +492,12 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+0"/>
         <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin</translation>
     </message>
     <message>
         <location line="+496"/>
         <source>&amp;Send</source>
-        <translation>Wyślij</translation>
+        <translation>&amp;Wyślij</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -507,7 +507,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+65"/>
         <source>&amp;Rebuild Block Chain</source>
-        <translation>Odbuduj łańcuch bloków</translation>
+        <translation>&amp;Odbuduj łańcuch bloków</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -517,7 +517,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;Download Blocks</source>
-        <translation>Pobierz bloki</translation>
+        <translation>&amp;Pobierz bloki</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -527,7 +527,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;Upgrade Client</source>
-        <translation>Aktualizuj program</translation>
+        <translation>&amp;Aktualizuj program</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -537,7 +537,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;About Gridcoin</source>
-        <translation>O Gridcoin</translation>
+        <translation>&amp;O Gridcoin</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -547,7 +547,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;Neural Network</source>
-        <translation>Sieć neuronowa</translation>
+        <translation>Sieć &amp;neuronowa</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -557,7 +557,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;Advanced Configuration</source>
-        <translation>Konfiguracja zaawansowana</translation>
+        <translation>Konfiguracj&amp;a zaawansowana</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -567,7 +567,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;New User Wizard</source>
-        <translation type="unfinished">Nowy kreator użytkownika</translation>
+        <translation>&amp;Nowy kreator użytkownika</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -578,7 +578,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="-665"/>
         <source>&amp;Voting</source>
-        <translation>Głosowanie</translation>
+        <translation>&amp;Głosowanie</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -588,7 +588,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+77"/>
         <source>&amp;Foundation</source>
-        <translation>Fundacja</translation>
+        <translation>&amp;Fundacja</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -598,7 +598,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+3"/>
         <source>&amp;Diagnostics</source>
-        <translation>Diagnostyka</translation>
+        <translation>&amp;Diagnostyka</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -608,7 +608,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+4"/>
         <source>FA&amp;Q</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+1"/>
@@ -680,12 +680,12 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+69"/>
         <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
-        <translation>Proszę wprowadzić swój adres e-mail zarejestrowany w BOINC, lub kliknij Anuluj aby pominąć.</translation>
+        <translation>Proszę wprowadzić swój adres e-mail zarejestrowany w BOINC, lub kliknij Anuluj aby pominąć:</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Created new Configuration File Successfully. </source>
-        <translation>Z powodzeniem utworzono nowy plik konfiguracyjny.</translation>
+        <translation>Z powodzeniem utworzono nowy plik konfiguracyjny. </translation>
     </message>
     <message>
         <location line="+1"/>
@@ -695,7 +695,7 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku w 
     <message>
         <location line="+8"/>
         <source>To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. </source>
-        <translation>Aby rozpocząć z BOINC, uruchom aplikację BOINC, wybierz projekty, następnie wpisz swój adres e-mail (BOINC) w pliku gridcoinresearch.conf w %appdata%\GridcoinResearch. Aby uruchomić ponownie ten kreator, proszę usunąć plik gridcoinresearch.conf.</translation>
+        <translation>Aby rozpocząć z BOINC, uruchom aplikację BOINC, wybierz projekty, następnie wpisz swój adres e-mail (BOINC) w pliku gridcoinresearch.conf w %appdata%\GridcoinResearch. Aby uruchomić ponownie ten kreator, proszę usunąć plik gridcoinresearch.conf. </translation>
     </message>
     <message>
         <location line="+1"/>
@@ -724,7 +724,7 @@ Adres: %4
         <location line="+211"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI nie może zostać sparsowane! Może to być spowodowane złym adresem Gridcoin lub złymi parametrami URI</translation>
+        <translation>URI nie może zostać sparsowane! Może to być spowodowane złym adresem Gridcoin lub złymi parametrami URI.</translation>
     </message>
     <message>
         <location line="-15"/>
@@ -750,12 +750,12 @@ Adres: %4
     <message>
         <location line="+0"/>
         <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Wystąpił problem przy zapisie danych portfela w nowym miejscu</translation>
+        <translation>Wystąpił problem przy zapisie danych portfela w nowym miejscu.</translation>
     </message>
     <message numerus="yes">
         <location line="+300"/>
         <source>%n second(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n sekunda</numerusform>
             <numerusform>%n sekund</numerusform>
             <numerusform>%n sekund</numerusform>
@@ -764,7 +764,7 @@ Adres: %4
     <message numerus="yes">
         <location line="+4"/>
         <source>%n minute(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n minuta</numerusform>
             <numerusform>%n minut</numerusform>
             <numerusform>%n minut</numerusform>
@@ -773,7 +773,7 @@ Adres: %4
     <message numerus="yes">
         <location line="+4"/>
         <source>%n hour(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n godzinę</numerusform>
             <numerusform>%n godziny</numerusform>
             <numerusform>%n godzin</numerusform>
@@ -782,7 +782,7 @@ Adres: %4
     <message numerus="yes">
         <location line="+4"/>
         <source>%n day(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n dzień</numerusform>
             <numerusform>%n dni</numerusform>
             <numerusform>%n dni</numerusform>
@@ -811,17 +811,17 @@ Adres: %4
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation>Brak gromadzenia (staking) ponieważ nie masz "dojrzałych" monet i twoja waga gromadzenia jest za niska.</translation>
+        <translation>Brak gromadzenia (staking) ponieważ nie masz &quot;dojrzałych&quot; monet i twoja waga gromadzenia jest za niska.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
-        <translation>Brak gromadzenia (staking) ponieważ nie masz "dojrzałych" monet</translation>
+        <translation>Brak gromadzenia (staking) ponieważ nie masz &quot;dojrzałych&quot; monet</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Searching for mature coins... Please wait</source>
-        <translation>Szukanie "dojrzałych" monet... proszę czekać</translation>
+        <translation>Szukanie &quot;dojrzałych&quot; monet... proszę czekać</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -841,12 +841,12 @@ Adres: %4
     <message>
         <location line="+9"/>
         <source>&amp;Community</source>
-        <translation>Społeczność</translation>
+        <translation>Społe&amp;czność</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>&amp;Advanced</source>
-        <translation>Zaawansowane</translation>
+        <translation>Z&amp;aawansowane</translation>
     </message>
     <message>
         <location line="+15"/>
@@ -911,7 +911,7 @@ Adres: %4
     <message>
         <location filename="../forms/coincontroldialog.ui" line="+14"/>
         <source>Coin Control</source>
-        <translation type="unfinished"></translation>
+        <translation>Obsługa monet</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -941,12 +941,12 @@ Adres: %4
     <message>
         <location line="+32"/>
         <source>Low Output:</source>
-        <translation>Niska wydajność</translation>
+        <translation>Niska wydajność:</translation>
     </message>
     <message>
         <location line="+162"/>
         <source>Tree &amp;mode</source>
-        <translation>Widok drzewa</translation>
+        <translation>&amp;Widok drzewa</translation>
     </message>
     <message>
         <location line="+66"/>
@@ -1072,7 +1072,7 @@ Adres: %4
     <message>
         <location line="+155"/>
         <source>DUST</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1110,14 +1110,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 
 To wymaga opłaty w wysokości conajmniej %2.
 
-Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmieci".</translation>
+Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot;śmieci&quot;.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>This label turns red, if the change is smaller than %1.
 
  This means a fee of at least %2 is required.</source>
-        <translation type="unfinished">Etykieta jest czerwona jeśli reszta jest mniejsza niż %1.
+        <translation>Etykieta jest czerwona jeśli reszta jest mniejsza niż %1.
         
  Oznacza to opłatę w wysokości conajmniej %2.</translation>
     </message>
@@ -1193,7 +1193,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
-        <translation type="unfinished">Adres jest związany z tym wpisem książki adresowej. Można edytować tylko dla adresów wyjściowych.</translation>
+        <translation>Adres jest związany z tym wpisem książki adresowej. Można edytować tylko dla adresów wyjściowych.</translation>
     </message>
     <message>
         <location line="-10"/>
@@ -1223,7 +1223,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+71"/>
         <source>The entered address &quot;%1&quot; is not a valid Gridcoin address.</source>
-        <translation>Wpisany adres &quot;%1&quot; nie jest prawidłowym adresem Gridcoin</translation>
+        <translation>Wpisany adres &quot;%1&quot; nie jest prawidłowym adresem Gridcoin.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1281,7 +1281,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+2"/>
         <source>Gridcoin-Qt</source>
-        <translation type="unfinished"></translation>
+        <translation>Gridcoin-Qt</translation>
     </message>
 </context>
 <context>
@@ -1300,7 +1300,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+10"/>
         <source>Days: </source>
-        <translation>Dni</translation>
+        <translation>Dni: </translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1368,17 +1368,17 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+16"/>
         <source>&amp;Main</source>
-        <translation>Główne</translation>
+        <translation>&amp;Główne</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Optional transaction fee per kB that helps make sure your transactions are processed quickly. Most transactions are 1 kB. Fee 0.01 recommended.</source>
-        <translation>Opcjonalna opłata transakcyjna za każdy kB, która pomaga upewnić się, że transakcje są szybko przetwarzane. Większość transakcji ma 1kB. Rekomendowana opłata to 0.01</translation>
+        <translation>Opcjonalna opłata transakcyjna za każdy kB, która pomaga upewnić się, że transakcje są szybko przetwarzane. Większość transakcji ma 1kB. Rekomendowana opłata to 0.01.</translation>
     </message>
     <message>
         <location line="+15"/>
         <source>Pa&amp;y transaction fee</source>
-        <translation>Opłata transakcyjna</translation>
+        <translation>Opłata transakc&amp;yjna</translation>
     </message>
     <message>
         <location line="+31"/>
@@ -1388,7 +1388,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+15"/>
         <source>Reser&amp;ve</source>
-        <translation>Zarezerwuj</translation>
+        <translation>&amp;Zarezerwuj</translation>
     </message>
     <message>
         <location line="+31"/>
@@ -1398,7 +1398,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+3"/>
         <source>&amp;Start Gridcoin on system login</source>
-        <translation>Uruchom Gridcoin przy logowaniu do ssystemu.</translation>
+        <translation>Uruchom Gridcoin przy logowaniu do &amp;systemu</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1408,7 +1408,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+3"/>
         <source>&amp;Detach databases at shutdown</source>
-        <translation>Odłącz bazy danych przy wyłączaniu.</translation>
+        <translation>Odłącz bazy &amp;danych przy wyłączaniu</translation>
     </message>
     <message>
         <location line="+27"/>
@@ -1423,7 +1423,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+3"/>
         <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Połącz przez SOCKS proxy</translation>
+        <translation>Połącz przez SO&amp;CKS proxy:</translation>
     </message>
     <message>
         <location line="+28"/>
@@ -1433,7 +1433,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+33"/>
         <source>SOCKS &amp;Version:</source>
-        <translation>Wersja &amp;SOCKS</translation>
+        <translation>Wersja &amp;SOCKS:</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -1468,17 +1468,17 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+3"/>
         <source>&amp;Display addresses in transaction list</source>
-        <translation>&amp;Wyświetlaj adresy w liście transakcji</translation>
+        <translation>&amp;Wyświetlaj adresy na liście transakcji</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Display coin &amp;control features (experts only!)</source>
-        <translation>Wyświetl opcje kontroli monet (tylko dla zaawansowanych!)</translation>
+        <translation>Wyświetl op&amp;cje kontroli monet (tylko dla zaawansowanych!)</translation>
     </message>
     <message>
         <location line="+91"/>
         <source>&amp;Apply</source>
-        <translation>Zastosuj</translation>
+        <translation>Z&amp;astosuj</translation>
     </message>
     <message>
         <location line="-345"/>
@@ -1493,7 +1493,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+19"/>
         <source>Proxy &amp;IP:</source>
-        <translation>&amp;IP proxy: </translation>
+        <translation>&amp;IP proxy:</translation>
     </message>
     <message>
         <location line="+26"/>
@@ -1513,12 +1513,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+6"/>
         <source>Show only a tray icon after minimizing the window.</source>
-        <translation>Pokazuj tylko ikonę przy zegarku po zminimalizowaniu okna.</translation>
+        <translation>Po zminimalizowaniu, widoczna jest tylko ikona na pasku zadań.</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
-        <translation>&amp;Minimalizuj do zasobnika systemowego zamiast do paska zadań</translation>
+        <translation>&amp;Minimalizuj do zasobnika systemowego</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -1543,7 +1543,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+13"/>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
-        <translation>Wybierz podział jednostki pokazywany w interfejsie  oraz podczas wysyłania monet</translation>
+        <translation>Wybierz podział jednostki pokazywany w interfejsie  oraz podczas wysyłania monet.</translation>
     </message>
     <message>
         <location line="+37"/>
@@ -1579,7 +1579,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
         <location line="+123"/>
         <location line="+9"/>
         <source>Warning</source>
-        <translation type="unfinished">Ostrzeżenie</translation>
+        <translation>Ostrzeżenie</translation>
     </message>
     <message>
         <location line="-9"/>
@@ -1590,7 +1590,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+42"/>
         <source>The supplied proxy address is invalid.</source>
-        <translation>Adres podanego proxy jest nieprawidłowy</translation>
+        <translation>Adres podanego proxy jest nieprawidłowy.</translation>
     </message>
 </context>
 <context>
@@ -1629,7 +1629,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+15"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
-        <translation>Suma transakcji, które nie zostały jeszcze potwierdzone i dodane do aktualnego bilansu.</translation>
+        <translation>Suma transakcji, które nie zostały jeszcze potwierdzone i dodane do aktualnego bilansu</translation>
     </message>
     <message>
         <location line="+31"/>
@@ -1659,7 +1659,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+7"/>
         <source>Magnitude:</source>
-        <translation>Znaczenie:</translation>
+        <translation>MAG:</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1753,7 +1753,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+46"/>
         <source>&amp;Save As...</source>
-        <translation>Zapisz jako...</translation>
+        <translation>Zapi&amp;sz jako...</translation>
     </message>
     <message>
         <location filename="../qrcodedialog.cpp" line="+62"/>
@@ -1846,7 +1846,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="-176"/>
         <source>&amp;Network Traffic</source>
-        <translation>$Ruch sieci</translation>
+        <translation>&amp;Ruch sieci</translation>
     </message>
     <message>
         <location line="+52"/>
@@ -1881,12 +1881,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location filename="../rpcconsole.cpp" line="-34"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Użyj strzałek do przewijania historii i &lt;b&gt;Ctrl-L&lt;/b&gt; aby wyczyścić ekran</translation>
+        <translation>Użyj strzałek do przewijania historii i &lt;b&gt;Ctrl-L&lt;/b&gt; aby wyczyścić ekran.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Wpisz &lt;b&gt;help&lt;/b&gt; aby uzyskać listę dostępnych komend</translation>
+        <translation>Wpisz &lt;b&gt;help&lt;/b&gt; aby uzyskać listę dostępnych komend.</translation>
     </message>
     <message>
         <location line="+111"/>
@@ -1911,7 +1911,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+7"/>
         <source>%1 m</source>
-        <translation type="unfinished">%1 m</translation>
+        <translation>%1 m</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1941,7 +1941,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+7"/>
         <source>1</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+128"/>
@@ -1961,7 +1961,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+29"/>
         <source>On testnet</source>
-        <translation>W testnet</translation>
+        <translation>Połączenie testnet</translation>
     </message>
     <message>
         <location line="+39"/>
@@ -2021,7 +2021,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+73"/>
         <source>Coin Control Features</source>
-        <translation>Funkcje kontroli monet</translation>
+        <translation>Kontrola monet</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -2031,7 +2031,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+7"/>
         <source>automatically selected</source>
-        <translation>zaznaczone automatycznie</translation>
+        <translation>Zaznaczone automatycznie</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -2047,7 +2047,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
         <location line="+22"/>
         <location line="+32"/>
         <source>0</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="-19"/>
@@ -2065,7 +2065,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
         <location line="+80"/>
         <location line="+29"/>
         <source>0.00 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="-179"/>
@@ -2075,7 +2075,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+19"/>
         <source>medium</source>
-        <translation type="unfinished">średnia</translation>
+        <translation>średni</translation>
     </message>
     <message>
         <location line="+29"/>
@@ -2085,7 +2085,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+32"/>
         <source>Low Output:</source>
-        <translation>Niska wydajność</translation>
+        <translation>Niska wydajność:</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -2115,7 +2115,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+47"/>
         <source>123.456 GRC</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="-70"/>
@@ -2155,7 +2155,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+15"/>
         <source>Copy quantity</source>
-        <translation>Skopiuj ilość</translation>
+        <translation>Kopiuj ilość</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2165,52 +2165,52 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>Copy fee</source>
-        <translation>Skopiuj prowizję</translation>
+        <translation>Kopiuj prowizję</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy after fee</source>
-        <translation>Skopiuj ilość po opłacie</translation>
+        <translation>Kopiuj ilość po opłacie</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy bytes</source>
-        <translation>Skopiuj ilość bajtów</translation>
+        <translation>Kopiuj ilość bajtów</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy priority</source>
-        <translation>Skopiuj priorytet</translation>
+        <translation>Kopiuj priorytet</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Copy low output</source>
-        <translation type="unfinished">Kopiuj niską wydajność</translation>
+        <translation>Kopiuj niską wydajność</translation>
     </message>
     <message>
         <location line="+87"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Are you sure you want to send %1?</source>
-        <translation type="unfinished"></translation>
+        <translation>Jesteś pewny, że chcesz wysłać? %1?</translation>
     </message>
     <message>
         <location line="+0"/>
         <source> and </source>
-        <translation type="unfinished"></translation>
+        <translation> i </translation>
     </message>
     <message>
         <location line="+29"/>
         <source>The recipient address is not valid, please recheck.</source>
-        <translation>Adres odbiorcy jest nieprawid?owy, prosz? poprawi?</translation>
+        <translation>Adres odbiorcy jest nieprawidłowy, proszę poprawić.</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Duplicate address found, can only send to each address once per send operation.</source>
-        <translation>Znaleziono powtórzony adres, mo?na wys?a? tylko raz na ka?dy adres podczas operacji wysy?ania.</translation>
+        <translation>Znaleziono powtórzony adres, można wysłac tylko raz na każdy adres podczas operacji wysyłania.</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -2273,7 +2273,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="-108"/>
         <source>Pay &amp;To:</source>
-        <translation>Zapłać &amp;dla:</translation>
+        <translation>A&amp;dres przelewu:</translation>
     </message>
     <message>
         <location line="-30"/>
@@ -2303,7 +2303,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="-126"/>
         <source>Form</source>
-        <translation type="unfinished">Formularz</translation>
+        <translation>Formularz</translation>
     </message>
     <message>
         <location line="+39"/>
@@ -2314,7 +2314,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+27"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
-        <translation>Adres do przelewu (n.p. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
+        <translation>Adres przelewu (n.p. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2383,7 +2383,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+85"/>
         <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
-        <translation>Wpisz adres podpisu, wiadomość (upewnij się, że dokładnie skopiujesz wszystkie zakończenia linii, spacje, tabulacje itp.) oraz podpis poniżej by sprawdzić wiadomość. Uważaj by nie dodać więcej do podpisu niż do samej podpisywanej wiadomości by uniknąć ataku MITM</translation>
+        <translation>Wpisz adres podpisu, wiadomość (upewnij się, że dokładnie skopiujesz wszystkie zakończenia linii, spacje, tabulacje itp.) oraz podpis poniżej by sprawdzić wiadomość. Uważaj by nie dodać więcej do podpisu niż do samej podpisywanej wiadomości by uniknąć ataku MITM.</translation>
     </message>
     <message>
         <location line="+21"/>
@@ -2518,7 +2518,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+0"/>
         <source>The signature did not match the message digest.</source>
-        <translation>Podpis nie odpowiada skrótowi wiadomości</translation>
+        <translation>Podpis nie odpowiada skrótowi wiadomości.</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -2536,7 +2536,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message numerus="yes">
         <location filename="../transactiondesc.cpp" line="+36"/>
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform></numerusform>
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -2550,7 +2550,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+6"/>
         <source>conflicted</source>
-        <translation type="unfinished"></translation>
+        <translation>konflikt</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2679,7 +2679,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>Wygenerowane money musza "dojrzeć" przez 110 bloków zanim mogą zostać użyte. Kiedy wygenerowałeś ten blok, ogłoszenie zostało rozesłane do sieci aby go dodać do sieci bloków. Jeśli się nie powiedzie, jego status zostanie zmieniony na  &quot;brak akceptacji&quot; i nie będzie można go użyć. Może się to czasem zdarzyć jeśli inna gałąź wygeneruje blok w przeciągu kilku sekund od twojego.</translation>
+        <translation>Wygenerowane money musza &quot;dojrzeć&quot; przez 110 bloków zanim mogą zostać użyte. Kiedy wygenerowałeś ten blok, ogłoszenie zostało rozesłane do sieci aby go dodać do sieci bloków. Jeśli się nie powiedzie, jego status zostanie zmieniony na  &quot;brak akceptacji&quot; i nie będzie można go użyć. Może się to czasem zdarzyć jeśli inna gałąź wygeneruje blok w przeciągu kilku sekund od twojego.</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -2795,7 +2795,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message numerus="yes">
         <location line="+52"/>
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform></numerusform>
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -2819,7 +2819,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+6"/>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation type="unfinished">Niedojrzałe (%1 potwierdzeń, będą dostępne po %2)&lt;br&gt;)</translation>
+        <translation>Niedojrzałe (%1 potwierdzeń, będą dostępne po %2)&lt;br&gt;)</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3013,7 +3013,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>Edit label</source>
-        <translation>Edytuj etykiet?</translation>
+        <translation>Edytuj etykietę</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3073,7 +3073,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+0"/>
         <source>Could not write to file %1.</source>
-        <translation>Nie można zapisać do pliku %1</translation>
+        <translation>Nie można zapisać do pliku %1.</translation>
     </message>
     <message>
         <location line="+100"/>
@@ -3120,13 +3120,13 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
         <location line="+7"/>
         <location line="+60"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="-54"/>
         <location line="+55"/>
         <source>Discussion URL: </source>
-        <translation>URL dyskusji:</translation>
+        <translation>URL dyskusji: </translation>
     </message>
     <message>
         <location line="-43"/>
@@ -3183,7 +3183,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="-387"/>
         <source>#</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3224,7 +3224,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>URL</source>
-        <translation type="unfinished"></translation>
+        <translation>URL</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3239,7 +3239,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+2"/>
         <source>Title.</source>
-        <translation>Tytuł</translation>
+        <translation>Tytuł.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3249,12 +3249,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+2"/>
         <source>Share Type.</source>
-        <translation>Typ udziału</translation>
+        <translation>Typ udziału.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Question.</source>
-        <translation>Pytanie</translation>
+        <translation>Pytanie.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -3269,7 +3269,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+2"/>
         <source>URL.</source>
-        <translation type="unfinished"></translation>
+        <translation>URL.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3287,12 +3287,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+14"/>
         <source>Q: </source>
-        <translation type="unfinished"></translation>
+        <translation>P: </translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Discussion URL: </source>
-        <translation>URL dyskusji:</translation>
+        <translation>URL dyskusji: </translation>
     </message>
     <message>
         <location line="+10"/>
@@ -3543,7 +3543,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+3"/>
         <source>Upgrade wallet to latest format</source>
-        <translation>Zaktualizuj portfel do najnowszego formatu.</translation>
+        <translation>Zaktualizuj portfel do najnowszego formatu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3653,7 +3653,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
-        <translation>Bład inicjalizacji bazy danych %s! Aby odzyskać, ZRÓB KOPIĘ ZAPASOWĄ FOLDERU, dopiero usuń z niego wszystko POMIJAJĄC wallet.dat </translation>
+        <translation>Bład inicjalizacji bazy danych %s! Aby odzyskać, ZRÓB KOPIĘ ZAPASOWĄ FOLDERU, dopiero usuń z niego wszystko POMIJAJĄC wallet.dat.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3728,12 +3728,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+4"/>
         <source>Importing blockchain data file.</source>
-        <translation>Importowanie pliku danych z łańcuchem bloków</translation>
+        <translation>Importowanie pliku danych z łańcuchem bloków.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Importing bootstrap blockchain data file.</source>
-        <translation>Importowanie pliku startera z łańcuchem bloków</translation>
+        <translation>Importowanie pliku startera z łańcuchem bloków.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3743,7 +3743,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+2"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
-        <translation>Nie można przywiązać %s na tym komputerze. Aplikacja Gridcoin jest już prawdopodobnie uruchomiona</translation>
+        <translation>Nie można przywiązać %s na tym komputerze. Aplikacja Gridcoin jest już prawdopodobnie uruchomiona.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -3763,12 +3763,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
-        <translation>Bład: Ta transakcja wymaga opłaty transakcyjnej wysokości conajmniej %s z powodu jej rozmiaru, kompleksowości lub użycia dopiero otrzymanych środków   </translation>
+        <translation>Bład: Ta transakcja wymaga opłaty transakcyjnej wysokości conajmniej %s z powodu jej rozmiaru, kompleksowości lub użycia dopiero otrzymanych środków  </translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Error: Transaction creation failed  </source>
-        <translation>Bład: Utworzenie transakcji nie powiodło się</translation>
+        <translation>Bład: Utworzenie transakcji nie powiodło się  </translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3798,7 +3798,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+1"/>
         <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
-        <translation>Ostrzeżenie: Wykryto naruszenie zsynchronizowanego punktu kontrolnego, ale zostało pominięte.</translation>
+        <translation>Ostrzeżenie: Wykryto naruszenie zsynchronizowanego punktu kontrolnego, ale zostało pominięte!</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3838,7 +3838,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako "śmi
     <message>
         <location line="+43"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
-        <translation>Wyślij informację/raport do konsoli zamiast do pliku debug.log.</translation>
+        <translation>Wyślij informację/raport do konsoli zamiast do pliku debug.log</translation>
     </message>
     <message>
         <location line="-1"/>
@@ -3893,7 +3893,7 @@ Nazwa użytkownika i hasło nie mogą być takie same.
 Jeśli plik nie istnieje, utwórz go z uprawnieniami tylko do odczytu.
 Również zaleca się ustawienie powiadomień alarmowych abyś był poinformowany o problemach;
 na przykład: alertnotify=echo %%s | mail -s &quot;Alarm Gridcoin&quot; admin@foo.com
-        </translation>
+</translation>
     </message>
     <message>
         <location line="+14"/>
@@ -3942,7 +3942,7 @@ Jeżeli plik nie istnieje, utwórz go z uprawnieniami właćciciela-tylko-do-odc
     <message>
         <location line="+1"/>
         <source>Gridcoin</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location line="+132"/>
