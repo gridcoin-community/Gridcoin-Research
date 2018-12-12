@@ -116,6 +116,11 @@ struct ScraperFileManifest
     int64_t timestamp;
 };
 
+// The inner map is sorted in descending order of time.
+typedef std::multimap<int64_t, uint256, greater <int64_t>> mCSManifest;
+// Right now this is using sCManifestName, but needs to be changed to pubkey once the pubkey part is finished.
+typedef std::map<std::string, mCSManifest> mmCSManifestsBinnedByScraper;
+
 struct ScraperObjectStatsKey
 {
     statsobjecttype objecttype;
@@ -184,7 +189,8 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool IsScraperAuthorizedToBroadcastManifests();
 bool ScraperSendFileManifestContents(std::string CManifestName);
-bool ScraperDeleteCScraperManifests();
+mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
+mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 
 double MagRound(double dMag)

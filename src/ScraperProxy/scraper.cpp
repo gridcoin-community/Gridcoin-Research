@@ -1705,87 +1705,119 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 }
 
 
+bool ScraperConstructConvergedManifest()
+{
+    
+    // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
+    // return a map of manifests binned by Scraper after the culling.
+    // TODO: Put locking around CScraperManifest::mapManifest, because technically, a new one
+    // could appear at any moment, even between the below call and the following code. This should
+    // really be atomic. Note that without the lock, the worst that could happen is that a scraper
+    // could publish (and the node receive) a new manifest after the below call, which means an extra
+    // manifest would be in the map from a scraper.
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
+    
+    return true;
+    
+}
 
-bool ScraperDeleteCScraperManifests()
+
+
+mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
+{
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper;
+
+    // Make use of the ordered element feature of above map to bin by scraper and then order by manifest time.
+    for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); ++iter)
+    {
+        CScraperManifest& manifest = *iter->second;
+
+        std::string sManifestName = manifest.sCManifestName;
+        int64_t nTime = manifest.nTime;
+        uint256 nHash = *manifest.phash;
+
+        mCSManifest mManifestInner;
+
+        auto BinIter = mMapCSManifestsBinnedByScraper.find(sManifestName);
+
+        // No scraper bin yet - so new insert.
+        if (BinIter == mMapCSManifestsBinnedByScraper.end())
+        {
+            mManifestInner.insert(std::make_pair(nTime, nHash));
+            mMapCSManifestsBinnedByScraper.insert(std::make_pair(sManifestName, mManifestInner));
+        }
+        else
+        {
+            mManifestInner = BinIter->second;
+            mManifestInner.insert(std::make_pair(nTime, nHash));
+            std::swap(mManifestInner, BinIter->second);
+        }
+    }
+    
+    return mMapCSManifestsBinnedByScraper;
+}
+
+
+mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
 {
     // Apply the SCRAPER_CMANIFEST_RETAIN_NONCURRENT bool and if false delete any existing
-    // CScraperManifests.
+    // CScraperManifests other than the current one for each scraper.
+    // TODO: Locking around CScraperManifest map.
 
     _log(INFO, "ScraperDeleteCScraperManifests", "Deleting old CScraperManifests.");
 
+    // Bin by scraper and order by manifest time within scraper bin.
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
+
+    _log(INFO, "ScraperDeleteCScraperManifests", "mMapCSManifestsBinnedByScraper size = " + std::to_string(mMapCSManifestsBinnedByScraper.size()));
+
     if (!SCRAPER_CMANIFEST_RETAIN_NONCURRENT)
     {
-        // Right now this is using sCManifestName, but needs to be changed to pubkey once the pubkey part is finished.
-        std::map<std::string, std::multimap<int64_t, uint256>> mmCSManifestsBinnedByScraper;
-
-        // Make use of the ordered element feature of above map to bin by scraper and then order by manifest time.
-        for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); ++iter)
-        {
-            CScraperManifest& manifest = *iter->second;
-
-            std::string sManifestName = manifest.sCManifestName;
-            int64_t nTime = manifest.nTime;
-            uint256 nHash = *manifest.phash;
-
-            std::multimap<int64_t, uint256> mManifestInner;
-
-            auto BinIter = mmCSManifestsBinnedByScraper.find(sManifestName);
-
-            // No scraper bin yet - so new insert.
-            if (BinIter == mmCSManifestsBinnedByScraper.end())
-            {
-                mManifestInner.insert(std::make_pair(nTime, nHash));
-                mmCSManifestsBinnedByScraper.insert(std::make_pair(sManifestName, mManifestInner));
-            }
-            else
-            {
-                mManifestInner = BinIter->second;
-                mManifestInner.insert(std::make_pair(nTime, nHash));
-                std::swap(mManifestInner, BinIter->second);
-            }
-        }
-
-        _log(INFO, "ScraperDeleteCScraperManifests", "mmCSManifestsBinnedByScraper size = " + std::to_string(mmCSManifestsBinnedByScraper.size()));
-
         // For each scraper, delete every manifest EXCEPT the latest.
-        std::map<std::string, std::multimap<int64_t, uint256>>::iterator iter;
-        for (iter = mmCSManifestsBinnedByScraper.begin(); iter != mmCSManifestsBinnedByScraper.end(); ++iter)
+        for (auto iter = mMapCSManifestsBinnedByScraper.begin(); iter != mMapCSManifestsBinnedByScraper.end(); ++iter)
         {
-            std::multimap<int64_t, uint256> mManifestInner = iter->second;
+            mCSManifest mManifestInner = iter->second;
 
             _log(INFO, "ScraperDeleteCScraperManifests", "mManifestInner size = " + std::to_string(mManifestInner.size()) +
                  " for " + iter->first + " scraper");
 
-            // This preserves the LATEST CScraperManifest entry for the given scraper (because of the reverse iterator),
-            // and deletes all others for that scraper source.
-            for (auto iter_inner = ++mManifestInner.rbegin() ;iter_inner != mManifestInner.rend(); ++iter_inner)
+            // This preserves the LATEST CScraperManifest entry for the given scraper, because the inner map is in descending order,
+            // and the first element is therefore the LATEST, and is skipped.
+            for (auto iter_inner = ++mManifestInner.begin(); iter_inner != mManifestInner.end(); ++iter_inner)
             {
+                
                 _log(INFO, "ScraperDeleteCScraperManifests", "Deleting non-current manifest " + iter_inner->second.GetHex()
                      + " from scraper source " + iter->first);
+                
+                // Delete from CScraperManifest map
                 ScraperDeleteCScraperManifest(iter_inner->second);
             }
         }
     }
-
 
     // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then
     // delete.
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
         // Copy iterator for deletion operation and increment iterator.
-        auto iter_copy = iter++;
+        auto iter_copy = iter;
 
-        CScraperManifest& manifest = *iter_copy->second;
-
+        CScraperManifest& manifest = *iter->second;
+        
         if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
         {
-            _log(INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter_copy->first.GetHex());
+            _log(INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter->first.GetHex());
+            // Delete from CScraperManifest map
             ScraperDeleteCScraperManifest(iter_copy->first);
         }
+        
+        ++iter;
     }
 
-    // TODO: Error handling.
-    return true;
+    // Reload mMapCSManifestsBinnedByScraper after deletions. This is not particularly efficient, but the map is not
+    // that large.
+    mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
+    return mMapCSManifestsBinnedByScraper;
 }
 
 
