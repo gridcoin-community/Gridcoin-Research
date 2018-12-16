@@ -259,7 +259,8 @@ void Scraper(bool fScraperStandalone)
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
                 // Cull CScraperManifests.
-                ScraperDeleteCScraperManifests();
+                //ScraperDeleteCScraperManifests();
+                ScraperConstructConvergedManifest();
             }
         }
 
@@ -282,8 +283,8 @@ void NeuralNetwork()
         if (!fScraperActive)
         {
             // Currently just cull outdated CScraperManifests received
-
-            ScraperDeleteCScraperManifests();
+            //ScraperDeleteCScraperManifests();
+            ScraperConstructConvergedManifest();
         }
 
         // Use the same sleep interval as the scraper. This defaults to 60 seconds.
@@ -1707,7 +1708,8 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
 bool ScraperConstructConvergedManifest()
 {
-    
+    bool bConvergenceSuccessful = false;
+
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
     // return a map of manifests binned by Scraper after the culling.
     // TODO: Put locking around CScraperManifest::mapManifest, because technically, a new one
@@ -1717,7 +1719,68 @@ bool ScraperConstructConvergedManifest()
     // manifest would be in the map from a scraper.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
     
-    return true;
+    // Do a map for unique manifest times ordered by descending time then content hash.
+    std::multimap<int64_t, uint256, greater<int64_t>> mManifestsBinnedByTime;
+    // and also by content hash, then scraperID and manifest (not content) hash.
+    std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;
+    std::multimap<uint256, std::pair<ScraperID, uint256>>::iterator convergence;
+    
+    unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
+
+    _log(INFO, "ScraperConstructConvergedManifest", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+
+    for (const auto& iter : mMapCSManifestsBinnedByScraper)
+    {
+        // iter.second is the mCSManifest
+        for (const auto& iter_inner : iter.second)
+        {
+            // Insert into mManifestsBinnedByTime multimap. Iter_inner.first is the manifest time,
+            // iter_inner.second.second is the manifest CONTENT hash.
+            mManifestsBinnedByTime.insert(std::make_pair(iter_inner.first, iter_inner.second.second));
+            // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
+            mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
+            _log(INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
+                 + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
+        }
+    }
+    
+    // Walk the time map (backwards in time because the sort order is descending), and select the first
+    // manifest content hash that meets the convergence rule.
+    for (const auto& iter : mManifestsBinnedByTime)
+    {
+        // Notice the below is NOT using the time. We switch to the content only. The time is only used to make sure
+        // we test the convergence of the manifests in time order, but once a content hash is selected based on the time,
+        // only the content hash is used to count occurrences in the multimap, because the times for the same
+        // content hash manifest will be different across different scrapers.
+        unsigned int nIdenticalContentManifestCount = mManifestsBinnedbyContent.count(iter.second);
+        if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
+        {
+            // Find the first one of equivalent content manifests.
+            convergence = mManifestsBinnedbyContent.find(iter.second);
+
+            _log(INFO, "ScraperConstructConvergedManifest", "Found convergence on manifest " + convergence->second.second.GetHex()
+                 + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
+                 + " agreeing.");
+
+            bConvergenceSuccessful = true;
+
+            break;
+        }
+    }
+
+    // TODO: Write the part level convergence routine. The above will only work reasonably well if
+    // SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true (which keeps a history of whole manifests around, and
+    // SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false (which only includes current files in the manifests).
+    // This may be the simpler way to go rather than flipping the above flags and matching at the part level,
+    // And since the parts are not actually duplicated between manifests if they have the same hash (they are referenced),
+    // the only additional overhead is the map entry and fields at the CScraperManifest level, which is small compared to the
+    // parts themselves.
+
+
+    if(!bConvergenceSuccessful)
+        _log(INFO, "ScraperConstructConvergedManifest", "No convergence on manifests by content at the manifest level.");
+
+    return bConvergenceSuccessful;
     
 }
 
@@ -1735,6 +1798,7 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
         std::string sManifestName = manifest.sCManifestName;
         int64_t nTime = manifest.nTime;
         uint256 nHash = *manifest.phash;
+        uint256 nContentHash = manifest.nContentHash;
 
         mCSManifest mManifestInner;
 
@@ -1743,13 +1807,13 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
         // No scraper bin yet - so new insert.
         if (BinIter == mMapCSManifestsBinnedByScraper.end())
         {
-            mManifestInner.insert(std::make_pair(nTime, nHash));
+            mManifestInner.insert(std::make_pair(nTime, std::make_pair(nHash, nContentHash)));
             mMapCSManifestsBinnedByScraper.insert(std::make_pair(sManifestName, mManifestInner));
         }
         else
         {
             mManifestInner = BinIter->second;
-            mManifestInner.insert(std::make_pair(nTime, nHash));
+            mManifestInner.insert(std::make_pair(nTime, std::make_pair(nHash, nContentHash)));
             std::swap(mManifestInner, BinIter->second);
         }
     }
@@ -1786,11 +1850,11 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
             for (auto iter_inner = ++mManifestInner.begin(); iter_inner != mManifestInner.end(); ++iter_inner)
             {
                 
-                _log(INFO, "ScraperDeleteCScraperManifests", "Deleting non-current manifest " + iter_inner->second.GetHex()
+                _log(INFO, "ScraperDeleteCScraperManifests", "Deleting non-current manifest " + iter_inner->second.first.GetHex()
                      + " from scraper source " + iter->first);
                 
                 // Delete from CScraperManifest map
-                ScraperDeleteCScraperManifest(iter_inner->second);
+                ScraperDeleteCScraperManifest(iter_inner->second.first);
             }
         }
     }

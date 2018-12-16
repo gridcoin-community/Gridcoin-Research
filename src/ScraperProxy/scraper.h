@@ -116,10 +116,12 @@ struct ScraperFileManifest
     int64_t timestamp;
 };
 
-// The inner map is sorted in descending order of time.
-typedef std::multimap<int64_t, uint256, greater <int64_t>> mCSManifest;
+typedef std::string ScraperID;
+// The inner map is sorted in descending order of time. The pair is manifest hash, content hash.
+typedef std::multimap<int64_t, pair<uint256, uint256>, greater <int64_t>> mCSManifest;
 // Right now this is using sCManifestName, but needs to be changed to pubkey once the pubkey part is finished.
-typedef std::map<std::string, mCSManifest> mmCSManifestsBinnedByScraper;
+// See the ScraperID typedef above.
+typedef std::map<ScraperID, mCSManifest> mmCSManifestsBinnedByScraper;
 
 struct ScraperObjectStatsKey
 {
@@ -155,15 +157,28 @@ typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKe
 * Global Constants   *
 *********************/
 
+// We may want to turn some of these into administrative message appcache entries...
+
 // Define 48 hour retention time for stats files, current or not.
 static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
 // Define whether prior CScraperManifests are kept.
-static bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = false;
+static bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
 // Define CManifest scraper object retention time.
 static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 3 * 3600;
-static bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = true;
+static bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
 static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
+// This settings below are important. This sets the minimum number of scrapers
+// that must be available to form a convergence. Above this minimum, the ratio
+// is followed. For example, if there are 4 scrapers, a ratio of 2/3 would require
+// CEILING(0.66666... * 4) = 3. See NumScrapersForSupermajority below.
+// If there is only 1 scraper available, and the mininum is 2, then a convergence
+// will not happen. Setting this below 2 will allow convergence to happen without
+// cross checking, and is undesirable, because the scrapers are not supposed to be
+// trusted entities.
+static const unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
+// Two-thirds seems like a reasonable standard for agreement.
+static const double SCRAPER_SUPERMAJORITY_RATIO = 2.0 / 3.0;
 
 /*********************
 * Functions          *
@@ -192,10 +207,18 @@ bool ScraperSendFileManifestContents(std::string CManifestName);
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
+bool ScraperConstructConvergedManifest();
 
 double MagRound(double dMag)
 {
     return round(dMag / MAG_ROUND) * MAG_ROUND;
+}
+
+unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
+{
+    unsigned int nRequired = std::max(SCRAPER_SUPERMAJORITY_MINIMUM, (unsigned int)std::ceil(SCRAPER_SUPERMAJORITY_RATIO * nScraperCount));
+    
+    return nRequired;
 }
 
 /*********************
