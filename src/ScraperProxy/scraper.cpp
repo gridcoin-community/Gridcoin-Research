@@ -1737,10 +1737,28 @@ bool ScraperConstructConvergedManifest()
             // Insert into mManifestsBinnedByTime multimap. Iter_inner.first is the manifest time,
             // iter_inner.second.second is the manifest CONTENT hash.
             mManifestsBinnedByTime.insert(std::make_pair(iter_inner.first, iter_inner.second.second));
-            // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
-            mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-            _log(INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
-                 + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
+
+            // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+            // We need to prevent the insertion of a second entry with the same content from the same scraper. This
+            // could otherwise happen if a scraper is shutdown and restarted, and it publishes a new manifest
+            // before it receives manifests from the other nodes (including its own prior manifests).
+
+            auto range = mManifestsBinnedbyContent.equal_range(iter_inner.second.second);
+            bool bAlreadyExists = false;
+            for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+            {
+                // ---- ScraperID ------ Candidate scraperID to insert
+                if (iter3->second.first == iter.first)
+                    bAlreadyExists = true;
+            }
+
+            if (!bAlreadyExists)
+            {
+                // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
+                mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
+                _log(INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
+                     + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
+            }
         }
     }
     
@@ -1759,6 +1777,7 @@ bool ScraperConstructConvergedManifest()
             convergence = mManifestsBinnedbyContent.find(iter.second);
 
             _log(INFO, "ScraperConstructConvergedManifest", "Found convergence on manifest " + convergence->second.second.GetHex()
+                 + " at " + std::to_string(iter.first)
                  + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                  + " agreeing.");
 
