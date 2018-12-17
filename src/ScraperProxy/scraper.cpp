@@ -31,7 +31,7 @@ void testdata(const std::string& etag);
 unsigned int nScraperSleep = 60000;
 unsigned int nActiveBeforeSB = 300;
 bool fScraperRetainNonCurrentFiles = false;
-boost::filesystem::path pathScraper = fs::current_path() / "Scraper";
+fs::path pathScraper = fs::current_path() / "Scraper";
 
 extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
@@ -40,6 +40,9 @@ extern BeaconConsensus GetConsensusBeaconList();
 void Scraper(bool fScraperStandalone)
 {
     _log(INFO, "Scraper", "Starting Scraper thread.");
+
+    // This is necessary to maintain compatibility with Windows.
+    pathScraper.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 
     // Hash check
     std::string sHashCheck = "Hello world";
@@ -81,14 +84,14 @@ void Scraper(bool fScraperStandalone)
 
                 for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
                 {
-                    std::string filename = dir.path().filename().c_str();
+                    std::string filename = dir.path().filename().string();
 
                     if(dir.path().filename() != "Manifest.csv.gz"
                             && dir.path().filename() != "BeaconList.csv.gz"
                             && dir.path().filename() != "Stats.csv.gz"
                             && fs::is_regular_file(dir))
                     {
-                        entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().c_str());
+                        entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
                         if (entry == StructScraperFileManifest.mScraperFileManifest.end())
                         {
                             fs::remove(dir.path());
@@ -703,7 +706,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     std::string gzetagfile_no_path = gzetagfile;
     // Put path in.
-    gzetagfile = ((fs::path)(pathScraper / gzetagfile)).c_str();
+    gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
 
     std::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
     boostio::filtering_ostream out;
@@ -914,7 +917,7 @@ uint256 GetmScraperFileManifestHash()
 
 void testdata(const std::string& etag)
 {
-    std::ifstream ingzfile( (pathScraper / (fs::path)(etag + ".gz")).c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile( (pathScraper / (fs::path)(etag + ".gz")).string(), std::ios_base::in | std::ios_base::binary);
 
 
     boostio::filtering_istream in;
@@ -1584,7 +1587,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
     fs::path inputfilewpath = pathScraper / inputfile;
     
     // open input file, and associate with CAutoFile
-    FILE *file = fopen(inputfilewpath.c_str(), "rb");
+    FILE *file = fopen(inputfilewpath.string().c_str(), "rb");
     CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
 
     if (!filein)
@@ -1634,7 +1637,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
         fs::path inputfilewpath = pathScraper / inputfile;
 
         // open input file, and associate with CAutoFile
-        FILE *file = fopen(inputfilewpath.c_str(), "rb");
+        FILE *file = fopen(inputfilewpath.string().c_str(), "rb");
         CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
 
         if (!filein)

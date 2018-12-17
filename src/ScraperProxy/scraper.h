@@ -13,6 +13,8 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <boost/locale.hpp>
+#include <codecvt>
 #include <boost/exception/exception.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
@@ -59,10 +61,15 @@ namespace boostio = boost::iostreams;
 * Scraper ENUMS      *
 *********************/
 
+// Have to have undefine ERROR and redefine as zero in enum because stupid windows.h has it already defined as zero, but as a macro.
+#ifdef WIN32
+#undef ERROR
+#endif
+
 enum logattribute {
+    ERROR,
     INFO,
     WARNING,
-    ERROR,
     CRITICAL
 };
 
@@ -629,7 +636,8 @@ class logger
 {
 private:
 
-    std::ofstream logfile;
+    //std::ofstream logfile;
+    fs::ofstream logfile;
 
 public:
 
@@ -897,7 +905,7 @@ class userpass
 {
 private:
 
-    std::ifstream userpassfile;
+    fs::ifstream userpassfile;
 
 public:
 
@@ -955,7 +963,7 @@ class authdata
 {
 private:
 
-    std::ofstream oauthdata;
+    fs::ofstream oauthdata;
     stringbuilder outdata;
 
 public:
@@ -1023,7 +1031,7 @@ class nntester
 {
 private:
 
-    std::ofstream logfile;
+    fs::ofstream logfile;
 
 public:
 

@@ -18,9 +18,10 @@ define $(package)_config_cmds
 endef
 
 define $(package)_build_cmds
-  $(MAKE) $($(package)_build_opts) libz.a
+  $(MAKE) $($(package)_build_opts) all
 endef
 
 define $(package)_stage_cmds
-  $(MAKE) DESTDIR=$($(package)_staging_dir) install $($(package)_build_opts)
+  $(MAKE) DESTDIR=$($(package)_staging_dir) install $($(package)_build_opts) &&\
+  $(MAKE) DESTDIR=$(host_prefix) install $($(package)_build_opts)
 endef
