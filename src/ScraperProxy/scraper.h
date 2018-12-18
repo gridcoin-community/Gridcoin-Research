@@ -409,6 +409,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
             curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
+            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
             res = curl_easy_perform(curl);
             fclose(fp);
@@ -456,6 +457,7 @@ public:
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
         curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
+        //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
         res = curl_easy_perform(curl);
 
@@ -464,7 +466,7 @@ public:
 
         if (res > 0)
         {
-            _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + ">");
+            _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
 
             return false;
         }
@@ -529,6 +531,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
             curl_easy_setopt(curl, CURLOPT_PROXY, "");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
             res = curl_easy_perform(curl);
             fclose(fp);
@@ -574,6 +577,7 @@ public:
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
         res = curl_easy_perform(curl);
 
@@ -582,7 +586,7 @@ public:
 
         if (res > 0)
         {
-            _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + ">");
+            _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
 
             return false;
         }
