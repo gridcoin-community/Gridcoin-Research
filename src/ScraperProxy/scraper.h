@@ -438,35 +438,45 @@ public:
 
     bool http_header(const std::string& url, std::string& etag, const std::string& userpass)
     {
-        struct curl_slist* headers = NULL;
-
-        headers = curl_slist_append(headers, "Accept: */*");
-        headers = curl_slist_append(headers, "User-Agent: curl/7.58.0");
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeheader);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-        curl_easy_setopt(curl, CURLOPT_PROXY, "");
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
-        curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
-        //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
-
-        res = curl_easy_perform(curl);
-
-        // Stop memory leak from headers
-        curl_slist_free_all(headers);
-
-        if (res > 0)
+        try
         {
-            _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+            struct curl_slist* headers = NULL;
+
+            headers = curl_slist_append(headers, "Accept: */*");
+            headers = curl_slist_append(headers, "User-Agent: curl/7.58.0");
+
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeheader);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+            curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+            curl_easy_setopt(curl, CURLOPT_PROXY, "");
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+            curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
+            curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
+            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+
+            res = curl_easy_perform(curl);
+
+            // Stop memory leak from headers
+            curl_slist_free_all(headers);
+
+            if (res > 0)
+            {
+                _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+
+                return false;
+            }
+        }
+
+        catch (std::exception& ex)
+        {
+            _log(ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -560,33 +570,43 @@ public:
 
     bool http_header(const std::string& url, std::string& etag)
     {
-        struct curl_slist* headers = NULL;
-
-        headers = curl_slist_append(headers, "Accept: */*");
-        headers = curl_slist_append(headers, "User-Agent: curl/7.58.0");
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeheader);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-        curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-        curl_easy_setopt(curl, CURLOPT_PROXY, "");
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
-
-        res = curl_easy_perform(curl);
-
-        // Stop memory leak from headers
-        curl_slist_free_all(headers);
-
-        if (res > 0)
+        try
         {
-            _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+            struct curl_slist* headers = NULL;
+
+            headers = curl_slist_append(headers, "Accept: */*");
+            headers = curl_slist_append(headers, "User-Agent: curl/7.58.0");
+
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeheader);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+            curl_easy_setopt(curl, CURLOPT_HEADERDATA, &header);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+            curl_easy_setopt(curl, CURLOPT_PROXY, "");
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+            curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+
+            res = curl_easy_perform(curl);
+
+            // Stop memory leak from headers
+            curl_slist_free_all(headers);
+
+            if (res > 0)
+            {
+                _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+
+                return false;
+            }
+        }
+
+        catch (std::exception& ex)
+        {
+            _log(ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
