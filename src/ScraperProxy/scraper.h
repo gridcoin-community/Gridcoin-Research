@@ -21,6 +21,7 @@
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/device/array.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/serialization/binary_object.hpp>
 //#include <expat.h>
@@ -130,6 +131,22 @@ typedef std::multimap<int64_t, pair<uint256, uint256>, greater <int64_t>> mCSMan
 // See the ScraperID typedef above.
 typedef std::map<ScraperID, mCSManifest> mmCSManifestsBinnedByScraper;
 
+// -------------- Project ---- Converged Part
+typedef std::map<std::string, CSerializeData> mConvergedManifestParts;
+// Note that this IS a copy not a pointer. Since manifests and parts can be deleted because of aging rules,
+// it is dangerous to save memory and point to the actual part objects themselves.
+
+struct ConvergedManifest
+{
+    uint256 nContentHash;
+    uint256 ConsensusBlock;
+    int64_t timestamp;
+    bool bByParts;
+
+    mConvergedManifestParts ConvergedManifestPartsMap;
+};
+
+
 struct ScraperObjectStatsKey
 {
     statsobjecttype objecttype;
@@ -196,6 +213,7 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
 bool ScraperDirectorySanity();
 bool StoreBeaconList(const fs::path& file);
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
+bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 extern AppCacheSection ReadCacheSection(const std::string& section);
 uint256 GetFileHash(const fs::path& inputfile);
@@ -206,7 +224,9 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 ScraperStats GetScraperStatsByConsensusBeaconList();
+ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool IsScraperAuthorizedToBroadcastManifests();
@@ -214,7 +234,7 @@ bool ScraperSendFileManifestContents(std::string CManifestName);
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
-bool ScraperConstructConvergedManifest();
+bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 
 double MagRound(double dMag)
 {

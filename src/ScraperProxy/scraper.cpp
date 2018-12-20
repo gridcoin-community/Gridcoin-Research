@@ -89,6 +89,7 @@ void Scraper(bool fScraperStandalone)
                     if(dir.path().filename() != "Manifest.csv.gz"
                             && dir.path().filename() != "BeaconList.csv.gz"
                             && dir.path().filename() != "Stats.csv.gz"
+                            && dir.path().filename() != "ConvergedStats.csv.gz"
                             && fs::is_regular_file(dir))
                     {
                         entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
@@ -261,9 +262,22 @@ void Scraper(bool fScraperStandalone)
 
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
-                // Cull CScraperManifests.
-                //ScraperDeleteCScraperManifests();
-                ScraperConstructConvergedManifest();
+                ConvergedManifest StructConvergedManifest;
+                BeaconMap mBeaconMap;
+
+                //ScraperConstructConvergedManifest also culls old CScraperManifests.
+                if (ScraperConstructConvergedManifest(StructConvergedManifest))
+                {
+                LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
+                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+                _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+                if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                    _log(ERROR, "Scraper", "StoreStats error occurred");
+                else
+                    _log(INFO, "Scraper", "Stored converged stats.");
+                }
             }
         }
 
@@ -285,9 +299,22 @@ void NeuralNetwork()
         // These items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
         {
-            // Currently just cull outdated CScraperManifests received
-            //ScraperDeleteCScraperManifests();
-            ScraperConstructConvergedManifest();
+            ConvergedManifest StructConvergedManifest;
+            BeaconMap mBeaconMap;
+
+            //ScraperConstructConvergedManifest also culls old CScraperManifests.
+            if(ScraperConstructConvergedManifest(StructConvergedManifest))
+            {
+            LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
+            ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+            _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+            if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                _log(ERROR, "Scraper", "StoreStats error occurred");
+            else
+                _log(INFO, "Scraper", "Stored converged stats.");
+            }
         }
 
         // Use the same sleep interval as the scraper. This defaults to 60 seconds.
@@ -1385,6 +1412,100 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
 
 
 
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+{
+    boostio::basic_array_source<char> input_source(&ProjectData[0], ProjectData.size());
+    boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
+
+    boostio::filtering_istream in;
+    in.push(boostio::gzip_decompressor());
+    in.push(ingzss);
+
+    std::vector<std::string> vXML;
+
+    // Lets vector the user blocks
+    std::string line;
+    double dProjectTC = 0.0;
+    double dProjectRAT = 0.0;
+    double dProjectRAC = 0.0;
+    while (std::getline(in, line))
+    {
+        if(line[0] == '#')
+            continue;
+
+        std::vector<std::string> fields;
+        boost::split(fields, line, boost::is_any_of(","), boost::token_compress_on);
+
+        if(fields.size() < 4)
+            continue;
+
+        ScraperObjectStats statsentry = {};
+
+        const std::string& sTC = fields[0];
+        const std::string& sRAT = fields[1];
+        const std::string& sRAC = fields[2];
+        const std::string& cpid = fields[3];
+
+        // Replace blank strings with zeros.
+        statsentry.statsvalue.dTC = (sTC.empty()) ? 0.0 : std::stod(sTC);
+        statsentry.statsvalue.dRAT = (sRAT.empty()) ? 0.0 : std::stod(sRAT);
+        statsentry.statsvalue.dRAC = (sRAC.empty()) ? 0.0 : std::stod(sRAC);
+        // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
+
+        statsentry.statskey.objecttype = byCPIDbyProject;
+        statsentry.statskey.objectID = project + "," + cpid;
+
+        // Insert stats entry into map by the key.
+        mScraperStats[statsentry.statskey] = statsentry;
+
+        // Increment project
+        dProjectTC += statsentry.statsvalue.dTC;
+        dProjectRAT += statsentry.statsvalue.dRAT;
+        dProjectRAC += statsentry.statsvalue.dRAC;
+    }
+
+    _log(INFO, "LoadProjectObjectToStatsByCPID", "There are " + std::to_string(mScraperStats.size()) + " CPID entries for " + project);
+
+    // The mScraperStats here is scoped to only this project so we do not need project filtering here.
+    ScraperStats::iterator entry;
+
+    for (auto const& entry : mScraperStats)
+    {
+        ScraperObjectStats statsentry;
+
+        statsentry.statskey = entry.first;
+        statsentry.statsvalue.dTC = entry.second.statsvalue.dTC;
+        statsentry.statsvalue.dRAT = entry.second.statsvalue.dRAT;
+        statsentry.statsvalue.dRAC = entry.second.statsvalue.dRAC;
+        statsentry.statsvalue.dMag = MagRound(entry.second.statsvalue.dRAC / dProjectRAC * projectmag);
+
+        // Update map entry with the magnitude.
+        mScraperStats[statsentry.statskey] = statsentry;
+    }
+
+    // Due to rounding to MAG_ROUND, the actual total project magnitude will not be exactly projectmag,
+    // but it should be very close. Roll up project statistics.
+    ScraperObjectStats ProjectStatsEntry = {};
+
+    ProjectStatsEntry.statskey.objecttype = byProject;
+    ProjectStatsEntry.statskey.objectID = project;
+
+    for (auto const& entry : mScraperStats)
+    {
+        ProjectStatsEntry.statsvalue.dTC += entry.second.statsvalue.dTC;
+        ProjectStatsEntry.statsvalue.dRAT += entry.second.statsvalue.dRAT;
+        ProjectStatsEntry.statsvalue.dRAC += entry.second.statsvalue.dRAC;
+        ProjectStatsEntry.statsvalue.dMag += entry.second.statsvalue.dMag;
+    }
+
+    // Insert project level map entry.
+    mScraperStats[ProjectStatsEntry.statskey] = ProjectStatsEntry;
+
+    return true;
+}
+
+
+
 
 
 
@@ -1429,9 +1550,9 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
                 LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, Consensus.mBeaconMap, mProjectScraperStats);
 
                 // Insert into overall map.
-                for (auto const& entry : mProjectScraperStats)
+                for (auto const& entry2 : mProjectScraperStats)
                 {
-                    mScraperStats[entry.first] = entry.second;
+                    mScraperStats[entry2.first] = entry2.second;
                 }
             }
         }
@@ -1490,6 +1611,94 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 }
 
 
+ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest)
+{
+    _log(INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
+
+    // Enumerate the count of active projects from the converged manifest. The part 0, which
+    // is the beacon list, is not a project, which is why there is a -1.
+    unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartsMap.size() - 1;
+    _log(INFO, "GetScraperStatsByConvergedManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
+
+    double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
+
+    //Get the Consensus Beacon map and initialize mScraperStats.
+    BeaconMap mBeaconMap;
+    LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
+
+    ScraperStats mScraperStats;
+
+    for (auto entry = StructConvergedManifest.ConvergedManifestPartsMap.begin(); entry != StructConvergedManifest.ConvergedManifestPartsMap.end(); ++entry)
+    {
+        std::string project = entry->first;
+        ScraperStats mProjectScraperStats;
+
+        // Do not process the BeaconList itself as a project stats file.
+        if(project != "BeaconList")
+        {
+            _log(INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
+
+            LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mBeaconMap, mProjectScraperStats);
+
+            // Insert into overall map.
+            for (auto const& entry2 : mProjectScraperStats)
+            {
+                mScraperStats[entry2.first] = entry2.second;
+            }
+        }
+    }
+
+    // Now are are going to cut across projects and group by CPID.
+
+    //Also track the network wide rollup.
+    ScraperObjectStats NetworkWideStatsEntry = {};
+
+    NetworkWideStatsEntry.statskey.objecttype = NetworkWide;
+    // ObjectID is blank string for network-wide.
+    NetworkWideStatsEntry.statskey.objectID = "";
+
+    for (auto const& beaconentry : mBeaconMap)
+    {
+        ScraperObjectStats CPIDStatsEntry = {};
+
+        CPIDStatsEntry.statskey.objecttype = byCPID;
+        CPIDStatsEntry.statskey.objectID = beaconentry.first;
+
+        for (auto const& innerentry : mScraperStats)
+        {
+            // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
+            // otherwise dimension mixing will result.
+
+            std::string objectID = innerentry.first.objectID;
+
+            std::size_t found = objectID.find(CPIDStatsEntry.statskey.objectID);
+
+            if (innerentry.first.objecttype == byCPIDbyProject && found!=std::string::npos)
+            {
+                CPIDStatsEntry.statsvalue.dTC += innerentry.second.statsvalue.dTC;
+                CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
+                CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
+                CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
+            }
+        }
+
+        // Insert the byCPID entry into the overall map.
+        mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
+
+        // Increement the network wide stats.
+        NetworkWideStatsEntry.statsvalue.dTC += CPIDStatsEntry.statsvalue.dTC;
+        NetworkWideStatsEntry.statsvalue.dRAT += CPIDStatsEntry.statsvalue.dRAT;
+        NetworkWideStatsEntry.statsvalue.dRAC += CPIDStatsEntry.statsvalue.dRAC;
+        NetworkWideStatsEntry.statsvalue.dMag += CPIDStatsEntry.statsvalue.dMag;
+    }
+
+    // Insert the (single) network-wide entry into the overall map.
+    mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
+
+    _log(INFO, "GetScraperStatsByConsensusBeaconList", "Completed stats processing");
+
+    return mScraperStats;
+}
 
 
 /***********************
@@ -1708,8 +1917,8 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
     return true;
 }
 
-
-bool ScraperConstructConvergedManifest()
+// ------------------------------------ This an out parameter.
+bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest)
 {
     bool bConvergenceSuccessful = false;
 
@@ -1790,6 +1999,55 @@ bool ScraperConstructConvergedManifest()
         }
     }
 
+    if (bConvergenceSuccessful)
+    {
+        // Select agreed upon (converged) CScraper manifest based on converged hash.
+        auto pair = CScraperManifest::mapManifest.find(convergence->second.second);
+        const CScraperManifest& manifest = *pair->second;
+
+        // Fill out the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
+        // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
+
+        StructConvergedManifest.nContentHash = convergence->first;
+        StructConvergedManifest.ConsensusBlock = manifest.ConsensusBlock;
+        StructConvergedManifest.timestamp = GetAdjustedTime();
+        StructConvergedManifest.bByParts = false;
+
+        int iPartNum = 0;
+        CDataStream ss(SER_NETWORK,1);
+        WriteCompactSize(ss, manifest.vParts.size());
+        uint256 nContentHashCheck;
+
+        for(const auto& iter : manifest.vParts)
+        {
+            std::string sProject;
+
+            if (iPartNum == 0)
+                sProject = "BeaconList";
+            else
+                sProject = manifest.projects[iPartNum-1].project;
+
+            // Copy the parts data into the map keyed by project.
+            StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(sProject, iter->data));
+
+            // Serialize the hash to doublecheck the content hash.
+            ss << iter->hash;
+
+            iPartNum++;
+        }
+        ss << StructConvergedManifest.ConsensusBlock;
+
+        nContentHashCheck = Hash(ss.begin(), ss.end());
+
+        if (nContentHashCheck != StructConvergedManifest.nContentHash)
+        {
+            bConvergenceSuccessful = false;
+            _log(ERROR, "ScraperConstructConvergedManifest", "Selected Converged Manifest content hash check failed! nContentHashCheck = "
+                 + nContentHashCheck.GetHex() + " and nContentHash = " + StructConvergedManifest.nContentHash.GetHex());
+        }
+    }
+
+
     // TODO: Write the part level convergence routine. The above will only work reasonably well if
     // SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true (which keeps a history of whole manifests around, and
     // SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false (which only includes current files in the manifests).
@@ -1797,7 +2055,6 @@ bool ScraperConstructConvergedManifest()
     // And since the parts are not actually duplicated between manifests if they have the same hash (they are referenced),
     // the only additional overhead is the map entry and fields at the CScraperManifest level, which is small compared to the
     // parts themselves.
-
 
     if(!bConvergenceSuccessful)
         _log(INFO, "ScraperConstructConvergedManifest", "No convergence on manifests by content at the manifest level.");
@@ -1904,6 +2161,51 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
     // that large.
     mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
     return mMapCSManifestsBinnedByScraper;
+}
+
+
+
+// ---------------------------------------------- In ---------------------------------------- Out
+bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap)
+{
+    // Find the beacon list.
+    auto iter = StructConvergedManifest.ConvergedManifestPartsMap.find("BeaconList");
+
+    boostio::basic_array_source<char> input_source(&iter->second[0], iter->second.size());
+    boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
+
+    boostio::filtering_istream in;
+    in.push(boostio::gzip_decompressor());
+    in.push(ingzss);
+
+    std::string line;
+
+    int64_t ntimestamp;
+
+    // Header -- throw away.
+    std::getline(in, line);
+
+    while (std::getline(in, line))
+    {
+        BeaconEntry LoadEntry;
+        std::string key;
+
+        std::vector<std::string> vline = split(line, ",");
+
+        key = vline[0];
+
+        std::istringstream sstimestamp(vline[1]);
+        sstimestamp >> ntimestamp;
+        LoadEntry.timestamp = ntimestamp;
+
+        LoadEntry.value = vline[2];
+
+        mBeaconMap[key] = LoadEntry;
+    }
+
+    _log(INFO, "LoadBeaconListFromConvergedManifest", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
+
+    return true;
 }
 
 
