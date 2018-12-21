@@ -18,7 +18,7 @@ CCriticalSection cs_StructScraperFileManifest;
 bool WhitelistPopulated();
 bool UserpassPopulated();
 bool DownloadProjectRacFilesByCPID();
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag);
+bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
 
@@ -586,6 +586,10 @@ bool DownloadProjectRacFilesByCPID()
         return false;
     }
 
+    // Get a consensus map of Beacons.
+    BeaconConsensus Consensus = GetConsensusBeaconList();
+    _log(INFO, "DownloadProjectRacFiles", "Getting consensus map of Beacons.");
+
     for (const auto& prjs : vwhitelist)
     {
         _log(INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.first);
@@ -695,7 +699,7 @@ bool DownloadProjectRacFilesByCPID()
                 continue;
             }
 
-        ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag);
+        ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag, Consensus);
     }
 
     // After processing, update global structure with the timestamp of the latest file in the manifest.
@@ -717,11 +721,11 @@ bool DownloadProjectRacFilesByCPID()
 
 
 // This version uses a consensus beacon map rather than the teamid to filter statistics.
-bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag)
+bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag, BeaconConsensus& Consensus)
 {
-    // Get a consensus map of Beacons.
-    BeaconConsensus Consensus = GetConsensusBeaconList();
-    
+    // Set fileerror flag to true until made false by the completion of one successful injection of user stats into stream.
+    bool bfileerror = true;
+
     std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
@@ -740,12 +744,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     std::string gzetagfile = "";
 
-    // If einstein we store different
-//    if (file.string().find("einstein") != std::string::npos)
-//        gzetagfile = "einstein_user.csv.gz";
-
-//    else
-        gzetagfile = project + "-" + etag + ".csv" + ".gz";
+    gzetagfile = project + "-" + etag + ".csv" + ".gz";
 
     std::string gzetagfile_no_path = gzetagfile;
     // Put path in.
@@ -780,13 +779,16 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                 << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
                 << cpid
                 << std::endl;
+
+            // If we get here at least once then there is at least one CPID being put in the file.
+            // So set the bfileerror flag to false.
+            bfileerror = false;
         }
         else
             builder.append(line);
     }
 
-    // TODO: Error out on stream errors.
-    /*
+    // TODO: More error checking on stream errors.
     if (bfileerror)
     {
         _log(CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
@@ -804,7 +806,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             fs::remove(file);
 
         return false;
-    }*/
+    }
 
     _log(INFO, "ProcessProjectRacFileByCPID", "Finished processing " + file.string());
 
