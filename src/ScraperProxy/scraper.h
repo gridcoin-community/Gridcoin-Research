@@ -158,6 +158,7 @@ struct ScraperObjectStatsValue
     double dTC;
     double dRAT;
     double dRAC;
+    double dAvgRAC;
     double dMag;
 };
 
@@ -227,6 +228,8 @@ ScraperStats GetScraperStatsByConsensusBeaconList();
 ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
+                                         const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool IsScraperAuthorizedToBroadcastManifests();
@@ -235,6 +238,7 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
+std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 
 double MagRound(double dMag)
 {
@@ -738,6 +742,11 @@ public:
     void append(int64_t value)
     {
         builtstring << value;
+    }
+
+    void fixeddoubleappend(double value, unsigned int precision)
+    {
+        builtstring << std::fixed << std::setprecision(precision) << value;
     }
 
     void cleanappend(const std::string& value)

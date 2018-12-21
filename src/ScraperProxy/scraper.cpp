@@ -261,24 +261,33 @@ void Scraper(bool fScraperStandalone)
                 }
 
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
-
-                ConvergedManifest StructConvergedManifest;
-                BeaconMap mBeaconMap;
-
-                //ScraperConstructConvergedManifest also culls old CScraperManifests.
-                if (ScraperConstructConvergedManifest(StructConvergedManifest))
-                {
-                LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
-
-                _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
-
-                if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                    _log(ERROR, "Scraper", "StoreStats error occurred");
-                else
-                    _log(INFO, "Scraper", "Stored converged stats.");
-                }
             }
+
+            // Construct Converged Manifest and SB Core (this is here during development only.)
+
+            ConvergedManifest StructConvergedManifest;
+            BeaconMap mBeaconMap;
+            std::string sSBCoreData;
+
+            //ScraperConstructConvergedManifest also culls old CScraperManifests.
+            if (ScraperConstructConvergedManifest(StructConvergedManifest))
+            {
+            LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
+            ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+            _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+            if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                _log(ERROR, "Scraper", "StoreStats error occurred");
+            else
+                _log(INFO, "Scraper", "Stored converged stats.");
+
+            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+
+            if (fDebug)
+                _log(INFO, "Scraper", "SB Core Data\n" + sSBCoreData);
+            }
+
         }
 
         _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
@@ -301,6 +310,7 @@ void NeuralNetwork()
         {
             ConvergedManifest StructConvergedManifest;
             BeaconMap mBeaconMap;
+            std::string sSBCoreData;
 
             //ScraperConstructConvergedManifest also culls old CScraperManifests.
             if(ScraperConstructConvergedManifest(StructConvergedManifest))
@@ -314,6 +324,12 @@ void NeuralNetwork()
                 _log(ERROR, "Scraper", "StoreStats error occurred");
             else
                 _log(INFO, "Scraper", "Stored converged stats.");
+
+            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+
+            if (fDebug)
+                _log(INFO, "Scraper", "SB Core Data\n" + sSBCoreData);
+
             }
         }
 
@@ -1249,7 +1265,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
     _log(INFO, "StoreStats", "Started processing " + file.string());
 
     // Header.
-    stream << "StatsType," << "Project," << "CPID," << "TC," << "RAT," << "RAC," << "Mag\n";
+    stream << "StatsType," << "Project," << "CPID," << "TC," << "RAT," << "RAC," << "AvgRAC," << "Mag\n";
 
     for (auto const& entry : mScraperStats)
     {
@@ -1285,6 +1301,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
                 + std::to_string(entry.second.statsvalue.dTC) + ","
                 + std::to_string(entry.second.statsvalue.dRAT) + ","
                 + std::to_string(entry.second.statsvalue.dRAC) + ","
+                + std::to_string(entry.second.statsvalue.dAvgRAC) + ","
                 + std::to_string(entry.second.statsvalue.dMag) + ","
                 + "\n";
         stream << sScraperStatsEntry;
@@ -1323,91 +1340,14 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
+    // TODO implement file error handling
     bool bcomplete = false;
     bool bfileerror = false;
     std::vector<std::string> vXML;
 
-    // Lets vector the user blocks
-    std::string line;
-    double dProjectTC = 0.0;
-    double dProjectRAT = 0.0;
-    double dProjectRAC = 0.0;
-    while (std::getline(in, line))
-    {
-        if(line[0] == '#')
-            continue;
+    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mBeaconMap, mScraperStats);
 
-        std::vector<std::string> fields;
-        boost::split(fields, line, boost::is_any_of(","), boost::token_compress_on);
-
-        if(fields.size() < 4)
-            continue;
-
-        ScraperObjectStats statsentry = {};
-
-        const std::string& sTC = fields[0];
-        const std::string& sRAT = fields[1];
-        const std::string& sRAC = fields[2];
-        const std::string& cpid = fields[3];
-
-        // Replace blank strings with zeros.
-        statsentry.statsvalue.dTC = (sTC.empty()) ? 0.0 : std::stod(sTC);
-        statsentry.statsvalue.dRAT = (sRAT.empty()) ? 0.0 : std::stod(sRAT);
-        statsentry.statsvalue.dRAC = (sRAC.empty()) ? 0.0 : std::stod(sRAC);
-        // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
-
-        statsentry.statskey.objecttype = byCPIDbyProject;
-        statsentry.statskey.objectID = project + "," + cpid;
-
-        // Insert stats entry into map by the key.
-        mScraperStats[statsentry.statskey] = statsentry;
-
-        // Increment project
-        dProjectTC += statsentry.statsvalue.dTC;
-        dProjectRAT += statsentry.statsvalue.dRAT;
-        dProjectRAC += statsentry.statsvalue.dRAC;
-    }
-
-    ingzfile.close();
-
-    _log(INFO, "LoadProjectFileToStatsByCPID", "There are " + std::to_string(mScraperStats.size()) + " CPID entries for " + project);
-
-    // The mScraperStats here is scoped to only this project so we do not need project filtering here.
-    ScraperStats::iterator entry;
-
-    for (auto const& entry : mScraperStats)
-    {
-        ScraperObjectStats statsentry;
-
-        statsentry.statskey = entry.first;
-        statsentry.statsvalue.dTC = entry.second.statsvalue.dTC;
-        statsentry.statsvalue.dRAT = entry.second.statsvalue.dRAT;
-        statsentry.statsvalue.dRAC = entry.second.statsvalue.dRAC;
-        statsentry.statsvalue.dMag = MagRound(entry.second.statsvalue.dRAC / dProjectRAC * projectmag);
-
-        // Update map entry with the magnitude.
-        mScraperStats[statsentry.statskey] = statsentry;
-    }
-
-    // Due to rounding to MAG_ROUND, the actual total project magnitude will not be exactly projectmag,
-    // but it should be very close. Roll up project statistics.
-    ScraperObjectStats ProjectStatsEntry = {};
-
-    ProjectStatsEntry.statskey.objecttype = byProject;
-    ProjectStatsEntry.statskey.objectID = project;
-
-    for (auto const& entry : mScraperStats)
-    {
-        ProjectStatsEntry.statsvalue.dTC += entry.second.statsvalue.dTC;
-        ProjectStatsEntry.statsvalue.dRAT += entry.second.statsvalue.dRAT;
-        ProjectStatsEntry.statsvalue.dRAC += entry.second.statsvalue.dRAC;
-        ProjectStatsEntry.statsvalue.dMag += entry.second.statsvalue.dMag;
-    }
-
-    // Insert project level map entry.
-    mScraperStats[ProjectStatsEntry.statskey] = ProjectStatsEntry;
-
-    return true;
+    return bResult;
 }
 
 
@@ -1421,14 +1361,22 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
     in.push(boostio::gzip_decompressor());
     in.push(ingzss);
 
+    bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mBeaconMap, mScraperStats);
+
+    return bResult;
+}
+
+
+
+bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
+                                         const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+{
     std::vector<std::string> vXML;
 
     // Lets vector the user blocks
     std::string line;
-    double dProjectTC = 0.0;
-    double dProjectRAT = 0.0;
     double dProjectRAC = 0.0;
-    while (std::getline(in, line))
+    while (std::getline(sUncompressedIn, line))
     {
         if(line[0] == '#')
             continue;
@@ -1450,6 +1398,8 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
         statsentry.statsvalue.dTC = (sTC.empty()) ? 0.0 : std::stod(sTC);
         statsentry.statsvalue.dRAT = (sRAT.empty()) ? 0.0 : std::stod(sRAT);
         statsentry.statsvalue.dRAC = (sRAC.empty()) ? 0.0 : std::stod(sRAC);
+        // At the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
+        statsentry.statsvalue.dAvgRAC = statsentry.statsvalue.dRAC;
         // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
 
         statsentry.statskey.objecttype = byCPIDbyProject;
@@ -1459,8 +1409,6 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
         mScraperStats[statsentry.statskey] = statsentry;
 
         // Increment project
-        dProjectTC += statsentry.statsvalue.dTC;
-        dProjectRAT += statsentry.statsvalue.dRAT;
         dProjectRAC += statsentry.statsvalue.dRAC;
     }
 
@@ -1477,6 +1425,8 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
         statsentry.statsvalue.dTC = entry.second.statsvalue.dTC;
         statsentry.statsvalue.dRAT = entry.second.statsvalue.dRAT;
         statsentry.statsvalue.dRAC = entry.second.statsvalue.dRAC;
+        // As per the above the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
+        statsentry.statsvalue.dAvgRAC = entry.second.statsvalue.dAvgRAC;
         statsentry.statsvalue.dMag = MagRound(entry.second.statsvalue.dRAC / dProjectRAC * projectmag);
 
         // Update map entry with the magnitude.
@@ -1490,21 +1440,26 @@ bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerialize
     ProjectStatsEntry.statskey.objecttype = byProject;
     ProjectStatsEntry.statskey.objectID = project;
 
+    unsigned int nCPIDCount = 0;
     for (auto const& entry : mScraperStats)
     {
         ProjectStatsEntry.statsvalue.dTC += entry.second.statsvalue.dTC;
         ProjectStatsEntry.statsvalue.dRAT += entry.second.statsvalue.dRAT;
         ProjectStatsEntry.statsvalue.dRAC += entry.second.statsvalue.dRAC;
         ProjectStatsEntry.statsvalue.dMag += entry.second.statsvalue.dMag;
+
+        nCPIDCount++;
     }
+
+    //Compute AvgRAC for project across CPIDs and set.
+    (nCPIDCount > 0) ? ProjectStatsEntry.statsvalue.dAvgRAC = ProjectStatsEntry.statsvalue.dRAC / nCPIDCount : ProjectStatsEntry.statsvalue.dAvgRAC = 0.0;
 
     // Insert project level map entry.
     mScraperStats[ProjectStatsEntry.statskey] = ProjectStatsEntry;
 
     return true;
+
 }
-
-
 
 
 
@@ -1567,6 +1522,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     // ObjectID is blank string for network-wide.
     NetworkWideStatsEntry.statskey.objectID = "";
 
+    unsigned int nCPIDProjectCount = 0;
     for (auto const& beaconentry : Consensus.mBeaconMap)
     {
         ScraperObjectStats CPIDStatsEntry = {};
@@ -1574,6 +1530,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         CPIDStatsEntry.statskey.objecttype = byCPID;
         CPIDStatsEntry.statskey.objectID = beaconentry.first;
 
+        unsigned int nProjectCount = 0;
         for (auto const& innerentry : mScraperStats)
         {
             // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
@@ -1589,8 +1546,14 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
                 CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
                 CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
                 CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
+
+                nProjectCount++;
+                nCPIDProjectCount++;
             }
         }
+
+        // Compute CPID AvgRAC across the projects for that CPID and set.
+        (nProjectCount > 0) ? CPIDStatsEntry.statsvalue.dAvgRAC = CPIDStatsEntry.statsvalue.dRAC / nProjectCount : CPIDStatsEntry.statsvalue.dAvgRAC = 0.0;
 
         // Insert the byCPID entry into the overall map.
         mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
@@ -1601,6 +1564,9 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         NetworkWideStatsEntry.statsvalue.dRAC += CPIDStatsEntry.statsvalue.dRAC;
         NetworkWideStatsEntry.statsvalue.dMag += CPIDStatsEntry.statsvalue.dMag;
     }
+
+    // Compute Network AvgRAC across all ByCPIDByProject elements and set.
+    (nCPIDProjectCount > 0) ? NetworkWideStatsEntry.statsvalue.dAvgRAC = NetworkWideStatsEntry.statsvalue.dRAC / nCPIDProjectCount : NetworkWideStatsEntry.statsvalue.dAvgRAC = 0.0;
 
     // Insert the (single) network-wide entry into the overall map.
     mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
@@ -1657,6 +1623,7 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
     // ObjectID is blank string for network-wide.
     NetworkWideStatsEntry.statskey.objectID = "";
 
+    unsigned int nCPIDProjectCount = 0;
     for (auto const& beaconentry : mBeaconMap)
     {
         ScraperObjectStats CPIDStatsEntry = {};
@@ -1664,6 +1631,7 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
         CPIDStatsEntry.statskey.objecttype = byCPID;
         CPIDStatsEntry.statskey.objectID = beaconentry.first;
 
+        unsigned int nProjectCount = 0;
         for (auto const& innerentry : mScraperStats)
         {
             // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
@@ -1679,8 +1647,14 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
                 CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
                 CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
                 CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
+
+                nProjectCount++;
+                nCPIDProjectCount++;
             }
         }
+
+        // Compute CPID AvgRAC across the projects for that CPID and set.
+        (nProjectCount > 0) ? CPIDStatsEntry.statsvalue.dAvgRAC = CPIDStatsEntry.statsvalue.dRAC / nProjectCount : CPIDStatsEntry.statsvalue.dAvgRAC = 0.0;
 
         // Insert the byCPID entry into the overall map.
         mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
@@ -1692,10 +1666,13 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
         NetworkWideStatsEntry.statsvalue.dMag += CPIDStatsEntry.statsvalue.dMag;
     }
 
+    // Compute Network AvgRAC across all ByCPIDByProject elements and set.
+    (nCPIDProjectCount > 0) ? NetworkWideStatsEntry.statsvalue.dAvgRAC = NetworkWideStatsEntry.statsvalue.dRAC / nCPIDProjectCount : NetworkWideStatsEntry.statsvalue.dAvgRAC = 0.0;
+
     // Insert the (single) network-wide entry into the overall map.
     mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
 
-    _log(INFO, "GetScraperStatsByConsensusBeaconList", "Completed stats processing");
+    _log(INFO, "GetScraperStatsByConvergedManifest", "Completed stats processing");
 
     return mScraperStats;
 }
@@ -2209,8 +2186,6 @@ bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManif
 }
 
 
-
-
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash)
 {
     // This deletes a manifest.
@@ -2226,6 +2201,80 @@ bool ScraperDeleteCScraperManifest(uint256 nManifestHash)
 }
 
 
+/***********************
+*    Neural Network    *
+************************/
+
+
+std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
+{
+    stringbuilder xmlout;
+
+    xmlout.append("<AVERAGES>");
+
+    // The <AVERAGES> in the SB core data are actually the project level
+    for (auto const& entry : mScraperStats)
+    {
+        if (entry.first.objecttype == byProject)
+        {
+        xmlout.append(entry.first.objectID);
+        xmlout.append(",");
+        xmlout.fixeddoubleappend(entry.second.statsvalue.dAvgRAC, 0);
+        xmlout.append(",");
+        xmlout.fixeddoubleappend(entry.second.statsvalue.dRAC, 0);
+        xmlout.append(";");
+        }
+    }
+
+    // Find the single network wide NN entry and put in string.
+    ScraperObjectStatsKey StatsKey;
+    StatsKey.objecttype = NetworkWide;
+    StatsKey.objectID = "";
+
+    const auto iter = mScraperStats.find(StatsKey);
+
+    xmlout.append("NeuralNetwork");
+    xmlout.append(",");
+    xmlout.fixeddoubleappend(iter->second.statsvalue.dAvgRAC, 0);
+    xmlout.append(",");
+    xmlout.fixeddoubleappend(iter->second.statsvalue.dRAC, 0);
+    xmlout.append(";");
+
+    xmlout.append("</AVERAGES");
+
+    xmlout.append("<QUOTES>btc,0;grc,0;</QUOTES>");
+
+    xmlout.append("<MAGNITUDES>");
+
+    // The <MAGNITUDES> in the SB core data are actually at the CPID level.
+    for (auto const& entry : mScraperStats)
+    {
+        if (entry.first.objecttype == byCPID)
+        {
+        xmlout.append(entry.first.objectID);
+        xmlout.append(",");
+        xmlout.fixeddoubleappend(entry.second.statsvalue.dMag, 0);
+        xmlout.append(";");
+        }
+    }
+
+    xmlout.append("</MAGNITUDES>");
+
+    std::string sSBCoreData = xmlout.value();
+
+    _log(INFO, "GenerateSBCoreDataFromScraperStats", "Generated SB Core Data.");
+
+    return sSBCoreData;
+}
+//*/
+
+
+
+
+
+/***********************
+*    RPC Functions     *
+************************/
 
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
