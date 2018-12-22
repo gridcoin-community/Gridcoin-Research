@@ -1,4 +1,4 @@
-#include "neuralnet.h"
+#include "neuralnet_win.h"
 #include "version.h"
 #include "sync.h"
 #include "util.h"
@@ -22,6 +22,8 @@ extern std::string qtExecuteDotNetStringFunction(std::string function,std::strin
 extern void qtSyncWithDPORNodes(std::string data);
 int64_t IsNeural();
 
+using namespace NN;
+
 // While transitioning to dotnet the NeuralNet implementation has been split
 // into 3 implementations; Win32 with Qt, Win32 without Qt and the rest.
 // After the transition both Win32 implementations can be removed.
@@ -29,7 +31,7 @@ int64_t IsNeural();
 // Win32 with Qt enabled.
 bool NeuralNetWin32::IsEnabled()
 {
-    return GetArgument("disableneuralnetwork", "false") == "false";
+return GetArgument("disableneuralnetwork", "false") == "false";
 }
 
 std::string NeuralNetWin32::GetNeuralVersion()
@@ -63,3 +65,4 @@ int64_t NeuralNetWin32::IsNeuralNet()
 {
     return IsNeural();
 }
+

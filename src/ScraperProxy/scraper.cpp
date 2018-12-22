@@ -135,6 +135,16 @@ void Scraper(bool fScraperStandalone)
     // The scraper thread loop...
     while (fScraperStandalone || !fShutdown)
     {
+        // Only proceed if wallet is in sync. Check every 5 seconds since no callback is available.
+        // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
+        while (OutOfSyncByAge())
+        {
+            _log(INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
+            MilliSleep(8000);
+        }
+
+        _log(INFO, "Scraper", "Wallet is now in sync. Continuing.");
+
         gridcoinrpc data;
         
         int64_t sbage = data.sbage();
@@ -305,6 +315,16 @@ void NeuralNetwork()
 
     while(!fShutdown)
     {
+        // Only proceed if wallet is in sync. Check every 5 seconds since no callback is available.
+        // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
+        while (OutOfSyncByAge())
+        {
+            _log(INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
+            MilliSleep(8000);
+        }
+
+        _log(INFO, "NeuralNetwork", "Wallet is now in sync. Continuing.");
+
         // These items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
         {
@@ -318,17 +338,17 @@ void NeuralNetwork()
             LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
             ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
 
-            _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+            _log(INFO, "NeuralNetwork", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
 
             if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                _log(ERROR, "Scraper", "StoreStats error occurred");
+                _log(ERROR, "NeuralNetwork", "StoreStats error occurred");
             else
-                _log(INFO, "Scraper", "Stored converged stats.");
+                _log(INFO, "NeuralNetwork", "Stored converged stats.");
 
             sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
 
             if (fDebug)
-                _log(INFO, "Scraper", "SB Core Data\n" + sSBCoreData);
+                _log(INFO, "NeuralNetwork", "SB Core Data\n" + sSBCoreData);
 
             }
         }

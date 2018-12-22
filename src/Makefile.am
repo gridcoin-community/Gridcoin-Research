@@ -87,6 +87,7 @@ GRIDCOIN_CORE_H = \
 	miner.h \
 	mruset.h \
 	neuralnet/neuralnet.h \
+   neuralnet/neuralnet_native.h \
    neuralnet/neuralnet_stub.h \
    neuralnet/neuralnet_win.h \
 	netbase.h \
@@ -138,6 +139,9 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	keystore.cpp \
 	main.cpp \
 	miner.cpp \
+   neuralnet/neuralnet.cpp \
+   neuralnet/neuralnet_native.cpp \
+   neuralnet/neuralnet_stub.cpp \
 	netbase.cpp \
 	net.cpp \
 	noui.cpp \
