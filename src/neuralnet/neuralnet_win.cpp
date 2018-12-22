@@ -25,43 +25,41 @@ int64_t IsNeural();
 // While transitioning to dotnet the NeuralNet implementation has been split
 // into 3 implementations; Win32 with Qt, Win32 without Qt and the rest.
 // After the transition both Win32 implementations can be removed.
-namespace NN
+
+// Win32 with Qt enabled.
+bool NeuralNetWin32::IsEnabled()
 {
-    // Win32 with Qt enabled.
-    bool IsEnabled()
-    {
-        return GetArgument("disableneuralnetwork", "false") == "false";
-    }
+    return GetArgument("disableneuralnetwork", "false") == "false";
+}
 
-    std::string GetNeuralVersion()
-    {
-        int neural_id = static_cast<int>(IsNeural());
-        return std::to_string(CLIENT_VERSION_MINOR) + "." + std::to_string(neural_id);
-    }
+std::string NeuralNetWin32::GetNeuralVersion()
+{
+    int neural_id = static_cast<int>(IsNeural());
+    return std::to_string(CLIENT_VERSION_MINOR) + "." + std::to_string(neural_id);
+}
 
-    std::string GetNeuralHash()
-    {
-        return qtGetNeuralHash("");
-    }
+std::string NeuralNetWin32::GetNeuralHash()
+{
+    return qtGetNeuralHash("");
+}
 
-    std::string GetNeuralContract()
-    {
-        return qtGetNeuralContract("");
-    }
+std::string NeuralNetWin32::GetNeuralContract()
+{
+    return qtGetNeuralContract("");
+}
 
-    bool SynchronizeDPOR(const std::string& data)
-    {
-        qtSyncWithDPORNodes(data);
-        return true;
-    }
+bool NeuralNetWin32::SynchronizeDPOR(const std::string& data)
+{
+    qtSyncWithDPORNodes(data);
+    return true;
+}
 
-    std::string ExecuteDotNetStringFunction(std::string function, std::string data)
-    {
-        return qtExecuteDotNetStringFunction(function, data);
-    }
+std::string NeuralNetWin32::ExecuteDotNetStringFunction(std::string function, std::string data)
+{
+    return qtExecuteDotNetStringFunction(function, data);
+}
 
-    int64_t IsNeuralNet()
-    {
-       return IsNeural();
-    }
+int64_t NeuralNetWin32::IsNeuralNet()
+{
+    return IsNeural();
 }

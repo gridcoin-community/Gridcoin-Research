@@ -334,7 +334,7 @@ qt_libgridcoinqt_a_SOURCES = $(GRIDCOINRESEARCH_QT_CPP) $(GRIDCOINRESEARCH_QT_H)
   $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(PROTOBUF_PROTO) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES) $(RES_STYLESHEETS)
 
 if TARGET_WINDOWS
-qt_libgridcoinqt_a_SOURCES += $(GRIDCOIN_CORE_H) $(GRIDCOIN_CORE_CPP) neuralnet.cpp
+qt_libgridcoinqt_a_SOURCES += $(GRIDCOIN_CORE_H) $(GRIDCOIN_CORE_CPP) neuralnet/neuralnet_win.cpp
 qt_libgridcoinqt_a_CXXFLAGS += -DUNICODE
 endif
 

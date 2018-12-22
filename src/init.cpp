@@ -13,6 +13,7 @@
 #include "ui_interface.h"
 #include "tally.h"
 #include "beacon.h"
+#include "neuralnet/neuralnet.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -374,7 +375,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     LogPrintf("Boost Version: %s", s.str());
 
-    //Placeholder: Load Remote CPIDs Here
+    NN::SetInstance(NN::CreateNeuralNet());
 
     nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);

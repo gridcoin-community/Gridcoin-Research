@@ -9,7 +9,7 @@
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "global_objects_noui.hpp"
 using namespace std;
 
@@ -76,7 +76,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("PopularNeuralHash", neural_hash);
     obj.pushKV("NeuralPopularity", neural_popularity);
     //9-19-2015 - CM
-    obj.pushKV("MyNeuralHash", NN::GetNeuralHash());
+    obj.pushKV("MyNeuralHash", NN::GetInstance()->GetNeuralHash());
 
     obj.pushKV("CPID",msPrimaryCPID);
 
