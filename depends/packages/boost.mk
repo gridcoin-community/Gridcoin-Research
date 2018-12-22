@@ -3,13 +3,14 @@ $(package)_version=1_65_1
 $(package)_download_path=https://dl.bintray.com/boostorg/release/1.65.1/source/
 $(package)_file_name=$(package)_$($(package)_version).tar.bz2
 $(package)_sha256_hash=9807a5d16566c57fd74fb522764e0b134a8bbe6b6e8967b83afefd30dcd3be81
+$(package)_dependencies=zlib
 
 define $(package)_set_vars
 $(package)_config_opts_release=variant=release
 $(package)_config_opts_debug=variant=debug
 $(package)_dependencies=zlib
 $(package)_config_opts=--layout=tagged --build-type=complete --user-config=user-config.jam
-$(package)_config_opts+=threading=multi link=static -sNO_BZIP2=1 -sZLIB_SOURCE=/home/jco/builds/zlib-1.2.11 -sZLIB_INCLUDE=$(host_prefix)/include -sZLIB_LIBPATH=$(host_prefix)/lib
+$(package)_config_opts+=threading=multi link=static -sNO_BZIP2=1 -sZLIB_SOURCE=$(host_prefix)/lib/zlib_source -sZLIB_INCLUDE=$(host_prefix)/include -sZLIB_LIBPATH=$(host_prefix)/lib
 $(package)_config_opts_linux=threadapi=pthread runtime-link=shared
 $(package)_config_opts_darwin=--toolset=darwin-4.2.1 runtime-link=shared
 $(package)_config_opts_mingw32=binary-format=pe target-os=windows threadapi=win32 runtime-link=static
