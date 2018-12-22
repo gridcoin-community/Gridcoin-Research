@@ -9,7 +9,7 @@
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "global_objects_noui.hpp"
 using namespace std;
 

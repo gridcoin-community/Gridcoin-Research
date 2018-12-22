@@ -12,7 +12,7 @@
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"

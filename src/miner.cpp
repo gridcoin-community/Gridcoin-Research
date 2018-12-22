@@ -10,7 +10,7 @@
 #include "cpid.h"
 #include "main.h"
 #include "appcache.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "contract/contract.h"
 #include "util.h"
 
