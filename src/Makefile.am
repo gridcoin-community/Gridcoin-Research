@@ -87,6 +87,8 @@ GRIDCOIN_CORE_H = \
 	miner.h \
 	mruset.h \
 	neuralnet/neuralnet.h \
+   neuralnet/neuralnet_stub.h \
+   neuralnet/neuralnet_win.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
@@ -178,6 +180,7 @@ libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
     neuralnet/neuralnet_stub.cpp \
+    neuralnet/neuralnet.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS

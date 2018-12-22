@@ -1446,7 +1446,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 std::string GetNeuralVersion()
 {
     std::string neural_v = "0";
-    int64_t neural_id = NN::IsNeuralNet();
+    int64_t neural_id = NN::GetInstance()->IsNeuralNet();
     neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
     return neural_v;
 }

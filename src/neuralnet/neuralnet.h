@@ -1,70 +1,120 @@
 #pragma once
 
 #include <string>
-
-extern std::string qtGetNeuralHash(std::string data);
-extern std::string qtGetNeuralContract(std::string data);
-extern double qtExecuteGenericFunction(std::string function,std::string data);
-extern void qtSyncWithDPORNodes(std::string data);
-
+#include <memory>
 
 namespace NN
 {
     //!
-    //! \brief Check is current system supports neural net operations.
+    //! \brief NeuralNet interface.
     //!
-    //! Validates the currently running system to see if neural network is
-    //! supported by thte system and not disabled by the user.
-    //!
-    //! \note Calling further functions on a disabled neural network is
-    //! undefined behavior.
-    //!
-    //! \return \c true if neural network is enabled, \c false otherwise.
-    //!
-    bool IsEnabled();
+    struct INeuralNet
+    {
+        //!
+        //! \brief Destructor.
+        //!
+        virtual ~INeuralNet() = default;
+
+        //!
+        //! \brief Check is current system supports neural net operations.
+        //!
+        //! Validates the currently running system to see if neural network is
+        //! supported by thte system and not disabled by the user.
+        //!
+        //! \note Calling further functions on a disabled neural network is
+        //! undefined behavior.
+        //!
+        //! \return \c true if neural network is enabled, \c false otherwise.
+        //!
+        virtual bool IsEnabled() = 0;
+
+        //!
+        //! \brief Get application neural version.
+        //!
+        //! Fetches the application version with the neural network magic suffix
+        //! (\c 1999) if the neural net is enabled.
+        //!
+        //! \return Current application version with proper neural suffix.
+        //!
+        virtual std::string GetNeuralVersion() = 0;
+
+        //!
+        //! \brief Get current neural hash from neural net.
+        //!
+        //! \note This is a synchoronous operation.
+        //!
+        //! \return Current neural hash. This might be empty if no has has
+        //! been calculated yet.
+        //!
+        virtual std::string GetNeuralHash() = 0;
+
+        //!
+        //! \brief Get the most recently updated neural network contract.
+        //!
+        //! Synchronously queries the neural network process for the current
+        //! neural contract.
+        //!
+        //! \return Most recent neural contract if available.
+        //!
+        virtual std::string GetNeuralContract() = 0;
+
+        //!
+        //! \brief Synchronize DPOR data.
+        //!
+        //! Asynchronously asks the neural net to download BOINC statistic files
+        //! and calculate CPID magnitudes. If called while synchronization is
+        //! already in progress this will do nothing.
+        //!
+        //! \param data CPID and quorum data to pass to the neural net.
+        //!
+        virtual bool SynchronizeDPOR(const std::string& data) = 0;
+
+        //!
+        //! \brief ExecuteDotNetStringFunction
+        //! \param function Function to execute.
+        //! \param data Function payload.
+        //! \return Function call's return string.
+        //! \todo Replace this with concrete functions.
+        //!
+        virtual std::string ExecuteDotNetStringFunction(std::string function, std::string data) = 0;
+
+        virtual int64_t IsNeuralNet() = 0;
+    };
 
     //!
-    //! \brief Get application neural version.
+    //! \brief INeuralNet smart pointer.
     //!
-    //! Fetches the application version with the neural network magic suffix
-    //! (\c 1999) if the neural net is enabled.
-    //!
-    //! \return Current application version with proper neural suffix.
-    //!
-    std::string GetNeuralVersion();
+    typedef std::shared_ptr<INeuralNet> INeuralNetPtr;
 
     //!
-    //! \brief Get current neural hash from neural net.
+    //! \brief Neuralnet factory.
     //!
-    //! \note This is a synchoronous operation.
+    //! Evaluates host platform and configuration flags to instantiate an
+    //! appropriate neuralnet object.
     //!
-    //! \return Current neural hash. This might be empty if no has has
-    //! been calculated yet.
+    //! \return A new INeuralNet instance.
     //!
-    std::string GetNeuralHash();
+    INeuralNetPtr CreateNeuralNet();
 
     //!
-    //! \brief Get the most recently updated neural network contract.
+    //! \brief Set global neuralnet object.
     //!
-    //! Synchronously queries the neural network process for the current
-    //! neural contract.
+    //! Sets the global object used for neuralnet access. This should be called
+    //! during application initialization:
     //!
-    //! \return Most recent neural contract if available.
+    //! \code
+    //! NN::SetInstance(NN::CreateNeuralNet());
+    //! \endcode
     //!
-    std::string GetNeuralContract();
+    //! It can also be used to inject mocks in unit tests.
+    //!
+    //! \param obj New global neuralnet instance.
+    //!
+    void SetInstance(const INeuralNetPtr& obj);
 
     //!
-    //! \brief Synchronize DPOR data.
+    //! \brief Get globl neuralnet instance.
+    //! \return Current global neuralnet instance.
     //!
-    //! Asynchronously asks the neural net to download BOINC statistic files
-    //! and calculate CPID magnitudes. If called while synchronization is
-    //! already in progress this will do nothing.
-    //!
-    //! \param data CPID and quorum data to pass to the neural net.
-    //!
-    bool SynchronizeDPOR(const std::string& data);
-
-    std::string ExecuteDotNetStringFunction(std::string function, std::string data);
-
-    int64_t IsNeuralNet();
+    INeuralNetPtr GetInstance();
 }

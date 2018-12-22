@@ -318,20 +318,20 @@ bool UpdateNeuralNetworkQuorumData()
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::ExecuteDotNetStringFunction("SetQuorumData",data);
+    NN::GetInstance()->ExecuteDotNetStringFunction("SetQuorumData",data);
     return true;
 }
 
 bool FullSyncWithDPORNodes()
 {
-    if(!NN::IsEnabled())
+    if(!NN::GetInstance()->IsEnabled())
         return false;
     // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
     // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
     std::string sMyNeuralHash = "";
-    sMyNeuralHash = NN::GetNeuralHash();
+    sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
     if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
     {
         bool bNodeOnline = RequestSupermajorityNeuralData();
@@ -355,7 +355,7 @@ bool FullSyncWithDPORNodes()
     std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
                        + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::SynchronizeDPOR(data);
+    NN::GetInstance()->SynchronizeDPOR(data);
     return true;
 }
 
@@ -4622,7 +4622,7 @@ void GridcoinServices()
             {
                 // First verify my node has a synced contract
                 std::string contract;
-                contract = NN::GetNeuralContract();
+                contract = NN::GetInstance()->GetNeuralContract();
                 if (VerifySuperblock(contract, pindexBest))
                 {
                         AsyncNeuralRequest("quorum","gridcoin",25);
@@ -6940,7 +6940,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             if (neural_request=="neural_data")
             {
-                pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
+                pfrom->PushMessage("ndata_nresp", NN::GetInstance()->GetNeuralContract());
             }
             else if (neural_request=="neural_hash")
             {
@@ -6950,17 +6950,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 supercfwd::SendResponse(pfrom,r_hash);
             }
             else
-            pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
+            pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
             }
             else if (neural_request=="explainmag")
             {
-            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
+            neural_response = NN::GetInstance()->ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
                 pfrom->PushMessage("expmag_nresp", neural_response);
                 }
             else if (neural_request=="quorum")
             {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
-            pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
+            pfrom->PushMessage("quorum_nresp", NN::GetInstance()->GetNeuralContract());
             }
             else if (neural_request=="supercfwdr")
             {
@@ -7077,7 +7077,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                  std::string results = "";
                  //Resolve discrepancies
-                results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
+                results = NN::GetInstance()->ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
                  if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
             }
 
@@ -7094,7 +7094,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                  std::string results = "";
                  //Resolve discrepancies
                 LogPrintf("Sync neural network data from supermajority");
-                results = NN::ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
+                results = NN::GetInstance()->ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
                 if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
                  // Resume the full DPOR sync at this point now that we have the supermajority data
                  if (results=="SUCCESS")  FullSyncWithDPORNodes();
@@ -7688,7 +7688,7 @@ void HarvestCPIDs(bool cleardata)
                                         msPrimaryCPID = structcpid.cpid;
                                             //Let the Neural Network know what your CPID is so it can be charted:
                                             std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-                                        std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
+                                        std::string sData = NN::GetInstance()->ExecuteDotNetStringFunction("WriteKey",sXML);
                                         //Try to get a neural RAC report
                                         AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                     }
