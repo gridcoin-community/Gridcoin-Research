@@ -2,31 +2,39 @@
 
 #include <string>
 
+extern std::string GetArgument(const std::string& arg, const std::string& defaultvalue);
+extern std::string ScraperGetNeuralContract(bool bStoreConvergedStats);
+extern std::string ScraperGetNeuralHash();
+extern bool ScraperSynchronizeDPOR();
+
 using namespace NN;
 
 bool NeuralNetNative::IsEnabled()
 {
-    return false;
+    return GetArgument("disableneuralnetwork", "false") == "false";
 }
 
 std::string NeuralNetNative::GetNeuralVersion()
 {
-    return "0";
+    // This is the NN magic version number. TODO: Consider different number for new NN?
+    return std::to_string(1999);
 }
 
 std::string NeuralNetNative::GetNeuralHash()
 {
-    return std::string();
+    return ScraperGetNeuralHash();
 }
 
 std::string NeuralNetNative::GetNeuralContract()
 {
-    return std::string();
+    return ScraperGetNeuralContract(false);
 }
 
+// Note that the data argument is still used here for compatibility, but I don't think it will
+// actually be used in the scraper. We will see.
 bool NeuralNetNative::SynchronizeDPOR(const std::string& data)
 {
-    return false;
+    return ScraperSynchronizeDPOR();
 }
 
 std::string NeuralNetNative::ExecuteDotNetStringFunction(std::string function, std::string data)

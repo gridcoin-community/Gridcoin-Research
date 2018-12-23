@@ -239,6 +239,9 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
+std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false);
+std::string ScraperGetNeuralHash();
+bool ScraperSynchronizeDPOR();
 
 double MagRound(double dMag)
 {

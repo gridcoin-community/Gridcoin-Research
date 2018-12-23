@@ -13,6 +13,7 @@ std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
 ScraperFileManifest StructScraperFileManifest;
 
+CCriticalSection cs_Scraper;
 CCriticalSection cs_StructScraperFileManifest;
 
 bool WhitelistPopulated();
@@ -165,9 +166,14 @@ void Scraper(bool fScraperStandalone)
 
             while (GetAdjustedTime() - nScraperThreadStartTime < nBeforeSBSleep)
             {
-                // The only thing we do here while quiescent is cull manifests received
-                // from other scrapers.
-                ScraperDeleteCScraperManifests();
+                // Take a lock on the whole scraper for this...
+                {
+                    LOCK(cs_Scraper);
+
+                    // The only thing we do here while quiescent is cull manifests received
+                    // from other scrapers.
+                    ScraperDeleteCScraperManifests();
+                }
 
                 _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
                 MilliSleep(nScraperSleep);
@@ -186,9 +192,9 @@ void Scraper(bool fScraperStandalone)
             else
                 _log(INFO, "Scraper", "Refreshing of whitelist completed");
 
-            // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
+            // Delete manifest entries not on whitelist. Take a lock on cs_Scraper and cs_StructScraperFileManifest for this.
             {
-                LOCK(cs_StructScraperFileManifest);
+                LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
                 ScraperFileManifestMap::iterator entry;
 
@@ -272,32 +278,22 @@ void Scraper(bool fScraperStandalone)
 
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
             }
+        }
 
-            // Construct Converged Manifest and SB Core (this is here during development only.)
+        // Periodically generate converged manifests and generate SB core and "contract"
+        // This will probably be reduced to the commented out call as we near final testing,
+        // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
+        // with the boolean false, meaning don't store the stats.
+        // Lock both cs_Scraper and cs_StructScraperFileManifest.
 
-            ConvergedManifest StructConvergedManifest;
-            BeaconMap mBeaconMap;
-            std::string sSBCoreData;
+        //ConvergedManifest StructConvergedManifest;
+        std::string sSBCoreData;
 
-            //ScraperConstructConvergedManifest also culls old CScraperManifests.
-            if (ScraperConstructConvergedManifest(StructConvergedManifest))
-            {
-            LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-            ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+        {
+            LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
-            _log(INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
-
-            if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                _log(ERROR, "Scraper", "StoreStats error occurred");
-            else
-                _log(INFO, "Scraper", "Stored converged stats.");
-
-            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
-
-            if (fDebug)
-                _log(INFO, "Scraper", "SB Core Data\n" + sSBCoreData);
-            }
-
+            //ScraperConstructConvergedManifest(StructConvergedManifest)
+            sSBCoreData = ScraperGetNeuralContract(true);
         }
 
         _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
@@ -328,30 +324,22 @@ void NeuralNetwork()
         // These items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
         {
-            ConvergedManifest StructConvergedManifest;
-            BeaconMap mBeaconMap;
+            // Periodically generate converged manifests and generate SB core and "contract"
+            // This will probably be reduced to the commented out call as we near final testing,
+            // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
+            // with the boolean false, meaning don't store the stats.
+            // Lock both cs_Scraper and cs_StructScraperFileManifest.
+
+            //ConvergedManifest StructConvergedManifest;
             std::string sSBCoreData;
 
-            //ScraperConstructConvergedManifest also culls old CScraperManifests.
-            if(ScraperConstructConvergedManifest(StructConvergedManifest))
             {
-            LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-            ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+                LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
-            _log(INFO, "NeuralNetwork", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
-
-            if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                _log(ERROR, "NeuralNetwork", "StoreStats error occurred");
-            else
-                _log(INFO, "NeuralNetwork", "Stored converged stats.");
-
-            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
-
-            if (fDebug)
-                _log(INFO, "NeuralNetwork", "SB Core Data\n" + sSBCoreData);
-
+                //ScraperConstructConvergedManifest(StructConvergedManifest)
+                sSBCoreData = ScraperGetNeuralContract(true);
             }
-        }
+       }
 
         // Use the same sleep interval as the scraper. This defaults to 60 seconds.
         _log(INFO, "NeuralNetwork", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
@@ -2290,8 +2278,63 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
 }
 //*/
 
+std::string ScraperGetNeuralContract(bool bStoreConvergedStats)
+{
+    ConvergedManifest StructConvergedManifest;
+    BeaconMap mBeaconMap;
+    std::string sSBCoreData;
+
+    // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
+    // you can't make a SB core and you can't make a contract, so return the empty string.
+    if(ScraperConstructConvergedManifest(StructConvergedManifest))
+    {
+        // This is to display the element count in the beacon map.
+        LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
+
+        ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+        _log(INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+        if (bStoreConvergedStats)
+        {
+            if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                _log(ERROR, "ScraperGetNeuralContract", "StoreStats error occurred");
+            else
+                _log(INFO, "ScraperGetNeuralContract", "Stored converged stats.");
+        }
+
+        sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+
+        if (fDebug)
+            _log(INFO, "ScraperGetNeuralContract", "SB Core Data\n" + sSBCoreData);
+
+        return sSBCoreData;
+    }
+    else
+        return std::string("");
+}
 
 
+// Note: This is NOT meant to be compatible with the .net NN QuorumHashingAlgorithm. We have to get away from that and
+// use a straightforward native hash of the contract string. The hash is returned as a string for compatibility
+// purposes. This is silly and should be changed to a uint256.
+std::string ScraperGetNeuralHash()
+{
+    std::string sNeuralContract = ScraperGetNeuralContract(false);
+
+    uint256 nHash = Hash(sNeuralContract.begin(), sNeuralContract.end());
+
+    return nHash.GetHex();
+}
+
+
+bool ScraperSynchronizeDPOR()
+{
+    // Currently stubbed out.
+    bool bStatus = true;
+
+    return true;
+}
 
 
 /***********************

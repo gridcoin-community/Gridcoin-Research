@@ -1,15 +1,15 @@
 #include "neuralnet.h"
 #include "neuralnet_native.h"
 #include "neuralnet_stub.h"
-#include "neuralnet_win.h"
 #include "util.h"
 
-extern bool GetBoolArg(const std::string& strArg, bool fDefault);
 
 
 #if defined(QT_GUI) && defined(WIN32)
 #include "neuralnet_win.h"
 #endif
+
+extern bool GetBoolArg(const std::string& strArg, bool fDefault);
 
 using namespace NN;
 
