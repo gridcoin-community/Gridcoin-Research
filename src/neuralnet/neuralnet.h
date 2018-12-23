@@ -2,6 +2,7 @@
 
 #include <string>
 #include <memory>
+#include <functional>
 
 namespace NN
 {
@@ -13,7 +14,7 @@ namespace NN
         //!
         //! \brief Destructor.
         //!
-        virtual ~INeuralNet() = default;
+        virtual ~INeuralNet() {}
 
         //!
         //! \brief Check is current system supports neural net operations.
@@ -87,10 +88,30 @@ namespace NN
     typedef std::shared_ptr<INeuralNet> INeuralNetPtr;
 
     //!
+    //! \brief Factory function.
+    //!
+    typedef std::function<INeuralNetPtr()> Factory;
+
+    //!
+    //! \brief Register factory function.
+    //!
+    //! Registers a factory function which will be called by
+    //! \p CreateNeuralNet.
+    //!
+    //! \param factory
+    //!
+    void RegisterFactory(const Factory& factory);
+
+    //!
     //! \brief Neuralnet factory.
     //!
     //! Evaluates host platform and configuration flags to instantiate an
     //! appropriate neuralnet object.
+    //!
+    //! This creates an object using the following criterias and order:
+    //!  1) New neuralnet if enabled
+    //!  2) Old neuralnet if factory has been registered, see RegisterFactory().
+    //!  3) A neural net stub.
     //!
     //! \return A new INeuralNet instance.
     //!
