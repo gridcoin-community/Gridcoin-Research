@@ -14,8 +14,6 @@
 #include <cstdio>
 #include <string>
 
-using namespace NN;
-
 // Old VB based NeuralNet.
 extern std::string qtGetNeuralHash(std::string data);
 extern std::string qtGetNeuralContract(std::string data);
@@ -23,6 +21,19 @@ extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string qtExecuteDotNetStringFunction(std::string function,std::string data);
 extern void qtSyncWithDPORNodes(std::string data);
 int64_t IsNeural();
+
+using namespace NN;
+
+namespace
+{
+    // Static factory registration.
+    bool registered = []()
+    {
+        NN::Factory factory([]() { return std::make_shared<NeuralNetWin32>(); });
+        NN::RegisterFactory(factory);
+        return true;
+    };
+}
 
 // While transitioning to dotnet the NeuralNet implementation has been split
 // into 3 implementations; Win32 with Qt, Win32 without Qt and the rest.

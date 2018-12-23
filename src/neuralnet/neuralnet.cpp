@@ -1,12 +1,9 @@
 #include "neuralnet.h"
 #include "neuralnet_native.h"
 #include "neuralnet_stub.h"
+#include "util.h"
 
-
-
-#if defined(QT_GUI) && defined(WIN32)
-#include "neuralnet_win.h"
-#endif
+#include <vector>
 
 extern bool GetBoolArg(const std::string& strArg, bool fDefault);
 
@@ -15,19 +12,12 @@ using namespace NN;
 namespace
 {
     INeuralNetPtr instance;
+    std::vector<Factory> factories;
 }
 
-INeuralNetPtr NN::CreateNeuralNet()
+void NN::RegisterFactory(const Factory &factory)
 {
-#if defined(QT_GUI) && defined(WIN32)
-    return std::make_shared<NeuralNetWin32>();
-#else
-    return std::make_shared<NeuralNetStub>();
-#endif
-
-namespace
-{
-    INeuralNetPtr instance;
+    factories.push_back(factory);
 }
 
 INeuralNetPtr NN::CreateNeuralNet()
@@ -35,19 +25,24 @@ INeuralNetPtr NN::CreateNeuralNet()
     if (GetBoolArg("-usenewnn"))
         return std::make_shared<NeuralNetNative>();
 
-#if defined(QT_GUI) && defined(WIN32)
-    return std::make_shared<NeuralNetWin32>();
-#else
+    // Try to instantiate via injected factories
+    for(auto factory : factories)
+    {
+        INeuralNetPtr obj = factory();
+        if(obj)
+            return obj;
+    }
+
+    // Fall back to stub implementation.
     return std::make_shared<NeuralNetStub>();
-#endif
 }
 
 void NN::SetInstance(const INeuralNetPtr &obj)
-    {
+{
     instance = obj;
-    }
+}
 
 INeuralNetPtr NN::GetInstance()
-    {
+{
     return instance;
 }
