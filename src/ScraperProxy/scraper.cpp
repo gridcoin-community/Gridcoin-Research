@@ -1799,7 +1799,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 bool IsScraperAuthorized()
 {
     // Stubbed out for general scraper operation policy.
-    // Currently set to false
+    // Currently set to true for testing fallback operation.
 
     return false;
 }
