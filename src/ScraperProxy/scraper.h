@@ -178,6 +178,12 @@ struct ScraperObjectStatsKeyComp
 
 typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKeyComp> ScraperStats;
 
+struct ConvergedScraperStats
+{
+    int64_t nTime;
+    ScraperStats mScraperConvergedStats;
+};
+
 /*********************
 * Global Constants   *
 *********************/
@@ -228,6 +234,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
+std::string ExplainMagnitude(std::string sCPID);
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,

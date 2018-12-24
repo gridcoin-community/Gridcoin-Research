@@ -13,8 +13,12 @@ std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
 ScraperFileManifest StructScraperFileManifest = {};
 
+// Global cache for converged scraper stats. Access must be through a lock.
+ConvergedScraperStats ConvergedScraperStatsCache = {};
+
 CCriticalSection cs_Scraper;
 CCriticalSection cs_StructScraperFileManifest;
+CCriticalSection cs_ConvergedScraperStatsCache;
 
 bool WhitelistPopulated();
 bool UserpassPopulated();
@@ -1718,6 +1722,96 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
 }
 
 
+std::string ExplainMagnitude(std::string sCPID)
+{
+    stringbuilder out;
+
+    // See if converged stats/contract update needed...
+    bool bConvergenceUpdateNeeded = true;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < nScraperSleep)
+            bConvergenceUpdateNeeded = false;
+    }
+
+    if (bConvergenceUpdateNeeded)
+        // Don't need the output.
+        ScraperGetNeuralContract(false, false);
+
+    // A purposeful copy here to avoid a long-term lock. May want to change to direct reference
+    // and allow locking during the output.
+    ScraperStats mScraperConvergedStats;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
+    }
+
+    /* Work in progress... needs to be changed, basically a cut and paste from the
+     * other stats functions.
+
+    ScraperObjectStats ProjectStats = {};
+
+    ProjectStats.statskey.objecttype = byProject;
+    ProjectStats.statskey.objectID = sCPID;
+
+    for (auto const& entry : mScraperConvergedStats)
+    {
+
+        std::string objectID = entry.first.objectID;
+
+        std::size_t found = objectID.find(ProjectStats.statskey.objectID);
+
+        if (entry.first.objecttype == byProject)
+        {
+            ProjectStats.statsvalue.dTC += entry.second.statsvalue.dTC;
+            ProjectStats.statsvalue.dRAT += entry.second.statsvalue.dRAT;
+            ProjectStats.statsvalue.dRAC += entry.second.statsvalue.dRAC;
+            ProjectStats.statsvalue.dMag += entry.second.statsvalue.dMag;
+
+            //nProjectCount++;
+            //nCPIDProjectCount++;
+        }
+    }
+
+
+
+    ScraperObjectStats CPIDStats = {};
+
+    CPIDStats.statskey.objecttype = byCPID;
+    CPIDStats.statskey.objectID = sCPID;
+
+    for (auto const& entry : mScraperStats)
+    {
+        // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
+        // otherwise dimension mixing will result.
+
+        std::string objectID = entry.first.objectID;
+
+        std::size_t found = objectID.find(CPIDStats.statskey.objectID);
+
+        if (entry.first.objecttype == byCPIDbyProject && found!=std::string::npos)
+        {
+            const auto& project = mScraperStats
+
+            CPIDStats.statsvalue.dTC += entry.second.statsvalue.dTC;
+            CPIDStats.statsvalue.dRAT += entry.second.statsvalue.dRAT;
+            CPIDStats.statsvalue.dRAC += entry.second.statsvalue.dRAC;
+            CPIDStats.statsvalue.dMag += entry.second.statsvalue.dMag;
+
+            //nProjectCount++;
+            //nCPIDProjectCount++;
+        }
+    }
+
+    */
+
+    //stub
+
+    return std::string("");
+}
+
 /***********************
 * Scraper networking   *
 ************************/
@@ -1801,7 +1895,7 @@ bool IsScraperAuthorized()
     // Stubbed out for general scraper operation policy.
     // Currently set to true for testing fallback operation.
 
-    return false;
+    return true;
 }
 
 bool IsScraperAuthorizedToBroadcastManifests()
@@ -2335,61 +2429,104 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
     if (OutOfSyncByAge())
         return std::string("");
 
+    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep old, then simply report back the cache contents.
+    // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
+    // the scraper loop if it is running, but that is ok. The scraper loop updates the time in the cache too.
+    bool bConvergenceUpdateNeeded = true;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < nScraperSleep)
+            bConvergenceUpdateNeeded = false;
+    }
+
     ConvergedManifest StructConvergedManifest;
     BeaconMap mBeaconMap;
     std::string sSBCoreData;
 
+    // if bConvergenceUpdate is needed, and...
     // If bContractDirectFromStatsUpdate is set to true, this means that this is being called from
     // ScraperSynchronizeDPOR() in fallback mode to force a single shot update of the stats files and
     // direct generation of the contract from the single shot run. This will return immediately with a blank if
     // IsScraperAuthorized() evaluates to false, because that means that by network policy, no non-scraper
     // stats downloads are allowed by unauthorized scraper nodes.
-    if (!bContractDirectFromStatsUpdate)
+    // (If bConvergenceUpdate is not needed, then the scraper is operating by convergence already...
+    if (bConvergenceUpdateNeeded)
     {
-        // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
-        // you can't make a SB core and you can't make a contract, so return the empty string.
-        if(ScraperConstructConvergedManifest(StructConvergedManifest))
+        if (!bContractDirectFromStatsUpdate)
         {
-            // This is to display the element count in the beacon map.
-            LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-
-            ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
-
-            _log(INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
-
-            if (bStoreConvergedStats)
+            // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
+            // you can't make a SB core and you can't make a contract, so return the empty string.
+            if(ScraperConstructConvergedManifest(StructConvergedManifest))
             {
-                if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                    _log(ERROR, "ScraperGetNeuralContract", "StoreStats error occurred");
-                else
-                    _log(INFO, "ScraperGetNeuralContract", "Stored converged stats.");
-            }
+                // This is to display the element count in the beacon map.
+                LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
 
-            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+                // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
+                // lock before and do a direct assignment, but that will lock the cache for the whole stats computation,
+                // which is not really necessary.
+                {
+                    LOCK(cs_ConvergedScraperStatsCache);
+
+                    ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
+                    ConvergedScraperStatsCache.nTime = GetAdjustedTime();
+                }
+
+                _log(INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+                if (bStoreConvergedStats)
+                {
+                    if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                        _log(ERROR, "ScraperGetNeuralContract", "StoreStats error occurred");
+                    else
+                        _log(INFO, "ScraperGetNeuralContract", "Stored converged stats.");
+                }
+
+                sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+
+                if (fDebug)
+                    _log(INFO, "ScraperGetNeuralContract", "SB Core Data from convergence \n" + sSBCoreData);
+                else
+                    _log(INFO, "ScraperGetNeuralContract", "SB Core Data from convergence \n");
+
+                return sSBCoreData;
+            }
+            else
+                return std::string("");
+        }
+        else if (IsScraperAuthorized())
+        {
+            // This part is the "second trip through from ScraperSynchronizeDPOR() as a fallback, if
+            // authorized.
+
+            // Do a single shot through the main scraper function to update all of the files.
+            ScraperSingleShot();
+
+            // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
+            // appropriate for the single shot.
+            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
+            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperStats);
 
             if (fDebug)
-                _log(INFO, "ScraperGetNeuralContract", "SB Core Data\n" + sSBCoreData);
+                _log(INFO, "ScraperGetNeuralContract", "SB Core Data from single shot\n" + sSBCoreData);
+            else
+                _log(INFO, "ScraperGetNeuralContract", "SB Core Data from single shot\n");
 
             return sSBCoreData;
         }
-        else
-            return std::string("");
     }
-    else if (IsScraperAuthorized())
+    else
     {
-        // This part is the "second trip through from ScraperSynchronizeDPOR() as a fallback, if
-        // authorized.
+        LOCK(cs_ConvergedScraperStatsCache);
 
-        // Do a single shot through the main scraper function to update all of the files.
-        ScraperSingleShot();
-
-        ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
-        sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperStats);
+        sSBCoreData = GenerateSBCoreDataFromScraperStats(ConvergedScraperStatsCache.mScraperConvergedStats);
 
         if (fDebug)
-            _log(INFO, "ScraperGetNeuralContract", "SB Core Data\n" + sSBCoreData);
-
-        return sSBCoreData;
+            _log(INFO, "ScraperGetNeuralContract", "SB Core Data from cached converged stats\n" + sSBCoreData);
+        else
+            _log(INFO, "ScraperGetNeuralContract", "SB Core Data from cached converged stats\n");
     }
 
     // If we got here, then no contract so return empty string.
