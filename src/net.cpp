@@ -56,7 +56,7 @@ void ThreadMapPort2(void* parg);
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
 
-extern void Scraper(bool fScraperStandalone);
+extern void Scraper(bool fScraperStandalone, bool bSingleShot = false);
 extern void NeuralNetwork();
 
 extern bool fScraperActive;

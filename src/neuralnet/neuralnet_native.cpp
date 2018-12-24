@@ -1,9 +1,10 @@
 #include "neuralnet_native.h"
+#include "version.h"
 
 #include <string>
 
 extern std::string GetArgument(const std::string& arg, const std::string& defaultvalue);
-extern std::string ScraperGetNeuralContract(bool bStoreConvergedStats);
+extern std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 extern std::string ScraperGetNeuralHash();
 extern bool ScraperSynchronizeDPOR();
 
@@ -14,10 +15,11 @@ bool NeuralNetNative::IsEnabled()
     return GetArgument("disableneuralnetwork", "false") == "false";
 }
 
+// This is for compatibility
 std::string NeuralNetNative::GetNeuralVersion()
 {
-    // This is the NN magic version number. TODO: Consider different number for new NN?
-    return std::to_string(1999);
+    int64_t neural_id = IsNeuralNet();
+    return std::to_string(CLIENT_VERSION_MINOR) + "." + std::to_string(neural_id);
 }
 
 std::string NeuralNetNative::GetNeuralHash()
@@ -27,7 +29,7 @@ std::string NeuralNetNative::GetNeuralHash()
 
 std::string NeuralNetNative::GetNeuralContract()
 {
-    return ScraperGetNeuralContract(false);
+    return ScraperGetNeuralContract(false, false);
 }
 
 // Note that the data argument is still used here for compatibility, but I don't think it will
@@ -44,5 +46,7 @@ std::string NeuralNetNative::ExecuteDotNetStringFunction(std::string function, s
 
 int64_t NeuralNetNative::IsNeuralNet()
 {
-    return 0;
+    // This is the NN version number. TODO: Consider different number for new NN?
+    int64_t nNeuralNetVersion = 1999;
+    return nNeuralNetVersion;
 }

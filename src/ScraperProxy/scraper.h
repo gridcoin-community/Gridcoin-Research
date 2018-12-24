@@ -211,6 +211,8 @@ static const double SCRAPER_SUPERMAJORITY_RATIO = 2.0 / 3.0;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
+void Scraper(bool fScraperStandalone, bool bSingleShot = false);
+void ScraperSingleShot();
 bool ScraperDirectorySanity();
 bool StoreBeaconList(const fs::path& file);
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
@@ -232,6 +234,7 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
                                          const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
+bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests();
 bool ScraperSendFileManifestContents(std::string CManifestName);
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
@@ -239,7 +242,7 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
-std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false);
+std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
 bool ScraperSynchronizeDPOR();
 

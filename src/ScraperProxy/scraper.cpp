@@ -11,7 +11,7 @@ std::string lowercase(std::string s);
 std::string ExtractXML(const std::string XMLdata, const std::string key, const std::string key_end);
 std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
 int64_t teamid(const std::string& xmldata);
-ScraperFileManifest StructScraperFileManifest;
+ScraperFileManifest StructScraperFileManifest = {};
 
 CCriticalSection cs_Scraper;
 CCriticalSection cs_StructScraperFileManifest;
@@ -38,9 +38,12 @@ extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
 
 // This is the scraper thread...
-void Scraper(bool fScraperStandalone)
+void Scraper(bool fScraperStandalone, bool bSingleShot)
 {
-    _log(INFO, "Scraper", "Starting Scraper thread.");
+    if(!bSingleShot)
+        _log(INFO, "Scraper", "Starting Scraper thread.");
+    else
+        _log(INFO, "Scraper", "Running in single shot mode.");
 
     // This is necessary to maintain compatibility with Windows.
     pathScraper.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
@@ -54,82 +57,89 @@ void Scraper(bool fScraperStandalone)
     else
         _log(ERROR, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is NOT correct.");
 
-    // Check to see if the Scraper directory exists and is a directory. If not create it.
-    if(fs::exists(pathScraper))
+    // Take a lock on cs_Scraper for the directory setup and file consistency check.
+
     {
-        // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
-        if(fs::is_regular_file(pathScraper))
-        {
-            fs::remove(pathScraper);
-            fs::create_directory(pathScraper);
-        }
-        else
-        {
-            // Load the manifest file from the Scraper directory into mScraperFileManifest.
+        LOCK(cs_Scraper);
 
-            _log(INFO, "Scraper", "Loading Manifest");
-            if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                _log(ERROR, "Scraper", "Error occurred loading manifest");
-            else
-                _log(INFO, "Scraper", "Loaded Manifest file into map.");
-
-            // Align the Scraper directory with the Manifest file.
-            // First remove orphan files with no Manifest entry.
-            // Lock the manifest while it is being manipulated.
+        // Check to see if the Scraper directory exists and is a directory. If not create it.
+        if(fs::exists(pathScraper))
+        {
+            // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
+            if(fs::is_regular_file(pathScraper))
             {
-                LOCK(cs_StructScraperFileManifest);
+                fs::remove(pathScraper);
+                fs::create_directory(pathScraper);
+            }
+            else
+            {
+                // Load the manifest file from the Scraper directory into mScraperFileManifest.
 
-                // Check to see if the file exists in the manifest and if the hash matches. If it doesn't
-                // remove it.
-                ScraperFileManifestMap::iterator entry;
+                _log(INFO, "Scraper", "Loading Manifest");
+                if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
+                    _log(ERROR, "Scraper", "Error occurred loading manifest");
+                else
+                    _log(INFO, "Scraper", "Loaded Manifest file into map.");
 
-                for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
+                // Align the Scraper directory with the Manifest file.
+                // First remove orphan files with no Manifest entry.
+                // Lock the manifest while it is being manipulated.
                 {
-                    std::string filename = dir.path().filename().string();
+                    LOCK(cs_StructScraperFileManifest);
 
-                    if(dir.path().filename() != "Manifest.csv.gz"
-                            && dir.path().filename() != "BeaconList.csv.gz"
-                            && dir.path().filename() != "Stats.csv.gz"
-                            && dir.path().filename() != "ConvergedStats.csv.gz"
-                            && fs::is_regular_file(dir))
+                    // Check to see if the file exists in the manifest and if the hash matches. If it doesn't
+                    // remove it.
+                    ScraperFileManifestMap::iterator entry;
+
+                    for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
                     {
-                        entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
-                        if (entry == StructScraperFileManifest.mScraperFileManifest.end())
-                        {
-                            fs::remove(dir.path());
-                            _log(WARNING, "Scraper", "Removing orphan file not in Manifest: " + filename);
-                            continue;
-                        }
+                        std::string filename = dir.path().filename().string();
 
-                        if (entry->second.hash != GetFileHash(dir))
+                        if(dir.path().filename() != "Manifest.csv.gz"
+                                && dir.path().filename() != "BeaconList.csv.gz"
+                                && dir.path().filename() != "Stats.csv.gz"
+                                && dir.path().filename() != "ConvergedStats.csv.gz"
+                                && fs::is_regular_file(dir))
                         {
-                            _log(INFO, "Scraper", "File failed hash check. Removing file.");
-                            fs::remove(dir.path());
+                            entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
+                            if (entry == StructScraperFileManifest.mScraperFileManifest.end())
+                            {
+                                fs::remove(dir.path());
+                                _log(WARNING, "Scraper", "Removing orphan file not in Manifest: " + filename);
+                                continue;
+                            }
+
+                            if (entry->second.hash != GetFileHash(dir))
+                            {
+                                _log(INFO, "Scraper", "File failed hash check. Removing file.");
+                                fs::remove(dir.path());
+                            }
                         }
                     }
-                }
 
-                // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
-                // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
-                //if fScraperRetainNonCurrentFiles is false.
-                for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
-                {
-                    ScraperFileManifestMap::iterator entry_copy = entry++;
-
-                    if (!fs::exists(pathScraper / entry_copy->first)
-                            || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
-                            || (!fScraperRetainNonCurrentFiles && entry_copy->second.current == false))
+                    // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
+                    // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
+                    //if fScraperRetainNonCurrentFiles is false.
+                    for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
                     {
-                        _log(WARNING, "Scraper", "Removing stale or orphan manifest entry: " + entry_copy->first);
-                        DeleteScraperFileManifestEntry(entry_copy->second);
+                        ScraperFileManifestMap::iterator entry_copy = entry++;
+
+                        if (!fs::exists(pathScraper / entry_copy->first)
+                                || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
+                                || (!fScraperRetainNonCurrentFiles && entry_copy->second.current == false))
+                        {
+                            _log(WARNING, "Scraper", "Removing stale or orphan manifest entry: " + entry_copy->first);
+                            DeleteScraperFileManifestEntry(entry_copy->second);
+                        }
                     }
                 }
             }
         }
-    }
-    else
-        fs::create_directory(pathScraper);
+        else
+            fs::create_directory(pathScraper);
 
+        // end LOCK(cs_Scraper)
+    }
 
     uint256 nmScraperFileManifestHash = 0;
 
@@ -138,13 +148,15 @@ void Scraper(bool fScraperStandalone)
     {
         // Only proceed if wallet is in sync. Check every 5 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
+        // If called in singleshot mode, wallet will most likely be in sync, because the calling functions check
+        // beforehand.
         while (OutOfSyncByAge())
         {
             _log(INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
-        _log(INFO, "Scraper", "Wallet is now in sync. Continuing.");
+        _log(INFO, "Scraper", "Wallet is in sync. Continuing.");
 
         gridcoinrpc data;
         
@@ -156,7 +168,8 @@ void Scraper(bool fScraperStandalone)
         // other scrapers while this one is quiescent. An unlikely but possible
         // situation because the nActiveBeforeSB may be set differently on other
         // scrapers.
-        if (sbage <= (86400 - nActiveBeforeSB) && sbage >= 0)
+        // If Scraper is called in singleshot mode, then skip the wait.
+        if (!bSingleShot && sbage <= (86400 - nActiveBeforeSB) && sbage >= 0)
         {
             // Don't let nBeforeSBSleep go less than zero, which could happen without max if wallet
             // started with sbage already older than 86400 - nActiveBeforeSB.
@@ -285,23 +298,40 @@ void Scraper(bool fScraperStandalone)
         // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
         // with the boolean false, meaning don't store the stats.
         // Lock both cs_Scraper and cs_StructScraperFileManifest.
-
-        //ConvergedManifest StructConvergedManifest;
-        std::string sSBCoreData;
-
+        // Don't do this if called with singleshot, because ScraperGetNeuralContract will be done afterwards by
+        // the functiont that called the singleshot.
+        if (!bSingleShot)
         {
-            LOCK2(cs_Scraper, cs_StructScraperFileManifest);
+            //ConvergedManifest StructConvergedManifest;
 
-            //ScraperConstructConvergedManifest(StructConvergedManifest)
-            sSBCoreData = ScraperGetNeuralContract(true);
+            std::string sSBCoreData;
+
+            {
+                LOCK2(cs_Scraper, cs_StructScraperFileManifest);
+
+                //ScraperConstructConvergedManifest(StructConvergedManifest)
+                sSBCoreData = ScraperGetNeuralContract(true);
+            }
+
+            _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
+            MilliSleep(nScraperSleep);
         }
-
-        _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
-        MilliSleep(nScraperSleep);
+        else
+            // This will break from the outer while loop if in singleshot mode and end execution after one pass.
+            // otherwise in a continuous while loop with nScraperSleep between iterations.
+            break;
     }
 }
 
 
+void ScraperSingleShot()
+{
+    // Going through Scraper function in single shot mode.
+
+    _log(INFO, "ScraperSingleShot", "Calling Scraper function in single shot mode.");
+
+    Scraper(false, true);
+}
 
 
 // This is the non-scraper "neural-network" node thread...
@@ -319,7 +349,7 @@ void NeuralNetwork()
             MilliSleep(8000);
         }
 
-        _log(INFO, "NeuralNetwork", "Wallet is now in sync. Continuing.");
+        _log(INFO, "NeuralNetwork", "Wallet is in sync. Continuing.");
 
         // These items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
@@ -1753,10 +1783,31 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     return true;
 }
 
+// The idea here is that there are two levels of authorization. The first level is whether any
+// node can operate as a "scraper", in other words, download the stats files themselves.
+// The second level, which is the IsScraperAuthorizedToBroadcastManifests() function,
+// is to authorize a particular node to actually be able to publish manifests.
+// The second function is intended to override the first, with the first being a network wide
+// policy. So to be clear, if the network wide policy has IsScraperAuthorized() set to false
+// then ONLY nodes that have IsScraperAuthorizedToBroadcastManifests() can download stats at all.
+// If IsScraperAuthorized() is set to true, then you have two levels of operation allowed.
+// Nodes can run -scraper and download stats for themselves. They will only be able to publish
+// manifests if for that node IsScraperAuthorizedToBroadcastManifests() evaluates to true.
+// This allows flexibility in network policy, and will allow us to convert from a scraper based
+// approach to convergence back to individual node stats download and convergence without a lot of
+// headaches.
+bool IsScraperAuthorized()
+{
+    // Stubbed out for general scraper operation policy.
+    // Currently set to false
+
+    return false;
+}
 
 bool IsScraperAuthorizedToBroadcastManifests()
 {
     // Stub for check against public key in AppCache to authorize sending manifests.
+    // Currently set to true during development/early testing.
     return true;
 }
 
@@ -2278,40 +2329,71 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
 }
 //*/
 
-std::string ScraperGetNeuralContract(bool bStoreConvergedStats)
+std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
 {
+    // If not in sync then immediately bail with a empty string.
+    if (OutOfSyncByAge())
+        return std::string("");
+
     ConvergedManifest StructConvergedManifest;
     BeaconMap mBeaconMap;
     std::string sSBCoreData;
 
-    // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
-    // you can't make a SB core and you can't make a contract, so return the empty string.
-    if(ScraperConstructConvergedManifest(StructConvergedManifest))
+    // If bContractDirectFromStatsUpdate is set to true, this means that this is being called from
+    // ScraperSynchronizeDPOR() in fallback mode to force a single shot update of the stats files and
+    // direct generation of the contract from the single shot run. This will return immediately with a blank if
+    // IsScraperAuthorized() evaluates to false, because that means that by network policy, no non-scraper
+    // stats downloads are allowed by unauthorized scraper nodes.
+    if (!bContractDirectFromStatsUpdate)
     {
-        // This is to display the element count in the beacon map.
-        LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-
-        ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
-
-        _log(INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
-
-        if (bStoreConvergedStats)
+        // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
+        // you can't make a SB core and you can't make a contract, so return the empty string.
+        if(ScraperConstructConvergedManifest(StructConvergedManifest))
         {
-            if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                _log(ERROR, "ScraperGetNeuralContract", "StoreStats error occurred");
-            else
-                _log(INFO, "ScraperGetNeuralContract", "Stored converged stats.");
-        }
+            // This is to display the element count in the beacon map.
+            LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
 
-        sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+            ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+            _log(INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+            if (bStoreConvergedStats)
+            {
+                if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                    _log(ERROR, "ScraperGetNeuralContract", "StoreStats error occurred");
+                else
+                    _log(INFO, "ScraperGetNeuralContract", "Stored converged stats.");
+            }
+
+            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+
+            if (fDebug)
+                _log(INFO, "ScraperGetNeuralContract", "SB Core Data\n" + sSBCoreData);
+
+            return sSBCoreData;
+        }
+        else
+            return std::string("");
+    }
+    else if (IsScraperAuthorized())
+    {
+        // This part is the "second trip through from ScraperSynchronizeDPOR() as a fallback, if
+        // authorized.
+
+        // Do a single shot through the main scraper function to update all of the files.
+        ScraperSingleShot();
+
+        ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
+        sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperStats);
 
         if (fDebug)
             _log(INFO, "ScraperGetNeuralContract", "SB Core Data\n" + sSBCoreData);
 
         return sSBCoreData;
     }
-    else
-        return std::string("");
+
+    // If we got here, then no contract so return empty string.
+    return std::string("");
 }
 
 
@@ -2320,7 +2402,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats)
 // purposes. This is silly and should be changed to a uint256.
 std::string ScraperGetNeuralHash()
 {
-    std::string sNeuralContract = ScraperGetNeuralContract(false);
+    std::string sNeuralContract = ScraperGetNeuralContract(false, false);
 
     uint256 nHash = Hash(sNeuralContract.begin(), sNeuralContract.end());
 
@@ -2330,10 +2412,32 @@ std::string ScraperGetNeuralHash()
 
 bool ScraperSynchronizeDPOR()
 {
-    // Currently stubbed out.
-    bool bStatus = true;
+    bool bStatus = false;
 
-    return true;
+    // First check to see if there is already a scraper convergence and a contract formable. If so, then no update needed.
+    // If the appropriate scrapers are running and the node is in communication, then this is most likely going to be
+    // the path, which means very little work.
+    std::string sNeuralContract = ScraperGetNeuralContract(false, false);
+
+    if (sNeuralContract != "")
+    {
+        bStatus = true;
+        // Return immediately here if successful, otherwise fallback to direct download if authorized.
+        return bStatus;
+    }
+    else
+    {
+        // Try again with the bool bContractDirectFromStatsUpdate set to true. This will cause a one-shot sync of the
+        // Scraper file manifest to the stats sites and then a construction of the contract directly from resultant
+        // mScraperStats, if the network policy allows one-off individual node stats downloads (i.e. IsScraperAuthorized()
+        // is true). If IsScraperAuthorized() is false, then this will do nothing but return an empty string.
+        std::string sNeuralContract = ScraperGetNeuralContract(false, true);
+    }
+
+    if (sNeuralContract != "")
+        bStatus = true;
+
+    return bStatus;
 }
 
 
