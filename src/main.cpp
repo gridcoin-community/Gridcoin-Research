@@ -5193,8 +5193,10 @@ BeaconConsensus GetConsensusBeaconList()
 
     BlockFinder MaxConsensusLadder;
 
+    // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
+    // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
     CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
-                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
+                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
 
     Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
 
