@@ -1242,31 +1242,50 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    if (bForce)
+    // First try local node before bothering network...
+
+    std::string sNeuralResponse = NN::GetInstance()->ExecuteDotNetStringFunction("ExplainMag", GlobalCPUMiningCPID.cpid);
+
+    if (sNeuralResponse.length() < 25)
     {
-        if (msNeuralResponse.length() < 25)
+        if (bForce)
         {
-            res.pushKV("Neural Response", "Empty; Requesting a response..");
-            res.pushKV("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses");
+            if (msNeuralResponse.length() < 25)
+            {
+                res.pushKV("Neural Response", "Empty; Requesting a response..");
+                res.pushKV("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses");
 
-            msNeuralResponse = "";
+                msNeuralResponse = "";
 
-            AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
+                AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
+            }
         }
+
+        if (msNeuralResponse.length() > 25)
+        {
+            res.pushKV("Neural Response", "true");
+
+            std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+
+            for (unsigned int i = 0; i < vMag.size(); i++)
+                res.pushKV(RoundToString(i+1,0),vMag[i].c_str());
+        }
+
+        else
+            res.pushKV("Neural Response", "false; Try again at a later time");
+
     }
-
-    if (msNeuralResponse.length() > 25)
+    // the local response was good so use it instead.
+    else
     {
-        res.pushKV("Neural Response", "true");
+        res.pushKV("Neural Response", "true (from THIS node)");
 
-        std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
+        std::vector<std::string> vMag = split(sNeuralResponse.c_str(),"<ROW>");
 
         for (unsigned int i = 0; i < vMag.size(); i++)
             res.pushKV(RoundToString(i+1,0),vMag[i].c_str());
     }
 
-    else
-        res.pushKV("Neural Response", "false; Try again at a later time");
 
     return res;
 }

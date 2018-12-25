@@ -33,6 +33,7 @@
 #include "appcache.h"
 #include "beacon.h"
 #include "wallet.h"
+#include "global_objects_noui.hpp"
 
 #include <memory>
 #include "net.h"
@@ -182,6 +183,8 @@ struct ConvergedScraperStats
 {
     int64_t nTime;
     ScraperStats mScraperConvergedStats;
+    uint256 nContractHash;
+    std::string sContract;
 };
 
 /*********************

@@ -1,5 +1,6 @@
 #include "neuralnet_native.h"
 #include "version.h"
+#include "util.h"
 
 #include <string>
 
@@ -7,6 +8,7 @@ extern std::string GetArgument(const std::string& arg, const std::string& defaul
 extern std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 extern std::string ScraperGetNeuralHash();
 extern bool ScraperSynchronizeDPOR();
+extern std::string ExplainMagnitude(std::string sCPID);
 
 using namespace NN;
 
@@ -41,7 +43,13 @@ bool NeuralNetNative::SynchronizeDPOR(const std::string& data)
 
 std::string NeuralNetNative::ExecuteDotNetStringFunction(std::string function, std::string data)
 {
-    return std::string();
+    if (function == "ExplainMag")
+        return ExplainMagnitude(data);
+    else
+    {
+        LogPrintf("ExecuteDotNetStringFunction(%s) not handled yet. Returning empty string.", function);
+        return std::string();
+    }
 }
 
 int64_t NeuralNetNative::IsNeuralNet()

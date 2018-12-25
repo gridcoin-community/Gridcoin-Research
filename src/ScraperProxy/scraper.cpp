@@ -342,13 +342,13 @@ void Scraper(bool fScraperStandalone, bool bSingleShot)
 
             {
                 LOCK2(cs_Scraper, cs_StructScraperFileManifest);
-                _log(INFO, "LOCK2", "cs_Scraper, cs_StructScraperFileManifest");
+                if (fDebug) _log(INFO, "LOCK2", "cs_Scraper, cs_StructScraperFileManifest");
 
                 //ScraperConstructConvergedManifest(StructConvergedManifest)
                 sSBCoreData = ScraperGetNeuralContract(true, false);
 
                 // END LOCK2(cs_Scraper, cs_StructScraperFileManifest);
-                _log(INFO, "ENDLOCK2", "cs_Scraper, cs_StructScraperFileManifest");
+                if (fDebug) _log(INFO, "ENDLOCK2", "cs_Scraper, cs_StructScraperFileManifest");
             }
 
             _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
@@ -1786,8 +1786,6 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
 
 std::string ExplainMagnitude(std::string sCPID)
 {
-    stringbuilder out;
-
     // See if converged stats/contract update needed...
     bool bConvergenceUpdateNeeded = true;
     {
@@ -1803,7 +1801,7 @@ std::string ExplainMagnitude(std::string sCPID)
     }
 
     if (bConvergenceUpdateNeeded)
-        // Don't need the output.
+        // Don't need the output but will use the global cache, which will be updated.
         ScraperGetNeuralContract(false, false);
 
     // A purposeful copy here to avoid a long-term lock. May want to change to direct reference
@@ -1819,69 +1817,73 @@ std::string ExplainMagnitude(std::string sCPID)
         if (fDebug) _log(INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
     }
 
-    /* Work in progress... needs to be changed, basically a cut and paste from the
-     * other stats functions.
+    stringbuilder out;
 
-    ScraperObjectStats ProjectStats = {};
+    out.append("CPID,Project,RAC,Project_Total_RAC,Project_Avg_RAC,Project Mag,Cumulative RAC,Cumulative Mag,Errors<ROW>");
 
-    ProjectStats.statskey.objecttype = byProject;
-    ProjectStats.statskey.objectID = sCPID;
+    double dCPIDCumulativeRAC = 0.0;
+    double dCPIDCumulativeMag = 0.0;
 
     for (auto const& entry : mScraperConvergedStats)
     {
+        // Only select the individual byCPIDbyProject stats for the selected CPID.
 
-        std::string objectID = entry.first.objectID;
-
-        std::size_t found = objectID.find(ProjectStats.statskey.objectID);
-
-        if (entry.first.objecttype == byProject)
-        {
-            ProjectStats.statsvalue.dTC += entry.second.statsvalue.dTC;
-            ProjectStats.statsvalue.dRAT += entry.second.statsvalue.dRAT;
-            ProjectStats.statsvalue.dRAC += entry.second.statsvalue.dRAC;
-            ProjectStats.statsvalue.dMag += entry.second.statsvalue.dMag;
-
-            //nProjectCount++;
-            //nCPIDProjectCount++;
-        }
-    }
-
-
-
-    ScraperObjectStats CPIDStats = {};
-
-    CPIDStats.statskey.objecttype = byCPID;
-    CPIDStats.statskey.objectID = sCPID;
-
-    for (auto const& entry : mScraperStats)
-    {
-        // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
-        // otherwise dimension mixing will result.
-
-        std::string objectID = entry.first.objectID;
-
-        std::size_t found = objectID.find(CPIDStats.statskey.objectID);
+        std::size_t found = entry.first.objectID.find(sCPID);
 
         if (entry.first.objecttype == byCPIDbyProject && found!=std::string::npos)
         {
-            const auto& project = mScraperStats
+            dCPIDCumulativeRAC += entry.second.statsvalue.dRAC;
+            dCPIDCumulativeMag += entry.second.statsvalue.dMag;
 
-            CPIDStats.statsvalue.dTC += entry.second.statsvalue.dTC;
-            CPIDStats.statsvalue.dRAT += entry.second.statsvalue.dRAT;
-            CPIDStats.statsvalue.dRAC += entry.second.statsvalue.dRAC;
-            CPIDStats.statsvalue.dMag += entry.second.statsvalue.dMag;
+            std::string sInput = entry.first.objectID;
 
-            //nProjectCount++;
-            //nCPIDProjectCount++;
+            // Remove ,CPID from key objectID to obtain referenced project.
+            std::string sProject = sInput.erase(sInput.find("," + sCPID), sCPID.length() + 1);
+
+            ScraperObjectStatsKey ProjectKey;
+
+            ProjectKey.objecttype = byProject;
+            ProjectKey.objectID = sProject;
+
+            auto const& iProject = mScraperConvergedStats.find(ProjectKey);
+
+            out.append(sCPID + ",");
+            out.append(sProject + ",");
+            out.fixeddoubleappend(iProject->second.statsvalue.dRAC, 2);
+            out.append(",");
+            out.fixeddoubleappend(iProject->second.statsvalue.dAvgRAC, 2);
+            out.append(",");
+            out.fixeddoubleappend(iProject->second.statsvalue.dMag, 2);
+            out.append(",");
+            out.fixeddoubleappend(dCPIDCumulativeRAC, 2);
+            out.append(",");
+            out.fixeddoubleappend(dCPIDCumulativeMag, 2);
+            out.append(",");
+            //The last field is for errors, but there are not any, so the <ROW> is next.
+            out.append("<ROW>");
         }
     }
 
-    */
+    // "Signature"
+    // TODO: Why the magic version number of 430 from .NET? Should this be a constant?
+    // Also convert GetAdjustTime to human readable time.
+    // Should we take a lock on cs_main to read GlobalCPUMiningCPID?
+    out.append("NN Host Version: 430, ");
+    out.append("NeuralHash: " + ConvergedScraperStatsCache.nContractHash.GetHex() + ", ");
+    out.append("SignatureCPID: " + GlobalCPUMiningCPID.cpid + ", ");
+    out.append("Time: " + std::to_string(GetAdjustedTime()) + "<ROW>");
 
-    //stub
+    //Totals
+    out.append("Total RAC: ");
+    out.fixeddoubleappend(dCPIDCumulativeRAC, 2);
+    out.append("<ROW>");
+    out.append("Total Mag: ");
+    out.fixeddoubleappend(dCPIDCumulativeMag, 2);
 
-    return std::string("");
+    return out.value();
 }
+
+
 
 /***********************
 * Scraper networking   *
@@ -2085,10 +2087,10 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
         std::string sinputfile = inputfile.string();
         std::string suffix = ".csv.gz";
 
-        std::string ETag = sinputfile.erase(sinputfile.find(sProject), sProject.length());
-        ETag = sinputfile.erase(sinputfile.find(suffix), suffix.length());
-
-        ProjectEntry.ETag = ETag;
+        // Remove project-
+        sinputfile.erase(sinputfile.find(sProject), sProject.length());
+        // Remove suffix. What is left is the ETag.
+        ProjectEntry.ETag = sinputfile.erase(sinputfile.find(suffix), suffix.length());
 
         ProjectEntry.LastModified = entry.second.timestamp;
 
@@ -2498,7 +2500,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
 {
     // If not in sync then immediately bail with a empty string.
     if (OutOfSyncByAge())
-        return std::string("");
+        return std::string();
 
     // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds), then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
@@ -2539,21 +2541,6 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
 
                 ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
 
-                // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
-                // lock before and do a direct assignment, but that will lock the cache for the whole stats computation,
-                // which is not really necessary.
-                {
-                    LOCK(cs_ConvergedScraperStatsCache);
-                     if (fDebug) _log(INFO, "LOCK", "cs_ConvergedScraperStatsCache");
-
-
-                    ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
-                    ConvergedScraperStatsCache.nTime = GetAdjustedTime();
-
-                    // End LOCK(cs_ConvergedScraperStatsCache)
-                    if (fDebug) _log(INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
-                }
-
                 _log(INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
 
                 if (bStoreConvergedStats)
@@ -2564,7 +2551,24 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                         _log(INFO, "ScraperGetNeuralContract", "Stored converged stats.");
                 }
 
-                sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+                // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
+                // lock before and do a direct assignment, but that will lock the cache for the whole stats computation,
+                // which is not really necessary.
+                {
+                    LOCK(cs_ConvergedScraperStatsCache);
+                     if (fDebug) _log(INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+                    sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
+
+                    ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
+                    ConvergedScraperStatsCache.nTime = GetAdjustedTime();
+                    ConvergedScraperStatsCache.nContractHash = Hash(sSBCoreData.begin(), sSBCoreData.end());
+                    ConvergedScraperStatsCache.sContract = sSBCoreData;
+
+                    // End LOCK(cs_ConvergedScraperStatsCache)
+                    if (fDebug) _log(INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+                }
+
 
                 if (fDebug)
                     _log(INFO, "ScraperGetNeuralContract", "SB Core Data from convergence \n" + sSBCoreData);
@@ -2574,8 +2578,9 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                 return sSBCoreData;
             }
             else
-                return std::string("");
+                return std::string();
         }
+        // If bContractDirectFromStatsUpdate is true, then this is the single shot pass.
         else if (IsScraperAuthorized())
         {
             // This part is the "second trip through from ScraperSynchronizeDPOR() as a fallback, if
@@ -2599,11 +2604,12 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
     }
     else
     {
+        // If we are here, we are using cached information.
+
         LOCK(cs_ConvergedScraperStatsCache);
         if (fDebug) _log(INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
-
-        sSBCoreData = GenerateSBCoreDataFromScraperStats(ConvergedScraperStatsCache.mScraperConvergedStats);
+        sSBCoreData = ConvergedScraperStatsCache.sContract;
 
         if (fDebug)
             _log(INFO, "ScraperGetNeuralContract", "SB Core Data from cached converged stats\n" + sSBCoreData);
@@ -2612,10 +2618,10 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
 
         // End LOCK(cs_ConvergedScraperStatsCache)
         if (fDebug) _log(INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+
     }
 
-    // If we got here, then no contract so return empty string.
-    return std::string("");
+    return sSBCoreData;
 }
 
 
