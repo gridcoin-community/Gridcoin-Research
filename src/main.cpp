@@ -307,7 +307,10 @@ bool TimerMain(std::string timer_name, int max_ms)
 
 bool UpdateNeuralNetworkQuorumData()
 {
-    if (!bGlobalcomInitialized) return false;
+    //if (!bGlobalcomInitialized) return false;
+    // Changed to check if the -disableneuralnetwork was passed, not whether bGlobalcomInitialized,
+    // because it must support the new native NN too.
+    if (!NN::GetInstance()->IsEnabled()) return false;
     int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
     int64_t superblock_age = GetAdjustedTime() - superblock_time;
     std::string myNeuralHash = "";

@@ -621,9 +621,15 @@ void BitcoinGUI::createMenuBar()
     community->addSeparator();
     community->addAction(websiteAction);
 
-#ifdef WIN32  // actions in this menu are on .NET dll side only show this menu for windows
-    QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
-    qmAdvanced->addAction(miningAction);
+    // For right now, actions in this menu are on .NET dll side. Only show this menu for Windows and
+    // if the old .net NN is active. If the new native NN is used, disable.
+    // Once a graphical UI is created for the new native NN, then this will be changed.
+#ifdef WIN32
+    if(!GetBoolArg("-usenewnn"))
+    {
+        QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
+        qmAdvanced->addAction(miningAction);
+    }
 #endif /* defined(WIN32) */
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
@@ -1515,31 +1521,37 @@ std::string getMacAddress()
 }
 
 
+// This function's name is misleading, it is also used to first instantiate globalcom as
+// well as reinstantiate it.
 void ReinstantiateGlobalcom()
 {
 #ifdef WIN32
-    if (bGlobalcomInitialized)
-        return;
-
-    // Note, on Windows, if the performance counters are corrupted, rebuild them
-    // by going to an elevated command prompt and issue the command: lodctr /r
-    // (to rebuild the performance counters in the registry)
-    LogPrintf("Instantiating globalcom for Windows.");
-    try
+    // If the new native NN is selected we do not want to start up the old NN.
+    if(!GetBoolArg("-usenewnn"))
     {
-        globalcom = new QAxObject("BoincStake.Utilization");
-        LogPrintf("Instantiated globalcom for Windows.");
-    }
-    catch(...)
-    {
-        LogPrintf("Failed to instantiate globalcom.");
+        if (bGlobalcomInitialized)
+            return;
 
-        return;
-    }
+        // Note, on Windows, if the performance counters are corrupted, rebuild them
+        // by going to an elevated command prompt and issue the command: lodctr /r
+        // (to rebuild the performance counters in the registry)
+        LogPrintf("Instantiating globalcom for Windows.");
+        try
+        {
+            globalcom = new QAxObject("BoincStake.Utilization");
+            LogPrintf("Instantiated globalcom for Windows.");
+        }
+        catch(...)
+        {
+            LogPrintf("Failed to instantiate globalcom.");
 
-    bGlobalcomInitialized = true;
-    std::string sNetworkFlag = fTestNet ? "TESTNET" : "MAINNET";
-    globalcom->dynamicCall("SetTestNetFlag(QString)", ToQstring(sNetworkFlag));
+            return;
+        }
+
+        bGlobalcomInitialized = true;
+        std::string sNetworkFlag = fTestNet ? "TESTNET" : "MAINNET";
+        globalcom->dynamicCall("SetTestNetFlag(QString)", ToQstring(sNetworkFlag));
+    }
 #endif
 }
 
