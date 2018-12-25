@@ -452,13 +452,12 @@ public:
             //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
             res = curl_easy_perform(curl);
-            fclose(fp);
+
+            if(fp)
+                fclose(fp);
 
             if (res > 0)
             {
-                if (fp)
-                    fclose(fp);
-
                 _log(ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
 
                 return false;
@@ -584,13 +583,12 @@ public:
             //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 
             res = curl_easy_perform(curl);
-            fclose(fp);
+
+            if (fp)
+                fclose(fp);
 
             if (res > 0)
             {
-                if (fp)
-                    fclose(fp);
-
                 _log(ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
 
                 return false;
