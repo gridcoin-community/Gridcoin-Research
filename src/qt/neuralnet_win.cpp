@@ -16,17 +16,6 @@ extern bool fTestNet;
 
 using namespace NN;
 
-namespace
-{
-    // Static factory registration.
-    bool registered = []()
-    {
-        NN::Factory factory([]() { return std::make_shared<NeuralNetWin32>(); });
-        NN::RegisterFactory(factory);
-        return true;
-    };
-}
-
 // While transitioning to dotnet the NeuralNet implementation has been split
 // into 3 implementations; Win32 with Qt, Win32 without Qt and the rest.
 // After the transition both Win32 implementations can be removed.
