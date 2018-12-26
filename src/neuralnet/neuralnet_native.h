@@ -20,5 +20,6 @@ namespace NN
         bool SynchronizeDPOR(const std::string& data);
         std::string ExecuteDotNetStringFunction(std::string function, std::string data);
         int64_t IsNeuralNet();
+        void Show();
     };
 }

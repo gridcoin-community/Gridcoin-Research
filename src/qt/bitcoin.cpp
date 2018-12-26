@@ -58,13 +58,6 @@ Q_IMPORT_PLUGIN(QSvgIconPlugin);
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
 
-//Global reference to globalcom
-
-#ifdef WIN32
-static QAxObject *globalcom;
-#endif
-
-
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
     // Message from network thread
@@ -320,8 +313,7 @@ int main(int argc, char *argv[])
 
 		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
 
-	    //Start globalcom
-        if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
+      if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
 		{
 				LogPrintf("Error; NewThread(ThreadAppInit2) failed");
 		        return 1;

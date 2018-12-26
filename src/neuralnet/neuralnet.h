@@ -80,6 +80,11 @@ namespace NN
         virtual std::string ExecuteDotNetStringFunction(std::string function, std::string data) = 0;
 
         virtual int64_t IsNeuralNet() = 0;
+
+        //!
+        //! \brief Show UI if available.
+        //!
+        virtual void Show() = 0;
     };
 
     //!

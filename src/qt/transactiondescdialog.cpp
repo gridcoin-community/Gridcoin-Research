@@ -7,8 +7,6 @@
 #include <QModelIndex>
 
 QString ToQString(std::string s);
-std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
 
 TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, QWidget *parent) :
     QDialog(parent),

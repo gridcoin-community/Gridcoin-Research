@@ -58,3 +58,6 @@ int64_t NeuralNetNative::IsNeuralNet()
     int64_t nNeuralNetVersion = 1999;
     return nNeuralNetVersion;
 }
+
+void NeuralNetNative::Show()
+{}

@@ -90,7 +90,6 @@ extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::strin
 extern UniValue GetJSONBeaconReport();
 
 void GatherNeuralHashes();
-void qtSyncWithDPORNodes(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();

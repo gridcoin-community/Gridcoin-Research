@@ -38,3 +38,6 @@ int64_t NeuralNetStub::IsNeuralNet()
 {
     return 0;
 }
+
+void NeuralNetStub::Show()
+{}

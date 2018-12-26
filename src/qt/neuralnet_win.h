@@ -1,6 +1,13 @@
 #pragma once
 
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
+
+#include <qglobal.h>
+#include <memory>
+
+QT_BEGIN_NAMESPACE
+class QAxObject;
+QT_END_NAMESPACE
 
 namespace NN
 {
@@ -12,6 +19,10 @@ namespace NN
     //!
     class NeuralNetWin32 : public INeuralNet
     {
+    public:
+        // Constructor
+        NeuralNetWin32();
+
     private:
         // Documentation in interface.
         bool IsEnabled();
@@ -21,5 +32,8 @@ namespace NN
         bool SynchronizeDPOR(const std::string& data);
         std::string ExecuteDotNetStringFunction(std::string function, std::string data);
         int64_t IsNeuralNet();
+        void Show();
+
+        std::unique_ptr<QAxObject> globalcom;
     };
 }
