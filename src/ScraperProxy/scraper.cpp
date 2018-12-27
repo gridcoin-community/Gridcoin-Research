@@ -806,6 +806,10 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // Set fileerror flag to true until made false by the completion of one successful injection of user stats into stream.
     bool bfileerror = true;
 
+    // If passed an empty file, immediately return false.
+    if (file.string().empty())
+        return false;
+
     std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
@@ -1439,9 +1443,8 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     in.push(ingzfile);
 
     // TODO implement file error handling
-    bool bcomplete = false;
-    bool bfileerror = false;
-    std::vector<std::string> vXML;
+    // bool bcomplete = false;
+    // bool bfileerror = false;
 
     bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mBeaconMap, mScraperStats);
 
