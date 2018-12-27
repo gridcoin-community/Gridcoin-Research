@@ -90,7 +90,6 @@ extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::strin
 extern UniValue GetJSONBeaconReport();
 
 void GatherNeuralHashes();
-void qtSyncWithDPORNodes(std::string data);
 
 extern bool TallyMagnitudesInSuperblock();
 double GetTotalBalance();
@@ -1244,7 +1243,7 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
     // First try local node before bothering network...
 
-    std::string sNeuralResponse = NN::GetInstance()->ExecuteDotNetStringFunction("ExplainMag", GlobalCPUMiningCPID.cpid);
+    std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(GlobalCPUMiningCPID.cpid);
 
     if (sNeuralResponse.length() < 25)
     {

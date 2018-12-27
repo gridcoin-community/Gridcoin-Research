@@ -12,12 +12,18 @@ using namespace NN;
 namespace
 {
     INeuralNetPtr instance;
-    std::vector<Factory> factories;
+
+    typedef std::vector<Factory> FactoryCollection;
+    FactoryCollection& GetFactoryCollection()
+    {
+        static FactoryCollection factories;
+        return factories;
+    }
 }
 
 void NN::RegisterFactory(const Factory &factory)
 {
-    factories.push_back(factory);
+    GetFactoryCollection().push_back(factory);
 }
 
 INeuralNetPtr NN::CreateNeuralNet()
@@ -26,7 +32,7 @@ INeuralNetPtr NN::CreateNeuralNet()
         return std::make_shared<NeuralNetNative>();
 
     // Try to instantiate via injected factories
-    for(auto factory : factories)
+    for(auto factory : GetFactoryCollection())
     {
         INeuralNetPtr obj = factory();
         if(obj)

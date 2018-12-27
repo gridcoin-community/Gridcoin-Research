@@ -6,12 +6,6 @@
 #include <QMenu>
 #include <stdint.h>
 
-#if defined(WIN32) && defined(QT_GUI)
-#include <QAxObject>
-#include <ActiveQt/qaxbase.h>
-#include <ActiveQt/qaxobject.h>
-#endif
-
 class TransactionTableModel;
 class ClientModel;
 class WalletModel;
@@ -95,14 +89,9 @@ private:
 	QAction *boincAction;
 	QAction *chatAction;
 	QAction *exchangeAction;
-
-	QAction *miningAction;
-
+    QAction *showNeuralNetAction;
     QAction *votingAction;
-
-	QAction *newUserWizardAction;
 	QAction *diagnosticsAction;
-
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
@@ -203,12 +192,8 @@ private slots:
 	void boincClicked();
     void boincStatsClicked();
 	void chatClicked();
-
     void miningClicked();
-
     void diagnosticsClicked();
-	
-	void newUserWizardClicked();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */

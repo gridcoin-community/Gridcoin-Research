@@ -321,7 +321,7 @@ bool UpdateNeuralNetworkQuorumData()
     std::string sTimestamp = TimestampToHRDate(superblock_time);
     std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
                        + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::GetInstance()->ExecuteDotNetStringFunction("SetQuorumData",data);
+    NN::GetInstance()->SetQuorumData(data);
     return true;
 }
 
@@ -6938,40 +6938,41 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "neural")
     {
-            std::string neural_request = "";
-            std::string neural_request_id = "";
-            vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-            std::string neural_response = "generic_response";
+        std::string neural_request = "";
+        std::string neural_request_id = "";
+        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
+        std::string neural_response = "generic_response";
 
-            if (neural_request=="neural_data")
-            {
-                pfrom->PushMessage("ndata_nresp", NN::GetInstance()->GetNeuralContract());
-            }
-            else if (neural_request=="neural_hash")
-            {
+        if (neural_request=="neural_data")
+        {
+            pfrom->PushMessage("ndata_nresp", NN::GetInstance()->GetNeuralContract());
+        }
+        else if (neural_request=="neural_hash")
+        {
             if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
             {
                 std::string r_hash;  vRecv >> r_hash;
                 supercfwd::SendResponse(pfrom,r_hash);
             }
             else
-            pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
-            }
-            else if (neural_request=="explainmag")
-            {
-            neural_response = NN::GetInstance()->ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-                pfrom->PushMessage("expmag_nresp", neural_response);
-                }
-            else if (neural_request=="quorum")
-            {
+                pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
+        }
+        else if (neural_request=="explainmag")
+        {
+            pfrom->PushMessage(
+                        "expmag_nresp",
+                        NN::GetInstance()->ExplainMagnitude(neural_request_id));
+        }
+        else if (neural_request=="quorum")
+        {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             pfrom->PushMessage("quorum_nresp", NN::GetInstance()->GetNeuralContract());
-            }
-            else if (neural_request=="supercfwdr")
-            {
-                // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
-                supercfwd::QuorumResponseHook(pfrom,neural_request_id);
-            }
+        }
+        else if (neural_request=="supercfwdr")
+        {
+            // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
+            supercfwd::QuorumResponseHook(pfrom,neural_request_id);
+        }
     }
     else if (strCommand == "ping")
     {
@@ -7078,32 +7079,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             std::string neural_contract = "";
             vRecv >> neural_contract;
             if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-            if (neural_contract.length() > 10)
-            {
-                 std::string results = "";
-                 //Resolve discrepancies
-                results = NN::GetInstance()->ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
-                 if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-            }
 
             // Hook into miner for delegated sb staking
             supercfwd::QuorumResponseHook(pfrom,neural_contract);
     }
     else if (strCommand == "ndata_nresp")
     {
-            std::string neural_contract = "";
-            vRecv >> neural_contract;
-            if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-            if (neural_contract.length() > 10)
-            {
-                 std::string results = "";
-                 //Resolve discrepancies
-                LogPrintf("Sync neural network data from supermajority");
-                results = NN::GetInstance()->ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
-                if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-                 // Resume the full DPOR sync at this point now that we have the supermajority data
-                 if (results=="SUCCESS")  FullSyncWithDPORNodes();
-            }
+        std::string neural_contract;
+        vRecv >> neural_contract;
+        if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
+        if (neural_contract.length() > 10)
+        {
+            //Resolve discrepancies
+            LogPrintf("Sync neural network data from supermajority");
+            const std::string& results = NN::GetInstance()->ResolveDiscrepancies(neural_contract);
+            if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
+            // Resume the full DPOR sync at this point now that we have the supermajority data
+            if (results=="SUCCESS")  FullSyncWithDPORNodes();
+        }
     }
     else if (strCommand == "alert")
     {
@@ -7680,24 +7673,23 @@ void HarvestCPIDs(bool cleardata)
 
                         if (structcpid.Iscpidvalid)
                         {
-                                // Verify the CPID is a valid researcher:
-                                if (IsResearcher(structcpid.cpid))
-                                {
-                                    GlobalCPUMiningCPID.cpidhash = cpidhash;
-                                    GlobalCPUMiningCPID.email = email;
-                                    GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-                                    LogPrintf("Setting bpk to %s", cpidhash);
+                            // Verify the CPID is a valid researcher:
+                            if (IsResearcher(structcpid.cpid))
+                            {
+                                GlobalCPUMiningCPID.cpidhash = cpidhash;
+                                GlobalCPUMiningCPID.email = email;
+                                GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+                                LogPrintf("Setting bpk to %s", cpidhash);
 
-                                    if (structcpid.team=="gridcoin")
-                                    {
-                                        msPrimaryCPID = structcpid.cpid;
-                                            //Let the Neural Network know what your CPID is so it can be charted:
-                                            std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-                                        std::string sData = NN::GetInstance()->ExecuteDotNetStringFunction("WriteKey",sXML);
-                                        //Try to get a neural RAC report
-                                        AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                                    }
+                                if (structcpid.team=="gridcoin")
+                                {
+                                    msPrimaryCPID = structcpid.cpid;
+                                    //Let the Neural Network know what your CPID is so it can be charted:
+                                    NN::GetInstance()->SetPrimaryCPID(msPrimaryCPID);
+                                    //Try to get a neural RAC report
+                                    AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                 }
+                            }
                         }
 
                         mvCPIDs[proj] = structcpid;

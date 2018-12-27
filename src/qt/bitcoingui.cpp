@@ -7,15 +7,7 @@
 
 
 #include <QProcess>
-
-#if defined(WIN32) && defined(QT_GUI)
-#include <QAxObject>
-#include <ActiveQt/qaxbase.h>
-#include <ActiveQt/qaxobject.h>
-#endif
-
 #include <QInputDialog>
-// include <QtSql> // Future Use
 
 #include <fstream>
 
@@ -51,6 +43,7 @@
 #include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
+#include "neuralnet_win.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -97,45 +90,32 @@
 #include "boinc.h"
 #include "util.h"
 
+namespace
+{
+#ifdef WIN32
+    // Static NN registration.
+    bool registered = []()
+    {
+        NN::Factory factory([]() { return std::make_shared<NN::NeuralNetWin32>(); });
+        NN::RegisterFactory(factory);
+        return true;
+    }();
+#endif
+}
 
 extern CWallet* pwalletMain;
-extern QString ToQstring(std::string s);
-extern void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude);
-extern void qtSyncWithDPORNodes(std::string data);
-extern double qtExecuteGenericFunction(std::string function,std::string data);
 extern std::string getMacAddress();
 
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-
-extern std::string qtGetNeuralHash(std::string data);
-extern std::string qtGetNeuralContract(std::string data);
-
-extern int64_t IsNeural();
-
 std::string getfilecontents(std::string filename);
-int nRegVersion;
 
 void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
 void HarvestCPIDs(bool cleardata);
-void ReinstantiateGlobalcom();
-
-#ifdef WIN32
-QAxObject *globalcom = NULL;
-QAxObject *globalwire = NULL;
-#endif
-
-QString ToQstring(std::string s)
-{
-    QString str1 = QString::fromUtf8(s.c_str());
-    return str1;
-}
-
-
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -243,162 +223,10 @@ BitcoinGUI::~BitcoinGUI()
 #endif
 }
 
-int CreateRestorePoint()
-{
-    if (!bGlobalcomInitialized)
-        return 0;
-
-#ifdef WIN32
-    globalcom->dynamicCall(fTestNet
-                           ? "CreateRestorePointTestNet()"
-                           : "CreateRestorePoint()");
-#endif
-
-    return 1;
-}
-
-//R Halford - 6/19/2015 - Let's clean up the windows side by removing all these functions and making a generic interface for comm between Windows and Linux; Start with one new generic function here:
-
-double qtExecuteGenericFunction(std::string function, std::string data)
-{
-    if (!bGlobalcomInitialized) return 0;
-
-    int result = 0;
-    #if defined(WIN32) && defined(QT_GUI)
-        QString qsData = ToQstring(data);
-        QString qsFunction = ToQstring(function +"(Qstring)");
-        std::string sFunction = function+"(Qstring)";
-        if (data=="")
-        {
-            sFunction = function + "()";
-            globalcom->dynamicCall(sFunction.c_str());
-        }
-        else
-        {
-            result = globalcom->dynamicCall(sFunction.c_str(),qsData).toInt();
-        }
-    #endif
-    return result;
-}
-
-
-
-std::string qtExecuteDotNetStringFunction(std::string function, std::string data)
-{
-    std::string sReturnData = "";
-    if (!bGlobalcomInitialized) return "";
-
-    #if defined(WIN32) && defined(QT_GUI)
-        if (!bGlobalcomInitialized) return "?";
-        QString qsData = ToQstring(data);
-        QString qsFunction = ToQstring(function +"(Qstring)");
-        std::string sFunction = function+"(Qstring)";
-        QString qsReturnData = globalcom->dynamicCall(sFunction.c_str(),qsData).toString();
-        sReturnData = FromQString(qsReturnData);
-        return sReturnData;
-    #endif
-    return sReturnData;
-}
-
-
-
-void qtSyncWithDPORNodes(std::string data)
-{
-
-    #if defined(WIN32) && defined(QT_GUI)
-        if (!bGlobalcomInitialized) return;
-        QString qsData = ToQstring(data);
-        if (fDebug3) LogPrintf("FullSyncWDporNodes");
-        int result = globalcom->dynamicCall("SyncCPIDsWithDPORNodes(Qstring)",qsData).toInt();
-        LogPrintf("Done syncing. %d", result);
-    #endif
-}
-
-
 std::string FromQString(QString qs)
 {
     std::string sOut = qs.toUtf8().constData();
     return sOut;
-}
-
-
-
-std::string qtGetNeuralContract(std::string data)
-{
-
-    #if defined(WIN32) && defined(QT_GUI)
-    try
-    {
-        if (!bGlobalcomInitialized) return "NA";
-        QString qsData = ToQstring(data);
-        //if (fDebug3) LogPrintf("GNC# ");
-        QString sResult = globalcom->dynamicCall("GetNeuralContract()").toString();
-        std::string result = FromQString(sResult);
-        return result;
-    }
-    catch(...)
-    {
-        return "?";
-    }
-    #else
-        return "?";
-    #endif
-}
-
-
-
-std::string qtGetNeuralHash(std::string data)
-{
-
-    #if defined(WIN32) && defined(QT_GUI)
-    try
-    {
-        if (!bGlobalcomInitialized) return "NA";
-
-        QString qsData = ToQstring(data);
-        QString sResult = globalcom->dynamicCall("GetNeuralHash()").toString();
-        std::string result = FromQString(sResult);
-        return result;
-    }
-    catch(...)
-    {
-        return "?";
-    }
-    #else
-        return "?";
-    #endif
-}
-
-void qtSetSessionInfo(std::string defaultgrcaddress, std::string cpid, double magnitude)
-{
-
-    if (!bGlobalcomInitialized) return;
-
-    #if defined(WIN32) && defined(QT_GUI)
-        std::string session = defaultgrcaddress + "<COL>" + cpid + "<COL>" + RoundToString(magnitude,1);
-        QString qsSession = ToQstring(session);
-        int result = globalcom->dynamicCall("SetSessionInfo(Qstring)",qsSession).toInt();
-        LogPrintf("Set session info result %d", result);
-    #endif
-}
-
-int64_t IsNeural()
-{
-    if (!bGlobalcomInitialized) return 0;
-    try
-    {
-        //NeuralNetwork
-        int nNeural = 0;
-#ifdef WIN32
-        nNeural = globalcom->dynamicCall("NeuralNetwork()").toInt();
-#endif
-        return nNeural;
-    }
-    catch(...)
-    {
-        LogPrintf("Exception");
-        return 0;
-    }
 }
 
 void BitcoinGUI::setOptionsStyleSheet(QString qssFileName)
@@ -501,13 +329,9 @@ void BitcoinGUI::createActions()
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
 
-    miningAction = new QAction(tr("&Neural Network"), this);
-    miningAction->setStatusTip(tr("Neural Network"));
-    miningAction->setMenuRole(QAction::TextHeuristicRole);
-
-    newUserWizardAction = new QAction(tr("&New User Wizard"), this);
-    newUserWizardAction->setStatusTip(tr("New User Wizard"));
-    newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
+    showNeuralNetAction = new QAction(tr("&Neural Network"), this);
+    showNeuralNetAction->setStatusTip(tr("Neural Network"));
+    showNeuralNetAction->setMenuRole(QAction::TextHeuristicRole);
 
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
@@ -547,9 +371,8 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(miningAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
+    connect(showNeuralNetAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
-    connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
 void BitcoinGUI::setIcons()
@@ -572,8 +395,7 @@ void BitcoinGUI::setIcons()
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
-    miningAction->setIcon(QPixmap(":/images/gridcoin"));
-    newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
+    showNeuralNetAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -628,7 +450,7 @@ void BitcoinGUI::createMenuBar()
     if(!GetBoolArg("-usenewnn"))
     {
         QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
-        qmAdvanced->addAction(miningAction);
+        qmAdvanced->addAction(showNeuralNetAction);
     }
 #endif /* defined(WIN32) */
 
@@ -1184,23 +1006,10 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->activateWindow();
 }
 
-void BitcoinGUI::newUserWizardClicked()
-{
-#ifdef WIN32
-    if (!bGlobalcomInitialized) return;
-    globalcom->dynamicCall("ShowNewUserWizard()");
-#endif
-}
-
 void BitcoinGUI::miningClicked()
 {
-
-#ifdef WIN32
-    if (!bGlobalcomInitialized) return;
-    globalcom->dynamicCall("ShowMiningConsole()");
-#endif
+    NN::GetInstance()->Show();
 }
-
 
 // links to websites and services outside the gridcoin client
 void BitcoinGUI::bxClicked()
@@ -1520,66 +1329,12 @@ std::string getMacAddress()
     return myMac;
 }
 
-
-// This function's name is misleading, it is also used to first instantiate globalcom as
-// well as reinstantiate it.
-void ReinstantiateGlobalcom()
-{
-#ifdef WIN32
-    // If the new native NN is selected we do not want to start up the old NN.
-    if(!GetBoolArg("-usenewnn"))
-    {
-        if (bGlobalcomInitialized)
-            return;
-
-        // Note, on Windows, if the performance counters are corrupted, rebuild them
-        // by going to an elevated command prompt and issue the command: lodctr /r
-        // (to rebuild the performance counters in the registry)
-        LogPrintf("Instantiating globalcom for Windows.");
-        try
-        {
-            globalcom = new QAxObject("BoincStake.Utilization");
-            LogPrintf("Instantiated globalcom for Windows.");
-        }
-        catch(...)
-        {
-            LogPrintf("Failed to instantiate globalcom.");
-
-            return;
-        }
-
-        bGlobalcomInitialized = true;
-        std::string sNetworkFlag = fTestNet ? "TESTNET" : "MAINNET";
-        globalcom->dynamicCall("SetTestNetFlag(QString)", ToQstring(sNetworkFlag));
-    }
-#endif
-}
-
 void BitcoinGUI::timerfire()
 {
     try
     {
-        if ( (nRegVersion==0 || Timer("start",10))  &&  !bGlobalcomInitialized)
-        {
-            ReinstantiateGlobalcom();
-            nRegVersion=9999;
-
-            static bool bNewUserWizardNotified = false;
-            if (!bNewUserWizardNotified)
-            {
-                bNewUserWizardNotified=true;
-                NewUserWizard();
-            }
-#ifdef WIN32
-            if (!bGlobalcomInitialized) return;
-
-            nRegVersion = globalcom->dynamicCall("Version()").toInt();
-            sRegVer = boost::lexical_cast<std::string>(nRegVersion);
-#endif
-        }
-
-
-        if (bGlobalcomInitialized)
+        // TODO: Check if these SetRPCResponse calls are really needed.
+        /*if (bGlobalcomInitialized)
         {
             //R Halford - Allow .NET to talk to Core: 6-21-2015
             #ifdef WIN32
@@ -1604,7 +1359,7 @@ void BitcoinGUI::timerfire()
                     }
                 }
             #endif
-        }
+        }*/
 
         if (Timer("status_update",5))
         {

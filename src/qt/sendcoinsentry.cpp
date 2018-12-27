@@ -10,10 +10,6 @@
 #include <QApplication>
 #include <QClipboard>
 
-
-
-std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
-
 SendCoinsEntry::SendCoinsEntry(QWidget *parent) :
     QFrame(parent),
     ui(new Ui::SendCoinsEntry),
