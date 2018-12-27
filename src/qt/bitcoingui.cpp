@@ -104,7 +104,6 @@ namespace
 }
 
 extern CWallet* pwalletMain;
-extern QString ToQstring(std::string s);
 extern std::string getMacAddress();
 
 extern std::string FromQString(QString qs);
@@ -117,14 +116,6 @@ void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
 void HarvestCPIDs(bool cleardata);
-
-QString ToQstring(std::string s)
-{
-    QString str1 = QString::fromUtf8(s.c_str());
-    return str1;
-}
-
-
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
