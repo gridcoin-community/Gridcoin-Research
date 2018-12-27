@@ -7078,13 +7078,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             std::string neural_contract = "";
             vRecv >> neural_contract;
             if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-            if (neural_contract.length() > 10)
-            {
-                 std::string results = "";
-                 //Resolve discrepancies
-                results = NN::GetInstance()->ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
-                 if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-            }
 
             // Hook into miner for delegated sb staking
             supercfwd::QuorumResponseHook(pfrom,neural_contract);

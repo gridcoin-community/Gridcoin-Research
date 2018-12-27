@@ -270,12 +270,6 @@ Public Class Utilization
         '  Log("Responding to neural request for " + sCPID + " " + sOut)
         Return sOut
     End Function
-    Public Function ResolveDiscrepancies(sContract As String) As String
-        '7-25-2015 - Moving to QuorumHashingAlgorithm for this - disable this for the time being
-        'Call ThreadResolveDiscrepanciesIn(sContract)
-        'Return "Started Async Resolution."
-        Return ""
-    End Function
     Public Function ResolveCurrentDiscrepancies(sContract As String) As String
         Try
             Dim sPath As String = GetGridFolder() + "NeuralNetwork\contract.dat"
