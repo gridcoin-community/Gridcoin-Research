@@ -41,15 +41,20 @@ bool NeuralNetNative::SynchronizeDPOR(const std::string& data)
     return ScraperSynchronizeDPOR();
 }
 
-std::string NeuralNetNative::ExecuteDotNetStringFunction(std::string function, std::string data)
+std::string NeuralNetNative::ExplainMagnitude(const std::string& cpid)
 {
-    if (function == "ExplainMag")
-        return ExplainMagnitude(data);
-    else
-    {
-        LogPrintf("ExecuteDotNetStringFunction(%s) not handled yet. Returning empty string.", function);
-        return std::string();
-    }
+    return ::ExplainMagnitude(cpid);
+}
+
+std::string NeuralNetNative::ResolveDiscrepancies(const std::string &contract)
+{
+    // Preserved for backward compatibility for now.
+    return std::string("SUCCESS");
+}
+
+std::string NeuralNetNative::SetPrimaryCPID(const std::string &cpid)
+{
+    return std::string();
 }
 
 int64_t NeuralNetNative::IsNeuralNet()
@@ -58,6 +63,9 @@ int64_t NeuralNetNative::IsNeuralNet()
     int64_t nNeuralNetVersion = 1999;
     return nNeuralNetVersion;
 }
+
+void NeuralNetNative::SetQuorumData(const std::string& data)
+{}
 
 void NeuralNetNative::Show()
 {}

@@ -60,18 +60,36 @@ bool NeuralNetWin32::SynchronizeDPOR(const std::string& data)
     return true;
 }
 
-std::string NeuralNetWin32::ExecuteDotNetStringFunction(std::string function, std::string data)
+std::string NeuralNetWin32::ExplainMagnitude(const std::string& data)
 {
-    std::string request = function+"(Qstring)";
-    QString result = globalcom->dynamicCall(
-                               request.c_str(),
-                               data.c_str()).toString();
-    return result.toStdString();
+    return globalcom->dynamicCall(
+                "ExplainMag(QString)",
+                data.c_str()).toString().toStdString();
+}
+
+std::string NeuralNetWin32::ResolveDiscrepancies(const std::string& contract)
+{
+    return globalcom->dynamicCall(
+                "ResolveCurrentDiscrepancies(QString)",
+                contract.c_str()).toString().toStdString();
+}
+
+std::string NeuralNetWin32::SetPrimaryCPID(const std::string &cpid)
+{
+    std::string payload = "<KEY>PrimaryCPID</KEY><VALUE>" + cpid + "</VALUE>";
+    return globalcom->dynamicCall(
+                "WriteKey(QString)",
+                payload.c_str()).toString().toStdString();
 }
 
 int64_t NeuralNetWin32::IsNeuralNet()
 {
     return globalcom->dynamicCall("NeuralNetwork()").toInt();
+}
+
+void NeuralNetWin32::SetQuorumData(const std::string& data)
+{
+    globalcom->dynamicCall("SetQuorumData(QString)", data.c_str());
 }
 
 void NeuralNetWin32::Show()

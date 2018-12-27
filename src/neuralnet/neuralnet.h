@@ -70,16 +70,12 @@ namespace NN
         //!
         virtual bool SynchronizeDPOR(const std::string& data) = 0;
 
-        //!
-        //! \brief ExecuteDotNetStringFunction
-        //! \param function Function to execute.
-        //! \param data Function payload.
-        //! \return Function call's return string.
-        //! \todo Replace this with concrete functions.
-        //!
-        virtual std::string ExecuteDotNetStringFunction(std::string function, std::string data) = 0;
+        virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
+        virtual std::string ResolveDiscrepancies(const std::string& contract) = 0;
+        virtual std::string SetPrimaryCPID(const std::string& cpid) = 0;
 
         virtual int64_t IsNeuralNet() = 0;
+        virtual void SetQuorumData(const std::string& data) = 0;
 
         //!
         //! \brief Show UI if available.
