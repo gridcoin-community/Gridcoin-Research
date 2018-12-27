@@ -198,7 +198,7 @@ static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
 // Define whether prior CScraperManifests are kept.
 static bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
 // Define CManifest scraper object retention time.
-static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 3 * 3600;
+static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
 static bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
 static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
