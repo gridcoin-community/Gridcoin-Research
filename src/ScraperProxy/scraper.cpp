@@ -185,8 +185,6 @@ void Scraper(bool fScraperStandalone, bool bSingleShot)
             // started with sbage already older than 86400 - nActiveBeforeSB.
             int64_t nBeforeSBSleep = std::max(86400 - nActiveBeforeSB - sbage, (int64_t) 0);
 
-            _log(INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
-
             while (GetAdjustedTime() - nScraperThreadStartTime < nBeforeSBSleep)
             {
                 // Take a lock on the whole scraper for this...
@@ -201,8 +199,11 @@ void Scraper(bool fScraperStandalone, bool bSingleShot)
                     // End LOCK(cs_Scraper)
                     if (fDebug) _log(INFO, "ENDLOCK", "cs_Scraper");
                 }
-
-                _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep) +" milliseconds");
+            
+                sbage = data.sbage();
+                _log(INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
+                _log(INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
+                
                 MilliSleep(nScraperSleep);
             }
         }
