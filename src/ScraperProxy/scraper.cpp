@@ -519,7 +519,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
 
     stringbuilder string;
 
-    string.append(std::to_string(GetAdjustedTime()));
+    string.append(DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
     string.append(" [");
     string.append(sType);
     string.append("] <");
@@ -1870,12 +1870,11 @@ std::string ExplainMagnitude(std::string sCPID)
 
     // "Signature"
     // TODO: Why the magic version number of 430 from .NET? Should this be a constant?
-    // Also convert GetAdjustTime to human readable time.
     // Should we take a lock on cs_main to read GlobalCPUMiningCPID?
     out.append("NN Host Version: 430, ");
     out.append("NeuralHash: " + ConvergedScraperStatsCache.nContractHash.GetHex() + ", ");
     out.append("SignatureCPID: " + GlobalCPUMiningCPID.cpid + ", ");
-    out.append("Time: " + std::to_string(GetAdjustedTime()) + "<ROW>");
+    out.append("Time: " + DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()) + "<ROW>");
 
     //Totals
     out.append("Total RAC: ");
