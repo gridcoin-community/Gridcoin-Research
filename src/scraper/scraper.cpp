@@ -3,6 +3,12 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
+// These will get overwritten by the GetArgs in init.cpp
+unsigned int nScraperSleep = 300000;
+unsigned int nActiveBeforeSB = 7200;
+bool fScraperRetainNonCurrentFiles = false;
+fs::path pathScraper = fs::current_path() / "Scraper";
+
 extern bool fShutdown;
 
 bool find(const std::string& s, const std::string& find);
