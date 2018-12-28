@@ -120,11 +120,8 @@ CCriticalSection cs_main;
 extern std::string NodeAddress(CNode* pfrom);
 
 CTxMemPool mempool;
-unsigned int WHITELISTED_PROJECTS = 0;
-int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
-int64_t nLastLoadAdminMessages = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
@@ -137,8 +134,6 @@ extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
-int64_t nLastBlockSubmitted = 0;
-int64_t nLastCheckedForUpdate = 0;
 
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
@@ -210,12 +205,9 @@ BlockFinder blockFinder;
 // Gridcoin - Rob Halford
 
 extern std::string RetrieveMd5(std::string s1);
-extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 bool bNetAveragesLoaded = false;
 bool bForceUpdate = false;
-bool bGlobalcomInitialized = false;
-bool bStakeMinerOutOfSyncWithNetwork = false;
 bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
@@ -239,7 +231,6 @@ std::string    msMiningProject;
 std::string    msMiningCPID;
 std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
-double         mdLastPorNonce = 0;
 double         mdMachineTimerLast = 0;
 // Mining status variables
 std::string    msHashBoinc;

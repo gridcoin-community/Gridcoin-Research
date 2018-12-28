@@ -106,16 +106,6 @@ double GetNetworkAvgByProject(std::string projectname)
     return networkavgrac;
 }
 
-double GetNetworkTotalByProject(std::string projectname)
-{
-    boost::replace_all(projectname, "_", " ");
-    if (mvNetwork.size() < 1)   return 0;
-    StructCPID structcpid = mvNetwork[projectname];
-    if (!structcpid.initialized) return 0;
-    double networkavgrac = structcpid.rac;
-    return networkavgrac;
-}
-
 double GetDifficulty(const CBlockIndex* blockindex)
 {
     // Floating point number that is a multiple of the minimum difficulty,
@@ -678,7 +668,6 @@ bool TallyMagnitudesInSuperblock()
         if (vProjects.size() > 0)
         {
             double totalRAC = 0;
-            WHITELISTED_PROJECTS = 0;
             for (unsigned int i = 0; i < vProjects.size(); i++)
             {
                 // For each Project in the contract
@@ -697,7 +686,6 @@ bool TallyMagnitudesInSuperblock()
                         stProject.rac = totalRAC;
                         mvNetworkCopy[project]=stProject;
                         TotalProjects++;
-                        WHITELISTED_PROJECTS++;
                         TotalRAC += avg;
                     }
                 }

@@ -13,8 +13,6 @@
 #include "global_objects_noui.hpp"
 using namespace std;
 
-int64_t GetCoinYearReward(int64_t nTime);
-
 double GRCMagnitudeUnit(int64_t locktime);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
