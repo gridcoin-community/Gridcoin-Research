@@ -1355,7 +1355,6 @@ UniValue magnitude(const UniValue& params, bool fHelp)
     return results;
 }
 
-#ifdef WIN32
 UniValue myneuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1390,7 +1389,6 @@ UniValue neuralhash(const UniValue& params, bool fHelp)
 
     return res;
 }
-#endif
 
 UniValue neuralreport(const UniValue& params, bool fHelp)
 {
@@ -1586,7 +1584,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
     return res;
 }
 
-#ifdef WIN32
 UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1619,7 +1616,6 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
     return res;
 }
-#endif
 
 UniValue debug(const UniValue& params, bool fHelp)
 {
@@ -2251,7 +2247,6 @@ UniValue tallyneural(const UniValue& params, bool fHelp)
     return res;
 }
 
-#ifdef WIN32
 UniValue testnewcontract(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -2283,7 +2278,6 @@ UniValue testnewcontract(const UniValue& params, bool fHelp)
 
     return res;
 }
-#endif
 
 UniValue versionreport(const UniValue& params, bool fHelp)
 {
