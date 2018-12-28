@@ -71,7 +71,6 @@ namespace NN
         virtual bool SynchronizeDPOR(const std::string& data) = 0;
 
         virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
-        virtual std::string SetPrimaryCPID(const std::string& cpid) = 0;
 
         virtual int64_t IsNeuralNet() = 0;
     };

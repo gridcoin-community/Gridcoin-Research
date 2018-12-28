@@ -34,11 +34,6 @@ std::string NeuralNetStub::ExplainMagnitude(const std::string& data)
     return std::string();
 }
 
-std::string NeuralNetStub::SetPrimaryCPID(const std::string &cpid)
-{
-    return std::string();
-}
-
 int64_t NeuralNetStub::IsNeuralNet()
 {
     return 0;

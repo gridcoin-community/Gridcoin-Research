@@ -46,11 +46,6 @@ std::string NeuralNetNative::ExplainMagnitude(const std::string& cpid)
     return ::ExplainMagnitude(cpid);
 }
 
-std::string NeuralNetNative::SetPrimaryCPID(const std::string &cpid)
-{
-    return std::string();
-}
-
 int64_t NeuralNetNative::IsNeuralNet()
 {
     // This is the NN version number. TODO: Consider different number for new NN?

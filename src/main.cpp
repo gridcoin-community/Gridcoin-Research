@@ -7638,8 +7638,6 @@ void HarvestCPIDs(bool cleardata)
                                 if (structcpid.team=="gridcoin")
                                 {
                                     msPrimaryCPID = structcpid.cpid;
-                                    //Let the Neural Network know what your CPID is so it can be charted:
-                                    NN::GetInstance()->SetPrimaryCPID(msPrimaryCPID);
                                     //Try to get a neural RAC report
                                     AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                 }
