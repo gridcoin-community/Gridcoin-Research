@@ -29,17 +29,12 @@ class CNode;
 class CTxMemPool;
 
 static const int LAST_POW_BLOCK = 2050;
-extern unsigned int WHITELISTED_PROJECTS;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
-static const int64_t BEACON_LOOKBACK = 30 * 6 * 86400; // 180 days in seconds
 static const int64_t DEFAULT_CBR = 10 * COIN;
 
-static const double NeuralNetworkMultiplier = 115000;
-
 extern int64_t nLastBlockSolved;
-extern int64_t nLastBlockSubmitted;
 
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
@@ -183,7 +178,6 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-extern int64_t nLastPing;
 extern int64_t nLastAskedForBlocks;
 extern int64_t nBootup;
 extern int64_t nCPIDsLoaded;
@@ -204,7 +198,6 @@ extern std::string 	msMiningCPID;
 extern std::string  msPrimaryCPID;
 
 extern double       mdPORNonce;
-extern double       mdLastPorNonce;
 extern double       mdMachineTimerLast;
 
 extern std::string  msHashBoinc;

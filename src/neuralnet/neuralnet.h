@@ -1,5 +1,7 @@
 #pragma once
 
+#include "beacon.h"
+
 #include <string>
 #include <memory>
 #include <functional>
@@ -66,42 +68,19 @@ namespace NN
         //! and calculate CPID magnitudes. If called while synchronization is
         //! already in progress this will do nothing.
         //!
-        //! \param data CPID and quorum data to pass to the neural net.
+        //! \param beacons Beacon consensus list.
         //!
-        virtual bool SynchronizeDPOR(const std::string& data) = 0;
+        virtual bool SynchronizeDPOR(const BeaconConsensus& beacons) = 0;
 
         virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
-        virtual std::string ResolveDiscrepancies(const std::string& contract) = 0;
-        virtual std::string SetPrimaryCPID(const std::string& cpid) = 0;
 
         virtual int64_t IsNeuralNet() = 0;
-        virtual void SetQuorumData(const std::string& data) = 0;
-
-        //!
-        //! \brief Show UI if available.
-        //!
-        virtual void Show() = 0;
     };
 
     //!
     //! \brief INeuralNet smart pointer.
     //!
     typedef std::shared_ptr<INeuralNet> INeuralNetPtr;
-
-    //!
-    //! \brief Factory function.
-    //!
-    typedef std::function<INeuralNetPtr()> Factory;
-
-    //!
-    //! \brief Register factory function.
-    //!
-    //! Registers a factory function which will be called by
-    //! \p CreateNeuralNet.
-    //!
-    //! \param factory
-    //!
-    void RegisterFactory(const Factory& factory);
 
     //!
     //! \brief Neuralnet factory.

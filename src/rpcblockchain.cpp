@@ -40,10 +40,8 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
-extern std::string SuccessFail(bool f);
 extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
-bool bNetAveragesLoaded_retired;
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(std::string cpid);
@@ -51,8 +49,6 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-bool UpdateNeuralNetworkQuorumData();
-int64_t GetEarliestWalletTransaction();
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
@@ -70,23 +66,13 @@ bool FullSyncWithDPORNodes();
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
-std::string GetNeuralNetworkReport();
 UniValue GetJSONNeuralNetworkReport();
 UniValue GetJSONCurrentNeuralNetworkReport();
 
 extern UniValue GetJSONVersionReport();
 extern UniValue GetJsonUnspentReport();
 
-extern bool PollExists(std::string pollname);
-extern bool PollExpired(std::string pollname);
-
-extern bool PollAcceptableAnswer(std::string pollname, std::string answer);
-extern std::string PollAnswers(std::string pollname);
-
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
-
-extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
-
 extern UniValue GetJSONBeaconReport();
 
 void GatherNeuralHashes();
@@ -96,17 +82,12 @@ double GetTotalBalance();
 
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
-extern std::string TimestampToHRDate(double dtm);
 
 double CoinToDouble(double surrogate);
-int64_t GetRSAWeightByCPID(std::string cpid);
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-std::string getfilecontents(std::string filename);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
-std::string getfilecontents(std::string filename);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -119,16 +100,6 @@ double GetNetworkAvgByProject(std::string projectname)
     StructCPID structcpid = mvNetwork[projectname];
     if (!structcpid.initialized) return 0;
     double networkavgrac = structcpid.AverageRAC;
-    return networkavgrac;
-}
-
-double GetNetworkTotalByProject(std::string projectname)
-{
-    boost::replace_all(projectname, "_", " ");
-    if (mvNetwork.size() < 1)   return 0;
-    StructCPID structcpid = mvNetwork[projectname];
-    if (!structcpid.initialized) return 0;
-    double networkavgrac = structcpid.rac;
     return networkavgrac;
 }
 
@@ -592,15 +563,6 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
     return -1;
 }
 
-void GetSuperblockProjectCount(std::string data, double& out_project_count, double& out_whitelist_count)
-{
-    // This is reserved in case we ever want to resync prematurely when the last superblock contains < .75% of whitelisted projects (remember we allow superblocks with up to .50% of the whitelisted projects, in case some project sites are being ddossed)
-    std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
-    double avg_of_projects = GetAverageInList(avgs, out_project_count);
-    out_whitelist_count = GetCountOf(Section::PROJECT);
-    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f", out_project_count, out_whitelist_count);
-}
-
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
 {
     try
@@ -612,8 +574,8 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (mags.empty()) return 0;
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
-        if (!bIgnoreBeacons) out_beacon_count = GetCountOf(Section::BEACON);
-        double out_project_count = GetCountOf(Section::PROJECT);
+        if (!bIgnoreBeacons) out_beacon_count = GetConsensusBeaconList().mBeaconMap.size();
+        double out_project_count = ReadCacheSection(Section::PROJECT).size();
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
@@ -703,7 +665,6 @@ bool TallyMagnitudesInSuperblock()
         if (vProjects.size() > 0)
         {
             double totalRAC = 0;
-            WHITELISTED_PROJECTS = 0;
             for (unsigned int i = 0; i < vProjects.size(); i++)
             {
                 // For each Project in the contract
@@ -722,7 +683,6 @@ bool TallyMagnitudesInSuperblock()
                         stProject.rac = totalRAC;
                         mvNetworkCopy[project]=stProject;
                         TotalProjects++;
-                        WHITELISTED_PROJECTS++;
                         TotalRAC += avg;
                     }
                 }
@@ -1068,7 +1028,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     std::string sMessage = "";
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
-    res.pushKV("Result",SuccessFail(fResult));
+    res.pushKV("Result", fResult ? "SUCCESS" : "FAIL");
     res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
     res.pushKV("Message",sMessage.c_str());
 
@@ -1365,7 +1325,6 @@ UniValue magnitude(const UniValue& params, bool fHelp)
     return results;
 }
 
-#ifdef WIN32
 UniValue myneuralhash(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1400,7 +1359,6 @@ UniValue neuralhash(const UniValue& params, bool fHelp)
 
     return res;
 }
-#endif
 
 UniValue neuralreport(const UniValue& params, bool fHelp)
 {
@@ -1514,17 +1472,9 @@ UniValue syncdpor2(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::string sOut = "";
-
     LOCK(cs_main);
-
-    bool bFull = GetCountOf(Section::BEACON) < 50 ? true : false;
-
-    LoadAdminMessages(bFull, sOut);
     FullSyncWithDPORNodes();
-
     res.pushKV("Syncing", 1);
-
     return res;
 }
 
@@ -1604,7 +1554,6 @@ UniValue addkey(const UniValue& params, bool fHelp)
     return res;
 }
 
-#ifdef WIN32
 UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1637,7 +1586,6 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
     return res;
 }
-#endif
 
 UniValue debug(const UniValue& params, bool fHelp)
 {
@@ -1856,8 +1804,19 @@ UniValue getlistof(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    res.pushKV("Data", GetListOf(StringToSection(sType)));
+    UniValue entries(UniValue::VOBJ);
+    for(const auto& entry : ReadSortedCacheSection(StringToSection(sType)))
+    {
+        const auto& key = entry.first;
+        const auto& value = entry.second;
 
+        UniValue obj(UniValue::VOBJ);
+        obj.pushKV("value", value.value);
+        obj.pushKV("timestamp", value.timestamp);
+        entries.pushKV(key, obj);
+    }
+
+    res.pushKV("entries", entries);
     return res;
 }
 
@@ -2231,7 +2190,6 @@ UniValue tally(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    bNetAveragesLoaded_retired = false;
     CBlockIndex* tallyIndex = FindTallyTrigger(pindexBest);
     TallyResearchAverages_v9(tallyIndex);
 
@@ -2253,14 +2211,11 @@ UniValue tallyneural(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     ComputeNeuralNetworkSupermajorityHashes();
-    UpdateNeuralNetworkQuorumData();
-
     res.pushKV("Ready", ".");
 
     return res;
 }
 
-#ifdef WIN32
 UniValue testnewcontract(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -2289,24 +2244,6 @@ UniValue testnewcontract(const UniValue& params, bool fHelp)
     res.pushKV("Local Core Quorum Hash", neural_hash);
     res.pushKV("Binary Local Core Quorum Hash", binary_neural_hash);
     res.pushKV("Neural Network Live Quorum Hash", myNeuralHash);
-
-    return res;
-}
-#endif
-
-UniValue updatequorumdata(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "updatequorumdata\n"
-                "\n"
-                "Requests update of neural network quorum data\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    UpdateNeuralNetworkQuorumData();
-
-    res.pushKV("Updated.", "");
 
     return res;
 }
@@ -3154,11 +3091,6 @@ std::string SendReward(std::string sAddress, int64_t nAmount)
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, 1, wtx);
     if (!strError.empty()) return strError;
     return wtx.GetHash().GetHex().c_str();
-}
-
-std::string SuccessFail(bool f)
-{
-    return f ? "SUCCESS" : "FAIL";
 }
 
 std::string YesNo(bool f)

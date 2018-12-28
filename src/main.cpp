@@ -49,7 +49,6 @@ bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 bool TallyResearchAverages(CBlockIndex* index);
 bool TallyResearchAverages_retired(CBlockIndex* index);
@@ -67,27 +66,18 @@ UniValue MagnitudeReport(std::string cpid);
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex);
 void ZeroOutResearcherTotals(StructCPID& stCpid);
 extern std::string getCpuHash();
-std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
-extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-double DoubleFromAmount(int64_t amount);
-
-extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 extern bool FullSyncWithDPORNodes();
 
-bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
-extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -101,7 +91,6 @@ extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
 extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
-std::string DefaultBlockKey(int key_length);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;
@@ -121,11 +110,8 @@ CCriticalSection cs_main;
 extern std::string NodeAddress(CNode* pfrom);
 
 CTxMemPool mempool;
-unsigned int WHITELISTED_PROJECTS = 0;
-int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
-int64_t nLastLoadAdminMessages = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
@@ -138,8 +124,6 @@ extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
-int64_t nLastBlockSubmitted = 0;
-int64_t nLastCheckedForUpdate = 0;
 
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
@@ -211,12 +195,9 @@ BlockFinder blockFinder;
 // Gridcoin - Rob Halford
 
 extern std::string RetrieveMd5(std::string s1);
-extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 bool bNetAveragesLoaded = false;
 bool bForceUpdate = false;
-bool bGlobalcomInitialized = false;
-bool bStakeMinerOutOfSyncWithNetwork = false;
 bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
@@ -240,7 +221,6 @@ std::string    msMiningProject;
 std::string    msMiningCPID;
 std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
-double         mdLastPorNonce = 0;
 double         mdMachineTimerLast = 0;
 // Mining status variables
 std::string    msHashBoinc;
@@ -271,7 +251,6 @@ bool fUseFastIndex = false;
 
 // Gridcoin status    *************
 MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
-int nBoincUtilization = 0;
 std::string sRegVer;
 
 std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
@@ -305,26 +284,6 @@ bool TimerMain(std::string timer_name, int max_ms)
     return false;
 }
 
-bool UpdateNeuralNetworkQuorumData()
-{
-    //if (!bGlobalcomInitialized) return false;
-    // Changed to check if the -disableneuralnetwork was passed, not whether bGlobalcomInitialized,
-    // because it must support the new native NN too.
-    if (!NN::GetInstance()->IsEnabled()) return false;
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    std::string myNeuralHash = "";
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-    std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::GetInstance()->SetQuorumData(data);
-    return true;
-}
-
 bool FullSyncWithDPORNodes()
 {
     if(!NN::GetInstance()->IsEnabled())
@@ -333,32 +292,17 @@ bool FullSyncWithDPORNodes()
     // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-    std::string sMyNeuralHash = "";
-    sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
-    if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+    std::string sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
+    if (!sMyNeuralHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
     {
         bool bNodeOnline = RequestSupermajorityNeuralData();
-        if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+        if (bNodeOnline)
+            return false;  // Async call to another node will continue after the node responds.
     }
+
     std::string errors1;
     LoadAdminMessages(false,errors1);
-
-    const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-    const int64_t nLookback = 30 * 6 * 86400;
-    const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-    std::string cpiddata = GetListOf(Section::BEACON, iStartTime, iEndTime);
-    std::string sWhitelist = GetListOf(Section::PROJECT);
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                       + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::GetInstance()->SynchronizeDPOR(data);
+    NN::GetInstance()->SynchronizeDPOR(GetConsensusBeaconList());
     return true;
 }
 
@@ -655,7 +599,6 @@ void GetGlobalStatus()
         double boincmagnitude = CalculatedMagnitude(GetAdjustedTime(),false);
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
-        nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
         double weight = nWeight/COIN;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
@@ -3863,12 +3806,6 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
             if (fDebug) LogPrintf("SetBestChain: Updating Neural Supermajority (v9 %%3) height %d",nBestHeight);
             ComputeNeuralNetworkSupermajorityHashes();
         }
-        // Update quorum data.
-        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
-        {
-            if (fDebug) LogPrintf("SetBestChain: Updating Neural Quorum (v9 M) height %d",nBestHeight);
-            UpdateNeuralNetworkQuorumData();
-        }
     }
     else if (!fIsInitialDownload)
         // Retally after reorganize to sync up amounts owed.
@@ -4526,13 +4463,6 @@ void GridcoinServices()
                 if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 A) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
             }
-            if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
-            {
-                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 A) height %d",nBestHeight);
-                if (fDebug10) LogPrintf("#CNNSH# ");
-                UpdateNeuralNetworkQuorumData();
-            }
-
             // Perform retired tallies between the V9 block switch (1144000) and the
             // V9 tally switch (1144120) or else blocks will be rejected in between.
             if (IsV9Enabled(nBestHeight) && (nBestHeight % 20) == 0)
@@ -4557,12 +4487,6 @@ void GridcoinServices()
             {
                 if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 D) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
-            }
-            if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
-            {
-                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 E) height %d",nBestHeight);
-                if (fDebug3) LogPrintf("CNNSH2 ");
-                UpdateNeuralNetworkQuorumData();
             }
         }
     }
@@ -5186,49 +5110,6 @@ std::string getfilecontents(std::string filename)
     myfile.close();
     return buffer;
 }
-
-
-
-BeaconConsensus GetConsensusBeaconList()
-{
-    //BeaconMap mBeaconMap;
-    BeaconConsensus Consensus;
-
-    BlockFinder MaxConsensusLadder;
-
-    // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
-    // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
-    CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
-                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
-
-    Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
-
-    const int64_t maxTime = pMaxConsensusLadder->nTime;
-    const int64_t minTime = maxTime - MaxBeaconAge();
-
-    for(const auto& item : ReadCacheSection(Section::BEACON))
-    {
-        const std::string& key = item.first;
-        BeaconEntry beaconentry;
-
-        beaconentry.timestamp = item.second.timestamp;
-        beaconentry.value = item.second.value;
-
-        // Compare age restrictions if specified.
-        if((minTime && beaconentry.timestamp <= minTime) ||
-           (maxTime && beaconentry.timestamp >= maxTime))
-            continue;
-
-        // Skip invalid beacons.
-        if (Contains("INVESTOR", beaconentry.value))
-            continue;
-
-        Consensus.mBeaconMap[key] = beaconentry;
-    }
-
-    return Consensus;
-}
-
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 {
@@ -7090,14 +6971,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> neural_contract;
         if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
         if (neural_contract.length() > 10)
-        {
-            //Resolve discrepancies
-            LogPrintf("Sync neural network data from supermajority");
-            const std::string& results = NN::GetInstance()->ResolveDiscrepancies(neural_contract);
-            if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-            // Resume the full DPOR sync at this point now that we have the supermajority data
-            if (results=="SUCCESS")  FullSyncWithDPORNodes();
-        }
+            FullSyncWithDPORNodes();
     }
     else if (strCommand == "alert")
     {
@@ -7685,8 +7559,6 @@ void HarvestCPIDs(bool cleardata)
                                 if (structcpid.team=="gridcoin")
                                 {
                                     msPrimaryCPID = structcpid.cpid;
-                                    //Let the Neural Network know what your CPID is so it can be charted:
-                                    NN::GetInstance()->SetPrimaryCPID(msPrimaryCPID);
                                     //Try to get a neural RAC report
                                     AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                 }

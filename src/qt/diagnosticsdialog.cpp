@@ -1,6 +1,6 @@
 #include "main.h"
 #include "boinc.h"
-#include "appcache.h"
+#include "beacon.h"
 #include "util.h"
 
 #include <boost/algorithm/string.hpp>
@@ -83,10 +83,16 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
 
 bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
 {
-    std::string beacons = GetListOf(Section::BEACON);
-    boost::algorithm::to_lower(beacons);
+    if(!IsResearcher(msPrimaryCPID))
+        return false;
 
-    return IsResearcher(msPrimaryCPID) && beacons.find(msPrimaryCPID) != std::string::npos;
+    for(const auto& entry : GetConsensusBeaconList().mBeaconMap)
+    {
+        if(boost::iequals(entry.first, msPrimaryCPID))
+            return true;
+    }
+
+    return false;
 }
 
 bool DiagnosticsDialog::VerifyWalletIsSynced()

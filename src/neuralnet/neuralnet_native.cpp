@@ -36,7 +36,7 @@ std::string NeuralNetNative::GetNeuralContract()
 
 // Note that the data argument is still used here for compatibility, but I don't think it will
 // actually be used in the scraper. We will see.
-bool NeuralNetNative::SynchronizeDPOR(const std::string& data)
+bool NeuralNetNative::SynchronizeDPOR(const BeaconConsensus& beacons)
 {
     return ScraperSynchronizeDPOR();
 }
@@ -46,26 +46,9 @@ std::string NeuralNetNative::ExplainMagnitude(const std::string& cpid)
     return ::ExplainMagnitude(cpid);
 }
 
-std::string NeuralNetNative::ResolveDiscrepancies(const std::string &contract)
-{
-    // Preserved for backward compatibility for now.
-    return std::string("SUCCESS");
-}
-
-std::string NeuralNetNative::SetPrimaryCPID(const std::string &cpid)
-{
-    return std::string();
-}
-
 int64_t NeuralNetNative::IsNeuralNet()
 {
     // This is the NN version number. TODO: Consider different number for new NN?
     int64_t nNeuralNetVersion = 1999;
     return nNeuralNetVersion;
 }
-
-void NeuralNetNative::SetQuorumData(const std::string& data)
-{}
-
-void NeuralNetNative::Show()
-{}
