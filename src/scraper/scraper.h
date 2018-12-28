@@ -41,16 +41,7 @@
 //#include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "scraper_net.h"
-
-#ifndef SCRAPER_STANDALONE 
 #include "util.h"
-#else
-#include <json/json.h>
-//#include <jsoncpp/json/json.h>
-#include "uint256.h"
-extern int64_t GetAdjustedTime();
-extern bool Contains(const std::string& data, const std::string& instring);
-#endif
 
 /*********************
 * Scraper Namepsace  *
@@ -220,7 +211,7 @@ static const double SCRAPER_SUPERMAJORITY_RATIO = 2.0 / 3.0;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
-void Scraper(bool fScraperStandalone, bool bSingleShot = false);
+void Scraper(bool bSingleShot = false);
 void ScraperSingleShot();
 bool ScraperDirectorySanity();
 bool StoreBeaconList(const fs::path& file);
@@ -375,58 +366,6 @@ public:
         return false;
     }
 
-    bool rpccall(const std::string& type, const std::string& params, std::string& reply)
-    {
-        std::string strdata;
-
-        if (params.empty())
-            strdata = "{\"jsonrpc\" : \"1.0\", \"id\" : \"" + type + "\", \"method\" : \"" + type + "\", \"params\" : []}";
-
-        else
-            strdata = "{\"jsonrpc\" : \"1.0\", \"id\" : \"" + type + "\", \"method\" : \"" + type + "\", \"params\" : [\"project\"]}";
-
-        const char* data = strdata.c_str();
-        struct curl_slist* rpcheaders = NULL;
-
-        rpcheaders = curl_slist_append(rpcheaders, "content-type: text/plain;");
-
-        curl_easy_setopt(curl, CURLOPT_URL, rpcip.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writestring);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffertwo);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-        curl_easy_setopt(curl, CURLOPT_PROXY, "");
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, rpcheaders);
-        curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
-        curl_easy_setopt(curl, CURLOPT_USERPWD, rpcauth.c_str());
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(data));
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-
-        res = curl_easy_perform(curl);
-
-        // Stop memory leak from headers
-        curl_slist_free_all(rpcheaders);
-
-        if (res > 0)
-        {
-            _log(ERROR, "curl_rpccall", "Failed to receive reply from Gridcoin RPC <type=" + type + "> (" + curl_easy_strerror(res) + ")");
-
-            return false;
-        }
-
-        //curl_easy_reset(curl);
-
-        std::istringstream ssinput(buffertwo);
-
-        for (std::string line; std::getline(ssinput, line);)
-            reply.append(line);
-
-        _log(INFO, "curl_rpccall", "Successful RPC call <tpye=" + type + ">");
-
-        return true;
-
-    }
-
     bool http_download(const std::string& url, const std::string& destination, const std::string& userpass)
     {
         try {
@@ -449,7 +388,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
             curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
-#ifdef Win32
+#ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
             if (url.find("World_Community_Grid") != std::string::npos)
@@ -503,7 +442,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
             curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
-#ifdef Win32
+#ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
             if (url.find("World_Community_Grid") != std::string::npos)
@@ -590,7 +529,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
             curl_easy_setopt(curl, CURLOPT_PROXY, "");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-#ifdef Win32
+#ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
             if (url.find("World_Community_Grid") != std::string::npos)
@@ -642,7 +581,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-#ifdef Win32
+#ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
             if (url.find("World_Community_Grid") != std::string::npos)
@@ -850,137 +789,20 @@ public:
 
     bool wlimport()
     {
-#ifdef SCRAPER_STANDALONE
-        whitelistrpcdata = "";
-        Json::Value jsonvalue;
-        Json::Reader jsonreader;
-        Json::StreamWriterBuilder valuestring;
-        Json::Value::const_iterator jsondata;
-        // Call RPC for the data
-        statscurl wl;
-
-        if (!wl.rpccall("listdata", "project", whitelistrpcdata))
-        {
-            _log(ERROR, "whitelist_data_import", "Failed to receive RPC reply for whitelist data");
-
-            return false;
-        }
-
-        if (whitelistrpcdata.find("\"result\":null") != std::string::npos)
-        {
-            _log(ERROR, "whitelist_data_import", "RPC replied with error (" + whitelistrpcdata + ")");
-
-            return false;
-        }
-
-        // Try to parse json data.
-
-        bool successparse = jsonreader.parse(whitelistrpcdata, jsonvalue);
-
-        if (!successparse)
-        {
-            printf("Failed to parse\n");
-            return false;
-        }
-
-        const Json::Value whitelist = jsonvalue["result"];
-
-        // Populate the beacon report data into scraper since we got a reply of whitelist
-        vwhitelist.clear();
-
-        for (jsondata = whitelist.begin() ; jsondata != whitelist.end(); jsondata++)
-        {
-
-            valuestring.settings_["indentation"] = "";
-            std::string outurl = Json::writeString(valuestring, *jsondata);
-
-            if (jsondata.key().asString() == "Key Type")
-                continue;
-
-            vwhitelist.push_back(std::make_pair(jsondata.key().asString(), outurl.substr(1, (outurl.size() - 2))));
-        }
-
-        return true;
-#else
         vwhitelist.clear();
 
         for(const auto& item : ReadCacheSection(Section::PROJECT))
             vwhitelist.push_back(std::make_pair(item.first, item.second.value));
 
         return true;
-#endif
     }
 
     int64_t sbage()
     {
-#ifdef SCRAPER_STANDALONE
-        Json::Value jsonvalue;
-        Json::Reader jsonreader;
-        Json::StreamWriterBuilder valuestring;
-        Json::Value::const_iterator jsondata;
-        superblockage = "";
-        // Call RPC for the data
-        statscurl age;
-
-        if (!age.rpccall("superblockage", "", superblockage))
-        {
-            _log(ERROR, "superblockage_data_import", "Failed to receive RPC reply for superblock data");
-
-            return -1;
-        }
-
-        if (superblockage.find("\"result\":null") != std::string::npos)
-        {
-            _log(ERROR, "superblockage_data_import", "RPC replied with error (" + superblockage + ")");
-
-            return -2;
-        }
-
-        // Try to parse json data.
-
-        bool successparse = jsonreader.parse(superblockage, jsonvalue);
-
-        if (!successparse)
-        {
-            printf("Failed to parse\n");
-            return -3;
-        }
-
-        try
-        {
-            const Json::Value superblockdata = jsonvalue["result"];
-
-            for (jsondata = superblockdata.begin() ; jsondata != superblockdata.end(); jsondata++)
-            {
-
-                valuestring.settings_["indentation"] = "";
-                std::string sSBage = Json::writeString(valuestring, *jsondata);
-
-                if (jsondata.key().asString() == "Superblock Age")
-                {
-                    printf("Outage is %s\n", sSBage.c_str());
-
-                    return std::stoll(sSBage);
-                }
-            }
-
-            return -4;
-        }
-
-        catch (std::exception& ex)
-        {
-            _log(ERROR, "superblockage_data_import", "Exception occured (" + std::string(ex.what()) + ")");
-
-            return -5;
-        }
-
-        return -6;
-#else
         int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
         int64_t nSBage = GetAdjustedTime() - superblock_time;
 
         return nSBage;
-#endif
     }
 };
 

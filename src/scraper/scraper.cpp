@@ -31,18 +31,11 @@ int GetDayOfYear(int64_t timestamp);
 
 void testdata(const std::string& etag);
 
-// Note these four are initialized here for standalone mode compile, but will be overwritten by
-// the values from GetArg in init.cpp when compiled as part of the wallet.
-unsigned int nScraperSleep = 60000;
-unsigned int nActiveBeforeSB = 300;
-bool fScraperRetainNonCurrentFiles = false;
-fs::path pathScraper = fs::current_path() / "Scraper";
-
 extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
 
 // This is the scraper thread...
-void Scraper(bool fScraperStandalone, bool bSingleShot)
+void Scraper(bool bSingleShot)
 {
     if(!bSingleShot)
         _log(INFO, "Scraper", "Starting Scraper thread.");
@@ -154,7 +147,7 @@ void Scraper(bool fScraperStandalone, bool bSingleShot)
     uint256 nmScraperFileManifestHash = 0;
 
     // The scraper thread loop...
-    while (fScraperStandalone || !fShutdown)
+    while (!fShutdown)
     {
         // Only proceed if wallet is in sync. Check every 5 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
@@ -369,7 +362,7 @@ void ScraperSingleShot()
 
     _log(INFO, "ScraperSingleShot", "Calling Scraper function in single shot mode.");
 
-    Scraper(false, true);
+    Scraper(true);
 }
 
 
