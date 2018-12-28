@@ -75,7 +75,6 @@ namespace NN
         virtual std::string SetPrimaryCPID(const std::string& cpid) = 0;
 
         virtual int64_t IsNeuralNet() = 0;
-        virtual void SetQuorumData(const std::string& data) = 0;
 
         //!
         //! \brief Show UI if available.

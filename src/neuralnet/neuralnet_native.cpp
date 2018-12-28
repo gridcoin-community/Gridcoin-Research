@@ -64,8 +64,5 @@ int64_t NeuralNetNative::IsNeuralNet()
     return nNeuralNetVersion;
 }
 
-void NeuralNetNative::SetQuorumData(const std::string& data)
-{}
-
 void NeuralNetNative::Show()
 {}

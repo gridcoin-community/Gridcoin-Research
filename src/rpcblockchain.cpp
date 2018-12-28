@@ -51,7 +51,6 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-bool UpdateNeuralNetworkQuorumData();
 int64_t GetEarliestWalletTransaction();
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -2253,8 +2252,6 @@ UniValue tallyneural(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     ComputeNeuralNetworkSupermajorityHashes();
-    UpdateNeuralNetworkQuorumData();
-
     res.pushKV("Ready", ".");
 
     return res;
@@ -2293,23 +2290,6 @@ UniValue testnewcontract(const UniValue& params, bool fHelp)
     return res;
 }
 #endif
-
-UniValue updatequorumdata(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "updatequorumdata\n"
-                "\n"
-                "Requests update of neural network quorum data\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    UpdateNeuralNetworkQuorumData();
-
-    res.pushKV("Updated.", "");
-
-    return res;
-}
 
 UniValue versionreport(const UniValue& params, bool fHelp)
 {

@@ -397,7 +397,6 @@ static const CRPCCommand vRPCCommands[] =
 #ifdef WIN32
     { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
 #endif
-    { "updatequorumdata",        &updatequorumdata,        false,  cat_developer     },
     { "versionreport",           &versionreport,           false,  cat_developer     },
     { "writedata",               &writedata,               false,  cat_developer     },
 

@@ -82,7 +82,6 @@ extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseL
 
 double DoubleFromAmount(int64_t amount);
 
-extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 extern bool FullSyncWithDPORNodes();
 
@@ -303,26 +302,6 @@ bool TimerMain(std::string timer_name, int max_ms)
         return true;
     }
     return false;
-}
-
-bool UpdateNeuralNetworkQuorumData()
-{
-    //if (!bGlobalcomInitialized) return false;
-    // Changed to check if the -disableneuralnetwork was passed, not whether bGlobalcomInitialized,
-    // because it must support the new native NN too.
-    if (!NN::GetInstance()->IsEnabled()) return false;
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    std::string myNeuralHash = "";
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-    std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::GetInstance()->SetQuorumData(data);
-    return true;
 }
 
 bool FullSyncWithDPORNodes()
@@ -3863,12 +3842,6 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
             if (fDebug) LogPrintf("SetBestChain: Updating Neural Supermajority (v9 %%3) height %d",nBestHeight);
             ComputeNeuralNetworkSupermajorityHashes();
         }
-        // Update quorum data.
-        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
-        {
-            if (fDebug) LogPrintf("SetBestChain: Updating Neural Quorum (v9 M) height %d",nBestHeight);
-            UpdateNeuralNetworkQuorumData();
-        }
     }
     else if (!fIsInitialDownload)
         // Retally after reorganize to sync up amounts owed.
@@ -4526,13 +4499,6 @@ void GridcoinServices()
                 if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 A) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
             }
-            if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
-            {
-                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 A) height %d",nBestHeight);
-                if (fDebug10) LogPrintf("#CNNSH# ");
-                UpdateNeuralNetworkQuorumData();
-            }
-
             // Perform retired tallies between the V9 block switch (1144000) and the
             // V9 tally switch (1144120) or else blocks will be rejected in between.
             if (IsV9Enabled(nBestHeight) && (nBestHeight % 20) == 0)
@@ -4557,12 +4523,6 @@ void GridcoinServices()
             {
                 if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 D) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
-            }
-            if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
-            {
-                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 E) height %d",nBestHeight);
-                if (fDebug3) LogPrintf("CNNSH2 ");
-                UpdateNeuralNetworkQuorumData();
             }
         }
     }
