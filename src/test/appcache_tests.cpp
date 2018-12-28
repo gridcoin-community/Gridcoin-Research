@@ -27,27 +27,6 @@ BOOST_AUTO_TEST_CASE(appcache_KeyShouldBeEmptyAfterDeleteCache)
     WriteCache(Section::GLOBAL, "key", "hello", 123456789);
     DeleteCache(Section::GLOBAL, "key");
     BOOST_CHECK(ReadCache(Section::GLOBAL, "key").value.empty() == true);
-    BOOST_CHECK_EQUAL(GetCountOf(Section::GLOBAL),0);
-}
-
-BOOST_AUTO_TEST_CASE(appcache_GetCountOfShouldCountEntries)
-{
-    ClearCache(Section::GLOBAL);
-    WriteCache(Section::GLOBAL, "key1", "hello", 123456789);
-    WriteCache(Section::GLOBAL, "key2", "hello", 123456789);
-    WriteCache(Section::GLOBAL, "key3", "hello", 123456789);
-    BOOST_CHECK_EQUAL(GetCountOf(Section::GLOBAL), 3);
-}
-
-BOOST_AUTO_TEST_CASE(appcache_GetListOfBeaconShouldIgnoreInvestors)
-{
-    ClearCache(Section::BEACON);
-    WriteCache(Section::BEACON, "CPID1", "INVESTOR", 12345);
-    BOOST_CHECK(GetListOf(Section::BEACON).empty() == true);
-
-    WriteCache(Section::BEACON, "CPID2", "abc123", 12345);
-    BOOST_CHECK(GetListOf(Section::BEACON).empty() == false);
-    BOOST_CHECK(GetListOf(Section::BEACON).find("abc123") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(appcache_SortedSectionsShouldBeSorted)

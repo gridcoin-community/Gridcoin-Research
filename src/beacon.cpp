@@ -1,4 +1,5 @@
 #include "beacon.h"
+#include "block.h"
 #include "util.h"
 #include "uint256.h"
 #include "key.h"
@@ -251,4 +252,44 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
         wallet->SetAddressBookName(vchAddress, "DPoR Beacon CPID " + cpid + " imported");
     }
     return true;
+}
+
+BeaconConsensus GetConsensusBeaconList()
+{
+    //BeaconMap mBeaconMap;
+    BeaconConsensus Consensus;
+
+    BlockFinder MaxConsensusLadder;
+
+    // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
+    // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
+    CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
+                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
+
+    Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
+
+    const int64_t maxTime = pMaxConsensusLadder->nTime;
+    const int64_t minTime = maxTime - MaxBeaconAge();
+
+    for(const auto& item : ReadCacheSection(Section::BEACON))
+    {
+        const std::string& key = item.first;
+        BeaconEntry beaconentry;
+
+        beaconentry.timestamp = item.second.timestamp;
+        beaconentry.value = item.second.value;
+
+        // Compare age restrictions if specified.
+        if((minTime && beaconentry.timestamp <= minTime) ||
+           (maxTime && beaconentry.timestamp >= maxTime))
+            continue;
+
+        // Skip invalid beacons.
+        if (Contains("INVESTOR", beaconentry.value))
+            continue;
+
+        Consensus.mBeaconMap[key] = beaconentry;
+    }
+
+    return Consensus;
 }

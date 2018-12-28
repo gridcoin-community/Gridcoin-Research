@@ -1,5 +1,7 @@
 #pragma once
 
+#include "beacon.h"
+
 #include <string>
 #include <memory>
 #include <functional>
@@ -66,9 +68,9 @@ namespace NN
         //! and calculate CPID magnitudes. If called while synchronization is
         //! already in progress this will do nothing.
         //!
-        //! \param data CPID and quorum data to pass to the neural net.
+        //! \param beacons Beacon consensus list.
         //!
-        virtual bool SynchronizeDPOR(const std::string& data) = 0;
+        virtual bool SynchronizeDPOR(const BeaconConsensus& beacons) = 0;
 
         virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
 

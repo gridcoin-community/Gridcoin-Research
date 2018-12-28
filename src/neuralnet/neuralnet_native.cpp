@@ -36,7 +36,7 @@ std::string NeuralNetNative::GetNeuralContract()
 
 // Note that the data argument is still used here for compatibility, but I don't think it will
 // actually be used in the scraper. We will see.
-bool NeuralNetNative::SynchronizeDPOR(const std::string& data)
+bool NeuralNetNative::SynchronizeDPOR(const BeaconConsensus& beacons)
 {
     return ScraperSynchronizeDPOR();
 }

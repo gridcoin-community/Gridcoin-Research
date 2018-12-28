@@ -591,15 +591,6 @@ double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid)
     return -1;
 }
 
-void GetSuperblockProjectCount(std::string data, double& out_project_count, double& out_whitelist_count)
-{
-    // This is reserved in case we ever want to resync prematurely when the last superblock contains < .75% of whitelisted projects (remember we allow superblocks with up to .50% of the whitelisted projects, in case some project sites are being ddossed)
-    std::string avgs = ExtractXML(data,"<AVERAGES>","</AVERAGES>");
-    double avg_of_projects = GetAverageInList(avgs, out_project_count);
-    out_whitelist_count = GetCountOf(Section::PROJECT);
-    if (fDebug10) LogPrintf(" GSPC:CountOfProjInBlock %f vs WhitelistedCount %f", out_project_count, out_whitelist_count);
-}
-
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight)
 {
     try
@@ -611,8 +602,8 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         if (mags.empty()) return 0;
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
-        if (!bIgnoreBeacons) out_beacon_count = GetCountOf(Section::BEACON);
-        double out_project_count = GetCountOf(Section::PROJECT);
+        if (!bIgnoreBeacons) out_beacon_count = GetConsensusBeaconList().mBeaconMap.size();
+        double out_project_count = ReadCacheSection(Section::PROJECT).size();
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
@@ -1513,17 +1504,9 @@ UniValue syncdpor2(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::string sOut = "";
-
     LOCK(cs_main);
-
-    bool bFull = GetCountOf(Section::BEACON) < 50 ? true : false;
-
-    LoadAdminMessages(bFull, sOut);
     FullSyncWithDPORNodes();
-
     res.pushKV("Syncing", 1);
-
     return res;
 }
 
@@ -1855,8 +1838,19 @@ UniValue getlistof(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    res.pushKV("Data", GetListOf(StringToSection(sType)));
+    UniValue entries(UniValue::VOBJ);
+    for(const auto& entry : ReadSortedCacheSection(StringToSection(sType)))
+    {
+        const auto& key = entry.first;
+        const auto& value = entry.second;
 
+        UniValue obj(UniValue::VOBJ);
+        obj.pushKV("value", value.value);
+        obj.pushKV("timestamp", value.timestamp);
+        entries.pushKV(key, obj);
+    }
+
+    res.pushKV("entries", entries);
     return res;
 }
 

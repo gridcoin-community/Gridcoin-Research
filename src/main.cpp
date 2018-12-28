@@ -322,23 +322,7 @@ bool FullSyncWithDPORNodes()
 
     std::string errors1;
     LoadAdminMessages(false,errors1);
-
-    const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-    const int64_t nLookback = 30 * 6 * 86400;
-    const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-    std::string cpiddata = GetListOf(Section::BEACON, iStartTime, iEndTime);
-    std::string sWhitelist = GetListOf(Section::PROJECT);
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                       + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::GetInstance()->SynchronizeDPOR(data);
+    NN::GetInstance()->SynchronizeDPOR(GetConsensusBeaconList());
     return true;
 }
 
@@ -5147,49 +5131,6 @@ std::string getfilecontents(std::string filename)
     myfile.close();
     return buffer;
 }
-
-
-
-BeaconConsensus GetConsensusBeaconList()
-{
-    //BeaconMap mBeaconMap;
-    BeaconConsensus Consensus;
-
-    BlockFinder MaxConsensusLadder;
-
-    // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
-    // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
-    CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
-                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
-
-    Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
-
-    const int64_t maxTime = pMaxConsensusLadder->nTime;
-    const int64_t minTime = maxTime - MaxBeaconAge();
-
-    for(const auto& item : ReadCacheSection(Section::BEACON))
-    {
-        const std::string& key = item.first;
-        BeaconEntry beaconentry;
-
-        beaconentry.timestamp = item.second.timestamp;
-        beaconentry.value = item.second.value;
-
-        // Compare age restrictions if specified.
-        if((minTime && beaconentry.timestamp <= minTime) ||
-           (maxTime && beaconentry.timestamp >= maxTime))
-            continue;
-
-        // Skip invalid beacons.
-        if (Contains("INVESTOR", beaconentry.value))
-            continue;
-
-        Consensus.mBeaconMap[key] = beaconentry;
-    }
-
-    return Consensus;
-}
-
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 {

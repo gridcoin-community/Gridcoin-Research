@@ -17,7 +17,7 @@ namespace NN
         std::string GetNeuralVersion();
         std::string GetNeuralHash();
         std::string GetNeuralContract();
-        bool SynchronizeDPOR(const std::string& data);
+        bool SynchronizeDPOR(const BeaconConsensus& beacons);
         std::string ExplainMagnitude(const std::string& cpid);
         int64_t IsNeuralNet();
     };

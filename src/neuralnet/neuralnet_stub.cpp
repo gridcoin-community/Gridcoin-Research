@@ -24,7 +24,7 @@ std::string NeuralNetStub::GetNeuralContract()
     return std::string();
 }
 
-bool NeuralNetStub::SynchronizeDPOR(const std::string& data)
+bool NeuralNetStub::SynchronizeDPOR(const BeaconConsensus& beacons)
 {
     return false;
 }
