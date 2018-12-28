@@ -43,7 +43,6 @@
 #include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
-#include "neuralnet_win.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -89,19 +88,6 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include "boinc.h"
 #include "util.h"
-
-namespace
-{
-#ifdef WIN32
-    // Static NN registration.
-    bool registered = []()
-    {
-        NN::Factory factory([]() { return std::make_shared<NN::NeuralNetWin32>(); });
-        NN::RegisterFactory(factory);
-        return true;
-    }();
-#endif
-}
 
 extern CWallet* pwalletMain;
 extern std::string getMacAddress();
