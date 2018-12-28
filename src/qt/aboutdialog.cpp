@@ -24,11 +24,8 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     // Set current copyright year and boinc utilization
     QString cr = "Copyright 2009-2018 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers";
-    std::string sBoincUtilization="";
-    sBoincUtilization = strprintf("%d",nBoincUtilization);
-	QString qsUtilization = QString::fromUtf8(sBoincUtilization.c_str());
 	QString qsRegVersion  = QString::fromUtf8(sRegVer.c_str());
-	ui->copyrightLabel->setText("Boinc Magnitude: " + qsUtilization + "              " + ", Registered Version: " + qsRegVersion + "             " + cr);
+    ui->copyrightLabel->setText("Registered Version: " + qsRegVersion + "             " + cr);
    // setTheme(this, THEME_ABOUTDIALOG);
 
 }

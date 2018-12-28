@@ -6,7 +6,6 @@
 #include <map>
 #include <set>
 
-extern int nBoincUtilization;
 extern std::string sRegVer;
 extern int nRegVersion;
 extern bool bNetAveragesLoaded;
