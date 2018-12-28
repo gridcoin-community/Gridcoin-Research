@@ -93,16 +93,6 @@ namespace NN
     typedef std::function<INeuralNetPtr()> Factory;
 
     //!
-    //! \brief Register factory function.
-    //!
-    //! Registers a factory function which will be called by
-    //! \p CreateNeuralNet.
-    //!
-    //! \param factory
-    //!
-    void RegisterFactory(const Factory& factory);
-
-    //!
     //! \brief Neuralnet factory.
     //!
     //! Evaluates host platform and configuration flags to instantiate an
