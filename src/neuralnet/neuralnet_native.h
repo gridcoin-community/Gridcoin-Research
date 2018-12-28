@@ -22,6 +22,5 @@ namespace NN
         std::string ResolveDiscrepancies(const std::string &contract);
         std::string SetPrimaryCPID(const std::string &cpid);
         int64_t IsNeuralNet();
-        void Show();
     };
 }

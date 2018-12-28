@@ -89,7 +89,6 @@ private:
 	QAction *boincAction;
 	QAction *chatAction;
 	QAction *exchangeAction;
-    QAction *showNeuralNetAction;
     QAction *votingAction;
 	QAction *diagnosticsAction;
     QAction *verifyMessageAction;
@@ -192,7 +191,6 @@ private slots:
 	void boincClicked();
     void boincStatsClicked();
 	void chatClicked();
-    void miningClicked();
     void diagnosticsClicked();
 
 #ifndef Q_OS_MAC

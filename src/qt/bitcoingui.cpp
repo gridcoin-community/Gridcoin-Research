@@ -315,10 +315,6 @@ void BitcoinGUI::createActions()
     aboutAction->setToolTip(tr("Show information about Gridcoin"));
     aboutAction->setMenuRole(QAction::AboutRole);
 
-    showNeuralNetAction = new QAction(tr("&Neural Network"), this);
-    showNeuralNetAction->setStatusTip(tr("Neural Network"));
-    showNeuralNetAction->setMenuRole(QAction::TextHeuristicRole);
-
     diagnosticsAction = new QAction(tr("&Diagnostics"), this);
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
@@ -357,7 +353,6 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, SIGNAL(triggered()), this, SLOT(lockWallet()));
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
-    connect(showNeuralNetAction, SIGNAL(triggered()), this, SLOT(miningClicked()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
 }
 
@@ -381,7 +376,6 @@ void BitcoinGUI::setIcons()
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
-    showNeuralNetAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -428,17 +422,6 @@ void BitcoinGUI::createMenuBar()
     community->addAction(chatAction);
     community->addSeparator();
     community->addAction(websiteAction);
-
-    // For right now, actions in this menu are on .NET dll side. Only show this menu for Windows and
-    // if the old .net NN is active. If the new native NN is used, disable.
-    // Once a graphical UI is created for the new native NN, then this will be changed.
-#ifdef WIN32
-    if(!GetBoolArg("-usenewnn"))
-    {
-        QMenu *qmAdvanced = appMenuBar->addMenu(tr("&Advanced"));
-        qmAdvanced->addAction(showNeuralNetAction);
-    }
-#endif /* defined(WIN32) */
 
     QMenu *help = appMenuBar->addMenu(tr("&Help"));
     help->addAction(openRPCConsoleAction);
@@ -990,11 +973,6 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->show();
     diagnosticsDialog->raise();
     diagnosticsDialog->activateWindow();
-}
-
-void BitcoinGUI::miningClicked()
-{
-    NN::GetInstance()->Show();
 }
 
 // links to websites and services outside the gridcoin client

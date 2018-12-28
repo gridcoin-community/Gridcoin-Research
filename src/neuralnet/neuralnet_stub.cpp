@@ -48,9 +48,3 @@ int64_t NeuralNetStub::IsNeuralNet()
 {
     return 0;
 }
-
-void NeuralNetStub::SetQuorumData(const std::string& data)
-{}
-
-void NeuralNetStub::Show()
-{}
