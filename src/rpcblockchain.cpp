@@ -40,10 +40,8 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
-extern std::string SuccessFail(bool f);
 extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
-bool bNetAveragesLoaded_retired;
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(std::string cpid);
@@ -69,23 +67,13 @@ bool FullSyncWithDPORNodes();
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
-std::string GetNeuralNetworkReport();
 UniValue GetJSONNeuralNetworkReport();
 UniValue GetJSONCurrentNeuralNetworkReport();
 
 extern UniValue GetJSONVersionReport();
 extern UniValue GetJsonUnspentReport();
 
-extern bool PollExists(std::string pollname);
-extern bool PollExpired(std::string pollname);
-
-extern bool PollAcceptableAnswer(std::string pollname, std::string answer);
-extern std::string PollAnswers(std::string pollname);
-
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
-
-extern std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
-
 extern UniValue GetJSONBeaconReport();
 
 void GatherNeuralHashes();
@@ -95,17 +83,14 @@ double GetTotalBalance();
 
 MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
-extern std::string TimestampToHRDate(double dtm);
 
 double CoinToDouble(double surrogate);
 int64_t GetRSAWeightByCPID(std::string cpid);
 double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-std::string getfilecontents(std::string filename);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 std::string RetrieveMd5(std::string s1);
-std::string getfilecontents(std::string filename);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -1058,7 +1043,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     std::string sMessage = "";
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
-    res.pushKV("Result",SuccessFail(fResult));
+    res.pushKV("Result", fResult ? "SUCCESS" : "FAIL");
     res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
     res.pushKV("Message",sMessage.c_str());
 
@@ -2220,7 +2205,6 @@ UniValue tally(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    bNetAveragesLoaded_retired = false;
     CBlockIndex* tallyIndex = FindTallyTrigger(pindexBest);
     TallyResearchAverages_v9(tallyIndex);
 
@@ -3122,11 +3106,6 @@ std::string SendReward(std::string sAddress, int64_t nAmount)
     string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, 1, wtx);
     if (!strError.empty()) return strError;
     return wtx.GetHash().GetHex().c_str();
-}
-
-std::string SuccessFail(bool f)
-{
-    return f ? "SUCCESS" : "FAIL";
 }
 
 std::string YesNo(bool f)
