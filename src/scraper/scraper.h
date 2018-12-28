@@ -391,7 +391,7 @@ public:
 #ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
-            if (url.find("World_Community_Grid") != std::string::npos)
+            if (url.find("www.worldcommunitygrid.org") != std::string::npos)
                 curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 #endif
 
@@ -445,7 +445,7 @@ public:
 #ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
-            if (url.find("World_Community_Grid") != std::string::npos)
+            if (url.find("www.worldcommunitygrid.org") != std::string::npos)
                 curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 #endif
 
@@ -532,7 +532,7 @@ public:
 #ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
-            if (url.find("World_Community_Grid") != std::string::npos)
+            if (url.find("www.worldcommunitygrid.org") != std::string::npos)
                 curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 #endif
 
@@ -584,7 +584,7 @@ public:
 #ifdef WIN32
             // Disable certificate verification for WCG if on Windows because something doesn't work.
             // This is intended to be a temporary workaround.
-            if (url.find("World_Community_Grid") != std::string::npos)
+            if (url.find("www.worldcommunitygrid.org") != std::string::npos)
                 curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
 #endif
 
