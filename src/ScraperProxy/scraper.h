@@ -449,7 +449,12 @@ public:
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
             curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
-            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#ifdef Win32
+            // Disable certificate verification for WCG if on Windows because something doesn't work.
+            // This is intended to be a temporary workaround.
+            if (url.find("World_Community_Grid") != std::string::npos)
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#endif
 
             res = curl_easy_perform(curl);
 
@@ -498,7 +503,12 @@ public:
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
             curl_easy_setopt(curl, CURLOPT_USERPWD, userpass.c_str());
-            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#ifdef Win32
+            // Disable certificate verification for WCG if on Windows because something doesn't work.
+            // This is intended to be a temporary workaround.
+            if (url.find("World_Community_Grid") != std::string::npos)
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#endif
 
             res = curl_easy_perform(curl);
 
@@ -580,7 +590,12 @@ public:
             curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
             curl_easy_setopt(curl, CURLOPT_PROXY, "");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#ifdef Win32
+            // Disable certificate verification for WCG if on Windows because something doesn't work.
+            // This is intended to be a temporary workaround.
+            if (url.find("World_Community_Grid") != std::string::npos)
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#endif
 
             res = curl_easy_perform(curl);
 
@@ -627,7 +642,12 @@ public:
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#ifdef Win32
+            // Disable certificate verification for WCG if on Windows because something doesn't work.
+            // This is intended to be a temporary workaround.
+            if (url.find("World_Community_Grid") != std::string::npos)
+                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+#endif
 
             res = curl_easy_perform(curl);
 
