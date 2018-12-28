@@ -5204,7 +5204,7 @@ BeaconConsensus GetConsensusBeaconList()
     Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
 
     const int64_t maxTime = pMaxConsensusLadder->nTime;
-    const int64_t minTime = maxTime - BEACON_LOOKBACK;
+    const int64_t minTime = maxTime - MaxBeaconAge();
 
     for(const auto& item : ReadCacheSection(Section::BEACON))
     {
