@@ -312,13 +312,14 @@ bool FullSyncWithDPORNodes()
     // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-    std::string sMyNeuralHash = "";
-    sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
-    if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+    std::string sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
+    if (!sMyNeuralHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
     {
         bool bNodeOnline = RequestSupermajorityNeuralData();
-        if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+        if (bNodeOnline)
+            return false;  // Async call to another node will continue after the node responds.
     }
+
     std::string errors1;
     LoadAdminMessages(false,errors1);
 
