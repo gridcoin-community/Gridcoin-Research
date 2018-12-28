@@ -46,12 +46,6 @@ std::string NeuralNetNative::ExplainMagnitude(const std::string& cpid)
     return ::ExplainMagnitude(cpid);
 }
 
-std::string NeuralNetNative::ResolveDiscrepancies(const std::string &contract)
-{
-    // Preserved for backward compatibility for now.
-    return std::string("SUCCESS");
-}
-
 std::string NeuralNetNative::SetPrimaryCPID(const std::string &cpid)
 {
     return std::string();

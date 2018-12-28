@@ -71,7 +71,6 @@ namespace NN
         virtual bool SynchronizeDPOR(const std::string& data) = 0;
 
         virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
-        virtual std::string ResolveDiscrepancies(const std::string& contract) = 0;
         virtual std::string SetPrimaryCPID(const std::string& cpid) = 0;
 
         virtual int64_t IsNeuralNet() = 0;
@@ -81,11 +80,6 @@ namespace NN
     //! \brief INeuralNet smart pointer.
     //!
     typedef std::shared_ptr<INeuralNet> INeuralNetPtr;
-
-    //!
-    //! \brief Factory function.
-    //!
-    typedef std::function<INeuralNetPtr()> Factory;
 
     //!
     //! \brief Neuralnet factory.

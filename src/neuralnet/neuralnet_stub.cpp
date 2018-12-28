@@ -34,11 +34,6 @@ std::string NeuralNetStub::ExplainMagnitude(const std::string& data)
     return std::string();
 }
 
-std::string NeuralNetStub::ResolveDiscrepancies(const std::string &contract)
-{
-    return std::string();
-}
-
 std::string NeuralNetStub::SetPrimaryCPID(const std::string &cpid)
 {
     return std::string();

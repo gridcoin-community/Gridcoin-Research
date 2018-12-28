@@ -7050,14 +7050,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         vRecv >> neural_contract;
         if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
         if (neural_contract.length() > 10)
-        {
-            //Resolve discrepancies
-            LogPrintf("Sync neural network data from supermajority");
-            const std::string& results = NN::GetInstance()->ResolveDiscrepancies(neural_contract);
-            if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-            // Resume the full DPOR sync at this point now that we have the supermajority data
-            if (results=="SUCCESS")  FullSyncWithDPORNodes();
-        }
+            FullSyncWithDPORNodes();
     }
     else if (strCommand == "alert")
     {
