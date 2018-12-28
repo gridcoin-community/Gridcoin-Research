@@ -29,7 +29,6 @@
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
-StructCPID GetStructCPID();
 void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 

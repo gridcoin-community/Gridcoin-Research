@@ -49,7 +49,6 @@ bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 bool TallyResearchAverages(CBlockIndex* index);
 bool TallyResearchAverages_retired(CBlockIndex* index);
@@ -67,26 +66,18 @@ UniValue MagnitudeReport(std::string cpid);
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex);
 void ZeroOutResearcherTotals(StructCPID& stCpid);
 extern std::string getCpuHash();
-std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
-extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
-
-double DoubleFromAmount(int64_t amount);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 extern bool FullSyncWithDPORNodes();
 
-bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
-extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -100,7 +91,6 @@ extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
 extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
-std::string DefaultBlockKey(int key_length);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;

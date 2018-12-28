@@ -14,9 +14,6 @@
 using namespace std;
 
 double GRCMagnitudeUnit(int64_t locktime);
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-
-int64_t GetRSAWeightByCPID(std::string cpid);
 
 UniValue getmininginfo(const UniValue& params, bool fHelp)
 {

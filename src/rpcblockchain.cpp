@@ -49,7 +49,6 @@ MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-int64_t GetEarliestWalletTransaction();
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
@@ -85,8 +84,6 @@ MiningCPID GetNextProject(bool bForce);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 
 double CoinToDouble(double surrogate);
-int64_t GetRSAWeightByCPID(std::string cpid);
-double GetUntrustedMagnitude(std::string cpid, double& out_owed);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
