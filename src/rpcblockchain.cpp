@@ -38,7 +38,6 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 extern std::string GetProvableVotingWeightXML();
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
-extern std::string SendReward(std::string sAddress, int64_t nAmount);
 extern double GetMagnitudeByCpidFromLastSuperblock(std::string sCPID);
 extern std::string SuccessFail(bool f);
 extern UniValue GetUpgradedBeaconReport();
@@ -3121,21 +3120,6 @@ UniValue GetJSONVersionReport()
     
     results.push_back(entry);
     return results;
-}
-
-std::string SendReward(std::string sAddress, int64_t nAmount)
-{
-    CBitcoinAddress address(sAddress);
-    if (!address.IsValid()) return "Invalid Gridcoin address";
-    // Wallet comments
-    CWalletTx wtx;
-    if (pwalletMain->IsLocked()) return "Error: Please enter the wallet passphrase with walletpassphrase first.";
-    std::string sMessageType      = "<MT>REWARD</MT>";
-    std::string sMessageValue     = "<MV>" + sAddress + "</MV>";
-    wtx.hashBoinc = sMessageType + sMessageValue;
-    string strError = pwalletMain->SendMoneyToDestinationWithMinimumBalance(address.Get(), nAmount, 1, wtx);
-    if (!strError.empty()) return strError;
-    return wtx.GetHash().GetHex().c_str();
 }
 
 std::string SuccessFail(bool f)
