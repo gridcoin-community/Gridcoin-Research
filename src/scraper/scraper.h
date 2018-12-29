@@ -55,7 +55,8 @@ namespace boostio = boost::iostreams;
 *********************/
 
 enum class logattribute {
-    ERROR,
+    // Can't use ERROR here because it is defined already in windows.h.
+    ERR,
     INFO,
     WARNING,
     CRITICAL
@@ -324,7 +325,7 @@ public:
         // Codes we send back true and wait for other HTTP/ code is 301, 302, 307 and 308 since these are follows
         if (response.empty())
         {
-            _log(logattribute::ERROR, "httpcode", "Server returned an empty HTTP code <prjurl=" + url+ ">");
+            _log(logattribute::ERR, "httpcode", "Server returned an empty HTTP code <prjurl=" + url+ ">");
 
             return false;
         }
@@ -333,16 +334,16 @@ public:
             return true;
 
         else if (response == "400")
-            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Bad Request <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERR, "httpcode", "Server returned a http code of Bad Request <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "401")
-            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Unauthorized <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERR, "httpcode", "Server returned a http code of Unauthorized <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "403")
-            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Forbidden <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERR, "httpcode", "Server returned a http code of Forbidden <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "404")
-            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Not Found <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERR, "httpcode", "Server returned a http code of Not Found <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "301")
             return true;
@@ -357,7 +358,7 @@ public:
             return true;
 
         else
-            _log(logattribute::ERROR, "httpcode", "Server returned a http code <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERR, "httpcode", "Server returned a http code <prjurl=" + url + ", code=" + response + ">");
 
         return false;
     }
@@ -371,7 +372,7 @@ public:
 
             if(!fp)
             {
-                _log(logattribute::ERROR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
+                _log(logattribute::ERR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
 
                 return false;
             }
@@ -398,7 +399,7 @@ public:
 
             if (res > 0)
             {
-                _log(logattribute::ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
+                _log(logattribute::ERR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
 
                 return false;
             }
@@ -409,7 +410,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(logattribute::ERROR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -452,7 +453,7 @@ public:
 
             if (res > 0)
             {
-                _log(logattribute::ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+                _log(logattribute::ERR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
 
                 return false;
             }
@@ -460,7 +461,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(logattribute::ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -494,7 +495,7 @@ public:
 
         if (etag.empty())
         {
-            _log(logattribute::ERROR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
+            _log(logattribute::ERR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
 
             return false;
         }
@@ -514,7 +515,7 @@ public:
 
             if(!fp)
             {
-                _log(logattribute::ERROR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
+                _log(logattribute::ERR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
 
                 return false;
             }
@@ -539,7 +540,7 @@ public:
 
             if (res > 0)
             {
-                _log(logattribute::ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
+                _log(logattribute::ERR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
 
                 return false;
             }
@@ -550,7 +551,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(logattribute::ERROR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -591,7 +592,7 @@ public:
 
             if (res > 0)
             {
-                _log(logattribute::ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+                _log(logattribute::ERR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
 
                 return false;
             }
@@ -599,7 +600,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(logattribute::ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -632,7 +633,7 @@ public:
 
         if (etag.empty())
         {
-            _log(logattribute::ERROR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
+            _log(logattribute::ERR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
 
             return false;
         }

@@ -58,7 +58,7 @@ void Scraper(bool bSingleShot)
     if (nHashCheck.GetHex() == "fe65ee46e01d18cebec555978abe82e021e5399171ce470e464996114d72dcf6")
         _log(logattribute::INFO, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is correct.");
     else
-        _log(logattribute::ERROR, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is NOT correct.");
+        _log(logattribute::ERR, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is NOT correct.");
 
     // Take a lock on cs_Scraper for the directory setup and file consistency check.
 
@@ -81,7 +81,7 @@ void Scraper(bool bSingleShot)
 
                 _log(logattribute::INFO, "Scraper", "Loading Manifest");
                 if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                    _log(logattribute::ERROR, "Scraper", "Error occurred loading manifest");
+                    _log(logattribute::ERR, "Scraper", "Error occurred loading manifest");
                 else
                     _log(logattribute::INFO, "Scraper", "Loaded Manifest file into map.");
 
@@ -208,7 +208,7 @@ void Scraper(bool bSingleShot)
         }
 
         else if (sbage <= -1)
-            _log(logattribute::ERROR, "Scraper", "RPC error occured, check logs");
+            _log(logattribute::ERR, "Scraper", "RPC error occured, check logs");
 
         else
         {
@@ -261,7 +261,7 @@ void Scraper(bool bSingleShot)
             // Note a lock on cs_StructScraperFileManifest is taken in StoreBeaconList,
             // and the block hash for the consensus block height is updated in the struct.
             if (!StoreBeaconList(pathScraper / "BeaconList.csv.gz"))
-                _log(logattribute::ERROR, "Scraper", "StoreBeaconList error occurred");
+                _log(logattribute::ERR, "Scraper", "StoreBeaconList error occurred");
             else
                 _log(logattribute::INFO, "Scraper", "Stored Beacon List");
 
@@ -278,7 +278,7 @@ void Scraper(bool bSingleShot)
         _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
 
         if (!StoreStats(pathScraper / "Stats.csv.gz", mScraperStats))
-            _log(logattribute::ERROR, "Scraper", "StoreStats error occurred");
+            _log(logattribute::ERR, "Scraper", "StoreStats error occurred");
         else
             _log(logattribute::INFO, "Scraper", "Stored stats.");
 
@@ -504,7 +504,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
         {
             case logattribute::INFO:        sType = "INFO";        break;
             case logattribute::WARNING:     sType = "WARNING";     break;
-            case logattribute::ERROR:       sType = "ERROR";       break;
+            case logattribute::ERR:       sType = "ERROR";       break;
             case logattribute::CRITICAL:    sType = "CRITICAL";    break;
         }
     }
@@ -547,7 +547,7 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
         {
             case logattribute::INFO:        sType = "INFO";        break;
             case logattribute::WARNING:     sType = "WARNING";     break;
-            case logattribute::ERROR:       sType = "ERROR";       break;
+            case logattribute::ERR:       sType = "ERROR";       break;
             case logattribute::CRITICAL:    sType = "CRITICAL";    break;
         }
     }
@@ -706,7 +706,7 @@ bool DownloadProjectRacFilesByCPID()
         {
             if (!racetagcurl.http_header(sUrl, sRacETag, userpass))
             {
-                _log(logattribute::ERROR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
 
                 continue;
             }
@@ -715,14 +715,14 @@ bool DownloadProjectRacFilesByCPID()
         else
             if (!racetagcurl.http_header(sUrl, sRacETag))
             {
-                _log(logattribute::ERROR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
 
                 continue;
             }
 
         if (sRacETag.empty())
         {
-            _log(logattribute::ERROR, "DownloadProjectRacFiles", "ETag for project is empty" + prjs.first);
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "ETag for project is empty" + prjs.first);
 
             continue;
         }
@@ -763,7 +763,7 @@ bool DownloadProjectRacFilesByCPID()
         {
             if (!raccurl.http_download(sUrl, rac_file.string(), userpass))
             {
-                _log(logattribute::ERROR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
 
                 continue;
             }
@@ -772,7 +772,7 @@ bool DownloadProjectRacFilesByCPID()
         else
             if (!raccurl.http_download(sUrl, rac_file.string()))
             {
-                _log(logattribute::ERROR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
 
                 continue;
             }
@@ -816,7 +816,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     if (!ingzfile)
     {
-        _log(logattribute::ERROR, "ProcessProjectRacFileByCPID", "Failed to open rac gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "Failed to open rac gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -978,7 +978,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         // sync if the wallet is ended during the middle of pulling the files.
         _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Persisting manifest entry to disk.");
         if(!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-            _log(logattribute::ERROR, "ProcessProjectRacFileByCPID", "StoreScraperFileManifest error occurred");
+            _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "StoreScraperFileManifest error occurred");
         else
             _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
 
@@ -1080,7 +1080,7 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 
     if (!ingzfile)
     {
-        _log(logattribute::ERROR, "LoadBeaconList", "Failed to open beacon gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "LoadBeaconList", "Failed to open beacon gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -1144,7 +1144,7 @@ bool StoreBeaconList(const fs::path& file)
 
     if (!outgzfile)
     {
-        _log(logattribute::ERROR, "StoreBeaconList", "Failed to open beacon list gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "StoreBeaconList", "Failed to open beacon list gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -1236,7 +1236,7 @@ bool LoadScraperFileManifest(const fs::path& file)
 
     if (!ingzfile)
     {
-        _log(logattribute::ERROR, "LoadScraperFileManifest", "Failed to open manifest gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "LoadScraperFileManifest", "Failed to open manifest gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -1299,7 +1299,7 @@ bool StoreScraperFileManifest(const fs::path& file)
 
     if (!outgzfile)
     {
-        _log(logattribute::ERROR, "StoreScraperFileManifest", "Failed to open manifest gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "StoreScraperFileManifest", "Failed to open manifest gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -1357,7 +1357,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 
     if (!outgzfile)
     {
-        _log(logattribute::ERROR, "StoreStats", "Failed to open stats gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "StoreStats", "Failed to open stats gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -1435,7 +1435,7 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
 
     if (!ingzfile)
     {
-        _log(logattribute::ERROR, "LoadProjectFileToStatsByCPID", "Failed to open project user stats gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "LoadProjectFileToStatsByCPID", "Failed to open project user stats gzip file (" + file.string() + ")");
 
         return false;
     }
@@ -1938,7 +1938,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 
         if (!outfile)
         {
-            _log(logattribute::ERROR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
+            _log(logattribute::ERR, "ScraperSaveCScraperManifestToFiles", "Failed to open file (" + outputfile + ")");
 
             return false;
         }
@@ -2010,7 +2010,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
     if (!filein)
     {
-        _log(logattribute::ERROR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
+        _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
         return false;
     }
 
@@ -2026,7 +2026,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
     }
     catch (std::exception &e)
     {
-        _log(logattribute::ERROR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
+        _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
         return false;
     }
 
@@ -2060,7 +2060,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
 
         if (!filein)
         {
-            _log(logattribute::ERROR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
+            _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
             return false;
         }
 
@@ -2076,7 +2076,7 @@ bool ScraperSendFileManifestContents(std::string sCManifestName)
         }
         catch (std::exception &e)
         {
-            _log(logattribute::ERROR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
+            _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to read file (" + inputfile.string() + ")");
             return false;
         }
 
@@ -2251,7 +2251,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         if (nContentHashCheck != StructConvergedManifest.nContentHash)
         {
             bConvergenceSuccessful = false;
-            _log(logattribute::ERROR, "ScraperConstructConvergedManifest", "Selected Converged Manifest content hash check failed! nContentHashCheck = "
+            _log(logattribute::ERR, "ScraperConstructConvergedManifest", "Selected Converged Manifest content hash check failed! nContentHashCheck = "
                  + nContentHashCheck.GetHex() + " and nContentHash = " + StructConvergedManifest.nContentHash.GetHex());
         }
     }
@@ -2571,7 +2571,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                 if (bStoreConvergedStats)
                 {
                     if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                        _log(logattribute::ERROR, "ScraperGetNeuralContract", "StoreStats error occurred");
+                        _log(logattribute::ERR, "ScraperGetNeuralContract", "StoreStats error occurred");
                     else
                         _log(logattribute::INFO, "ScraperGetNeuralContract", "Stored converged stats.");
                 }
