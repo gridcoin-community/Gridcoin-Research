@@ -25,7 +25,6 @@
 
 using namespace std;
 
-std::string SendReward(std::string sAddress, int64_t nAmount);
 int64_t GetRSAWeightByCPID(std::string cpid);
 
 MiningCPID DeserializeBoincBlock(std::string block);
@@ -567,41 +566,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 
         // notify an external script when a wallet transaction comes in or is updated
         std::string strCmd = GetArg("-walletnotify", "");
-        // Reward Sharing - Added 08-21-2016
-        // if (IsCoinBase() || IsCoinStake())
-
-        if (wtxIn.IsCoinBase() || wtxIn.IsCoinStake())
-        {
-            if (fDebug10) LogPrintf("CoinBase:CoinStake");
-            CBlockIndex* pBlk = mapBlockIndex[wtxIn.hashBlock];
-            CBlock blk;
-            bool r = blk.ReadFromDisk(pBlk);
-            if (r)
-            {
-                MiningCPID bb = DeserializeBoincBlock(blk.vtx[0].hashBoinc,blk.nVersion);
-                double dResearch = bb.ResearchSubsidy + bb.InterestSubsidy;
-                double dRewardShare = dResearch*.10;
-                // Only send Reward if > .10 GRC
-                if (dRewardShare > .10)
-                {
-                    // Only send reward if Reward Sharing is set up in the conf file (RS=RewardReceiveAddress)
-                    std::string sRewardAddress = GetArgument("RS","");
-                    if (!sRewardAddress.empty())
-                    {
-                        // Ensure this Proof Of Stake Coinbase was Just Generated before sending the reward (prevent rescans from sending rewards):
-                        LogPrintf("reward locktime %" PRId64 " curr time %" PRId64, wtxIn.nTime, GetAdjustedTime());
-                        LogPrintf(" reward shared %f", dRewardShare);
-                        LogPrintf(" addr %s",sRewardAddress);
-                        if (IsLockTimeWithinMinutes(wtxIn.nTime, GetAdjustedTime(), 10))
-                        {
-                            std::string sResult = SendReward(sRewardAddress,CoinFromValue(dRewardShare));
-                            LogPrintf("Issuing Reward Share of %f GRC to %s. Response: %s",dRewardShare,sRewardAddress, sResult);
-                        }
-                    }
-                }
-            }
-        }
-
         if (!strCmd.empty())
         {
             boost::replace_all(strCmd, "%s", wtxIn.GetHash().GetHex());
@@ -1891,21 +1855,6 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
 
     return "";
 }
-
-
-
-
-string CWallet::SendMoneyToDestinationWithMinimumBalance(const CTxDestination& address, int64_t nValue, int64_t nMinimumBalanceRequired, CWalletTx& wtxNew)
-{
-    // Check amount
-    if (nValue + nTransactionFee > GetBalance())        return _("Insufficient funds");
-    if (GetBalance() < nMinimumBalanceRequired)         return _("Balance too low to create a smart contract.");
-    CScript scriptPubKey;
-    scriptPubKey.SetDestination(address);
-    return SendMoney(scriptPubKey, nValue, wtxNew, false);
-}
-
-
 
 string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee)
 {
