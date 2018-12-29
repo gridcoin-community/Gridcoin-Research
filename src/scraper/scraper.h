@@ -54,19 +54,14 @@ namespace boostio = boost::iostreams;
 * Scraper ENUMS      *
 *********************/
 
-// Have to have undefine ERROR and redefine as zero in enum because stupid windows.h has it already defined as zero, but as a macro.
-#ifdef WIN32
-#undef ERROR
-#endif
-
-enum logattribute {
+enum class logattribute {
     ERROR,
     INFO,
     WARNING,
     CRITICAL
 };
 
-enum statsobjecttype {
+enum class statsobjecttype {
     NetworkWide,
     byCPID,
     byProject,
@@ -75,9 +70,9 @@ enum statsobjecttype {
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 
-const std::string GetTextForstatsobjecttype(int EnumValue)
+const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 {
-  return vstatsobjecttypestrings[EnumValue];
+  return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
 }
 
 /*********************
@@ -242,6 +237,7 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
+bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
@@ -328,7 +324,7 @@ public:
         // Codes we send back true and wait for other HTTP/ code is 301, 302, 307 and 308 since these are follows
         if (response.empty())
         {
-            _log(ERROR, "httpcode", "Server returned an empty HTTP code <prjurl=" + url+ ">");
+            _log(logattribute::ERROR, "httpcode", "Server returned an empty HTTP code <prjurl=" + url+ ">");
 
             return false;
         }
@@ -337,16 +333,16 @@ public:
             return true;
 
         else if (response == "400")
-            _log(ERROR, "httpcode", "Server returned a http code of Bad Request <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Bad Request <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "401")
-            _log(ERROR, "httpcode", "Server returned a http code of Unauthorized <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Unauthorized <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "403")
-            _log(ERROR, "httpcode", "Server returned a http code of Forbidden <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Forbidden <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "404")
-            _log(ERROR, "httpcode", "Server returned a http code of Not Found <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERROR, "httpcode", "Server returned a http code of Not Found <prjurl=" + url + ", code=" + response + ">");
 
         else if (response == "301")
             return true;
@@ -361,7 +357,7 @@ public:
             return true;
 
         else
-            _log(ERROR, "httpcode", "Server returned a http code <prjurl=" + url + ", code=" + response + ">");
+            _log(logattribute::ERROR, "httpcode", "Server returned a http code <prjurl=" + url + ", code=" + response + ">");
 
         return false;
     }
@@ -375,7 +371,7 @@ public:
 
             if(!fp)
             {
-                _log(ERROR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
+                _log(logattribute::ERROR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
 
                 return false;
             }
@@ -402,7 +398,7 @@ public:
 
             if (res > 0)
             {
-                _log(ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
+                _log(logattribute::ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
 
                 return false;
             }
@@ -413,7 +409,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(ERROR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERROR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -456,7 +452,7 @@ public:
 
             if (res > 0)
             {
-                _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+                _log(logattribute::ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
 
                 return false;
             }
@@ -464,7 +460,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -498,13 +494,13 @@ public:
 
         if (etag.empty())
         {
-            _log(ERROR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
+            _log(logattribute::ERROR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
 
             return false;
         }
 
         if (fDebug)
-            _log(INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
+            _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 
         return true;
     }
@@ -518,7 +514,7 @@ public:
 
             if(!fp)
             {
-                _log(ERROR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
+                _log(logattribute::ERROR, "url_http_download", "Failed to open file to download project data into <destination=" + destination + ">");
 
                 return false;
             }
@@ -543,7 +539,7 @@ public:
 
             if (res > 0)
             {
-                _log(ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
+                _log(logattribute::ERROR, "curl_http_download", "Failed to download file <urlfile=" + url + "> (" + curl_easy_strerror(res) + ")");
 
                 return false;
             }
@@ -554,7 +550,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(ERROR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERROR, "curl_http_download", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -595,7 +591,7 @@ public:
 
             if (res > 0)
             {
-                _log(ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
+                _log(logattribute::ERROR, "curl_http_header", "Failed to capture header of file <urlfile=" + url + "> with curl error= " + curl_easy_strerror(res));
 
                 return false;
             }
@@ -603,7 +599,7 @@ public:
 
         catch (std::exception& ex)
         {
-            _log(ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
+            _log(logattribute::ERROR, "curl_http_header", "Std exception occured (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -636,13 +632,13 @@ public:
 
         if (etag.empty())
         {
-            _log(ERROR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
+            _log(logattribute::ERROR, "curl_http_header", "No ETag response from project url <urlfile=" + url + ">");
 
             return false;
         }
 
         if (fDebug)
-            _log(INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
+            _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 
         return true;
     }
@@ -827,7 +823,7 @@ public:
         userpassfile.open(plistfile.c_str(), std::ios_base::in);
 
         if (!userpassfile.is_open())
-            _log(CRITICAL, "userpass_data", "Failed to open userpass file");
+            _log(logattribute::CRITICAL, "userpass_data", "Failed to open userpass file");
     }
 
     ~userpass()
@@ -850,14 +846,14 @@ public:
                 vuserpass.push_back(std::make_pair(vlist[0], vlist[1]));
             }
 
-            _log(INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
+            _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
 
             return true;
         }
 
         catch (std::exception& ex)
         {
-            _log(CRITICAL, "userpass_data_import", "Failed to userpass import due to exception (" + std::string(ex.what()) + ")");
+            _log(logattribute::CRITICAL, "userpass_data_import", "Failed to userpass import due to exception (" + std::string(ex.what()) + ")");
 
             return false;
         }
@@ -885,7 +881,7 @@ public:
         oauthdata.open(poutfile.c_str(), std::ios_base::out | std::ios_base::app);
 
         if (!oauthdata.is_open())
-            _log(CRITICAL, "auth_data", "Failed to open auth data file");
+            _log(logattribute::CRITICAL, "auth_data", "Failed to open auth data file");
     }
 
     ~authdata()
@@ -911,21 +907,21 @@ public:
         {
             if (outdata.size() == 0)
             {
-                _log(CRITICAL, "user_data_export", "No authentication etags to be exported!");
+                _log(logattribute::CRITICAL, "user_data_export", "No authentication etags to be exported!");
 
                 return false;
             }
 
             oauthdata.write(outdata.value().c_str(), outdata.size());
 
-            _log(INFO, "auth_data_export", "Exported");
+            _log(logattribute::INFO, "auth_data_export", "Exported");
 
             return true;
         }
 
         catch (std::exception& ex)
         {
-            _log(CRITICAL, "auth_data_export", "Failed to export auth data due to exception (" + std::string(ex.what()) + ")");
+            _log(logattribute::CRITICAL, "auth_data_export", "Failed to export auth data due to exception (" + std::string(ex.what()) + ")");
 
             return false;
         }
