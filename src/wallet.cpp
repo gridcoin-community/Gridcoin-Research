@@ -1856,6 +1856,21 @@ string CWallet::SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNe
     return "";
 }
 
+
+
+
+string CWallet::SendMoneyToDestinationWithMinimumBalance(const CTxDestination& address, int64_t nValue, int64_t nMinimumBalanceRequired, CWalletTx& wtxNew)
+{
+    // Check amount
+    if (nValue + nTransactionFee > GetBalance())        return _("Insufficient funds");
+    if (GetBalance() < nMinimumBalanceRequired)         return _("Balance too low to create a smart contract.");
+    CScript scriptPubKey;
+    scriptPubKey.SetDestination(address);
+    return SendMoney(scriptPubKey, nValue, wtxNew, false);
+}
+
+
+
 string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee)
 {
     // Check amount

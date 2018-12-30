@@ -195,6 +195,7 @@ public:
 
     std::string SendMoney(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
     std::string SendMoneyToDestination(const CTxDestination &address, int64_t nValue, CWalletTx& wtxNew, bool fAskFee=false);
+	std::string SendMoneyToDestinationWithMinimumBalance(const CTxDestination& address, int64_t nValue, int64_t nMinimumBalanceRequired, CWalletTx& wtxNew);
 
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int nSize = 0);
