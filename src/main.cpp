@@ -3979,6 +3979,11 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 
 bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
+    // Allow the genesis block to pass.
+    if(hashPrevBlock == uint256() &&
+       GetHash() == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
+        return true;
+
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
 
