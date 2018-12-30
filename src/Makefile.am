@@ -99,7 +99,8 @@ GRIDCOIN_CORE_H = \
 	rpcprotocol.h \
 	rpcserver.h \
 	scraper_net.h \
-    scraper/scraper.h \
+	scraper/http.h \
+	scraper/scraper.h \
 	script.h \
 	scrypt.h \
 	serialize.h \
@@ -159,7 +160,8 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	rpcwallet.cpp \
 	rpcdataacq.cpp \
 	scraper_net.cpp \
-    scraper/scraper.cpp \
+	scraper/http.cpp \
+	scraper/scraper.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \

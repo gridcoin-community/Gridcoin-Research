@@ -1,4 +1,5 @@
 #include "scraper.h"
+#include "http.h"
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -15,8 +16,6 @@ bool find(const std::string& s, const std::string& find);
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
 std::string ExtractXML(const std::string XMLdata, const std::string key, const std::string key_end);
-std::vector<std::string> vXMLData(const std::string& xmldata, int64_t teamid);
-int64_t teamid(const std::string& xmldata);
 ScraperFileManifest StructScraperFileManifest = {};
 
 // Global cache for converged scraper stats. Access must be through a lock.
@@ -710,7 +709,7 @@ bool DownloadProjectRacFilesByCPID()
 //                fs::remove(rac_file);
 
         // Grab ETag of rac file
-        statscurl racetagcurl;
+        Http http;
         std::string sRacETag;
 
         bool buserpass = false;
@@ -728,23 +727,14 @@ bool DownloadProjectRacFilesByCPID()
             }
         }
 
-        if (buserpass)
+        try
         {
-            if (!racetagcurl.http_header(sUrl, sRacETag, userpass))
-            {
-                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
-
-                continue;
-            }
+            sRacETag = http.GetEtag(sUrl, userpass);
+        } catch (const std::runtime_error& e)
+        {
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
+            continue;
         }
-
-        else
-            if (!racetagcurl.http_header(sUrl, sRacETag))
-            {
-                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
-
-                continue;
-            }
 
         if (sRacETag.empty())
         {
@@ -783,25 +773,15 @@ bool DownloadProjectRacFilesByCPID()
 
         _nntester(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
 
-        statscurl raccurl;
-
-        if (buserpass)
+        try
         {
-            if (!raccurl.http_download(sUrl, rac_file.string(), userpass))
-            {
-                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
-
-                continue;
-            }
+            http.Download(sUrl, rac_file.string(), userpass);
         }
-
-        else
-            if (!raccurl.http_download(sUrl, rac_file.string()))
-            {
-                _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
-
-                continue;
-            }
+        catch(const std::runtime_error& e)
+        {
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
+            continue;
+        }
 
         ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag, Consensus);
     }
