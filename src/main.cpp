@@ -4305,7 +4305,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    if (fDebug) LogPrintf("{ACC}");
     nLastAskedForBlocks=GetAdjustedTime();
     ResetTimerMain("OrphanBarrage");
     return true;
@@ -4797,8 +4796,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.erase(hashPrev);
 
     }
-
-    LogPrintf("{PB}: ACC; ");
 
     // Compatiblity while V8 is in use. Can be removed after the V9 switch.
     if(IsV9Enabled(pindexBest->nHeight) == false)
