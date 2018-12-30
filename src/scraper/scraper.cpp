@@ -2330,7 +2330,7 @@ bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mM
         vwhitelist_local = vwhitelist;
     }
 
-    for (const auto& iWhitelistProject : vwhitelist)
+    for (const auto& iWhitelistProject : vwhitelist_local)
     {
         // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project Objects (Parts),
         // the content hash is the object hash. We also need the consensus block here, because we are "composing" the manifest by
@@ -2461,7 +2461,7 @@ bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mM
     }
 
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
-    if ((double)iCountSuccesfulConvergedProjects / (double)vwhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
+    if ((double)iCountSuccesfulConvergedProjects / (double)vwhitelist_local.size() >= CONVERGENCE_BY_PROJECT_RATIO)
     {
         // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
@@ -2491,7 +2491,7 @@ bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mM
         bConvergenceSuccessful = true;
 
         _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
-             + std::to_string(iCountSuccesfulConvergedProjects) + " out of " + std::to_string(vwhitelist.size())
+             + std::to_string(iCountSuccesfulConvergedProjects) + " out of " + std::to_string(vwhitelist_local.size())
              + " projects at "
              + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
