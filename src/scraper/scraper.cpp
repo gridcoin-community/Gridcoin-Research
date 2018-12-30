@@ -236,7 +236,14 @@ void Scraper(bool bSingleShot)
 
                     // Set flag to false. If entry project matches a whitelist project then mark true and break.
                     bool bOnWhitelist = false;
-                    for (const auto& wlproject : vwhitelist)
+                    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
+                    {
+                        LOCK(cs_vwhitelist);
+
+                        vwhitelist_local = vwhitelist;
+                    }
+
+                    for (const auto& wlproject : vwhitelist_local)
                     {
                         if(entry_copy->second.project == wlproject.first)
                         {
@@ -333,7 +340,7 @@ void Scraper(bool bSingleShot)
         // with the boolean false, meaning don't store the stats.
         // Lock both cs_Scraper and cs_StructScraperFileManifest.
         // Don't do this if called with singleshot, because ScraperGetNeuralContract will be done afterwards by
-        // the functiont that called the singleshot.
+        // the function that called the singleshot.
         if (!bSingleShot)
         {
             //ConvergedManifest StructConvergedManifest;
@@ -392,6 +399,15 @@ void NeuralNetwork()
         // These items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
         {
+            gridcoinrpc data;
+
+            // Refresh the whitelist if its available
+            if (!data.wlimport())
+                _log(logattribute::WARNING, "Scraper", "Refreshing of whitelist failed.. using old data");
+
+            else
+                _log(logattribute::INFO, "Scraper", "Refreshing of whitelist completed");
+
             // Periodically generate converged manifests and generate SB core and "contract"
             // This will probably be reduced to the commented out call as we near final testing,
             // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
@@ -504,7 +520,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
         {
             case logattribute::INFO:        sType = "INFO";        break;
             case logattribute::WARNING:     sType = "WARNING";     break;
-            case logattribute::ERR:       sType = "ERROR";       break;
+            case logattribute::ERR:         sType = "ERROR";       break;
             case logattribute::CRITICAL:    sType = "CRITICAL";    break;
         }
     }
@@ -547,7 +563,7 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
         {
             case logattribute::INFO:        sType = "INFO";        break;
             case logattribute::WARNING:     sType = "WARNING";     break;
-            case logattribute::ERR:       sType = "ERROR";       break;
+            case logattribute::ERR:         sType = "ERROR";       break;
             case logattribute::CRITICAL:    sType = "CRITICAL";    break;
         }
     }
@@ -584,6 +600,8 @@ void _nntester(logattribute eType, const std::string& sCall, const std::string& 
 
 bool WhitelistPopulated()
 {
+    LOCK(cs_vwhitelist);
+
     if (vwhitelist.empty())
     {
         _log(logattribute::INFO, "WhitelistPopulated", "Whitelist vector currently empty; populating");
@@ -650,11 +668,19 @@ bool UserpassPopulated()
 
 bool DownloadProjectRacFilesByCPID()
 {
+    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
+
     if (!WhitelistPopulated())
     {
         _log(logattribute::CRITICAL, "DownloadProjectRacFiles", "Whitelist is not populated");
 
         return false;
+    }
+
+    {
+        LOCK(cs_vwhitelist);
+
+        vwhitelist_local = vwhitelist;
     }
 
     if (!UserpassPopulated())
@@ -668,7 +694,7 @@ bool DownloadProjectRacFilesByCPID()
     BeaconConsensus Consensus = GetConsensusBeaconList();
     _log(logattribute::INFO, "DownloadProjectRacFiles", "Getting consensus map of Beacons.");
 
-    for (const auto& prjs : vwhitelist)
+    for (const auto& prjs : vwhitelist_local)
     {
         _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.first);
 
@@ -1692,7 +1718,7 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
 
-    // Enumerate the count of active projects from the converged manifest. The part 0, which
+    // Enumerate the count of active projects from the converged manifest. One of the parts
     // is the beacon list, is not a project, which is why there is a -1.
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartsMap.size() - 1;
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
@@ -2163,7 +2189,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             // We need to prevent the insertion of a second entry with the same content from the same scraper. This
             // could otherwise happen if a scraper is shutdown and restarted, and it publishes a new manifest
             // before it receives manifests from the other nodes (including its own prior manifests).
-
+            // ------------------------------------------------  manifest CONTENT hash
             auto range = mManifestsBinnedbyContent.equal_range(iter_inner.second.second);
             bool bAlreadyExists = false;
             for (auto iter3 = range.first; iter3 != range.second; ++iter3)
@@ -2198,12 +2224,13 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             convergence = mManifestsBinnedbyContent.find(iter.second);
 
             _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Found convergence on manifest " + convergence->second.second.GetHex()
-                 + " at " + std::to_string(iter.first)
+                 + " at " + DateTimeStrFormat("%x %H:%M:%S",  iter.first)
                  + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                  + " agreeing.");
 
             bConvergenceSuccessful = true;
 
+            // Note this break is VERY important, it prevents considering essentially the same manifest that meets convergence multiple times.
             break;
         }
     }
@@ -2217,7 +2244,6 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         // Fill out the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
 
-        StructConvergedManifest.nContentHash = convergence->first;
         StructConvergedManifest.ConsensusBlock = manifest.ConsensusBlock;
         StructConvergedManifest.timestamp = GetAdjustedTime();
         StructConvergedManifest.bByParts = false;
@@ -2227,7 +2253,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         WriteCompactSize(ss, manifest.vParts.size());
         uint256 nContentHashCheck;
 
-        for(const auto& iter : manifest.vParts)
+        for (const auto& iter : manifest.vParts)
         {
             std::string sProject;
 
@@ -2248,48 +2274,233 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
         nContentHashCheck = Hash(ss.begin(), ss.end());
 
-        if (nContentHashCheck != StructConvergedManifest.nContentHash)
+        if (nContentHashCheck != convergence->first)
         {
             bConvergenceSuccessful = false;
             _log(logattribute::ERR, "ScraperConstructConvergedManifest", "Selected Converged Manifest content hash check failed! nContentHashCheck = "
                  + nContentHashCheck.GetHex() + " and nContentHash = " + StructConvergedManifest.nContentHash.GetHex());
         }
+
+        // The ConvergedManifest content hash is NOT the same as the hash above from the CScraper::manifest, because it needs to be in the order of the
+        // map key and on the data, not the order of vParts by the part hash. So, unfortunately, we have to walk through the map again to hash it correctly.
+        CDataStream ss2(SER_NETWORK,1);
+        for (const auto& iter : StructConvergedManifest.ConvergedManifestPartsMap)
+            ss2 << iter.second;
+
+        StructConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
     }
 
-
-    // TODO: Write the part level convergence routine. The above will only work reasonably well if
-    // SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true (which keeps a history of whole manifests around, and
-    // SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false (which only includes current files in the manifests).
-    // This may be the simpler way to go rather than flipping the above flags and matching at the part level,
-    // And since the parts are not actually duplicated between manifests if they have the same hash (they are referenced),
-    // the only additional overhead is the map entry and fields at the CScraperManifest level, which is small compared to the
-    // parts themselves.
-
     if(!bConvergenceSuccessful)
-       bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(mMapCSManifestsBinnedByScraper, StructConvergedManifest);
-
-    if(!bConvergenceSuccessful)
+    {
         _log(logattribute::INFO, "ScraperConstructConvergedManifest", "No convergence on manifests by content at the manifest level.");
+
+        // Try to form a convergence by project objects (parts)...
+        bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(mMapCSManifestsBinnedByScraper, StructConvergedManifest);
+
+        // If we have reached here. All attempts at convergence have failed. Reinitialize StructConvergedManifest to eliminate stale or
+        // Partially filled-in data.
+        if (!bConvergenceSuccessful)
+            StructConvergedManifest = {};
+    }
 
     return bConvergenceSuccessful;
     
 }
 
-// Subordinate function to ScraperConstructConvergedManifest to try to find a convergence at the Project (part)
+// Subordinate function to ScraperConstructConvergedManifest to try to find a convergence at the Project (part) level
 // if there is no convergence at the manifest level.
 // ------------------------------------------------------------------------ In ------------------------------------------------- Out
 bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest)
 {
-    /*
+    bool bConvergenceSuccessful = false;
+
+    CDataStream ss(SER_NETWORK,1);
+    uint256 nConvergedConsensusBlock = 0;
+    int64_t nConvergedConsensusTime = 0;
+    uint256 nManifestHashForConvergedBeaconList = 0;
+
+    // We are going to do this for each project in the whitelist.
+    std::vector<std::pair<std::string, std::string>> vwhitelist_local = {};
+    unsigned int iCountSuccesfulConvergedProjects = 0;
+    unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
+
+    {
+        LOCK(cs_vwhitelist);
+
+        vwhitelist_local = vwhitelist;
+    }
+
     for (const auto& iWhitelistProject : vwhitelist)
     {
+        // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project Objects (Parts),
+        // the content hash is the object hash. We also need the consensus block here, because we are "composing" the manifest by
+        // parts, so we will need to choose the latest consensus block by manifest time. This will occur naturally below if tracked in
+        // this manner. We will also want the BeaconList from the associated manifest.
+        // ------ manifest time --- object hash - consensus block hash - manifest hash.
+        std::multimap<int64_t, std::tuple<uint256, uint256, uint256>, greater<int64_t>> mProjectObjectsBinnedByTime;
+        // and also by project object (content) hash, then scraperID and project.
+        std::multimap<uint256, std::pair<ScraperID, std::string>> mProjectObjectsBinnedbyContent;
+        std::multimap<uint256, std::pair<ScraperID, std::string>>::iterator ProjectConvergence;
 
+        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+
+        // For the selected project in the whitelist, walk each scraper.
+        for (const auto& iter : mMapCSManifestsBinnedByScraper)
+        {
+            // iter.second is the mCSManifest. Walk each manifest in each scraper.
+            for (const auto& iter_inner : iter.second)
+            {
+                // This is the referenced CScraperManifest hash
+                uint256 nCSManifestHash = iter_inner.second.first;
+
+                // Select manifest based on provided hash.
+                auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
+                CScraperManifest& manifest = *pair->second;
+
+                // Find the part number in the manifest that corresponds to the whitelisted project.
+                // Once we find a part that corresponds to the selected project in the given manifest, then break,
+                // because there can only be one part in a manifest corresponding to a given project.
+                int nPart = -1;
+                int64_t nProjectObjectTime = 0;
+                uint256 nProjectObjectHash = 0;
+                for (const auto& vectoriter : manifest.projects)
+                {
+                    if (vectoriter.project == iWhitelistProject.first)
+                    {
+                        nPart = vectoriter.part1;
+                        nProjectObjectTime = vectoriter.LastModified;
+                        break;
+                    }
+                }
+
+                // Part -1 means not found, Part 0 is the beacon list, so needs to be greater than zero.
+                if (nPart > 0)
+                {
+                    // Get the hash of the part referenced in the manifest.
+                    nProjectObjectHash = manifest.vParts[nPart]->hash;
+
+                    // Insert into mManifestsBinnedByTime multimap.
+                    mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest.ConsensusBlock, *manifest.phash)));
+
+                    // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+                    // We need to prevent the insertion of a second entry with the same content from the same scraper. This is
+                    // even more true here at the part level than at the manifest level, because if both SCRAPER_CMANIFEST_RETAIN_NONCURRENT
+                    // and SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES are true, then there can be many references
+                    // to the same part by different manifests of the same scraper in addition to across scrapers.
+                    auto range = mProjectObjectsBinnedbyContent.equal_range(nProjectObjectHash);
+                    bool bAlreadyExists = false;
+                    for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+                    {
+                        // ---- ScraperID ------ Candidate scraperID to insert
+                        if (iter3->second.first == iter.first)
+                            bAlreadyExists = true;
+                    }
+
+                    if (!bAlreadyExists)
+                    {
+                        // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
+                        mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.first)));
+                        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
+                             + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
+                    }
+                }
+            }
+        }
+
+        // Walk the time map (backwards in time because the sort order is descending), and select the first
+        // Project Part (Object) content hash that meets the convergence rule.
+        for (const auto& iter : mProjectObjectsBinnedByTime)
+        {
+            // Notice the below is NOT using the time. We switch to the content only. The time is only used to make sure
+            // we test the convergence of the project objects in time order, but once a content hash is selected based on the time,
+            // only the content hash is used to count occurrences in the multimap, because the times for the same
+            // project object (part hash) will be different across different manifests and different scrapers.
+            unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(std::get<0>(iter.second));
+            if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
+            {
+                // Find the first one of equivalent parts ------------------ by hash.
+                ProjectConvergence = mProjectObjectsBinnedbyContent.find(std::get<0>(iter.second));
+
+                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Found convergence on project object " + ProjectConvergence->first.GetHex()
+                     + " for project " + iWhitelistProject.first
+                     + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
+                     + " agreeing.");
+
+                // Get the actual part ----------------- by hash.
+                auto iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
+
+                uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
+
+                if (nContentHashCheck != iPart->first)
+                {
+                    _log(logattribute::ERR, "ScraperConstructConvergedManifestByProject", "Selected Converged Project Object content hash check failed! nContentHashCheck = "
+                         + nContentHashCheck.GetHex() + " and nContentHash = " + iPart->first.GetHex());
+                    break;
+                }
+
+                // Put Project Object (Part) in StructConvergedManifest keyed by project.
+                StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.first, iPart->second.data));
+
+                // If the indirectly referenced manifest has a consensus time that is greater than already recorded, replace with that time, and also
+                // change the consensus block to the referred to consensus block. (Note that this is scoped at even above the individual project level, so
+                // the result after iterating through all projects will be the latest manifest time and consensus block that corresponds to any of the
+                // parts that meet convergence.) We will also get the manifest hash too, so we can retrieve the associated BeaconList that was used.
+                if (iter.first > nConvergedConsensusTime)
+                {
+                    nConvergedConsensusTime = iter.first;
+                    nConvergedConsensusBlock = std::get<1>(iter.second);
+                    nManifestHashForConvergedBeaconList = std::get<2>(iter.second);
+                }
+
+                iCountSuccesfulConvergedProjects++;
+
+                // Note this break is VERY important, it prevents considering essentially the same project object that meets convergence multiple times.
+                break;
+            }
+        }
+    }
+
+    // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
+    if ((double)iCountSuccesfulConvergedProjects / (double)vwhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
+    {
+        // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
+        // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
+
+        // Lets use the BeaconList from the manifest referred to by nManifestHashForConvergedBeaconList. Technically there is no exact answer to
+        // the BeaconList that should be used in the convergence when putting it together at the individual part level, because each project part
+        // could have used a different BeaconList (subject to the consensus ladder. It makes sense to use the "newest" one that is associated
+        // with a manifest that has the newest part associated with a successful part (project) level convergence.
+
+        // Select manifest based on provided hash.
+        auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
+        CScraperManifest& manifest = *pair->second;
+
+        // The vParts[0] is always the BeaconList.
+        StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]->data));
+
+        StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
+
+        // The ConvergedManifest content hash is in the order of the map key and on the data.
+        for (const auto& iter : StructConvergedManifest.ConvergedManifestPartsMap)
+            ss << iter.second;
+
+        StructConvergedManifest.nContentHash = Hash(ss.begin(), ss.end());
+        StructConvergedManifest.timestamp = GetAdjustedTime();
+        StructConvergedManifest.bByParts = true;
+
+        bConvergenceSuccessful = true;
+
+        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
+             + std::to_string(iCountSuccesfulConvergedProjects) + " out of " + std::to_string(vwhitelist.size())
+             + " projects at "
+             + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
     }
-    */
 
-    // Stub.
-    return false;
+    if(!bConvergenceSuccessful)
+        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "No convergence on manifests by projects.");
+
+    return bConvergenceSuccessful;
 
 }
 

@@ -93,6 +93,8 @@ int64_t ndownloadsize = 0;
 int64_t nuploadsize = 0;
 bool fScraperActive = false;
 
+CCriticalSection cs_vwhitelist;
+
 struct ScraperFileManifestEntry
 {
     std::string filename; // Filename
@@ -126,6 +128,8 @@ typedef std::map<std::string, CSerializeData> mConvergedManifestParts;
 
 struct ConvergedManifest
 {
+    // IMPORTANT... nContentHash is NOT the hash of part hashes in the order of vParts unlike CScraper::manifest.
+    // It is the hash of the data in the ConvergedManifestPartsMap in the order of the key.
     uint256 nContentHash;
     uint256 ConsensusBlock;
     int64_t timestamp;
@@ -200,6 +204,8 @@ static const double NEURALNETWORKMULTIPLIER = 115000;
 static const unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
 // Two-thirds seems like a reasonable standard for agreement.
 static const double SCRAPER_SUPERMAJORITY_RATIO = 2.0 / 3.0;
+// By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
+static const double CONVERGENCE_BY_PROJECT_RATIO = 0.95;
 
 /*********************
 * Functions          *
@@ -786,6 +792,8 @@ public:
 
     bool wlimport()
     {
+        LOCK(cs_vwhitelist);
+
         vwhitelist.clear();
 
         for(const auto& item : ReadCacheSection(Section::PROJECT))
