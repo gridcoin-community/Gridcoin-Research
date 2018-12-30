@@ -571,16 +571,16 @@ bool CTxDB::LoadBlockIndex()
                 // check level 5: check whether all prevouts are marked spent
                 if (nCheckLevel>4)
                 {
-                     for (auto const& txin : tx.vin)
-                     {
-                          CTxIndex txindex;
-                          if (ReadTxIndex(txin.prevout.hash, txindex))
-                              if (txindex.vSpent.size()-1 < txin.prevout.n || txindex.vSpent[txin.prevout.n].IsNull())
-                              {
-                                  LogPrintf("LoadBlockIndex(): *** found unspent prevout %s:%i in %s", txin.prevout.hash.ToString(), txin.prevout.n, hashTx.ToString());
-                                  pindexFork = pindex->pprev;
-                              }
-                     }
+                    for (auto const& txin : tx.vin)
+                    {
+                        CTxIndex txindex;
+                        if (ReadTxIndex(txin.prevout.hash, txindex))
+                            if (txindex.vSpent.size()-1 < txin.prevout.n || txindex.vSpent[txin.prevout.n].IsNull())
+                            {
+                                LogPrintf("LoadBlockIndex(): *** found unspent prevout %s:%i in %s", txin.prevout.hash.ToString(), txin.prevout.n, hashTx.ToString());
+                                pindexFork = pindex->pprev;
+                            }
+                    }
                 }
             }
         }
@@ -604,50 +604,51 @@ bool CTxDB::LoadBlockIndex()
     LogPrintf("Set up RA ");
     nStart = GetTimeMillis();
 
-    //Gridcoin - In order, set up Research Age hashes and lifetime fields
+    // Gridcoin - In order, set up Research Age hashes and lifetime fields.
+    // pindex is guaranteed to be valid here, even on an empty chain. Prior
+    // calls will set it up to the genesis block.
     CBlockIndex* pindex = BlockFinder().FindByHeight(1);
 
-    LogPrintf("RA Starting %i %i %i \n", pindex->nHeight, pindex->pnext->nHeight, pindexBest->nHeight);
+    LogPrintf("RA scan blocks %i-%i", pindex->nHeight, pindexBest->nHeight);
     nLoaded=pindex->nHeight;
     for ( ; pindex ; pindex= pindex->pnext )
     {
-        if(IsResearchAgeEnabled(pindex->nHeight))
+        if(fQtActive && (pindex->nHeight % 10000) == 0)
         {
-            if( pindex->IsUserCPID() && pindex->cpid == uint128() )
-            {
-                /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
-                auto bb = GetBoincBlockByIndex(pindex);
-                if( bb.cpid != pindex->GetCPID() )
-                {
-                    if(fDebug)
-                        LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                                  pindex->GetCPID(), bb.cpid,
-                                  pindex->GetBlockHash().GetHex(), pindex->nHeight );
+            nLoaded +=10000;
+            if (nLoaded > nHighest) nHighest=nLoaded;
+            if (nHighest < nGrandfather) nHighest=nGrandfather;
+            std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
+            uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+        }
 
-                    /* Repair the cpid field */
-                    pindex->SetCPID(bb.cpid);
+        // Block repair and reward collection only needs to be done after
+        // research age has been enabled.
+        if(!IsResearchAgeEnabled(pindex->nHeight))
+            continue;
+
+        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
+        {
+            /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
+            auto bb = GetBoincBlockByIndex(pindex);
+            if( bb.cpid != pindex->GetCPID() )
+            {
+                if(fDebug)
+                    LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                              pindex->GetCPID(), bb.cpid,
+                              pindex->GetBlockHash().GetHex(), pindex->nHeight );
+
+                /* Repair the cpid field */
+                pindex->SetCPID(bb.cpid);
 
 #if 0
-                    if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
-                        error("LoadBlockIndex: writing CDiskBlockIndex failed");
+                if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+                    error("LoadBlockIndex: writing CDiskBlockIndex failed");
 #endif
-                }
-            }
-
-            AddRARewardBlock(pindex);
-        }
-
-        if(fQtActive)
-        {
-            if ((pindex->nHeight % 10000) == 0)
-            {
-                nLoaded +=10000;
-                if (nLoaded > nHighest) nHighest=nLoaded;
-                if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
-                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
             }
         }
+
+        AddRARewardBlock(pindex);
     }
 
     LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
