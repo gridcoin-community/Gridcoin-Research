@@ -8310,8 +8310,7 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
        return true;
 
     // These are memorized consecutively in order from oldest to newest.
-    // Chain head intentionally left out for backward compatibility.
-    for(; pindex && pindex->pnext; pindex = pindex->pnext)
+    for(; pindex; pindex = pindex->pnext)
     {
         if (!pindex->IsInMainChain())
             continue;
