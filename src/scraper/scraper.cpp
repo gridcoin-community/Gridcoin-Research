@@ -1,8 +1,17 @@
 #include "scraper.h"
 #include "http.h"
 
+#include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/serialization/binary_object.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/exception/exception.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/device/array.hpp>
 
 // These will get overwritten by the GetArgs in init.cpp
 unsigned int nScraperSleep = 300000;

@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <cmath>
-#include <zlib.h>
 #include <iostream>
 #include <inttypes.h>
 #include <algorithm>
@@ -13,17 +12,8 @@
 #include <unordered_map>
 #include <boost/locale.hpp>
 #include <codecvt>
-#include <boost/exception/exception.hpp>
-#include <boost/exception/diagnostic_information.hpp>
-#include <boost/iostreams/filtering_stream.hpp>
-#include <boost/iostreams/copy.hpp>
-#include <boost/iostreams/filter/gzip.hpp>
-#include <boost/iostreams/stream.hpp>
-#include <boost/iostreams/device/array.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/serialization/binary_object.hpp>
-//#include <expat.h>
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
 #include <fstream>
 #include <sstream>
 
