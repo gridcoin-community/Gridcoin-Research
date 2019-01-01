@@ -286,7 +286,7 @@ void Scraper(bool bSingleShot)
             if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
-        _nntester(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
+        _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
         ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
 
@@ -540,17 +540,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
         return;
     }
 
-    stringbuilder string;
-
-    string.append(DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
-    string.append(" [");
-    string.append(sType);
-    string.append("] <");
-    string.append(sCall);
-    string.append("> : ");
-    string.append(sMessage);
-    sOut = string.value();
-
+    sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
     logger log;
 
     log.output(sOut);
@@ -559,48 +549,6 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
 
     return;
 }
-
-void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage)
-{
-    std::string sType;
-    std::string sOut;
-
-    try
-    {
-        switch (eType)
-        {
-            case logattribute::INFO:        sType = "INFO";        break;
-            case logattribute::WARNING:     sType = "WARNING";     break;
-            case logattribute::ERR:         sType = "ERROR";       break;
-            case logattribute::CRITICAL:    sType = "CRITICAL";    break;
-        }
-    }
-
-    catch (std::exception& ex)
-    {
-        printf("Logger : exception occured in _log function (%s)\n", ex.what());
-
-        return;
-    }
-
-    stringbuilder string;
-
-    string.append(std::to_string(time(NULL)));
-    string.append(" [");
-    string.append(sType);
-    string.append("] <");
-    string.append(sCall);
-    string.append("> : ");
-    string.append(sMessage);
-    sOut = string.value();
-
-    nntester log;
-
-    log.output(sOut);
-
-    return;
-}
-
 
 /**********************
 * Populate Whitelist  *
@@ -771,16 +719,10 @@ bool DownloadProjectRacFilesByCPID()
         if (fs::exists(chkfile))
         {
             _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
-
-            _nntester(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
-
             continue;
         }
-
         else
             fs::remove(chkfile);
-
-        _nntester(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
 
         try
         {
@@ -924,17 +866,15 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     try
     {
-    size_t filea = fs::file_size(file);
-    fs::path temp = gzetagfile.c_str();
-    size_t fileb = fs::file_size(temp);
+        size_t filea = fs::file_size(file);
+        fs::path temp = gzetagfile.c_str();
+        size_t fileb = fs::file_size(temp);
 
-    _nntester(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processing new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
+        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processing new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
 
-    ndownloadsize += (int64_t)filea;
-    nuploadsize += (int64_t)fileb;
-
+        ndownloadsize += (int64_t)filea;
+        nuploadsize += (int64_t)fileb;
     }
-
     catch (fs::filesystem_error& e)
     {
         _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "FS Error -> " + std::string(e.what()));

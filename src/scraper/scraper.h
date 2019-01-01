@@ -202,7 +202,6 @@ static const double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
 *********************/
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
-void _nntester(logattribute eType, const std::string& sCall, const std::string& sMessage);
 void Scraper(bool bSingleShot = false);
 void ScraperSingleShot();
 bool ScraperDirectorySanity();
@@ -535,45 +534,5 @@ public:
 
             return false;
         }
-    }
-};
-
-/**********************
-* Network Node Tester *
-**********************/
-
-class nntester
-{
-private:
-
-    fs::ofstream logfile;
-
-public:
-
-    nntester()
-    {
-        fs::path plogfile = GetDataDir() / "scraper.time";
-
-        logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
-
-        if (!logfile.is_open())
-            printf("Logging : Failed to open logging file\n");
-    }
-
-    ~nntester()
-    {
-        if (logfile.is_open())
-        {
-            logfile.flush();
-            logfile.close();
-        }
-    }
-
-    void output(const std::string& tofile)
-    {
-        if (logfile.is_open())
-            logfile << tofile << std::endl;
-
-        return;
     }
 };
