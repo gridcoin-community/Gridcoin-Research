@@ -136,6 +136,8 @@ struct ConvergedManifest
     bool bByParts;
 
     mConvergedManifestParts ConvergedManifestPartsMap;
+    // ------------------ project ----- reason for exclusion
+    std::vector<std::pair<std::string, std::string>> vExcludedProjects;
 };
 
 
@@ -195,15 +197,16 @@ static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
 // This settings below are important. This sets the minimum number of scrapers
 // that must be available to form a convergence. Above this minimum, the ratio
-// is followed. For example, if there are 4 scrapers, a ratio of 2/3 would require
-// CEILING(0.66666... * 4) = 3. See NumScrapersForSupermajority below.
+// is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
+// CEILING(0.6 * 4) = 3. See NumScrapersForSupermajority below.
 // If there is only 1 scraper available, and the mininum is 2, then a convergence
 // will not happen. Setting this below 2 will allow convergence to happen without
 // cross checking, and is undesirable, because the scrapers are not supposed to be
 // trusted entities.
 static const unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
-// Two-thirds seems like a reasonable standard for agreement.
-static const double SCRAPER_SUPERMAJORITY_RATIO = 2.0 / 3.0;
+// 0.6 seems like a reasonable standard for agreement. It will require...
+// 2 out of 3, 3 out of 4, 3 out of 5, 4 out of 6, 5 out of 7, 5 out of 8, etc.
+static const double SCRAPER_SUPERMAJORITY_RATIO = 0.6;
 // By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
 static const double CONVERGENCE_BY_PROJECT_RATIO = 0.95;
 
@@ -244,7 +247,8 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
-bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
+bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
+                                                mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();

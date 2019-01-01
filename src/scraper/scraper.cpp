@@ -2157,6 +2157,18 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 {
     bool bConvergenceSuccessful = false;
 
+    // get the whitelist to fill out the excluded projects vector later on. This is currently a global
+    // But may be changed to a passed parameter later. It is a small vector, so copy the global into a
+    // local to avoid holding the lock for extended periods.
+
+    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
+
+    {
+        LOCK(cs_vwhitelist);
+
+        vwhitelist_local = vwhitelist;
+    }
+
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
     // return a map of manifests binned by Scraper after the culling.
     // TODO: Put locking around CScraperManifest::mapManifest, because technically, a new one
@@ -2279,15 +2291,32 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             bConvergenceSuccessful = false;
             _log(logattribute::ERR, "ScraperConstructConvergedManifest", "Selected Converged Manifest content hash check failed! nContentHashCheck = "
                  + nContentHashCheck.GetHex() + " and nContentHash = " + StructConvergedManifest.nContentHash.GetHex());
+            // Reinitialize StructConvergedManifest
+            StructConvergedManifest = {};
         }
+        else // Content matches so we have a confirmed convergence.
+        {
+            // The ConvergedManifest content hash is NOT the same as the hash above from the CScraper::manifest, because it needs to be in the order of the
+            // map key and on the data, not the order of vParts by the part hash. So, unfortunately, we have to walk through the map again to hash it correctly.
+            CDataStream ss2(SER_NETWORK,1);
+            for (const auto& iter : StructConvergedManifest.ConvergedManifestPartsMap)
+                ss2 << iter.second;
 
-        // The ConvergedManifest content hash is NOT the same as the hash above from the CScraper::manifest, because it needs to be in the order of the
-        // map key and on the data, not the order of vParts by the part hash. So, unfortunately, we have to walk through the map again to hash it correctly.
-        CDataStream ss2(SER_NETWORK,1);
-        for (const auto& iter : StructConvergedManifest.ConvergedManifestPartsMap)
-            ss2 << iter.second;
+            StructConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
 
-        StructConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
+            // Fill out the excluded projects vector...
+            for (const auto& iProjects : vwhitelist_local)
+            {
+                if(StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.first) == StructConvergedManifest.ConvergedManifestPartsMap.end())
+                {
+                    // Project in whitelist was not in the map, so it goes in the exclusion vector.
+                    StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.first, "Converged manifests (agreed by multiple scrapers) excluded project."));
+                    _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
+                         + iProjects.first
+                         + " was excluded because the converged manifests from the scrapers all excluded the project.");
+                }
+            }
+        }
     }
 
     if(!bConvergenceSuccessful)
@@ -2295,10 +2324,10 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         _log(logattribute::INFO, "ScraperConstructConvergedManifest", "No convergence on manifests by content at the manifest level.");
 
         // Try to form a convergence by project objects (parts)...
-        bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(mMapCSManifestsBinnedByScraper, StructConvergedManifest);
+        bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(vwhitelist_local, mMapCSManifestsBinnedByScraper, StructConvergedManifest);
 
         // If we have reached here. All attempts at convergence have failed. Reinitialize StructConvergedManifest to eliminate stale or
-        // Partially filled-in data.
+        // partially filled-in data.
         if (!bConvergenceSuccessful)
             StructConvergedManifest = {};
     }
@@ -2310,7 +2339,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 // Subordinate function to ScraperConstructConvergedManifest to try to find a convergence at the Project (part) level
 // if there is no convergence at the manifest level.
 // ------------------------------------------------------------------------ In ------------------------------------------------- Out
-bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest)
+bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
+                                                mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest)
 {
     bool bConvergenceSuccessful = false;
 
@@ -2320,15 +2350,8 @@ bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mM
     uint256 nManifestHashForConvergedBeaconList = 0;
 
     // We are going to do this for each project in the whitelist.
-    std::vector<std::pair<std::string, std::string>> vwhitelist_local = {};
     unsigned int iCountSuccesfulConvergedProjects = 0;
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
-
-    {
-        LOCK(cs_vwhitelist);
-
-        vwhitelist_local = vwhitelist;
-    }
 
     for (const auto& iWhitelistProject : vwhitelist_local)
     {
@@ -2495,6 +2518,18 @@ bool ScraperConstructConvergedManifestByProject(mmCSManifestsBinnedByScraper& mM
              + " projects at "
              + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
+        // Fill out the excluded projects vector...
+        for (const auto& iProjects : vwhitelist_local)
+        {
+            if(StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.first) == StructConvergedManifest.ConvergedManifestPartsMap.end())
+            {
+                // Project in whitelist was not in the map, so it goes in the exclusion vector.
+                StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.first, "No convergence was found at the fallback (project) level."));
+                _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
+                     + iProjects.first
+                     + " was excluded because there was no convergence from the scrapers for this project at the project level.");
+            }
+        }
     }
 
     if(!bConvergenceSuccessful)
