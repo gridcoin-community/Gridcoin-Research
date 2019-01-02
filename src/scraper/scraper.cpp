@@ -41,10 +41,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
 
-int GetDayOfYear(int64_t timestamp);
-
-void testdata(const std::string& etag);
-
 extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
 
@@ -1003,27 +999,6 @@ uint256 GetmScraperFileManifestHash()
 
     return nHash;
 }
-
-
-void testdata(const std::string& etag)
-{
-    std::ifstream ingzfile( (pathScraper / (fs::path)(etag + ".gz")).string(), std::ios_base::in | std::ios_base::binary);
-
-
-    boostio::filtering_istream in;
-    in.push(boostio::gzip_decompressor());
-    in.push(ingzfile);
-
-    std::string line;
-    printf("size: %lu\n", in.size());
-    while (std::getline(in, line))
-    {
-        printf("data: %s\n", line.c_str());
-    }
-}
-
-
-
 
 /***********************
 * Persistance          *
