@@ -21,7 +21,6 @@ fs::path pathScraper = fs::current_path() / "Scraper";
 
 extern bool fShutdown;
 
-bool find(const std::string& s, const std::string& find);
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
 std::string ExtractXML(const std::string XMLdata, const std::string key, const std::string key_end);
@@ -441,23 +440,11 @@ void NeuralNetwork()
 /**********************
 * Sanity              *
 **********************/
-
-bool find(const std::string& s, const std::string& find)
-{
-    size_t pos = s.find(find);
-
-    if (pos == std::string::npos)
-        return false;
-
-    else
-        return true;
-}
-
 std::string urlsanity(const std::string& s, const std::string& type)
 {
     stringbuilder url;
 
-    if (find(s, "einstein"))
+    if (Contains("einstein", s))
     {
         url.append(s.substr(0,4));
         url.append("s");
@@ -470,7 +457,7 @@ std::string urlsanity(const std::string& s, const std::string& type)
     url.append("stats/");
     url.append(type);
 
-    if (find(s, "gorlaeus") || find(s, "worldcommunitygrid"))
+    if (Contains("gorlaeus", s) || Contains("worldcommunitygrid", s))
         url.append(".xml.gz");
 
     else
