@@ -335,16 +335,6 @@ public:
         builtstring << std::fixed << std::setprecision(precision) << value;
     }
 
-    void cleanappend(const std::string& value)
-    {
-        builtstring << value.substr(1, value.size());
-    }
-
-    void nlcleanappend(const std::string& value)
-    {
-        builtstring << value.substr(1, value.size()) << "\n";
-    }
-
     void nlappend(const std::string& value)
     {
         builtstring << value << "\n";
