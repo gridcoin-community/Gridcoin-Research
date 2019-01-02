@@ -208,7 +208,8 @@ static const unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
 // 2 out of 3, 3 out of 4, 3 out of 5, 4 out of 6, 5 out of 7, 5 out of 8, etc.
 static const double SCRAPER_SUPERMAJORITY_RATIO = 0.6;
 // By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
-static const double CONVERGENCE_BY_PROJECT_RATIO = 0.95;
+// For 20 whitelisted projects this means up to five can be excluded and a contract formed.
+static const double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
 
 /*********************
 * Functions          *
