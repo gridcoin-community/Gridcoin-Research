@@ -114,6 +114,11 @@ void AuthenticationETagClear();
 extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
 
+// For compatibility this will be used for the contract hashing to allow easy
+// roll-in of the new NN, because the Quorum functions look for the empty string
+// hash value and that will not be invariant if a hash function switch is done now.
+extern std::string GetQuorumHash(const std::string& data);
+
 
 /**********************
 * Scraper Logger      *
@@ -3127,16 +3132,22 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
 }
 
 
-// Note: This is NOT meant to be compatible with the .net NN QuorumHashingAlgorithm. We have to get away from that and
-// use a straightforward native hash of the contract string. The hash is returned as a string for compatibility
-// purposes. This is silly and should be changed to a uint256.
+// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes. See the comments below.
 std::string ScraperGetNeuralHash()
 {
     std::string sNeuralContract = ScraperGetNeuralContract(false, false);
 
-    uint256 nHash = Hash(sNeuralContract.begin(), sNeuralContract.end());
+    std::string sHash;
 
-    return nHash.GetHex();
+    //sHash = Hash(sNeuralContract.begin(), sNeuralContract.end()).GetHex();
+
+    // This is the hash currently used by the old NN. Continue to use it for compatibility purpose until the next mandatory
+    // after the new NN rollout, when the old NN hash function can be retired in favor of the commented out code above.
+    // The intent will be to uncomment out the above line, and then reverse the roles of ScraperGetNeuralHash() and
+    // GetQuorumHash().
+    sHash = GetQuorumHash(sNeuralContract);
+
+    return sHash;
 }
 
 
