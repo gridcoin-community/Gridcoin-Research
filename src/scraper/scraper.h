@@ -42,14 +42,6 @@ namespace boostio = boost::iostreams;
 * Scraper ENUMS      *
 *********************/
 
-enum class logattribute {
-    // Can't use ERROR here because it is defined already in windows.h.
-    ERR,
-    INFO,
-    WARNING,
-    CRITICAL
-};
-
 enum class statsobjecttype {
     NetworkWide,
     byCPID,
@@ -68,37 +60,6 @@ const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 * Global Vars        *
 *********************/
 
-extern bool fDebug;
-extern std::string msMasterMessagePrivateKey;
-extern CWallet* pwalletMain;
-std::vector<std::pair<std::string, std::string>> vwhitelist;
-std::vector<std::pair<std::string, std::string>> vuserpass;
-std::vector<std::pair<std::string, int64_t>> vprojectteamids;
-std::vector<std::string> vauthenicationetags;
-int64_t ndownloadsize = 0;
-int64_t nuploadsize = 0;
-bool fScraperActive = false;
-
-CCriticalSection cs_vwhitelist;
-
-struct ScraperFileManifestEntry
-{
-    std::string filename; // Filename
-    std::string project;
-    uint256 hash; // hash of file
-    int64_t timestamp;
-    bool current;
-};
-
-typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
-
-struct ScraperFileManifest
-{
-    ScraperFileManifestMap mScraperFileManifest;
-    uint256 nFileManifestMapHash;
-    uint256 nConsensusBlockHash;
-    int64_t timestamp;
-};
 
 typedef std::string ScraperID;
 // The inner map is sorted in descending order of time. The pair is manifest hash, content hash.

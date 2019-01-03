@@ -20,6 +20,46 @@ bool fScraperRetainNonCurrentFiles = false;
 fs::path pathScraper = fs::current_path() / "Scraper";
 
 extern bool fShutdown;
+extern bool fDebug;
+extern std::string msMasterMessagePrivateKey;
+extern CWallet* pwalletMain;
+bool fScraperActive = false;
+std::vector<std::pair<std::string, std::string>> vwhitelist;
+std::vector<std::pair<std::string, std::string>> vuserpass;
+std::vector<std::pair<std::string, int64_t>> vprojectteamids;
+std::vector<std::string> vauthenicationetags;
+int64_t ndownloadsize = 0;
+int64_t nuploadsize = 0;
+
+enum class logattribute {
+    // Can't use ERROR here because it is defined already in windows.h.
+    ERR,
+    INFO,
+    WARNING,
+    CRITICAL
+};
+
+struct ScraperFileManifestEntry
+{
+    std::string filename; // Filename
+    std::string project;
+    uint256 hash; // hash of file
+    int64_t timestamp;
+    bool current;
+};
+
+typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
+
+struct ScraperFileManifest
+{
+    ScraperFileManifestMap mScraperFileManifest;
+    uint256 nFileManifestMapHash;
+    uint256 nConsensusBlockHash;
+    int64_t timestamp;
+};
+
+
+
 
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
@@ -30,6 +70,7 @@ ScraperFileManifest StructScraperFileManifest = {};
 ConvergedScraperStats ConvergedScraperStatsCache = {};
 
 CCriticalSection cs_Scraper;
+CCriticalSection cs_vwhitelist;
 CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
 
