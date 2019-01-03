@@ -33,8 +33,38 @@ CCriticalSection cs_Scraper;
 CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
 
+void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
+void Scraper(bool bSingleShot = false);
+void ScraperSingleShot();
 bool WhitelistPopulated();
 bool UserpassPopulated();
+bool ScraperDirectorySanity();
+bool StoreBeaconList(const fs::path& file);
+bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
+bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
+std::vector<std::string> split(const std::string& s, const std::string& delim);
+uint256 GetmScraperFileManifestHash();
+bool StoreScraperFileManifest(const fs::path& file);
+bool LoadScraperFileManifest(const fs::path& file);
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
+ScraperStats GetScraperStatsByConsensusBeaconList();
+bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
+                                         const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
+bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
+bool ScraperSendFileManifestContents(std::string CManifestName);
+mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
+mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
+bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
+bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
+bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
+                                                mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
+std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
+
 bool DownloadProjectRacFilesByCPID();
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
@@ -42,6 +72,314 @@ void AuthenticationETagClear();
 
 extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
+
+
+/**********************
+* Scraper Logger      *
+**********************/
+
+
+class logger
+{
+private:
+
+    //std::ofstream logfile;
+    fs::ofstream logfile;
+
+public:
+
+    logger()
+    {
+        fs::path plogfile = GetDataDir() / "scraper.log";
+
+        logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
+
+        if (!logfile.is_open())
+            printf("Logging : Failed to open logging file\n");
+    }
+
+    ~logger()
+    {
+        if (logfile.is_open())
+        {
+            logfile.flush();
+            logfile.close();
+        }
+    }
+
+    void output(const std::string& tofile)
+    {
+        if (logfile.is_open())
+            logfile << tofile << std::endl;
+
+        return;
+    }
+};
+
+
+void _log(logattribute eType, const std::string& sCall, const std::string& sMessage)
+{
+    std::string sType;
+    std::string sOut;
+
+    try
+    {
+        switch (eType)
+        {
+            case logattribute::INFO:        sType = "INFO";        break;
+            case logattribute::WARNING:     sType = "WARNING";     break;
+            case logattribute::ERR:         sType = "ERROR";       break;
+            case logattribute::CRITICAL:    sType = "CRITICAL";    break;
+        }
+    }
+
+    catch (std::exception& ex)
+    {
+        printf("Logger : exception occured in _log function (%s)\n", ex.what());
+
+        return;
+    }
+
+    sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
+    logger log;
+
+    log.output(sOut);
+
+    LogPrintf(std::string(sType + ": Scraper: <" + sCall + ">: %s").c_str(), sMessage);
+
+    return;
+}
+
+
+
+
+/**********************
+* String Builder EXP  *
+**********************/
+
+class stringbuilder
+{
+protected:
+
+    std::stringstream builtstring;
+
+public:
+
+    void append(const std::string &value)
+    {
+        builtstring << value;
+    }
+
+    void append(double value)
+    {
+        builtstring << value;
+    }
+
+    void append(int64_t value)
+    {
+        builtstring << value;
+    }
+
+    void fixeddoubleappend(double value, unsigned int precision)
+    {
+        builtstring << std::fixed << std::setprecision(precision) << value;
+    }
+
+    void nlappend(const std::string& value)
+    {
+        builtstring << value << "\n";
+    }
+
+    std::string value()
+    {
+        // Prevent a memory leak
+        const std::string& out = builtstring.str();
+
+        return out;
+    }
+
+    size_t size()
+    {
+        const std::string& out = builtstring.str();
+        return out.size();
+    }
+
+    void clear()
+    {
+        builtstring.clear();
+        builtstring.str(std::string());
+    }
+};
+
+
+/*********************
+* Whitelist Data     *
+*********************/
+
+class gridcoinrpc
+{
+private:
+
+    std::string whitelistrpcdata = "";
+    std::string superblockage = "";
+
+public:
+
+    gridcoinrpc()
+    {}
+
+    ~gridcoinrpc()
+    {}
+
+    bool wlimport()
+    {
+        LOCK(cs_vwhitelist);
+
+        vwhitelist.clear();
+
+        for(const auto& item : ReadCacheSection(Section::PROJECT))
+            vwhitelist.push_back(std::make_pair(item.first, item.second.value));
+
+        return true;
+    }
+
+    int64_t sbage()
+    {
+        int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
+        int64_t nSBage = GetAdjustedTime() - superblock_time;
+
+        return nSBage;
+    }
+};
+
+/*********************
+* Userpass Data      *
+*********************/
+
+class userpass
+{
+private:
+
+    fs::ifstream userpassfile;
+
+public:
+
+    userpass()
+    {
+        vuserpass.clear();
+
+        fs::path plistfile = GetDataDir() / "userpass.dat";
+
+        userpassfile.open(plistfile.c_str(), std::ios_base::in);
+
+        if (!userpassfile.is_open())
+            _log(logattribute::CRITICAL, "userpass_data", "Failed to open userpass file");
+    }
+
+    ~userpass()
+    {
+        if (userpassfile.is_open())
+            userpassfile.close();
+    }
+
+    bool import()
+    {
+        vuserpass.clear();
+        std::string inputdata;
+
+        try
+        {
+            while (std::getline(userpassfile, inputdata))
+            {
+                std::vector<std::string>vlist = split(inputdata, ";");
+
+                vuserpass.push_back(std::make_pair(vlist[0], vlist[1]));
+            }
+
+            _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
+
+            return true;
+        }
+
+        catch (std::exception& ex)
+        {
+            _log(logattribute::CRITICAL, "userpass_data_import", "Failed to userpass import due to exception (" + std::string(ex.what()) + ")");
+
+            return false;
+        }
+    }
+};
+
+/*********************
+* Auth Data          *
+*********************/
+
+class authdata
+{
+private:
+
+    fs::ofstream oauthdata;
+    stringbuilder outdata;
+
+public:
+
+    authdata(const std::string& project)
+    {
+        std::string outfile = project + "_auth.dat";
+        fs::path poutfile = GetDataDir() / outfile.c_str();
+
+        oauthdata.open(poutfile.c_str(), std::ios_base::out | std::ios_base::app);
+
+        if (!oauthdata.is_open())
+            _log(logattribute::CRITICAL, "auth_data", "Failed to open auth data file");
+    }
+
+    ~authdata()
+    {
+        if (oauthdata.is_open())
+            oauthdata.close();
+    }
+
+    void setoutputdata(const std::string& type, const std::string& name, const std::string& etag)
+    {
+        outdata.clear();
+        outdata.append("<auth><etag>");
+        outdata.append(etag);
+        outdata.append("</etag>");
+        outdata.append("<type>");
+        outdata.append(type);
+        outdata.nlappend("</type></auth>");
+    }
+
+    bool xport()
+    {
+        try
+        {
+            if (outdata.size() == 0)
+            {
+                _log(logattribute::CRITICAL, "user_data_export", "No authentication etags to be exported!");
+
+                return false;
+            }
+
+            oauthdata.write(outdata.value().c_str(), outdata.size());
+
+            _log(logattribute::INFO, "auth_data_export", "Exported");
+
+            return true;
+        }
+
+        catch (std::exception& ex)
+        {
+            _log(logattribute::CRITICAL, "auth_data_export", "Failed to export auth data due to exception (" + std::string(ex.what()) + ")");
+
+            return false;
+        }
+    }
+};
+
+
+
 
 // This is the scraper thread...
 void Scraper(bool bSingleShot)
@@ -492,45 +830,6 @@ bool ScraperDirectorySanity()
     // Need to implement error handling. For now, returns true.
 
     return true;
-}
-
-
-
-/**********************
-* Scraper Logger      *
-**********************/
-
-void _log(logattribute eType, const std::string& sCall, const std::string& sMessage)
-{
-    std::string sType;
-    std::string sOut;
-
-    try
-    {
-        switch (eType)
-        {
-            case logattribute::INFO:        sType = "INFO";        break;
-            case logattribute::WARNING:     sType = "WARNING";     break;
-            case logattribute::ERR:         sType = "ERROR";       break;
-            case logattribute::CRITICAL:    sType = "CRITICAL";    break;
-        }
-    }
-
-    catch (std::exception& ex)
-    {
-        printf("Logger : exception occured in _log function (%s)\n", ex.what());
-
-        return;
-    }
-
-    sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
-    logger log;
-
-    log.output(sOut);
-
-    LogPrintf(std::string(sType + ": Scraper: <" + sCall + ">: %s").c_str(), sMessage);
-
-    return;
 }
 
 /**********************
