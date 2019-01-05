@@ -766,8 +766,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         }
 
         //If beacon is already in the chain, exit early
-        std::string sBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-        if (!sBeaconPublicKey.empty())
+        if (!GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true).empty())
         {
             // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
             // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)
@@ -812,7 +811,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         }
 
         // Convert the new pubkey into legacy hex format
-        sBeaconPublicKey= HexStr(keyBeacon.GetPubKey().Raw());
+        sOutPubKey = HexStr(keyBeacon.GetPubKey().Raw());
 
         GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
         std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
