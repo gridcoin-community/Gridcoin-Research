@@ -747,6 +747,14 @@ void Scraper(bool bSingleShot)
                 if (fDebug) _log(logattribute::INFO, "ENDLOCK2", "cs_Scraper, cs_StructScraperFileManifest");
             }
 
+            // Temporarily here for visibility into the Quorum map...
+            if (fDebug)
+            {
+                for(const auto& network_hash : mvNeuralNetworkHash)
+                      _log(logattribute::INFO, "NeuralNetwork", "NN Contract Hash: " + network_hash.first
+                         + ", Popularity: " + std::to_string(network_hash.second));
+            }
+
             _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
             MilliSleep(nScraperSleep);
         }
@@ -811,6 +819,14 @@ void NeuralNetwork()
 
                 //ScraperConstructConvergedManifest(StructConvergedManifest)
                 sSBCoreData = ScraperGetNeuralContract(true, false);
+            }
+
+            // Temporarily here for visibility into the Quorum map...
+            if (fDebug)
+            {
+                for(const auto& network_hash : mvNeuralNetworkHash)
+                      _log(logattribute::INFO, "NeuralNetwork", "NN Contract Hash: " + network_hash.first
+                         + ", Popularity: " + std::to_string(network_hash.second));
             }
        }
 
