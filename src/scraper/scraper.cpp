@@ -579,7 +579,7 @@ void Scraper(bool bSingleShot)
                     if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
                     // The only thing we do here while quiescent is cull manifests received
-                    // from other scrapers.
+                    // from other scrapers or generated from this scraper that have aged out.
                     ScraperDeleteCScraperManifests();
 
                     // End LOCK(cs_Scraper)
@@ -808,7 +808,7 @@ void NeuralNetwork()
                 LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
                 //ScraperConstructConvergedManifest(StructConvergedManifest)
-                sSBCoreData = ScraperGetNeuralContract(true);
+                sSBCoreData = ScraperGetNeuralContract(true, false);
             }
        }
 
