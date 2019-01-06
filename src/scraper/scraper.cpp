@@ -77,6 +77,7 @@ CCriticalSection cs_ConvergedScraperStatsCache;
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 void Scraper(bool bSingleShot = false);
 void ScraperSingleShot();
+bool ScraperHousekeeping();
 bool WhitelistPopulated();
 bool UserpassPopulated();
 bool ScraperDirectorySanity();
@@ -120,7 +121,8 @@ extern BeaconConsensus GetConsensusBeaconList();
 // roll-in of the new NN, because the Quorum functions look for the empty string
 // hash value and that will not be invariant if a hash function switch is done now.
 extern std::string GetQuorumHash(const std::string& data);
-
+extern std::string UnpackBinarySuperblock(std::string sBlock);
+extern std::string PackBinarySuperblock(std::string sBlock);
 
 /**********************
 * Scraper Logger      *
@@ -723,37 +725,11 @@ void Scraper(bool bSingleShot)
             }
         }
 
-        // Periodically generate converged manifests and generate SB core and "contract"
-        // This will probably be reduced to the commented out call as we near final testing,
-        // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
-        // with the boolean false, meaning don't store the stats.
-        // Lock both cs_Scraper and cs_StructScraperFileManifest.
         // Don't do this if called with singleshot, because ScraperGetNeuralContract will be done afterwards by
         // the function that called the singleshot.
         if (!bSingleShot)
         {
-            //ConvergedManifest StructConvergedManifest;
-
-            std::string sSBCoreData;
-
-            {
-                LOCK2(cs_Scraper, cs_StructScraperFileManifest);
-                if (fDebug) _log(logattribute::INFO, "LOCK2", "cs_Scraper, cs_StructScraperFileManifest");
-
-                //ScraperConstructConvergedManifest(StructConvergedManifest)
-                sSBCoreData = ScraperGetNeuralContract(true, false);
-
-                // END LOCK2(cs_Scraper, cs_StructScraperFileManifest);
-                if (fDebug) _log(logattribute::INFO, "ENDLOCK2", "cs_Scraper, cs_StructScraperFileManifest");
-            }
-
-            // Temporarily here for visibility into the Quorum map...
-            if (fDebug)
-            {
-                for(const auto& network_hash : mvNeuralNetworkHash)
-                      _log(logattribute::INFO, "NeuralNetwork", "NN Contract Hash: " + network_hash.first
-                         + ", Popularity: " + std::to_string(network_hash.second));
-            }
+            ScraperHousekeeping();
 
             _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
             MilliSleep(nScraperSleep);
@@ -793,42 +769,9 @@ void NeuralNetwork()
 
         _log(logattribute::INFO, "NeuralNetwork", "Wallet is in sync. Continuing.");
 
-        // These items are only run in this thread if not handled by the Scraper() thread.
+        // ScraperHousekeeping items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
-        {
-            gridcoinrpc data;
-
-            // Refresh the whitelist if its available
-            if (!data.wlimport())
-                _log(logattribute::WARNING, "Scraper", "Refreshing of whitelist failed.. using old data");
-
-            else
-                _log(logattribute::INFO, "Scraper", "Refreshing of whitelist completed");
-
-            // Periodically generate converged manifests and generate SB core and "contract"
-            // This will probably be reduced to the commented out call as we near final testing,
-            // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
-            // with the boolean false, meaning don't store the stats.
-            // Lock both cs_Scraper and cs_StructScraperFileManifest.
-
-            //ConvergedManifest StructConvergedManifest;
-            std::string sSBCoreData;
-
-            {
-                LOCK2(cs_Scraper, cs_StructScraperFileManifest);
-
-                //ScraperConstructConvergedManifest(StructConvergedManifest)
-                sSBCoreData = ScraperGetNeuralContract(true, false);
-            }
-
-            // Temporarily here for visibility into the Quorum map...
-            if (fDebug)
-            {
-                for(const auto& network_hash : mvNeuralNetworkHash)
-                      _log(logattribute::INFO, "NeuralNetwork", "NN Contract Hash: " + network_hash.first
-                         + ", Popularity: " + std::to_string(network_hash.second));
-            }
-       }
+            ScraperHousekeeping();
 
         // Use the same sleep interval as the scraper. This defaults to 60 seconds.
         _log(logattribute::INFO, "NeuralNetwork", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
@@ -837,6 +780,66 @@ void NeuralNetwork()
     }
 }
 
+
+bool ScraperHousekeeping()
+{
+    gridcoinrpc data;
+
+    // Refresh the whitelist if its available
+    if (!data.wlimport())
+        _log(logattribute::WARNING, "ScraperHousekeeping", "Refreshing of whitelist failed.. using old data");
+
+    else
+        _log(logattribute::INFO, "ScraperHousekeeping", "Refreshing of whitelist completed");
+
+    // Periodically generate converged manifests and generate SB core and "contract"
+    // This will probably be reduced to the commented out call as we near final testing,
+    // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
+    // with the boolean false, meaning don't store the stats.
+    // Lock both cs_Scraper and cs_StructScraperFileManifest.
+
+    //ConvergedManifest StructConvergedManifest;
+    std::string sSBCoreData;
+
+    {
+        LOCK2(cs_Scraper, cs_StructScraperFileManifest);
+
+        //ScraperConstructConvergedManifest(StructConvergedManifest)
+        sSBCoreData = ScraperGetNeuralContract(true, false);
+    }
+
+    if (!sSBCoreData.empty())
+    {
+        // Temporarily here for compatibility checking...
+        _log(logattribute::INFO, "ScraperHousekeeping", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
+
+        std::string sSBCoreData_out = UnpackBinarySuperblock(PackBinarySuperblock(sSBCoreData));
+
+        if(sSBCoreData == sSBCoreData_out)
+            _log(logattribute::INFO, "ScraperHousekeeping", "Generated contract passed binary pack/unpack");
+        else
+        {
+            _log(logattribute::ERR, "ScraperHousekeeping", "Generated contract FAILED binary pack/unpack");
+            _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData_out = \n" + sSBCoreData_out);
+        }
+    }
+
+
+    // Temporarily here for visibility into the Quorum map...
+    if (fDebug)
+    {
+        _log(logattribute::INFO, "ScraperHousekeeping", "mvNeuralNetworkHash dump");
+        for(const auto& network_hash : mvNeuralNetworkHash)
+            _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
+                 + ", Popularity: " + std::to_string(network_hash.second));
+        _log(logattribute::INFO, "ScraperHousekeeping", "mvCurrentNeuralNetworkHash dump");
+        for(const auto& network_hash : mvCurrentNeuralNetworkHash)
+            _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
+                 + ", Popularity: " + std::to_string(network_hash.second));
+    }
+
+    return true;
+}
 
 
 /**********************
@@ -2994,7 +2997,7 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
     xmlout.fixeddoubleappend(iter->second.statsvalue.dRAC, 0);
     xmlout.append(";");
 
-    xmlout.append("</AVERAGES");
+    xmlout.append("</AVERAGES>");
 
     xmlout.append("<QUOTES>btc,0;grc,0;</QUOTES>");
 
