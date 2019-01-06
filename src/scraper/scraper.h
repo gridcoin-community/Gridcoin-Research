@@ -123,7 +123,7 @@ struct ConvergedScraperStats
 {
     int64_t nTime;
     ScraperStats mScraperConvergedStats;
-    uint256 nContractHash;
+    std::string sContractHash;
     std::string sContract;
 };
 

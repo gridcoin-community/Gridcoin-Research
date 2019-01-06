@@ -105,6 +105,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
                                                 mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
+// Overloaded. See alternative in scraper.h.
+std::string ScraperGetNeuralHash(std::string sNeuralContract);
 
 bool DownloadProjectRacFilesByCPID();
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
@@ -2136,7 +2138,7 @@ std::string ExplainMagnitude(std::string sCPID)
     // TODO: Why the magic version number of 430 from .NET? Should this be a constant?
     // Should we take a lock on cs_main to read GlobalCPUMiningCPID?
     out.append("NN Host Version: 430, ");
-    out.append("NeuralHash: " + ConvergedScraperStatsCache.nContractHash.GetHex() + ", ");
+    out.append("NeuralHash: " + ConvergedScraperStatsCache.sContractHash + ", ");
     out.append("SignatureCPID: " + GlobalCPUMiningCPID.cpid + ", ");
     out.append("Time: " + DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()) + "<ROW>");
 
@@ -3070,7 +3072,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
 
                     ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
-                    ConvergedScraperStatsCache.nContractHash = Hash(sSBCoreData.begin(), sSBCoreData.end());
+                    ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
                     ConvergedScraperStatsCache.sContract = sSBCoreData;
 
                     // End LOCK(cs_ConvergedScraperStatsCache)
@@ -3138,6 +3140,23 @@ std::string ScraperGetNeuralHash()
 {
     std::string sNeuralContract = ScraperGetNeuralContract(false, false);
 
+    std::string sHash;
+
+    //sHash = Hash(sNeuralContract.begin(), sNeuralContract.end()).GetHex();
+
+    // This is the hash currently used by the old NN. Continue to use it for compatibility purpose until the next mandatory
+    // after the new NN rollout, when the old NN hash function can be retired in favor of the commented out code above.
+    // The intent will be to uncomment out the above line, and then reverse the roles of ScraperGetNeuralHash() and
+    // GetQuorumHash().
+    sHash = GetQuorumHash(sNeuralContract);
+
+    return sHash;
+}
+
+
+// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes. See the comments below.
+std::string ScraperGetNeuralHash(std::string sNeuralContract)
+{
     std::string sHash;
 
     //sHash = Hash(sNeuralContract.begin(), sNeuralContract.end()).GetHex();
