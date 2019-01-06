@@ -6,6 +6,19 @@
 #include <string.h>
 #include <memory>
 
+// Only for troubleshooting. This should be removed before production.
+#include "util.h"
+
+enum class logattribute {
+    // Can't use ERROR here because it is defined already in windows.h.
+    ERR,
+    INFO,
+    WARNING,
+    CRITICAL
+};
+
+extern void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
+
 namespace
 {
     size_t curl_write_file(void* ptr, size_t size, size_t nmemb, FILE* fp)
@@ -33,6 +46,9 @@ namespace
         curl_easy_setopt(curl.get(), CURLOPT_UNRESTRICTED_AUTH, 1L);
         curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 0);
         curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_LIMIT, 10000L);
+        curl_easy_setopt(curl.get(), CURLOPT_LOW_SPEED_TIME, 60L);
+
         return curl;
     }
 }
@@ -113,6 +129,9 @@ std::string Http::GetEtag(
 
     // Find ETag header.
     std::string etag;
+    
+    if(fDebug) _log(logattribute::INFO, "Http::ETag", "Header: \n" + header);
+    
     std::istringstream iss(header);
     for (std::string line; std::getline(iss, line);)
     {
@@ -128,8 +147,10 @@ std::string Http::GetEtag(
         throw std::runtime_error("No ETag response from project url <urlfile=" + url + ">");
 
     return std::string();
-    /*if (fDebug)
-        _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");*/
+    
+    // This needs to go away for production along with the above external function declaration and the fixup enum to support _log here.
+    if (fDebug)
+        _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 }
 
 void Http::EvaluateResponse(int code, const std::string& url)

@@ -1047,6 +1047,7 @@ bool DownloadProjectRacFilesByCPID()
         if (fs::exists(chkfile))
         {
             _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
+            //_log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file size " + std::to_string(fs::file_size(chkfile)));
             continue;
         }
         else
