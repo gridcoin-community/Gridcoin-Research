@@ -433,6 +433,10 @@ HelpMessageBox::HelpMessageBox(QWidget *parent) :
     // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
     setText(header + QString(QChar(0x2003)).repeated(50));
     setDetailedText(coreOptions + "\n" + uiOptions);
+
+    setStandardButtons(QMessageBox::Ok);
+    setDefaultButton(QMessageBox::Ok);
+    setEscapeButton(QMessageBox::Ok);
 }
 
 void HelpMessageBox::printToConsole()
