@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Camilla]
+### Added
+ - Add `rainbymagnitude` RPC command #1235 (@Foggyx420).
+ - Add stake splitting and side staking #1265 (@jamescowens).
+ - Detect and block Windows shutdown so wallet can exit cleanly #1309
+   (@jamescowens).
+
+### Changed
+ - Configuration options are now case insensitive #294 (@Foggyx420).
+ - Update command in beaconstatus help message #1312 (@chrstphrchvz).
+ - Improve synchronization speeds:
+   - Refactor superblock pack/unpack #1194 (@denravonska).
+   - Optimize neuralsecurity calculations #1255 (@denravonska).
+   - Reduce hash calculations when checking blocks #1206 (@denravonska).
+ - Make display of private key in beaconstatus OPT-IN only #1275 (@Foggyx420).
+ - Store Beacon keys in Wallet #1088 (@tomasbrod).
+ - Use default colors for pie chart #1333 (@chrstphrchvz).
+ - Show hand cursor when hovering clickable labels #1332 (@chrstphrchvz).
+ - Update README.md #1337 (@Peppernrino).
+ - Fix integer overflow with displayed nonce #1297 (@personthingman2).
+ - Improve application cache performance #1317 (@denravonska).
+ - Improve reorg speeds #1263 (@denravonska).
+
+## Fixed
+ - Remove expired polls from overview page #1250 (@personthingman2).
+ - Fix plural text on block age #1304 (@scribblemaniac).
+ - Fix researcher staking issue if your chain head was staked by you,
+   #1299 (@denravonska).
+ - Fix incorrect address to grcpool node #1314 (@wilkart).
+ - Do not replace underscores by spaces in Qt Poll URLs #1327 (@tomasbrod).
+ - Fix scraper SSL issues #1330 (@Foggyx420).
+
+### Removed
+ - Remove or merged several RPC commands #1228 (@Foggyx420):
+    - `newburnaddress`, removed.
+    - `burn2`: Removed.
+    - `cpid`: Merged into `projects`.
+    - `mymagnitude`: Merged into `magnitude`.
+    - `rsa`: Removed, use `magnitude`.
+    - `rsaweight`: Removed, use `magnitude`.
+    - `proveownership`: Removed.
+    - `encrypt`: Removed.
+ - Remove obsolete POW fields from RPC responses #1358 (@jamescowens).
+ - Remove obsolete netsoft fields for slight RAM requirement reduction
+   #1336 (@denravonska).
+ - Remove unused attachment functionality #1345 (@denravonska).
+
 
 ## [4.0.1.0] 2018-11-30, leisure
 ### Fixed

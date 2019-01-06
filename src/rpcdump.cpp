@@ -125,16 +125,26 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
         fRescan = params[2].get_bool();
 
     CBitcoinSecret vchSecret;
+    CKey key;
     bool fGood = vchSecret.SetString(strSecret);
 
-    if (!fGood) throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-    if (fWalletUnlockStakingOnly)
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
-
-    CKey key;
+    // If CBitcoinSecret key decode failed, try to decode the key as hex
+    if(!fGood)
+    {
+        auto vecsecret = ParseHex(strSecret);
+        if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+    }
+    else
+    {
     bool fCompressed;
     CSecret secret = vchSecret.GetSecret(fCompressed);
     key.SetSecret(secret, fCompressed);
+    }
+
+    if (fWalletUnlockStakingOnly)
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
+
     CKeyID vchAddress = key.GetPubKey().GetID();
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);

@@ -1,6 +1,7 @@
 #ifndef GLOBAL_OBJECTS_NOUI_HPP
 #define GLOBAL_OBJECTS_NOUI_HPP
 
+#include "fwd.h"
 #include <string>
 #include <map>
 #include <set>
@@ -55,16 +56,11 @@ struct StructCPID
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
     std::string cpid;
-    std::string emailhash;
     std::string cpidhash;
     std::string projectname;
     std::string team;
-    std::string verifiedteam;
     std::string boincpublickey;
-    std::string link;
     std::string errors;
-    std::string email;
-    std::string boincruntimepublickey;
     std::string cpidv2;
     std::string BlockHash;
     std::set<const CBlockIndex*> rewardBlocks;

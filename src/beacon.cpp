@@ -3,96 +3,81 @@
 #include "uint256.h"
 #include "key.h"
 #include "main.h"
+#include "init.h"
 #include "appcache.h"
 #include "contract/contract.h"
+#include "key.h"
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 
-namespace
+bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 {
-    std::string GetNetSuffix()
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
+    // Try to reuse 5-month-old beacon
+    const std::string sBeaconPublicKey = GetBeaconPublicKey(cpid,false);
+
+    if(!sBeaconPublicKey.empty())
     {
-        return fTestNet ? "testnet" : "";
-    }
-}
-
-bool GenerateBeaconKeys(const std::string &cpid, std::string &sOutPubKey, std::string &sOutPrivKey)
-{
-    // First Check the Index - if it already exists, use it
-    sOutPrivKey = GetArgument("privatekey" + cpid + GetNetSuffix(), "");
-    sOutPubKey  = GetArgument("publickey" + cpid + GetNetSuffix(), "");
-
-    // If current keypair is not empty, but is invalid, allow the new keys to be stored, otherwise return 1: (10-25-2016)
-    if (!sOutPrivKey.empty() && !sOutPubKey.empty())
-    {
-        uint256 hashBlock = GetRandHash();
-        std::string sSignature;
-        std::string sError;
-        bool fResult;
-        fResult = SignBlockWithCPID(cpid, hashBlock.GetHex(), sSignature, sError, true);
-
-        if (!fResult)
-            LogPrintf("GenerateBeaconKeys::Failed to sign block with cpid with existing keys; generating new key pair -> %s", sError);
-
-        else
+        CPubKey oldKey(ParseHex(sBeaconPublicKey));
+        if(oldKey.IsValid())
         {
-            fResult = VerifyCPIDSignature(cpid, hashBlock.GetHex(), sSignature);
-
-            if (fResult)
+            if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
             {
-                LogPrintf("GenerateBeaconKeys::Current keypair is valid.");
+                assert(outPrivPubKey.IsValid());//GetKey gives valid key or false
+                assert(outPrivPubKey.GetPubKey()==oldKey);//GetKey should return the key we ask for
+                LogPrintf("GenerateBeaconKeys: Reusing >5 <6 m old Key");
                 return true;
             }
-
-            else
-                LogPrintf("GenerateBeaconKeys::Signing block with CPID was successful; However Verifying CPID Sign was not; Key pair is not valid, generating new key pair");
         }
     }
 
-    // Generate the Keypair
-    CKey key;
-    key.MakeNewKey(false);
-    CPrivKey vchPrivKey = key.GetPrivKey();
-    sOutPrivKey = HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end());
-    sOutPubKey = HexStr(key.GetPubKey().Raw());
+    // Generate a new key that is added to wallet
+    CPubKey newKey;
+    if (!pwalletMain->GetKeyFromPool(newKey, false))
+        return error("GenerateBeaconKeys: Failed to get Key from Wallet");
+
+    CKeyID keyID = newKey.GetID();
+
+    // Assign a description for this address
+    std::string strLabel= "DPoR Beacon CPID "+cpid+" "+ToString(nBestHeight);
+    pwalletMain->SetAddressBookName(keyID, strLabel);
+
+    // Get the private part of the key from wallet
+    if (!pwalletMain->GetKey(keyID, outPrivPubKey))
+        return error("GenerateBeaconKeys: Failed to get Private Key from Wallet");
 
     return true;
 }
 
-bool StoreBeaconKeys(
-        const std::string &cpid,
-        const std::string &pubKey,
-        const std::string &privKey)
+bool GetStoredBeaconPrivateKey(const std::string& cpid, CKey& outPrivPubKey)
 {
-    if (   !WriteKey("publickey" + cpid + GetNetSuffix(), pubKey)
-        || !WriteKey("privatekey" + cpid + GetNetSuffix(), privKey)
-       )
-        return false;
-
-    else
-        return true;
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
+    CPubKey oldKey(ParseHex(GetBeaconPublicKey(cpid, false)));
+    if(oldKey.IsValid())
+    {
+        if (pwalletMain->GetKey(oldKey.GetID(), outPrivPubKey))
+        {
+            return outPrivPubKey.IsValid();
+        }
+    }
+    return false;
 }
 
-std::string GetStoredBeaconPrivateKey(const std::string& cpid)
+int64_t MaxBeaconAge()
 {
-    return GetArgument("privatekey" + cpid + GetNetSuffix(), "");
+    // 6 months in seconds.
+    return 3600 * 24 * 30 * 6;
 }
 
-std::string GetStoredBeaconPublicKey(const std::string& cpid)
+int64_t BeaconAgeAdvertiseThreshold()
 {
-    return GetArgument("publickey" + cpid + GetNetSuffix(), "");
-}
-
-void ActivateBeaconKeys(
-        const std::string &cpid,
-        const std::string &pubKey,
-        const std::string &privKey)
-{
-    SetArgument("publickey" + cpid + GetNetSuffix(), pubKey);
-    SetArgument("privatekey" + cpid + GetNetSuffix(), privKey);
+    // 5 months in seconds.
+    return 3600 * 24 * 30 * 5;    
 }
 
 void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::string& out_address, std::string& out_publickey)
@@ -108,11 +93,14 @@ void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::s
 
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 {
-    //3-26-2017 - Ensure beacon public key is within 6 months of network age (If advertising, let it be returned as missing after 5 months, to ensure the public key is renewed seamlessly).
-    int iMonths = bAdvertisingBeacon ? 5 : 6;
-    int64_t iMaxSeconds = 60 * 24 * 30 * iMonths * 60;
+    // 3-26-2017 - Ensure beacon public key is within 6 months of network age
+    // (If advertising, let it be returned as missing after 5 months, to
+    // ensure the public key is renewed seamlessly).
+    int64_t iMaxSeconds = bAdvertisingBeacon ? BeaconAgeAdvertiseThreshold() : MaxBeaconAge();
     std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
-    if (sBeacon.empty()) return "";
+    if (sBeacon.empty())
+        return "";
+    
     // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
     std::string sContract = DecodeBase64(sBeacon);
     std::vector<std::string> vContract = split(sContract.c_str(),";");
@@ -123,7 +111,8 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
-    const AppCacheEntry& entry =  ReadCache("beacon", cpid);
+    AssertLockHeld(cs_main);
+    const AppCacheEntry& entry =  ReadCache(Section::BEACON, cpid);
     std::string sBeacon = entry.value;
     int64_t iLocktime = entry.timestamp;
     int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
@@ -142,21 +131,23 @@ bool HasActiveBeacon(const std::string& cpid)
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds)
 {
-    const AppCacheEntry& entry = ReadCache("beacon", cpid);
+    AssertLockHeld(cs_main);
+    const AppCacheEntry& entry = ReadCache(Section::BEACON, cpid);
 
     // Compare the age of the beacon to the age of the current block. If we have
     // no current block we assume that the beacon is valid.
     int64_t iAge = pindexBest != NULL
-          ? pindexBest->nTime - entry.timestamp
-          : 0;
+                                 ? pindexBest->nTime - entry.timestamp
+                                 : 0;
 
     return (iAge > iMaxSeconds)
-          ? ""
-          : entry.value;
+            ? ""
+            : entry.value;
 }
 
 bool VerifyBeaconContractTx(const CTransaction& tx)
 {
+    AssertLockHeld(cs_main);
     // Check if tx contains beacon advertisement and evaluate for certain conditions
     std::string chkMessageType = ExtractXML(tx.hashBoinc, "<MT>", "</MT>");
     std::string chkMessageAction = ExtractXML(tx.hashBoinc, "<MA>", "</MA>");
@@ -179,7 +170,7 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     if (tx_out_cpid.empty() || tx_out_address.empty() || tx_out_publickey.empty() || chkMessageContractCPID.empty())
         return false; // Incomplete contract
 
-    const AppCacheEntry& beaconEntry = ReadCache("beacon", chkMessageContractCPID);
+    const AppCacheEntry& beaconEntry = ReadCache(Section::BEACON, chkMessageContractCPID);
     if (beaconEntry.value.empty())
     {
         if (fDebug10)
@@ -189,8 +180,8 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     }
 
     int64_t chkiAge = pindexBest != NULL
-        ? tx.nLockTime - beaconEntry.timestamp
-        : 0;
+                                    ? tx.nLockTime - beaconEntry.timestamp
+                                    : 0;
     int64_t chkSecondsBase = 60 * 24 * 30 * 60;
 
     // Conditions
@@ -223,5 +214,41 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
     }
 
     // Passed checks
+    return true;
+}
+
+bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
+{    
+    if(cpid.empty())
+        return error("Empty CPID");
+
+    std::string strSecret = GetArgument("privatekey" + cpid + (fTestNet ? "testnet" : ""), "");
+    if(strSecret.empty())
+        return false;
+    
+    auto vecsecret = ParseHex(strSecret);
+
+    CKey key;
+    if(!key.SetPrivKey(CPrivKey(vecsecret.begin(),vecsecret.end())))
+        return error("ImportBeaconKeysFromConfig: Invalid private key");
+    CKeyID vchAddress = key.GetPubKey().GetID();
+
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    // Don't throw error in case a key is already there
+    if (!wallet->HaveKey(vchAddress))
+    {
+        if (wallet->IsLocked())
+            return error("ImportBeaconKeysFromConfig: Wallet locked!");
+
+        wallet->MarkDirty();
+
+        wallet->mapKeyMetadata[vchAddress].nCreateTime = 0;
+
+        if (!wallet->AddKey(key))
+            return error("ImportBeaconKeysFromConfig: failed to add key to wallet");
+
+        wallet->SetAddressBookName(vchAddress, "DPoR Beacon CPID " + cpid + " imported");
+    }
     return true;
 }

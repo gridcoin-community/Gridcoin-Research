@@ -273,7 +273,7 @@ void VotingTableModel::resetData(bool history)
             item->vectorOfAnswers_ = iterPoll.answers;
             item->totalParticipants_ = iterPoll.total_participants;
             item->totalShares_ = iterPoll.total_shares;
-            item->url_ = QString::fromStdString(iterPoll.url).replace("_"," ");
+            item->url_ = QString::fromStdString(iterPoll.url);
             item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer).replace("_"," ");
             items.push_back(item);
         }
@@ -721,11 +721,6 @@ void VotingChartDialog::resetData(const VotingItem *item)
 
 #ifdef QT_CHARTS_LIB
         QtCharts::QPieSlice *slice = new QtCharts::QPieSlice(sAnswerNames[y], iShares[y]);
-        unsigned int num = rand();
-        int r = (num >>  0) % 0xFF;
-        int g = (num >>  8) % 0xFF;
-        int b = (num >> 16) % 0xFF;
-        slice->setColor(QColor(r, g, b));
         series->append(slice);
         chart_->addSeries(series);
 #endif
