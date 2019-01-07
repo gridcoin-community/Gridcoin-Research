@@ -825,6 +825,8 @@ bool ScraperHousekeeping()
         }
     }
 
+    // Temporarily here to show this node's contract hash.
+    _log(logattribute::INFO, "ScraperHousekeeping", "neural contract (sSBCoreData) hash = " + ScraperGetNeuralHash(sSBCoreData));
 
     // Temporarily here for visibility into the Quorum map...
     if (fDebug)
