@@ -142,6 +142,7 @@ static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
 static bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
 static const double MAG_ROUND = 0.01;
 static const double NEURALNETWORKMULTIPLIER = 115000;
+static const double CPID_MAG_LIMIT = 32767;
 // This settings below are important. This sets the minimum number of scrapers
 // that must be available to form a convergence. Above this minimum, the ratio
 // is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require

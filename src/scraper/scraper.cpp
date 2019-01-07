@@ -1887,6 +1887,10 @@ bool ProcessNetworkWideFromProjectStats(BeaconMap& mBeaconMap, ScraperStats& mSc
                 CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
                 CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
                 CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
+                // Note the following is VERY inelegant. It CAPS the CPID magnitude to CPID_MAG_LIMIT.
+                // No attempt to renormalize the magnitudes due to this cap is done at this time. This means
+                // The total magnitude across projects will NOT match the total across all CPIDs and the network.
+                CPIDStatsEntry.statsvalue.dMag = std::min(CPID_MAG_LIMIT, CPIDStatsEntry.statsvalue.dMag);
 
                 nProjectCount++;
                 nCPIDProjectCount++;
