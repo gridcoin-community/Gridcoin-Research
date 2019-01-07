@@ -2430,8 +2430,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             {
                 // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
                 mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
-                     + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
+                if (fDebug) _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
+                                 + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
             }
         }
     }
@@ -2568,6 +2568,8 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
     unsigned int iCountSuccesfulConvergedProjects = 0;
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
+    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+
     for (const auto& iWhitelistProject : vwhitelist_local)
     {
         // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project Objects (Parts),
@@ -2579,8 +2581,6 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
         // and also by project object (content) hash, then scraperID and project.
         std::multimap<uint256, std::pair<ScraperID, std::string>> mProjectObjectsBinnedbyContent;
         std::multimap<uint256, std::pair<ScraperID, std::string>>::iterator ProjectConvergence;
-
-        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
 
         // For the selected project in the whitelist, walk each scraper.
         for (const auto& iter : mMapCSManifestsBinnedByScraper)
@@ -2638,8 +2638,8 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                     {
                         // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
                         mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.first)));
-                        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
-                             + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
+                        if (fDebug) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
+                                         + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
                     }
                 }
             }
