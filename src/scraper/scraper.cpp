@@ -96,6 +96,7 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
                                          const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
+bool ProcessNetworkWideFromProjectStats(BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool ScraperSendFileManifestContents(std::string CManifestName);
@@ -1850,6 +1851,70 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
 
 
+// ------------------------------------------------ In ------------------- both In/Out
+bool ProcessNetworkWideFromProjectStats(BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
+{
+    // We are going to cut across projects and group by CPID.
+
+    //Also track the network wide rollup.
+    ScraperObjectStats NetworkWideStatsEntry = {};
+
+    NetworkWideStatsEntry.statskey.objecttype = statsobjecttype::NetworkWide;
+    // ObjectID is blank string for network-wide.
+    NetworkWideStatsEntry.statskey.objectID = "";
+
+    unsigned int nCPIDProjectCount = 0;
+    for (auto const& beaconentry : mBeaconMap)
+    {
+        ScraperObjectStats CPIDStatsEntry = {};
+
+        CPIDStatsEntry.statskey.objecttype = statsobjecttype::byCPID;
+        CPIDStatsEntry.statskey.objectID = beaconentry.first;
+
+        unsigned int nProjectCount = 0;
+        for (auto const& innerentry : mScraperStats)
+        {
+            // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
+            // otherwise dimension mixing will result.
+
+            std::string objectID = innerentry.first.objectID;
+
+            std::size_t found = objectID.find(CPIDStatsEntry.statskey.objectID);
+
+            if (innerentry.first.objecttype == statsobjecttype::byCPIDbyProject && found!=std::string::npos)
+            {
+                CPIDStatsEntry.statsvalue.dTC += innerentry.second.statsvalue.dTC;
+                CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
+                CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
+                CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
+
+                nProjectCount++;
+                nCPIDProjectCount++;
+            }
+        }
+
+        // Compute CPID AvgRAC across the projects for that CPID and set.
+        (nProjectCount > 0) ? CPIDStatsEntry.statsvalue.dAvgRAC = CPIDStatsEntry.statsvalue.dRAC / nProjectCount : CPIDStatsEntry.statsvalue.dAvgRAC = 0.0;
+
+        // Insert the byCPID entry into the overall map.
+        mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
+
+        // Increement the network wide stats.
+        NetworkWideStatsEntry.statsvalue.dTC += CPIDStatsEntry.statsvalue.dTC;
+        NetworkWideStatsEntry.statsvalue.dRAT += CPIDStatsEntry.statsvalue.dRAT;
+        NetworkWideStatsEntry.statsvalue.dRAC += CPIDStatsEntry.statsvalue.dRAC;
+        NetworkWideStatsEntry.statsvalue.dMag += CPIDStatsEntry.statsvalue.dMag;
+    }
+
+    // Compute Network AvgRAC across all ByCPIDByProject elements and set.
+    (nCPIDProjectCount > 0) ? NetworkWideStatsEntry.statsvalue.dAvgRAC = NetworkWideStatsEntry.statsvalue.dRAC / nCPIDProjectCount : NetworkWideStatsEntry.statsvalue.dAvgRAC = 0.0;
+
+    // Insert the (single) network-wide entry into the overall map.
+    mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
+
+    return true;
+}
+
 
 ScraperStats GetScraperStatsByConsensusBeaconList()
 {
@@ -1908,63 +1973,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
     }
 
-    // Now are are going to cut across projects and group by CPID.
-
-    //Also track the network wide rollup.
-    ScraperObjectStats NetworkWideStatsEntry = {};
-
-    NetworkWideStatsEntry.statskey.objecttype = statsobjecttype::NetworkWide;
-    // ObjectID is blank string for network-wide.
-    NetworkWideStatsEntry.statskey.objectID = "";
-
-    unsigned int nCPIDProjectCount = 0;
-    for (auto const& beaconentry : Consensus.mBeaconMap)
-    {
-        ScraperObjectStats CPIDStatsEntry = {};
-
-        CPIDStatsEntry.statskey.objecttype = statsobjecttype::byCPID;
-        CPIDStatsEntry.statskey.objectID = beaconentry.first;
-
-        unsigned int nProjectCount = 0;
-        for (auto const& innerentry : mScraperStats)
-        {
-            // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
-            // otherwise dimension mixing will result.
-
-            std::string objectID = innerentry.first.objectID;
-
-            std::size_t found = objectID.find(CPIDStatsEntry.statskey.objectID);
-
-            if (innerentry.first.objecttype == statsobjecttype::byCPIDbyProject && found!=std::string::npos)
-            {
-                CPIDStatsEntry.statsvalue.dTC += innerentry.second.statsvalue.dTC;
-                CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
-                CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
-                CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
-
-                nProjectCount++;
-                nCPIDProjectCount++;
-            }
-        }
-
-        // Compute CPID AvgRAC across the projects for that CPID and set.
-        (nProjectCount > 0) ? CPIDStatsEntry.statsvalue.dAvgRAC = CPIDStatsEntry.statsvalue.dRAC / nProjectCount : CPIDStatsEntry.statsvalue.dAvgRAC = 0.0;
-
-        // Insert the byCPID entry into the overall map.
-        mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
-
-        // Increement the network wide stats.
-        NetworkWideStatsEntry.statsvalue.dTC += CPIDStatsEntry.statsvalue.dTC;
-        NetworkWideStatsEntry.statsvalue.dRAT += CPIDStatsEntry.statsvalue.dRAT;
-        NetworkWideStatsEntry.statsvalue.dRAC += CPIDStatsEntry.statsvalue.dRAC;
-        NetworkWideStatsEntry.statsvalue.dMag += CPIDStatsEntry.statsvalue.dMag;
-    }
-
-    // Compute Network AvgRAC across all ByCPIDByProject elements and set.
-    (nCPIDProjectCount > 0) ? NetworkWideStatsEntry.statsvalue.dAvgRAC = NetworkWideStatsEntry.statsvalue.dRAC / nCPIDProjectCount : NetworkWideStatsEntry.statsvalue.dAvgRAC = 0.0;
-
-    // Insert the (single) network-wide entry into the overall map.
-    mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
+    ProcessNetworkWideFromProjectStats(Consensus.mBeaconMap, mScraperStats);
 
     _log(logattribute::INFO, "GetScraperStatsByConsensusBeaconList", "Completed stats processing");
 
@@ -2009,63 +2018,7 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
         }
     }
 
-    // Now are are going to cut across projects and group by CPID.
-
-    //Also track the network wide rollup.
-    ScraperObjectStats NetworkWideStatsEntry = {};
-
-    NetworkWideStatsEntry.statskey.objecttype = statsobjecttype::NetworkWide;
-    // ObjectID is blank string for network-wide.
-    NetworkWideStatsEntry.statskey.objectID = "";
-
-    unsigned int nCPIDProjectCount = 0;
-    for (auto const& beaconentry : mBeaconMap)
-    {
-        ScraperObjectStats CPIDStatsEntry = {};
-
-        CPIDStatsEntry.statskey.objecttype = statsobjecttype::byCPID;
-        CPIDStatsEntry.statskey.objectID = beaconentry.first;
-
-        unsigned int nProjectCount = 0;
-        for (auto const& innerentry : mScraperStats)
-        {
-            // Only select the individual byCPIDbyProject stats for the selected CPID. Leave out the project rollup (byProj) ones,
-            // otherwise dimension mixing will result.
-
-            std::string objectID = innerentry.first.objectID;
-
-            std::size_t found = objectID.find(CPIDStatsEntry.statskey.objectID);
-
-            if (innerentry.first.objecttype == statsobjecttype::byCPIDbyProject && found!=std::string::npos)
-            {
-                CPIDStatsEntry.statsvalue.dTC += innerentry.second.statsvalue.dTC;
-                CPIDStatsEntry.statsvalue.dRAT += innerentry.second.statsvalue.dRAT;
-                CPIDStatsEntry.statsvalue.dRAC += innerentry.second.statsvalue.dRAC;
-                CPIDStatsEntry.statsvalue.dMag += innerentry.second.statsvalue.dMag;
-
-                nProjectCount++;
-                nCPIDProjectCount++;
-            }
-        }
-
-        // Compute CPID AvgRAC across the projects for that CPID and set.
-        (nProjectCount > 0) ? CPIDStatsEntry.statsvalue.dAvgRAC = CPIDStatsEntry.statsvalue.dRAC / nProjectCount : CPIDStatsEntry.statsvalue.dAvgRAC = 0.0;
-
-        // Insert the byCPID entry into the overall map.
-        mScraperStats[CPIDStatsEntry.statskey] = CPIDStatsEntry;
-
-        // Increement the network wide stats.
-        NetworkWideStatsEntry.statsvalue.dTC += CPIDStatsEntry.statsvalue.dTC;
-        NetworkWideStatsEntry.statsvalue.dRAT += CPIDStatsEntry.statsvalue.dRAT;
-        NetworkWideStatsEntry.statsvalue.dRAC += CPIDStatsEntry.statsvalue.dRAC;
-        NetworkWideStatsEntry.statsvalue.dMag += CPIDStatsEntry.statsvalue.dMag;
-    }
-
-    // Compute Network AvgRAC across all ByCPIDByProject elements and set.
-    (nCPIDProjectCount > 0) ? NetworkWideStatsEntry.statsvalue.dAvgRAC = NetworkWideStatsEntry.statsvalue.dRAC / nCPIDProjectCount : NetworkWideStatsEntry.statsvalue.dAvgRAC = 0.0;
-
-    // Insert the (single) network-wide entry into the overall map.
-    mScraperStats[NetworkWideStatsEntry.statskey] = NetworkWideStatsEntry;
+    ProcessNetworkWideFromProjectStats(mBeaconMap, mScraperStats);
 
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Completed stats processing");
 
