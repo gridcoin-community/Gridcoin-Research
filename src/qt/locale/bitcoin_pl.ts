@@ -6,7 +6,7 @@
     <message>
         <location filename="../forms/aboutdialog.ui" line="+14"/>
         <source>About Gridcoin</source>
-        <translation>O oprogramowaniu GridCoin</translation>
+        <translation>O oprogramowaniu Gridcoin</translation>
     </message>
     <message>
         <location line="+39"/>
@@ -21,7 +21,12 @@ This is experimental software.
 Distributed under the MIT/X11 software license, see the accompanying file COPYING or https://opensource.org/licenses/mit-license.php.
 
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation type="unfinished"></translation>
+        <translation>
+Oprogramowanie eksperymentalne.
+
+Rozprowadzane na licencji MIT/X11, zobacz plik &apos;COPYING&apos; lub http://www.opensource.org/licenses/mit-license.php.
+
+Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku przez OpenSSL Toolkit (http://www.openssl.org/). Oprogramowanie kryptograficzne napisane przez Eric&apos;a Young (eay@cryptsoft.com) i oprogramowanie UPnP napisane przez Thomas&apos;a Bernard.</translation>
     </message>
     <message>
         <source>
@@ -639,7 +644,6 @@ Adres: %4
     </message>
     <message>
         <location line="+1"/>
-        <location line="+586"/>
         <source>New User Wizard</source>
         <translation>Nowy kreator użytkownika</translation>
     </message>
@@ -687,6 +691,7 @@ Adres: %4
         <location line="+4"/>
         <source>Modify configuration options for Gridcoin</source>
         <translation>Zmień konfigurację dla Gridcoin</translation>
+    </message>
     <message>
         <location line="+2"/>
         <source>&amp;Show / Hide</source>
@@ -703,14 +708,12 @@ Adres: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+215"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+65"/>
         <source>Gridcoin client</source>
         <translation>Klient Gridcoin</translation>
     </message>
@@ -1053,7 +1056,7 @@ Adres: %4
     <message>
         <location line="+16"/>
         <source>&amp;List mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Wi&amp;dok listy</translation>
     </message>
     <message>
         <location line="+50"/>
@@ -1301,6 +1304,8 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <location line="+17"/>
         <source>The address associated with this address book entry. This can only be modified for sending addresses.</source>
         <translation>Adres jest związany z tym wpisem książki adresowej. Można edytować tylko dla adresów wyjściowych.</translation>
+    </message>
+    <message>
         <location line="+51"/>
         <source>Verify BOINC path</source>
         <translation type="unfinished"></translation>
@@ -1857,6 +1862,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <location line="+17"/>
         <source>DPOR Weight:</source>
         <translation>Waga DPOR:</translation>
+    </message>
     <message>
         <location line="+275"/>
         <source>Error Messages:</source>
@@ -3447,7 +3453,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     <message>
         <location line="+26"/>
         <source>No polls !</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Brak ankiet !</translation>
     </message>
 </context>
 <context>
@@ -3756,6 +3762,8 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <location line="+1"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation>Przy tworzeniu transakcji, ignoruj wpisy większe niż to (domyślnie: 0.01)</translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>None</source>
         <translation type="unfinished"></translation>
@@ -3859,6 +3867,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <location line="+3"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Zaktualizuj portfel do najnowszego formatu</translation>
+    </message>
     <message>
         <location line="+1"/>
         <source>Address</source>
@@ -4000,17 +4009,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Maximum per-connection receive buffer, &lt;n&gt;*1000 bytes (default: 5000)</source>
-        <translation>Maksymalny bufor odbioru na po??czenie, &lt;n&gt;*1000 bajtów (domy?lnie: 5000)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Maximum per-connection send buffer, &lt;n&gt;*1000 bytes (default: 1000)</source>
-        <translation>Maksymalny bufor wysy?u na po??czenie, &lt;n&gt;*1000 bajtów (domy?lnie: 1000)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Message Data</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4160,92 +4159,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Use UPnP to map the listening port (default: 1 when listening)</source>
-        <translation>U?ywaj UPnP do mapowania portu nas?uchu (domy?lnie: 1 gdy nas?uchuje)</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <source>Use UPnP to map the listening port (default: 0)</source>
-        <translation>U?ywaj UPnP do mapowania portu nas?uchu (domy?lnie: 0)</translation>
-    </message>
-    <message>
-        <location line="-108"/>
-        <source>Fee per KB to add to transactions you send</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-68"/>
-        <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
+        <location line="-164"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Akceptuj linię poleceń oraz polecenia JSON-RPC</translation>
     </message>
     <message>
-        <location line="+171"/>
-        <source>Use the test network</source>
-        <translation>U?yj sieci testowej</translation>
-    </message>
-    <message>
-        <location line="-56"/>
-        <source>Output extra debugging information. Implies all other -debug* options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Output extra network debugging information</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Prepend debug output with timestamp</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Send trace/debug info to debugger</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-169"/>
-        <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+48"/>
-        <source>Allow JSON-RPC connections from specified IP address</source>
-        <translation>Przyjmuj po??czenia JSON-RPC ze wskazanego adresu IP</translation>
-    </message>
-    <message>
-        <location line="+119"/>
-        <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
-        <translation>Wysy?aj polecenia do w?z?a dzia?aj?cego na &lt;ip&gt; (domy?lnie: 127.0.0.1)</translation>
-    </message>
-    <message>
-        <location line="-8"/>
-        <source>Require a confirmations for change (default: 0)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-180"/>
-        <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+211"/>
-        <source>Upgrade wallet to latest format</source>
-        <translation>Zaktualizuj portfel do najnowszego formatu.</translation>
-    </message>
-    <message>
-        <location line="-27"/>
+        <location line="+138"/>
         <source>Set key pool size to &lt;n&gt; (default: 100)</source>
         <translation>Ustaw rozmiar puli kluczy na &lt;n&gt; (domyślnie: 100)</translation>
     </message>
