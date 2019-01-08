@@ -2963,16 +2963,29 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
     xmlout.append("<MAGNITUDES>");
 
     // The <MAGNITUDES> in the SB core data are actually at the CPID level.
+    unsigned int nZeros = 0;
     for (auto const& entry : mScraperStats)
     {
         if (entry.first.objecttype == statsobjecttype::byCPID)
         {
-        xmlout.append(entry.first.objectID);
-        xmlout.append(",");
-        xmlout.fixeddoubleappend(entry.second.statsvalue.dMag, 0);
-        xmlout.append(";");
+            // If the magnitude entry is zero suppress the CPID and increment the zero counter.
+            if (std::round(entry.second.statsvalue.dMag) > 0)
+            {
+                xmlout.append(entry.first.objectID);
+                xmlout.append(",");
+                xmlout.fixeddoubleappend(entry.second.statsvalue.dMag, 0);
+                xmlout.append(";");
+            }
+            else
+                nZeros++;
         }
     }
+
+    // Put all of the zero CPID mags at the end with 15,0; entries.
+    // TODO: This should be replaced with a <ZERO>X</ZERO> block as in the packed version
+    // at the next mandatory after the new NN rollout. This will require a change to the packer conditioned on the bv.
+    for (unsigned int i = 1; i <= nZeros; i++)
+        xmlout.append("15,0;");
 
     xmlout.append("</MAGNITUDES>");
 
