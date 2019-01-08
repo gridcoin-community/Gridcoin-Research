@@ -2986,7 +2986,7 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
     // TODO: This should be replaced with a <ZERO>X</ZERO> block as in the packed version
     // at the next mandatory after the new NN rollout. This will require a change to the packer conditioned on the bv.
     for (unsigned int i = 1; i <= nZeros; i++)
-        xmlout.append("15,0;");
+        xmlout.append("0,15;");
 
     xmlout.append("</MAGNITUDES>");
 
