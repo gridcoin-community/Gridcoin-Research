@@ -42,7 +42,8 @@ namespace boostio = boost::iostreams;
 * Scraper ENUMS      *
 *********************/
 
-enum class statsobjecttype {
+enum class statsobjecttype
+{
     NetworkWide,
     byCPID,
     byProject,
@@ -53,7 +54,7 @@ static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCP
 
 const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 {
-  return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
+    return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
 }
 
 /*********************
