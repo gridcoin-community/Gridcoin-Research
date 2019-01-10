@@ -21,6 +21,7 @@ fs::path pathScraper = fs::current_path() / "Scraper";
 
 extern bool fShutdown;
 extern bool fDebug;
+extern bool fDebug3;
 extern std::string msMasterMessagePrivateKey;
 extern CWallet* pwalletMain;
 bool fScraperActive = false;
@@ -76,12 +77,13 @@ CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
+void ScraperApplyAppCacheEntries();
 void Scraper(bool bSingleShot = false);
 void ScraperSingleShot();
 bool ScraperHousekeeping();
 bool WhitelistPopulated();
 bool UserpassPopulated();
-bool ScraperDirectorySanity();
+bool ScraperDirectoryAndConfigSanity();
 bool StoreBeaconList(const fs::path& file);
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
 bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
@@ -286,11 +288,15 @@ public:
     bool wlimport()
     {
         LOCK(cs_vwhitelist);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
         vwhitelist.clear();
 
         for (const auto& item : ReadCacheSection(Section::PROJECT))
             vwhitelist.push_back(std::make_pair(item.first, item.second.value));
+
+        // End LOCK(cs_vwhitelist).
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
 
         return true;
     }
@@ -432,6 +438,98 @@ public:
 
 
 
+void ScraperApplyAppCacheEntries()
+{
+    // If there are AppCache entries for the defaults in scraper.h override them.
+    // I put in error handling for stod's but probably need to do atoi(64)'s too.
+
+    if (!ReadCache(Section::PROTOCOL, "SCRAPER_FILE_RETENTION_TIME").value.empty())
+        SCRAPER_FILE_RETENTION_TIME = atoi64(ReadCache(Section::PROTOCOL, "SCRAPER_FILE_RETENTION_TIME").value);
+
+    if (!ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_RETAIN_NONCURRENT").value.empty())
+    {
+        if (ReadCache(Section::PROTOCOL, "SCRAPER_FILE_RETENTION_TIME").value == "false")
+            SCRAPER_CMANIFEST_RETAIN_NONCURRENT = false;
+        else
+            SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
+    }
+
+    if (!ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_RETENTION_TIME").value.empty())
+        SCRAPER_CMANIFEST_RETENTION_TIME = atoi64(ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_RETENTION_TIME").value);
+
+    if (!ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES").value.empty())
+    {
+        if (ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES").value == "false")
+            SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
+        else
+            SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = true;
+    }
+
+    if (!ReadCache(Section::PROTOCOL, "MAG_ROUND").value.empty())
+    {
+        try
+        {
+            MAG_ROUND = std::stod(ReadCache(Section::PROTOCOL, "MAG_ROUND").value);
+        }
+        catch (...)
+        {
+            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for MAG_ROUND.");
+        }
+    }
+
+    if (!ReadCache(Section::PROTOCOL, "NEURALNETWORKMULTIPLIER").value.empty())
+    {
+        try
+        {
+            NEURALNETWORKMULTIPLIER = std::stod(ReadCache(Section::PROTOCOL, "NEURALNETWORKMULTIPLIER").value);
+        }
+        catch (...)
+        {
+            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for NEURALNETWORKMULTIPLIER.");
+        }
+    }
+
+    if (!ReadCache(Section::PROTOCOL, "CPID_MAG_LIMIT").value.empty())
+    {
+        try
+        {
+            CPID_MAG_LIMIT = std::stod(ReadCache(Section::PROTOCOL, "CPID_MAG_LIMIT").value);
+        }
+        catch (...)
+        {
+            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for CPID_MAG_LIMIT.");
+        }
+    }
+
+    if (!ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_MINIMUM").value.empty())
+        SCRAPER_SUPERMAJORITY_MINIMUM = atoi(ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_MINIMUM").value);
+
+    if (!ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_RATIO").value.empty())
+    {
+        try
+        {
+            SCRAPER_SUPERMAJORITY_RATIO = std::stod(ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_RATIO").value);
+        }
+        catch (...)
+        {
+            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for SCRAPER_SUPERMAJORITY_RATIO.");
+        }
+    }
+
+    if (!ReadCache(Section::PROTOCOL, "CONVERGENCE_BY_PROJECT_RATIO").value.empty())
+    {
+        try
+        {
+            CONVERGENCE_BY_PROJECT_RATIO = std::stod(ReadCache(Section::PROTOCOL, "CONVERGENCE_BY_PROJECT_RATIO").value);
+        }
+        catch (...)
+        {
+            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for CONVERGENCE_BY_PROJECT_RATIO.");
+        }
+    }
+}
+
+
 
 // This is the scraper thread...
 void Scraper(bool bSingleShot)
@@ -453,96 +551,6 @@ void Scraper(bool bSingleShot)
     else
         _log(logattribute::ERR, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is NOT correct.");
 
-    // Take a lock on cs_Scraper for the directory setup and file consistency check.
-
-    {
-        LOCK(cs_Scraper);
-        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
-
-        // Check to see if the Scraper directory exists and is a directory. If not create it.
-        if (fs::exists(pathScraper))
-        {
-            // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
-            if (fs::is_regular_file(pathScraper))
-            {
-                fs::remove(pathScraper);
-                fs::create_directory(pathScraper);
-            }
-            else
-            {
-                // Load the manifest file from the Scraper directory into mScraperFileManifest.
-
-                _log(logattribute::INFO, "Scraper", "Loading Manifest");
-                if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                    _log(logattribute::ERR, "Scraper", "Error occurred loading manifest");
-                else
-                    _log(logattribute::INFO, "Scraper", "Loaded Manifest file into map.");
-
-                // Align the Scraper directory with the Manifest file.
-                // First remove orphan files with no Manifest entry.
-                // Lock the manifest while it is being manipulated.
-                {
-                    LOCK(cs_StructScraperFileManifest);
-                    if (fDebug) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
-
-                    // Check to see if the file exists in the manifest and if the hash matches. If it doesn't
-                    // remove it.
-                    ScraperFileManifestMap::iterator entry;
-
-                    for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
-                    {
-                        std::string filename = dir.path().filename().string();
-
-                        if (dir.path().filename() != "Manifest.csv.gz"
-                                && dir.path().filename() != "BeaconList.csv.gz"
-                                && dir.path().filename() != "Stats.csv.gz"
-                                && dir.path().filename() != "ConvergedStats.csv.gz"
-                                && fs::is_regular_file(dir))
-                        {
-                            entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
-                            if (entry == StructScraperFileManifest.mScraperFileManifest.end())
-                            {
-                                fs::remove(dir.path());
-                                _log(logattribute::WARNING, "Scraper", "Removing orphan file not in Manifest: " + filename);
-                                continue;
-                            }
-
-                            if (entry->second.hash != GetFileHash(dir))
-                            {
-                                _log(logattribute::INFO, "Scraper", "File failed hash check. Removing file.");
-                                fs::remove(dir.path());
-                            }
-                        }
-                    }
-
-                    // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
-                    // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
-                    //if fScraperRetainNonCurrentFiles is false.
-                    for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
-                    {
-                        ScraperFileManifestMap::iterator entry_copy = entry++;
-
-                        if (!fs::exists(pathScraper / entry_copy->first)
-                                || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
-                                || (!fScraperRetainNonCurrentFiles && entry_copy->second.current == false))
-                        {
-                            _log(logattribute::WARNING, "Scraper", "Removing stale or orphan manifest entry: " + entry_copy->first);
-                            DeleteScraperFileManifestEntry(entry_copy->second);
-                        }
-                    }
-
-                    // End LOCK(cs_StructScraperFileManifest)
-                    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
-                }
-            }
-        }
-        else
-            fs::create_directory(pathScraper);
-
-        // end LOCK(cs_Scraper)
-        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
-    }
-
     uint256 nmScraperFileManifestHash = 0;
 
     // The scraper thread loop...
@@ -559,6 +567,17 @@ void Scraper(bool bSingleShot)
         }
 
         _log(logattribute::INFO, "Scraper", "Wallet is in sync. Continuing.");
+
+        // Now that we are in sync, refresh from the AppCache and check for proper directory/file structure.
+        {
+            LOCK(cs_Scraper);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+
+            ScraperDirectoryAndConfigSanity();
+
+            // End LOCK(cs_Scraper)
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+        }
 
         gridcoinrpc data;
         
@@ -584,8 +603,8 @@ void Scraper(bool bSingleShot)
                     LOCK(cs_Scraper);
                     if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
-                    // The only thing we do here while quiescent is cull manifests received
-                    // from other scrapers or generated from this scraper that have aged out.
+                    // The only things we do here while quiescent
+                    ScraperDirectoryAndConfigSanity();
                     ScraperDeleteCScraperManifests();
 
                     // End LOCK(cs_Scraper)
@@ -632,8 +651,10 @@ void Scraper(bool bSingleShot)
                     std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
                     {
                         LOCK(cs_vwhitelist);
+                        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
                         vwhitelist_local = vwhitelist;
+                        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
                     }
 
                     for (const auto& wlproject : vwhitelist_local)
@@ -882,10 +903,14 @@ std::string lowercase(std::string s)
     return s;
 }
 
-
-bool ScraperDirectorySanity()
+// A lock on cs_Scraper should be taken before calling this function.
+bool ScraperDirectoryAndConfigSanity()
 {
-    // Check for the existence and proper form of the Scraper subdirectory (pathScraper), and make if necessary.
+    ScraperApplyAppCacheEntries();
+
+    if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+
+    // Check to see if the Scraper directory exists and is a directory. If not create it.
     if (fs::exists(pathScraper))
     {
         // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
@@ -894,11 +919,81 @@ bool ScraperDirectorySanity()
             fs::remove(pathScraper);
             fs::create_directory(pathScraper);
         }
+        else
+        {
+            // Load the manifest file from the Scraper directory into mScraperFileManifest, if mScraperFileManifest is empty.
+            // Lock the manifest while it is being manipulated.
+            {
+                LOCK(cs_StructScraperFileManifest);
+                if (fDebug) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+
+                if (StructScraperFileManifest.mScraperFileManifest.empty())
+                {
+                    _log(logattribute::INFO, "ScraperDirectorySanity", "Loading Manifest");
+                    if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
+                        _log(logattribute::ERR, "ScraperDirectorySanity", "Error occurred loading manifest");
+                    else
+                        _log(logattribute::INFO, "ScraperDirectorySanity", "Loaded Manifest file into map.");
+                }
+
+                // Align the Scraper directory with the Manifest file.
+                // First remove orphan files with no Manifest entry.
+                // Check to see if the file exists in the manifest and if the hash matches. If it doesn't
+                // remove it.
+                ScraperFileManifestMap::iterator entry;
+
+                for (fs::directory_entry& dir : fs::directory_iterator(pathScraper))
+                {
+                    std::string filename = dir.path().filename().string();
+
+                    if (dir.path().filename() != "Manifest.csv.gz"
+                            && dir.path().filename() != "BeaconList.csv.gz"
+                            && dir.path().filename() != "Stats.csv.gz"
+                            && dir.path().filename() != "ConvergedStats.csv.gz"
+                            && fs::is_regular_file(dir))
+                    {
+                        entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
+                        if (entry == StructScraperFileManifest.mScraperFileManifest.end())
+                        {
+                            fs::remove(dir.path());
+                            _log(logattribute::WARNING, "ScraperDirectorySanity", "Removing orphan file not in Manifest: " + filename);
+                            continue;
+                        }
+
+                        if (entry->second.hash != GetFileHash(dir))
+                        {
+                            _log(logattribute::INFO, "ScraperDirectorySanity", "File failed hash check. Removing file.");
+                            fs::remove(dir.path());
+                        }
+                    }
+                }
+
+                // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
+                // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
+                //if fScraperRetainNonCurrentFiles is false.
+                for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
+                {
+                    ScraperFileManifestMap::iterator entry_copy = entry++;
+
+                    if (!fs::exists(pathScraper / entry_copy->first)
+                            || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
+                            || (!fScraperRetainNonCurrentFiles && entry_copy->second.current == false))
+                    {
+                        _log(logattribute::WARNING, "ScraperDirectorySanity", "Removing stale or orphan manifest entry: " + entry_copy->first);
+                        DeleteScraperFileManifestEntry(entry_copy->second);
+                    }
+                }
+
+                // End LOCK(cs_StructScraperFileManifest)
+                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+            }
+        }
     }
     else
         fs::create_directory(pathScraper);
 
-    // Need to implement error handling. For now, returns true.
+    // end LOCK(cs_Scraper)
+    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
 
     return true;
 }
@@ -910,6 +1005,7 @@ bool ScraperDirectorySanity()
 bool WhitelistPopulated()
 {
     LOCK(cs_vwhitelist);
+    if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
     if (vwhitelist.empty())
     {
@@ -929,6 +1025,9 @@ bool WhitelistPopulated()
     }
 
     _log(logattribute::INFO, "WhitelistPopulated", "Whitelist is populated; Contains " + std::to_string(vwhitelist.size()) + " projects");
+
+    // End LOCK(cs_vwhitelist.
+    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
 
     return true;
 }
@@ -988,8 +1087,10 @@ bool DownloadProjectRacFilesByCPID()
 
     {
         LOCK(cs_vwhitelist);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
         vwhitelist_local = vwhitelist;
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
     }
 
     if (!UserpassPopulated())
@@ -2141,7 +2242,15 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
     // Make sure the Scraper directory itself exists, because this function could be called from outside
     // the scraper thread loop, and therefore the directory may not have been set up yet.
-    ScraperDirectorySanity();
+    {
+        LOCK(cs_Scraper);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+
+        ScraperDirectoryAndConfigSanity();
+
+        // End LOCK(cs_Scraper).
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+    }
 
     fs::path savepath = pathScraper / "incoming";
 
@@ -2383,8 +2492,10 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
     {
         LOCK(cs_vwhitelist);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
         vwhitelist_local = vwhitelist;
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
     }
 
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
@@ -2433,7 +2544,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             {
                 // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
                 mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                if (fDebug) _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
+                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
                                  + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
             }
         }
@@ -2641,7 +2752,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                     {
                         // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
                         mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.first)));
-                        if (fDebug) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
+                        if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
                                          + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
                     }
                 }

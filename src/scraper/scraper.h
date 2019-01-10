@@ -129,21 +129,21 @@ struct ConvergedScraperStats
 };
 
 /*********************
-* Global Constants   *
+* Global Defaults    *
 *********************/
 
-// We may want to turn some of these into administrative message appcache entries...
+// These can be overridden by ScraperApplyAppCacheEntries().
 
 // Define 48 hour retention time for stats files, current or not.
-static int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
 // Define whether prior CScraperManifests are kept.
-static bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
+bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
 // Define CManifest scraper object retention time.
-static int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
-static bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
-static const double MAG_ROUND = 0.01;
-static const double NEURALNETWORKMULTIPLIER = 115000;
-static const double CPID_MAG_LIMIT = 32767;
+int64_t SCRAPER_CMANIFEST_RETENTION_TIME = 48 * 3600;
+bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
+double MAG_ROUND = 0.01;
+double NEURALNETWORKMULTIPLIER = 115000;
+double CPID_MAG_LIMIT = 32767;
 // This settings below are important. This sets the minimum number of scrapers
 // that must be available to form a convergence. Above this minimum, the ratio
 // is followed. For example, if there are 4 scrapers, a ratio of 0.6 would require
@@ -152,13 +152,13 @@ static const double CPID_MAG_LIMIT = 32767;
 // will not happen. Setting this below 2 will allow convergence to happen without
 // cross checking, and is undesirable, because the scrapers are not supposed to be
 // trusted entities.
-static const unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
+unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
 // 0.6 seems like a reasonable standard for agreement. It will require...
 // 2 out of 3, 3 out of 4, 3 out of 5, 4 out of 6, 5 out of 7, 5 out of 8, etc.
-static const double SCRAPER_SUPERMAJORITY_RATIO = 0.6;
+double SCRAPER_SUPERMAJORITY_RATIO = 0.6;
 // By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
 // For 20 whitelisted projects this means up to five can be excluded and a contract formed.
-static const double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
+double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
 
 /*********************
 * Functions          *

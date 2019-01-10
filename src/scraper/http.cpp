@@ -130,7 +130,7 @@ std::string Http::GetEtag(
     // Find ETag header.
     std::string etag;
     
-    if(fDebug) _log(logattribute::INFO, "Http::ETag", "Header: \n" + header);
+    if(fDebug3) _log(logattribute::INFO, "Http::ETag", "Header: \n" + header);
     
     std::istringstream iss(header);
     for (std::string line; std::getline(iss, line);)
