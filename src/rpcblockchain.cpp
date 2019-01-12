@@ -43,7 +43,7 @@ extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
-extern UniValue SuperblockReport(std::string cpid);
+extern UniValue SuperblockReport(std::string cpid, int lookback = 14, bool displaycontract = false);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
@@ -1438,24 +1438,36 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
 UniValue superblocks(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 3)
         throw runtime_error(
-                "superblocks [cpid]\n"
+                "superblocks [cpid [lookback [displaycontract]]]\n"
                 "\n"
                 "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
+                "\n"
+                "[lookback] -> Optional: # of SB's to show (default 14)\n"
+                "\n"
+                "[displaycontract] -> Optional true/false: display SB contract (default false)"
                 "\n"
                 "Display data on recent superblocks\n");
 
     UniValue res(UniValue::VARR);
 
     std::string cpid = "";
+    int lookback = 14;
+    bool displaycontract = false;
 
     if (params.size() > 0)
         cpid = params[0].get_str();
 
+    if (params.size() > 1)
+        lookback = params[1].get_int();
+
+    if (params.size() > 2)
+        displaycontract = params[2].get_bool();
+
     LOCK(cs_main);
 
-    res = SuperblockReport(cpid);
+    res = SuperblockReport(cpid, lookback, displaycontract);
 
     return res;
 }
@@ -2429,7 +2441,7 @@ UniValue execute(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
 }
 
-UniValue SuperblockReport(std::string cpid)
+UniValue SuperblockReport(std::string cpid, int lookback, bool displaycontract)
 {
     UniValue results(UniValue::VARR);
     UniValue c(UniValue::VOBJ);
@@ -2440,7 +2452,7 @@ UniValue SuperblockReport(std::string cpid)
     results.push_back(c);
 
     int nMaxDepth = nBestHeight;
-    int nLookback = BLOCKS_PER_DAY * 14;
+    int nLookback = BLOCKS_PER_DAY * lookback;
     int nMinDepth = (nMaxDepth - nLookback) - ( (nMaxDepth-nLookback) % BLOCK_GRANULARITY);
     //int iRow = 0;
     CBlockIndex* pblockindex = pindexBest;
@@ -2478,7 +2490,8 @@ UniValue SuperblockReport(std::string cpid)
                 {
                     c.pushKV("Magnitude",mag);
                 }
-
+                if (displaycontract)
+                    c.pushKV("Contract Contents: ", superblock);
 
                 results.push_back(c);
             }
