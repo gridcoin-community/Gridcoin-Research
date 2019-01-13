@@ -169,6 +169,8 @@ double SCRAPER_CONVERGENCE_RATIO = 0.6;
 // By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
 // For 20 whitelisted projects this means up to five can be excluded and a contract formed.
 double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
+// Allow non-scraper nodes to download stats?
+bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = false;
 
 /*********************
 * Functions          *

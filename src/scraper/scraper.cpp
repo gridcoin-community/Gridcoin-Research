@@ -494,6 +494,7 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("SCRAPER_CONVERGENCE_MINIMUM", SCRAPER_CONVERGENCE_MINIMUM);
     ApplyCache("SCRAPER_CONVERGENCE_RATIO", SCRAPER_CONVERGENCE_RATIO);
     ApplyCache("CONVERGENCE_BY_PROJECT_RATIO", CONVERGENCE_BY_PROJECT_RATIO);
+    ApplyCache("ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD", ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD);
 
     if (fDebug)
     {
@@ -511,6 +512,7 @@ void ScraperApplyAppCacheEntries()
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_MINIMUM = " + std::to_string(SCRAPER_CONVERGENCE_MINIMUM));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_RATIO = " + std::to_string(SCRAPER_CONVERGENCE_RATIO));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CONVERGENCE_BY_PROJECT_RATIO = " + std::to_string(CONVERGENCE_BY_PROJECT_RATIO));
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = " + std::to_string(ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD));
     }
 }
 
@@ -2310,10 +2312,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 // headaches.
 bool IsScraperAuthorized()
 {
-    // Stubbed out for general scraper operation policy.
-    // Currently set to true for testing fallback operation.
-
-    return true;
+    return ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
 }
 
 bool IsScraperAuthorizedToBroadcastManifests()
