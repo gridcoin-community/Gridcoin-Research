@@ -456,7 +456,7 @@ void ApplyCache(const std::string& key, T& result)
             result = atoi64(entry.value);
         else if (std::is_same<T, unsigned int>::value)
             // Throw away (zero out) negative integer
-            // This approach limits the range to 0 to 32767, but that is good enough.
+            // This approach limits the range to the non-negative signed int, but that is good enough.
             result = (unsigned int)std::max(0, stoi(entry.value));
         else if (std::is_same<T, bool>::value)
         {
