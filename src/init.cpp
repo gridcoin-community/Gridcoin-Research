@@ -50,7 +50,6 @@ extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
-extern bool fScraperRetainNonCurrentFiles;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
 
@@ -382,10 +381,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     nMinerSleep = GetArg("-minersleep", 8000);
     // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
     nScraperSleep = std::min(std::max(GetArg("-scrapersleep", 300), (int64_t) 60), (int64_t) 600) * 1000;
-    // Default to 7200 sec (2 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
-    nActiveBeforeSB = std::min(std::max(GetArg("-activebeforesb", 7200), (int64_t) 300), (int64_t) 86400);
-    // Boolean to direct scraper to retain non-current stats files.
-    fScraperRetainNonCurrentFiles = GetBoolArg("-ScraperRetainNonCurrentFiles");
+    // Default to 7200 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
+    nActiveBeforeSB = std::min(std::max(GetArg("-activebeforesb", 14400), (int64_t) 300), (int64_t) 86400);
 
     nDerivationMethodIndex = 0;
     fTestNet = GetBoolArg("-testnet");

@@ -132,8 +132,18 @@ struct ConvergedScraperStats
 * Global Defaults    *
 *********************/
 
+// These can get overridden by the GetArgs in init.cpp or ScraperApplyAppCacheEntries.
+// The appcache entries will take precedence.
+
+// The amount of time to wait between scraper loop runs.
+unsigned int nScraperSleep = 300000;
+// The amount of time before SB is due to start scraping.
+unsigned int nActiveBeforeSB = 14400;
+
 // These can be overridden by ScraperApplyAppCacheEntries().
 
+// The flag to control whether non-current statistics files are retained.
+bool SCRAPER_RETAIN_NONCURRENT_FILES = true;
 // Define 48 hour retention time for stats files, current or not.
 int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
 // Define whether prior CScraperManifests are kept.

@@ -13,10 +13,6 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/device/array.hpp>
 
-// These will get overwritten by the GetArgs in init.cpp
-unsigned int nScraperSleep = 300000;
-unsigned int nActiveBeforeSB = 7200;
-bool fScraperRetainNonCurrentFiles = false;
 fs::path pathScraper = fs::current_path() / "Scraper";
 
 extern bool fShutdown;
@@ -77,6 +73,10 @@ CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
+
+template<typename T>
+void ApplyCache(const std::string& key, T& result);
+
 void ScraperApplyAppCacheEntries();
 void Scraper(bool bSingleShot = false);
 void ScraperSingleShot();
@@ -438,100 +438,70 @@ public:
 
 
 
-void ScraperApplyAppCacheEntries()
+template<typename T>
+void ApplyCache(const std::string& key, T& result)
 {
-    // If there are AppCache entries for the defaults in scraper.h override them.
-    // I put in error handling for stod's but probably need to do atoi(64)'s too.
+    // Local reference to avoid double lookup.
+    const auto& entry = ReadCache(Section::PROTOCOL, key);
 
-    if (!ReadCache(Section::PROTOCOL, "SCRAPER_FILE_RETENTION_TIME").value.empty())
-        SCRAPER_FILE_RETENTION_TIME = atoi64(ReadCache(Section::PROTOCOL, "SCRAPER_FILE_RETENTION_TIME").value);
+    // If the entry has an empty string (no value) then leave the original undisturbed.
+    if(entry.value.empty())
+       return;
 
-    if (!ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_RETAIN_NONCURRENT").value.empty())
+    try
     {
-        if (ReadCache(Section::PROTOCOL, "SCRAPER_FILE_RETENTION_TIME").value == "false")
-            SCRAPER_CMANIFEST_RETAIN_NONCURRENT = false;
-        else
-            SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
-    }
-
-    if (!ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_RETENTION_TIME").value.empty())
-        SCRAPER_CMANIFEST_RETENTION_TIME = atoi64(ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_RETENTION_TIME").value);
-
-    if (!ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES").value.empty())
-    {
-        if (ReadCache(Section::PROTOCOL, "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES").value == "false")
-            SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = false;
-        else
-            SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = true;
-    }
-
-    if (!ReadCache(Section::PROTOCOL, "MAG_ROUND").value.empty())
-    {
-        try
+        if (std::is_same<T, double>::value)
+            result = stod(entry.value);
+        else if (std::is_same<T, int64_t>::value)
+            result = atoi64(entry.value);
+        else if (std::is_same<T, unsigned int>::value)
+            // Throw away (zero out) negative integer
+            // This approach limits the range to 0 to 32767, but that is good enough.
+            result = (unsigned int)std::max(0, stoi(entry.value));
+        else if (std::is_same<T, bool>::value)
         {
-            MAG_ROUND = std::stod(ReadCache(Section::PROTOCOL, "MAG_ROUND").value);
-        }
-        catch (...)
-        {
-            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for MAG_ROUND.");
+            if (entry.value == "false" || entry.value == "0")
+                result = false;
+            else if (entry.value == "true" || entry.value == "1")
+                result = true;
+            else
+                throw std::invalid_argument("Argument not true or false");
         }
     }
-
-    if (!ReadCache(Section::PROTOCOL, "NEURALNETWORKMULTIPLIER").value.empty())
+    catch (const std::exception&)
     {
-        try
-        {
-            NEURALNETWORKMULTIPLIER = std::stod(ReadCache(Section::PROTOCOL, "NEURALNETWORKMULTIPLIER").value);
-        }
-        catch (...)
-        {
-            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for NEURALNETWORKMULTIPLIER.");
-        }
-    }
-
-    if (!ReadCache(Section::PROTOCOL, "CPID_MAG_LIMIT").value.empty())
-    {
-        try
-        {
-            CPID_MAG_LIMIT = std::stod(ReadCache(Section::PROTOCOL, "CPID_MAG_LIMIT").value);
-        }
-        catch (...)
-        {
-            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for CPID_MAG_LIMIT.");
-        }
-    }
-
-    if (!ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_MINIMUM").value.empty())
-        SCRAPER_SUPERMAJORITY_MINIMUM = atoi(ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_MINIMUM").value);
-
-    if (!ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_RATIO").value.empty())
-    {
-        try
-        {
-            SCRAPER_SUPERMAJORITY_RATIO = std::stod(ReadCache(Section::PROTOCOL, "SCRAPER_SUPERMAJORITY_RATIO").value);
-        }
-        catch (...)
-        {
-            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for SCRAPER_SUPERMAJORITY_RATIO.");
-        }
-    }
-
-    if (!ReadCache(Section::PROTOCOL, "CONVERGENCE_BY_PROJECT_RATIO").value.empty())
-    {
-        try
-        {
-            CONVERGENCE_BY_PROJECT_RATIO = std::stod(ReadCache(Section::PROTOCOL, "CONVERGENCE_BY_PROJECT_RATIO").value);
-        }
-        catch (...)
-        {
-            _log(logattribute::ERR, "ScraperApplyAppCacheEntries", "Ignoring bad AppCache entry for CONVERGENCE_BY_PROJECT_RATIO.");
-        }
+        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::format("Ignoring bad AppCache entry for %s.", key));
     }
 }
 
 
+void ScraperApplyAppCacheEntries()
+{
+    // If there are AppCache entries for the defaults in scraper.h override them. For the first two, this will also
+    // override any GetArgs supplied from the command line, which is appropriate as network policy should take precedence.
 
-// This is the scraper thread...
+    ApplyCache("scrapersleep", nScraperSleep);
+    ApplyCache("activebeforesb", nActiveBeforeSB);
+
+    ApplyCache("SCRAPER_RETAIN_NONCURRENT_FILES", SCRAPER_RETAIN_NONCURRENT_FILES);
+    ApplyCache("SCRAPER_FILE_RETENTION_TIME", SCRAPER_FILE_RETENTION_TIME);
+    ApplyCache("SCRAPER_CMANIFEST_RETAIN_NONCURRENT", SCRAPER_CMANIFEST_RETAIN_NONCURRENT);
+    ApplyCache("SCRAPER_CMANIFEST_RETENTION_TIME", SCRAPER_CMANIFEST_RETENTION_TIME);
+    ApplyCache("SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES", SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES);
+    ApplyCache("MAG_ROUND", MAG_ROUND);
+    ApplyCache("NEURALNETWORKMULTIPLIER", NEURALNETWORKMULTIPLIER);
+    ApplyCache("CPID_MAG_LIMIT", CPID_MAG_LIMIT);
+    ApplyCache("SCRAPER_SUPERMAJORITY_MINIMUM", SCRAPER_SUPERMAJORITY_MINIMUM);
+    ApplyCache("SCRAPER_SUPERMAJORITY_RATIO", SCRAPER_SUPERMAJORITY_RATIO);
+    ApplyCache("CONVERGENCE_BY_PROJECT_RATIO", CONVERGENCE_BY_PROJECT_RATIO);
+}
+
+
+
+// This is the "main" scraper function.
+// It will be instantiated as a separate thread if -scraper is specified as a startup argument,
+// and operate in a continuous while loop.
+// It can also be called in "single shot" mode.
 void Scraper(bool bSingleShot)
 {
     if (!bSingleShot)
@@ -977,7 +947,7 @@ bool ScraperDirectoryAndConfigSanity()
 
                     if (!fs::exists(pathScraper / entry_copy->first)
                             || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
-                            || (!fScraperRetainNonCurrentFiles && entry_copy->second.current == false))
+                            || (!SCRAPER_RETAIN_NONCURRENT_FILES && entry_copy->second.current == false))
                     {
                         _log(logattribute::WARNING, "ScraperDirectorySanity", "Removing stale or orphan manifest entry: " + entry_copy->first);
                         DeleteScraperFileManifestEntry(entry_copy->second);
@@ -1371,7 +1341,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             // If records are older than SCRAPER_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
             // delete all non-current records, including the one just marked non-current.
             if (((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
-                    || (entry_copy->second.project == project && entry_copy->second.current == false && !fScraperRetainNonCurrentFiles))
+                    || (entry_copy->second.project == project && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES))
             {
                 DeleteScraperFileManifestEntry(entry_copy->second);
             }
