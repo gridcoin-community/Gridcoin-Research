@@ -162,10 +162,10 @@ double CPID_MAG_LIMIT = 32767;
 // will not happen. Setting this below 2 will allow convergence to happen without
 // cross checking, and is undesirable, because the scrapers are not supposed to be
 // trusted entities.
-unsigned int SCRAPER_SUPERMAJORITY_MINIMUM = 2;
+unsigned int SCRAPER_CONVERGENCE_MINIMUM = 2;
 // 0.6 seems like a reasonable standard for agreement. It will require...
 // 2 out of 3, 3 out of 4, 3 out of 5, 4 out of 6, 5 out of 7, 5 out of 8, etc.
-double SCRAPER_SUPERMAJORITY_RATIO = 0.6;
+double SCRAPER_CONVERGENCE_RATIO = 0.6;
 // By Project Fallback convergence rule as a ratio of projects converged vs whitelist.
 // For 20 whitelisted projects this means up to five can be excluded and a contract formed.
 double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
@@ -190,7 +190,7 @@ double MagRound(double dMag)
 
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 {
-    unsigned int nRequired = std::max(SCRAPER_SUPERMAJORITY_MINIMUM, (unsigned int)std::ceil(SCRAPER_SUPERMAJORITY_RATIO * nScraperCount));
+    unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM, (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
     
     return nRequired;
 }
