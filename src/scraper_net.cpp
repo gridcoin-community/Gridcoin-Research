@@ -191,7 +191,6 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 }
 
 
-
 void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersion) const
 { /* TODO: remove this redundant code */
     ss<< project;
@@ -212,6 +211,7 @@ void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVe
     ss>> current;
     ss>> last;
 }
+
 
 void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int nVersion) const
 {
@@ -243,6 +243,14 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
     ss << signature;
 }
 
+
+// This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
+// It is used to determine whether received manifests are authorized.
+bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey)
+{
+    // Stub
+    return true;
+}
 
 
 void CScraperManifest::UnserializeCheck(CReaderStream& ss)

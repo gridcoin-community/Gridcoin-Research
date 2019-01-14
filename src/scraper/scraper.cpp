@@ -695,7 +695,8 @@ void Scraper(bool bSingleShot)
 
 
         // This is the section to send out manifests. Only do if authorized.
-        if (IsScraperAuthorizedToBroadcastManifests())
+        CKey KeyOut = {};
+        if (IsScraperAuthorizedToBroadcastManifests(KeyOut))
         {
             // This will push out a new CScraperManifest if the hash has changed of mScraperFileManifestHash.
             // The idea here is to run the scraper loop a number of times over a period of time approaching
@@ -2315,11 +2316,105 @@ bool IsScraperAuthorized()
     return ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
 }
 
-bool IsScraperAuthorizedToBroadcastManifests()
+// This checks to see if the local node is authorized to publish manifests. Note that this code could be
+// modified to bypass this check, so messages sent will also be validated on receipt by the complement
+// to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
+bool IsScraperAuthorizedToBroadcastManifests(CKey& KeyOut)
 {
-    // Stub for check against public key in AppCache to authorize sending manifests.
-    // Currently set to true during development/early testing.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+    std::string sScraperAddressFromConfig = GetArg("-scraperkey", "false");
+
+    // Check against the -scraperkey config entry first and return quickly to avoid extra work.
+    // If the config entry exists and is in the map (i.e. in the appcache)...
+    auto entry = mScrapers.find(sScraperAddressFromConfig);
+
+    // If the address (entry) exists in the config and appcache...
+    if (sScraperAddressFromConfig != "false" && entry != mScrapers.end())
+    {
+        // ... and is enabled...
+        if (entry->second.value == "true" || entry->second.value == "1")
+        {
+            CPubKey ScraperPubKey(ParseHex(sScraperAddressFromConfig));
+
+            // ... and the public key for the address is valid...
+            if (ScraperPubKey.IsValid())
+            {
+                // ... and it exists in the wallet...
+                if (pwalletMain->GetKey(ScraperPubKey.GetID(), KeyOut))
+                {
+                    // ... and the key returned from the wallet is valid and matches the provided public key...
+                    assert(KeyOut.IsValid());
+                    assert(KeyOut.GetPubKey() == ScraperPubKey);
+
+                    // Note that KeyOut here will have the correct key to use by THIS node.
+                    if (fDebug)
+                        _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
+                             "Found address specified by -scraperkey in both the wallet and appcache. \n"
+                             "This scraper is authorized to publish manifests.");
+                    return true;
+                }
+            }
+        }
+    }
+    // If a -scraperkey config entry has not been specified, we will walk through all of the addresses in the wallet
+    // until we hit the first one that is in the list.
+    else
+    {
+        for (auto const& item : pwalletMain->mapAddressBook)
+        {
+            const CBitcoinAddress& address = item.first;
+
+            std::string sScraperAddress = address.ToString();
+            entry = mScrapers.find(sScraperAddress);
+
+            // The address is found in the appcache...
+            if (entry != mScrapers.end())
+            {
+                // ... and is enabled...
+                if (entry->second.value == "true" || entry->second.value == "1")
+                {
+                    CPubKey ScraperPubKey(ParseHex(sScraperAddress));
+
+                    // ... and the public key for the address is valid...
+                    if (ScraperPubKey.IsValid())
+                    {
+                        // ... and it exists in the wallet... (It SHOULD here... it came from the map...)
+                        if (pwalletMain->GetKey(ScraperPubKey.GetID(), KeyOut))
+                        {
+                            // ... and the key returned from the wallet is valid and matches the provided public key...
+                            assert(KeyOut.IsValid());
+                            assert(KeyOut.GetPubKey() == ScraperPubKey);
+
+                            // Note that KeyOut here will have the correct key to use by THIS node.
+
+                            _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
+                                 "Found address " + sScraperAddress + " in both the wallet and appcache. \n"
+                                 "This scraper is authorized to publish manifests.");
+
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /*
+    CKey k;
+    CKeyID id;
+    CBitcoinAddress ba;
+    (check) ba.SetString(GetArg('-scraperkey')); (check) ba.GetKeyID(id); (check)  pWalletMain->GetKey(id,k);
+    */
+
+    // If we made it here, there is no match or valid key in the wallet
+    // For right now return true (during testing) but _log a warning.
+
+    _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests", "No key found in wallet that matches authorized scrapers in appcache.");
     return true;
+    // return false;
 }
 
 

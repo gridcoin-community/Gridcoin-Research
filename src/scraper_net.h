@@ -94,8 +94,11 @@ public: /* static methods */
     /** Add new manifest object into list of known manifests */
     static bool addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign);
 
+    /** Validate whether recieved manifest is authorized */
+    static bool IsManifestAuthorized(CPubKey& PubKey);
+
     /** Delete Manifest **/
-    bool DeleteManifest(const uint256& nHash);
+    static bool DeleteManifest(const uint256& nHash);
 
 public: /*==== fields ====*/
 

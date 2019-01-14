@@ -180,7 +180,7 @@ uint256 GetFileHash(const fs::path& inputfile);
 ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
 std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
-bool IsScraperAuthorizedToBroadcastManifests();
+bool IsScraperAuthorizedToBroadcastManifests(CKey& KeyOut);
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
 bool ScraperSynchronizeDPOR();
