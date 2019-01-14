@@ -105,6 +105,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool ScraperSendFileManifestContents(std::string CManifestName);
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
+unsigned int ScraperDeleteUnauthorizedCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
@@ -559,11 +560,15 @@ void Scraper(bool bSingleShot)
         _log(logattribute::INFO, "Scraper", "Wallet is in sync. Continuing.");
 
         // Now that we are in sync, refresh from the AppCache and check for proper directory/file structure.
+        // Also delete any unauthorized CScraperManifests received before the wallet was in sync.
         {
             LOCK(cs_Scraper);
             if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
             ScraperDirectoryAndConfigSanity();
+            // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
+            // See the comment on the function.
+            ScraperDeleteUnauthorizedCScraperManifests();
 
             // End LOCK(cs_Scraper)
             if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
@@ -785,9 +790,21 @@ void NeuralNetwork()
 
         // ScraperHousekeeping items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
+        {
+            LOCK(cs_Scraper);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+
+            ScraperApplyAppCacheEntries();
+            // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
+            // See the comment on the function.
+            ScraperDeleteUnauthorizedCScraperManifests();
             ScraperHousekeeping();
 
-        // Use the same sleep interval as the scraper. This defaults to 60 seconds.
+            // END LOCK(cs_Scraper)
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+        }
+
+        // Use the same sleep interval configured for the scraper.
         _log(logattribute::INFO, "NeuralNetwork", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
 
         MilliSleep(nScraperSleep);
@@ -899,8 +916,6 @@ bool ScraperDirectoryAndConfigSanity()
 {
     ScraperApplyAppCacheEntries();
 
-    if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
-
     // Check to see if the Scraper directory exists and is a directory. If not create it.
     if (fs::exists(pathScraper))
     {
@@ -982,9 +997,6 @@ bool ScraperDirectoryAndConfigSanity()
     }
     else
         fs::create_directory(pathScraper);
-
-    // end LOCK(cs_Scraper)
-    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
 
     return true;
 }
@@ -2415,6 +2427,41 @@ bool IsScraperAuthorizedToBroadcastManifests(CKey& KeyOut)
     _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests", "No key found in wallet that matches authorized scrapers in appcache.");
     return true;
     // return false;
+}
+
+
+// This function is necessary because some CScraperManifest messages are likely to be received before the wallet is in sync. Therefore, they
+// cannot be checked at that time by the deserialize check. Instead, while the wallet is not in sync, the local CScraperManifest flag
+// bCheckedAuthorized will be set to false on any manifests received during that time. Once the wallet is in sync, this function will be
+// called and will walk the mapManifest and check all Manifests with bCheckedAuthorized false to ensure the PubKey in the manifest is in the
+// authorized scraper list in the AppCache. If it passes the flag will be set to true. If it fails, the manifest will be deleted.
+unsigned int ScraperDeleteUnauthorizedCScraperManifests()
+{
+    unsigned int nDeleted = 0;
+
+    for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
+    {
+        auto iter_copy = iter;
+
+        CScraperManifest& manifest = *iter->second;
+
+        if (!manifest.bCheckedAuthorized)
+        {
+            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
+                manifest.bCheckedAuthorized = true;
+            else
+            {
+                _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests", "Deleting unauthorized manifest with hash " + iter->first.GetHex());
+                // Delete from CScraperManifest map
+                ScraperDeleteCScraperManifest(iter_copy->first);
+            }
+        }
+
+        ++iter;
+        nDeleted++;
+    }
+
+    return nDeleted;
 }
 
 

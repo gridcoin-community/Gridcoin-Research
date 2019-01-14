@@ -131,6 +131,12 @@ public: /*==== fields ====*/
 
     uint256 nContentHash;
 
+    // The bCheckedAuthorized flag is LOCAL only. It is not serialized/deserialized. This
+    // is set during Unserializecheck to false if wallet not in sync, and true if in sync
+    // and scraper ID matches authorized list (i.e. IsManifestAuthorized is true.
+    // The node will walk the mapManifest from
+    bool bCheckedAuthorized;
+
 public: /* public methods */
 
     /** Hook called when all parts are available */

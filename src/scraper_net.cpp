@@ -11,6 +11,7 @@
 #include "base58.h"
 #endif
 #include "scraper_net.h"
+#include "appcache.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
@@ -248,7 +249,23 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
 // It is used to determine whether received manifests are authorized.
 bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey)
 {
-    // Stub
+    AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+    for (auto const& entry : mScrapers)
+    {
+        if (entry.second.value == "true" || entry.second.value == "1")
+        {
+            CPubKey AuthScraperPubKey(ParseHex(entry.first));
+
+            if (AuthScraperPubKey == PubKey)
+                return true;
+        }
+    }
+
+    LogPrintf("ERROR: CScraperManifest::IsManifestAuthorized: Manifest is not authorized.");
+    // return false;
+
+    // For right now, during testing, only log the unauthorized manifest, but return true.
     return true;
 }
 
@@ -260,10 +277,18 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     vector<uint256> vph;
     ss>>vph;
     ss>> pubkey;
-#if 0
-    if( pubkey not in authorized scraper key list )
+
+    // This will set the bCheckAuthorized flag to false if a message
+    // is received while the wallet is not in sync. If in sync and
+    // the manifest is authorized, then set the checked flag to true,
+    // otherwise terminate the unserializecheck and throw an error,
+    // which will also result in an increase in banscore.
+    if (OutOfSyncByAge())
+        bCheckedAuthorized = false;
+    else if (IsManifestAuthorized(pubkey))
+        bCheckedAuthorized = true;
+    else
         throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
-#endif
 
     ss>> sCManifestName;
     ss>> nTime;
