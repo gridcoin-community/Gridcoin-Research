@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Fix integer overflow with displayed nonce #1297 (@personthingman2).
  - Improve application cache performance #1317 (@denravonska).
  - Improve reorg speeds #1263 (@denravonska).
+ - Update Polish translation #1375 (@michalkania).
 
 ## Fixed
  - Remove expired polls from overview page #1250 (@personthingman2).
