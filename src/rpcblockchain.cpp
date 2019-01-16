@@ -43,7 +43,7 @@ extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(std::string cpid);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
-extern UniValue SuperblockReport(std::string cpid, int lookback = 14, bool displaycontract = false);
+extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
@@ -1440,34 +1440,41 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 3)
         throw runtime_error(
-                "superblocks [cpid [lookback [displaycontract]]]\n"
-                "\n"
-                "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
+                "superblocks [lookback [displaycontract [cpid]]]\n"
                 "\n"
                 "[lookback] -> Optional: # of SB's to show (default 14)\n"
-                "\n"
-                "[displaycontract] -> Optional true/false: display SB contract (default false)"
+                "[displaycontract] -> Optional true/false: display SB contract (default false)\n"
+                "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
                 "\n"
                 "Display data on recent superblocks\n");
 
     UniValue res(UniValue::VARR);
 
-    std::string cpid = "";
     int lookback = 14;
     bool displaycontract = false;
+    std::string cpid = "";
 
     if (params.size() > 0)
-        cpid = params[0].get_str();
+    {
+        lookback = params[0].get_int();
+        if (fDebug) LogPrintf("INFO: superblocks: lookback %i", lookback);
+    }
 
     if (params.size() > 1)
-        lookback = params[1].get_int();
+    {
+        displaycontract = params[1].get_bool();
+        if (fDebug) LogPrintf("INFO: superblocks: display contract %i", displaycontract);
+    }
 
     if (params.size() > 2)
-        displaycontract = params[2].get_bool();
+    {
+        cpid = params[2].get_str();
+        if (fDebug) LogPrintf("INFO: superblocks: CPID %s", cpid);
+    }
 
     LOCK(cs_main);
 
-    res = SuperblockReport(cpid, lookback, displaycontract);
+    res = SuperblockReport(lookback, displaycontract, cpid);
 
     return res;
 }
@@ -2441,7 +2448,7 @@ UniValue execute(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_DEPRECATED, "execute function has been deprecated; run the command as previously done so but without execute");
 }
 
-UniValue SuperblockReport(std::string cpid, int lookback, bool displaycontract)
+UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 {
     UniValue results(UniValue::VARR);
     UniValue c(UniValue::VOBJ);

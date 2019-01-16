@@ -65,7 +65,7 @@ const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 typedef std::string ScraperID;
 // The inner map is sorted in descending order of time. The pair is manifest hash, content hash.
 typedef std::multimap<int64_t, pair<uint256, uint256>, greater <int64_t>> mCSManifest;
-// Right now this is using sCManifestName, but needs to be changed to pubkey once the pubkey part is finished.
+// This is sCManifestName, which is the string version of the originating scraper pubkey.
 // See the ScraperID typedef above.
 typedef std::map<ScraperID, mCSManifest> mmCSManifestsBinnedByScraper;
 
@@ -171,6 +171,8 @@ double SCRAPER_CONVERGENCE_RATIO = 0.6;
 double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
 // Allow non-scraper nodes to download stats?
 bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = false;
+// Misbehaving scraper node banscore
+unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE = 0;
 
 /*********************
 * Functions          *
@@ -180,7 +182,7 @@ uint256 GetFileHash(const fs::path& inputfile);
 ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
 std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
-bool IsScraperAuthorizedToBroadcastManifests(CKey& KeyOut);
+bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
 bool ScraperSynchronizeDPOR();

@@ -16,6 +16,7 @@
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
 std::map< uint256, std::unique_ptr<CScraperManifest> > CScraperManifest::mapManifest;
+extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
@@ -54,7 +55,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
             return false;
         }
     } else {
-        if(pfrom)  pfrom->Misbehaving(10);
+        if(pfrom)  pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
         return error("Spurious part received!");
     }
 }
@@ -249,24 +250,33 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
 // It is used to determine whether received manifests are authorized.
 bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey)
 {
+    bool bIsValid = PubKey.IsValid();
+    if (!bIsValid)
+        return false;
+
+    CKeyID ManifestKeyID = PubKey.GetID();
+
+    CBitcoinAddress ManifestAddress;
+    ManifestAddress.Set(ManifestKeyID);
+
+    // This is the address corresponding to the manifest public key.
+    std::string sManifestAddress = ManifestAddress.ToString();
+
+    // Now check and see if that address is in the authorized scraper list.
     AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
 
     for (auto const& entry : mScrapers)
     {
         if (entry.second.value == "true" || entry.second.value == "1")
         {
-            CPubKey AuthScraperPubKey(ParseHex(entry.first));
-
-            if (AuthScraperPubKey == PubKey)
+            if (sManifestAddress == entry.first)
                 return true;
         }
     }
 
     LogPrintf("ERROR: CScraperManifest::IsManifestAuthorized: Manifest is not authorized.");
-    // return false;
 
-    // For right now, during testing, only log the unauthorized manifest, but return true.
-    return true;
+    return false;
 }
 
 
@@ -353,12 +363,12 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     } catch(bool& e) {
         mapManifest.erase(hash);
         LogPrint("manifest", "invalid manifest %s receiveD", hash.GetHex());
-        if(pfrom)  pfrom->Misbehaving(50);
+        if(pfrom)  pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
         return false;
     } catch(std::ios_base::failure& e) {
         mapManifest.erase(hash);
         LogPrint("manifest", "invalid manifest %s receivEd", hash.GetHex());
-        if(pfrom)  pfrom->Misbehaving(50);
+        if(pfrom)  pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
         return false;
     }
     LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
@@ -511,26 +521,4 @@ UniValue getmpart(const UniValue& params, bool fHelp)
     if(ipart == CSplitBlob::mapParts.end())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");
     return UniValue(HexStr(ipart->second.data.begin(),ipart->second.data.end()));
-}
-
-UniValue sendmanifest(const UniValue& params, bool fHelp)
-{
-    if(fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "sendmanifest <test>\n"
-                "Send a new CScraperManifest object.\n"
-                );
-    auto manifest=  std::unique_ptr<CScraperManifest>(new CScraperManifest());
-    manifest->sCManifestName= params[0].get_str();
-    // Because if BeaconList is -1 it will fail the out of range test.
-    manifest->BeaconList = 0;
-    CDataStream part(SER_NETWORK,1);
-    part << std::string("SampleText") << rand();
-    manifest->addPartData(std::move(part));
-
-    CKey key;
-    std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
-    key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
-    CScraperManifest::addManifest(std::move(manifest), key);
-    return UniValue(true);
 }
