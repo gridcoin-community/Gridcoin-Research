@@ -99,7 +99,8 @@ GRIDCOIN_CORE_H = \
 	rpcprotocol.h \
 	rpcserver.h \
 	scraper_net.h \
-	scraper/http.h \
+	scraper/fwd.h \
+    scraper/http.h \
 	scraper/scraper.h \
 	script.h \
 	scrypt.h \

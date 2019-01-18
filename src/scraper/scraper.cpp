@@ -1,5 +1,6 @@
 #include "scraper.h"
 #include "http.h"
+#include "ui_interface.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -709,6 +710,8 @@ void Scraper(bool bSingleShot)
         else
             _log(logattribute::INFO, "Scraper", "Stored stats.");
 
+        // Signal stats event to UI.
+        uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_NEW);
 
         // This is the section to send out manifests. Only do if authorized.
         CBitcoinAddress AddressOut;
@@ -735,7 +738,8 @@ void Scraper(bool bSingleShot)
                     _log(logattribute::INFO, "Scraper", "Publishing new CScraperManifest.");
 
                     // scraper key used for signing is the key returned by IsScraperAuthorizedToBroadcastManifests(KeyOut).
-                    ScraperSendFileManifestContents(AddressOut, KeyOut);
+                    if (ScraperSendFileManifestContents(AddressOut, KeyOut))
+                        uiInterface.NotifyScraperEvent(scrapereventtypes::Manifest, CT_NEW);
                 }
 
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
@@ -2833,6 +2837,12 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             StructConvergedManifest = {};
     }
 
+    // Signal UI of the status of convergence attempt.
+    if (bConvergenceSuccessful)
+        uiInterface.NotifyScraperEvent(scrapereventtypes::Convergence, CT_NEW);
+    else
+        uiInterface.NotifyScraperEvent(scrapereventtypes::Convergence, CT_DELETED);
+
     return bConvergenceSuccessful;
     
 }
@@ -3343,12 +3353,33 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                     LOCK(cs_ConvergedScraperStatsCache);
                     if (fDebug) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
+                    std::string sSBCoreDataPrev = ConvergedScraperStatsCache.sContract;
+
                     sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
 
                     ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
                     ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
                     ConvergedScraperStatsCache.sContract = sSBCoreData;
+                    ConvergedScraperStatsCache.vExcludedProjects = StructConvergedManifest.vExcludedProjects;
+
+                    // Signal UI of SBContract status
+                    if (!sSBCoreData.empty())
+                    {
+                        if (!sSBCoreDataPrev.empty())
+                        {
+                            // If the current is not empty and the previous is not empty and not the same, then there is an updated contract.
+                            if (sSBCoreData != sSBCoreDataPrev)
+                                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED);
+                        }
+                        else
+                            // If the previous was empty and the current is not empty, then there is a new contract.
+                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW);
+                    }
+                    else
+                        if (!sSBCoreDataPrev.empty())
+                            // If the current is empty and the previous was not empty, then the contract has been deleted.
+                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED);
 
                     // End LOCK(cs_ConvergedScraperStatsCache)
                     if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
@@ -3378,6 +3409,10 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
             // appropriate for the single shot.
             ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
             sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperStats);
+
+            // Signal the UI there is a contract.
+            if(!sSBCoreData.empty())
+                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW);
 
             if (fDebug)
                 _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from single shot\n" + sSBCoreData);
@@ -3493,7 +3528,10 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
     CKey KeyOut;
     bool ret;
     if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+    {
         ret = ScraperSendFileManifestContents(AddressOut, KeyOut);
+        uiInterface.NotifyScraperEvent(scrapereventtypes::Manifest, CT_NEW);
+    }
     else
         ret = false;
 

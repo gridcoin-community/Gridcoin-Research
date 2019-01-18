@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+#include "scraper/fwd.h"
+
 class CBasicKeyStore;
 class CWallet;
 class uint256;
@@ -96,6 +98,12 @@ public:
      * @note called with lock cs_mapAlerts held.
      */
     boost::signals2::signal<void (const uint256 &hash, ChangeType status)> NotifyAlertChanged;
+
+    /**
+     * Scraper event type - new or update
+     * @note called with lock cs_ConvergedScraperStatsCache held.
+     */
+    boost::signals2::signal<void (const scrapereventtypes& ScraperEventtype, ChangeType status)> NotifyScraperEvent;
 };
 
 extern CClientUIInterface uiInterface;

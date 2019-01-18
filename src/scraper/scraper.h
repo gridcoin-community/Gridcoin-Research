@@ -1,10 +1,8 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <cmath>
 #include <iostream>
 #include <inttypes.h>
+#include <cmath>
 #include <algorithm>
 #include <cctype>
 #include <vector>
@@ -25,11 +23,11 @@
 
 #include <memory>
 #include "net.h"
-// Do not include rpcserver.h yet, as it includes conflicting ExtractXML functions. To do: remove duplicates.
-//#include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "scraper_net.h"
-#include "util.h"
+
+// See fwd.h for certain forward declarations that need to be included in other areas.
+#include "fwd.h"
 
 /*********************
 * Scraper Namepsace  *
@@ -38,95 +36,6 @@
 namespace fs = boost::filesystem;
 namespace boostio = boost::iostreams;
 
-/*********************
-* Scraper ENUMS      *
-*********************/
-
-enum class statsobjecttype
-{
-    NetworkWide,
-    byCPID,
-    byProject,
-    byCPIDbyProject
-};
-
-static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
-
-const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
-{
-    return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
-}
-
-/*********************
-* Global Vars        *
-*********************/
-
-
-typedef std::string ScraperID;
-// The inner map is sorted in descending order of time. The pair is manifest hash, content hash.
-typedef std::multimap<int64_t, pair<uint256, uint256>, greater <int64_t>> mCSManifest;
-// This is sCManifestName, which is the string version of the originating scraper pubkey.
-// See the ScraperID typedef above.
-typedef std::map<ScraperID, mCSManifest> mmCSManifestsBinnedByScraper;
-
-// -------------- Project ---- Converged Part
-typedef std::map<std::string, CSerializeData> mConvergedManifestParts;
-// Note that this IS a copy not a pointer. Since manifests and parts can be deleted because of aging rules,
-// it is dangerous to save memory and point to the actual part objects themselves.
-
-struct ConvergedManifest
-{
-    // IMPORTANT... nContentHash is NOT the hash of part hashes in the order of vParts unlike CScraper::manifest.
-    // It is the hash of the data in the ConvergedManifestPartsMap in the order of the key.
-    uint256 nContentHash;
-    uint256 ConsensusBlock;
-    int64_t timestamp;
-    bool bByParts;
-
-    mConvergedManifestParts ConvergedManifestPartsMap;
-    // ------------------ project ----- reason for exclusion
-    std::vector<std::pair<std::string, std::string>> vExcludedProjects;
-};
-
-
-struct ScraperObjectStatsKey
-{
-    statsobjecttype objecttype;
-    std::string objectID;
-};
-
-struct ScraperObjectStatsValue
-{
-    double dTC;
-    double dRAT;
-    double dRAC;
-    double dAvgRAC;
-    double dMag;
-};
-
-struct ScraperObjectStats
-{
-    ScraperObjectStatsKey statskey;
-    ScraperObjectStatsValue statsvalue;
-};
-
-struct ScraperObjectStatsKeyComp
-{
-    bool operator() ( ScraperObjectStatsKey a, ScraperObjectStatsKey b ) const
-    {
-        return std::make_pair(a.objecttype, a.objectID) < std::make_pair(b.objecttype, b.objectID);
-    }
-};
-
-typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKeyComp> ScraperStats;
-
-struct ConvergedScraperStats
-{
-    int64_t nTime;
-    ScraperStats mScraperConvergedStats;
-    std::string sContractHash;
-    std::string sContract;
-};
 
 /*********************
 * Global Defaults    *
@@ -186,6 +95,13 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
 bool ScraperSynchronizeDPOR();
+
+static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
+
+const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
+{
+    return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
+}
 
 double MagRound(double dMag)
 {
