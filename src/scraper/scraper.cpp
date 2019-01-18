@@ -799,7 +799,7 @@ void NeuralNetwork()
             LOCK(cs_Scraper);
             if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
-            ScraperApplyAppCacheEntries();
+            ScraperDirectoryAndConfigSanity();
             // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
             // See the comment on the function.
             ScraperDeleteUnauthorizedCScraperManifests();
@@ -930,7 +930,8 @@ bool ScraperDirectoryAndConfigSanity()
             fs::remove(pathScraper);
             fs::create_directory(pathScraper);
         }
-        else
+        // Only do the file manifest to directory alignments if the scraper is active.
+        else if (fScraperActive)
         {
             // Load the manifest file from the Scraper directory into mScraperFileManifest, if mScraperFileManifest is empty.
             // Lock the manifest while it is being manipulated.
