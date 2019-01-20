@@ -61,6 +61,8 @@
         <file alias="history_dark">res/icons/icons_dark/transactions.svg</file>
         <file alias="history_light">res/icons/icons_light/transactions.svg</file>
         <file alias="history_native">res/icons/icons_native/transactions.svg</file>
+        <file alias="tx_mined_ss">res/icons/tx_mined_ss.svg</file>
+        <file alias="tx_cpumined_ss">res/icons/tx_por_ss.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>
@@ -79,4 +81,5 @@
         <file alias="native">res/stylesheets/native_stylesheet.qss</file>
         <file alias="dark">res/stylesheets/dark_stylesheet.qss</file>
     </qresource>
+    <qresource prefix="/"/>
 </RCC>

@@ -399,8 +399,8 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
             case MinedType::POS               :    return QIcon(":/icons/tx_mined");
             case MinedType::POR               :    return QIcon(":/icons/tx_cpumined");
             case MinedType::ORPHANED          :    return QIcon(":/icons/transaction_conflicted");
-            case MinedType::POS_SIDE_STAKE    :    return QIcon(":/icons/transaction_0");
-            case MinedType::POR_SIDE_STAKE    :    return QIcon(":/icons/transaction_0");
+            case MinedType::POS_SIDE_STAKE    :    return QIcon(":/icons/tx_mined_ss");
+            case MinedType::POR_SIDE_STAKE    :    return QIcon(":/icons/tx_cpumined_ss");
             default                           :    return QIcon(":/icons/transaction_0");
         }
     }
