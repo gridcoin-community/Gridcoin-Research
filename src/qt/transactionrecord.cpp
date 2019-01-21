@@ -108,7 +108,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     {
                         //Standard POR/POS CoinStake
                         sub.type = TransactionRecord::Generated;
-                        sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
+                        sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet, wtx) - nDebit;
                         hashPrev = hash;
                     }
                 }
