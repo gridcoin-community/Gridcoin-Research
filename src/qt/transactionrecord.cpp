@@ -63,7 +63,7 @@ int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx, unsigned int&
     return nValueOut;
 }
 
-int64_t GetNumberOfStakeReturnOutputs(const CWallet *wallet,const CWalletTx &wtx)
+unsigned int GetNumberOfStakeReturnOutputs(const CWallet *wallet,const CWalletTx &wtx)
 {
     unsigned int nNumberOfOutputs = 0;
 
@@ -91,8 +91,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     int64_t nCredit = wtx.GetCredit(true);
     int64_t nDebit = wtx.GetDebit();
     int64_t nNet = nCredit - nDebit;
-    uint256 hash = wtx.GetHash(), hashPrev = 0;
+    uint256 hash = wtx.GetHash();
     std::map<std::string, std::string> mapValue = wtx.mapValue;
+
+    int64_t nCoinStakeReturnOutput = 0;
+    unsigned int iCoinStakeReturnOutputIndex = 1;
 
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
     {
@@ -105,7 +108,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 TransactionRecord sub(hash, nTime);
                 CTxDestination address;
                 sub.idx = parts.size(); // sequence number
-                sub.credit = wtx.vout[t].nValue;
                 sub.vout = t;
 
                 if (ExtractDestination(wtx.vout[t].scriptPubKey, address) && IsMine(*wallet, address))
@@ -120,42 +122,52 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     sub.type = TransactionRecord::RecvFromOther;
                     sub.address = mapValue["from"];
                 }
+
                 if (wtx.IsCoinBase())
                 {
                     // Generated (proof-of-work)
                     sub.type = TransactionRecord::Generated;
+                    // This is legacy.
+                    sub.credit = wtx.vout[t].nValue;
                 }
-                if (wtx.IsCoinStake())
+                else if (wtx.IsCoinStake())
                 {
-                    // Generated (proof-of-stake)
-                    //if (hashPrev == hash)
-                    //    continue; // last coinstake output
+                    //POR-POS CoinStake, so change transaction record type to generated.
+                    sub.type = TransactionRecord::Generated;
 
-                    if (wtx.vout.size() >= 2)
+                    unsigned int nNumberOfStakeReturnOutputs  = GetNumberOfStakeReturnOutputs(wallet, wtx);
+
+                    // The number of StakeOutputs should never be zero for the coinstake.
+                    if (nNumberOfStakeReturnOutputs == 0)
                     {
-                        //POR-POS CoinStake
-                        sub.type = TransactionRecord::Generated;
-
-                        int64_t nNumberOfStakeReturnOutputs  = GetNumberOfStakeReturnOutputs(wallet, wtx);
-
-                        // The number of StakeOutputs should never be zero for the coinstake.
-                        if (nNumberOfStakeReturnOutputs == 0)
-                        {
-                            LogPrintf("ERROR: decomposeTransaction: nNumberOfStakeReturnOutputs = 0. Adjusting to 1.");
-                            nNumberOfStakeReturnOutputs = 1;
-                        }
-
-                        // If the output address does not match the input (which is the same as the first non-empty output),
-                        // then this is a sidestake and we are on the receiving side, so no debit, otherwise, the debit is
-                        // apportioned.
-                        if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey)
-                            sub.credit = GetMyValueOut(wallet, wtx, t);
-                        else
-                            // The apportionment of the "debit", which in this case is vin, is to take care of stake splitting.
-                            sub.credit = GetMyValueOut(wallet, wtx, t) - nDebit / nNumberOfStakeReturnOutputs;
-                        hashPrev = hash;
+                        LogPrintf("ERROR: decomposeTransaction: nNumberOfStakeReturnOutputs = 0. Adjusting to 1.");
+                        nNumberOfStakeReturnOutputs = 1;
                     }
-                }
+
+                    // If the output address does not match the input (which is the same as the first non-empty output),
+                    // then this is a sidestake and we are on the receiving side, so no debit, otherwise, the debit is
+                    // apportioned and coalesced.
+                    if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey)
+                        sub.credit = GetMyValueOut(wallet, wtx, t);
+                    else
+                    {
+                        // Accumulate/coalesce splitstake output (returns) to the same address
+                        nCoinStakeReturnOutput += GetMyValueOut(wallet, wtx, t);
+
+                        if (iCoinStakeReturnOutputIndex < nNumberOfStakeReturnOutputs)
+                        {
+                            // Do not allow to flow down to parts.append(sub). Increment output index counter.
+                            iCoinStakeReturnOutputIndex++;
+                            continue;
+                        }
+                        else
+                        {
+                            // We are on the last splitstake return, so apply the debit and allow to go to parts.append(sub).
+                            sub.credit = nCoinStakeReturnOutput - nDebit;
+                        }
+                    }
+                } else
+                    sub.credit = wtx.vout[t].nValue;
 
                 parts.append(sub);
             }
