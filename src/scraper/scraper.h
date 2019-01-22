@@ -11,6 +11,7 @@
 #include <boost/locale.hpp>
 #include <codecvt>
 #include <boost/filesystem.hpp>
+#include <boost/filesystem/fstream.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <fstream>
 #include <sstream>
