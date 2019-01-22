@@ -55,7 +55,12 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
             return false;
         }
     } else {
-        if(pfrom)  pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+        if(pfrom)
+        {
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+            LogPrintf("WARNING: CSplitBlob::RecvPart: Spurious part received from %s. Adding %u banscore.",
+                     pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE / 5);
+        }
         return error("Spurious part received!");
     }
 }
@@ -274,7 +279,7 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey)
         }
     }
 
-    LogPrintf("ERROR: CScraperManifest::IsManifestAuthorized: Manifest is not authorized.");
+    LogPrintf("WARNING: CScraperManifest::IsManifestAuthorized: Manifest from %s is not authorized.", sManifestAddress);
 
     return false;
 }
@@ -362,19 +367,29 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         manifest.UnserializeCheck(vRecv);
     } catch(bool& e) {
         mapManifest.erase(hash);
-        LogPrint("manifest", "invalid manifest %s receiveD", hash.GetHex());
-        if(pfrom)  pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
+        LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+        if(pfrom)
+        {
+            LogPrintf("WARNING: CScraperManifest::RecvManifest): Invalid manifest %s received from %s. Increasing banscore by %u.",
+                     hash.GetHex(), pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE);
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
+        }
         return false;
     } catch(std::ios_base::failure& e) {
         mapManifest.erase(hash);
-        LogPrint("manifest", "invalid manifest %s receivEd", hash.GetHex());
-        if(pfrom)  pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
+        LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
+        if(pfrom)
+        {
+            LogPrintf("WARNING: CScraperManifest::RecvManifest): Invalid manifest %s received from %s. Increasing banscore by %u.",
+                     hash.GetHex(), pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE);
+            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
+        }
         return false;
     }
     LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
     if( manifest.isComplete() )
     {
-        /* If we already got all the parts in memory, signal completition */
+        /* If we already got all the parts in memory, signal completion */
         manifest.Complete();
     } else {
         /* else request missing parts from the sender */
@@ -401,7 +416,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     uint256 hash(Hash(ss.begin(),ss.end()));
     keySign.Sign(hash, m->signature);
     ss << m->signature;
-    LogPrintf("CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
+    if (fDebug) LogPrintf("INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
 #if 1
     LogPrint("manifest", "adding new local manifest");
@@ -437,7 +452,7 @@ void CScraperManifest::Complete()
     /* Do something with the complete manifest */
     std::string bodystr;
     vParts[0]->getReader() >> bodystr;
-    printf("CScraperManifest::Complete(): %s %s\n",sCManifestName.c_str(),bodystr.c_str());
+    if (fDebug) LogPrintf("INFO: CScraperManifest::Complete(): from %s with hash %s", sCManifestName, phash->GetHex());
 }
 
 /* how?
