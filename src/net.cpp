@@ -2240,17 +2240,23 @@ void StartNode(void* parg)
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
 
-    // Run the scraper
-    if (!GetBoolArg("-scraper"))
-        LogPrintf("Scraper disabled");
-    else
+    // Run the scraper or NN housekeeping thread, but not both. The NN housekeeping thread
+    // checks if the flag for the scraper thread is true, and basically becomes a no-op, but
+    // it is silly to run it if the scraper thread is running. The scraper thread does all
+    // of the same housekeeping functions as the NN housekeeping thread.
+    if (GetBoolArg("-scraper", false))
+    {
+        LogPrintf("Scraper enabled.");
         if (!netThreads->createThread(ThreadScraper,NULL,"ThreadScraper"))
             LogPrintf("Error: createThread(ThreadScraper) failed");
-
-    // Run the neural network thread (this is currently NOT the same as the GridcoinServices() stuff from main).
+    }
+    else
+    {
+        LogPrintf("Scraper disabled.");
+        LogPrintf("NN housekeeping thread enabled.");
         if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
             LogPrintf("Error: createThread(NeuralNetwork) failed");
-
+    }
 }
 
 bool StopNode()
