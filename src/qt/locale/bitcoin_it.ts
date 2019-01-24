@@ -2387,8 +2387,8 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="-206"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Inserisci un indirizzo Gridcoin (es. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Inserisci un indirizzo Gridcoin (es. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-145"/>
@@ -2530,8 +2530,8 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="-96"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Inserisci un indirizzo Gridcoin (es. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Inserisci un indirizzo Gridcoin (es. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
 </context>
 <context>
@@ -2714,8 +2714,8 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="-230"/>
         <location line="+198"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Inserisci un indirizzo Gridcoin (es. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Inserisci un indirizzo Gridcoin (es. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
 </context>
 <context>

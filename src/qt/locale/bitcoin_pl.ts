@@ -2383,8 +2383,8 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="-206"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Wprowadź adres Gridcoin (n.p. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Wprowadź adres Gridcoin (n.p. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-165"/>
@@ -2577,8 +2577,8 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="-96"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Wprowadź adres Gridcoin (n.p. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Wprowadź adres Gridcoin (n.p. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
 </context>
 <context>
@@ -2699,8 +2699,8 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="-256"/>
         <location line="+198"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Wpisz adres Gridcoin (n.p. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Wpisz adres Gridcoin (n.p. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <location line="-134"/>

@@ -2335,8 +2335,8 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     </message>
     <message>
         <location line="-206"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Insira um endereço Grdicoin(exemplo: G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Insira um endereço Grdicoin(exemplo: S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="-165"/>
@@ -2528,8 +2528,8 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     </message>
     <message>
         <location line="-96"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Insira um endereço Gridcoin (exemplo:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Insira um endereço Gridcoin (exemplo:S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
 </context>
 <context>
@@ -2712,8 +2712,8 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="-230"/>
         <location line="+198"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Insira um endereço Gridcoin (exemplo:G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Insira um endereço Gridcoin (exemplo:S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
 </context>
 <context>

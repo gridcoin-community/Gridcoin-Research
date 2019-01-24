@@ -2270,7 +2270,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
     </message>
     <message>
         <location line="-203"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2449,7 +2449,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
     </message>
     <message>
         <location line="-96"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2557,7 +2557,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
     <message>
         <location line="-256"/>
         <location line="+198"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
