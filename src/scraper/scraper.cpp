@@ -779,7 +779,9 @@ void ScraperSingleShot()
 // This is the non-scraper "neural-network" node thread...
 void NeuralNetwork()
 {
-    _log(logattribute::INFO, "NeuralNetwork", "Starting Neural Network thread (new C++ implementation).");
+    _log(logattribute::INFO, "NeuralNetwork", "Starting Neural Network housekeeping thread (new C++ implementation). \n"
+                                              "Note that this does NOT mean the NN is active. This simply does housekeeping"
+                                              "functions.");
 
     while(!fShutdown)
     {
