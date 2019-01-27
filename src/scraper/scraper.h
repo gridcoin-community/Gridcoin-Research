@@ -83,6 +83,10 @@ double CONVERGENCE_BY_PROJECT_RATIO = 0.75;
 bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = false;
 // Misbehaving scraper node banscore
 unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE = 0;
+// Require team membership in team whitelist.
+bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP = false;
+// Default team whitelist
+std::string TEAM_WHITELIST = "Gridcoin";
 
 /*********************
 * Functions          *

@@ -57,8 +57,9 @@ struct ScraperFileManifest
     int64_t timestamp;
 };
 
-
-
+// --------------- project -------------team name -- teamID
+typedef std::map<std::string, std::map<std::string, int64_t>> mTeamIDs;
+mTeamIDs TeamIDMap;
 
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
@@ -72,6 +73,7 @@ CCriticalSection cs_Scraper;
 CCriticalSection cs_vwhitelist;
 CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
+CCriticalSection cs_TeamIDMap;
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage);
 
@@ -86,8 +88,10 @@ bool WhitelistPopulated();
 bool UserpassPopulated();
 bool ScraperDirectoryAndConfigSanity();
 bool StoreBeaconList(const fs::path& file);
+bool StoreTeamIDList(const fs::path& file);
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
 bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
+bool LoadTeamIDList(const fs::path& file);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 uint256 GetmScraperFileManifestHash();
 bool StoreScraperFileManifest(const fs::path& file);
@@ -115,6 +119,8 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 // Overloaded. See alternative in scraper.h.
 std::string ScraperGetNeuralHash(std::string sNeuralContract);
 
+bool DownloadProjectTeamFiles();
+bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::map<std::string, int64_t>& mTeamIdsForProject_out);
 bool DownloadProjectRacFilesByCPID();
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
@@ -447,8 +453,8 @@ void ApplyCache(const std::string& key, T& result)
     const auto& entry = ReadCache(Section::PROTOCOL, key);
 
     // If the entry has an empty string (no value) then leave the original undisturbed.
-    if(entry.value.empty())
-       return;
+    if (entry.value.empty())
+        return;
 
     try
     {
@@ -469,6 +475,8 @@ void ApplyCache(const std::string& key, T& result)
             else
                 throw std::invalid_argument("Argument not true or false");
         }
+        else
+            result = boost::lexical_cast<T>(entry.value);
     }
     catch (const std::exception&)
     {
@@ -498,6 +506,8 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("CONVERGENCE_BY_PROJECT_RATIO", CONVERGENCE_BY_PROJECT_RATIO);
     ApplyCache("ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD", ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD);
     ApplyCache("SCRAPER_MISBEHAVING_NODE_BANSCORE", SCRAPER_MISBEHAVING_NODE_BANSCORE);
+    ApplyCache("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", REQUIRE_TEAM_WHITELIST_MEMBERSHIP);
+    ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
 
     if (fDebug)
     {
@@ -517,6 +527,8 @@ void ScraperApplyAppCacheEntries()
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CONVERGENCE_BY_PROJECT_RATIO = " + std::to_string(CONVERGENCE_BY_PROJECT_RATIO));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = " + std::to_string(ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_MISBEHAVING_NODE_BANSCORE = " + std::to_string(SCRAPER_MISBEHAVING_NODE_BANSCORE));
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + std::to_string(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "TEAM_WHITELIST = " + TEAM_WHITELIST);
 
         AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
 
@@ -692,6 +704,12 @@ void Scraper(bool bSingleShot)
                 _log(logattribute::ERR, "Scraper", "StoreBeaconList error occurred");
             else
                 _log(logattribute::INFO, "Scraper", "Stored Beacon List");
+
+            // If team filtering is set by policy then pull down and retrieve team ID's as needed. This loads the TeamIDMap global.
+            // Note that the call(s) to ScraperDirectoryAndConfigSanity() above will preload the team ID map from the persisted file
+            // if it exists, so this will minimize the work that DownloadProjectTeamFiles() has to do.
+            if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
+                DownloadProjectTeamFiles();
 
             DownloadProjectRacFilesByCPID();
 
@@ -943,11 +961,11 @@ bool ScraperDirectoryAndConfigSanity()
 
                 if (StructScraperFileManifest.mScraperFileManifest.empty())
                 {
-                    _log(logattribute::INFO, "ScraperDirectorySanity", "Loading Manifest");
+                    _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loading Manifest");
                     if (!LoadScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                        _log(logattribute::ERR, "ScraperDirectorySanity", "Error occurred loading manifest");
+                        _log(logattribute::ERR, "ScraperDirectoryAndConfigSanity", "Error occurred loading manifest");
                     else
-                        _log(logattribute::INFO, "ScraperDirectorySanity", "Loaded Manifest file into map.");
+                        _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loaded Manifest file into map.");
                 }
 
                 // Align the Scraper directory with the Manifest file.
@@ -964,19 +982,20 @@ bool ScraperDirectoryAndConfigSanity()
                             && dir.path().filename() != "BeaconList.csv.gz"
                             && dir.path().filename() != "Stats.csv.gz"
                             && dir.path().filename() != "ConvergedStats.csv.gz"
+                            && dir.path().filename() != "TeamIDs.csv.gz"
                             && fs::is_regular_file(dir))
                     {
                         entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
                         if (entry == StructScraperFileManifest.mScraperFileManifest.end())
                         {
                             fs::remove(dir.path());
-                            _log(logattribute::WARNING, "ScraperDirectorySanity", "Removing orphan file not in Manifest: " + filename);
+                            _log(logattribute::WARNING, "ScraperDirectoryAndConfigSanity", "Removing orphan file not in Manifest: " + filename);
                             continue;
                         }
 
                         if (entry->second.hash != GetFileHash(dir))
                         {
-                            _log(logattribute::INFO, "ScraperDirectorySanity", "File failed hash check. Removing file.");
+                            _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "File failed hash check. Removing file.");
                             fs::remove(dir.path());
                         }
                     }
@@ -993,13 +1012,47 @@ bool ScraperDirectoryAndConfigSanity()
                             || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
                             || (!SCRAPER_RETAIN_NONCURRENT_FILES && entry_copy->second.current == false))
                     {
-                        _log(logattribute::WARNING, "ScraperDirectorySanity", "Removing stale or orphan manifest entry: " + entry_copy->first);
+                        _log(logattribute::WARNING, "ScraperDirectoryAndConfigSanity", "Removing stale or orphan manifest entry: " + entry_copy->first);
                         DeleteScraperFileManifestEntry(entry_copy->second);
                     }
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
                 if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+            }
+
+            // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
+            // team file downloads for projects whose team ID's have already been found and stored.
+            if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
+            {
+                LOCK(cs_TeamIDMap);
+                if (fDebug) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+
+                if (TeamIDMap.empty())
+                {
+                    _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loading team IDs");
+                    if (!LoadTeamIDList(pathScraper / "TeamIDs.csv.gz"))
+                        _log(logattribute::ERR, "ScraperDirectoryAndConfigSanity", "Error occurred loading team IDs");
+                    else
+                    {
+                        _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loaded team IDs file into map.");
+                        if (fDebug3)
+                        {
+                            _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "TeamIDMap contents:");
+                            for (const auto& iter : TeamIDMap)
+                            {
+                                _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Project = " + iter.first);
+                                for (const auto& iter2 : iter.second)
+                                {
+                                    _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity",
+                                         "Team = " + iter2.first + ", TeamID = " + std::to_string(iter2.second));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
             }
         }
     }
@@ -1079,6 +1132,263 @@ bool UserpassPopulated()
     return true;
 }
 
+
+
+
+/**********************
+* Project Team Files  *
+**********************/
+
+bool DownloadProjectTeamFiles()
+{
+    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
+
+        if (!WhitelistPopulated())
+        {
+            _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Whitelist is not populated");
+
+            return false;
+        }
+
+        {
+            LOCK(cs_vwhitelist);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
+
+            vwhitelist_local = vwhitelist;
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
+        }
+
+        if (!UserpassPopulated())
+        {
+            _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Userpass is not populated");
+
+            return false;
+        }
+
+        for (const auto& prjs : vwhitelist_local)
+        {
+            LOCK(cs_TeamIDMap);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+
+            const auto iter = TeamIDMap.find(prjs.first);
+
+            // If there is an entry in the TeamIDMap for the project, and in the submap (team name and team id) there
+            // are the correct number of team entries, then skip processing.
+            if (iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, ",").size())
+            {
+                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
+                     + prjs.first + " project. Skipping team file download and processing.");
+                continue;
+            }
+
+            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Downloading project file for " + prjs.first);
+
+            std::vector<std::string> vPrjUrl = split(prjs.second, "@");
+
+            std::string sUrl = urlsanity(vPrjUrl[0], "team");
+
+            std::string team_file_name = prjs.first + "-team.gz";
+
+            fs::path team_file = pathScraper / team_file_name.c_str();
+
+            // Grab ETag of team file
+            Http http;
+            std::string sTeamETag;
+
+            bool buserpass = false;
+            std::string userpass;
+
+            for (const auto& up : vuserpass)
+            {
+                if (up.first == prjs.first)
+                {
+                    buserpass = true;
+
+                    userpass = up.second;
+
+                    break;
+                }
+            }
+
+            try
+            {
+                sTeamETag = http.GetEtag(sUrl, userpass);
+            }
+            catch (const std::runtime_error& e)
+            {
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.first);
+                continue;
+            }
+
+            if (sTeamETag.empty())
+            {
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "ETag for project is empty" + prjs.first);
+
+                continue;
+            }
+            else
+                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Successfully pulled team header file for " + prjs.first);
+
+            if (buserpass)
+            {
+                authdata ad(lowercase(prjs.first));
+
+                ad.setoutputdata("team", prjs.first, sTeamETag);
+
+                if (!ad.xport())
+                    _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Failed to export etag for " + prjs.first + " to authentication file");
+            }
+
+            std::string chketagfile = prjs.first + "-" + sTeamETag + ".csv" + ".gz";
+            fs::path chkfile = pathScraper / chketagfile.c_str();
+
+            if (fs::exists(chkfile))
+            {
+                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Etag file for " + prjs.first + " already exists");
+                continue;
+            }
+            else
+                fs::remove(team_file);
+
+            try
+            {
+                http.Download(sUrl, team_file.string(), userpass);
+            }
+            catch(const std::runtime_error& e)
+            {
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.first);
+                continue;
+            }
+
+
+            std::map<std::string, int64_t> mTeamIDsForProject = {};
+
+            if (ProcessProjectTeamFile(team_file.string(), sTeamETag, mTeamIDsForProject))
+            {
+                // Insert or update team IDs for the project into the team ID map.
+                TeamIDMap[prjs.first] = mTeamIDsForProject;
+            }
+
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+        }
+
+    return true;
+}
+
+
+
+bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::map<std::string, int64_t>& mTeamIdsForProject_out)
+{
+    // If passed an empty file, immediately return false.
+    if (file.string().empty())
+        return false;
+
+    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+
+    if (!ingzfile)
+    {
+        _log(logattribute::ERR, "ProcessProjectTeamFile", "Failed to open team gzip file (" + file.string() + ")");
+
+        return 0;
+    }
+
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Opening team file (" + file.string() + ")");
+
+    boostio::filtering_istream in;
+
+    in.push(boostio::gzip_decompressor());
+    in.push(ingzfile);
+
+    std::string gzetagfile = "";
+
+    // If einstein we store different
+    //if (file.string().find("einstein") != std::string::npos)
+    //    gzetagfile = "einstein_team.gz";
+    //else
+    gzetagfile = etag + ".csv" + ".gz";
+
+    //std::string gzetagfile_no_path = gzetagfile;
+    // Put path in.
+    gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
+
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.string());
+
+    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, ",");
+
+    std::string line;
+    stringbuilder builder;
+
+    while (std::getline(in, line))
+    {
+        if (line == "<team>")
+            builder.clear();
+        else if (line == "</team>")
+        {
+            const std::string& data = builder.value();
+            builder.clear();
+
+            const std::string& sTeamID = ExtractXML(data, "<id>", "</id>");
+            const std::string& sTeamName = ExtractXML(data, "<name>", "</name>");
+
+            // See if the team name is in the team whitelist.
+            auto iter = find(vTeamWhiteList.begin(), vTeamWhiteList.end(), sTeamName);
+            // If it is not continue on to next team.
+            if (iter == vTeamWhiteList.end())
+                continue;
+
+            int64_t nTeamID = 0;
+
+            try
+            {
+                nTeamID = atoi64(sTeamID);
+            }
+            catch (const std::exception&)
+            {
+                _log(logattribute::ERR, "ProccessProjectTeamFile", tfm::format("Ignoring bad team id for team %s.", sTeamName));
+                continue;
+            }
+
+            mTeamIdsForProject_out[sTeamName] = nTeamID;
+        }
+        else
+            builder.append(line);
+    }
+
+    if (mTeamIdsForProject_out.empty())
+    {
+        _log(logattribute::CRITICAL, "ProcessProjectTeamFile", "Error in data processing of " + file.string());
+
+        std::string efile = etag + ".gz";
+        fs::path fsepfile = pathScraper/ efile;
+        ingzfile.close();
+
+        if (fs::exists(fsepfile))
+            fs::remove(fsepfile);
+
+        if (fs::exists(file))
+            fs::remove(file);
+
+        return false;
+    }
+
+    if (mTeamIdsForProject_out.size() < vTeamWhiteList.size())
+        _log(logattribute::ERR, "ProcessProjectTeamFile", "Unable to determine team IDs for one or more whitelisted teams.");
+
+    // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
+    // The TeamIDs file is actually very small though, and this primitive implementation will suffice.
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Persisting Team ID entries to disk.");
+    if (!StoreTeamIDList(pathScraper / "TeamIDs.csv.gz"))
+        _log(logattribute::ERR, "ProcessProjectTeamFile", "StoreTeamIDList error occurred.");
+    else
+        _log(logattribute::INFO, "ProcessProjectTeamFile", "Stored Team ID entries.");
+
+
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Finished processing " + file.string());
+
+    fs::remove(file);
+
+    return true;
+}
 
 
 /**********************
@@ -1225,7 +1535,7 @@ bool DownloadProjectRacFilesByCPID()
 
 
 
-// This version uses a consensus beacon map rather than the teamid to filter statistics.
+// This version uses a consensus beacon map (and teamid, if team filtering is specificed by policy) to filter statistics.
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag, BeaconConsensus& Consensus)
 {
     // Set fileerror flag to true until made false by the completion of one successful injection of user stats into stream.
@@ -1266,6 +1576,18 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Started processing " + file.string());
 
+    std::map<std::string, int64_t> mTeamIDsForProject = {};
+    // Take a lock on cs_TeamIDMap to populate local whitelist TeamID vector for this project.
+    if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
+    {
+        LOCK(cs_TeamIDMap);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+
+        mTeamIDsForProject = TeamIDMap.find(project)->second;
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+    }
+
     std::string line;
     stringbuilder builder;
     out << "# total_credit,expavg_time,expavgcredit,cpid" << std::endl;
@@ -1281,6 +1603,30 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
             if (Consensus.mBeaconMap.count(cpid) < 1)
                 continue;
+
+            // Only do this if team membership filtering is specified by network policy.
+            if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
+            {
+                const std::string& sTeamID = ExtractXML(data, "<teamid>", "</teamid>");
+                int64_t nTeamID = 0;
+
+                try
+                {
+                    nTeamID = atoi64(sTeamID);
+                }
+                catch (const std::exception&)
+                {
+                    _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "Bad team id in user stats file data.");
+                    continue;
+                }
+
+                // Check to see if the user's team ID is in the whitelist team ID map for the project. If not continue.
+                for (auto const& iTeam : mTeamIDsForProject)
+                {
+                    if (iTeam.second == nTeamID)
+                        continue;
+                }
+            }
 
             // User beacon verified. Append its statistics to the CSV output.
             out << ExtractXML(data, "<total_credit>", "</total_credit>") << ","
@@ -1518,6 +1864,86 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 }
 
 
+
+bool LoadTeamIDList(const fs::path& file)
+{
+    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+
+    if (!ingzfile)
+    {
+        _log(logattribute::ERR, "LoadTeamIDList", "Failed to open Team ID gzip file (" + file.string() + ")");
+
+        return false;
+    }
+
+    boostio::filtering_istream in;
+    in.push(boostio::gzip_decompressor());
+    in.push(ingzfile);
+
+    std::string line;
+
+    // Header. This is used to construct the team names vector, since the team IDs were stored in the same order.
+    std::getline(in, line);
+
+    // This is in the form Project, Gridcoin, ...."
+    std::vector<std::string> vTeamNames = split(line, ",");
+    if (fDebug3) _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
+
+    while (std::getline(in, line))
+    {
+        std::string sProject = {};
+        std::map<std::string, int64_t> mTeamIDsForProject = {};
+
+        std::vector<std::string> vline = split(line, ",");
+
+        unsigned int iTeamName = 0;
+        // Populate team IDs into map.
+        for (const auto& iter : vline)
+        {
+            int64_t nTeamID;
+
+            // Skip (probably stale or bad entry with more or less team IDs than the header.
+            if (vline.size() != vTeamNames.size())
+                continue;
+
+            // The first element is the project
+            if (!iTeamName)
+                sProject = iter;
+            else
+            {
+                try
+                {
+                    nTeamID = atoi64(iter);
+                }
+                catch (std::exception&)
+                {
+                    _log(logattribute::ERR, "LoadTeamIDList", "Ignoring invalid team id found in team id file.");
+                    continue;
+                }
+
+                std::string sTeamName = vTeamNames.at(iTeamName);
+
+                mTeamIDsForProject[sTeamName] = nTeamID;
+            }
+
+            iTeamName++;
+        }
+
+        LOCK(cs_TeamIDMap);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+
+        // Insert into whitelist team ID map.
+        if (!sProject.empty())
+            TeamIDMap[sProject] = mTeamIDsForProject;
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+    }
+
+    return true;
+}
+
+
+
 bool StoreBeaconList(const fs::path& file)
 {
     BeaconConsensus Consensus = GetConsensusBeaconList();
@@ -1576,6 +2002,69 @@ bool StoreBeaconList(const fs::path& file)
     return true;
 }
 
+
+
+bool StoreTeamIDList(const fs::path& file)
+{
+    LOCK(cs_TeamIDMap);
+
+    if (fs::exists(file))
+        fs::remove(file);
+
+    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+    if (!outgzfile)
+    {
+        _log(logattribute::ERR, "StoreTeamIDList", "Failed to open team ID list gzip file (" + file.string() + ")");
+
+        return false;
+    }
+
+    boostio::filtering_istream out;
+    out.push(boostio::gzip_compressor());
+    std::stringstream stream;
+
+    _log(logattribute::INFO, "StoreTeamIDList", "Started processing " + file.string());
+
+    // Header
+    stream << "Project";
+
+    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, ",");
+    std::set<std::string> setTeamWhiteList;
+
+    // Ensure that the team names are in the correct order.
+    for (auto const& iTeam: vTeamWhiteList)
+        setTeamWhiteList.insert(iTeam);
+
+    for (auto const& iTeam: setTeamWhiteList)
+        stream << "," << iTeam;
+
+    stream << std::endl;
+
+    // Data
+    for (auto const& iProject : TeamIDMap)
+    {
+        std::string sProjectEntry = {};
+
+        stream << iProject.first;
+
+        for (auto const& iTeam : iProject.second)
+            sProjectEntry += "," + std::to_string(iTeam.second);
+
+        stream << sProjectEntry << std::endl;
+    }
+
+    _log(logattribute::INFO, "StoreTeamIDList", "Finished processing Team ID data from map.");
+
+    out.push(stream);
+    boost::iostreams::copy(out, outgzfile);
+    outgzfile.flush();
+    outgzfile.close();
+
+    _log(logattribute::INFO, "StoreTeamIDList", "Process Complete.");
+
+    return true;
+}
 
 
 
