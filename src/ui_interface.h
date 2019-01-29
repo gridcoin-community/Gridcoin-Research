@@ -103,7 +103,7 @@ public:
      * Scraper event type - new or update
      * @note called with lock cs_ConvergedScraperStatsCache held.
      */
-    boost::signals2::signal<void (const scrapereventtypes& ScraperEventtype, ChangeType status)> NotifyScraperEvent;
+    boost::signals2::signal<void (const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)> NotifyScraperEvent;
 };
 
 extern CClientUIInterface uiInterface;

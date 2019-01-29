@@ -21,10 +21,11 @@ enum class statsobjecttype
 
 enum class scrapereventtypes
 {
+    Log,
     Stats,
     Manifest,
     Convergence,
-    SBContract,
+    SBContract
 };
 
 
