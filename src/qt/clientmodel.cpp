@@ -123,6 +123,13 @@ void ClientModel::updateAlert(const QString &hash, int status)
     emit numBlocksChanged(getNumBlocks(), getNumBlocksOfPeers());
 }
 
+void ClientModel::updateScraper(int scraperEventtype, int status, const QString message)
+{
+    if (scraperEventtype = (int)scrapereventtypes::Log)
+        emit updateScraperLog(message);
+}
+
+
 bool ClientModel::isTestNet() const
 {
     return fTestNet;
@@ -214,12 +221,21 @@ static void NotifyAlertChanged(ClientModel *clientmodel, const uint256 &hash, Ch
                               Q_ARG(int, status));
 }
 
+static void NotifyScraperEvent(ClientModel *clientmodel, const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)
+{
+    QMetaObject::invokeMethod(clientmodel, "updateScraper", Qt::QueuedConnection,
+                              Q_ARG(int, (int)ScraperEventtype),
+                              Q_ARG(int, status),
+                              Q_ARG(QString, QString::fromStdString(message)));
+}
+
 void ClientModel::subscribeToCoreSignals()
 {
     // Connect signals to client
     uiInterface.NotifyBlocksChanged.connect(boost::bind(NotifyBlocksChanged, this));
     uiInterface.NotifyNumConnectionsChanged.connect(boost::bind(NotifyNumConnectionsChanged, this, _1));
     uiInterface.NotifyAlertChanged.connect(boost::bind(NotifyAlertChanged, this, _1, _2));
+    uiInterface.NotifyScraperEvent.connect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()
@@ -228,4 +244,5 @@ void ClientModel::unsubscribeFromCoreSignals()
     uiInterface.NotifyBlocksChanged.disconnect(boost::bind(NotifyBlocksChanged, this));
     uiInterface.NotifyNumConnectionsChanged.disconnect(boost::bind(NotifyNumConnectionsChanged, this, _1));
     uiInterface.NotifyAlertChanged.disconnect(boost::bind(NotifyAlertChanged, this, _1, _2));
+    uiInterface.NotifyScraperEvent.disconnect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));
 }
