@@ -2942,15 +2942,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
         }
     }
 
-    /*
-    CKey k;
-    CKeyID id;
-    CBitcoinAddress ba;
-    (check) ba.SetString(GetArg('-scraperkey')); (check) ba.GetKeyID(id); (check)  pWalletMain->GetKey(id,k);
-    */
-
     // If we made it here, there is no match or valid key in the wallet
-    // For right now return true (during testing) but _log a warning.
 
     _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests", "No key found in wallet that matches authorized scrapers in appcache.");
 
@@ -2982,11 +2974,11 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
                 _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests", "Deleting unauthorized manifest with hash " + iter->first.GetHex());
                 // Delete from CScraperManifest map
                 ScraperDeleteCScraperManifest(iter_copy->first);
+                nDeleted++;
             }
         }
 
         ++iter;
-        nDeleted++;
     }
 
     return nDeleted;
