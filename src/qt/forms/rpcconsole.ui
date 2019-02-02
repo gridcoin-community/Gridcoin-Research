@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>784</width>
-    <height>718</height>
+    <height>1020</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -753,6 +753,35 @@
         </layout>
        </item>
       </layout>
+     </widget>
+     <widget class="QWidget" name="tab_scraper">
+      <attribute name="title">
+       <string>&amp;Scraper</string>
+      </attribute>
+      <widget class="QPlainTextEdit" name="scraper_log">
+       <property name="geometry">
+        <rect>
+         <x>11</x>
+         <y>11</y>
+         <width>721</width>
+         <height>911</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>9</pointsize>
+        </font>
+       </property>
+       <property name="autoFillBackground">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+       </property>
+       <property name="maximumBlockCount">
+        <number>10000</number>
+       </property>
+      </widget>
      </widget>
     </widget>
    </item>

@@ -125,8 +125,12 @@ void ClientModel::updateAlert(const QString &hash, int status)
 
 void ClientModel::updateScraper(int scraperEventtype, int status, const QString message)
 {
-    if (scraperEventtype = (int)scrapereventtypes::Log)
+    if (scraperEventtype == (int)scrapereventtypes::Log)
+    {
+        //LogPrintf("INFO: ClientModel::updateScraper: %s", message.toStdString());
+
         emit updateScraperLog(message);
+    }
 }
 
 
