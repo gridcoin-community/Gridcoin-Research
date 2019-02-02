@@ -89,7 +89,6 @@ GRIDCOIN_CORE_H = \
 	neuralnet/neuralnet.h \
    neuralnet/neuralnet_native.h \
    neuralnet/neuralnet_stub.h \
-   neuralnet/neuralnet_win.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
