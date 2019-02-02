@@ -472,9 +472,9 @@ void ApplyCache(const std::string& key, T& result)
         else if (std::is_same<T, bool>::value)
         {
             if (entry.value == "false" || entry.value == "0")
-                result = false;
+                result = boost::lexical_cast<T>(false);
             else if (entry.value == "true" || entry.value == "1")
-                result = true;
+                result = boost::lexical_cast<T>(true);
             else
                 throw std::invalid_argument("Argument not true or false");
         }
