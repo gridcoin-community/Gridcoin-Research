@@ -16,6 +16,7 @@
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
 std::map< uint256, std::unique_ptr<CScraperManifest> > CScraperManifest::mapManifest;
+CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
@@ -164,6 +165,8 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
    * if yes, relay pfrom to Parts system as a fetch source and return true
    * else return false
   */
+    LOCK(cs_mapManifest);
+
     auto found = mapManifest.find(inv.hash);
     if( found!=mapManifest.end() )
     {
@@ -179,6 +182,8 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
 
 void CScraperManifest::PushInvTo(CNode* pto)
 {
+    LOCK(cs_mapManifest);
+
     /* send all keys from the index map as inventory */
     /* FIXME: advertise only completed manifests */
     for (auto const& obj : mapManifest)
@@ -190,6 +195,8 @@ void CScraperManifest::PushInvTo(CNode* pto)
 
 bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 {
+    LOCK(cs_mapManifest);
+
     auto it= mapManifest.find(hash);
     if(it==mapManifest.end())
         return false;
@@ -335,6 +342,8 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
 
 bool CScraperManifest::DeleteManifest(const uint256& nHash)
 {
+    LOCK(cs_mapManifest);
+
     if(mapManifest.erase(nHash))
         return true;
     else
@@ -354,6 +363,10 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
   */
     /* hash the object */
     uint256 hash(Hash(vRecv.begin(), vRecv.end()));
+
+    // This lock is taken in AlreadyHave too, but that is ok.
+    LOCK(cs_mapManifest);
+
     /* see if we do not already have it */
     if( AlreadyHave(pfrom,CInv(MSG_SCRAPERINDEX, hash)) )
     {
@@ -516,6 +529,9 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
                 "Show detailed list of known ScraperManifest objects.\n"
                 );
     UniValue result1(UniValue::VOBJ);
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
     for(const auto& pair : CScraperManifest::mapManifest)
     {
         const uint256& hash= pair.first;

@@ -6,6 +6,7 @@
 */
 
 #include <key.h>
+#include "sync.h"
 
 /** Abstract class for blobs that are split into parts. */
 class CSplitBlob
@@ -69,6 +70,8 @@ public: /* static methods */
 
     /** map from index hash to scraper Index, so we can process Inv messages */
     static std::map< uint256, std::unique_ptr<CScraperManifest> > mapManifest;
+
+    static CCriticalSection cs_mapManifest;
 
     /** Process a message containing Index of Scraper Data.
    * @returns whether the data was useful and valid
