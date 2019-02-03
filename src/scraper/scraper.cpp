@@ -748,8 +748,8 @@ void Scraper(bool bSingleShot)
 
             // Publish and/or local delete CScraperManifests.
             {
-                LOCK(cs_StructScraperFileManifest);
-                if (fDebug) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+                LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
+                if (fDebug) _log(logattribute::INFO, "LOCK2", "cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
 
 
                 // If the hash doesn't match (a new one is available), or there are none, then publish a new one.
@@ -766,7 +766,7 @@ void Scraper(bool bSingleShot)
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+                if (fDebug) _log(logattribute::INFO, "ENDLOCK2", "cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
             }
         }
 
@@ -2770,6 +2770,8 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     else
         fs::create_directory(savepath);
 
+    LOCK(CScraperManifest::cs_mapManifest);
+    if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     // Select manifest based on provided hash.
     auto pair = CScraperManifest::mapManifest.find(nManifestHash);
@@ -2806,6 +2808,8 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 
         iPartNum++;
     }
+
+    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
     return true;
 }
@@ -2959,6 +2963,9 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 {
     unsigned int nDeleted = 0;
 
+    LOCK(CScraperManifest::cs_mapManifest);
+    if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
         auto iter_copy = iter;
@@ -2980,6 +2987,8 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
         ++iter;
     }
+
+    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
     return nDeleted;
 }
@@ -3120,11 +3129,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         iPartNum++;
     }
 
-    // Sign and "send".
-    //CKey key;
-    //std::vector<unsigned char> vchPrivKey = ParseHex(msMasterMessagePrivateKey);
-    //key.SetPrivKey(CPrivKey(vchPrivKey.begin(),vchPrivKey.end()));
-
+    // "Sign" and "send".
     bool bAddManifestSuccessful = CScraperManifest::addManifest(std::move(manifest), Key);
 
     if (fDebug)
@@ -3163,11 +3168,6 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
     // return a map of manifests binned by Scraper after the culling.
-    // TODO: Put locking around CScraperManifest::mapManifest, because technically, a new one
-    // could appear at any moment, even between the below call and the following code. This should
-    // really be atomic. Note that without the lock, the worst that could happen is that a scraper
-    // could publish (and the node receive) a new manifest after the below call, which means an extra
-    // manifest would be in the map from a scraper.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
     
     // Do a map for unique manifest times ordered by descending time then content hash.
@@ -3241,6 +3241,9 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
     if (bConvergenceSuccessful)
     {
+        LOCK(CScraperManifest::cs_mapManifest);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
         // Select agreed upon (converged) CScraper manifest based on converged hash.
         auto pair = CScraperManifest::mapManifest.find(convergence->second.second);
         const CScraperManifest& manifest = *pair->second;
@@ -3309,6 +3312,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                 }
             }
         }
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
     }
 
     if (!bConvergenceSuccessful)
@@ -3374,6 +3379,9 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                 // This is the referenced CScraperManifest hash
                 uint256 nCSManifestHash = iter_inner.second.first;
 
+                LOCK(CScraperManifest::cs_mapManifest);
+                if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
                 // Select manifest based on provided hash.
                 auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
                 CScraperManifest& manifest = *pair->second;
@@ -3425,6 +3433,8 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                                          + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
                     }
                 }
+
+                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
             }
         }
 
@@ -3492,6 +3502,9 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
         // could have used a different BeaconList (subject to the consensus ladder. It makes sense to use the "newest" one that is associated
         // with a manifest that has the newest part associated with a successful part (project) level convergence.
 
+        LOCK(CScraperManifest::cs_mapManifest);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
         // Select manifest based on provided hash.
         auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
         CScraperManifest& manifest = *pair->second;
@@ -3528,6 +3541,8 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                      + " was excluded because there was no convergence from the scrapers for this project at the project level.");
             }
         }
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
     }
 
     if (!bConvergenceSuccessful)
@@ -3538,7 +3553,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
 }
 
 
-
+// A lock should be taken on CScraperManifest::cs_Manifest before calling this function.
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
 {
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper;
@@ -3579,9 +3594,11 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
 {
     // Apply the SCRAPER_CMANIFEST_RETAIN_NONCURRENT bool and if false delete any existing
     // CScraperManifests other than the current one for each scraper.
-    // TODO: Locking around CScraperManifest map.
 
     _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Deleting old CScraperManifests.");
+
+    LOCK(CScraperManifest::cs_mapManifest);
+    if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     // Bin by scraper and order by manifest time within scraper bin.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
@@ -3632,8 +3649,11 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
     }
 
     // Reload mMapCSManifestsBinnedByScraper after deletions. This is not particularly efficient, but the map is not
-    // that large.
+    // that large. (The lock on CScraperManifest::cs_mapManifest is still held from above.)
     mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
+
+    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+
     return mMapCSManifestsBinnedByScraper;
 }
 
@@ -3683,10 +3703,10 @@ bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManif
 }
 
 
+// A lock should be taken on CScraperManifest::cs_mapManifest before calling this function.
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash)
 {
-    // This deletes a manifest.
-    // Note this just deletes the local copy. TODO: Implement manifest delete message.
+    // This deletes a manifest from the map.
     
     // Select manifest based on provided hash.
     auto pair = CScraperManifest::mapManifest.find(nManifestHash);
@@ -4048,7 +4068,14 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
                 "deletecscrapermanifest <hash>\n"
                 "delete manifest object.\n"
                 );
+
+    LOCK(CScraperManifest::cs_mapManifest);
+    if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
     bool ret = ScraperDeleteCScraperManifest(uint256(params[0].get_str()));
+
+    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+
     return UniValue(ret);
 }
 
