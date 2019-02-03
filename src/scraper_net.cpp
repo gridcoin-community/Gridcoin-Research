@@ -197,6 +197,10 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 {
     LOCK(cs_mapManifest);
 
+    // Do not send manifests while out of sync.
+    if(OutOfSyncByAge())
+        return false;
+
     auto it= mapManifest.find(hash);
     if(it==mapManifest.end())
         return false;
