@@ -6591,8 +6591,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 else if(!pushed && MSG_PART == inv.type ) {
                     CSplitBlob::SendPartTo(pfrom, inv.hash);
                 }
-                else if(!pushed && MSG_SCRAPERINDEX == inv.type ) {
-                    CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                else if(!pushed && MSG_SCRAPERINDEX == inv.type )
+                {
+                    LOCK(CScraperManifest::cs_mapManifest);
+
+                    // Do not send manifests while out of sync.
+                    if (!OutOfSyncByAge())
+                    {
+                        // Do not send unauthorized manifests. This check needs to be done here, because in the
+                        // case of a scraper deauthorization, a request from another node to forward the manifest
+                        // may come before the housekeeping loop has a chance to do the periodic culling. This could
+                        // result in unnecessary node banscore. This will suppress "this" node from sending any
+                        // unauthorized manifests.
+
+                        auto iter = CScraperManifest::mapManifest.find(inv.hash);
+                        CScraperManifest manifest = *iter->second;
+
+                        if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
+                            CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                    }
                 }
             }
 
