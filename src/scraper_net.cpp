@@ -197,12 +197,21 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 {
     LOCK(cs_mapManifest);
 
-    // Do not send manifests while out of sync.
+    // Do not send manifests while out of sync. Bail immediately to avoid unnecessary work.
     if(OutOfSyncByAge())
         return false;
 
+    // Do not send unauthorized manifests. This check needs to be done here, because in the
+    // case of a scraper deauthorization, a request from another node to forward the manifest
+    // may come before the housekeeping loop has a chance to do the periodic culling. This could
+    // result in unnecessary node banscore. This will suppress "this" node from sending any
+    // unauthorized manifests
     auto it= mapManifest.find(hash);
-    if(it==mapManifest.end())
+
+    CScraperManifest manifest = *it->second;
+    bool bAuthorized = CScraperManifest::IsManifestAuthorized(manifest.pubkey);
+
+    if(it==mapManifest.end() || !bAuthorized)
         return false;
     pto->PushMessage("scraperindex", *it->second);
     return true;
