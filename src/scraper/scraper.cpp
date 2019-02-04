@@ -3135,10 +3135,12 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     {
         if (bAddManifestSuccessful)
             _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
-                 + manifest->sCManifestName + ") successful");
+                 + manifest->sCManifestName + ") successful, timestamp "
+                 + DateTimeStrFormat("%x %H:%M:%S",manifest->nTime));
         else
             _log(logattribute::ERR, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
-                 + manifest->sCManifestName + ") FAILED");
+                 + manifest->sCManifestName + ") FAILED, timestamp "
+                 + DateTimeStrFormat("%x %H:%M:%S",manifest->nTime));
     }
 
     return bAddManifestSuccessful;
@@ -3206,8 +3208,11 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             {
                 // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
                 mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert "
-                                 + iter_inner.second.second.GetHex() + ", " + iter.first + ", " + iter_inner.second.first.GetHex());
+                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert, timestamp "
+                                  + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
+                                  + ", content hash "+ iter_inner.second.second.GetHex()
+                                  + ", scraper ID " + iter.first
+                                  + ", manifest hash" + iter_inner.second.first.GetHex());
             }
         }
     }
