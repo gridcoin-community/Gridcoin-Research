@@ -2957,8 +2957,10 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 // This function is necessary because some CScraperManifest messages are likely to be received before the wallet is in sync. Therefore, they
 // cannot be checked at that time by the deserialize check. Instead, while the wallet is not in sync, the local CScraperManifest flag
 // bCheckedAuthorized will be set to false on any manifests received during that time. Once the wallet is in sync, this function will be
-// called and will walk the mapManifest and check all Manifests with bCheckedAuthorized false to ensure the PubKey in the manifest is in the
-// authorized scraper list in the AppCache. If it passes the flag will be set to true. If it fails, the manifest will be deleted.
+// called and will walk the mapManifest and check all Manifests to ensure the PubKey in the manifest is in the
+// authorized scraper list in the AppCache. If it passes the flag will be set to true. If it fails, the manifest will be deleted. All manifests
+// must be checked, because we have to deal with another condition where a scraper is deauthorized by network policy. This means manifests may
+// not be authorized even if the bCheckedAuthorized is true from a prior check.
 unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 {
     unsigned int nDeleted = 0;
@@ -2972,17 +2974,14 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
         CScraperManifest& manifest = *iter->second;
 
-        if (!manifest.bCheckedAuthorized)
+        if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
+            manifest.bCheckedAuthorized = true;
+        else
         {
-            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
-                manifest.bCheckedAuthorized = true;
-            else
-            {
-                _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests", "Deleting unauthorized manifest with hash " + iter->first.GetHex());
-                // Delete from CScraperManifest map
-                ScraperDeleteCScraperManifest(iter_copy->first);
-                nDeleted++;
-            }
+            _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests", "Deleting unauthorized manifest with hash " + iter->first.GetHex());
+            // Delete from CScraperManifest map
+            ScraperDeleteCScraperManifest(iter_copy->first);
+            nDeleted++;
         }
 
         ++iter;
@@ -3604,7 +3603,7 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
     // function also takes a lock on CScraperManifest::cs_mapManifest, but that is ok.
     unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
     if (nDeleted)
-        _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + "unauthorized manifests.");
+        _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
 
     // Bin by scraper and order by manifest time within scraper bin.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
