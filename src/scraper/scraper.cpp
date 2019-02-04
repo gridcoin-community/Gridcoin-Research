@@ -3600,6 +3600,12 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
     LOCK(CScraperManifest::cs_mapManifest);
     if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
+    // First check for unauthorized manifests just in case a scraper has been deauthorized. Note this
+    // function also takes a lock on CScraperManifest::cs_mapManifest, but that is ok.
+    unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
+    if (nDeleted)
+        _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + "unauthorized manifests.");
+
     // Bin by scraper and order by manifest time within scraper bin.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
 
