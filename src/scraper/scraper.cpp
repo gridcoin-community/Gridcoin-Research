@@ -1374,6 +1374,16 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
         return false;
     }
 
+    std::string efile = etag + ".gz";
+    fs::path fsepfile = pathScraper/ efile;
+    ingzfile.close();
+
+    if (fs::exists(fsepfile))
+        fs::remove(fsepfile);
+
+    if (fs::exists(file))
+        fs::remove(file);
+
     if (mTeamIdsForProject_out.size() < vTeamWhiteList.size())
         _log(logattribute::ERR, "ProcessProjectTeamFile", "Unable to determine team IDs for one or more whitelisted teams.");
 
@@ -1385,10 +1395,7 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
     else
         _log(logattribute::INFO, "ProcessProjectTeamFile", "Stored Team ID entries.");
 
-
     _log(logattribute::INFO, "ProcessProjectTeamFile", "Finished processing " + file.string());
-
-    fs::remove(file);
 
     return true;
 }
