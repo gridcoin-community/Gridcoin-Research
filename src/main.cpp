@@ -6605,10 +6605,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         // unauthorized manifests.
 
                         auto iter = CScraperManifest::mapManifest.find(inv.hash);
-                        CScraperManifest& manifest = *iter->second;
+                        if (iter != CScraperManifest::mapManifest.end())
+                        {
+                            CScraperManifest& manifest = *iter->second;
 
-                        if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
-                            CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
+                                CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                        }
                     }
                 }
             }
