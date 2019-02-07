@@ -200,9 +200,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                             {
                                 if (vTxNormalInfo.second == "Vote" || vTxNormalInfo.second == "Add Poll")
                                 {
-                                    if (fDebug)
-                                        OutputDebugStringF("Vote/Add Poll\n");
-
                                     sub.type = TransactionRecord::Vote;
                                     break;
                                 }
