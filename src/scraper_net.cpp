@@ -147,6 +147,7 @@ bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
     return false;
 }
 
+// A lock needs to be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
 {
     if( MSG_PART ==inv.type )
@@ -165,7 +166,6 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
    * if yes, relay pfrom to Parts system as a fetch source and return true
    * else return false
   */
-    LOCK(cs_mapManifest);
 
     auto found = mapManifest.find(inv.hash);
     if( found!=mapManifest.end() )
@@ -192,7 +192,7 @@ void CScraperManifest::PushInvTo(CNode* pto)
     }
 }
 
-
+// A lock needs to be taken on cs_mapManifest before calling this.
 bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 {
     auto it = mapManifest.find(hash);
@@ -339,17 +339,16 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
         addPart(ph);
 }
 
+// A lock must be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::DeleteManifest(const uint256& nHash)
 {
-    LOCK(cs_mapManifest);
-
     if(mapManifest.erase(nHash))
         return true;
     else
         return false;
 }
 
-
+// A lock needs to be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 {
     /* Index object for scraper data.
@@ -362,9 +361,6 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
   */
     /* hash the object */
     uint256 hash(Hash(vRecv.begin(), vRecv.end()));
-
-    // This lock is taken in AlreadyHave too, but that is ok.
-    LOCK(cs_mapManifest);
 
     /* see if we do not already have it */
     if( AlreadyHave(pfrom,CInv(MSG_SCRAPERINDEX, hash)) )
@@ -410,6 +406,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     return true;
 }
 
+// A lock needs to be taken on cs_mapManifest before calling this function>
 bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
     m->pubkey= keySign.GetPubKey();
@@ -432,7 +429,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
 
 #if 1
     LogPrint("manifest", "adding new local manifest");
-    /* at this point it is easier to pretent like it was received from network */
+    /* at this point it is easier to pretend like it was received from network */
     return CScraperManifest::RecvManifest(0, ss);
 #else
     uint256 hash(Hash(ss.begin(),ss.end()));

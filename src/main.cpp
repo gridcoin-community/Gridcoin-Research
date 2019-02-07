@@ -6494,6 +6494,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             /* Check also the scraper data propagation system to see if it needs
              * this inventory object */
+            LOCK(CScraperManifest::cs_mapManifest);
+
             fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
 
             if (fDebug10)
@@ -7028,6 +7030,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else if (strCommand == "scraperindex")
     {
+        LOCK(CScraperManifest::cs_mapManifest);
+
         CScraperManifest::RecvManifest(pfrom,vRecv);
     }
     else if (strCommand == "part")
@@ -7855,7 +7859,9 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         const CInv& inv = (*pto->mapAskFor.begin()).second;
 
         // Brod: do not request stuff if it was already removed from this map
-        // TODO: check thread safety
+        // TODO: check thread safety - JCO - I think I have addressed.
+        LOCK(CScraperManifest::cs_mapManifest);
+
         const auto iaaf= mapAlreadyAskedFor.find(inv);
 
         bool fAlreadyHave = AlreadyHave(txdb, inv);
