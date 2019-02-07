@@ -595,7 +595,14 @@ void Scraper(bool bSingleShot)
             ScraperDirectoryAndConfigSanity();
             // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
             // See the comment on the function.
+
+            LOCK(CScraperManifest::cs_mapManifest);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
             ScraperDeleteUnauthorizedCScraperManifests();
+
+            // End LOCK(CScraperManifest::cs_mapManifest)
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
             // End LOCK(cs_Scraper)
             if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
@@ -825,7 +832,15 @@ void NeuralNetwork()
             ScraperDirectoryAndConfigSanity();
             // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
             // See the comment on the function.
+
+            LOCK(CScraperManifest::cs_mapManifest);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
             ScraperDeleteUnauthorizedCScraperManifests();
+
+            // END LOCK(CScraperManifest::cs_mapManifest)
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+
             ScraperHousekeeping();
 
             // END LOCK(cs_Scraper)
@@ -2968,12 +2983,11 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 // authorized scraper list in the AppCache. If it passes the flag will be set to true. If it fails, the manifest will be deleted. All manifests
 // must be checked, because we have to deal with another condition where a scraper is deauthorized by network policy. This means manifests may
 // not be authorized even if the bCheckedAuthorized is true from a prior check.
+
+// A lock needs to be taken on CScraperManifest::cs_mapManifest before calling this function.
 unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 {
     unsigned int nDeleted = 0;
-
-    LOCK(CScraperManifest::cs_mapManifest);
-    if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
@@ -2993,8 +3007,6 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
         ++iter;
     }
-
-    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
     return nDeleted;
 }
@@ -3136,6 +3148,9 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     }
 
     // "Sign" and "send".
+
+    LOCK(CScraperManifest::cs_mapManifest);
+
     bool bAddManifestSuccessful = CScraperManifest::addManifest(std::move(manifest), Key);
 
     if (fDebug)
@@ -3611,8 +3626,7 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
     LOCK(CScraperManifest::cs_mapManifest);
     if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
-    // First check for unauthorized manifests just in case a scraper has been deauthorized. Note this
-    // function also takes a lock on CScraperManifest::cs_mapManifest, but that is ok.
+    // First check for unauthorized manifests just in case a scraper has been deauthorized.
     unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
     if (nDeleted)
         _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
