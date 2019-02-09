@@ -3021,10 +3021,16 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     auto manifest = std::unique_ptr<CScraperManifest>(new CScraperManifest());
 
     // The manifest name is the authorized address of the scraper.
-    //manifest->sCManifestName = Key.GetPubKey().GetID().ToString();
     manifest->sCManifestName = Address.ToString();
 
+    // Also store local sCManifestName, because the manifest will be std::moved by addManifest.
+    std::string sCManifestName = Address.ToString();
+
     manifest->nTime = StructScraperFileManifest.timestamp;
+
+    // Also store local nTime, because the manifest will be std::moved by addManifest.
+    int64_t nTime = StructScraperFileManifest.timestamp;
+
     manifest->ConsensusBlock = StructScraperFileManifest.nConsensusBlockHash;
 
     // This will have to be changed to support files bigger than 32 MB, where more than one
@@ -3157,12 +3163,12 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     {
         if (bAddManifestSuccessful)
             _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
-                 + manifest->sCManifestName + ") successful, timestamp "
-                 + DateTimeStrFormat("%x %H:%M:%S",manifest->nTime));
+                 + sCManifestName + ") successful, timestamp "
+                 + DateTimeStrFormat("%x %H:%M:%S", nTime));
         else
             _log(logattribute::ERR, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
-                 + manifest->sCManifestName + ") FAILED, timestamp "
-                 + DateTimeStrFormat("%x %H:%M:%S",manifest->nTime));
+                 + sCManifestName + ") FAILED, timestamp "
+                 + DateTimeStrFormat("%x %H:%M:%S", nTime));
     }
 
     return bAddManifestSuccessful;
