@@ -377,6 +377,11 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
                 "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to]\n"
                 "\n"
                 "<amount> is a real and is rounded to the nearest 0.000001\n"
+                "<comment> a comment used to store what the transaction is for.\n"
+                "         This is not part of the transaction, just kept in your wallet.\n"
+                "<comment_to> a comment to store the name of the person or organization\n"
+                "             to which you're sending the transaction. This is not part of the \n"
+                "             transaction, just kept in your wallet.\n"
                 + HelpRequiringPassphrase());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
