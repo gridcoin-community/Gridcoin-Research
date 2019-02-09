@@ -6365,6 +6365,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         /* Notify the peer about statsscraper blobs we have */
+        LOCK(CScraperManifest::cs_mapManifest);
+
         CScraperManifest::PushInvTo(pfrom);
 
         pfrom->fSuccessfullyConnected = true;

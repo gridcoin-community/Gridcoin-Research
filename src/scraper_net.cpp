@@ -180,10 +180,9 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     }
 }
 
+// A lock needs to be taken on cs_mapManifest before calling this.
 void CScraperManifest::PushInvTo(CNode* pto)
 {
-    LOCK(cs_mapManifest);
-
     /* send all keys from the index map as inventory */
     /* FIXME: advertise only completed manifests */
     for (auto const& obj : mapManifest)
@@ -406,7 +405,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     return true;
 }
 
-// A lock needs to be taken on cs_mapManifest before calling this function>
+// A lock needs to be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
     m->pubkey= keySign.GetPubKey();
@@ -424,28 +423,35 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     /* sign the serialized manifest and append the signature */
     uint256 hash(Hash(ss.begin(),ss.end()));
     keySign.Sign(hash, m->signature);
-    ss << m->signature;
+    //ss << m->signature;
     if (fDebug) LogPrintf("INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
-#if 1
     LogPrint("manifest", "adding new local manifest");
     /* at this point it is easier to pretend like it was received from network */
-    return CScraperManifest::RecvManifest(0, ss);
-#else
-    uint256 hash(Hash(ss.begin(),ss.end()));
+    // ^ Yes, but your are creating a new object and pointer that way. It is better to do
+    // a special insert routine below, which forwards the object (pointer).
+    // return CScraperManifest::RecvManifest(0, ss);
+
     /* try inserting into map */
-    const auto it = mapManifest.emplace(hash,m);
+    const auto it = mapManifest.emplace(hash, std::move(m));
     /* Already exists, do nothing */
-    if(it.second==false)
+    if (it.second == false)
         return false;
 
     CScraperManifest& manifest = *it.first->second;
     /* set the hash pointer inside */
     manifest.phash= &it.first->first;
 
-    /* TODO: call Complete or PushInventory, which is better? */
+    // We do not need to do a deserialize check here, because the
+    // manifest originates from THIS node, and the scraper's authorization
+    // to send has already been checked before the call.
+    // We also do not need to do a manifest.isComplete to see if all
+    // parts are available, because they have to be - this manifest was constructed
+    // on THIS node.
+
+    // Call manifest complete to notify peers of new manifest.
+    manifest.Complete();
     return true;
-#endif
 }
 
 void CScraperManifest::Complete()
