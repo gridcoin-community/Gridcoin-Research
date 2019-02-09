@@ -3337,10 +3337,22 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                 if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.first) == StructConvergedManifest.ConvergedManifestPartsMap.end())
                 {
                     // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                    StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.first, "Converged manifests (agreed by multiple scrapers) excluded project."));
+                    //StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.first, "Converged manifests (agreed by multiple scrapers) excluded project."));
+                    //_log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
+                    //     + iProjects.first
+                    //     + " was excluded because the converged manifests from the scrapers all excluded the project.");
+
+                    // To deal with a corner case of a medium term project fallout at the head of the list (more recent) where it is still available within
+                    // the 48 hour retention window, fallback to project level convergence to attempt to recover the project.
                     _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
                          + iProjects.first
-                         + " was excluded because the converged manifests from the scrapers all excluded the project.");
+                         + " was excluded because the converged manifests from the scrapers all excluded the project. \n"
+                         + "Falling back to attempt convergence by project to try and recover excluded project.");
+                    
+                    bConvergenceSuccessful = false;
+                    
+                    // Since we are falling back to project level and discarding this convergence, no need to process any more once one missed project is found.
+                    break;
                 }
             }
         }
@@ -3351,6 +3363,9 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
     if (!bConvergenceSuccessful)
     {
         _log(logattribute::INFO, "ScraperConstructConvergedManifest", "No convergence on manifests by content at the manifest level.");
+
+        // Reinitialize StructConvergedManifest
+        StructConvergedManifest = {};
 
         // Try to form a convergence by project objects (parts)...
         bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(vwhitelist_local, mMapCSManifestsBinnedByScraper, StructConvergedManifest);
