@@ -818,8 +818,10 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 3 || params.size() > 7)
         throw runtime_error(
-                "sendfrom <fromaccount> <toGridcoinaddress> <amount> [minconf=1] [comment] [comment-to] [message]\n"
+                "sendfrom <account> <gridcoinaddress> <amount> [minconf=1] [comment] [comment-to] [message]\n"
                 "\n"
+                "<account> account to send from.\n"
+                "<gridcoinaddress> address to send to.\n"
                 "<amount> is a real and is rounded to the nearest 0.000001\n"
                 "[minconf] only use the balance confirmed at least this many times."
                 "[comment] a comment used to store what the transaction is for.\n"
