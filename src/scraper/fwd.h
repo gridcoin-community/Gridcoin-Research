@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "util.h"
 
@@ -101,5 +102,18 @@ struct ConvergedScraperStats
     std::string sContract;
     std::vector<std::pair<std::string, std::string>> vExcludedProjects;
 };
+
+
+// Extended AppCache structures similar to those in AppCache.h, except a deleted flag is provided
+struct AppCacheEntryExt
+{
+    std::string value; // Value of entry.
+    int64_t timestamp; // Timestamp of entry/deletion
+    bool deleted; // Deleted flag.
+};
+
+typedef std::unordered_map<std::string, AppCacheEntryExt> AppCacheSectionExt;
+
+
 
 #endif // FWD_H

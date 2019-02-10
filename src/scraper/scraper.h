@@ -7,7 +7,6 @@
 #include <cctype>
 #include <vector>
 #include <map>
-#include <unordered_map>
 #include <boost/locale.hpp>
 #include <codecvt>
 #include <boost/filesystem.hpp>
@@ -25,7 +24,6 @@
 #include <memory>
 #include "net.h"
 #include "rpcprotocol.h"
-#include "scraper_net.h"
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "fwd.h"
@@ -87,6 +85,18 @@ unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE = 0;
 bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP = false;
 // Default team whitelist
 std::string TEAM_WHITELIST = "Gridcoin";
+// This is the period after the deauthorizing of a scraper before the nodes will start
+// to assign banscore to nodes sending unauthorized manifests.
+int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = 300;
+
+
+AppCacheSectionExt mScrapersExt = {};
+
+int64_t nSyncTime = 0;
+
+CCriticalSection cs_mScrapersExt;
+CCriticalSection cs_nSyncTime;
+
 
 /*********************
 * Functions          *

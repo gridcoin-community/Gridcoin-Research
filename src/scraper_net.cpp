@@ -12,12 +12,18 @@
 #endif
 #include "scraper_net.h"
 #include "appcache.h"
+#include "scraper/fwd.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
 std::map< uint256, std::unique_ptr<CScraperManifest> > CScraperManifest::mapManifest;
 CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
+extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+extern AppCacheSectionExt mScrapersExt;
+extern int64_t nSyncTime;
+extern CCriticalSection cs_mScrapersExt;
+extern CCriticalSection cs_nSyncTime;
 
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
@@ -258,7 +264,7 @@ void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
 
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
-bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey)
+bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out)
 {
     bool bIsValid = PubKey.IsValid();
     if (!bIsValid)
@@ -275,22 +281,89 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey)
     // Now check and see if that address is in the authorized scraper list.
     AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
 
+    /* We cannot use the AppCacheSection mScrapers in the raw, because there are two ways to deauthorize scrapers.
+     * The first way is to change the value of an existing entry to false. This works fine with mScrapers. The second way is to
+     * issue an addkey delete key. This will remove the key entirely, therefore deauthorizing the scraper. We need to preserve
+     * the key entry of the deleted record and when it was deleted to calculate a grace period. Why? To ensure that
+     * we do not generate islanding in the network in the case of a scraper deauthorization, we must apply a grace period
+     * after the timestamp of the marking of false/deletion, or from the time when the wallet came in sync, whichever is greater, before
+     * we start assigning a banscore to nodes that send/forward unauthorized manifests. This is because not all nodes
+     * may receive and accept the block that contains the transaction that modifies or deletes the scraper appcache entry
+     * at the same time, so there is a chance a node could send/forward an unauthorized manifest between when the scraper
+     * is deauthorized and the block containing that deauthorization is received by the sending node.
+     */
+
+    // So we are going to make use of AppCacheEntryExt and mScrapersExt, which are just like the normal AppCache structure, except they
+    // have an explicit deleted boolean.
+
+    // First, walk the mScrapersExt map and see if it contains an entry that does not exist in mScrapers. If so,
+    // update the entry's value and timestamp and mark deleted.
+    LOCK(cs_mScrapersExt);
+
+    for (auto const& entry : mScrapersExt)
+    {
+        const auto& iter = mScrapers.find(entry.first);
+
+        if (iter == mScrapers.end())
+            // Mark entry in mScrapersExt as deleted at the current adjusted time. The value is changed
+            // to false, because if it is deleted, it is also not authorized.
+            mScrapersExt[entry.first] = AppCacheEntryExt {"false", GetAdjustedTime(), true};
+
+    }
+
+    // Now insert/update entries from mScrapers into mScrapersExt.
     for (auto const& entry : mScrapers)
+        mScrapersExt[entry.first] = AppCacheEntryExt {entry.second.value, entry.second.timestamp, false};
+
+    // Now mScrapersExt is up to date. Walk and see if there is an entry with a value of true that matches
+    // manifest address. If so the manifest is authorized. Note that no grace period has to be considered
+    // for the authorized case. To prevent islanding in the unauthorized case, we must allow a grace period
+    // before we return a banscore > 0. The grace period must extend SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD
+    // from the timestamp of the last updated entry in mScraperExt or the time the wallet went in sync, whichever is later.
+    bool bAuthorized = false;
+    int64_t nLastFalseEntryTime = 0;
+    int64_t nGracePeriodEnd = 0;
+
+    for (auto const& entry : mScrapersExt)
     {
         if (entry.second.value == "true" || entry.second.value == "1")
         {
+            // If the entry key (address) matches the manifest address, then the scraper is authorized, so
+            // set banscore_out equal to 0 and bAuthorized = true and break.
             if (sManifestAddress == entry.first)
-                return true;
+            {
+                banscore_out = 0;
+                bAuthorized = true;
+                break;
+            }
         }
+        else
+            // Track the latest timestamp of the false/deleted entries.
+            nLastFalseEntryTime = std::max(nLastFalseEntryTime, entry.second.timestamp);
     }
 
-    LogPrintf("WARNING: CScraperManifest::IsManifestAuthorized: Manifest from %s is not authorized.", sManifestAddress);
+    if (bAuthorized)
+        return true;
+    else
+    {
+        LOCK(cs_nSyncTime);
 
-    return false;
+        nGracePeriodEnd = std::max(nSyncTime, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+
+        // If the current time is past the grace period end then set SCRAPER_MISBEHAVING_NODE_BANSCORE, otherwise 0.
+        if (nGracePeriodEnd < GetAdjustedTime())
+            banscore_out = SCRAPER_MISBEHAVING_NODE_BANSCORE;
+        else
+            banscore_out = 0;
+
+        LogPrintf("WARNING: CScraperManifest::IsManifestAuthorized: Manifest from %s is not authorized.", sManifestAddress);
+
+        return false;
+    }
 }
 
 
-void CScraperManifest::UnserializeCheck(CReaderStream& ss)
+void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscore_out)
 {
     const auto pbegin = ss.begin();
 
@@ -302,10 +375,10 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss)
     // is received while the wallet is not in sync. If in sync and
     // the manifest is authorized, then set the checked flag to true,
     // otherwise terminate the unserializecheck and throw an error,
-    // which will also result in an increase in banscore.
+    // which will also result in an increase in banscore, if past the grace period.
     if (OutOfSyncByAge())
         bCheckedAuthorized = false;
-    else if (IsManifestAuthorized(pubkey))
+    else if (IsManifestAuthorized(pubkey, banscore_out))
         bCheckedAuthorized = true;
     else
         throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
@@ -358,6 +431,8 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
    * populate the maps
    * request parts
   */
+    unsigned int banscore = 0;
+
     /* hash the object */
     uint256 hash(Hash(vRecv.begin(), vRecv.end()));
 
@@ -371,15 +446,15 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     manifest.phash= &it.first->first;
     try {
         //void Unserialize(Stream& s, int nType, int nVersion)
-        manifest.UnserializeCheck(vRecv);
+        manifest.UnserializeCheck(vRecv, banscore);
     } catch(bool& e) {
         mapManifest.erase(hash);
         LogPrint("manifest", "invalid manifest %s received", hash.GetHex());
         if(pfrom)
         {
             LogPrintf("WARNING: CScraperManifest::RecvManifest): Invalid manifest %s received from %s. Increasing banscore by %u.",
-                     hash.GetHex(), pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE);
-            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
+                     hash.GetHex(), pfrom->addr.ToString(), banscore);
+            pfrom->Misbehaving(banscore);
         }
         return false;
     } catch(std::ios_base::failure& e) {
@@ -388,8 +463,8 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         if(pfrom)
         {
             LogPrintf("WARNING: CScraperManifest::RecvManifest): Invalid manifest %s received from %s. Increasing banscore by %u.",
-                     hash.GetHex(), pfrom->addr.ToString(), SCRAPER_MISBEHAVING_NODE_BANSCORE);
-            pfrom->Misbehaving(SCRAPER_MISBEHAVING_NODE_BANSCORE);
+                     hash.GetHex(), pfrom->addr.ToString(), banscore);
+            pfrom->Misbehaving(banscore);
         }
         return false;
     }
