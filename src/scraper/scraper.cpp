@@ -1,4 +1,5 @@
 #include "scraper.h"
+#include "scraper_net.h"
 #include "http.h"
 #include "ui_interface.h"
 
@@ -448,7 +449,6 @@ public:
 };
 
 
-
 template<typename T>
 void ApplyCache(const std::string& key, T& result)
 {
@@ -511,6 +511,7 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("SCRAPER_MISBEHAVING_NODE_BANSCORE", SCRAPER_MISBEHAVING_NODE_BANSCORE);
     ApplyCache("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", REQUIRE_TEAM_WHITELIST_MEMBERSHIP);
     ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
+    ApplyCache("SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD", SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD);
 
     if (fDebug)
     {
@@ -532,6 +533,7 @@ void ScraperApplyAppCacheEntries()
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_MISBEHAVING_NODE_BANSCORE = " + std::to_string(SCRAPER_MISBEHAVING_NODE_BANSCORE));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + std::to_string(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "TEAM_WHITELIST = " + TEAM_WHITELIST);
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + std::to_string(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
 
         AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
 
@@ -584,7 +586,16 @@ void Scraper(bool bSingleShot)
             MilliSleep(8000);
         }
 
-        _log(logattribute::INFO, "Scraper", "Wallet is in sync. Continuing.");
+        {
+            LOCK(cs_nSyncTime);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_nSyncTime");
+
+            nSyncTime = GetAdjustedTime();
+
+            _log(logattribute::INFO, "Scraper", "Wallet is in sync. Continuing.");
+
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_nSyncTime");
+        }
 
         // Now that we are in sync, refresh from the AppCache and check for proper directory/file structure.
         // Also delete any unauthorized CScraperManifests received before the wallet was in sync.
@@ -821,7 +832,16 @@ void NeuralNetwork()
             MilliSleep(8000);
         }
 
-        _log(logattribute::INFO, "NeuralNetwork", "Wallet is in sync. Continuing.");
+        {
+            LOCK(cs_nSyncTime);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_nSyncTime");
+
+            nSyncTime = GetAdjustedTime();
+
+            _log(logattribute::INFO, "NeuralNetwork", "Wallet is in sync. Continuing.");
+
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_nSyncTime");
+        }
 
         // ScraperHousekeeping items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
@@ -2995,7 +3015,10 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
         CScraperManifest& manifest = *iter->second;
 
-        if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
+        // We are not going to do anything with the banscore here, but it is an out parameter of IsManifestAuthorized.
+        unsigned int banscore_out = 0;
+
+        if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out))
             manifest.bCheckedAuthorized = true;
         else
         {

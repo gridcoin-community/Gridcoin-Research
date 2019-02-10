@@ -6613,7 +6613,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         {
                             CScraperManifest& manifest = *iter->second;
 
-                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey))
+                            // We are not going to do anything with the banscore here, because this is the sending node,
+                            // but it is an out parameter of IsManifestAuthorized.
+                            unsigned int banscore_out = 0;
+
+                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out))
                                 CScraperManifest::SendManifestTo(pfrom, inv.hash);
                         }
                     }

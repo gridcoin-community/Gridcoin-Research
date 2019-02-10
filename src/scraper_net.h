@@ -98,7 +98,7 @@ public: /* static methods */
     static bool addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign);
 
     /** Validate whether recieved manifest is authorized */
-    static bool IsManifestAuthorized(CPubKey& PubKey);
+    static bool IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out);
 
     /** Delete Manifest **/
     static bool DeleteManifest(const uint256& nHash);
@@ -149,7 +149,7 @@ public: /* public methods */
     void Serialize(CDataStream& s, int nType, int nVersion) const;
     void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
     void SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const;
-    void UnserializeCheck(CReaderStream& s);
+    void UnserializeCheck(CReaderStream& s, unsigned int& banscore_out);
     UniValue ToJson() const;
 
 };
