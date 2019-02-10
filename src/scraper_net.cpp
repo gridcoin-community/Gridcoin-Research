@@ -4,6 +4,7 @@
 #define SCRAPER_NET_PK_AS_ADDRESS
 
 #include <memory>
+#include <atomic>
 #include "net.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
@@ -21,7 +22,7 @@ CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 extern AppCacheSectionExt mScrapersExt;
-extern int64_t nSyncTime;
+extern std::atomic<int64_t> nSyncTime;
 extern CCriticalSection cs_mScrapersExt;
 
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
@@ -345,7 +346,7 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
         return true;
     else
     {
-        nGracePeriodEnd = std::max(nSyncTime, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+        nGracePeriodEnd = std::max((int64_t)nSyncTime, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
         // If the current time is past the grace period end then set SCRAPER_MISBEHAVING_NODE_BANSCORE, otherwise 0.
         if (nGracePeriodEnd < GetAdjustedTime())

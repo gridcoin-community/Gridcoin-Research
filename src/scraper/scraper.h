@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <iostream>
 #include <inttypes.h>
 #include <cmath>
@@ -92,7 +93,8 @@ int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = 300;
 
 AppCacheSectionExt mScrapersExt = {};
 
-int64_t nSyncTime = 0;
+// Lets try to start using some lockless synchronization.
+std::atomic<int64_t> nSyncTime {0};
 
 CCriticalSection cs_mScrapersExt;
 CCriticalSection cs_nSyncTime;
