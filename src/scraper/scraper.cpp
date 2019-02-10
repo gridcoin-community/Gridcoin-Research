@@ -3440,72 +3440,73 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
         std::multimap<uint256, std::pair<ScraperID, std::string>> mProjectObjectsBinnedbyContent;
         std::multimap<uint256, std::pair<ScraperID, std::string>>::iterator ProjectConvergence;
 
-        // For the selected project in the whitelist, walk each scraper.
-        for (const auto& iter : mMapCSManifestsBinnedByScraper)
         {
-            // iter.second is the mCSManifest. Walk each manifest in each scraper.
-            for (const auto& iter_inner : iter.second)
+            LOCK(CScraperManifest::cs_mapManifest);
+            if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
+            // For the selected project in the whitelist, walk each scraper.
+            for (const auto& iter : mMapCSManifestsBinnedByScraper)
             {
-                // This is the referenced CScraperManifest hash
-                uint256 nCSManifestHash = iter_inner.second.first;
-
-                LOCK(CScraperManifest::cs_mapManifest);
-                if (fDebug) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
-
-                // Select manifest based on provided hash.
-                auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
-                CScraperManifest& manifest = *pair->second;
-
-                // Find the part number in the manifest that corresponds to the whitelisted project.
-                // Once we find a part that corresponds to the selected project in the given manifest, then break,
-                // because there can only be one part in a manifest corresponding to a given project.
-                int nPart = -1;
-                int64_t nProjectObjectTime = 0;
-                uint256 nProjectObjectHash = 0;
-                for (const auto& vectoriter : manifest.projects)
+                // iter.second is the mCSManifest. Walk each manifest in each scraper.
+                for (const auto& iter_inner : iter.second)
                 {
-                    if (vectoriter.project == iWhitelistProject.first)
+                    // This is the referenced CScraperManifest hash
+                    uint256 nCSManifestHash = iter_inner.second.first;
+
+                    // Select manifest based on provided hash.
+                    auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
+                    CScraperManifest& manifest = *pair->second;
+
+                    // Find the part number in the manifest that corresponds to the whitelisted project.
+                    // Once we find a part that corresponds to the selected project in the given manifest, then break,
+                    // because there can only be one part in a manifest corresponding to a given project.
+                    int nPart = -1;
+                    int64_t nProjectObjectTime = 0;
+                    uint256 nProjectObjectHash = 0;
+                    for (const auto& vectoriter : manifest.projects)
                     {
-                        nPart = vectoriter.part1;
-                        nProjectObjectTime = vectoriter.LastModified;
-                        break;
+                        if (vectoriter.project == iWhitelistProject.first)
+                        {
+                            nPart = vectoriter.part1;
+                            nProjectObjectTime = vectoriter.LastModified;
+                            break;
+                        }
+                    }
+
+                    // Part -1 means not found, Part 0 is the beacon list, so needs to be greater than zero.
+                    if (nPart > 0)
+                    {
+                        // Get the hash of the part referenced in the manifest.
+                        nProjectObjectHash = manifest.vParts[nPart]->hash;
+
+                        // Insert into mManifestsBinnedByTime multimap.
+                        mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest.ConsensusBlock, *manifest.phash)));
+
+                        // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+                        // We need to prevent the insertion of a second entry with the same content from the same scraper. This is
+                        // even more true here at the part level than at the manifest level, because if both SCRAPER_CMANIFEST_RETAIN_NONCURRENT
+                        // and SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES are true, then there can be many references
+                        // to the same part by different manifests of the same scraper in addition to across scrapers.
+                        auto range = mProjectObjectsBinnedbyContent.equal_range(nProjectObjectHash);
+                        bool bAlreadyExists = false;
+                        for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+                        {
+                            // ---- ScraperID ------ Candidate scraperID to insert
+                            if (iter3->second.first == iter.first)
+                                bAlreadyExists = true;
+                        }
+
+                        if (!bAlreadyExists)
+                        {
+                            // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
+                            mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.first)));
+                            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
+                                              + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
+                        }
                     }
                 }
-
-                // Part -1 means not found, Part 0 is the beacon list, so needs to be greater than zero.
-                if (nPart > 0)
-                {
-                    // Get the hash of the part referenced in the manifest.
-                    nProjectObjectHash = manifest.vParts[nPart]->hash;
-
-                    // Insert into mManifestsBinnedByTime multimap.
-                    mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest.ConsensusBlock, *manifest.phash)));
-
-                    // Even though this is a multimap on purpose because we are going to count occurances of the same key,
-                    // We need to prevent the insertion of a second entry with the same content from the same scraper. This is
-                    // even more true here at the part level than at the manifest level, because if both SCRAPER_CMANIFEST_RETAIN_NONCURRENT
-                    // and SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES are true, then there can be many references
-                    // to the same part by different manifests of the same scraper in addition to across scrapers.
-                    auto range = mProjectObjectsBinnedbyContent.equal_range(nProjectObjectHash);
-                    bool bAlreadyExists = false;
-                    for (auto iter3 = range.first; iter3 != range.second; ++iter3)
-                    {
-                        // ---- ScraperID ------ Candidate scraperID to insert
-                        if (iter3->second.first == iter.first)
-                            bAlreadyExists = true;
-                    }
-
-                    if (!bAlreadyExists)
-                    {
-                        // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
-                        mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.first)));
-                        if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
-                                         + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
-                    }
-                }
-
-                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
             }
+            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
         }
 
         // Walk the time map (backwards in time because the sort order is descending), and select the first
