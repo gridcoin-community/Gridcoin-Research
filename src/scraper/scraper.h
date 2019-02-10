@@ -97,7 +97,6 @@ AppCacheSectionExt mScrapersExt = {};
 std::atomic<int64_t> nSyncTime {0};
 
 CCriticalSection cs_mScrapersExt;
-CCriticalSection cs_nSyncTime;
 
 
 /*********************
