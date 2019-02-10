@@ -586,16 +586,7 @@ void Scraper(bool bSingleShot)
             MilliSleep(8000);
         }
 
-        {
-            LOCK(cs_nSyncTime);
-            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_nSyncTime");
-
-            nSyncTime = GetAdjustedTime();
-
-            _log(logattribute::INFO, "Scraper", "Wallet is in sync. Continuing.");
-
-            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_nSyncTime");
-        }
+        nSyncTime = GetAdjustedTime();
 
         // Now that we are in sync, refresh from the AppCache and check for proper directory/file structure.
         // Also delete any unauthorized CScraperManifests received before the wallet was in sync.
@@ -832,16 +823,7 @@ void NeuralNetwork()
             MilliSleep(8000);
         }
 
-        {
-            LOCK(cs_nSyncTime);
-            if (fDebug) _log(logattribute::INFO, "LOCK", "cs_nSyncTime");
-
-            nSyncTime = GetAdjustedTime();
-
-            _log(logattribute::INFO, "NeuralNetwork", "Wallet is in sync. Continuing.");
-
-            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_nSyncTime");
-        }
+        nSyncTime = GetAdjustedTime();
 
         // ScraperHousekeeping items are only run in this thread if not handled by the Scraper() thread.
         if (!fScraperActive)
