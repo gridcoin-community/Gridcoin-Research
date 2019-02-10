@@ -23,7 +23,6 @@ extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 extern AppCacheSectionExt mScrapersExt;
 extern int64_t nSyncTime;
 extern CCriticalSection cs_mScrapersExt;
-extern CCriticalSection cs_nSyncTime;
 
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
@@ -346,8 +345,6 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
         return true;
     else
     {
-        LOCK(cs_nSyncTime);
-
         nGracePeriodEnd = std::max(nSyncTime, nLastFalseEntryTime) + SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
         // If the current time is past the grace period end then set SCRAPER_MISBEHAVING_NODE_BANSCORE, otherwise 0.
