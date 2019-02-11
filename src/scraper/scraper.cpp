@@ -297,18 +297,13 @@ public:
     ~gridcoinrpc()
     {}
 
+    // A lock should be taken on cs_vwhitelist before calling this function.
     bool wlimport()
     {
-        LOCK(cs_vwhitelist);
-        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
         vwhitelist.clear();
 
         for (const auto& item : ReadCacheSection(Section::PROJECT))
             vwhitelist.push_back(std::make_pair(item.first, item.second.value));
-
-        // End LOCK(cs_vwhitelist).
-        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
 
         return true;
     }
@@ -666,11 +661,19 @@ void Scraper(bool bSingleShot)
             if (fDebug) _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
             // Refresh the whitelist if its available
-            if (!data.wlimport())
-                _log(logattribute::WARNING, "Scraper", "Refreshing of whitelist failed.. using old data");
+            std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
+            {
+                LOCK(cs_vwhitelist);
+                if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
-            else
-                _log(logattribute::INFO, "Scraper", "Refreshing of whitelist completed");
+                if (!data.wlimport())
+                    _log(logattribute::WARNING, "Scraper", "Refreshing of whitelist failed.. using old data");
+                else
+                    _log(logattribute::INFO, "Scraper", "Refreshing of whitelist completed");
+
+                vwhitelist_local = vwhitelist;
+                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
+            }
 
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
@@ -688,14 +691,6 @@ void Scraper(bool bSingleShot)
 
                     // Set flag to false. If entry project matches a whitelist project then mark true and break.
                     bool bOnWhitelist = false;
-                    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
-                    {
-                        LOCK(cs_vwhitelist);
-                        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-                        vwhitelist_local = vwhitelist;
-                        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-                    }
 
                     for (const auto& wlproject : vwhitelist_local)
                     {
@@ -874,11 +869,18 @@ bool ScraperHousekeeping()
     gridcoinrpc data;
 
     // Refresh the whitelist if its available
-    if (!data.wlimport())
-        _log(logattribute::WARNING, "ScraperHousekeeping", "Refreshing of whitelist failed.. using old data");
+    {
+        LOCK(cs_vwhitelist);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
 
-    else
-        _log(logattribute::INFO, "ScraperHousekeeping", "Refreshing of whitelist completed");
+        if (!data.wlimport())
+            _log(logattribute::WARNING, "ScraperHousekeeping", "Refreshing of whitelist failed.. using old data");
+
+        else
+            _log(logattribute::INFO, "ScraperHousekeeping", "Refreshing of whitelist completed");
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
+    }
 
     // Periodically generate converged manifests and generate SB core and "contract"
     // This will probably be reduced to the commented out call as we near final testing,
