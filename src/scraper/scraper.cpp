@@ -1699,6 +1699,9 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         if (fs::exists(file))
             fs::remove(file);
 
+        if (fs::exists(gzetagfile))
+            fs::remove(gzetagfile);
+
         return false;
     }
 
