@@ -1447,12 +1447,12 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     if (scraperEventtype == (int)scrapereventtypes::OutOfSync && status == CT_UPDATING)
     {
         labelScraperIcon->setPixmap(QIcon(":/icons/notsynced").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync"));
+        labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
     {
         labelScraperIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync"));
+        labelScraperIcon->setToolTip(tr("Scraper: superblock not needed - inactive."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
     {
