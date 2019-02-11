@@ -25,6 +25,7 @@ class uint256;
 enum ChangeType
 {
     CT_NEW,
+    CT_UPDATING,
     CT_UPDATED,
     CT_DELETED
 };

@@ -582,6 +582,9 @@ void Scraper(bool bSingleShot)
         // beforehand.
         while (OutOfSyncByAge())
         {
+            // Signal stats event to UI.
+            uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
+
             _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
@@ -629,6 +632,9 @@ void Scraper(bool bSingleShot)
 
             while (GetAdjustedTime() - nScraperThreadStartTime < nBeforeSBSleep)
             {
+                // Signal stats event to UI.
+                uiInterface.NotifyScraperEvent(scrapereventtypes::Sleep, CT_NEW, {});
+
                 // Take a lock on the whole scraper for this...
                 {
                     LOCK(cs_Scraper);
@@ -665,6 +671,9 @@ void Scraper(bool bSingleShot)
 
             else
                 _log(logattribute::INFO, "Scraper", "Refreshing of whitelist completed");
+
+            // Signal stats event to UI.
+            uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
@@ -815,10 +824,13 @@ void NeuralNetwork()
 
     while(!fShutdown)
     {
-        // Only proceed if wallet is in sync. Check every 5 seconds since no callback is available.
+        // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
         while (OutOfSyncByAge())
         {
+            // Signal stats event to UI.
+            uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
+
             _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }

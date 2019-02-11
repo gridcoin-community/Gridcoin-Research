@@ -2,6 +2,7 @@
 #define CLIENTMODEL_H
 
 #include <QObject>
+#include "scraper/fwd.h"
 
 class OptionsModel;
 class AddressTableModel;
@@ -48,6 +49,7 @@ public:
 
     QString formatBoostVersion()  const;
     QString getDifficulty() const;
+    ConvergedScraperStats getConvergedScraperStatsCache() const;
 private:
     OptionsModel *optionsModel;
 
@@ -65,6 +67,7 @@ signals:
     void numBlocksChanged(int count, int countOfPeers);
 	void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
     void updateScraperLog(QString message);
+    void updateScraperStatus(int ScraperEventtype, int status);
 
     //! Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);

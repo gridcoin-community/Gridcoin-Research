@@ -477,11 +477,13 @@ void BitcoinGUI::createToolBars()
     labelStakingIcon = new QLabel();
     labelConnectionsIcon = new QLabel();
     labelBlocksIcon = new QLabel();
-    frameBlocksLayout->addWidget(labelEncryptionIcon);
+    labelScraperIcon = new QLabel();
 
+    frameBlocksLayout->addWidget(labelEncryptionIcon);
     frameBlocksLayout->addWidget(labelStakingIcon);
     frameBlocksLayout->addWidget(labelConnectionsIcon);
     frameBlocksLayout->addWidget(labelBlocksIcon);
+    frameBlocksLayout->addWidget(labelScraperIcon);
     //12-21-2015 Prevent Lock from falling off the page
 
     frameBlocksLayout->addStretch();
@@ -556,6 +558,10 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
 
         setNumBlocks(clientModel->getNumBlocks(), clientModel->getNumBlocksOfPeers());
         connect(clientModel, SIGNAL(numBlocksChanged(int,int)), this, SLOT(setNumBlocks(int,int)));
+
+        // Start with out-of-sync message for scraper/NN.
+        updateScraperIcon((int)scrapereventtypes::OutOfSync, CT_UPDATING);
+        connect(clientModel, SIGNAL(updateScraperStatus(int, int)), this, SLOT(updateScraperIcon(int, int)));
 
         // Report errors from network/worker thread
         connect(clientModel, SIGNAL(error(QString,QString,bool)), this, SLOT(error(QString,QString,bool)));
@@ -1411,4 +1417,64 @@ void BitcoinGUI::updateStakingIcon()
         //Part of this string wont be translated :(
         labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
     }
+}
+
+
+void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
+{
+    const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
+
+    int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
+
+    std::string sExcludedProjects = {};
+
+    bool bExcludedProjects = false;
+
+    // If the convergence cache has excluded projects...
+    if (ConvergedScraperStatsCache.vExcludedProjects.size())
+    {
+        bExcludedProjects = true;
+
+        for (const auto& iter : ConvergedScraperStatsCache.vExcludedProjects)
+        {
+            if (sExcludedProjects.empty())
+                sExcludedProjects += iter.first;
+            else
+                sExcludedProjects += ", " + iter.first;
+        }
+    }
+
+    if (scraperEventtype == (int)scrapereventtypes::OutOfSync && status == CT_UPDATING)
+    {
+        labelScraperIcon->setPixmap(QIcon(":/icons/notsynced").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync"));
+    }
+    else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
+    {
+        labelScraperIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setToolTip(tr("Scraper: waiting on wallet to sync"));
+    }
+    else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
+    {
+        labelScraperIcon->setToolTip(tr("Scraper: downloading and processing stats."));
+        labelScraperIcon->setMovie(syncIconMovie);
+        syncIconMovie->start();
+    }
+    else if (scraperEventtype == (int)scrapereventtypes::Convergence && (status == CT_NEW || status == CT_UPDATED))
+    {
+        labelScraperIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+
+        if (!bExcludedProjects)
+            labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1."
+                                            " All projects on whitelist included.").arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str())));
+        else
+            labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1 UTC."
+                                            " Project(s) excluded: %2.").arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str())).arg(QString(sExcludedProjects.c_str())));
+    }
+    else if (scraperEventtype == (int)scrapereventtypes::Convergence && (status == CT_DELETED))
+    {
+        labelScraperIcon->setPixmap(QIcon(":/icons/quit").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));
+    }
+
 }
