@@ -76,6 +76,7 @@ private:
     QLabel *labelStakingIcon;
     QLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
+    QLabel *labelScraperIcon;
 
     QMenuBar *appMenuBar;
     QAction *overviewAction;
@@ -220,6 +221,7 @@ private slots:
 
     void updateWeight();
     void updateStakingIcon();
+    void updateScraperIcon(int scraperEventtype, int status);
 
 	QString GetEstimatedTime(unsigned int nEstimateTime);
 

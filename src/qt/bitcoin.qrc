@@ -63,6 +63,7 @@
         <file alias="tx_mined_ss">res/icons/tx_mined_ss.svg</file>
         <file alias="tx_cpumined">res/icons/tx_por.svg</file>
         <file alias="tx_cpumined_ss">res/icons/tx_por_ss.svg</file>
+        <file alias="notsynced">res/icons/notsynced.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

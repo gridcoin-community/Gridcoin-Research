@@ -14,6 +14,8 @@
 
 static const int64_t nClientStartupTime = GetTime();
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
+extern ConvergedScraperStats ConvergedScraperStatsCache;
+extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel),
@@ -126,13 +128,18 @@ void ClientModel::updateAlert(const QString &hash, int status)
 void ClientModel::updateScraper(int scraperEventtype, int status, const QString message)
 {
     if (scraperEventtype == (int)scrapereventtypes::Log)
-    {
-        //LogPrintf("INFO: ClientModel::updateScraper: %s", message.toStdString());
-
         emit updateScraperLog(message);
-    }
+    else
+        emit updateScraperStatus(scraperEventtype, status);
 }
 
+ConvergedScraperStats ClientModel::getConvergedScraperStatsCache() const
+{
+    // May not be necessary to take lock, since this is read only. Consider removing.
+    LOCK(cs_ConvergedScraperStatsCache);
+
+    return ConvergedScraperStatsCache;
+}
 
 bool ClientModel::isTestNet() const
 {

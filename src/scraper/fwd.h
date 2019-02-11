@@ -22,11 +22,13 @@ enum class statsobjecttype
 
 enum class scrapereventtypes
 {
+    OutOfSync,
     Log,
     Stats,
     Manifest,
     Convergence,
-    SBContract
+    SBContract,
+    Sleep
 };
 
 
@@ -102,7 +104,6 @@ struct ConvergedScraperStats
     std::string sContract;
     std::vector<std::pair<std::string, std::string>> vExcludedProjects;
 };
-
 
 // Extended AppCache structures similar to those in AppCache.h, except a deleted flag is provided
 struct AppCacheEntryExt
