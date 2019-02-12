@@ -6496,9 +6496,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             /* Check also the scraper data propagation system to see if it needs
              * this inventory object */
-            LOCK(CScraperManifest::cs_mapManifest);
+            {
+                LOCK(CScraperManifest::cs_mapManifest);
 
-            fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+                fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+            }
 
             if (fDebug10)
                 LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
