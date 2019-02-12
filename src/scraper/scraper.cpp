@@ -3875,9 +3875,11 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
 
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
 {
+    // NOTE - out of sync check here is removed, because in all instances, it is being checked before this function is
+    // called. OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit.
     // If not in sync then immediately bail with a empty string.
-    if (OutOfSyncByAge())
-        return std::string();
+    // if (OutOfSyncByAge())
+    //    return std::string();
 
     // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds), then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
