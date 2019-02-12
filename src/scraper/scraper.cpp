@@ -2878,9 +2878,16 @@ bool IsScraperAuthorized()
 // to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+    AppCacheSection mScrapers = {};
+    {
+        LOCK(cs_main);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "cs_main");
+
+        mScrapers = ReadCacheSection(Section::SCRAPER);
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_main");
+    }
 
     std::string sScraperAddressFromConfig = GetArg("-scraperkey", "false");
 
@@ -2899,7 +2906,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
             if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry in appcache is enabled.");
 
             CBitcoinAddress address(sScraperAddressFromConfig);
-            CPubKey ScraperPubKey(ParseHex(sScraperAddressFromConfig));
+            //CPubKey ScraperPubKey(ParseHex(sScraperAddressFromConfig));
 
             CKeyID KeyID;
             address.GetKeyID(KeyID);
@@ -2911,6 +2918,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                 if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "(Doublecheck) The address is " + address.ToString());
 
                 // ... and it exists in the wallet...
+                LOCK(pwalletMain->cs_wallet);
+                if (fDebug) _log(logattribute::INFO, "LOCK", "pwalletMain->cs_wallet");
+
                 if (pwalletMain->GetKey(KeyID, KeyOut))
                 {
                     // ... and the key returned from the wallet is valid and matches the provided public key...
@@ -2926,8 +2936,11 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                          "Found address " + sScraperAddressFromConfig + " in both the wallet and appcache. \n"
                          "This scraper is authorized to publish manifests.");
 
+                    if (fDebug) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
                     return true;
                 }
+
+                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
             }
         }
     }
@@ -2935,6 +2948,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
     // until we hit the first one that is in the list.
     else
     {
+        LOCK(pwalletMain->cs_wallet);
+        if (fDebug) _log(logattribute::INFO, "LOCK", "pwalletMain->cs_wallet");
+
         for (auto const& item : pwalletMain->mapAddressBook)
         {
             const CBitcoinAddress& address = item.first;
@@ -2979,12 +2995,15 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                                  "Found address " + sScraperAddress + " in both the wallet and appcache. \n"
                                  "This scraper is authorized to publish manifests.");
 
+                            if (fDebug) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
                             return true;
                         }
                     }
                 }
             }
         }
+
+        if (fDebug) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
     }
 
     // If we made it here, there is no match or valid key in the wallet
