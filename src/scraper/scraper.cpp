@@ -1848,12 +1848,24 @@ uint256 GetmScraperFileManifestHash()
 
     for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
-        ss << entry.second.filename
-           << entry.second.project
-           << entry.second.hash
-           << entry.second.timestamp
-           << entry.second.current;
-    }
+        // The purpose of the hash on the mScraperFileManifest map is to be able
+        // to decide when to publish a new manifest based on a change. If the CScraperManifest
+        // is set to include noncurrent files, then all file entries should be included
+        // in the map hash, because they will all be included in the published manifest.
+        // If, however, only current files should be included, only the current files
+        // in the map will be included in the hash, because otherwise if non-current files
+        // are deleted by aging rules, the hash would change but the actual content of the
+        // CScraperManifest would not, and so the publishing of the manifest would fail.
+        // This was a minor error caught in corner-case testing, and fixed by the below filter.
+        if (SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES || entry.second.current)
+        {
+            ss << entry.second.filename
+               << entry.second.project
+               << entry.second.hash
+               << entry.second.timestamp
+               << entry.second.current;
+        }
+     }
 
     nHash = Hash(ss.begin(), ss.end());
 
@@ -2122,7 +2134,11 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
         // If successful insert, rehash map and record in struct for easy comparison later. If already
         // exists, hash is unchanged.
         if (ret.second)
+        {
             StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
+
+            if (fDebug) _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modifed nFileManifestMapHash.");
+        }
     }
 
     // True if insert was sucessful, false if entry with key (hash) already exists in map.
@@ -2142,7 +2158,11 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 
     // If an element was deleted then rehash the map and store hash in struct.
     if (ret)
+    {
         StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
+
+        if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modifed nFileManifestMapHash.");
+    }
 
     // Returns number of elements erased, either 0 or 1.
     return ret;
@@ -2158,6 +2178,8 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
     entry.current = false;
 
     StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
+
+    if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Marked File Manifest Entry non-current and stored modifed nFileManifestMapHash.");
 
     return true;
 }
@@ -3281,7 +3303,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                                   + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
                                   + ", content hash "+ iter_inner.second.second.GetHex()
                                   + ", scraper ID " + iter.first
-                                  + ", manifest hash" + iter_inner.second.first.GetHex());
+                                  + ", manifest hash " + iter_inner.second.first.GetHex());
             }
         }
     }
