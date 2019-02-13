@@ -1460,7 +1460,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
         labelScraperIcon->setMovie(syncIconMovie);
         syncIconMovie->start();
     }
-    else if (scraperEventtype == (int)scrapereventtypes::Convergence && (status == CT_NEW || status == CT_UPDATED))
+    else if (scraperEventtype == (int)scrapereventtypes::Convergence && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
         labelScraperIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
