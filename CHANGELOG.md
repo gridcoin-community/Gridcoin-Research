@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Add stake splitting and side staking #1265 (@jamescowens).
  - Detect and block Windows shutdown so wallet can exit cleanly #1309
    (@jamescowens).
+ - Add message support to sendfrom and sendtoaddress #1400 (@denravonska).
 
 ### Changed
  - Configuration options are now case insensitive #294 (@Foggyx420).
