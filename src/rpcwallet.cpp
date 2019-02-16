@@ -372,11 +372,17 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 
 UniValue sendtoaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 4)
+    if (fHelp || params.size() < 2 || params.size() > 5)
         throw runtime_error(
-                "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to]\n"
+                "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to] [message]\n"
                 "\n"
                 "<amount> is a real and is rounded to the nearest 0.000001\n"
+                "[comment] a comment used to store what the transaction is for.\n"
+                "         This is not part of the transaction, just kept in your wallet.\n"
+                "[comment_to] a comment to store the name of the person or organization\n"
+                "             to which you're sending the transaction. This is not part of the \n"
+                "             transaction, just kept in your wallet.\n"
+                "[message] Optional message to add to the receiver.\n"
                 + HelpRequiringPassphrase());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -392,8 +398,10 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     CWalletTx wtx;
     if (params.size() > 2 && !params[2].isNull() && !params[2].get_str().empty())
         wtx.mapValue["comment"] = params[2].get_str();
-    if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
+    if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())        
         wtx.mapValue["to"]      = params[3].get_str();
+    if (params.size() > 4 && !params[4].isNull() && !params[4].get_str().empty())
+        wtx.hashBoinc += "<MESSAGE>" + MakeSafeMessage(params[4].get_str()) + "</MESSAGE>";
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -808,11 +816,20 @@ UniValue movecmd(const UniValue& params, bool fHelp)
 
 UniValue sendfrom(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 6)
+    if (fHelp || params.size() < 3 || params.size() > 7)
         throw runtime_error(
-                "sendfrom <fromaccount> <toGridcoinaddress> <amount> [minconf=1] [comment] [comment-to]\n"
+                "sendfrom <account> <gridcoinaddress> <amount> [minconf=1] [comment] [comment-to] [message]\n"
                 "\n"
+                "<account> account to send from.\n"
+                "<gridcoinaddress> address to send to.\n"
                 "<amount> is a real and is rounded to the nearest 0.000001\n"
+                "[minconf] only use the balance confirmed at least this many times."
+                "[comment] a comment used to store what the transaction is for.\n"
+                "         This is not part of the transaction, just kept in your wallet.\n"
+                "[comment_to] a comment to store the name of the person or organization\n"
+                "             to which you're sending the transaction. This is not part of the \n"
+                "             transaction, just kept in your wallet.\n"
+                "[message] Optional message to add to the receiver.\n"
                 + HelpRequiringPassphrase());
 
     string strAccount = AccountFromValue(params[0]);
@@ -834,6 +851,8 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
         wtx.mapValue["comment"] = params[4].get_str();
     if (params.size() > 5 && !params[5].isNull() && !params[5].get_str().empty())
         wtx.mapValue["to"]      = params[5].get_str();
+    if (params.size() > 6 && !params[6].isNull() && !params[6].get_str().empty())
+        wtx.hashBoinc += "<MESSAGE>" + MakeSafeMessage(params[6].get_str()) + "</MESSAGE>";
 
     EnsureWalletIsUnlocked();
 
