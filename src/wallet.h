@@ -948,5 +948,5 @@ private:
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 
-MinedType GenerateType(const uint256& tx, unsigned int vout);
+MinedType getGeneratedType(const uint256& tx, unsigned int vout);
 #endif
