@@ -255,6 +255,7 @@ RES_ICONS = \
   qt/res/icons/staking_off.png \
   qt/res/icons/staking_on.png \
   qt/res/icons/statistics.png \
+  qt/res/icons/notsynced.png \
   qt/res/icons/synced.png \
   qt/res/icons/toolbar.png \
   qt/res/icons/transaction0.png \
