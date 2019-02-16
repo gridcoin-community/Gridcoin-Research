@@ -100,8 +100,13 @@ public: /* static methods */
     /** Validate whether recieved manifest is authorized */
     static bool IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out);
 
-    /** Delete Manifest **/
+    /** Delete Manifest (key version) **/
     static bool DeleteManifest(const uint256& nHash);
+
+    /** Delete Manifest (iterator version) **/
+    static std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator
+        DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter);
+
 
 public: /*==== fields ====*/
 

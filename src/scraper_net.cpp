@@ -412,10 +412,16 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
 // A lock must be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::DeleteManifest(const uint256& nHash)
 {
-    if(mapManifest.erase(nHash))
+    if (mapManifest.erase(nHash))
         return true;
     else
         return false;
+}
+
+// A lock must be taken on cs_mapManifest before calling this function.
+std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter)
+{
+    return mapManifest.erase(iter);
 }
 
 // A lock needs to be taken on cs_mapManifest before calling this function.

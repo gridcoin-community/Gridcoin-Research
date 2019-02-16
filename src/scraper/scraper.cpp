@@ -1857,14 +1857,14 @@ uint256 GetmScraperFileManifestHash()
         // are deleted by aging rules, the hash would change but the actual content of the
         // CScraperManifest would not, and so the publishing of the manifest would fail.
         // This was a minor error caught in corner-case testing, and fixed by the below filter.
-        if (SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES || entry.second.current)
-        {
+        //if (SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES || entry.second.current)
+        //{
             ss << entry.second.filename
                << entry.second.project
                << entry.second.hash
                << entry.second.timestamp
                << entry.second.current;
-        }
+        //}
      }
 
     nHash = Hash(ss.begin(), ss.end());
@@ -3051,24 +3051,23 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
 
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
-        auto iter_copy = iter;
-
         CScraperManifest& manifest = *iter->second;
 
         // We are not going to do anything with the banscore here, but it is an out parameter of IsManifestAuthorized.
         unsigned int banscore_out = 0;
 
         if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out))
+        {
             manifest.bCheckedAuthorized = true;
+            ++iter;
+        }
         else
         {
             _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests", "Deleting unauthorized manifest with hash " + iter->first.GetHex());
-            // Delete from CScraperManifest map
-            ScraperDeleteCScraperManifest(iter_copy->first);
+            // Delete from CScraperManifest map (also advances iter to the next valid element).
+            iter = CScraperManifest::DeleteManifest(iter);
             nDeleted++;
         }
-
-        ++iter;
     }
 
     return nDeleted;
@@ -3745,23 +3744,19 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
         }
     }
 
-    // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then
-    // delete.
+    // If any CScraperManifest has exceeded SCRAPER_CMANIFEST_RETENTION_TIME, then delete.
     for (auto iter = CScraperManifest::mapManifest.begin(); iter != CScraperManifest::mapManifest.end(); )
     {
-        // Copy iterator for deletion operation and increment iterator.
-        auto iter_copy = iter;
-
         CScraperManifest& manifest = *iter->second;
         
         if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
         {
             _log(logattribute::INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter->first.GetHex());
             // Delete from CScraperManifest map
-            ScraperDeleteCScraperManifest(iter_copy->first);
+            iter = CScraperManifest::DeleteManifest(iter);
         }
-        
-        ++iter;
+        else
+            ++iter;
     }
 
     // Reload mMapCSManifestsBinnedByScraper after deletions. This is not particularly efficient, but the map is not
@@ -3823,12 +3818,7 @@ bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManif
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash)
 {
     // This deletes a manifest from the map.
-    
-    // Select manifest based on provided hash.
-    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
-    CScraperManifest& manifest = *pair->second;
-
-    bool ret = manifest.DeleteManifest(nManifestHash);
+    bool ret = CScraperManifest::DeleteManifest(nManifestHash);
 
     return ret;
 }
