@@ -1344,7 +1344,7 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                     else
                         entry.pushKV("category", "generate");
 
-                    MinedType gentype = GenerateType(wtx.GetHash(), r.vout);
+                    MinedType gentype = GetGeneratedType(wtx.GetHash(), r.vout);
 
                     switch (gentype)
                     {

@@ -2611,7 +2611,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         mapKeyBirth[it->first] = it->second->nTime - 7200; // block times can be 2h off
 }
 
-MinedType GenerateType(const uint256& tx, unsigned int vout)
+MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
 {
     CWalletTx wallettx;
     uint256 hashblock;
