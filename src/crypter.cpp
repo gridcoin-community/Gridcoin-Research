@@ -18,7 +18,6 @@
 unsigned char chKeyGridcoin[256];
 unsigned char chIVGridcoin[256];
 bool fKeySetGridcoin;
-std::string getHardwareID();
 std::string RetrieveMd5(std::string s1);
 
 bool CCrypter::SetKeyFromPassphrase(const SecureString& strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod)
@@ -322,67 +321,6 @@ std::string AdvancedDecrypt(std::string boinchash_encrypted)
     catch(...)
     {
         LogPrintf("Error while decrypting 2.");
-        return "";
-    }
-}
-
-
-std::string AdvancedCryptWithHWID(std::string data)
-{
-    std::string HWID = getHardwareID();
-    std::string enc = "";
-    std::string salt = HWID;
-    for (unsigned int i = 0; i < 9; i++)
-    {
-        std::string old_salt = salt;
-        salt = RetrieveMd5(old_salt);
-    }
-    enc = AdvancedCryptWithSalt(data,salt);
-    return enc;
-}
-
-std::string AdvancedDecryptWithHWID(std::string data)
-{
-    std::string HWID = getHardwareID();
-    std::string salt = HWID;
-    for (unsigned int i = 0; i < 9; i++)
-    {
-        std::string old_salt = salt;
-        salt = RetrieveMd5(old_salt);
-    }
-    std::string dec = AdvancedDecryptWithSalt(data,salt);
-    return dec;
-}
-
-std::string AdvancedCryptWithSalt(std::string boinchash, std::string salt)
-{
-    try
-    {
-       std::vector<unsigned char> vchSecret( boinchash.begin(), boinchash.end() );
-       std::vector<unsigned char> vchCryptedSecret;
-       GridEncryptWithSalt(vchSecret, vchCryptedSecret,salt);
-       std::string encrypted = EncodeBase64(UnsignedVectorToString(vchCryptedSecret));
-
-       return encrypted;
-    } catch (std::exception &e)
-    {
-        LogPrintf("Error while encrypting %s",boinchash);
-        return "";
-    }
-}
-
-std::string AdvancedDecryptWithSalt(std::string boinchash_encrypted, std::string salt)
-{
-    try{
-       std::string pre_encrypted_boinchash = DecodeBase64(boinchash_encrypted);
-       std::vector<unsigned char> vchCryptedSecret(pre_encrypted_boinchash.begin(),pre_encrypted_boinchash.end());
-       std::vector<unsigned char> vchPlaintext;
-       GridDecryptWithSalt(vchCryptedSecret,vchPlaintext,salt);
-       std::string decrypted = UnsignedVectorToString(vchPlaintext);
-       return decrypted;
-    } catch (std::exception &e)
-    {
-        LogPrintf("Error while decrypting %s",boinchash_encrypted);
         return "";
     }
 }
