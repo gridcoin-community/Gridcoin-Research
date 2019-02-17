@@ -2336,8 +2336,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="-206"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Ange en Gridcoin-address (t.ex. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Ange en Gridcoin-address (t.ex. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <location filename="../sendcoinsdialog.cpp" line="+1"/>
@@ -2524,8 +2524,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+75"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation type="unfinished">Ange en Gridcoin-address (t.ex. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation type="unfinished">Ange en Gridcoin-address (t.ex. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
 </context>
 <context>
@@ -2672,8 +2672,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <location filename="../forms/signverifymessagedialog.ui" line="-64"/>
         <location line="+198"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
-        <translation>Ange en Gridcoin-address (t.ex. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</translation>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
+        <translation>Ange en Gridcoin-address (t.ex. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
     <message>
         <location line="+32"/>

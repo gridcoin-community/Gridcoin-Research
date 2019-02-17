@@ -2278,7 +2278,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="-206"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2467,7 +2467,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="-96"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2575,7 +2575,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     <message>
         <location line="-256"/>
         <location line="+198"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
