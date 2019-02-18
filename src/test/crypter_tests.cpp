@@ -38,29 +38,4 @@ BOOST_AUTO_TEST_CASE(crypter_GridDecryptShouldDecryptValidInput)
     BOOST_CHECK_EQUAL(PLAINTEXT, decrypted_message);
 }
 
-BOOST_AUTO_TEST_CASE(crypter_GridEncryptWithSaltShouldProduceCorrectOutput)
-{
-    const std::vector<unsigned char> plaintext(PLAINTEXT.begin(), PLAINTEXT.end());
-    std::vector<unsigned char> encrypted;
-
-    BOOST_CHECK(GridEncryptWithSalt(plaintext, encrypted, SALT));
-
-    // Convert encrypted message to Base64 for easier verification.
-    std::string encrypted_message(encrypted.begin(), encrypted.end());
-    BOOST_CHECK_EQUAL(EncodeBase64(encrypted_message),
-                      "bFCPuKw6yUO2tSMsRlAfaza/bBrYFJFA4ke4S0lEbvH1gMwayuRzbBJ7ZFzAawTIXWpXe+JTvuMQHI6H0kDg6A==");
-}
-
-BOOST_AUTO_TEST_CASE(crypter_GridDecryptWithSaltShouldDecryptValidInput)
-{
-    const std::vector<unsigned char> encrypted =
-            DecodeBase64("bFCPuKw6yUO2tSMsRlAfaza/bBrYFJFA4ke4S0lEbvH1gMwayuRzbBJ7ZFzAawTIXWpXe+JTvuMQHI6H0kDg6A==");
-
-    // GridEncrypt allocates memory in destination while GridDecrypt doesn't.
-    std::vector<unsigned char> plaintext(encrypted.size());
-    BOOST_CHECK(GridDecryptWithSalt(encrypted, plaintext, SALT));
-    const std::string decrypted_message(plaintext.begin(), plaintext.end());
-    BOOST_CHECK_EQUAL(PLAINTEXT, decrypted_message);
-}
-
 BOOST_AUTO_TEST_SUITE_END()

@@ -210,62 +210,6 @@ bool GridDecrypt(const std::vector<unsigned char>& vchCiphertext,std::vector<uns
     return true;
 }
 
-
-
-
-
-bool GridEncryptWithSalt(std::vector<unsigned char> vchPlaintext, std::vector<unsigned char> &vchCiphertext, std::string salt)
-{
-    LoadGridKey("gridcoin",salt);
-    int nLen = vchPlaintext.size();
-    int nCLen = nLen + AES_BLOCK_SIZE, nFLen = 0;
-    vchCiphertext = std::vector<unsigned char> (nCLen);
-    bool fOk = true;
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if(!ctx)
-        throw std::runtime_error("Error allocating cipher context");
-
-    if (fOk) fOk = EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKeyGridcoin, chIVGridcoin);
-    if (fOk) fOk = EVP_EncryptUpdate(ctx, &vchCiphertext[0], &nCLen, &vchPlaintext[0], nLen);
-    if (fOk) fOk = EVP_EncryptFinal_ex(ctx, (&vchCiphertext[0])+nCLen, &nFLen);
-    EVP_CIPHER_CTX_free(ctx);
-    if (!fOk) return false;
-    vchCiphertext.resize(nCLen + nFLen);
-    return true;
-}
-
-
-bool GridDecryptWithSalt(const std::vector<unsigned char>& vchCiphertext,std::vector<unsigned char>& vchPlaintext, std::string salt)
-{
-    LoadGridKey("gridcoin",salt);
-    int nLen = vchCiphertext.size();
-    int nPLen = nLen, nFLen = 0;
-    bool fOk = true;
-
-    // Allocate data for the plaintext string. This is always equal to lower
-    // than the length of the encrypted string. Stray data is discarded
-    // after successfully decrypting.
-    vchPlaintext.resize(nLen);
-
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if(!ctx)
-        throw std::runtime_error("Error allocating cipher context");
-
-    if (fOk) fOk = EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, chKeyGridcoin, chIVGridcoin);
-    if (fOk) fOk = EVP_DecryptUpdate(ctx, &vchPlaintext[0], &nPLen, &vchCiphertext[0], nLen);
-    if (fOk) fOk = EVP_DecryptFinal_ex(ctx, (&vchPlaintext[0])+nPLen, &nFLen);
-    EVP_CIPHER_CTX_free(ctx);
-    if (!fOk) return false;
-
-    vchPlaintext.resize(nPLen + nFLen);
-    return true;
-}
-
-
-
-
-
-
 char FromUnsigned( unsigned char ch )
 {
   return static_cast< char >( ch );
