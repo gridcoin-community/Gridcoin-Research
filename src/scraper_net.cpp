@@ -443,7 +443,8 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     /* see if we do not already have it */
     if( AlreadyHave(pfrom,CInv(MSG_SCRAPERINDEX, hash)) )
     {
-        return error("Already have this ScraperManifest");
+        LogPrintf("ERROR: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
+        return false;
     }
     const auto it = mapManifest.emplace(hash,std::unique_ptr<CScraperManifest>(new CScraperManifest()));
     CScraperManifest& manifest = *it.first->second;
