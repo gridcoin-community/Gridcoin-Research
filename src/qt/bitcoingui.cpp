@@ -1460,7 +1460,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
         labelScraperIcon->setMovie(syncIconMovie);
         syncIconMovie->start();
     }
-    else if (scraperEventtype == (int)scrapereventtypes::Convergence && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
+    else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
+             && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
         labelScraperIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
@@ -1471,7 +1472,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
             labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1 UTC."
                                             " Project(s) excluded: %2.").arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str())).arg(QString(sExcludedProjects.c_str())));
     }
-    else if (scraperEventtype == (int)scrapereventtypes::Convergence && (status == CT_DELETED))
+    else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
+             && status == CT_DELETED)
     {
         labelScraperIcon->setPixmap(QIcon(":/icons/quit").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));

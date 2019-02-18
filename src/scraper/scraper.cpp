@@ -4046,6 +4046,11 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
 
         sSBCoreData = ConvergedScraperStatsCache.sContract;
 
+        // Signal the UI of the "updated" contract. This needs to be sent because the scraper loop could
+        // have changed the state to something else, even though an update to the contract really hasn't happened,
+        // because it is cached.
+        uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
+
         if (fDebug)
             _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from cached converged stats\n" + sSBCoreData);
         else
