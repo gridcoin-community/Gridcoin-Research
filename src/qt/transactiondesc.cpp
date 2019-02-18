@@ -113,7 +113,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         // Update support for Side Stake and correctly show POS/POR as well
         strHTML += "<b>" + tr("Source") + ":</b> ";
 
-        MinedType gentype = getGeneratedType(wtx.GetHash(), vout);
+        MinedType gentype = GenerateType(wtx.GetHash(), vout);
 
         switch (gentype)
         {
