@@ -251,6 +251,7 @@ bool fUseFastIndex = false;
 
 // Gridcoin status    *************
 MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
+int nBoincUtilization = 0;
 std::string sRegVer;
 
 std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
@@ -599,6 +600,7 @@ void GetGlobalStatus()
         double boincmagnitude = CalculatedMagnitude(GetAdjustedTime(),false);
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
+        nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
         double weight = nWeight/COIN;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
@@ -6496,9 +6498,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             /* Check also the scraper data propagation system to see if it needs
              * this inventory object */
-            LOCK(CScraperManifest::cs_mapManifest);
+            {
+                LOCK(CScraperManifest::cs_mapManifest);
 
-            fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+                fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+            }
 
             if (fDebug10)
                 LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");

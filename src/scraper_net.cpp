@@ -412,12 +412,21 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
 // A lock must be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::DeleteManifest(const uint256& nHash)
 {
-    if(mapManifest.erase(nHash))
+    if (mapManifest.erase(nHash))
         return true;
     else
         return false;
 }
 
+<<<<<<< HEAD
+=======
+// A lock must be taken on cs_mapManifest before calling this function.
+std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter)
+{
+    return mapManifest.erase(iter);
+}
+
+>>>>>>> integrated_scraper_removalof01230124
 // A lock needs to be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 {
@@ -437,7 +446,8 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     /* see if we do not already have it */
     if( AlreadyHave(pfrom,CInv(MSG_SCRAPERINDEX, hash)) )
     {
-        return error("Already have this ScraperManifest");
+        LogPrintf("ERROR: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
+        return false;
     }
     const auto it = mapManifest.emplace(hash,std::unique_ptr<CScraperManifest>(new CScraperManifest()));
     CScraperManifest& manifest = *it.first->second;
