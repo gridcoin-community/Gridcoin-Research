@@ -58,20 +58,6 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
-bool IsPoR2(double amt)
-{
-    std::string sAmt = RoundToString(amt,8);
-    if (sAmt.length() > 8)
-    {
-        std::string suffix = sAmt.substr(sAmt.length()-4,4);
-        if (suffix == "0124" || suffix=="0123")
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
 {
     int confirms = wtx.GetDepthInMainChain();
@@ -1377,11 +1363,17 @@ static void MaybePushAddress(UniValue& entry, const CTxDestination& dest)
                     else
                         entry.pushKV("category", "generate");
 
-                    std::string type = IsPoR2(CoinToDouble(r.amount)) ? "POR" : "Interest";
-                    {
-                        entry.pushKV("Type", type);
-                    }
+                    MinedType gentype = GetGeneratedType(wtx.GetHash(), r.vout);
 
+                    switch (gentype)
+                    {
+                        case MinedType::POR               :    entry.pushKV("Type", "POR");               break;
+                        case MinedType::POS               :    entry.pushKV("Type", "POS");               break;
+                        case MinedType::ORPHANED          :    entry.pushKV("Type", "ORPHANED");          break;
+                        case MinedType::POS_SIDE_STAKE    :    entry.pushKV("Type", "POS SIDE STAKE");    break;
+                        case MinedType::POR_SIDE_STAKE    :    entry.pushKV("Type", "POR SIDE STAKE");    break;
+                        default                           :    entry.pushKV("Type", "UNKNOWN");           break;
+                    }
                 }
                 else
                 {
@@ -1456,11 +1448,6 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     else
                     {
                         entry.pushKV("category", "generate");
-
-                    }
-                    std::string type = IsPoR2(-nFee) ? "POR" : "Interest";
-                    {
-                        entry.pushKV("Type", type);
                     }
                 }
                 else
