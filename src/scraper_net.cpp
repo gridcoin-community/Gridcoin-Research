@@ -418,16 +418,13 @@ bool CScraperManifest::DeleteManifest(const uint256& nHash)
         return false;
 }
 
-<<<<<<< HEAD
-=======
 // A lock must be taken on cs_mapManifest before calling this function.
 std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter)
 {
     return mapManifest.erase(iter);
 }
 
->>>>>>> integrated_scraper_removalof01230124
-// A lock needs to be taken on cs_mapManifest before calling this function.
+// A lock must be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
 {
     /* Index object for scraper data.
