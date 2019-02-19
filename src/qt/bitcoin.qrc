@@ -36,7 +36,6 @@
         <file alias="tx_input">res/icons/tx_input.svg</file>
         <file alias="tx_mined">res/icons/tx_mined.svg</file>
         <file alias="tx_output">res/icons/tx_output.svg</file>
-        <file alias="tx_cpumined">res/icons/tx_por.svg</file>
         <file alias="overview_native">res/icons/icons_native/overview.svg</file>
         <file alias="overview_light">res/icons/icons_light/overview.svg</file>
         <file alias="overview_dark">res/icons/icons_dark/overview.svg</file>
@@ -83,4 +82,5 @@
         <file alias="native">res/stylesheets/native_stylesheet.qss</file>
         <file alias="dark">res/stylesheets/dark_stylesheet.qss</file>
     </qresource>
+    <qresource prefix="/"/>
 </RCC>
