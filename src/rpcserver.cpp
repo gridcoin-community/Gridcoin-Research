@@ -399,6 +399,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendscraperfilemanifest", &sendscraperfilemanifest, false,  cat_developer     },
     { "savescraperfilemanifest", &savescraperfilemanifest, false,  cat_developer     },
     { "deletecscrapermanifest",  &deletecscrapermanifest,  false,  cat_developer     },
+    { "archivescraperlog",       &archivescraperlog,       false,  cat_developer     },
 
   // Network commands
     { "addnode",                 &addnode,                 false,  cat_network       },

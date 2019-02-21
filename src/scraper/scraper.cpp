@@ -14,8 +14,12 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/device/array.hpp>
+#include <boost/date_time.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/gregorian/greg_date.hpp>
 
-fs::path pathScraper = fs::current_path() / "Scraper";
+fs::path pathDataDir = fs::current_path();
+fs::path pathScraper = pathDataDir  / "Scraper";
 
 extern bool fShutdown;
 extern bool fDebug;
@@ -144,25 +148,32 @@ extern std::string PackBinarySuperblock(std::string sBlock);
 
 class logger
 {
+
 private:
 
-    //std::ofstream logfile;
+    static CCriticalSection cs_log;
+
+    static boost::gregorian::date PrevArchiveCheckDate;
+
     fs::ofstream logfile;
 
 public:
 
     logger()
     {
-        fs::path plogfile = GetDataDir() / "scraper.log";
+        LOCK(cs_log);
 
+        fs::path plogfile = pathDataDir / "scraper.log";
         logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
 
         if (!logfile.is_open())
-            printf("Logging : Failed to open logging file\n");
+            LogPrintf("ERROR: Scraper: Logger: Failed to open logging file\n");
     }
 
     ~logger()
     {
+        LOCK(cs_log);
+
         if (logfile.is_open())
         {
             logfile.flush();
@@ -172,12 +183,96 @@ public:
 
     void output(const std::string& tofile)
     {
+        LOCK(cs_log);
+
         if (logfile.is_open())
             logfile << tofile << std::endl;
 
         return;
     }
+
+
+
+    bool archive(bool fImmediate, fs::path pfile_out)
+    {
+        int64_t nTime = GetAdjustedTime();
+        boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
+        fs::path plogfile;
+        fs::path pfile_temp;
+
+        std::stringstream ssArchiveCheckDate, ssPrevArchiveCheckDate;
+
+        ssArchiveCheckDate << ArchiveCheckDate;
+        ssPrevArchiveCheckDate << PrevArchiveCheckDate;
+
+        if (fDebug) LogPrintf("INFO: Scraper: Logger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
+
+        if (fImmediate || ArchiveCheckDate > PrevArchiveCheckDate)
+        {
+            {
+                LOCK(cs_log);
+
+                if (logfile.is_open())
+                {
+                    logfile.flush();
+                    logfile.close();
+                }
+
+                plogfile = pathDataDir / "scraper.log";
+                pfile_temp = pathDataDir / ("scraper-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + ".log");
+                pfile_out = pathDataDir / ("scraper-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + ".log.gz");
+
+                try
+                {
+                    fs::rename(plogfile, pfile_temp);
+                }
+                catch(...)
+                {
+                    LogPrintf("ERROR: Scraper: Logger: Failed to rename logging file\n");
+                    return false;
+                }
+
+                PrevArchiveCheckDate = ArchiveCheckDate;
+            }
+
+            std::ifstream infile(pfile_temp.string().c_str(), std::ios_base::in | std::ios_base::binary);
+
+            if (!infile)
+            {
+                LogPrintf("ERROR: logger: Failed to open archive log file for compression %s.", pfile_temp.string());
+                return false;
+            }
+
+            std::ofstream outgzfile(pfile_out.string().c_str(), std::ios_base::out | std::ios_base::binary);
+
+            if (!outgzfile)
+            {
+                LogPrintf("ERROR: logger: Failed to open archive gzip file %s.", pfile_out.string());
+                return false;
+            }
+
+            boostio::filtering_ostream out;
+            out.push(boostio::gzip_compressor());
+            out.push(outgzfile);
+
+            boost::iostreams::copy(infile, out);
+
+            infile.close();
+            outgzfile.flush();
+            outgzfile.close();
+
+            fs::remove(pfile_temp);
+
+            return true;
+        }
+        else
+            return false;
+    }
 };
+
+boost::gregorian::date logger::PrevArchiveCheckDate = boost::posix_time::from_time_t(GetAdjustedTime()).date();
+CCriticalSection logger::cs_log;
+
 
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage)
@@ -555,6 +650,7 @@ void Scraper(bool bSingleShot)
         _log(logattribute::INFO, "Scraper", "Running in single shot mode.");
 
     // This is necessary to maintain compatibility with Windows.
+    pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
     pathScraper.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 
     // Hash check
@@ -642,6 +738,15 @@ void Scraper(bool bSingleShot)
                     // End LOCK(cs_Scraper)
                     if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
                 }
+
+                // Need the log archive check here, because we don't run housekeeping in this while loop.
+                logger log;
+
+                fs::path plogfile_out;
+
+                if (log.archive(false, plogfile_out))
+                    _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.string());
+
 
                 sbage = data.sbage();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
@@ -931,6 +1036,13 @@ bool ScraperHousekeeping()
             _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
                  + ", Popularity: " + std::to_string(network_hash.second));
     }
+
+    logger log;
+
+    fs::path plogfile_out;
+
+    if (log.archive(false, plogfile_out))
+        _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.string());
 
     return true;
 }
@@ -4224,6 +4336,27 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
     bool ret = ScraperDeleteCScraperManifest(uint256(params[0].get_str()));
 
     if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+
+    return UniValue(ret);
+}
+
+
+UniValue archivescraperlog(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0 )
+        throw std::runtime_error(
+                "archivescraperlog takes no arguments and results in immediate archiving of the scraper log\n"
+                );
+
+    logger log;
+
+    fs::path pfile_out;
+    bool ret = log.archive(true, pfile_out);
+
+    if(!ret)
+        return UniValue(ret);
+    else
+        return UniValue(pfile_out.c_str());
 
     return UniValue(ret);
 }
