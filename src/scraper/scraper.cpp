@@ -378,19 +378,14 @@ public:
 * Whitelist Data     *
 *********************/
 
-class gridcoinrpc
+class whitelist
 {
-private:
-
-    std::string whitelistrpcdata = "";
-    std::string superblockage = "";
-
 public:
 
-    gridcoinrpc()
+    whitelist()
     {}
 
-    ~gridcoinrpc()
+    ~whitelist()
     {}
 
     // A lock should be taken on cs_vwhitelist before calling this function.
@@ -713,7 +708,7 @@ void Scraper(bool bSingleShot)
             if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
-        gridcoinrpc data;
+        whitelist data;
         
         int64_t sbage = data.sbage();
         int64_t nScraperThreadStartTime = GetAdjustedTime();
@@ -994,7 +989,7 @@ void NeuralNetwork()
 
 bool ScraperHousekeeping()
 {
-    gridcoinrpc data;
+    whitelist data;
 
     // Refresh the whitelist if its available
     {
@@ -1278,7 +1273,7 @@ bool WhitelistPopulated()
     {
         _log(logattribute::INFO, "WhitelistPopulated", "Whitelist vector currently empty; populating");
 
-        gridcoinrpc data;
+        whitelist data;
 
         if (data.wlimport())
             _log(logattribute::INFO, "WhitelistPopulated", "Successfully populated whitelist vector");

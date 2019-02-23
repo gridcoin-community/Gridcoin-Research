@@ -135,8 +135,11 @@ unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
 * Scraper            *
 *********************/
 
-class scraper
+// For version 2 of the scraper we will restructure into a class. For now this is a placeholder.
+/*
+ * class scraper
 {
 public:
     scraper();
 };
+*/
