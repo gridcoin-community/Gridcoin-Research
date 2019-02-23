@@ -18,8 +18,9 @@
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/gregorian/greg_date.hpp>
 
-fs::path pathDataDir = fs::current_path();
-fs::path pathScraper = pathDataDir  / "Scraper";
+// These are initialized empty. GetDataDir() cannot be called here. It is too early.
+fs::path pathDataDir = {};
+fs::path pathScraper = {};
 
 extern bool fShutdown;
 extern bool fDebug;
@@ -644,14 +645,22 @@ void ScraperApplyAppCacheEntries()
 // It can also be called in "single shot" mode.
 void Scraper(bool bSingleShot)
 {
+    // Initialize these while still single-threaded. They cannot be initialized during declaration because GetDataDir()
+    // gives the wrong value that early. If they are already initialized then leave them alone (because this function
+    // can be called in singleshot mode.
+    if (pathDataDir.empty())
+    {
+        pathDataDir = GetDataDir();
+        // This is necessary to maintain compatibility with Windows.
+        pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+
+        pathScraper = pathDataDir  / "Scraper";
+    }
+
     if (!bSingleShot)
         _log(logattribute::INFO, "Scraper", "Starting Scraper thread.");
     else
         _log(logattribute::INFO, "Scraper", "Running in single shot mode.");
-
-    // This is necessary to maintain compatibility with Windows.
-    pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
-    pathScraper.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 
     // Hash check
     std::string sHashCheck = "Hello world";
@@ -920,6 +929,18 @@ void ScraperSingleShot()
 // This is the non-scraper "neural-network" node thread...
 void NeuralNetwork()
 {
+    // Initialize these while still single-threaded. They cannot be initialized during declaration because GetDataDir()
+    // gives the wrong value that early. Don't initialize here if the scraper thread is running, or if already initialized.
+    if (!fScraperActive && pathDataDir.empty())
+    {
+        pathDataDir = GetDataDir();
+        // This is necessary to maintain compatibility with Windows.
+        pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
+
+        pathScraper = pathDataDir  / "Scraper";
+    }
+
+
     _log(logattribute::INFO, "NeuralNetwork", "Starting Neural Network housekeeping thread (new C++ implementation). \n"
                                               "Note that this does NOT mean the NN is active. This simply does housekeeping"
                                               "functions.");
