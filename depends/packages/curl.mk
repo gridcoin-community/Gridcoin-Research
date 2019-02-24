@@ -8,12 +8,10 @@ $(package)_dependencies=openssl
 define $(package)_set_vars
   $(package)_config_opts=--disable-shared
   $(package)_config_opts+= --enable-static
-  $(package)_config_opts+= --enable-ssl
-  $(package)_config_opts+= --with-ca-bundle=./TLS/cacert.pem
-  $(package)_config_opts+= --with-ca-path=./TLS/certs
-#  $(package)_config_opts+= --with-winssl
   $(package)_config_opts_release+=--disable-debug-mode
   $(package)_config_opts_linux+=--with-pic
+  # Disable OpenSSL for Windows and use native SSL stack (SSPI/Schannel):
+  $(package)_config_opts_mingw32+= --with-winssl --without-ssl
 endef
 
 define $(package)_config_cmds
