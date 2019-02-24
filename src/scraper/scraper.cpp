@@ -196,6 +196,8 @@ public:
 
     bool archive(bool fImmediate, fs::path pfile_out)
     {
+        bool fArchiveDaily = GetBoolArg("-scraperlogarchivedaily", true);
+
         int64_t nTime = GetAdjustedTime();
         boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
         fs::path plogfile;
@@ -208,7 +210,7 @@ public:
 
         if (fDebug) LogPrintf("INFO: Scraper: Logger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
 
-        if (fImmediate || ArchiveCheckDate > PrevArchiveCheckDate)
+        if (fImmediate || (fArchiveDaily && ArchiveCheckDate > PrevArchiveCheckDate))
         {
             {
                 LOCK(cs_log);
@@ -1848,7 +1850,6 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             builder.append(line);
     }
 
-    // TODO: More error checking on stream errors.
     if (bfileerror)
     {
         _log(logattribute::CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
@@ -2563,10 +2564,6 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
-    // TODO implement file error handling
-    // bool bcomplete = false;
-    // bool bfileerror = false;
-
     bool bResult = ProcessProjectStatsFromStreamByCPID(project, in, projectmag, mBeaconMap, mScraperStats);
 
     return bResult;
@@ -2945,8 +2942,8 @@ std::string ExplainMagnitude(std::string sCPID)
     }
 
     // "Signature"
-    // TODO: Why the magic version number of 430 from .NET? Should this be a constant?
-    // Should we take a lock on cs_main to read GlobalCPUMiningCPID?
+    // The magic version number of 430 from .NET is there for compatibility with the old NN protocol.
+    // TODO: Should we take a lock on cs_main to read GlobalCPUMiningCPID?
     out.append("NN Host Version: 430, ");
     out.append("NeuralHash: " + ConvergedScraperStatsCache.sContractHash + ", ");
     out.append("SignatureCPID: " + GlobalCPUMiningCPID.cpid + ", ");
