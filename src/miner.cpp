@@ -10,7 +10,7 @@
 #include "cpid.h"
 #include "main.h"
 #include "appcache.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "contract/contract.h"
 #include "util.h"
 
@@ -998,7 +998,7 @@ namespace supercfwd
     }
     void SendResponse(CNode* fromNode, const std::string& req_hash)
     {
-        const std::string nn_hash(NN::GetNeuralHash());
+        const std::string nn_hash(NN::GetInstance()->GetNeuralHash());
         const bool& fDebug10= fDebug; //temporary
         if(req_hash==sCacheHash)
         {
@@ -1008,7 +1008,7 @@ namespace supercfwd
         }
         else if(req_hash==nn_hash)
         {
-            std::string nn_data= PackBinarySuperblock(NN::GetNeuralContract());
+            std::string nn_data= PackBinarySuperblock(NN::GetInstance()->GetNeuralContract());
             if(fDebug10) LogPrintf("supercfwd.SendResponse: %s requested %s, sending our nn binary contract (size %d)",fromNode->addrName,req_hash,nn_data.length());
             fromNode->PushMessage("neural", std::string("supercfwdr"),
                 std::move(nn_data));
@@ -1060,7 +1060,7 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 
     /* Retrive the neural Contract */
-    const std::string& sb_contract = NN::GetNeuralContract();
+    const std::string& sb_contract = NN::GetInstance()->GetNeuralContract();
     const std::string& sb_hash = GetQuorumHash(sb_contract);
 
     if(!sb_contract.empty())

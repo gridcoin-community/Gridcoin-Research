@@ -75,7 +75,7 @@ std::string PubKeyToGRCAddress(const CScript& scriptPubKey)
     return grcaddress;
 }
 
-QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
+QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vout)
 {
     QString strHTML;
 	
@@ -109,8 +109,24 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx)
         strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated in CoinBase") + "<br>";
 
     else if (wtx.IsCoinStake())
-        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated, PoS") + "<br>";
+    {
+        // Update support for Side Stake and correctly show POS/POR as well
+        strHTML += "<b>" + tr("Source") + ":</b> ";
 
+        MinedType gentype = GetGeneratedType(wtx.GetHash(), vout);
+
+        switch (gentype)
+        {
+            case MinedType::POS               :    strHTML += tr("MINED - POS");        break;
+            case MinedType::POR               :    strHTML += tr("MINED - POR");        break;
+            case MinedType::ORPHANED          :    strHTML += tr("MINED - ORPHANED");   break;
+            case MinedType::POS_SIDE_STAKE    :    strHTML += tr("POS SIDE STAKE");     break;
+            case MinedType::POR_SIDE_STAKE    :    strHTML += tr("POR SIDE STAKE");     break;
+            default                           :    strHTML += tr("MINED - UNKNOWN");    break;
+        }
+
+        strHTML += "<br>";
+    }
     // Online transaction
     else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
         strHTML += "<b>" + tr("From") + ":</b> " + GUIUtil::HtmlEscape(wtx.mapValue["from"]) + "<br>";

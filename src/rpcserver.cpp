@@ -345,10 +345,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getmininginfo",           &getmininginfo,           false,  cat_mining        },
     { "lifetime",                &lifetime,                false,  cat_mining        },
     { "magnitude",               &magnitude,               false,  cat_mining        },
-#ifdef WIN32
     { "myneuralhash",            &myneuralhash,            false,  cat_mining        },
     { "neuralhash",              &neuralhash,              false,  cat_mining        },
-#endif
     { "neuralreport",            &neuralreport,            false,  cat_mining        },
     { "resetcpids",              &resetcpids,              false,  cat_mining        },
     { "staketime",               &staketime,               false,  cat_mining        },
@@ -359,9 +357,7 @@ static const CRPCCommand vRPCCommands[] =
 
   // Developer commands
     { "addkey",                  &addkey,                  false,  cat_developer     },
-#ifdef WIN32
     { "currentcontractaverage",  &currentcontractaverage,  false,  cat_developer     },
-#endif
     { "debug",                   &debug,                   true,   cat_developer     },
     { "debug10",                 &debug10,                 true,   cat_developer     },
     { "debug2",                  &debug2,                  true,   cat_developer     },
@@ -394,12 +390,16 @@ static const CRPCCommand vRPCCommands[] =
     { "superblockaverage",       &superblockaverage,       false,  cat_developer     },
     { "tally",                   &tally,                   false,  cat_developer     },
     { "tallyneural",             &tallyneural,             false,  cat_developer     },
-#ifdef WIN32
     { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
-#endif
-    { "updatequorumdata",        &updatequorumdata,        false,  cat_developer     },
     { "versionreport",           &versionreport,           false,  cat_developer     },
     { "writedata",               &writedata,               false,  cat_developer     },
+
+    { "listmanifests",           &listmanifests,           false,  cat_developer     },
+    { "getmpart",                &getmpart,                false,  cat_developer     },
+    { "sendscraperfilemanifest", &sendscraperfilemanifest, false,  cat_developer     },
+    { "savescraperfilemanifest", &savescraperfilemanifest, false,  cat_developer     },
+    { "deletecscrapermanifest",  &deletecscrapermanifest,  false,  cat_developer     },
+    { "archivescraperlog",       &archivescraperlog,       false,  cat_developer     },
 
   // Network commands
     { "addnode",                 &addnode,                 false,  cat_network       },

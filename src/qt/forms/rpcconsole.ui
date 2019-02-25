@@ -19,6 +19,11 @@
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
     <widget class="QTabWidget" name="tabWidget">
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
      <property name="autoFillBackground">
       <bool>false</bool>
      </property>
@@ -753,6 +758,34 @@
         </layout>
        </item>
       </layout>
+     </widget>
+     <widget class="QWidget" name="tab_scraper">
+      <attribute name="title">
+       <string>&amp;Scraper</string>
+      </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_6">
+        <property name="spacing">
+        <number>3</number>
+        </property>
+        <item>
+         <widget class="QPlainTextEdit" name="scraper_log">
+          <property name="font">
+           <font>
+            <pointsize>9</pointsize>
+           </font>
+          </property>
+          <property name="autoFillBackground">
+           <bool>true</bool>
+          </property>
+          <property name="textInteractionFlags">
+           <set>Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+          </property>
+          <property name="maximumBlockCount">
+           <number>10000</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
      </widget>
     </widget>
    </item>

@@ -289,6 +289,7 @@ void RPCConsole::setClientModel(ClientModel *model)
         // Subscribe to information, replies, messages, errors
         connect(model, SIGNAL(numConnectionsChanged(int)), this, SLOT(setNumConnections(int)));
         connect(model, SIGNAL(numBlocksChanged(int,int)), this, SLOT(setNumBlocks(int,int)));
+        connect(model, SIGNAL(updateScraperLog(QString)), this, SLOT(displayScraperLogMessage(QString)));
 
         updateTrafficStats(model->getTotalBytesRecv(), model->getTotalBytesSent());
         connect(model, SIGNAL(bytesChanged(quint64,quint64)), this, SLOT(updateTrafficStats(quint64, quint64)));
@@ -392,6 +393,13 @@ void RPCConsole::setNumBlocks(int count, int countOfPeers)
         ui->lastBlockTime->setText(clientModel->getLastBlockDate().toString());
 		ui->porDiff->setText(clientModel->getDifficulty());
     }
+}
+
+void RPCConsole::displayScraperLogMessage(const QString& string)
+{
+    // LogPrintf("INFO: RPCConsole::displayScraperLogMessage: %s", string.toStdString());
+
+    ui->scraper_log->appendPlainText(string);
 }
 
 void RPCConsole::on_lineEdit_returnPressed()

@@ -9,16 +9,11 @@
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "global_objects_noui.hpp"
 using namespace std;
 
-int64_t GetCoinYearReward(int64_t nTime);
-
 double GRCMagnitudeUnit(int64_t locktime);
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-
-int64_t GetRSAWeightByCPID(std::string cpid);
 
 UniValue getmininginfo(const UniValue& params, bool fHelp)
 {
@@ -76,7 +71,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("PopularNeuralHash", neural_hash);
     obj.pushKV("NeuralPopularity", neural_popularity);
     //9-19-2015 - CM
-    obj.pushKV("MyNeuralHash", NN::GetNeuralHash());
+    obj.pushKV("MyNeuralHash", NN::GetInstance()->GetNeuralHash());
 
     obj.pushKV("CPID",msPrimaryCPID);
 

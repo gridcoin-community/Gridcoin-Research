@@ -167,10 +167,8 @@ extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getmininginfo(const UniValue& params, bool fHelp);
 extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
-#ifdef WIN32
 extern UniValue myneuralhash(const UniValue& params, bool fHelp);
 extern UniValue neuralhash(const UniValue& params, bool fHelp);
-#endif
 extern UniValue neuralreport(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
 extern UniValue staketime(const UniValue& params, bool fHelp);
@@ -181,9 +179,7 @@ extern UniValue upgradedbeaconreport(const UniValue& params, bool fHelp);
 
 // Developers
 extern UniValue addkey(const UniValue& params, bool fHelp);
-#ifdef WIN32
 extern UniValue currentcontractaverage(const UniValue& params, bool fHelp);
-#endif
 extern UniValue debug(const UniValue& params, bool fHelp);
 extern UniValue debug10(const UniValue& params, bool fHelp);
 extern UniValue debug2(const UniValue& params, bool fHelp);
@@ -213,12 +209,17 @@ extern UniValue sendrawcontract(const UniValue& params, bool fHelp);
 extern UniValue superblockaverage(const UniValue& params, bool fHelp);
 extern UniValue tally(const UniValue& params, bool fHelp);
 extern UniValue tallyneural(const UniValue& params, bool fHelp);
-#ifdef WIN32
 extern UniValue testnewcontract(const UniValue& params, bool fHelp);
-#endif
-extern UniValue updatequorumdata(const UniValue& params, bool fHelp);
 extern UniValue versionreport(const UniValue& params, bool fhelp);
 extern UniValue writedata(const UniValue& params, bool fHelp);
+
+extern UniValue listmanifests(const UniValue& params, bool fHelp);
+extern UniValue getmanifest(const UniValue& params, bool fHelp);
+extern UniValue getmpart(const UniValue& params, bool fHelp);
+extern UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
+extern UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
+extern UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
+extern UniValue archivescraperlog(const UniValue& params, bool fHelp);
 
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);

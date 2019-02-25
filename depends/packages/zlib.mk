@@ -18,9 +18,11 @@ define $(package)_config_cmds
 endef
 
 define $(package)_build_cmds
-  $(MAKE) $($(package)_build_opts) libz.a
+  $(MAKE) $($(package)_build_opts) all
 endef
 
 define $(package)_stage_cmds
-  $(MAKE) DESTDIR=$($(package)_staging_dir) install $($(package)_build_opts)
+  $(MAKE) DESTDIR=$($(package)_staging_dir) install $($(package)_build_opts) &&\
+  mkdir $($(package)_staging_dir)/$(host_prefix)/lib/zlib_source &&\
+  cp -r * $($(package)_staging_dir)/$(host_prefix)/lib/zlib_source
 endef

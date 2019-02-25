@@ -702,10 +702,6 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     if (!block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
         return fDebug? error("CheckProofOfStake() : read block failed") : false; // unable to read block of previous transaction
 
-
-    LogPrintf("-");
-    //if (pindexPrev) nGrandfatherHeight = pindexPrev->nHeight;
-
     if (pindexPrev->nHeight > nGrandfather || pindexPrev->nHeight >= 999000)
     {
         if (!CheckStakeKernelHash(pindexPrev, nBits, block, txindex.pos.nTxPos - txindex.pos.nBlockPos, txPrev, txin.prevout, tx.nTime, hashProofOfStake,

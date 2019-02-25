@@ -13,6 +13,7 @@
 #include "ui_interface.h"
 #include "tally.h"
 #include "beacon.h"
+#include "neuralnet/neuralnet.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -28,7 +29,6 @@
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern boost::thread_group threadGroup;
 
-StructCPID GetStructCPID();
 void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
@@ -48,7 +48,10 @@ extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
 extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
+extern unsigned int nScraperSleep;
+extern unsigned int nActiveBeforeSB;
 extern bool fUseFastIndex;
+extern boost::filesystem::path pathScraper;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -370,12 +373,17 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     LogPrintf("Boost Version: %s", s.str());
 
-    //Placeholder: Load Remote CPIDs Here
+    NN::SetInstance(NN::CreateNeuralNet());
 
     nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);
 
     nMinerSleep = GetArg("-minersleep", 8000);
+    // Default to 300 sec (5 min), clamp to 60 minimum, 600 maximum - converted to milliseconds.
+    nScraperSleep = std::min(std::max(GetArg("-scrapersleep", 300), (int64_t) 60), (int64_t) 600) * 1000;
+    // Default to 7200 sec (4 hrs), clamp to 300 minimum, 86400 maximum (meaning active all of the time).
+    nActiveBeforeSB = std::min(std::max(GetArg("-activebeforesb", 14400), (int64_t) 300), (int64_t) 86400);
+
     nDerivationMethodIndex = 0;
     fTestNet = GetBoolArg("-testnet");
 
@@ -531,6 +539,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     static boost::interprocess::file_lock lock(pathLockFile.string().c_str());
     if (!lock.try_lock())
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
+
+    // Set the scraper file staging directory.
+    pathScraper = GetDataDir() / "Scraper";
+
+
 
 #if !defined(WIN32) 
     if (fDaemon)

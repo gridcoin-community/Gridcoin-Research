@@ -12,12 +12,7 @@
 #include <QSet>
 #include <QTimer>
 
-
-std::string YesNo(bool bin);
-
 void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
-
-
 
 WalletModel::WalletModel(CWallet *wallet, OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
