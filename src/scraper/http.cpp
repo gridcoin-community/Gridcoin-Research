@@ -79,12 +79,6 @@ void Http::Download(
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, curl_write_file);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, fp.get());
     curl_easy_setopt(curl.get(), CURLOPT_USERPWD, userpass.c_str());
-#ifdef WIN32
-    // Disable certificate verification for WCG if on Windows because something doesn't work.
-    // This is intended to be a temporary workaround.
-    if (url.find("www.worldcommunitygrid.org") != std::string::npos)
-        curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, FALSE);
-#endif
 
     CURLcode res = curl_easy_perform(curl.get());
     if (res > 0)
@@ -97,7 +91,7 @@ std::string Http::GetEtag(
 {
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Accept: */*");
-    headers = curl_slist_append(headers, "User-Agent: curl/7.58.0");
+    headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
     std::string header;
     std::string buffer;
 
@@ -109,12 +103,6 @@ std::string Http::GetEtag(
     curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1);
     curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl.get(), CURLOPT_USERPWD, userpass.c_str());
-#ifdef WIN32
-    // Disable certificate verification for WCG if on Windows because something doesn't work.
-    // This is intended to be a temporary workaround.
-    if (url.find("www.worldcommunitygrid.org") != std::string::npos)
-        curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, FALSE);
-#endif
 
     CURLcode res = curl_easy_perform(curl.get());
     curl_slist_free_all(headers);
@@ -129,9 +117,9 @@ std::string Http::GetEtag(
 
     // Find ETag header.
     std::string etag;
-    
+
     if(fDebug3) _log(logattribute::INFO, "Http::ETag", "Header: \n" + header);
-    
+
     std::istringstream iss(header);
     for (std::string line; std::getline(iss, line);)
     {
@@ -147,7 +135,7 @@ std::string Http::GetEtag(
         throw std::runtime_error("No ETag response from project url <urlfile=" + url + ">");
 
     return std::string();
-    
+
     // This needs to go away for production along with the above external function declaration and the fixup enum to support _log here.
     if (fDebug)
         _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
