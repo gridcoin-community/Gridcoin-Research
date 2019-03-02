@@ -673,7 +673,7 @@ void Scraper(bool bSingleShot)
     // The scraper thread loop...
     while (!fShutdown)
     {
-        // Only proceed if wallet is in sync. Check every 5 seconds since no callback is available.
+        // Only proceed if wallet is in sync. Check every 8 seconds since no callback is available.
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
         // If called in singleshot mode, wallet will most likely be in sync, because the calling functions check
         // beforehand.
@@ -714,6 +714,8 @@ void Scraper(bool bSingleShot)
         
         int64_t sbage = data.sbage();
         int64_t nScraperThreadStartTime = GetAdjustedTime();
+        CBitcoinAddress AddressOut;
+        CKey KeyOut;
 
         // Give nActiveBeforeSB seconds before superblock needed before we sync
         // Note there is a small while loop here to cull incoming manifests from
@@ -765,7 +767,8 @@ void Scraper(bool bSingleShot)
         else if (sbage <= -1)
             _log(logattribute::ERR, "Scraper", "RPC error occured, check logs");
 
-        else
+        // This is the section to download statistics. Only do if authorized.
+        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
         {
             // Take a lock on cs_Scraper for the main activity portion of the loop.
             LOCK(cs_Scraper);
@@ -843,27 +846,25 @@ void Scraper(bool bSingleShot)
 
             DownloadProjectRacFilesByCPID();
 
+            _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
+
+            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
+
+            _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
+
+            if (!StoreStats(pathScraper / "Stats.csv.gz", mScraperStats))
+                _log(logattribute::ERR, "Scraper", "StoreStats error occurred");
+            else
+                _log(logattribute::INFO, "Scraper", "Stored stats.");
+
+            // Signal stats event to UI.
+            uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_NEW, {});
+
             // End LOCK(cs_Scraper)
             if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
-        _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
-
-        ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
-
-        _log(logattribute::INFO, "Scraper", "mScraperStats has the following number of elements: " + std::to_string(mScraperStats.size()));
-
-        if (!StoreStats(pathScraper / "Stats.csv.gz", mScraperStats))
-            _log(logattribute::ERR, "Scraper", "StoreStats error occurred");
-        else
-            _log(logattribute::INFO, "Scraper", "Stored stats.");
-
-        // Signal stats event to UI.
-        uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_NEW, {});
-
         // This is the section to send out manifests. Only do if authorized.
-        CBitcoinAddress AddressOut;
-        CKey KeyOut;
         if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
         {
             // This will push out a new CScraperManifest if the hash has changed of mScraperFileManifestHash.
@@ -1198,7 +1199,7 @@ bool ScraperDirectoryAndConfigSanity()
                 {
                     _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loading team IDs");
                     if (!LoadTeamIDList(pathScraper / "TeamIDs.csv.gz"))
-                        _log(logattribute::ERR, "ScraperDirectoryAndConfigSanity", "Error occurred loading team IDs");
+                        _log(logattribute::WARNING, "ScraperDirectoryAndConfigSanity", "Unable to load team IDs. This is normal for first time startup.");
                     else
                     {
                         _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loaded team IDs file into map.");
@@ -1219,41 +1220,7 @@ bool ScraperDirectoryAndConfigSanity()
                 }
 
                 if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
-            }
-
-            // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
-            // team file downloads for projects whose team ID's have already been found and stored.
-            if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
-            {
-                LOCK(cs_TeamIDMap);
-                if (fDebug) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
-
-                if (TeamIDMap.empty())
-                {
-                    _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loading team IDs");
-                    if (!LoadTeamIDList(pathScraper / "TeamIDs.csv.gz"))
-                        _log(logattribute::ERR, "ScraperDirectoryAndConfigSanity", "Error occurred loading team IDs");
-                    else
-                    {
-                        _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loaded team IDs file into map.");
-                        if (fDebug3)
-                        {
-                            _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "TeamIDMap contents:");
-                            for (const auto& iter : TeamIDMap)
-                            {
-                                _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Project = " + iter.first);
-                                for (const auto& iter2 : iter.second)
-                                {
-                                    _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity",
-                                         "Team = " + iter2.first + ", TeamID = " + std::to_string(iter2.second));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (fDebug) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
-            }
+            }            
         }
     }
     else
@@ -1501,13 +1468,8 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
 
     std::string gzetagfile = "";
 
-    // If einstein we store different
-    //if (file.string().find("einstein") != std::string::npos)
-    //    gzetagfile = "einstein_team.gz";
-    //else
     gzetagfile = etag + ".csv" + ".gz";
 
-    //std::string gzetagfile_no_path = gzetagfile;
     // Put path in.
     gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
 
@@ -1643,9 +1605,6 @@ bool DownloadProjectRacFilesByCPID()
         std::string rac_file_name = prjs.first + +"-user.gz";
 
         fs::path rac_file = pathScraper / rac_file_name.c_str();
-
-        //            if (fs::exists(rac_file))
-        //                fs::remove(rac_file);
 
         // Grab ETag of rac file
         Http http;
@@ -3122,6 +3081,12 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                     if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
                     return true;
                 }
+                else
+                {
+                    _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests",
+                         "Key not found in the wallet for matching address. Please check that the wallet is unlocked "
+                         "(preferably for staking only).");
+                }
 
                 if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
             }
@@ -3180,6 +3145,12 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 
                             if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
                             return true;
+                        }
+                        else
+                        {
+                            _log(logattribute::WARNING, "IsScraperAuthorizedToBroadcastManifests",
+                                 "Key not found in the wallet for matching address. Please check that the wallet is unlocked "
+                                 "(preferably for staking only).");
                         }
                     }
                 }
