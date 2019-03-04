@@ -392,6 +392,7 @@ static const CRPCCommand vRPCCommands[] =
     { "tallyneural",             &tallyneural,             false,  cat_developer     },
     { "testnewcontract",         &testnewcontract,         false,  cat_developer     },
     { "versionreport",           &versionreport,           false,  cat_developer     },
+    { "whitelist",               &whitelist,               false,  cat_developer     },
     { "writedata",               &writedata,               false,  cat_developer     },
 
     { "listmanifests",           &listmanifests,           false,  cat_developer     },

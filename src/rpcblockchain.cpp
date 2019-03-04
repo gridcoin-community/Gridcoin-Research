@@ -19,6 +19,7 @@
 #include "contract/polls.h"
 #include "contract/contract.h"
 #include "util.h"
+#include "neuralnet/project.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -2278,6 +2279,33 @@ UniValue versionreport(const UniValue& params, bool fHelp)
     UniValue myNeuralJSON = GetJSONVersionReport();
 
     return myNeuralJSON;
+}
+
+// TODO: temporary testing RPC method:
+UniValue whitelist(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "whitelist\n"
+                "\n"
+                "Displays whitelisted projects and averages\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    for (const auto& project : NN::GetWhitelist().Snapshot()) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("display_name", project.DisplayName());
+        entry.pushKV("url", project.m_url);
+        entry.pushKV("base_url", project.BaseUrl());
+        entry.pushKV("display_url", project.DisplayUrl());
+        entry.pushKV("stats_url", project.StatsUrl());
+        entry.pushKV("time", project.m_timestamp);
+
+        res.pushKV(project.m_name, entry);
+    }
+
+    return res;
 }
 
 UniValue writedata(const UniValue& params, bool fHelp)

@@ -2798,9 +2798,10 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 
                 try
                 {
-                DeleteCache(StringToSection(sMType), sMKey);
-                if(fDebug)
-                    LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+                    NN::DeleteContract(sMType, sMKey);
+                    DeleteCache(StringToSection(sMType), sMKey);
+                    if(fDebug)
+                        LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
                 }
                 catch(const std::runtime_error& e)
                 {
@@ -8100,6 +8101,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                     try
                     {
+                        NN::AddContract(sMessageType, sMessageKey, sMessageValue, nTime);
                         WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
                         if(fDebug10 && sMessageType=="beacon" )
                                     LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
@@ -8124,6 +8126,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     
                     try
                     {
+                        NN::DeleteContract(sMessageType, sMessageKey);
                         DeleteCache(StringToSection(sMessageType), sMessageKey);
                                 fMessageLoaded = true;
                         }
