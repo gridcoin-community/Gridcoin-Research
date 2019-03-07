@@ -680,6 +680,9 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // (interest or CBR) and research rewards.
     int64_t nRemainingStakeOutputValue = blocknew.vtx[1].vout[1].nValue;
 
+    // We need the input value later.
+    int64_t nInputValue = nRemainingStakeOutputValue - nReward;
+
     // Remove the existing single stake output and the empty coinstake to prepare for splitting. (The empty one
     // needs to be removed too, because we need to reverse the order of the outputs at the end. See the bottom of
     // this function.
@@ -718,18 +721,33 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             // Push to an output the (reward times the allocation) to the address, increment the accumulator for allocation,
             // decrement the remaining stake output value, and increment outputs used.
+
             SideStakeScriptPubKey.SetDestination(address.Get());
-            
+
             // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake entries
             // if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that case. The
             // coins should flow down to the coinstake outputs and be returned there. This will also simplify the display logic in
             // the UI, because it makes the sidestake and coinstake outputs disjoint from an address point of view.
             if (SideStakeScriptPubKey == CoinStakeScriptPubKey)
                 continue;
-            blocknew.vtx[1].vout.push_back(CTxOut(nReward * iterSideStake->second, SideStakeScriptPubKey));
+
+            int64_t nSideStake = 0;
+
+            // For allocations ending less than 100% assign using sidestake allocation.
+            if (dSumAllocation + iterSideStake->second < 1.0)
+                nSideStake = nReward * iterSideStake->second;
+            // We need to handle the final sidestake differently in the case it brings the total allocation up to 100%,
+            // because testing showed in corner cases the output return to the staking address could be off by one Halford.
+            else if (dSumAllocation + iterSideStake->second == 1.0)
+                // Simply assign the special case final nSideStake the remaining output value minus input value to ensure
+                // a match on the output flowing down.
+                nSideStake = nRemainingStakeOutputValue - nInputValue;
+
+            blocknew.vtx[1].vout.push_back(CTxOut(nSideStake, SideStakeScriptPubKey));
+
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s", nOutputsUsed, CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
             dSumAllocation += iterSideStake->second;
-            nRemainingStakeOutputValue -= nReward * iterSideStake->second;
+            nRemainingStakeOutputValue -= nSideStake;
             nOutputsUsed++;
         }
         // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
