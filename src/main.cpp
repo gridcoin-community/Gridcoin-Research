@@ -2798,8 +2798,9 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 
                 try
                 {
-                    NN::DeleteContract(sMType, sMKey);
-                    DeleteCache(StringToSection(sMType), sMKey);
+                    if (!NN::DeleteContract(sMType, sMKey)) {
+                        DeleteCache(StringToSection(sMType), sMKey);
+                    }
                     if(fDebug)
                         LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
                 }
@@ -8101,11 +8102,13 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                     try
                     {
-                        NN::AddContract(sMessageType, sMessageKey, sMessageValue, nTime);
-                        WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
-                        if(fDebug10 && sMessageType=="beacon" )
-                                    LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                                }
+                        if (!NN::AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
+                            WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
+
+                            if(fDebug10 && sMessageType=="beacon" )
+                                LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
+                        }
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
@@ -8126,10 +8129,11 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     
                     try
                     {
-                        NN::DeleteContract(sMessageType, sMessageKey);
-                        DeleteCache(StringToSection(sMessageType), sMessageKey);
-                                fMessageLoaded = true;
+                        if (!NN::DeleteContract(sMessageType, sMessageKey)) {
+                            DeleteCache(StringToSection(sMessageType), sMessageKey);
                         }
+                        fMessageLoaded = true;
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);

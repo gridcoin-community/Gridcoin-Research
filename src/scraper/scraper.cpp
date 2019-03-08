@@ -1,3 +1,4 @@
+#include "neuralnet/neuralnet.h"
 #include "scraper.h"
 #include "scraper_net.h"
 #include "http.h"
@@ -28,7 +29,6 @@ extern bool fDebug3;
 extern std::string msMasterMessagePrivateKey;
 extern CWallet* pwalletMain;
 bool fScraperActive = false;
-std::vector<std::pair<std::string, std::string>> vwhitelist;
 std::vector<std::pair<std::string, std::string>> vuserpass;
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
 std::vector<std::string> vauthenicationetags;
@@ -76,7 +76,6 @@ ScraperFileManifest StructScraperFileManifest = {};
 ConvergedScraperStats ConvergedScraperStatsCache = {};
 
 CCriticalSection cs_Scraper;
-CCriticalSection cs_vwhitelist;
 CCriticalSection cs_StructScraperFileManifest;
 CCriticalSection cs_ConvergedScraperStatsCache;
 CCriticalSection cs_TeamIDMap;
@@ -90,7 +89,6 @@ void ScraperApplyAppCacheEntries();
 void Scraper(bool bSingleShot = false);
 void ScraperSingleShot();
 bool ScraperHousekeeping();
-bool WhitelistPopulated();
 bool UserpassPopulated();
 bool ScraperDirectoryAndConfigSanity();
 bool StoreBeaconList(const fs::path& file);
@@ -119,15 +117,15 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 unsigned int ScraperDeleteUnauthorizedCScraperManifests();
 bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
-bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
+bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& projectWhitelist,
                                                 mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 // Overloaded. See alternative in scraper.h.
 std::string ScraperGetNeuralHash(std::string sNeuralContract);
 
-bool DownloadProjectTeamFiles();
+bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::map<std::string, int64_t>& mTeamIdsForProject_out);
-bool DownloadProjectRacFilesByCPID();
+bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist);
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
 void AuthenticationETagClear();
@@ -379,36 +377,14 @@ public:
 /*********************
 * Whitelist Data     *
 *********************/
-
-class whitelist
+// TODO: Lock this somehow
+int64_t SuperblockAge()
 {
-public:
+    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
+    int64_t nSBage = GetAdjustedTime() - superblock_time;
 
-    whitelist()
-    {}
-
-    ~whitelist()
-    {}
-
-    // A lock should be taken on cs_vwhitelist before calling this function.
-    bool wlimport()
-    {
-        vwhitelist.clear();
-
-        for (const auto& item : ReadCacheSection(Section::PROJECT))
-            vwhitelist.push_back(std::make_pair(item.first, item.second.value));
-
-        return true;
-    }
-
-    int64_t sbage()
-    {
-        int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-        int64_t nSBage = GetAdjustedTime() - superblock_time;
-
-        return nSBage;
-    }
-};
+    return nSBage;
+}
 
 /*********************
 * Userpass Data      *
@@ -710,9 +686,7 @@ void Scraper(bool bSingleShot)
             if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
-        whitelist data;
-        
-        int64_t sbage = data.sbage();
+        int64_t sbage = SuperblockAge();
         int64_t nScraperThreadStartTime = GetAdjustedTime();
         CBitcoinAddress AddressOut;
         CKey KeyOut;
@@ -756,7 +730,7 @@ void Scraper(bool bSingleShot)
                     _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.string());
 
 
-                sbage = data.sbage();
+                sbage = SuperblockAge();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
                 _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
                 
@@ -774,26 +748,14 @@ void Scraper(bool bSingleShot)
             LOCK(cs_Scraper);
             if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
-            // Refresh the whitelist if its available
-            std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
-            {
-                LOCK(cs_vwhitelist);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-                if (!data.wlimport())
-                    _log(logattribute::WARNING, "Scraper", "Refreshing of whitelist failed.. using old data");
-                else
-                    _log(logattribute::INFO, "Scraper", "Refreshing of whitelist completed");
-
-                vwhitelist_local = vwhitelist;
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-            }
-
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
+
+            // Get a read-only view of the current project whitelist: 
+            const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
 
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
@@ -806,19 +768,7 @@ void Scraper(bool bSingleShot)
                 {
                     ScraperFileManifestMap::iterator entry_copy = entry++;
 
-                    // Set flag to false. If entry project matches a whitelist project then mark true and break.
-                    bool bOnWhitelist = false;
-
-                    for (const auto& wlproject : vwhitelist_local)
-                    {
-                        if (entry_copy->second.project == wlproject.first)
-                        {
-                            bOnWhitelist = true;
-                            break;
-                        }
-                    }
-
-                    if (!bOnWhitelist)
+                    if (!projectWhitelist.Contains(entry_copy->second.project))
                     {
                         _log(logattribute::INFO, "Scraper", "Removing manifest entry for non-whitelisted project: " + entry_copy->first);
                         DeleteScraperFileManifestEntry(entry_copy->second);
@@ -842,9 +792,9 @@ void Scraper(bool bSingleShot)
             // Note that the call(s) to ScraperDirectoryAndConfigSanity() above will preload the team ID map from the persisted file
             // if it exists, so this will minimize the work that DownloadProjectTeamFiles() has to do.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
-                DownloadProjectTeamFiles();
+                DownloadProjectTeamFiles(projectWhitelist);
 
-            DownloadProjectRacFilesByCPID();
+            DownloadProjectRacFilesByCPID(projectWhitelist);
 
             _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
@@ -940,7 +890,7 @@ void NeuralNetwork()
 
 
     _log(logattribute::INFO, "NeuralNetwork", "Starting Neural Network housekeeping thread (new C++ implementation). \n"
-                                              "Note that this does NOT mean the NN is active. This simply does housekeeping"
+                                              "Note that this does NOT mean the NN is active. This simply does housekeeping "
                                               "functions.");
 
     while(!fShutdown)
@@ -992,35 +942,17 @@ void NeuralNetwork()
 
 bool ScraperHousekeeping()
 {
-    whitelist data;
-
-    // Refresh the whitelist if its available
-    {
-        LOCK(cs_vwhitelist);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-        if (!data.wlimport())
-            _log(logattribute::WARNING, "ScraperHousekeeping", "Refreshing of whitelist failed.. using old data");
-
-        else
-            _log(logattribute::INFO, "ScraperHousekeeping", "Refreshing of whitelist completed");
-
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-    }
-
     // Periodically generate converged manifests and generate SB core and "contract"
     // This will probably be reduced to the commented out call as we near final testing,
     // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
     // with the boolean false, meaning don't store the stats.
     // Lock both cs_Scraper and cs_StructScraperFileManifest.
 
-    //ConvergedManifest StructConvergedManifest;
     std::string sSBCoreData;
 
     {
         LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
-        //ScraperConstructConvergedManifest(StructConvergedManifest)
         sSBCoreData = ScraperGetNeuralContract(true, false);
     }
 
@@ -1066,35 +998,6 @@ bool ScraperHousekeeping()
     return true;
 }
 
-
-/**********************
-* Sanity              *
-**********************/
-std::string urlsanity(const std::string& s, const std::string& type)
-{
-    stringbuilder url;
-
-    if (Contains("einstein", s))
-    {
-        url.append(s.substr(0,4));
-        url.append("s");
-        url.append(s.substr(4, s.size()));
-    }
-
-    else
-        url.append(s);
-
-    url.append("stats/");
-    url.append(type);
-
-    if (Contains("gorlaeus", s) || Contains("worldcommunitygrid", s))
-        url.append(".xml.gz");
-
-    else
-        url.append(".gz");
-
-    return url.value();
-}
 
 std::string lowercase(std::string s)
 {
@@ -1229,40 +1132,6 @@ bool ScraperDirectoryAndConfigSanity()
     return true;
 }
 
-/**********************
-* Populate Whitelist  *
-**********************/
-
-bool WhitelistPopulated()
-{
-    LOCK(cs_vwhitelist);
-    if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-    if (vwhitelist.empty())
-    {
-        _log(logattribute::INFO, "WhitelistPopulated", "Whitelist vector currently empty; populating");
-
-        whitelist data;
-
-        if (data.wlimport())
-            _log(logattribute::INFO, "WhitelistPopulated", "Successfully populated whitelist vector");
-
-        else
-        {
-            _log(logattribute::CRITICAL, "WhitelistPopulated", "Failed to populate whitelist vector; keeping old whitelist data for time being");
-
-            return false;
-        }
-    }
-
-    _log(logattribute::INFO, "WhitelistPopulated", "Whitelist is populated; Contains " + std::to_string(vwhitelist.size()) + " projects");
-
-    // End LOCK(cs_vwhitelist.
-    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-
-    return true;
-}
-
 void AuthenticationETagClear()
 {
     fs::path file = fs::current_path() / "auth.dat";
@@ -1306,24 +1175,16 @@ bool UserpassPopulated()
 * Project Team Files  *
 **********************/
 
-bool DownloadProjectTeamFiles()
+bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 {
-    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
-
-        if (!WhitelistPopulated())
+        if (!projectWhitelist.Populated())
         {
             _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Whitelist is not populated");
 
             return false;
         }
 
-        {
-            LOCK(cs_vwhitelist);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-            vwhitelist_local = vwhitelist;
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-        }
+        _log(logattribute::INFO, "DownloadProjectTeamFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
 
         if (!UserpassPopulated())
         {
@@ -1332,29 +1193,25 @@ bool DownloadProjectTeamFiles()
             return false;
         }
 
-        for (const auto& prjs : vwhitelist_local)
+        for (const auto& prjs : projectWhitelist)
         {
             LOCK(cs_TeamIDMap);
             if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
 
-            const auto iter = TeamIDMap.find(prjs.first);
+            const auto iter = TeamIDMap.find(prjs.m_name);
 
             // If there is an entry in the TeamIDMap for the project, and in the submap (team name and team id) there
             // are the correct number of team entries, then skip processing.
             if (iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, ",").size())
             {
                 _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
-                     + prjs.first + " project. Skipping team file download and processing.");
+                     + prjs.m_name + " project. Skipping team file download and processing.");
                 continue;
             }
 
-            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Downloading project file for " + prjs.first);
+            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Downloading project file for " + prjs.m_name);
 
-            std::vector<std::string> vPrjUrl = split(prjs.second, "@");
-
-            std::string sUrl = urlsanity(vPrjUrl[0], "team");
-
-            std::string team_file_name = prjs.first + "-team.gz";
+            std::string team_file_name = prjs.m_name + "-team.gz";
 
             fs::path team_file = pathScraper / team_file_name.c_str();
 
@@ -1367,7 +1224,7 @@ bool DownloadProjectTeamFiles()
 
             for (const auto& up : vuserpass)
             {
-                if (up.first == prjs.first)
+                if (up.first == prjs.m_name)
                 {
                     buserpass = true;
 
@@ -1379,39 +1236,39 @@ bool DownloadProjectTeamFiles()
 
             try
             {
-                sTeamETag = http.GetEtag(sUrl, userpass);
+                sTeamETag = http.GetEtag(prjs.StatsUrl("team"), userpass);
             }
             catch (const std::runtime_error& e)
             {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.m_name);
                 continue;
             }
 
             if (sTeamETag.empty())
             {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "ETag for project is empty" + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "ETag for project is empty" + prjs.m_name);
 
                 continue;
             }
             else
-                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Successfully pulled team header file for " + prjs.first);
+                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Successfully pulled team header file for " + prjs.m_name);
 
             if (buserpass)
             {
-                authdata ad(lowercase(prjs.first));
+                authdata ad(lowercase(prjs.m_name));
 
-                ad.setoutputdata("team", prjs.first, sTeamETag);
+                ad.setoutputdata("team", prjs.m_name, sTeamETag);
 
                 if (!ad.xport())
-                    _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Failed to export etag for " + prjs.first + " to authentication file");
+                    _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
             }
 
-            std::string chketagfile = prjs.first + "-" + sTeamETag + ".csv" + ".gz";
+            std::string chketagfile = prjs.m_name + "-" + sTeamETag + ".csv" + ".gz";
             fs::path chkfile = pathScraper / chketagfile.c_str();
 
             if (fs::exists(chkfile))
             {
-                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Etag file for " + prjs.first + " already exists");
+                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Etag file for " + prjs.m_name + " already exists");
                 continue;
             }
             else
@@ -1419,11 +1276,11 @@ bool DownloadProjectTeamFiles()
 
             try
             {
-                http.Download(sUrl, team_file.string(), userpass);
+                http.Download(prjs.StatsUrl("team"), team_file.string(), userpass);
             }
             catch(const std::runtime_error& e)
             {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.first);
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name);
                 continue;
             }
 
@@ -1433,7 +1290,7 @@ bool DownloadProjectTeamFiles()
             if (ProcessProjectTeamFile(team_file.string(), sTeamETag, mTeamIDsForProject))
             {
                 // Insert or update team IDs for the project into the team ID map.
-                TeamIDMap[prjs.first] = mTeamIDsForProject;
+                TeamIDMap[prjs.m_name] = mTeamIDsForProject;
             }
 
             if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
@@ -1564,24 +1421,16 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
 * Project RAC Files   *
 **********************/
 
-bool DownloadProjectRacFilesByCPID()
+bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist)
 {
-    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
-
-    if (!WhitelistPopulated())
+    if (!projectWhitelist.Populated())
     {
         _log(logattribute::CRITICAL, "DownloadProjectRacFiles", "Whitelist is not populated");
 
         return false;
     }
 
-    {
-        LOCK(cs_vwhitelist);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-        vwhitelist_local = vwhitelist;
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-    }
+    _log(logattribute::INFO, "DownloadProjectRacFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
 
     if (!UserpassPopulated())
     {
@@ -1594,15 +1443,11 @@ bool DownloadProjectRacFilesByCPID()
     BeaconConsensus Consensus = GetConsensusBeaconList();
     _log(logattribute::INFO, "DownloadProjectRacFiles", "Getting consensus map of Beacons.");
 
-    for (const auto& prjs : vwhitelist_local)
+    for (const auto& prjs : projectWhitelist)
     {
-        _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.first);
+        _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.m_name);
 
-        std::vector<std::string> vPrjUrl = split(prjs.second, "@");
-
-        std::string sUrl = urlsanity(vPrjUrl[0], "user");
-
-        std::string rac_file_name = prjs.first + +"-user.gz";
+        std::string rac_file_name = prjs.m_name + +"-user.gz";
 
         fs::path rac_file = pathScraper / rac_file_name.c_str();
 
@@ -1615,7 +1460,7 @@ bool DownloadProjectRacFilesByCPID()
 
         for (const auto& up : vuserpass)
         {
-            if (up.first == prjs.first)
+            if (up.first == prjs.m_name)
             {
                 buserpass = true;
 
@@ -1627,39 +1472,39 @@ bool DownloadProjectRacFilesByCPID()
 
         try
         {
-            sRacETag = http.GetEtag(sUrl, userpass);
+            sRacETag = http.GetEtag(prjs.StatsUrl("user"), userpass);
         } catch (const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.first);
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to pull rac header file for " + prjs.m_name);
             continue;
         }
 
         if (sRacETag.empty())
         {
-            _log(logattribute::ERR, "DownloadProjectRacFiles", "ETag for project is empty" + prjs.first);
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "ETag for project is empty" + prjs.m_name);
 
             continue;
         }
 
         else
-            _log(logattribute::INFO, "DownloadProjectRacFiles", "Successfully pulled rac header file for " + prjs.first);
+            _log(logattribute::INFO, "DownloadProjectRacFiles", "Successfully pulled rac header file for " + prjs.m_name);
 
         if (buserpass)
         {
-            authdata ad(lowercase(prjs.first));
+            authdata ad(lowercase(prjs.m_name));
 
-            ad.setoutputdata("user", prjs.first, sRacETag);
+            ad.setoutputdata("user", prjs.m_name, sRacETag);
 
             if (!ad.xport())
-                _log(logattribute::CRITICAL, "DownloadProjectRacFiles", "Failed to export etag for " + prjs.first + " to authentication file");
+                _log(logattribute::CRITICAL, "DownloadProjectRacFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
         }
 
-        std::string chketagfile = prjs.first + "-" + sRacETag + ".csv" + ".gz";
+        std::string chketagfile = prjs.m_name + "-" + sRacETag + ".csv" + ".gz";
         fs::path chkfile = pathScraper / chketagfile.c_str();
 
         if (fs::exists(chkfile))
         {
-            _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.first + " already exists");
+            _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
             //_log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file size " + std::to_string(fs::file_size(chkfile)));
             continue;
         }
@@ -1668,15 +1513,15 @@ bool DownloadProjectRacFilesByCPID()
 
         try
         {
-            http.Download(sUrl, rac_file.string(), userpass);
+            http.Download(prjs.StatsUrl("user"), rac_file.string(), userpass);
         }
         catch(const std::runtime_error& e)
         {
-            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.first);
+            _log(logattribute::ERR, "DownloadProjectRacFiles", "Failed to download project rac file for " + prjs.m_name);
             continue;
         }
 
-        ProcessProjectRacFileByCPID(prjs.first, rac_file.string(), sRacETag, Consensus);
+        ProcessProjectRacFileByCPID(prjs.m_name, rac_file.string(), sRacETag, Consensus);
     }
 
     // After processing, update global structure with the timestamp of the latest file in the manifest.
@@ -2716,7 +2561,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 
     // Enumerate the count of active projects from the file manifest. Since the manifest is
     // constructed starting with the whitelist, and then using only the current files, this
-    // will always be less than or equal to the whitelist count from vwhitelist.
+    // will always be less than or equal to the whitelist count from whitelist.
     unsigned int nActiveProjects = 0;
     {
         LOCK(cs_StructScraperFileManifest);
@@ -3369,25 +3214,10 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 }
 
 
-
 // ------------------------------------ This an out parameter.
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest)
 {
     bool bConvergenceSuccessful = false;
-
-    // get the whitelist to fill out the excluded projects vector later on. This is currently a global
-    // But may be changed to a passed parameter later. It is a small vector, so copy the global into a
-    // local to avoid holding the lock for extended periods.
-
-    std::vector<std::pair<std::string, std::string>> vwhitelist_local {};
-
-    {
-        LOCK(cs_vwhitelist);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_vwhitelist");
-
-        vwhitelist_local = vwhitelist;
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_vwhitelist");
-    }
 
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
     // return a map of manifests binned by Scraper after the culling.
@@ -3465,6 +3295,10 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         }
     }
 
+    // Get a read-only view of the current project whitelist to fill out the 
+    // excluded projects vector later on: 
+    const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
+
     if (bConvergenceSuccessful)
     {
         LOCK(CScraperManifest::cs_mapManifest);
@@ -3526,20 +3360,20 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             StructConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
 
             // Fill out the excluded projects vector...
-            for (const auto& iProjects : vwhitelist_local)
+            for (const auto& iProjects : projectWhitelist)
             {
-                if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.first) == StructConvergedManifest.ConvergedManifestPartsMap.end())
+                if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
                 {
                     // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                    //StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.first, "Converged manifests (agreed by multiple scrapers) excluded project."));
+                    //StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.m_name, "Converged manifests (agreed by multiple scrapers) excluded project."));
                     //_log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                    //     + iProjects.first
+                    //     + iProjects.m_name
                     //     + " was excluded because the converged manifests from the scrapers all excluded the project.");
 
                     // To deal with a corner case of a medium term project fallout at the head of the list (more recent) where it is still available within
                     // the 48 hour retention window, fallback to project level convergence to attempt to recover the project.
                     _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                         + iProjects.first
+                         + iProjects.m_name
                          + " was excluded because the converged manifests from the scrapers all excluded the project. \n"
                          + "Falling back to attempt convergence by project to try and recover excluded project.");
                     
@@ -3562,7 +3396,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         StructConvergedManifest = {};
 
         // Try to form a convergence by project objects (parts)...
-        bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(vwhitelist_local, mMapCSManifestsBinnedByScraper, StructConvergedManifest);
+        bConvergenceSuccessful = ScraperConstructConvergedManifestByProject(projectWhitelist, mMapCSManifestsBinnedByScraper, StructConvergedManifest);
 
         // If we have reached here. All attempts at convergence have failed. Reinitialize StructConvergedManifest to eliminate stale or
         // partially filled-in data.
@@ -3583,7 +3417,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 // Subordinate function to ScraperConstructConvergedManifest to try to find a convergence at the Project (part) level
 // if there is no convergence at the manifest level.
 // ------------------------------------------------------------------------ In ------------------------------------------------- Out
-bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::string, std::string>> &vwhitelist_local,
+bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& projectWhitelist,
                                                 mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest)
 {
     bool bConvergenceSuccessful = false;
@@ -3599,7 +3433,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
 
     _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
 
-    for (const auto& iWhitelistProject : vwhitelist_local)
+    for (const auto& iWhitelistProject : projectWhitelist)
     {
         // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project Objects (Parts),
         // the content hash is the object hash. We also need the consensus block here, because we are "composing" the manifest by
@@ -3636,7 +3470,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                     uint256 nProjectObjectHash = 0;
                     for (const auto& vectoriter : manifest.projects)
                     {
-                        if (vectoriter.project == iWhitelistProject.first)
+                        if (vectoriter.project == iWhitelistProject.m_name)
                         {
                             nPart = vectoriter.part1;
                             nProjectObjectTime = vectoriter.LastModified;
@@ -3670,9 +3504,9 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                         if (!bAlreadyExists)
                         {
                             // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
-                            mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.first)));
+                            mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.m_name)));
                             if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
-                                              + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.first);
+                                              + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
                         }
                     }
                 }
@@ -3695,7 +3529,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                 ProjectConvergence = mProjectObjectsBinnedbyContent.find(std::get<0>(iter.second));
 
                 _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Found convergence on project object " + ProjectConvergence->first.GetHex()
-                     + " for project " + iWhitelistProject.first
+                     + " for project " + iWhitelistProject.m_name
                      + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                      + " agreeing.");
 
@@ -3712,7 +3546,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
                 }
 
                 // Put Project Object (Part) in StructConvergedManifest keyed by project.
-                StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.first, iPart->second.data));
+                StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.m_name, iPart->second.data));
 
                 // If the indirectly referenced manifest has a consensus time that is greater than already recorded, replace with that time, and also
                 // change the consensus block to the referred to consensus block. (Note that this is scoped at even above the individual project level, so
@@ -3734,7 +3568,7 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
     }
 
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
-    if ((double)iCountSuccesfulConvergedProjects / (double)vwhitelist_local.size() >= CONVERGENCE_BY_PROJECT_RATIO)
+    if ((double)iCountSuccesfulConvergedProjects / (double)projectWhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
     {
         // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
@@ -3767,19 +3601,19 @@ bool ScraperConstructConvergedManifestByProject(std::vector<std::pair<std::strin
         bConvergenceSuccessful = true;
 
         _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
-             + std::to_string(iCountSuccesfulConvergedProjects) + " out of " + std::to_string(vwhitelist_local.size())
+             + std::to_string(iCountSuccesfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
              + " projects at "
              + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
         // Fill out the excluded projects vector...
-        for (const auto& iProjects : vwhitelist_local)
+        for (const auto& iProjects : projectWhitelist)
         {
-            if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.first) == StructConvergedManifest.ConvergedManifestPartsMap.end())
+            if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
             {
                 // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.first, "No convergence was found at the fallback (project) level."));
+                StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.m_name, "No convergence was found at the fallback (project) level."));
                 _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                     + iProjects.first
+                     + iProjects.m_name
                      + " was excluded because there was no convergence from the scrapers for this project at the project level.");
             }
         }
@@ -4034,7 +3868,7 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
 
     return sSBCoreData;
 }
-//*/
+
 
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
 {

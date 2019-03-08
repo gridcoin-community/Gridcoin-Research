@@ -104,6 +104,13 @@ public:
     //!
     bool Contains(const std::string& name) const;
 
+    //!
+    //! \brief Create a snapshot copy sorted alphabetically by project name.
+    //!
+    //! \return A sorted copy of the snapshot.
+    //!
+    WhitelistSnapshot Sorted() const;
+
 private:
     const ProjectListPtr m_projects;  //!< The set of whitelisted projects.
 };

@@ -575,7 +575,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
         if (!bIgnoreBeacons) out_beacon_count = GetConsensusBeaconList().mBeaconMap.size();
-        double out_project_count = ReadCacheSection(Section::PROJECT).size();
+        double out_project_count = NN::GetWhitelist().Snapshot().size();
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
@@ -1983,16 +1983,16 @@ UniValue projects(const UniValue& params, bool fHelp)
     if (mvCPIDs.empty())
         HarvestCPIDs(false);
 
-    for (const auto& item : ReadSortedCacheSection(Section::PROJECT))
+    for (const auto& item : NN::GetWhitelist().Snapshot().Sorted())
     {
         UniValue entry(UniValue::VOBJ);
 
-        std::string sProjectName = item.first;
+        std::string sProjectName = item.m_name;
 
         if (sProjectName.empty())
             continue;
 
-        std::string sProjectURL = item.second.value;
+        std::string sProjectURL = item.m_url;
         sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
 
         // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
@@ -2292,7 +2292,7 @@ UniValue whitelist(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    for (const auto& project : NN::GetWhitelist().Snapshot()) {
+    for (const auto& project : NN::GetWhitelist().Snapshot().Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("display_name", project.DisplayName());

@@ -16,7 +16,6 @@ enum class Section
     TRXID,
     POLL,
     VOTE,
-    PROJECT,
     SCRAPER,
 
     // Enum counting entry. Using it will throw.
