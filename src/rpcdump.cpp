@@ -14,6 +14,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/variant/get.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 
 using namespace std;
 
@@ -305,12 +306,20 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
             "\n"
             "<filename> -> filename to dump wallet to\n"
             "\n"
-            "Dumps all wallet keys in a human-readable format\n");
+            "Dumps all wallet keys in a human-readable format into the specified file.\n"
+            "If a path is not specified in the filename, the data directory is used.");
 
     EnsureWalletIsUnlocked();
 
+    boost::filesystem::path PathForDump = boost::filesystem::path(params[0].get_str());
+    boost::filesystem::path DefaultPathDataDir = GetDataDir();
+
+    // If provided filename does not have a path, then append parent path, otherwise leave alone.
+    if (PathForDump.parent_path().empty())
+        PathForDump = DefaultPathDataDir / PathForDump;
+
     ofstream file;
-    file.open(params[0].get_str().c_str());
+    file.open(PathForDump.string().c_str());
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
