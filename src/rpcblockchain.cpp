@@ -1552,6 +1552,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     bool bProjectKey = (sType == "project" || sType == "projectmapping"
         || (sType == "beacon" && sAction == "delete")
         || sType == "protocol"
+        || sType == "scraper"
     );
 
     const std::string sPass = bProjectKey
