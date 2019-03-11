@@ -97,9 +97,10 @@ $(package)_config_opts_linux += -qt-xcb
 $(package)_config_opts_linux += -system-freetype
 $(package)_config_opts_linux += -fontconfig
 $(package)_config_opts_linux += -no-opengl
-$(package)_config_opts_arm_linux  = -platform linux-g++ -xplatform $(host)
+$(package)_config_opts_arm_linux  = -platform linux-g++ -xplatform $(host)-g++
 $(package)_config_opts_i686_linux  = -xplatform linux-g++-32
 $(package)_config_opts_mingw32  = -no-opengl -xplatform win32-g++ -device-option CROSS_COMPILE="$(host)-"
+$(package)_config_opts_aarch64_linux = -xplatform linux-aarch64-gnu-g++
 $(package)_build_env  = QT_RCC_TEST=1
 endef
 
@@ -164,7 +165,10 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/0021-Use-.dll.a-as-import-lib-extension.patch &&\
   patch -p1 -i $($(package)_patch_dir)/0030-Prevent-qmake-from-messing-static-lib-dependencies.patch &&\
   patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch &&\
-  patch -p1 -i $($(package)_patch_dir)/0013-Fix-linking-against-static-pcre.patch
+  patch -p1 -i $($(package)_patch_dir)/0013-Fix-linking-against-static-pcre.patch &&\
+  mv qtbase/mkspecs/linux-arm-gnueabi-g++ qtbase/mkspecs/arm-linux-gnueabi-g++ &&\
+  cp -rf qtbase/mkspecs/arm-linux-gnueabi-g++ qtbase/mkspecs/arm-linux-gnueabihf-g++ &&\
+  sed -i.old "s/arm-linux-gnueabi/arm-linux-gnueabihf/" qtbase/mkspecs/arm-linux-gnueabihf-g++/qmake.conf
 endef
 
 define $(package)_config_cmds
