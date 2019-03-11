@@ -13,7 +13,11 @@ qt_darwin_packages=qt
 qt_mingw32_packages=qt
 endif
 
+ifeq ($(BDB_53),1)
+wallet_packages=bdb53
+else
 wallet_packages=bdb
+endif
 
 upnp_packages=miniupnpc
 
