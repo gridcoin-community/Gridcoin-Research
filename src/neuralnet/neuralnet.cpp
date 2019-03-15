@@ -12,7 +12,6 @@ using namespace NN;
 namespace
 {
     INeuralNetPtr instance;
-    Whitelist whitelist;
 }
 
 INeuralNetPtr NN::CreateNeuralNet()
@@ -65,13 +64,6 @@ INeuralNetPtr NN::GetInstance()
     return instance;
 }
 
-// TODO: perhaps we should give back a smart pointer here. Clients shouldn't
-// really hold onto this or pass it around, though...
-Whitelist& NN::GetWhitelist()
-{
-    return whitelist;
-}
-
 bool NN::AddContract(
     const std::string& type,
     const std::string& key,
@@ -79,7 +71,7 @@ bool NN::AddContract(
     const int64_t& timestamp)
 {
     if (type == "project" || type == "projectmapping") {
-        whitelist.Add(key, value, timestamp);
+        GetWhitelist().Add(key, value, timestamp);
     } else {
         return false;
     }
@@ -90,7 +82,7 @@ bool NN::AddContract(
 bool NN::DeleteContract(const std::string& type, const std::string& key)
 {
     if (type == "project" || type == "projectmapping") {
-        whitelist.Delete(key);
+        GetWhitelist().Delete(key);
     } else {
         return false;
     }

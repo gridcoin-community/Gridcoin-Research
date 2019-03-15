@@ -46,10 +46,18 @@ struct MutableProject
 
         return m_lower_name;
     }
+namespace
+{
+    Whitelist whitelist;
+}
 
 private:
     mutable std::string m_lower_name; //!< Caches the lowercase project name.
 };
+Whitelist& NN::GetWhitelist()
+{
+    return whitelist;
+}
 
 // -----------------------------------------------------------------------------
 // Class: Project

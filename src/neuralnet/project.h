@@ -182,4 +182,11 @@ private:
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:
     ProjectListPtr m_projects;  //!< The set of whitelisted projects.
 };
+
+//!
+//! \brief Get the global project whitelist manager.
+//!
+//! \return Current global whitelist manager instance.
+//!
+Whitelist& GetWhitelist();
 }

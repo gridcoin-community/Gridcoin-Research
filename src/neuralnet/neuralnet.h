@@ -121,13 +121,6 @@ namespace NN
     INeuralNetPtr GetInstance();
 
     //!
-    //! \brief Get the global project whitelist manager.
-    //!
-    //! \return Current global whitelist manager instance.
-    //!
-    Whitelist& GetWhitelist();
-
-    //!
     //! \brief Attempt to process an \c A (addition) contract action with a
     //! neural network component.
     //!
