@@ -42,7 +42,7 @@ GRIDCOIN_TESTS =\
   test/mruset_tests.cpp \
   test/multisig_tests.cpp \
   test/netbase_tests.cpp \
-  test/project_tests.cpp \
+  test/neuralnet/project_tests.cpp \
   test/rpc_tests.cpp \
   test/script_P2SH_tests.cpp \
   test/script_tests.cpp \
