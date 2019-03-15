@@ -49,9 +49,14 @@ struct Project
 };
 
 //!
+//! \brief A collection of projects in the Gridcoin whitelist.
+//!
+typedef std::vector<Project> ProjectList;
+
+//!
 //! \brief Smart pointer around a collection of projects.
 //!
-typedef std::shared_ptr<std::vector<Project>> ProjectListPtr;
+typedef std::shared_ptr<ProjectList> ProjectListPtr;
 
 //!
 //! \brief Read-only view of the Gridcoin project whitelist at a point in time.
@@ -59,9 +64,9 @@ typedef std::shared_ptr<std::vector<Project>> ProjectListPtr;
 class WhitelistSnapshot
 {
 public:
-    typedef std::vector<Project>::size_type size_type;
-    typedef std::vector<Project>::iterator iterator;
-    typedef std::vector<Project>::const_iterator const_iterator;
+    typedef ProjectList::size_type size_type;
+    typedef ProjectList::iterator iterator;
+    typedef ProjectList::const_iterator const_iterator;
 
     //!
     //! \brief Initialize a snapshot for the provided project list.

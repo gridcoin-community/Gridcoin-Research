@@ -180,7 +180,7 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
 // -----------------------------------------------------------------------------
 
 Whitelist::Whitelist()
-    : m_projects(std::make_shared<std::vector<Project>>())
+    : m_projects(std::make_shared<ProjectList>())
 {
 }
 
@@ -195,7 +195,7 @@ void Whitelist::Add(
     const std::string& url,
     const int64_t& timestamp)
 {
-    ProjectListPtr copy = std::make_shared<std::vector<Project>>(*m_projects);
+    ProjectListPtr copy = std::make_shared<ProjectList>(*m_projects);
 
     copy->emplace_back(name, url, timestamp);
 
@@ -205,7 +205,7 @@ void Whitelist::Add(
 
 void Whitelist::Delete(const std::string& name)
 {
-    ProjectListPtr copy = std::make_shared<std::vector<Project>>();
+    ProjectListPtr copy = std::make_shared<ProjectList>();
 
     for (const auto& project : *m_projects) {
         if (project.m_name != name) {
