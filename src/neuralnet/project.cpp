@@ -146,15 +146,21 @@ void Whitelist::Add(
     const std::string& url,
     const int64_t& timestamp)
 {
-    ProjectListPtr copy = std::make_shared<ProjectList>(*m_projects);
+    ProjectListPtr copy = CopyFilteredWhitelist(name);
 
     copy->emplace_back(name, url, timestamp);
 
     // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
-    std::atomic_store(&m_projects, copy);
+    std::atomic_store(&m_projects, std::move(copy));
 }
 
 void Whitelist::Delete(const std::string& name)
+{
+    // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
+    std::atomic_store(&m_projects, CopyFilteredWhitelist(name));
+}
+
+ProjectListPtr Whitelist::CopyFilteredWhitelist(const std::string& name) const
 {
     ProjectListPtr copy = std::make_shared<ProjectList>();
 
@@ -164,6 +170,5 @@ void Whitelist::Delete(const std::string& name)
         }
     }
 
-    // With C++20, use std::atomic<std::shared_ptr<T>>::store() instead:
-    std::atomic_store(&m_projects, copy);
+    return copy;
 }

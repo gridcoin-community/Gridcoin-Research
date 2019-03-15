@@ -186,6 +186,16 @@ public:
 private:
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:
     ProjectListPtr m_projects;  //!< The set of whitelisted projects.
+
+    //!
+    //! \brief Create a copy of the current whitelist that excludes the project
+    //! with the specified name if it exists.
+    //!
+    //! \param name Project name to exclude from the copy.
+    //!
+    //! \return A smart pointer to the copy of the whitelist.
+    //!
+    ProjectListPtr CopyFilteredWhitelist(const std::string& name) const;
 };
 
 //!
