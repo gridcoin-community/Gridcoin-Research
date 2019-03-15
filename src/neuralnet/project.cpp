@@ -2,58 +2,14 @@
 
 #include <algorithm>
 #include <atomic>
-#include <boost/algorithm/string/case_conv.hpp>
 
 using namespace NN;
 
-//!
-//! \brief A mutable representation of a \c Project.
-//!
-//! The internal implementation uses this class to sort containers of \c Project
-//! instances. \c std::sort() cannot sort a collection of \c const objects.
-//!
-struct MutableProject
-{
-    //!
-    //! \brief Create a mutable representation of the provided \c Project.
-    //!
-    //! \param project The \c const instance to copy.
-    //!
-    MutableProject(const Project& project)
-        : m_name(project.m_name),
-          m_url(project.m_url),
-          m_timestamp(project.m_timestamp)
-    {
-    }
-
-    std::string m_name;   //!< As it exists in the contract key field.
-    std::string m_url;    //!< As it exists in the contract value field.
-    int64_t m_timestamp;  //!< Timestamp of the contract.
-
-    //!
-    //! \brief Get the lowercase equivalent of the project name.
-    //!
-    //! Lazy case-conversion. Used for sorting.
-    //!
-    //! \return The lowercase project name.
-    //!
-    std::string& LowercaseName() const
-    {
-        if (m_lower_name.empty()) {
-            m_lower_name = m_name;
-            boost::to_lower(m_lower_name);
-        }
-
-        return m_lower_name;
-    }
 namespace
 {
     Whitelist whitelist;
 }
 
-private:
-    mutable std::string m_lower_name; //!< Caches the lowercase project name.
-};
 Whitelist& NN::GetWhitelist()
 {
     return whitelist;
@@ -152,27 +108,22 @@ bool WhitelistSnapshot::Contains(const std::string& name) const
 
 WhitelistSnapshot WhitelistSnapshot::Sorted() const
 {
-    // TODO: we cannot sort a vector of const Project objects with std::sort()
-    // because it uses move semantics, so we copy it (twice). Find a better way.
-    std::vector<MutableProject> sorted;
+    ProjectList sorted(m_projects->begin(), m_projects->end());
 
-    for (auto const& project : *m_projects) {
-        sorted.emplace_back(project);
-    }
-
-    auto comparer = [] (const MutableProject& a, const MutableProject& b) {
-        return a.LowercaseName() < b.LowercaseName();
+    auto predicate = [](const Project& a, const Project& b) {
+        return std::lexicographical_compare(
+            a.m_name.begin(),
+            a.m_name.end(),
+            b.m_name.begin(),
+            b.m_name.end(),
+            [](const char ac, const char bc) {
+                return std::tolower(ac) < std::tolower(bc);
+            });
     };
 
-    std::sort(sorted.begin(), sorted.end(), comparer);
+    std::sort(sorted.begin(), sorted.end(), predicate);
 
-    ProjectListPtr copy = std::make_shared<std::vector<Project>>();
-
-    for (auto const& project : sorted) {
-        copy->emplace_back(project.m_name, project.m_url, project.m_timestamp);
-    }
-
-    return WhitelistSnapshot(copy);
+    return WhitelistSnapshot(std::make_shared<ProjectList>(sorted));
 }
 
 // -----------------------------------------------------------------------------

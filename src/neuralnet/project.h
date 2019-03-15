@@ -20,9 +20,9 @@ struct Project
     //!
     Project(const std::string name, const std::string url, const int64_t ts);
 
-    const std::string m_name;   //!< As it exists in the contract key field.
-    const std::string m_url;    //!< As it exists in the contract value field.
-    const int64_t m_timestamp;  //!< Timestamp of the contract.
+    std::string m_name;   //!< As it exists in the contract key field.
+    std::string m_url;    //!< As it exists in the contract value field.
+    int64_t m_timestamp;  //!< Timestamp of the contract.
 
     //!
     //! \brief Get a user-friendly display name created from the project key.
