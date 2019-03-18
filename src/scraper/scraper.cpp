@@ -742,9 +742,6 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
-            // Signal stats event to UI.
-            uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
-
             // Get a read-only view of the current project whitelist: 
             const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
 
