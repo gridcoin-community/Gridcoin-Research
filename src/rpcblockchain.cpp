@@ -1882,6 +1882,32 @@ UniValue listdata(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue listprojects(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listprojects\n"
+                "\n"
+                "Displays information about whitelisted projects.\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    for (const auto& project : NN::GetWhitelist().Snapshot().Sorted()) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("display_name", project.DisplayName());
+        entry.pushKV("url", project.m_url);
+        entry.pushKV("base_url", project.BaseUrl());
+        entry.pushKV("display_url", project.DisplayUrl());
+        entry.pushKV("stats_url", project.StatsUrl());
+        entry.pushKV("time", project.m_timestamp);
+
+        res.pushKV(project.m_name, entry);
+    }
+
+    return res;
+}
+
 UniValue memorizekeys(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
