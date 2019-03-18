@@ -22,6 +22,7 @@
 #include <script.h>
 #include "main.h"
 #include "util.h"
+#include "beacon.h"
 
 using namespace std;
 
@@ -178,7 +179,12 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
+            {
+                if(ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, this))
+                   LogPrintf("Beacon imported");
+
                 return true;
+            }
         }
     }
     return false;
