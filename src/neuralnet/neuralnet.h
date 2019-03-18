@@ -1,6 +1,7 @@
 #pragma once
 
 #include "beacon.h"
+#include "project.h"
 
 #include <string>
 #include <memory>
@@ -114,8 +115,38 @@ namespace NN
     void SetInstance(const INeuralNetPtr& obj);
 
     //!
-    //! \brief Get globl neuralnet instance.
+    //! \brief Get global neuralnet instance.
     //! \return Current global neuralnet instance.
     //!
     INeuralNetPtr GetInstance();
+
+    //!
+    //! \brief Attempt to process an \c A (addition) contract action with a
+    //! neural network component.
+    //!
+    //! \param type      Contract type. Determines how to handle the message.
+    //! \param key       The key as stored in the contract message.
+    //! \param value     The value as stored in the contract message.
+    //! \param timestamp The contract message timestamp.
+    //!
+    //! \return \c true if the message contains a contract type handled by the
+    //! NN. If \c false, the calling code must process the message elsewhere.
+    //!
+    bool AddContract(
+        const std::string& type,
+        const std::string& key,
+        const std::string& value,
+        const int64_t& timestamp);
+
+    //!
+    //! \brief Attempt to process a \c D (deletion) contract action with a
+    //! neural network component.
+    //!
+    //! \param type      Contract type. Determines how to handle the message.
+    //! \param key       The key as stored in the contract message.
+    //!
+    //! \return \c true if the message contains a contract type handled by the
+    //! NN. If \c false, the calling code must process the message elsewhere.
+    //!
+    bool DeleteContract(const std::string& type, const std::string& key);
 }

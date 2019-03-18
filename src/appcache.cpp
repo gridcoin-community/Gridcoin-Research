@@ -25,7 +25,6 @@ namespace
         { "trxid", Section::TRXID },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
-        { "project", Section::PROJECT },
         { "scraper", Section::SCRAPER }
     };
     

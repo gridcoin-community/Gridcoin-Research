@@ -19,6 +19,7 @@
 #include "contract/polls.h"
 #include "contract/contract.h"
 #include "util.h"
+#include "neuralnet/project.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -574,7 +575,7 @@ double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out
         double avg_of_magnitudes = GetAverageInList(mags,mag_count);
         double avg_of_projects   = GetAverageInList(avgs,avg_count);
         if (!bIgnoreBeacons) out_beacon_count = GetConsensusBeaconList().mBeaconMap.size();
-        double out_project_count = ReadCacheSection(Section::PROJECT).size();
+        double out_project_count = NN::GetWhitelist().Snapshot().size();
         out_participant_count = mag_count;
         out_average = avg_of_magnitudes;
         if (avg_of_magnitudes < 000010)  return -1;
@@ -1882,6 +1883,32 @@ UniValue listdata(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue listprojects(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listprojects\n"
+                "\n"
+                "Displays information about whitelisted projects.\n");
+
+    UniValue res(UniValue::VOBJ);
+
+    for (const auto& project : NN::GetWhitelist().Snapshot().Sorted()) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("display_name", project.DisplayName());
+        entry.pushKV("url", project.m_url);
+        entry.pushKV("base_url", project.BaseUrl());
+        entry.pushKV("display_url", project.DisplayUrl());
+        entry.pushKV("stats_url", project.StatsUrl());
+        entry.pushKV("time", project.m_timestamp);
+
+        res.pushKV(project.m_name, entry);
+    }
+
+    return res;
+}
+
 UniValue memorizekeys(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1983,16 +2010,16 @@ UniValue projects(const UniValue& params, bool fHelp)
     if (mvCPIDs.empty())
         HarvestCPIDs(false);
 
-    for (const auto& item : ReadSortedCacheSection(Section::PROJECT))
+    for (const auto& item : NN::GetWhitelist().Snapshot().Sorted())
     {
         UniValue entry(UniValue::VOBJ);
 
-        std::string sProjectName = item.first;
+        std::string sProjectName = item.m_name;
 
         if (sProjectName.empty())
             continue;
 
-        std::string sProjectURL = item.second.value;
+        std::string sProjectURL = item.m_url;
         sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
 
         // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.

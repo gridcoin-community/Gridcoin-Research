@@ -941,6 +941,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     LoadCPIDs();
 
+    if(!pwalletMain->IsLocked() &&
+       ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain))
+       LogPrintf("Beacon imported");
+
     // Beacon private keys can't be imported here, because the wallet is locked
 
     if (!CheckDiskSpace())

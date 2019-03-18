@@ -2798,9 +2798,11 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 
                 try
                 {
-                DeleteCache(StringToSection(sMType), sMKey);
-                if(fDebug)
-                    LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+                    if (!NN::DeleteContract(sMType, sMKey)) {
+                        DeleteCache(StringToSection(sMType), sMKey);
+                    }
+                    if(fDebug)
+                        LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
                 }
                 catch(const std::runtime_error& e)
                 {
@@ -4583,13 +4585,7 @@ void GridcoinServices()
                 LOCK(MinerStatus.lock);
                 msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
             }
-        } else {
-            /* If public key is set, try to import it's private part from
-             * config. The function fails fast if there are none in config.
-             */
-            ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
         }
-
     }
 
     if (TimerMain("gather_cpids",480))
@@ -8100,10 +8096,13 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                     try
                     {
-                        WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
-                        if(fDebug10 && sMessageType=="beacon" )
-                                    LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                                }
+                        if (!NN::AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
+                            WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
+
+                            if(fDebug10 && sMessageType=="beacon" )
+                                LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
+                        }
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
@@ -8124,9 +8123,11 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     
                     try
                     {
-                        DeleteCache(StringToSection(sMessageType), sMessageKey);
-                                fMessageLoaded = true;
+                        if (!NN::DeleteContract(sMessageType, sMessageKey)) {
+                            DeleteCache(StringToSection(sMessageType), sMessageKey);
                         }
+                        fMessageLoaded = true;
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
