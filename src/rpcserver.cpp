@@ -375,6 +375,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getrecentblocks",         &rpc_getrecentblocks,     false,  cat_developer     },
     { "getsupervotes",           &rpc_getsupervotes,       false,  cat_developer     },
     { "listdata",                &listdata,                false,  cat_developer     },
+    { "listprojects",            &listprojects,            false,  cat_developer     },
     { "memorizekeys",            &memorizekeys,            false,  cat_developer     },
     { "network",                 &network,                 false,  cat_developer     },
     { "neuralrequest",           &neuralrequest,           false,  cat_developer     },

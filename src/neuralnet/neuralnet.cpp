@@ -63,3 +63,29 @@ INeuralNetPtr NN::GetInstance()
 {
     return instance;
 }
+
+bool NN::AddContract(
+    const std::string& type,
+    const std::string& key,
+    const std::string& value,
+    const int64_t& timestamp)
+{
+    if (type == "project" || type == "projectmapping") {
+        GetWhitelist().Add(key, value, timestamp);
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+bool NN::DeleteContract(const std::string& type, const std::string& key)
+{
+    if (type == "project" || type == "projectmapping") {
+        GetWhitelist().Delete(key);
+    } else {
+        return false;
+    }
+
+    return true;
+}

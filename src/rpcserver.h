@@ -194,6 +194,7 @@ extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 extern UniValue getlistof(const UniValue& params, bool fHelp);
 extern UniValue getnextproject(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
+extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue memorizekeys(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);
 extern UniValue neuralrequest(const UniValue& params, bool fHelp);
