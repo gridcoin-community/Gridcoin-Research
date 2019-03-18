@@ -33,8 +33,6 @@
 #include "util.h"
 #include "rpcprotocol.h"
 
-extern std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-
 static std::string GetFoundationGuid(const std::string &sTitle)
 {
     const std::string foundation("[foundation ");

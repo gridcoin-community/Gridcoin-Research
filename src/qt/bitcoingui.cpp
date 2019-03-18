@@ -95,7 +95,6 @@ extern std::string getMacAddress();
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
 std::string getfilecontents(std::string filename);
 
 void GetGlobalStatus();

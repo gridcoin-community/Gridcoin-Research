@@ -12,7 +12,7 @@
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 {
