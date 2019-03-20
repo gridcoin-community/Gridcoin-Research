@@ -5028,21 +5028,21 @@ bool LoadBlockIndex(bool fAllowNew)
     return true;
 }
 
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end)
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end)
 {
+    string::size_type loc = XMLdata.find(key, 0);
 
-    std::string extraction = "";
-    string::size_type loc = XMLdata.find( key, 0 );
-    if( loc != string::npos )
-    {
-        string::size_type loc_end = XMLdata.find( key_end, loc+3);
-        if (loc_end != string::npos )
-        {
-            extraction = XMLdata.substr(loc+(key.length()),loc_end-loc-(key.length()));
-
-        }
+    if (loc == string::npos) {
+        return "";
     }
-    return extraction;
+
+    string::size_type loc_end = XMLdata.find(key_end, loc + 3);
+
+    if (loc_end == string::npos) {
+        return "";
+    }
+
+    return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
 }
 
 std::string RetrieveMd5(std::string s1)

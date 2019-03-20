@@ -41,7 +41,7 @@ extern std::string GetCommandNonce(std::string command);
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
