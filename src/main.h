@@ -128,7 +128,6 @@ inline bool IsV9Enabled_Tally(int nHeight)
     return IsV9Enabled(nHeight-120);
 }
 
-inline int64_t PastDrift(int64_t nTime, int nHeight)   { return nTime - 20 * 60; }
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
