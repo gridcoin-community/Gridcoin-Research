@@ -180,9 +180,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
             {
-                if(ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, this))
-                   LogPrintf("Beacon imported");
-
+                ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, this);
                 return true;
             }
         }
