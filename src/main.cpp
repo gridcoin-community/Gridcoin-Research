@@ -4571,8 +4571,6 @@ void GridcoinServices()
     if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
         return;
 
-    if (fDebug) LogPrintf(" {SVC} ");
-
     //Backup the wallet once per 900 blocks or as specified in config:
     int nWBI = GetArg("-walletbackupinterval", 900);
     if (nWBI && TimerMain("backupwallet", nWBI))
@@ -4657,8 +4655,6 @@ void GridcoinServices()
 
     if (TimerMain("gather_cpids",480))
         msNeuralResponse.clear();
-
-    if (fDebug10) LogPrintf(" {/SVC} ");
 }
 
 bool AskForOutstandingBlocks(uint256 hashStart)
