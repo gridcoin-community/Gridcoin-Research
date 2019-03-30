@@ -255,7 +255,7 @@ bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
 double GetBlockDifficulty(unsigned int nBits);
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 std::string GetCurrentOverviewTabPoll();
 

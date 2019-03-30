@@ -69,7 +69,7 @@ mTeamIDs TeamIDMap;
 
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
-std::string ExtractXML(const std::string XMLdata, const std::string key, const std::string key_end);
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 ScraperFileManifest StructScraperFileManifest = {};
 
 // Global cache for converged scraper stats. Access must be through a lock.
