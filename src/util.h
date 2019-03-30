@@ -219,7 +219,7 @@ void SetMockTime(int64_t nMockTimeIn);
 int64_t GetAdjustedTime();
 int64_t GetTimeOffset();
 bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
-bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes);
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference);
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
