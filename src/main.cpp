@@ -55,7 +55,6 @@ bool TallyResearchAverages_retired(CBlockIndex* index);
 bool TallyResearchAverages_v9(CBlockIndex* index);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
-extern std::string getHardDriveSerial();
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void GridcoinServices();
 extern double SnapToGrid(double d);
@@ -65,7 +64,6 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 UniValue MagnitudeReport(std::string cpid);
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex);
 void ZeroOutResearcherTotals(StructCPID& stCpid);
-extern std::string getCpuHash();
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
@@ -8431,83 +8429,6 @@ std::string GetQuorumHash(const std::string& data)
     }
 
     return RetrieveMd5(sHashIn);
-}
-
-
-std::string getHardwareID()
-{
-    std::string ele1 = "?";
-    /*#ifdef QT_GUI
-        ele1 = getMacAddress();
-    #endif*/
-    ele1 += ":" + getCpuHash();
-    ele1 += ":" + getHardDriveSerial();
-
-    std::string hwid = RetrieveMd5(ele1);
-    return hwid;
-}
-
-#ifdef WIN32
-static void getCpuid( unsigned int* p, unsigned int ax )
- {
-    __asm __volatile
-    (   "movl %%ebx, %%esi\n\t"
-        "cpuid\n\t"
-        "xchgl %%ebx, %%esi"
-        : "=a" (p[0]), "=S" (p[1]),
-          "=c" (p[2]), "=d" (p[3])
-        : "0" (ax)
-    );
- }
-#endif
-
- std::string getCpuHash()
- {
-    std::string n = boost::asio::ip::host_name();
-    #ifdef WIN32
-        unsigned int cpuinfo[4] = { 0, 0, 0, 0 };
-        getCpuid( cpuinfo, 0 );
-        unsigned short hash = 0;
-        unsigned int* ptr = (&cpuinfo[0]);
-        for ( unsigned int i = 0; i < 4; i++ )
-            hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );
-        double dHash = (double)hash;
-        return n + ";" + RoundToString(dHash,0);
-    #else
-        return n;
-    #endif
- }
-
-
-
-std::string SystemCommand(const char* cmd)
-{
-    FILE* pipe = popen(cmd, "r");
-    if (!pipe) return "ERROR";
-    char buffer[128];
-    std::string result = "";
-    while(!feof(pipe))
-    {
-        if(fgets(buffer, 128, pipe) != NULL)
-            result += buffer;
-    }
-    pclose(pipe);
-    return result;
-}
-
-
-std::string getHardDriveSerial()
-{
-    if (!msHDDSerial.empty()) return msHDDSerial;
-    std::string cmd1 = "";
-    #ifdef WIN32
-        cmd1 = "wmic path win32_physicalmedia get SerialNumber";
-    #else
-        cmd1 = "ls /dev/disk/by-uuid";
-    #endif
-    std::string result = SystemCommand(cmd1.c_str());
-    msHDDSerial = result;
-    return result;
 }
 
 bool IsContract(CBlockIndex* pIndex)

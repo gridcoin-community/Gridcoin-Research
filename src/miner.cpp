@@ -104,47 +104,6 @@ public:
     }
 };
 
-
-void MinerAutoUnlockFeature(CWallet *pwallet)
-{
-    ///////////////////////  Auto Unlock Feature for Research Miner
-    if (pwallet->IsLocked())
-        {
-            //11-5-2014 R Halford - If wallet is locked - see if user has an encrypted password stored:
-            std::string passphrase = "";
-            if (mapArgs.count("-autounlock"))
-            {
-                passphrase = GetArg("-autounlock", "");
-            }
-            if (passphrase.length() > 1)
-            {
-                std::string decrypted = AdvancedDecryptWithHWID(passphrase);
-                //Unlock the wallet for 10 days (Equivalent to: walletpassphrase mylongpass 999999) FOR STAKING ONLY!
-                int64_t nSleepTime = 9999999;
-                SecureString strWalletPass;
-                strWalletPass.reserve(100);
-                strWalletPass = decrypted.c_str();
-                if (strWalletPass.length() > 0)
-                {
-                    if (!pwallet->Unlock(strWalletPass))
-                    {
-                        LogPrintf("GridcoinResearchMiner:AutoUnlock:Error: The wallet passphrase entered was incorrect.");
-                    }
-                    else
-                    {
-                        NewThread(ThreadTopUpKeyPool,NULL);
-                        int64_t* pnSleepTime = new int64_t(nSleepTime);
-                        NewThread(ThreadCleanWalletPassphrase, pnSleepTime);
-                        fWalletUnlockStakingOnly = true;
-                    }
-                }
-            }
-        }
-    return;
-    // End of AutoUnlock Feature
-}
-
-
 // CreateRestOfTheBlock: collect transactions into block and fill in header
 bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 {
@@ -1241,12 +1200,9 @@ bool IsMiningAllowed(CWallet *pwallet)
 
 void StakeMiner(CWallet *pwallet)
 {
-
     // Make this thread recognisable as the mining thread
     RenameThread("grc-stake-miner");
 
-    MinerAutoUnlockFeature(pwallet);
-    
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
     LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
