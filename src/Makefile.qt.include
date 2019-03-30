@@ -307,8 +307,6 @@ RES_IMAGES = \
   qt/res/images/gridcoin.svg \
   qt/res/images/about_light.svg
 
-RES_MOVIES = qt/res/movies/update_spinner.gif
-
 RES_STYLESHEETS = \
   qt/res/stylesheets/light_stylesheet.qss \
   qt/res/stylesheets/native_stylesheet.qss \
