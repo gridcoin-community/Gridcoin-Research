@@ -1,4 +1,5 @@
 package=libICE
+GCCFLAGS?=
 $(package)_version=1.0.9
 $(package)_download_path=http://xorg.freedesktop.org/releases/individual/lib/
 $(package)_file_name=$(package)-$($(package)_version).tar.bz2
@@ -8,6 +9,10 @@ $(package)_dependencies=xtrans xproto
 define $(package)_set_vars
   $(package)_config_opts=--disable-static --disable-docs --disable-specs --without-xsltproc
   $(package)_config_opts_linux=--with-pic
+  $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cxxflags_arm_linux = $(GCCFLAGS)
+  $(package)_cflags_arm_linux = $(GCCFLAGS)
 endef
 
 define $(package)_config_cmds

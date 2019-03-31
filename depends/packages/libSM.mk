@@ -1,4 +1,5 @@
 package=libSM
+GCCFLAGS?=
 $(package)_version=1.2.2
 $(package)_download_path=http://xorg.freedesktop.org/releases/individual/lib/
 $(package)_file_name=$(package)-$($(package)_version).tar.bz2
@@ -8,6 +9,10 @@ $(package)_dependencies=xtrans xproto libICE
 define $(package)_set_vars
   $(package)_config_opts=--without-libuuid  --without-xsltproc  --disable-docs --disable-static
   $(package)_config_opts_linux=--with-pic
+  $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cxxflags_arm_linux = $(GCCFLAGS)
+  $(package)_cflags_arm_linux = $(GCCFLAGS)
 endef
 
 define $(package)_config_cmds

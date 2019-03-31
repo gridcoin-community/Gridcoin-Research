@@ -1,4 +1,5 @@
 PACKAGE=qt
+GCCFLAGS?=
 $(package)_version=5.7.1
 $(package)_download_path=http://download.qt.io/archive/qt/5.7/$($(package)_version)/submodules
 $(package)_suffix=opensource-src-$($(package)_version).tar.gz
@@ -110,6 +111,10 @@ $(package)_config_opts_arm_linux  = -platform linux-g++ -xplatform $(host)
 $(package)_config_opts_i686_linux  = -xplatform linux-g++-32
 $(package)_config_opts_mingw32  = -no-opengl -xplatform win32-g++ -device-option CROSS_COMPILE="$(host)-"
 $(package)_config_opts_aarch64_linux = -xplatform linux-aarch64-gnu-g++
+$(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
+$(package)_cflags_aarch64_linux = $(GCCFLAGS)
+$(package)_cxxflags_arm_linux = $(GCCFLAGS)
+$(package)_cflags_arm_linux = $(GCCFLAGS)
 $(package)_build_env  = QT_RCC_TEST=1
 endef
 

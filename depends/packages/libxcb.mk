@@ -1,4 +1,5 @@
 package=libxcb
+GCCFLAGS?=
 $(package)_version=1.10
 $(package)_download_path=http://xcb.freedesktop.org/dist
 $(package)_file_name=$(package)-$($(package)_version).tar.bz2
@@ -6,7 +7,11 @@ $(package)_sha256_hash=98d9ab05b636dd088603b64229dd1ab2d2cc02ab807892e107d674f9c
 $(package)_dependencies=xcb_proto libXau xproto
 
 define $(package)_set_vars
-$(package)_config_opts=--disable-static
+  $(package)_config_opts=--disable-static
+  $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cxxflags_arm_linux = $(GCCFLAGS)
+  $(package)_cflags_arm_linux = $(GCCFLAGS)
 endef
 
 define $(package)_preprocess_cmds
