@@ -3258,7 +3258,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         //Approve first coinstake in DPOR block
-        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
+        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) && !IsResearchAgeEnabled(pindex->nHeight))
         {
             if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
             {
@@ -3308,7 +3308,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if ((IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) || nVersion>=9) && !fColdBoot)
+            if ((IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) || nVersion>=9) && !fColdBoot)
             {
                 // Let this take effect together with stakev8
                 if (nVersion>=8)
@@ -4237,7 +4237,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 600) || nHeight >= 999000))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), 600, GetAdjustedTime()) || nHeight >= 999000))
                     {
                         return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
                     }
@@ -4594,7 +4594,7 @@ void GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 2)) return true;
+    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, 2, GetAdjustedTime())) return true;
     nLastAskedForBlocks = GetAdjustedTime();
 
     int iAsked = 0;
@@ -4643,7 +4643,7 @@ void ClearOrphanBlocks()
 
 void CleanInboundConnections(bool bClearAll)
 {
-        if (IsLockTimeWithinMinutes(nLastCleaned, GetAdjustedTime(), 10)) return;
+        if (IsLockTimeWithinMinutes(nLastCleaned, 10, GetAdjustedTime())) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
         for(CNode* pNode : vNodes)
@@ -5381,7 +5381,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 
     int64_t nGRCTime = ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
     int64_t nCPIDTime = ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
-    if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
+    if (IsLockTimeWithinMinutes(nLastGRCtallied, 100, GetAdjustedTime()) &&
         (nGRCTime > 0 || nCPIDTime > 0))
         return true;
 
@@ -6166,9 +6166,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
     // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup, GetAdjustedTime(), 15))
+    if (!IsLockTimeWithinMinutes(nBootup, 15, GetAdjustedTime()))
     {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
+        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
             if(fDebug) LogPrintf("Bootup");
             AskForOutstandingBlocks(uint256(0));
@@ -8205,7 +8205,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
             // Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
             int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
-            if (IsLockTimeWithinMinutes(iBeaconTimestamp, pindexBest->GetBlockTime(), 60*24*30*6))
+            if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6, pindexBest->GetBlockTime()))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));

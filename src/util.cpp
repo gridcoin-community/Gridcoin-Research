@@ -1288,10 +1288,10 @@ int64_t GetAdjustedTime()
 
 bool IsLockTimeWithin14days(int64_t locktime, int64_t reference)
 {
-    return IsLockTimeWithinMinutes(locktime, reference, 14 * 24 * 60);
+    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60, reference);
 }
 
-bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes)
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference)
 {
     int64_t cutOff = reference - minutes * 60;
     return locktime >= cutOff;
