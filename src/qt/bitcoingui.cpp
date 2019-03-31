@@ -65,7 +65,6 @@
 #include <QMimeData>
 #include <QStackedWidget>
 #include <QDateTime>
-#include <QMovie>
 #include <QFileDialog>
 #include <QStandardPaths>
 #include <QTimer>
@@ -172,8 +171,6 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
 
     // Create status bar
     // statusBar();
-
-    syncIconMovie = new QMovie(":/movies/update_spinner", "GIF", this);
 
     // Clicking on a transaction on the overview page simply sends you to transaction history page
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), this, SLOT(gotoHistoryPage()));
@@ -735,7 +732,7 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
         text = tr("%n day(s) ago", "", secs/(60*60*24));
     }
 
-    // Set icon state: spinning if catching up, tick otherwise
+    // Set icon state: not synced icon if catching up, tick otherwise
     if(secs < 90*60 && count >= nTotalBlocks)
     {
         tooltip = tr("Up to date") + QString(".<br>") + tooltip;
@@ -745,9 +742,8 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     }
     else
     {
+        labelBlocksIcon->setPixmap(QIcon(":/icons/notsynced").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         tooltip = tr("Catching up...") + QString("<br>") + tooltip;
-        labelBlocksIcon->setMovie(syncIconMovie);
-        syncIconMovie->start();
 
         overviewPage->showOutOfSyncWarning(true);
     }
@@ -1455,9 +1451,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
     {
+        labelScraperIcon->setPixmap(QIcon(":/icons/notsynced").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelScraperIcon->setToolTip(tr("Scraper: downloading and processing stats."));
-        labelScraperIcon->setMovie(syncIconMovie);
-        syncIconMovie->start();
     }
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
