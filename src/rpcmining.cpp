@@ -31,6 +31,12 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
     UniValue weight(UniValue::VOBJ);
+    UniValue stakesplitting(UniValue::VOBJ);
+    UniValue stakesplittingparam(UniValue::VOBJ);
+    UniValue sidestaking(UniValue::VOBJ);
+    UniValue sidestakingalloc(UniValue::VOBJ);
+    UniValue vsidestakingalloc(UniValue::VARR);
+
     double nNetworkWeight = GetEstimatedNetworkWeight();
     double nNetworkValue = nNetworkWeight / 80.0;
     obj.pushKV("blocks",        nBestHeight);
@@ -60,6 +66,41 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("kernel-diff-best",MinerStatus.KernelDiffMax);
         obj.pushKV("kernel-diff-sum",MinerStatus.KernelDiffSum);
     }
+
+    int64_t nMinStakeSplitValue = 0;
+    double dEfficiency = 0;
+    int64_t nDesiredStakeSplitValue = 0;
+    SideStakeAlloc vSideStakeAlloc;
+
+    // nMinStakeSplitValue, dEfficiency, and nDesiredStakeSplitValue are out parameters.
+    bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeSplitValue);
+
+    // vSideStakeAlloc is an out parameter.
+    bool fEnableSideStaking = GetSideStakingStatusAndAlloc(vSideStakeAlloc);
+
+    stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
+    if (fEnableStakeSplit)
+    {
+        stakesplittingparam.pushKV("min-stake-split-value", nMinStakeSplitValue / COIN);
+        stakesplittingparam.pushKV("efficiency", dEfficiency);
+        stakesplittingparam.pushKV("stake-split-UTXO-size-for-target-efficiency", nDesiredStakeSplitValue / COIN);
+        stakesplitting.pushKV("stake-splitting-params", stakesplittingparam);
+    }
+    obj.pushKV("stake-splitting", stakesplitting);
+
+    sidestaking.pushKV("side-staking-enabled", fEnableSideStaking);
+    if (fEnableSideStaking)
+    {
+        for (const auto& alloc : vSideStakeAlloc)
+        {
+            sidestakingalloc.pushKV("address", alloc.first);
+            sidestakingalloc.pushKV("allocation-pct", alloc.second);
+
+            vsidestakingalloc.push_back(sidestakingalloc);
+        }
+        sidestaking.pushKV("side-staking-allocations", vsidestakingalloc);
+    }
+    obj.pushKV("side-staking", sidestaking);
 
     obj.pushKV("difficulty",    diff);
     obj.pushKV("errors",        GetWarnings("statusbar"));
