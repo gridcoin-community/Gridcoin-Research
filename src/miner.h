@@ -48,5 +48,7 @@ static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 
 void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking, SideStakeAlloc &vSideStakeAlloc, double &dEfficiency);
 unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency);
+bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc);
+bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue);
 
 #endif // NOVACOIN_MINER_H
