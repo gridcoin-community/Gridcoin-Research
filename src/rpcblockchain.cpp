@@ -786,15 +786,21 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         try
         {
             // Backup config with old keys like a normal backup
-            // not needed, but extra backup does not hurt
-            if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf")))
+            // not needed, but extra backup does not hurt.
+            // Also back up the wallet for extra safety measure.
+
+            LOCK(pwalletMain->cs_wallet);
+
+            if(!BackupConfigFile(GetBackupFilename("gridcoinresearch.conf"))
+                    || !BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat")))
             {
-                sError = "Failed to backup old configuration file. Beacon not sent.";
+                sError = "Failed to backup old configuration file and wallet. Beacon not sent.";
                 return false;
             }
 
             // Send the beacon transaction
             sMessage = SendContract(sType,sName,sBase);
+
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
 
@@ -1035,12 +1041,12 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
         res.pushKV("Errors",sError);
 
     if (!fResult)
+    {
         res.pushKV("FAILURE","Note: if your wallet is locked this command will fail; to solve that unlock the wallet: 'walletpassphrase <yourpassword> <240>'.");
-
+    }
     else
     {
         res.pushKV("Public Key",sOutPubKey.c_str());
-        res.pushKV("Warning!","Your keys to research rewards have been stored in your wallet. It is recommended that you back up your files on a regular basis.");
     }
 
     return res;
