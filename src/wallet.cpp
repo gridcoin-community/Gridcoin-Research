@@ -22,6 +22,7 @@
 #include <script.h>
 #include "main.h"
 #include "util.h"
+#include "beacon.h"
 
 using namespace std;
 
@@ -178,7 +179,10 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
+            {
+                ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, this);
                 return true;
+            }
         }
     }
     return false;
@@ -2611,3 +2615,53 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
         mapKeyBirth[it->first] = it->second->nTime - 7200; // block times can be 2h off
 }
 
+MinedType GetGeneratedType(const uint256& tx, unsigned int vout)
+{
+    CWalletTx wallettx;
+    uint256 hashblock;
+
+    if (!GetTransaction(tx, wallettx, hashblock))
+        return MinedType::ORPHANED;
+
+    BlockMap::iterator mi = mapBlockIndex.find(hashblock);
+
+    if (mi == mapBlockIndex.end())
+        return MinedType::UNKNOWN;
+
+    CBlockIndex* blkindex = (*mi).second;
+
+    // Basic CoinStake Support
+    if (wallettx.vout.size() == 2)
+    {
+        if (blkindex->nResearchSubsidy == 0)
+            return MinedType::POS;
+
+        else
+            return MinedType::POR;
+    }
+
+    // Side/Split Stake Support
+    else if (wallettx.vout.size() >= 3)
+    {
+        // Split Stake -- There a better way since you cannot == two scriptPubKeys
+        if (wallettx.vout[vout].scriptPubKey.ToString() == wallettx.vout[1].scriptPubKey.ToString())
+        {
+            if (blkindex->nResearchSubsidy == 0)
+                return MinedType::POS;
+
+            else
+                return MinedType::POR;
+        }
+
+        else
+        {
+            if (blkindex->nResearchSubsidy == 0)
+                return MinedType::POS_SIDE_STAKE;
+
+            else
+                return MinedType::POR_SIDE_STAKE;
+        }
+    }
+
+    return MinedType::UNKNOWN;
+}

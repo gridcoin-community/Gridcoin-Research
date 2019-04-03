@@ -40,19 +40,46 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
     return true;
 }
 
-	int64_t GetMyValueOut(const CWallet *wallet,const CWalletTx &wtx)
+int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx)
+{
+    int64_t nValueOut = 0;
+    for (auto const& txout : wtx.vout)
     {
-        int64_t nValueOut = 0;
-        for (auto const& txout : wtx.vout)
+       if (wallet->IsMine(txout))
+       {
+            nValueOut += txout.nValue;
+       }
+    }
+    return nValueOut;
+}
+
+
+int64_t GetMyValueOut(const CWallet *wallet, const CWalletTx &wtx, unsigned int& index)
+{
+    int64_t nValueOut = 0;
+    if (wallet->IsMine(wtx.vout[index]))
+        nValueOut += wtx.vout[index].nValue;
+
+    return nValueOut;
+}
+
+unsigned int GetNumberOfStakeReturnOutputs(const CWallet *wallet,const CWalletTx &wtx)
+{
+    unsigned int nNumberOfOutputs = 0;
+
+    if (wtx.IsCoinStake())
+    {
+        for (auto const& txout: wtx.vout)
         {
-	       if (wallet->IsMine(txout))
-		   {
-				nValueOut += txout.nValue;
-		   }
+            // Count the number of outputs that have a pubkey equal to the first (non-empty) output.
+            // This are the stakesplits.
+            if (txout.scriptPubKey == wtx.vout[1].scriptPubKey)
+                nNumberOfOutputs++;
         }
-        return nValueOut;
     }
 
+    return nNumberOfOutputs;
+}
 
 /*
  * Decompose CWallet transaction to model transaction records.
@@ -64,23 +91,26 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     int64_t nCredit = wtx.GetCredit(true);
     int64_t nDebit = wtx.GetDebit();
     int64_t nNet = nCredit - nDebit;
-    uint256 hash = wtx.GetHash(), hashPrev = 0;
+    uint256 hash = wtx.GetHash();
     std::map<std::string, std::string> mapValue = wtx.mapValue;
+
+    int64_t nCoinStakeReturnOutput = 0;
+    unsigned int iCoinStakeReturnOutputIndex = 1;
 
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
     {
-        //
-        // Credit - Calculate Net from CryptoLottery Rob Halford - 4-3-2015-1
-        //
-        for (auto const& txout : wtx.vout)
+        // Cannot use range based loop anymore
+        for (unsigned int t = 0; t < wtx.vout.size(); t++)
+        //for (auto const& txout : wtx.vout)
         {
-            if(wallet->IsMine(txout))
+            if(wallet->IsMine(wtx.vout[t]))
             {
                 TransactionRecord sub(hash, nTime);
                 CTxDestination address;
                 sub.idx = parts.size(); // sequence number
-                sub.credit = txout.nValue;
-                if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
+                sub.vout = t;
+
+                if (ExtractDestination(wtx.vout[t].scriptPubKey, address) && IsMine(*wallet, address))
                 {
                     // Received by Bitcoin Address
                     sub.type = TransactionRecord::RecvWithAddress;
@@ -92,41 +122,52 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     sub.type = TransactionRecord::RecvFromOther;
                     sub.address = mapValue["from"];
                 }
+
                 if (wtx.IsCoinBase())
                 {
                     // Generated (proof-of-work)
                     sub.type = TransactionRecord::Generated;
+                    // This is legacy.
+                    sub.credit = wtx.vout[t].nValue;
                 }
-                if (wtx.IsCoinStake())
+                else if (wtx.IsCoinStake())
                 {
-                    // Generated (proof-of-stake)
-			        if (hashPrev == hash)
-                        continue; // last coinstake output
+                    //POR-POS CoinStake, so change transaction record type to generated.
+                    sub.type = TransactionRecord::Generated;
 
-					if (wtx.vout.size()==2)
-					{
-						//Standard POR CoinStake
-						sub.type = TransactionRecord::Generated;
-						sub.credit = nNet > 0 ? nNet : wtx.GetValueOut() - nDebit;
-						hashPrev = hash;
-					}
-					else
-					{
-						//CryptoLottery - CoinStake - 4-3-2015
-						sub.type = TransactionRecord::Generated;
-						if (nDebit == 0)
-						{
-							sub.credit = GetMyValueOut(wallet,wtx);
-							sub.RemoteFlag = 1;
-						}
-						else
-						{
-							sub.credit = nNet > 0 ? nNet : GetMyValueOut(wallet,wtx) - nDebit;
-						}
+                    unsigned int nNumberOfStakeReturnOutputs  = GetNumberOfStakeReturnOutputs(wallet, wtx);
 
-						hashPrev = hash;
-					}
-                }
+                    // The number of StakeOutputs should never be zero for the coinstake.
+                    if (nNumberOfStakeReturnOutputs == 0)
+                    {
+                        LogPrintf("ERROR: decomposeTransaction: nNumberOfStakeReturnOutputs = 0. Adjusting to 1.");
+                        nNumberOfStakeReturnOutputs = 1;
+                    }
+
+                    // If the output address does not match the input (which is the same as the first non-empty output),
+                    // then this is a sidestake and we are on the receiving side, so no debit, otherwise, the debit is
+                    // apportioned and coalesced.
+                    if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey)
+                        sub.credit = GetMyValueOut(wallet, wtx, t);
+                    else
+                    {
+                        // Accumulate/coalesce splitstake output (returns) to the same address
+                        nCoinStakeReturnOutput += GetMyValueOut(wallet, wtx, t);
+
+                        if (iCoinStakeReturnOutputIndex < nNumberOfStakeReturnOutputs)
+                        {
+                            // Do not allow to flow down to parts.append(sub). Increment output index counter.
+                            iCoinStakeReturnOutputIndex++;
+                            continue;
+                        }
+                        else
+                        {
+                            // We are on the last splitstake return, so apply the debit and allow to go to parts.append(sub).
+                            sub.credit = nCoinStakeReturnOutput - nDebit;
+                        }
+                    }
+                } else
+                    sub.credit = wtx.vout[t].nValue;
 
                 parts.append(sub);
             }
@@ -148,7 +189,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             int64_t nChange = wtx.GetChange();
 
             parts.append(TransactionRecord(hash, nTime, TransactionRecord::SendToSelf, "",
-                            -(nDebit - nChange), nCredit - nChange));
+                            -(nDebit - nChange), nCredit - nChange, 0));
         }
         else if (fAllFromMe)
         {
@@ -201,7 +242,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             //
             // Mixed debit transaction, can't break down payees
             //
-            parts.append(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0));
+            parts.append(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0, 0));
         }
     }
 

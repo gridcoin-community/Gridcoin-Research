@@ -21,9 +21,6 @@ public:
 
 private:
     Ui::TransactionDescDialog *ui;
-
-private slots:
-	void on_btnViewAttachment_clicked();
 };
 
 #endif // TRANSACTIONDESCDIALOG_H

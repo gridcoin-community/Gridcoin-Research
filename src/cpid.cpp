@@ -1,8 +1,10 @@
-
 #include "cpid.h"
+#include "util.h"
+
 #include <cstdio>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iomanip>
+#include <sstream>
 
 #define S11 (0x9e5+1366-0xf34)
 #define S12 (0x161b+3182-0x227d)

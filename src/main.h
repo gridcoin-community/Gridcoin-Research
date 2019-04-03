@@ -132,16 +132,15 @@ inline bool IsV9Enabled_Tally(int nHeight)
     return IsV9Enabled(nHeight-120);
 }
 
-inline int64_t PastDrift(int64_t nTime, int nHeight)   { return IsProtocolV2(nHeight) ? nTime - 20 * 60  : nTime - 20 * 60; }
-inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? nTime + 20 * 60  : nTime + 20 * 60; }
+inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
 
-extern std::map<std::string, double> mvNeuralNetworkHash;
-extern std::map<std::string, double> mvCurrentNeuralNetworkHash;
-extern std::map<std::string, double> mvNeuralVersion;
+extern std::unordered_map<std::string, double> mvNeuralNetworkHash;
+extern std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
+extern std::unordered_map<std::string, double> mvNeuralVersion;
 
 extern std::map<std::string, StructCPID> mvDPOR;
 extern std::map<std::string, StructCPID> mvDPORCopy;
@@ -213,7 +212,6 @@ extern std::string  msMiningErrors5;
 extern std::string  msMiningErrors6;
 extern std::string  msMiningErrors7;
 extern std::string  msMiningErrors8;
-extern std::string  msAttachmentGuid;
 
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
@@ -262,9 +260,10 @@ void PrintBlockTree();
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
-bool WriteKey(std::string sKey, std::string sValue);
 double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+
+std::string GetCurrentOverviewTabPoll();
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
 // Validate researcher rewards.
@@ -1455,10 +1454,7 @@ public:
 
     int64_t GetPastTimeLimit() const
     {
-        if (IsProtocolV2(nHeight))
-	         return GetMedianTimePast();
-        else
-            return GetMedianTimePast();
+        return GetMedianTimePast();
     }
 
     enum { nMedianTimeSpan=11 };

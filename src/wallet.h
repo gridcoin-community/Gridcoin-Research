@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #ifndef BITCOIN_WALLET_H
 #define BITCOIN_WALLET_H
+
 #include <string>
 #include <vector>
 #include <stdlib.h>
@@ -13,7 +14,6 @@
 #include "script.h"
 #include "ui_interface.h"
 #include "walletdb.h"
-#include "util.h"
 
 extern bool fWalletUnlockStakingOnly;
 extern bool fConfChange;
@@ -31,6 +31,17 @@ enum WalletFeature
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
     FEATURE_LATEST = 60000
+};
+
+/** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just incase!*/
+enum MinedType
+{
+    UNKNOWN = 0,
+    POS = 1,
+    POR = 2,
+    ORPHANED = 3,
+    POS_SIDE_STAKE = 4,
+    POR_SIDE_STAKE = 5
 };
 
 /** A key pool entry */
@@ -937,4 +948,5 @@ private:
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 
+MinedType GetGeneratedType(const uint256& tx, unsigned int vout);
 #endif
