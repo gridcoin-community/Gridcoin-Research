@@ -5069,41 +5069,31 @@ int GetFilesize(FILE* file)
 }
 
 
-
-
 std::string getfilecontents(std::string filename)
 {
-    std::string buffer;
-    std::string line;
-    ifstream myfile;
-    if (fDebug10) LogPrintf("loading file to string %s",filename);
-
-    filesystem::path path = filename;
-
-    if (!filesystem::exists(path)) {
-        LogPrintf("the file does not exist %s",path.string());
+    if (!filesystem::exists(filename)) {
+        LogPrintf("getfilecontents: file does not exist %s", filename);
         return "-1";
     }
 
-     FILE *file = fopen(filename.c_str(), "rb");
-     CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
-     int fileSize = GetFilesize(filein);
-     filein.fclose();
+    std::ifstream in(filename, std::ios::in | std::ios::binary);
 
-     myfile.open(filename.c_str());
-
-    buffer.reserve(fileSize);
-    if (fDebug10) LogPrintf("opening file %s",filename);
-
-    if(myfile)
-    {
-      while(getline(myfile, line))
-      {
-            buffer = buffer + line + "\n";
-      }
+    if (in.fail()) { 
+        LogPrintf("getfilecontents: error opening file %s", filename); 
+        return "-1";
     }
-    myfile.close();
-    return buffer;
+
+    if (fDebug10) LogPrintf("loading file to string %s", filename);
+
+    std::ostringstream out;
+
+    out << in.rdbuf();
+
+    // Immediately close instead of waiting for the destructor to decrease the 
+    // chance of a race when calling this to read BOINC's client_state.xml:
+    in.close();
+
+    return out.str();
 }
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
@@ -7448,8 +7438,8 @@ void HarvestCPIDs(bool cleardata)
  try
  {
     std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-    std::string sout = "";
-    sout = getfilecontents(sourcefile);
+    std::string sout = getfilecontents(sourcefile);
+
     if (sout == "-1")
     {
         LogPrintf("Unable to obtain Boinc CPIDs ");
