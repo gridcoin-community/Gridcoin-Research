@@ -463,12 +463,7 @@ bool CTxDB::LoadBlockIndex()
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
     int nCheckDepth = GetArg( "-checkblocks", 1000);
-    if (fTestNet) nCheckDepth = 3000; //Check the last 3000 blocks in TestNet since we want to rebuild the chain (8-19-2015)
 
-    if (nCheckDepth == 0)
-        nCheckDepth = 1000000000; // suffices until the year 19000
-    if (nCheckDepth > nBestHeight)
-        nCheckDepth = nBestHeight;
     LogPrintf("Verifying last %i blocks at level %i", nCheckDepth, nCheckLevel);
     CBlockIndex* pindexFork = NULL;
     map<pair<unsigned int, unsigned int>, CBlockIndex*> mapBlockPos;
@@ -576,16 +571,16 @@ bool CTxDB::LoadBlockIndex()
                 // check level 5: check whether all prevouts are marked spent
                 if (nCheckLevel>4)
                 {
-                     for (auto const& txin : tx.vin)
-                     {
-                          CTxIndex txindex;
-                          if (ReadTxIndex(txin.prevout.hash, txindex))
-                              if (txindex.vSpent.size()-1 < txin.prevout.n || txindex.vSpent[txin.prevout.n].IsNull())
-                              {
-                                  LogPrintf("LoadBlockIndex(): *** found unspent prevout %s:%i in %s", txin.prevout.hash.ToString(), txin.prevout.n, hashTx.ToString());
-                                  pindexFork = pindex->pprev;
-                              }
-                     }
+                    for (auto const& txin : tx.vin)
+                    {
+                        CTxIndex txindex;
+                        if (ReadTxIndex(txin.prevout.hash, txindex))
+                            if (txindex.vSpent.size()-1 < txin.prevout.n || txindex.vSpent[txin.prevout.n].IsNull())
+                            {
+                                LogPrintf("LoadBlockIndex(): *** found unspent prevout %s:%i in %s", txin.prevout.hash.ToString(), txin.prevout.n, hashTx.ToString());
+                                pindexFork = pindex->pprev;
+                            }
+                    }
                 }
             }
         }
@@ -640,16 +635,16 @@ bool CTxDB::LoadBlockIndex()
             {
                 if(fDebug)
                     LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                        pindex->GetCPID(), bb.cpid,
-                        pindex->GetBlockHash().GetHex(), pindex->nHeight );
+                              pindex->GetCPID(), bb.cpid,
+                              pindex->GetBlockHash().GetHex(), pindex->nHeight );
 
                 /* Repair the cpid field */
                 pindex->SetCPID(bb.cpid);
 
-                #if 0
+#if 0
                 if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
                     error("LoadBlockIndex: writing CDiskBlockIndex failed");
-                #endif
+#endif
             }
         }
 

@@ -1,7 +1,10 @@
 #pragma once
 
+#include "uint256.h"
+
 #include <cstring>
-#include "util.h"
+#include <string>
+#include <iosfwd>
 
 class CPID
 {

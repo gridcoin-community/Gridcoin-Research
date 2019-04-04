@@ -13,6 +13,7 @@ These dependencies are required:
 
  Library     | Purpose          | Description
  ------------|------------------|----------------------------------------------------------------
+ pkg-config  | Build            | Learn library inter-dependencies
  libssl      | Crypto           | Random Number Generation, Elliptic Curve Cryptography
  libboost    | Utility          | Library for threading, data structures, etc
  libevent    | Networking       | OS independent asynchronous networking

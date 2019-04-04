@@ -15,7 +15,6 @@ class CBlockIndex;
 
 #include "global_objects_noui.hpp"
 #include "checkpoints.h"
-#include "util.h"
 
 void StartRPCThreads();
 void StopRPCThreads();
@@ -107,14 +106,12 @@ extern UniValue addredeemscript(const UniValue& params, bool fHelp);
 extern UniValue backupprivatekeys(const UniValue& params, bool fHelp);
 extern UniValue backupwallet(const UniValue& params, bool fHelp);
 extern UniValue burn(const UniValue& params, bool fHelp);
-extern UniValue burn2(const UniValue& params, bool fHelp);
 extern UniValue checkwallet(const UniValue& params, bool fHelp);
 extern UniValue createrawtransaction(const UniValue& params, bool fHelp);
 extern UniValue decoderawtransaction(const UniValue& params, bool fHelp);
 extern UniValue decodescript(const UniValue& params, bool fHelp);
 extern UniValue dumpprivkey(const UniValue& params, bool fHelp);
 extern UniValue dumpwallet(const UniValue& params, bool fHelp);
-extern UniValue encrypt(const UniValue& params, bool fHelp);
 extern UniValue encryptwallet(const UniValue& params, bool fHelp);
 extern UniValue getaccount(const UniValue& params, bool fHelp);
 extern UniValue getaccountaddress(const UniValue& params, bool fHelp);
@@ -139,8 +136,8 @@ extern UniValue listtransactions(const UniValue& params, bool fHelp);
 extern UniValue listunspent(const UniValue& params, bool fHelp);
 extern UniValue makekeypair(const UniValue& params, bool fHelp);
 extern UniValue movecmd(const UniValue& params, bool fHelp);
-extern UniValue newburnaddress(const UniValue& params, bool fHelp);
 extern UniValue rain(const UniValue& params, bool fHelp);
+extern UniValue rainbymagnitude(const UniValue& params, bool fHelp);
 extern UniValue repairwallet(const UniValue& params, bool fHelp);
 extern UniValue resendtx(const UniValue& params, bool fHelp);
 extern UniValue reservebalance(const UniValue& params, bool fHelp);
@@ -164,29 +161,23 @@ extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue beaconreport(const UniValue& params, bool fHelp);
 extern UniValue beaconstatus(const UniValue& params, bool fHelp);
-extern UniValue cpids(const UniValue& params, bool fHelp);
 extern UniValue currentneuralhash(const UniValue& params, bool fHelp);
 extern UniValue currentneuralreport(const UniValue& params, bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getmininginfo(const UniValue& params, bool fHelp);
 extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
-extern UniValue mymagnitude(const UniValue& params, bool fHelp);
 #ifdef WIN32
 extern UniValue myneuralhash(const UniValue& params, bool fHelp);
 extern UniValue neuralhash(const UniValue& params, bool fHelp);
 #endif
 extern UniValue neuralreport(const UniValue& params, bool fHelp);
-extern UniValue proveownership(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
-extern UniValue rsa(const UniValue& params, bool fHelp);
-extern UniValue rsaweight(const UniValue& params, bool fHelp);
 extern UniValue staketime(const UniValue& params, bool fHelp);
 extern UniValue superblockage(const UniValue& params, bool fHelp);
 extern UniValue superblocks(const UniValue& params, bool fHelp);
 extern UniValue syncdpor2(const UniValue& params, bool fHelp);
 extern UniValue upgradedbeaconreport(const UniValue& params, bool fHelp);
-extern UniValue validcpids(const UniValue& params, bool fHelp);
 
 // Developers
 extern UniValue addkey(const UniValue& params, bool fHelp);
@@ -200,7 +191,7 @@ extern UniValue debug3(const UniValue& params, bool fHelp);
 extern UniValue debug4(const UniValue& params, bool fHelp);
 extern UniValue debugnet(const UniValue& params, bool fHelp);
 extern UniValue dportally(const UniValue& params, bool fHelp);
-extern UniValue forcequorom(const UniValue& params, bool fHelp);
+extern UniValue forcequorum(const UniValue& params, bool fHelp);
 extern UniValue gatherneuralhashes(const UniValue& params, bool fHelp);
 extern UniValue genboinckey(const UniValue& params, bool fHelp);
 extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
@@ -225,7 +216,7 @@ extern UniValue tallyneural(const UniValue& params, bool fHelp);
 #ifdef WIN32
 extern UniValue testnewcontract(const UniValue& params, bool fHelp);
 #endif
-extern UniValue updatequoromdata(const UniValue& params, bool fHelp);
+extern UniValue updatequorumdata(const UniValue& params, bool fHelp);
 extern UniValue versionreport(const UniValue& params, bool fhelp);
 extern UniValue writedata(const UniValue& params, bool fHelp);
 

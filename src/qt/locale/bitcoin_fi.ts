@@ -9,7 +9,7 @@
         <translation>Tietoa Gridcoinista</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+39"/>
         <source>&lt;b&gt;Gridcoin&lt;/b&gt; </source>
         <translation type="unfinished"></translation>
     </message>
@@ -18,10 +18,19 @@
         <source>
 This is experimental software.
 
+Distributed under the MIT/X11 software license, see the accompanying file COPYING or https://opensource.org/licenses/mit-license.php.
+
+This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>
+This is experimental software.
+
 Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation>
+        <translation type="vanished">
 Tämä on kokeellista ohjelmistoa.
 
 Levitetään MIT/X11 ohjelmistolisenssin alaisuudessa. Tarkemmat tiedot löytyvät tiedostosta COPYING tai osoitteesta http://www.opensource.org/licenses/mit-license.php.
@@ -113,7 +122,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>&amp;Muokkaa</translation>
     </message>
     <message>
-        <location line="+250"/>
+        <location line="+249"/>
         <source>Export Address Book Data</source>
         <translation>Vie osoitekirjasta tietoja</translation>
     </message>
@@ -136,7 +145,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
 <context>
     <name>AddressTableModel</name>
     <message>
-        <location filename="../addresstablemodel.cpp" line="+144"/>
+        <location filename="../addresstablemodel.cpp" line="+145"/>
         <source>Label</source>
         <translation>Nimi</translation>
     </message>
@@ -174,7 +183,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Toista uusi tunnuslause</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+30"/>
         <source>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</source>
         <translation>Sallii estettäväksi yksinkertaiset rahansiirrot kun käyttöjärjestelmän käyttäjätunnuksen turvallisuutta on rikottu. Tämä ei takaa oikeasti turvallisuutta.</translation>
     </message>
@@ -305,12 +314,12 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+798"/>
+        <location filename="../bitcoingui.cpp" line="+531"/>
         <source>Sign &amp;message...</source>
         <translation>&amp;Allekirjoita viesti...</translation>
     </message>
     <message>
-        <location line="-131"/>
+        <location line="-104"/>
         <source>&amp;Overview</source>
         <translation>&amp;Yleisnäkymä</translation>
     </message>
@@ -406,7 +415,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Sulje ohjelma</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+20"/>
         <source>&amp;Options...</source>
         <translation>&amp;Asetukset...</translation>
     </message>
@@ -421,22 +430,20 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Salaa tai pura salaus lompakosta</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>&amp;Backup Wallet...</source>
-        <translation>&amp;Varmuuskopioi Lompakko...</translation>
+        <translation type="vanished">&amp;Varmuuskopioi Lompakko...</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Vaihda Tunnuslause...</translation>
     </message>
     <message>
-        <location line="-1"/>
         <source>Backup wallet to another location</source>
-        <translation>Varmuuskopioi lompakko toiseen sijaintiin</translation>
+        <translation type="vanished">Varmuuskopioi lompakko toiseen sijaintiin</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Vaihda lompakon salaukseen käytettävä tunnuslause</translation>
     </message>
@@ -486,7 +493,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Varmista &amp;viesti...</translation>
     </message>
     <message>
-        <location line="-623"/>
+        <location line="-376"/>
         <source>Wallet</source>
         <translation>Lompakko</translation>
     </message>
@@ -496,7 +503,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+496"/>
+        <location line="+276"/>
         <source>&amp;Send</source>
         <translation>&amp;Lähetä</translation>
     </message>
@@ -506,37 +513,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>&amp;Vastaanota</translation>
     </message>
     <message>
-        <location line="+65"/>
-        <source>&amp;Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Rebuild Block Chain</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Download Blocks</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Download Blocks</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;Upgrade Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Upgrade Client</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+63"/>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;Tietoa Gridcoinista</translation>
     </message>
@@ -557,27 +534,17 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
     </message>
     <message>
         <location line="+3"/>
-        <source>&amp;Advanced Configuration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Advanced Configuration</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>&amp;New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+590"/>
+        <location line="+586"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-665"/>
+        <location line="-643"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -587,33 +554,13 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+77"/>
-        <source>&amp;Foundation</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Foundation</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+59"/>
         <source>&amp;Diagnostics</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Diagnostics</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>FA&amp;Q</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Interactive FAQ</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -627,6 +574,16 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>&amp;Näytä / Piilota</translation>
     </message>
     <message>
+        <location line="+4"/>
+        <source>&amp;Backup Wallet/Config...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Backup wallet/config to another location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+215"/>
         <location line="+9"/>
         <source>[testnet]</source>
@@ -634,37 +591,33 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
     </message>
     <message>
         <location line="+0"/>
-        <location line="+64"/>
+        <location line="+65"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin-asiakas</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+83"/>
         <source>%1 active connection(s) to Gridcoin network</source>
         <translation type="unfinished">%1 aktiivinen yhteys Gridcoin-verkkoon</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>%1 second(s) ago</source>
-        <translation type="unfinished">%1 sekunti sitten</translation>
+        <translation type="obsolete">%1 sekunti sitten</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 minute(s) ago</source>
-        <translation type="unfinished">%1 minuutti sitten</translation>
+        <translation type="obsolete">%1 minuutti sitten</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 hour(s) ago</source>
-        <translation type="unfinished">%1 tunti sitten</translation>
+        <translation type="obsolete">%1 tunti sitten</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>%1 day(s) ago</source>
-        <translation type="unfinished">%1 päivä sitten</translation>
+        <translation type="obsolete">%1 päivä sitten</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+60"/>
         <source>Last received block was generated %1.</source>
         <translation>Viimeinen vastaanotettu lohko generoitu %1.</translation>
     </message>
@@ -679,7 +632,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Hyväksy rahansiirtopalkkio</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+67"/>
         <source>Please enter your boinc E-mail address, or click &lt;Cancel&gt; to skip for now:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -704,12 +657,41 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+15"/>
         <source>Attention! - Boinc Path Error!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+315"/>
+        <location line="+32"/>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4</source>
+        <translation type="unfinished">Päivä: %1
+Määrä: %2
+Tyyppi: %3
+Osoite: %4 {1
+?} {2
+?} {3
+?} {4?}</translation>
+    </message>
+    <message>
+        <location line="+200"/>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+35"/>
         <source>Backup Wallet</source>
         <translation>Varmuuskopioi lompakkosi</translation>
     </message>
@@ -720,16 +702,28 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
     </message>
     <message>
         <location line="+3"/>
+        <location line="+6"/>
         <source>Backup Failed</source>
         <translation>Varmuuskopion luonti epäonnistui</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-6"/>
+        <location line="+6"/>
         <source>There was an error trying to save the wallet data to the new location.</source>
         <translation>Virhe tallentaessa lompakkotiedostoa uuteen sijaintiinsa.</translation>
     </message>
+    <message>
+        <location line="-3"/>
+        <source>Backup Config</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Wallet Config (*.conf)</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message numerus="yes">
-        <location line="+300"/>
+        <location line="+232"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -761,47 +755,37 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         </translation>
     </message>
     <message>
-        <location line="+27"/>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
+        <location line="+26"/>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+7"/>
+        <source>Not staking; %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Not staking because wallet is locked</source>
-        <translation>Ei osakkaana koska lompakko on lukittu</translation>
+        <translation type="vanished">Ei osakkaana koska lompakko on lukittu</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Not staking because wallet is offline</source>
-        <translation>Ei osakkaana koska lompakko on offline-tilassa</translation>
+        <translation type="vanished">Ei osakkaana koska lompakko on offline-tilassa</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Not staking because wallet is syncing</source>
-        <translation>Ei osakkaana koska lompakko synkronoituu</translation>
+        <translation type="vanished">Ei osakkaana koska lompakko synkronoituu</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
         <source>Not staking because you don&apos;t have mature coins</source>
-        <translation>Ei osakkaana koska sinulle ei ole erääntynyt kolikoita</translation>
+        <translation type="vanished">Ei osakkaana koska sinulle ei ole erääntynyt kolikoita</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Searching for mature coins... Please wait</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
         <source>Not staking</source>
-        <translation>Ei osakkaana</translation>
+        <translation type="vanished">Ei osakkaana</translation>
     </message>
     <message>
-        <location line="-1246"/>
+        <location line="-1082"/>
         <source>&amp;File</source>
         <translation>&amp;Tiedosto</translation>
     </message>
@@ -816,25 +800,57 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>&amp;Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+4"/>
         <source>&amp;Help</source>
         <translation>&amp;Apua</translation>
     </message>
     <message numerus="yes">
-        <location line="+285"/>
+        <location line="+279"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Prosessoitu %n lohko rahansiirtohistoriasta.</numerusform>
             <numerusform>Prosessoitu %n lohkoa rahansiirtohistoriasta.</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <location line="+13"/>
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n sekunti sitten</numerusform>
+            <numerusform>%n sekunti sitten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n minuutti sitten</numerusform>
+            <numerusform>%n minuutti sitten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n tunti sitten</numerusform>
+            <numerusform>%n tunti sitten</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform>%n päivä sitten</numerusform>
+            <numerusform>%n päivä sitten</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+31"/>
+        <location line="+6"/>
         <source>Up to date</source>
         <translation>Rahansiirtohistoria on ajan tasalla</translation>
     </message>
@@ -844,7 +860,7 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Saavutetaan verkkoa...</translation>
     </message>
     <message>
-        <location line="+218"/>
+        <location line="+215"/>
         <source>Sent transaction</source>
         <translation>Lähetetyt rahansiirrot</translation>
     </message>
@@ -854,19 +870,18 @@ Tämä tuote sisältää OpenSSL-projektin kehittämää ohjelmistoa OpenSSL-ty�
         <translation>Saapuva rahansiirto</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Date: %1
 Amount: %2
 Type: %3
 Address: %4
 </source>
-        <translation>Päivä: %1
+        <translation type="vanished">Päivä: %1
 Määrä: %2
 Tyyppi: %3
 Osoite: %4</translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+168"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation>URI-merkkijonoa ei voida jäsentää! Tämä voi johtua väärästä Gridcoin-osoitteesta tai väärässä muodossa olevista URI-parametreistä.</translation>
@@ -878,17 +893,16 @@ Osoite: %4</translation>
         <translation>URI-merkkijonojen käsittely</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation>Lompakko on &lt;b&gt;salattu&lt;/b&gt; ja tällä hetkellä &lt;b&gt;avoinna&lt;/b&gt;</translation>
+        <translation type="vanished">Lompakko on &lt;b&gt;salattu&lt;/b&gt; ja tällä hetkellä &lt;b&gt;avoinna&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+28"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Lompakko on &lt;b&gt;salattu&lt;/b&gt; ja tällä hetkellä &lt;b&gt;lukittuna&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../bitcoin.cpp" line="+145"/>
+        <location filename="../bitcoin.cpp" line="+160"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Vakava virhe kohdattu. Gridcoin-ohjelma ei voi enää jatkaa turvallisesti ja sulkee itsensä.</translation>
     </message>
@@ -896,7 +910,7 @@ Osoite: %4</translation>
 <context>
     <name>ClientModel</name>
     <message>
-        <location filename="../clientmodel.cpp" line="+116"/>
+        <location filename="../clientmodel.cpp" line="+117"/>
         <source>Network Alert</source>
         <translation>Verkkohälytys</translation>
     </message>
@@ -914,37 +928,42 @@ Osoite: %4</translation>
         <translation>Määrä:</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+23"/>
         <source>Bytes:</source>
         <translation>Tavuja:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+39"/>
         <source>Amount:</source>
         <translation>Määrä:</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+23"/>
         <source>Priority:</source>
         <translation>Prioriteetti:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+39"/>
         <source>Fee:</source>
         <translation>Palkkio:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+26"/>
         <source>Low Output:</source>
         <translation>Heikko ulosanti:</translation>
     </message>
     <message>
-        <location line="+162"/>
+        <location line="+144"/>
         <source>Tree &amp;mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+16"/>
+        <source>&amp;List mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+50"/>
         <source>Label</source>
         <translation>Nimike</translation>
     </message>
@@ -959,27 +978,26 @@ Osoite: %4</translation>
         <translation>Prioriteetti</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-191"/>
         <source>After Fee:</source>
         <translation>Palkkion jälkeen:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+26"/>
         <source>Change:</source>
         <translation>Vaihtoraha:</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+63"/>
         <source>(un)select all</source>
         <translation>(epä)valitse kaikki</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>List mode</source>
-        <translation>Listarakenne</translation>
+        <translation type="vanished">Listarakenne</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+74"/>
         <source>Amount</source>
         <translation>Määrä</translation>
     </message>
@@ -1170,6 +1188,80 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
 </context>
 <context>
+    <name>DiagnosticsDialog</name>
+    <message>
+        <location filename="../forms/diagnosticsdialog.ui" line="+14"/>
+        <location line="+210"/>
+        <source>Diagnostics</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-157"/>
+        <source>Verify CPID is in Neural Network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Verify BOINC path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Verify CPID has RAC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Verify wallet is synced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Verify CPID is valid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Find PrimaryCPID (Windows Only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Verify clock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Verify connections to seeds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Verify connections to network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Verify TCP port 32749</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Check client version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Test</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>EditAddressDialog</name>
     <message>
         <location filename="../forms/editaddressdialog.ui" line="+14"/>
@@ -1240,7 +1332,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
-        <location filename="../guiutil.cpp" line="+424"/>
+        <location filename="../guiutil.cpp" line="+419"/>
         <source>version</source>
         <translation>versio</translation>
     </message>
@@ -1283,7 +1375,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+896"/>
+        <location filename="../votingdialog.cpp" line="+863"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1336,6 +1428,11 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     <message>
         <location line="+4"/>
         <source>Creating poll failed! Days value is missing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Creating poll failed! Polls can not last longer than 180 days.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1422,7 +1519,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>%Yhdistä SOCKS-välityspalvelimen läpi:</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+9"/>
+        <source>Pro&amp;xy IP:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>Välityspalvelimen IP-osoite (esim. 127.0.0.1)</translation>
     </message>
@@ -1472,12 +1574,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Näytä rahan&amp;hallinnan ominaisuudet (vain kokeneille käyttäjille!)</translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+85"/>
         <source>&amp;Apply</source>
         <translation>%Käytä</translation>
     </message>
     <message>
-        <location line="-345"/>
+        <location line="-339"/>
         <source>&amp;Network</source>
         <translation>&amp;Verkko</translation>
     </message>
@@ -1487,12 +1589,11 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Portin uudelleenohjaus &amp;UPnP:llä</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Proxy &amp;IP:</source>
-        <translation>Proxyn &amp;IP:</translation>
+        <translation type="vanished">Proxyn &amp;IP:</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+45"/>
         <source>&amp;Port:</source>
         <translation>&amp;Portti</translation>
     </message>
@@ -1547,7 +1648,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Näytetäänkö kolikkokontrollin ominaisuuksia vai ei</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+71"/>
         <source>&amp;OK</source>
         <translation>&amp;OK</translation>
     </message>
@@ -1562,17 +1663,22 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>oletus</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+22"/>
         <source>Native</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-2"/>
         <source>Light</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+1"/>
+        <source>Dark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+125"/>
         <location line="+9"/>
         <source>Warning</source>
         <translation>Varoitus</translation>
@@ -1597,23 +1703,23 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Lomake</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+39"/>
         <source>Wallet</source>
         <translation type="unfinished">Lompakko</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+466"/>
+        <location line="+418"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation>Näytettävät tiedot voivat olla vanhentuneet. Lompakkosi synkronoituu automaattisesti Gridcoin-verkon kanssa kun yhteys on muodostettu, mutta tätä prosessia ei ole viety vielä päätökseen.</translation>
     </message>
     <message>
-        <location line="-390"/>
+        <location line="-356"/>
         <source>Stake</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+10"/>
         <source>Total number of coins that are staking, and do not yet count toward the current balance</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1623,17 +1729,17 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished">Vahvistamaton</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+10"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation>Kaikki vahvistamattomat rahansiirrot yhteensä, joita ei vielä lasketa saldoosi.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+20"/>
         <source>Total mined coins that have not yet matured.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+88"/>
         <source>Blocks:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1648,12 +1754,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
-        <source>DPOR Weight:</source>
+        <location line="+275"/>
+        <source>Error Messages:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-251"/>
         <source>Magnitude:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1673,32 +1779,27 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+223"/>
+        <location line="+213"/>
         <source>Current Poll:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+17"/>
-        <source>Client Messages:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-515"/>
+        <location line="-456"/>
         <source>Available:</source>
         <translation>Käytettävissä:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+10"/>
         <source>Your current spendable balance</source>
         <translation>Nykyinen käytettävissä oleva tase</translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="+59"/>
         <source>Immature:</source>
         <translation>Epäkypsää:</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+39"/>
         <source>Total:</source>
         <translation>Yhteensä:</translation>
     </message>
@@ -1708,12 +1809,17 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Tililläsi tällä hetkellä olevien Bitcoinien määrä</translation>
     </message>
     <message>
-        <location line="+252"/>
+        <location line="+100"/>
+        <source>Coin Weight:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+145"/>
         <source>Recent transactions</source>
         <translation>Viimeisimmät rahansiirrot</translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+132"/>
+        <location filename="../overviewpage.cpp" line="+128"/>
         <location line="+1"/>
         <source>out of sync</source>
         <translation>Ei ajan tasalla</translation>
@@ -1781,71 +1887,78 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     <name>RPCConsole</name>
     <message>
         <location filename="../forms/rpcconsole.ui" line="+46"/>
-        <location line="+27"/>
+        <location line="+43"/>
+        <location line="+47"/>
+        <location line="+16"/>
+        <location line="+23"/>
+        <location line="+16"/>
+        <location line="+36"/>
+        <location line="+16"/>
+        <location line="+30"/>
+        <location line="+58"/>
+        <location line="+43"/>
         <location line="+42"/>
-        <location line="+42"/>
-        <location line="+54"/>
-        <location line="+19"/>
-        <location line="+29"/>
-        <location line="+34"/>
-        <location line="+39"/>
-        <location line="+107"/>
-        <location filename="../rpcconsole.cpp" line="+386"/>
+        <location filename="../rpcconsole.cpp" line="+391"/>
         <source>N/A</source>
         <translation>Ei saatavilla</translation>
     </message>
     <message>
-        <location line="-241"/>
+        <location line="-251"/>
         <source>Client version</source>
         <translation>Pääteohjelman versio</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-135"/>
         <source>&amp;Information</source>
         <translation>T&amp;ietoa</translation>
     </message>
     <message>
-        <location line="+425"/>
+        <location line="+291"/>
         <source>Startup time</source>
         <translation>Käynnistysaika</translation>
     </message>
     <message>
-        <location line="-366"/>
+        <location line="-215"/>
         <source>Number of connections</source>
         <translation>Yhteyksien lukumäärä</translation>
     </message>
     <message>
-        <location line="+84"/>
+        <location line="+245"/>
         <source>Block chain</source>
         <translation>Lohkoketju</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="-58"/>
         <source>Current number of blocks</source>
         <translation>Nykyinen Lohkojen määrä</translation>
     </message>
     <message>
-        <location line="-188"/>
+        <location line="+14"/>
         <source>Last block time</source>
         <translation>Viimeisimmän lohkon aika</translation>
     </message>
     <message>
-        <location line="+248"/>
+        <location line="+96"/>
         <source>&amp;Open</source>
         <translation>&amp;Avaa</translation>
     </message>
     <message>
-        <location line="+296"/>
+        <location line="+277"/>
         <source>&amp;Console</source>
         <translation>&amp;Konsoli</translation>
     </message>
     <message>
-        <location line="-176"/>
+        <location line="-250"/>
         <source>&amp;Network Traffic</source>
         <translation>&amp;Verkkoliikenne</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="-167"/>
+        <source>Qt version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+219"/>
         <source>&amp;Clear</source>
         <translation>&amp;Tyhjennä</translation>
     </message>
@@ -1855,27 +1968,37 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Yhteensä</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+64"/>
         <source>In:</source>
         <translation>Sisään:</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+80"/>
         <source>Out:</source>
         <translation>Ulos:</translation>
     </message>
     <message>
-        <location line="-271"/>
+        <location line="-353"/>
         <source>Debug log file</source>
         <translation>Debug lokitiedosto</translation>
     </message>
     <message>
-        <location line="+368"/>
+        <location line="+450"/>
         <source>Clear console</source>
         <translation>Tyhjennä konsoli</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-34"/>
+        <location filename="../rpcconsole.cpp" line="-85"/>
+        <source>Yes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+51"/>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Ylös- ja alas-nuolet selaavat historiaa ja &lt;b&gt;Ctrl-L&lt;/b&gt; tyhjentää ruudun.</translation>
     </message>
@@ -1920,62 +2043,62 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="-717"/>
+        <location filename="../forms/rpcconsole.ui" line="-722"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+330"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-44"/>
         <source>Proof Of Research Difficulty</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-247"/>
         <source>1</source>
         <translation type="unfinished">1</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+164"/>
         <source>Gridcoin Core:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="-104"/>
         <source>Build date</source>
         <translation>Kääntöpäiväys</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+201"/>
         <source>Network:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="-275"/>
         <source>On testnet</source>
         <translation>Testiverkossa</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+348"/>
         <source>Estimated total blocks</source>
         <translation>Arvioitu lohkojen kokonaismäärä</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
         <translation>Avaa Gridcoin-asiakasohjelman debug-lokitiedosto nykyisestä hakemistostaan. Tämä voi kestää muutaman sekunnin avattaessa suuria lokitiedostoja.</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="-301"/>
         <source>Command-line options</source>
         <translation>Komentokehotteen ominaisuudet</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="-33"/>
         <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1985,12 +2108,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>%Näytä</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+10"/>
         <source>OpenSSL version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+177"/>
         <source>Client name</source>
         <translation>Pääteohjelman nimi</translation>
     </message>
@@ -2004,7 +2127,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     <name>SendCoinsDialog</name>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="+14"/>
-        <location filename="../sendcoinsdialog.cpp" line="+182"/>
+        <location filename="../sendcoinsdialog.cpp" line="+177"/>
         <location line="+5"/>
         <location line="+5"/>
         <location line="+5"/>
@@ -2015,7 +2138,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Lähetä Bitcoineja</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+67"/>
         <source>Coin Control Features</source>
         <translation>Kolikkokontrolli ominaisuudet</translation>
     </message>
@@ -2030,7 +2153,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>automaattisesti valitut</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+10"/>
         <source>Insufficient funds!</source>
         <translation>Lompakon saldo ei riitä!</translation>
     </message>
@@ -2040,36 +2163,36 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Määrä:</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <location line="+32"/>
+        <location line="+16"/>
+        <location line="+26"/>
         <source>0</source>
         <translation>0</translation>
     </message>
     <message>
-        <location line="-19"/>
+        <location line="-13"/>
         <source>Bytes:</source>
         <translation>Tavuja:</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+42"/>
         <source>Amount:</source>
         <translation>Määrä:</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <location line="+80"/>
-        <location line="+80"/>
-        <location line="+29"/>
+        <location line="+16"/>
+        <location line="+68"/>
+        <location line="+68"/>
+        <location line="+23"/>
         <source>0.00 GRC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-179"/>
+        <location line="-149"/>
         <source>Priority:</source>
         <translation>Prioriteetti:</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+13"/>
         <source>medium</source>
         <translation>keskikokoinen</translation>
     </message>
@@ -2079,12 +2202,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Palkkio:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+26"/>
         <source>Low Output:</source>
         <translation>Heikko ulosanti:</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+13"/>
         <source>no</source>
         <translation>ei</translation>
     </message>
@@ -2094,17 +2217,17 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Palkkion jälkeen:</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+26"/>
         <source>Change</source>
         <translation>Vaihtoraha</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+44"/>
         <source>custom change address</source>
         <translation>erikseen määritetty vaihtorahaosoite</translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+141"/>
         <source>Remove all transaction fields</source>
         <translation>Tyhjennä kaikki rahansiirtokentät</translation>
     </message>
@@ -2144,7 +2267,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>&amp;Lähetä</translation>
     </message>
     <message>
-        <location filename="../sendcoinsdialog.cpp" line="-158"/>
+        <location filename="../sendcoinsdialog.cpp" line="-165"/>
         <source>Copy quantity</source>
         <translation>Kopioi määrä</translation>
     </message>
@@ -2179,12 +2302,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Kopioi heikko ulosanti</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+93"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt;:sta %2 (%3)</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Confirm send coins</source>
         <translation>Hyväksy Bitcoinien lähettäminen</translation>
     </message>
@@ -2244,40 +2367,40 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>VAROITUS: Tuntematon vaihtorahaosoite</translation>
     </message>
     <message>
-        <location line="-420"/>
+        <location line="-427"/>
         <source>Copy change</source>
         <translation>Kopioi vaihtoraha</translation>
     </message>
     <message>
-        <location line="+416"/>
+        <location line="+423"/>
         <source>(no label)</source>
         <translation>(ei nimeä)</translation>
     </message>
     <message>
-        <location line="-438"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <location filename="../forms/sendcoinsdialog.ui" line="-206"/>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+170"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+172"/>
         <source>A&amp;mount:</source>
         <translation>M&amp;äärä:</translation>
     </message>
     <message>
-        <location line="-108"/>
+        <location line="-107"/>
         <source>Pay &amp;To:</source>
         <translation>Maksun saaja:</translation>
     </message>
     <message>
-        <location line="-30"/>
+        <location line="-33"/>
         <source>&amp;Label:</source>
         <translation>&amp;Nimi:</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+70"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2297,13 +2420,13 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Viesti:</translation>
     </message>
     <message>
-        <location line="-126"/>
+        <location line="-128"/>
         <source>Form</source>
         <translation>Kaavake</translation>
     </message>
     <message>
         <location line="+39"/>
-        <location filename="../sendcoinsentry.cpp" line="+29"/>
+        <location line="+3"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Anna nimi tälle osoitteelle, jos haluat lisätä sen osoitekirjaan</translation>
     </message>
@@ -2313,12 +2436,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+13"/>
         <source>Choose address from address book</source>
         <translation>Valitse osoite osoitekirjasta</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+30"/>
         <source>Remove this recipient</source>
         <translation>Poista tämä vastaanottaja</translation>
     </message>
@@ -2329,17 +2452,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+22"/>
-        <source>Track Coins</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
         <source>Add Attachment</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../sendcoinsentry.cpp" line="+1"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <location line="-96"/>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2366,18 +2484,18 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
-        <location line="+203"/>
+        <location line="+13"/>
+        <location line="+198"/>
         <source>Choose an address from the address book</source>
         <translation>Valitse osoite osoitekirjasta</translation>
     </message>
     <message>
-        <location line="-116"/>
+        <location line="-113"/>
         <source>Sign the message to prove you own this Gridcoin address</source>
         <translation>Allekirjoita viesti vahvistaaksesi, että omistat tämän Gridcoin-osoitteen</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+79"/>
         <source>Enter the signing address, message (ensure you copy line breaks, spaces, tabs, etc. exactly) and signature below to verify the message. Be careful not to read more into the signature than what is in the signed message itself, to avoid being tricked by a man-in-the-middle attack.</source>
         <translation>Syötä allekirjoittava osoite, viesti ja allekirjoitus alla oleviin kenttiin varmistaaksesi allekirjoituksen aitouden. Varmista että kopioit kaikki kentät täsmälleen oikein, myös rivinvaihdot, välilyönnit, tabulaattorit, jne.</translation>
     </message>
@@ -2387,18 +2505,18 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+47"/>
         <source>Verify the message to ensure it was signed with the specified Gridcoin address</source>
         <translation>Vahvista viesti varmistaaksesi että se on allekirjoitettu kyseisellä Gridcoin-osoitteella</translation>
     </message>
     <message>
-        <location line="-223"/>
-        <location line="+203"/>
+        <location line="-222"/>
+        <location line="+198"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
     <message>
-        <location line="-193"/>
+        <location line="-188"/>
         <source>Paste address from clipboard</source>
         <translation>Liitä osoite leikepöydältä</translation>
     </message>
@@ -2413,7 +2531,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Kirjoita tähän viesti minkä haluat allekirjoittaa</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+22"/>
         <source>Copy the current signature to the system clipboard</source>
         <translation>Kopioi tämänhetkinen allekirjoitus leikepöydälle</translation>
     </message>
@@ -2429,13 +2547,13 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+146"/>
+        <location line="+147"/>
         <source>Clear &amp;All</source>
         <translation>&amp;Tyhjennä Kaikki</translation>
     </message>
     <message>
-        <location line="-87"/>
-        <location line="+70"/>
+        <location line="-94"/>
+        <location line="+77"/>
         <source>&amp;Verify Message</source>
         <translation>&amp;Varmista viesti</translation>
     </message>
@@ -2445,23 +2563,23 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Tyhjennä kaikki varmista-viesti-kentät</translation>
     </message>
     <message>
-        <location filename="../signverifymessagedialog.cpp" line="+27"/>
-        <location line="+3"/>
-        <source>Enter a Gridcoin address (e.g. G8gZqgY4r2RoEdqYk3QsAqFckyf9pRHN6i)</source>
+        <location line="-256"/>
+        <location line="+198"/>
+        <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-134"/>
         <source>Click &quot;Sign Message&quot; to generate signature</source>
         <translation>Klikkaa &quot;Allekirjoita Viesti luodaksesi allekirjoituksen </translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+166"/>
         <source>Enter Gridcoin signature</source>
         <translation>Syötä Gridcoin-allekirjoitus</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location filename="../signverifymessagedialog.cpp" line="+104"/>
         <location line="+81"/>
         <source>The entered address is invalid.</source>
         <translation>Syötetty osoite on virheellinen.</translation>
@@ -2530,7 +2648,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
-        <location filename="../transactiondesc.cpp" line="+36"/>
+        <location filename="../transactiondesc.cpp" line="+35"/>
         <source>Open for %n more block(s)</source>
         <translation type="unfinished">
             <numerusform>Avoinna %n lohkolle</numerusform>
@@ -2538,32 +2656,32 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         </translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Open until %1</source>
         <translation>Avoinna %1 asti</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>conflicted</source>
         <translation>törmännyt</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>%1/offline</source>
         <translation>%1/offline</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>%1/unconfirmed</source>
         <translation>%1/vahvistamaton</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>%1 confirmations</source>
         <translation>%1 vahvistusta</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+38"/>
         <source>Status</source>
         <translation>Tila</translation>
     </message>
@@ -2573,7 +2691,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>, ei ole vielä onnistuneesti lähetetty</translation>
     </message>
     <message numerus="yes">
-        <location line="+2"/>
+        <location line="+3"/>
         <source>, broadcast through %n node(s)</source>
         <translation>
             <numerusform>lähetetty %n noodin läpi</numerusform>
@@ -2586,18 +2704,28 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Aika</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+4"/>
+        <location line="+3"/>
         <source>Source</source>
         <translation>Lähde</translation>
     </message>
     <message>
-        <location line="+0"/>
         <source>Generated</source>
-        <translation>Generoitu</translation>
+        <translation type="vanished">Generoitu</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <location line="+17"/>
+        <location line="-3"/>
+        <source>Generated in CoinBase</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Generated, PoS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <location line="+18"/>
         <source>From</source>
         <translation>Lähettäjä</translation>
     </message>
@@ -2608,33 +2736,33 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+22"/>
-        <location line="+58"/>
+        <location line="+25"/>
+        <location line="+63"/>
         <source>To</source>
         <translation>Saaja</translation>
     </message>
     <message>
-        <location line="-77"/>
-        <location line="+2"/>
+        <location line="-84"/>
+        <location line="+3"/>
         <source>own address</source>
         <translation>oma osoite</translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-3"/>
         <source>label</source>
         <translation>nimi</translation>
     </message>
     <message>
-        <location line="+37"/>
-        <location line="+12"/>
-        <location line="+45"/>
-        <location line="+17"/>
-        <location line="+43"/>
+        <location line="+40"/>
+        <location line="+14"/>
+        <location line="+50"/>
+        <location line="+20"/>
+        <location line="+74"/>
         <source>Credit</source>
         <translation>Credit</translation>
     </message>
     <message numerus="yes">
-        <location line="-115"/>
+        <location line="-155"/>
         <source>matures in %n more block(s)</source>
         <translation>
             <numerusform>kypsyy %n lohkon kuluttua</numerusform>
@@ -2642,75 +2770,97 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         </translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>not accepted</source>
         <translation>ei hyväksytty</translation>
     </message>
     <message>
-        <location line="+44"/>
-        <location line="+8"/>
-        <location line="+15"/>
-        <location line="+43"/>
+        <location line="+48"/>
+        <location line="+9"/>
+        <location line="+16"/>
+        <location line="+74"/>
         <source>Debit</source>
         <translation>Debit</translation>
     </message>
     <message>
-        <location line="-52"/>
+        <location line="-83"/>
         <source>Transaction fee</source>
         <translation>Maksukulu</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Net amount</source>
         <translation>Netto määrä</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+4"/>
         <source>Message</source>
         <translation>Viesti</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Comment</source>
         <translation>Viesti</translation>
     </message>
     <message>
         <location line="+2"/>
+        <source>TX ID</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+3"/>
+        <source>Block Hash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Transaction Stake Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Transaction Message Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Transaction Debits/Credits</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Transaction Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Transaction Inputs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Transaction ID</source>
-        <translation>Siirtotunnus</translation>
+        <translation type="vanished">Siirtotunnus</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Block Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Block Number</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-55"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Information</source>
-        <translation type="unfinished">Tietoa</translation>
+        <translation type="obsolete">Tietoa</translation>
     </message>
     <message>
-        <location line="+8"/>
         <source>Transaction</source>
-        <translation>Rahansiirto</translation>
+        <translation type="vanished">Rahansiirto</translation>
     </message>
     <message>
-        <location line="+25"/>
         <source>Inputs</source>
-        <translation>Sisääntulot</translation>
+        <translation type="vanished">Sisääntulot</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+78"/>
         <source>Amount</source>
         <translation>Määrä</translation>
     </message>
@@ -2753,7 +2903,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished">S&amp;ulje</translation>
     </message>
     <message>
-        <location filename="../transactiondescdialog.cpp" line="+40"/>
+        <location filename="../transactiondescdialog.cpp" line="+38"/>
         <source>Gridcoin Documents</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2879,7 +3029,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+50"/>
         <source>(n/a)</source>
         <translation>(ei saatavilla)</translation>
     </message>
@@ -2912,7 +3062,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>TransactionView</name>
     <message>
-        <location filename="../transactionview.cpp" line="+126"/>
+        <location filename="../transactionview.cpp" line="+123"/>
         <source>Copy address</source>
         <translation>Kopioi osoite</translation>
     </message>
@@ -2932,7 +3082,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Kopioi rahansiirron ID</translation>
     </message>
     <message>
-        <location line="-74"/>
+        <location line="-71"/>
         <location line="+16"/>
         <source>All</source>
         <translation>Kaikki</translation>
@@ -2993,12 +3143,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Muu</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Enter address or label to search</source>
         <translation>Anna etsittävä osoite tai tunniste</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+5"/>
         <source>Min amount</source>
         <translation>Minimimäärä</translation>
     </message>
@@ -3013,7 +3163,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Näytä rahansiirron yksityiskohdat</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+144"/>
         <source>Export Transaction Data</source>
         <translation>Vie tiedot rahansiirrosta</translation>
     </message>
@@ -3081,58 +3231,39 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>UpgradeDialog</name>
     <message>
-        <location filename="../forms/upgradedialog.ui" line="+14"/>
-        <source>Gridcoin Upgrading Facility</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+65"/>
-        <source>Retry Download</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Upgrade</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
         <source>Hide</source>
-        <translation type="unfinished">Piilota</translation>
+        <translation type="obsolete">Piilota</translation>
     </message>
 </context>
 <context>
     <name>VotingChartDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="-374"/>
+        <location filename="../votingdialog.cpp" line="-396"/>
         <source>Poll Results</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
-        <location line="+60"/>
+        <location line="+14"/>
         <source>Q: </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-54"/>
-        <location line="+55"/>
+        <location line="+10"/>
         <source>Discussion URL: </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-43"/>
+        <location line="+30"/>
         <source>Chart</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+10"/>
         <source>List</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
-        <location line="+25"/>
+        <location line="-28"/>
         <source>Best Answer: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3140,7 +3271,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>VotingDialog</name>
     <message>
-        <location line="-343"/>
+        <location line="-313"/>
         <source>Active Polls (Right Click to Vote)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3165,46 +3296,40 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+46"/>
         <source>...loading data!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>No polls !</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>VotingTableModel</name>
     <message>
-        <location line="-387"/>
+        <location line="-377"/>
         <source>#</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Title</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
         <source>Expiration</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Share Type</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Question</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+158"/>
-        <source>Answers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-157"/>
+        <location line="-2"/>
         <source># Voters</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3214,17 +3339,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>URL</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-2"/>
         <source>Best Answer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+144"/>
+        <location line="+126"/>
         <source>Row Number.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3245,22 +3365,12 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Question.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
         <source>Total Participants.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Total Shares.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>URL.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3272,7 +3382,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+528"/>
+        <location line="+533"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3287,7 +3397,7 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>Best Answer: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3313,32 +3423,27 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+39"/>
+        <location filename="../bitcoinstrings.cpp" line="+215"/>
         <source>Options:</source>
         <translation>Asetukset:</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+42"/>
         <source>This help message</source>
         <translation>Tämä ohjeviesti</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-6"/>
         <source>Specify pid file (default: gridcoind.pid)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
         <source>Specify data directory</source>
         <translation>Määritä data-hakemisto</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-11"/>
         <source>Set database cache size in megabytes (default: 25)</source>
         <translation>Aseta tietokannan välimuistin koko megatavuina (oletus: 25)</translation>
     </message>
@@ -3348,99 +3453,288 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Aseta tietokannan lokien maksimikoko megatavuissa (oletus: 100)</translation>
     </message>
     <message>
+        <location line="+8"/>
+        <source>Specify configuration file (default: gridcoinresearch.conf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>Specify connection timeout in milliseconds (default: 5000)</source>
         <translation>Määritä yhteyden aikakataisu millisekunneissa (vakioasetus: 5000)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-112"/>
         <source>Connect through socks proxy</source>
         <translation>Yhdistä SOCKS-välityspalvelimen lävitse</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+94"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Valitse SOCKS-välityspalvelimen versio (4-5, oletus 5)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+42"/>
         <source>Use proxy to reach tor hidden services (default: same as -proxy)</source>
         <translation>Käytä välityspalvelinta saavuttaaksesi tor:n piilotetut palvelut (oletus: sama kuin -proxy)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-86"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished">Kuuntele yhteyksiä portissa &lt;port&gt; (oletus: 15714 tai testiverkko: 25714) {32749 ?} {32748)?}</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+8"/>
         <source>Maintain at most &lt;n&gt; connections to peers (default: 125)</source>
         <translation>Pidä enintään &lt;n&gt; yhteyttä verkkoihin (oletus: 125)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-59"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Yhidstä ainoastaan määrättyihin noodeihin</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
         <translation>Yhdistä noodiin hakeaksesi naapurien osoitteet ja katkaise yhteys</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+115"/>
         <source>Specify your own public address</source>
         <translation>Määritä julkinen osoitteesi</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-39"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Yhdistä vain noodeihin verkossa &lt;net&gt; (IPv4, IPv6 tai Tor)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-69"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
         <translation>Hae oma IP osoite (vakioasetus: 1 kun kuuntelemassa ja ei -externalip)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Find peers using internet relay chat (default: 0)</source>
-        <translation>Etsi vertaisiasi käyttäen Internet Relay Chatia (oletus: 1) {0)?}</translation>
+        <translation type="vanished">Etsi vertaisiasi käyttäen Internet Relay Chatia (oletus: 1) {0)?}</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-41"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
         <translation>Hyväksy yhteyksiä ulkopuolelta (vakioasetus: 1 jos -proxy tai -connect ei määritelty)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+17"/>
         <source>Bind to given address. Use [host]:port notation for IPv6</source>
         <translation>Liitä annettuun osoitteeseen. Käytä [host]:port merkintää IPv6:lle</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+43"/>
         <source>Find peers using DNS lookup (default: 1)</source>
         <translation>Etsi vertaisiasi käyttäen DNS-nimihakua (oletus: 1)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-90"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation>Synkronoi kello muiden noodien kanssa. Poista käytöstä, jos järjestelmäsi aika on tarkka esim. päivittää itsensä NTP-palvelimelta. (oletus: 1)</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Sync checkpoints policy (default: strict)</source>
-        <translation>Synkronoi tallennuspisteiden käytännöt (oletus: strict)</translation>
+        <translation type="vanished">Synkronoi tallennuspisteiden käytännöt (oletus: strict)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+184"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Kynnysarvo aikakatkaisulle heikosti toimiville verkoille (oletus: 100)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-190"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Sekuntien määrä, kuinka kauan uudelleenkytkeydytään verkkoihin (oletus: 86400)</translation>
+    </message>
+    <message>
+        <location line="-56"/>
+        <location line="+1"/>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source> days</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>A beacon was advertised less then 5 blocks ago. Please wait a full 5 blocks for your beacon to enter the chain.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Unable to obtain superblock data before vote was made to calculate voting weight</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Add Beacon Contract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add Foundation Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add Poll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add Project</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Address</source>
+        <translation type="unfinished">Osoite</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Alert: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Answers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Average Magnitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Balance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Block Version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Block not in index</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Block read failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Boinc Public Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Boinc Reward</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>CPID</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Client Version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Contract length for beacon is less then 256 in length. Size: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Current Neural Hash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete Beacon Contract</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete Project</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Difficulty</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>ERROR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Expires</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Height</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Interest</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Invalid argument exception while parsing Transaction Message -&gt; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Is Superblock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Low difficulty!; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Magnitude</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+3"/>
@@ -3454,36 +3748,186 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Message Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Message Length</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Message Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Message</source>
+        <translation type="unfinished">Viesti</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Messate Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Miner: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Net averages not yet loaded; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Network Date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Neural Contract Binary Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Neural Hash</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No Attached Messages</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No coins; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Offline; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Organization</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Out of rance exception while parsing Transaction Message -&gt; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Public Key</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Question</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Research Age</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set the number of threads to service RPC calls (default: 4)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Share Type Debug</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Share Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Staking Interest</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Text Message</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Text Rain Message</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Title</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unable To Send Beacon! Unlock Wallet!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Unable to extract Share Type. Vote likely &gt; 6 months old</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unknown</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
         <translation>Käytä UPnP:tä kuunneltavan portin avaamiseen (vakioasetus: 1 kun kuuntelemassa)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
         <source>Use UPnP to map the listening port (default: 0)</source>
         <translation>Käytä UPnP:tä kuunneltavan portin avaamiseen (vakioasetus: 0)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-108"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Rahansiirtopalkkio kilotavua kohden lähetettäviin rahansiirtoihisi</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-68"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation>Rahansiirtoja luodessa jätä huomioimatta syötteet joiden arvo on vähemmän kuin tämä (oletus: 0.01)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+8"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Hyväksy merkkipohjaiset- ja JSON-RPC-käskyt</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+171"/>
         <source>Use the test network</source>
         <translation>Käytä test -verkkoa</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-56"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Tulosta lisäksi debug-tietoa, seuraa kaikkia muita -debug*-asetuksia</translation>
     </message>
@@ -3493,67 +3937,112 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Tulosta lisäksi verkon debug-tietoa</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Prepend debug output with timestamp</source>
         <translation>Lisää debug-tulosteiden alkuun aikaleimat</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+13"/>
         <source>Send trace/debug info to debugger</source>
         <translation>Lähetä debug-tuloste kehittäjille</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-169"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Kuuntele JSON-RPC-yhteyksiä portissa &lt;port&gt; (oletus: 15715 tai testiverkko: 25715)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+48"/>
         <source>Allow JSON-RPC connections from specified IP address</source>
         <translation>Salli JSON-RPC yhteydet tietystä ip-osoitteesta</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+119"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Lähetä käskyjä solmuun osoitteessa &lt;ip&gt; (oletus: 127.0.0.1)</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-8"/>
         <source>Require a confirmations for change (default: 0)</source>
         <translation>Vaadi vaihtorahalle vahvistus (oletus: 0)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-180"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Vahvista, että rahansiirtoskriptit käyttävät sääntöjen mukaisia PUSH-toimijoita (oletus: 1)</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+12"/>
         <source>Execute command when a relevant alert is received (%s in cmd is replaced by message)</source>
         <translation>Suorita komento kun olennainen varoitus on saatu (%s komennossa korvattu viestillä)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+211"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Päivitä lompakko uusimpaan formaattiin</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-27"/>
         <source>Set key pool size to &lt;n&gt; (default: 100)</source>
         <translation>Aseta avainpoolin koko arvoon &lt;n&gt; (oletus: 100)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-15"/>
         <source>Rescan the block chain for missing wallet transactions</source>
         <translation>Skannaa uudelleen lohkoketju lompakon puuttuvien rahasiirtojen vuoksi</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-109"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Yritetään palauttaa yksityisiä salausavaimia korruptoituneesta wallet.dat-tiedostosta</translation>
     </message>
     <message>
+        <location line="-86"/>
+        <source>Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+81"/>
+        <source>All BOINC projects exhausted.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Balance too low to create a smart contract.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Boinc Mining</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Compute Neural Network Hashes...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Error obtaining next project.  Error 06172014.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+1"/>
+        <source>Error obtaining next project.  Error 16172014.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Error obtaining status.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Finding first applicable Research Project...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
         <translation>Kuinka monta lohkoa tarkistetaan käynnistyksen yhteydessä (oletus: 2500, 0 = kaikki)</translation>
     </message>
@@ -3563,37 +4052,62 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Kuinka perusteellisesti lohko vahvistetaan  (0-6, oletus: 1)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Imports blocks from external blk000?.dat file</source>
         <translation>Tuo lohkoja erillisestä blk000?.dat-tiedostosta</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+14"/>
+        <source>Loading Network Averages...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Loading Persisted Data Cache...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Maximum number of outbound connections (default: 8)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Mining</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Please wait for new user wizard to start...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+22"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Asetan pienin lohkon koko tavuissa (vakioasetus: 0)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
         <source>Set maximum block size in bytes (default: 250000)</source>
         <translation>Aseta lohkon maksimikoko tavuissa (oletus: 250000)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-171"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Aseta maksimikoko korkean prioriteetin/pienen siirtokulun maksutapahtumille tavuina (oletus: 27000)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+159"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL asetukset (katso Bitcoin Wikistä tarkemmat SSL ohjeet)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+40"/>
         <source>Use OpenSSL (https) for JSON-RPC connections</source>
         <translation>Käytä OpenSSL:ää (https) JSON-RPC-yhteyksille</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-33"/>
         <source>Server certificate file (default: server.cert)</source>
         <translation>Palvelimen sertifikaatti-tiedosto (oletus: server.cert)</translation>
     </message>
@@ -3603,94 +4117,107 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Palvelimen yksityisavain (oletus: server.pem)</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation>Hyväksytyt salaustyypit (oletus: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
+        <translation type="vanished">Hyväksytyt salaustyypit (oletus: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-57"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>-paytxfee=&lt;amount&gt;: &apos;%s&apos; on virheellinen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-99"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Varoitus: -paytxfee on asetettu erittäin korkeaksi! Tämä on maksukulu jonka tulet maksamaan kun lähetät siirron.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+98"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Epäkelpo määrä parametrille -mininput=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-5"/>
         <source>Initialization sanity check failed. Gridcoin is shutting down.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+103"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Lompakko %s on datahakemiston %s ulkopuolella.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-239"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Ei voida saavuttaa lukkoa datatiedostossa %s. Gridcoin-asiakasohjelma on ehkä jo käynnissä.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+237"/>
         <source>Verifying database integrity...</source>
         <translation>Tarkistetaan tietokannan eheyttä...</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-229"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Virhe alustettaessa tietokantaympäristöä %s! Palauttaaksesi sen, TEE VARMUUSKOPIO HAKEMISTOSTA ja poista tämän jälkeen kaikki hakemiston tiedostot paitsi wallet.dat-tiedosto.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+44"/>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
         <translation>Varoitus: wallet.dat-tiedosto on korruptoitunut, data pelastettu! Alkuperäinen wallet.dat on tallennettu nimellä wallet.{aikaleima}.bak kohteeseen %s; Jos saldosi tai rahansiirrot ovat väärät, sinun tulee palauttaa lompakko varmuuskopiosta.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+186"/>
+        <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Wallet locked; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Weight</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat on korruptoitunut, pelastusyritys epäonnistui</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-18"/>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>Tuntematon -socks proxy versio pyydetty: %i</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-86"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Epäkelpo -tor-osoite: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-48"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>-bind osoitteen &apos;%s&apos; selvittäminen epäonnistui</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Cannot resolve -externalip address: &apos;%s&apos;</source>
         <translation>-externalip osoitteen &apos;%s&apos; selvittäminen epäonnistui</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+50"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation>Epäkelpo määrä -reservebalance=&lt;amount&gt;</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Unable to sign checkpoint, wrong checkpointkey?
 </source>
-        <translation>Ei voitu kirjata tallennuspistettä, väärä checkpointkey?
+        <translation type="vanished">Ei voitu kirjata tallennuspistettä, väärä checkpointkey?
 </translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-33"/>
         <source>Error loading blkindex.dat</source>
         <translation>Virhe ladattaessa blkindex.dat-tiedostoa</translation>
     </message>
@@ -3700,27 +4227,27 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Virhe ladattaessa wallet.dat-tiedostoa: Lompakko vioittunut</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-63"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Varoitus: Virhe luettaessa wallet.dat-tiedostoa! Kaikki avaimet luettiin oikein, mutta rahansiirtodata tai osoitekirjan kentät voivat olla puuttuvat tai väärät.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+64"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation>Virhe ladattaessa wallet.dat-tiedostoa: Lompakko tarvitsee uudemman version Gridcoin-asiakasohjelmasta</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+128"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Lompakko on kirjoitettava uudelleen: käynnistä Gridcoin-asiakasohjelma uudelleen päättääksesi toiminnon</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-130"/>
         <source>Error loading wallet.dat</source>
         <translation>Virhe ladattaessa wallet.dat-tiedostoa</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+22"/>
         <source>Importing blockchain data file.</source>
         <translation>Tuodaan lohkoketjun datatiedostoa.</translation>
     </message>
@@ -3730,22 +4257,22 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Tuodaan esilatausohjelma lohkoketjun datatiedostolle.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-13"/>
         <source>Error: could not start node</source>
         <translation>Virhe: Ei voitu käynnistää noodia</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-83"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>Ei voitu liittää %s tällä tietokoneella. Gridcoin-asiakasohjelma on jo ehkä päällä.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+186"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Kytkeytyminen %s tällä tietokonella ei onnistu (kytkeytyminen palautti virheen %d, %s)</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-105"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Virhe: Lompakko lukittu, rahansiirtoa ei voida luoda</translation>
     </message>
@@ -3755,117 +4282,114 @@ Tämä tarkoittaa, että ainakin %2 rahansiirtopalkkio tarvitaan.</translation>
         <translation>Virhe: Lompakko avattu vain osakkuutta varten, rahansiirtoja ei voida luoda.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-105"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation>Virhe: Tämä rahansiirto tarvitsee rahansiirtopalkkion, kooltaan %s, kokonsa, monimutkaisuutensa tai aikaisemmin saatujen varojen käytön takia.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+103"/>
         <source>Error: Transaction creation failed  </source>
         <translation>Virhe: Rahansiirron luonti epäonnistui</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+79"/>
         <source>Sending...</source>
         <translation>Lähetetään...</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-186"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Virhe: Rahansiirto on evätty. Tämä voi tapahtua jos joitakin kolikoistasi lompakossasi on jo käytetty, tai jos olet käyttänyt wallet.dat-tiedoston kopiota ja rahat olivat käytetyt kopiossa, mutta ei merkitty käytetyksi tässä.</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+133"/>
         <source>Invalid amount</source>
         <translation>Virheellinen määrä</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-98"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Varoitus: Tarkista, että tietokoneesi aika ja päivämäärä ovat oikeassa! Jos kellosi on väärässä, Gridcoin ei toimi oikein.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Warning: This version is obsolete, upgrade required!</source>
-        <translation>Varoitus: Tämä versio on vanhentunut, päivitys tarpeen!</translation>
+        <translation type="vanished">Varoitus: Tämä versio on vanhentunut, päivitys tarpeen!</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
-        <translation>VAROITUS: synkronoidun tallennuspisteen rikkomista havaittu, mutta ohitettu!</translation>
+        <translation type="vanished">VAROITUS: synkronoidun tallennuspisteen rikkomista havaittu, mutta ohitettu!</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+196"/>
         <source>Warning: Disk space is low!</source>
         <translation>Varoitus: Kiintolevytila on vähissä!</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
-        <translation>VAROITUS: Epäkelpo tarkistuspiste löydetty! Ilmoitetut rahansiirrot eivät välttämättä pidä paikkaansa! Sinun täytyy päivittää asiakasohjelma, tai ilmoittaa kehittäjille ongelmasta.</translation>
+        <translation type="vanished">VAROITUS: Epäkelpo tarkistuspiste löydetty! Ilmoitetut rahansiirrot eivät välttämättä pidä paikkaansa! Sinun täytyy päivittää asiakasohjelma, tai ilmoittaa kehittäjille ongelmasta.</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-52"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Aja taustalla daemonina ja hyväksy komennot</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="-169"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Suorita käsky kun lompakossa rahansiirto muuttuu (%s cmd on vaihdettu TxID kanssa)</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+63"/>
         <source>Block creation options:</source>
         <translation>Lohkon luonnin asetukset:</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Ei onnistuttu kuuntelemaan missään portissa. Käytä -listen=0 jos haluat tätä.</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="+90"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Aseta lompakkotiedosto (data-hakemiston sisällä)</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="-18"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
         <translation>Lähetä jäljitys/debug-tieto konsoliin, debug.log-tiedoston sijaan</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="+13"/>
         <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
         <translation>Pienennä debug.log tiedosto käynnistyksen yhteydessä (vakioasetus: 1 kun ei -debug)</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+28"/>
         <source>Username for JSON-RPC connections</source>
         <translation>Käyttäjätunnus JSON-RPC-yhteyksille</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-55"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Salasana JSON-RPC-yhteyksille</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="-157"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
         <translation>Suorita käsky kun paras lohko muuttuu (%s cmd on vaihdettu block hashin kanssa)</translation>
     </message>
     <message>
-        <location line="-44"/>
+        <location line="+50"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>Salli DNS kyselyt -addnode, -seednode ja -connect yhteydessä</translation>
     </message>
     <message>
-        <location line="-43"/>
+        <location line="+147"/>
         <source>To use the %s option</source>
         <translation>Käytä %s optiota</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-245"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -3880,17 +4404,17 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+21"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv6, falling back to IPv4: %s</source>
         <translation>Virhe ilmennyt asetettaessa RPC-porttia %u IPv6:n kuuntelemiseksi, palataan takaisin IPv4:ään %s</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-2"/>
         <source>An error occurred while setting up the RPC port %u for listening on IPv4: %s</source>
         <translation>Virhe valmisteltaessa RPC-portin %u avaamista kuunneltavaksi: %s</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+64"/>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
@@ -3899,92 +4423,92 @@ If the file does not exist, create it with owner-readable-only file permissions.
 Jos tiedostoa ei ole, niin luo se ainoastaan omistajan kirjoitusoikeuksin.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+69"/>
         <source>Gridcoin version</source>
         <translation>Gridcoinin versio</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+102"/>
         <source>Usage:</source>
         <translation>Käyttö:</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-37"/>
         <source>Send command to -server or gridcoind</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-46"/>
         <source>List commands</source>
         <translation>Lista komennoista</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-20"/>
         <source>Get help for a command</source>
         <translation>Hanki apua käskyyn</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+132"/>
+        <location line="+22"/>
         <source>Loading addresses...</source>
         <translation>Ladataan osoitteita...</translation>
     </message>
     <message>
-        <location line="-22"/>
+        <location line="-12"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
         <translation>Virheellinen proxy-osoite &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="+88"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Tuntematon verkko -onlynet parametrina: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="-90"/>
         <source>Insufficient funds</source>
         <translation>Lompakon saldo ei riitä</translation>
     </message>
     <message>
-        <location line="-33"/>
+        <location line="+15"/>
         <source>Loading block index...</source>
         <translation>Ladataan lohkoindeksiä...</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-82"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
         <translation>Linää solmu mihin liittyä pitääksesi yhteyden auki</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+83"/>
         <source>Loading wallet...</source>
         <translation>Ladataan lompakkoa...</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="-62"/>
         <source>Cannot downgrade wallet</source>
         <translation>Et voi päivittää lompakkoasi vanhempaan versioon</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Cannot write default address</source>
         <translation>Oletusosoitetta ei voi kirjoittaa</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+94"/>
         <source>Rescanning...</source>
         <translation>Skannataan uudelleen...</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="-81"/>
         <source>Done loading</source>
         <translation>Lataus on valmis</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="+10"/>
         <source>Error</source>
         <translation>Virhe</translation>
     </message>

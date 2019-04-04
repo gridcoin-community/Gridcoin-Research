@@ -10,6 +10,8 @@ Public Class clsBoincProjectDownload
         Dim headers As New Dictionary(Of String, String)()
         Try
             Dim webRequest As WebRequest = HttpWebRequest.Create(url)
+            ' Add support to use prefered TLS 1.2 and if that not available use TLS 1.1 and if its some ancient webserver use Tls1.0
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 Or SecurityProtocolType.Tls11 Or SecurityProtocolType.Tls
             webRequest.Method = "HEAD"
             webRequest.Timeout = 10000
             Using webResponse As WebResponse = webRequest.GetResponse()
@@ -72,6 +74,8 @@ Public Class clsBoincProjectDownload
     Public Function DownloadFile(iAttemptNo As Integer, sSourceURL As String, sOutputPath As String) As Boolean
         Try
             Dim w As New MyWebClient2
+            ' Add support to use prefered TLS 1.2 and if that not available use TLS 1.1 and if its some ancient webserver use Tls1.0
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 Or SecurityProtocolType.Tls11 Or SecurityProtocolType.Tls
             Log(" Downloading Attempt #" + Trim(iAttemptNo) + " for URL " + sSourceURL)
             w.DownloadFile(sSourceURL, sOutputPath)
             Return True
