@@ -1198,26 +1198,18 @@ bool IsMiningAllowed(CWallet *pwallet)
     return status;
 }
 
-void StakeMiner(CWallet *pwallet)
+// This function parses the config file for the directives for side staking. It is used
+// in StakeMiner for the miner loop and also called by rpc getmininginfo.
+bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
 {
-    // Make this thread recognisable as the mining thread
-    RenameThread("grc-stake-miner");
-
-    // Parse StakeSplit and SideStaking flags.
-    bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
-    LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
+    vector<string> vSubParam;
+    std::string sAddress;
+    double dAllocation = 0.0;
+    double dSumAllocation = 0.0;
 
     bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
     LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
 
-    vector<string> vSubParam;
-    SideStakeAlloc vSideStakeAlloc;
-    std::string sAddress;
-    int64_t nMinStakeSplitValue;
-    double dEfficiency;
-    double dAllocation = 0.0;
-    double dSumAllocation = 0.0;
-    
     // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
     // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
     if (fEnableSideStaking)
@@ -1233,7 +1225,7 @@ void StakeMiner(CWallet *pwallet)
                     vSubParam.clear();
                     continue;
                 }
-                   
+
                 sAddress = vSubParam[0];
 
                 CBitcoinAddress address(sAddress);
@@ -1254,7 +1246,7 @@ void StakeMiner(CWallet *pwallet)
                     vSubParam.clear();
                     continue;
                 }
-                
+
                 if (dAllocation <= 0)
                 {
                     LogPrintf("WARN: StakeMiner: Negative or zero allocation provided. Skipping allocation.");
@@ -1277,7 +1269,7 @@ void StakeMiner(CWallet *pwallet)
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
                 LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
 
-                vSubParam.clear();   
+                vSubParam.clear();
             }
         }
         // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
@@ -1285,6 +1277,17 @@ void StakeMiner(CWallet *pwallet)
         if (!dSumAllocation)
             LogPrintf("WARN: StakeMiner: enablesidestaking was set in config but nothing has been allocated for distribution!");
     }
+
+    return fEnableSideStaking;
+}
+
+// This function parses the config file for the directives for stake splitting. It is used
+// in StakeMiner for the miner loop and also called by rpc getmininginfo.
+bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
+{
+    // Parse StakeSplit and SideStaking flags.
+    bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
+    LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
 
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
@@ -1303,7 +1306,40 @@ void StakeMiner(CWallet *pwallet)
         nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
 
         LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
+
+        // For the definition of the constant G, please see
+        // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
+        // Refer to page 5 for G. This link is a draft of an upcoming bluepaper section.
+        const double G = 9942.2056;
+
+        // Desired UTXO size post stake based on passed in efficiency and difficulty, but do not allow to go below
+        // passed in MinStakeSplitValue. Note that we use GetAverageDifficulty over a 4 hour (160 block period) rather than
+        // StakeKernelDiff, because the block to block difficulty has too much scatter. Please refer to the above link,
+        // equation (27) on page 10 as a reference for the below formula.
+        nDesiredStakeOutputValue = G * GetAverageDifficulty(160) * (3.0 / 2.0) * (1 / dEfficiency  - 1) * COIN;
+        nDesiredStakeOutputValue = max(nMinStakeSplitValue, nDesiredStakeOutputValue);
     }
+
+    return fEnableStakeSplit;
+}
+
+
+
+void StakeMiner(CWallet *pwallet)
+{
+    // Make this thread recognisable as the mining thread
+    RenameThread("grc-stake-miner");
+
+    int64_t nMinStakeSplitValue = 0;
+    double dEfficiency = 0;
+    int64_t nDesiredStakeOutputValue = 0;
+    SideStakeAlloc vSideStakeAlloc = {};
+
+    // nMinStakeSplitValue and dEfficiency are out parameters.
+    bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
+
+    // vSideStakeAlloc is an out parameter.
+    bool fEnableSideStaking = GetSideStakingStatusAndAlloc(vSideStakeAlloc);
 
     supercfwd::fEnable= GetBoolArg("-supercfwd",true);
     if(fDebug) LogPrintf("supercfwd::fEnable= %d",supercfwd::fEnable);
