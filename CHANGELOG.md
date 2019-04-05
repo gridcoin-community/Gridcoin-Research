@@ -53,7 +53,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    #1336 (@denravonska).
  - Remove unused attachment functionality #1345 (@denravonska).
 
-
 ## [4.0.1.0] 2018-11-30, leisure
 ### Fixed
  - Wrong RA scan range causing reward calculation disagreements and forks
