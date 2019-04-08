@@ -840,164 +840,6 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-
-/* Super Contract Forwarding */
-namespace supercfwd
-{
-    std::string sCacheHash;
-    std::string sBinContract;
-    bool fEnable(false);
-
-    int RequestAnyNode(const std::string& consensus_hash)
-    {
-        const bool& fDebug10= fDebug; //temporary
-        LOCK(cs_vNodes);
-        CNode* pNode= vNodes[rand()%vNodes.size()];
-
-        if(fDebug10) LogPrintf("supercfwd.RequestAnyNode %s requesting neural hash",pNode->addrName);
-        pNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("neural_hash"),
-            /*reqid*/std::string("supercfwd.rqa"), consensus_hash);
-
-        return true;
-    }
-
-    int MaybeRequest()
-    {
-        if(!fEnable)
-            return false;
-
-        if(OutOfSyncByAge() || pindexBest->nVersion < 9)
-            return false;
-
-        if(!NeedASuperblock())
-            return false;
-
-        /*
-        if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
-           return false;
-        */
-
-        double popularity = 0;
-        std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-
-        if(consensus_hash==sCacheHash && !sBinContract.empty())
-            return false;
-
-        if(popularity<=0)
-            return false;
-
-        if(fDebug2) LogPrintf("supercfwd.MaybeRequestHash: requesting");
-        RequestAnyNode(consensus_hash);
-        return true;
-    }
-
-    int SendOutRcvdHash()
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pNode : vNodes)
-        {
-            const bool bNeural= Contains(pNode->strSubVer, "1999");
-            const bool bParticip= IsNeuralNodeParticipant(pNode->sGRCAddress, GetAdjustedTime());
-            if(bParticip && !bNeural)
-            {
-                if(fDebug) LogPrintf("supercfwd.SendOutRcvdHash to %s",pNode->addrName);
-                pNode->PushMessage("hash_nresp", sCacheHash, std::string("supercfwd.sorh"));
-                //pNode->PushMessage("neural", std::string("supercfwdr"), sBinContract);
-            }
-        }
-        return true;
-    }
-
-    void HashResponseHook(CNode* fromNode, const std::string& neural_response)
-    {
-        assert(fromNode);
-        if(!fEnable)
-            return;
-        if(neural_response.length() != 32)
-            return;
-        if("d41d8cd98f00b204e9800998ecf8427e"==neural_response)
-            return;
-        const std::string logprefix = "supercfwd.HashResponseHook: from "+fromNode->addrName+" hash "+neural_response;
-
-        if(neural_response!=sCacheHash)
-        {
-            double popularity = 0;
-            const std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-
-            if(neural_response==consensus_hash)
-            {
-                if(fDebug) LogPrintf("%s requesting contract data",logprefix);
-                fromNode->PushMessage(/*command*/ "neural", /*subcommand*/ std::string("quorum"), /*reqid*/std::string("supercfwd.hrh"));
-            }
-            else
-            {
-                if(fDebug) LogPrintf("%s not matching consensus",logprefix);
-                //TODO: try another peer faster
-            }
-        }
-        else if(fDebug) LogPrintf("%s already cached",logprefix);
-    }
-
-    void QuorumResponseHook(CNode* fromNode, const std::string& neural_response)
-    {
-        assert(fromNode);
-        const auto resp_length= neural_response.length();
-
-        if(fEnable && resp_length >= 10)
-        {
-            const std::string rcvd_contract= UnpackBinarySuperblock(std::move(neural_response));
-            const std::string rcvd_hash = GetQuorumHash(rcvd_contract);
-            const std::string logprefix = "supercfwd.QuorumResponseHook: from "+fromNode->addrName + " hash "+rcvd_hash;
-
-            if(rcvd_hash!=sCacheHash)
-            {
-                double popularity = 0;
-                const std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-
-                if(rcvd_hash==consensus_hash)
-                {
-                    LogPrintf("%s good contract save",logprefix);
-                    sBinContract= PackBinarySuperblock(std::move(rcvd_contract));
-                    sCacheHash= std::move(rcvd_hash);
-
-                    if(!fNoListen)
-                        SendOutRcvdHash();
-                }
-                else
-                {
-                    if(fDebug) LogPrintf("%s not matching consensus, (size %d)",logprefix,resp_length);
-                    //TODO: try another peer faster
-                }
-            }
-            else if(fDebug) LogPrintf("%s already cached",logprefix);
-        }
-        //else if(fDebug10) LogPrintf("%s invalid data",logprefix);
-    }
-    void SendResponse(CNode* fromNode, const std::string& req_hash)
-    {
-        const std::string nn_hash(NN::GetInstance()->GetNeuralHash());
-        const bool& fDebug10= fDebug; //temporary
-        if(req_hash==sCacheHash)
-        {
-            if(fDebug10) LogPrintf("supercfwd.SendResponse: %s requested %s, sending forwarded binary contract (size %d)",fromNode->addrName,req_hash,sBinContract.length());
-            fromNode->PushMessage("neural", std::string("supercfwdr"),
-                sBinContract);
-        }
-        else if(req_hash==nn_hash)
-        {
-            std::string nn_data= PackBinarySuperblock(NN::GetInstance()->GetNeuralContract());
-            if(fDebug10) LogPrintf("supercfwd.SendResponse: %s requested %s, sending our nn binary contract (size %d)",fromNode->addrName,req_hash,nn_data.length());
-            fromNode->PushMessage("neural", std::string("supercfwdr"),
-                std::move(nn_data));
-        }
-        else
-        {
-            if(fDebug10) LogPrintf("supercfwd.SendResponse: to %s don't have %s, sending %s",fromNode->addrName,req_hash,nn_hash);
-            fromNode->PushMessage("hash_nresp", nn_hash, std::string());
-        }
-    }
-}
-
 void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 {
     if(OutOfSyncByAge())
@@ -1070,16 +912,6 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
         LogPrintf("AddNeuralContractOrVote: Local Contract Empty");
 
         /* Do NOT add a Neural Vote alone, because this hash is not Trusted! */
-
-        if(!supercfwd::sBinContract.empty() && consensus_hash==supercfwd::sCacheHash)
-        {
-            assert(GetQuorumHash(UnpackBinarySuperblock(supercfwd::sBinContract))==consensus_hash); //disable for performace
-
-            bb.NeuralHash = supercfwd::sCacheHash;
-            bb.superblock = supercfwd::sBinContract;
-            LogPrintf("AddNeuralContractOrVote: Added forwarded Superblock (size %" PRIszu ") (hash %s)",bb.superblock.length(),bb.NeuralHash);
-        }
-        else LogPrintf("AddNeuralContractOrVote: Forwarded Contract Empty or not in Consensus");
     }
 
     return;
@@ -1341,9 +1173,6 @@ void StakeMiner(CWallet *pwallet)
     // vSideStakeAlloc is an out parameter.
     bool fEnableSideStaking = GetSideStakingStatusAndAlloc(vSideStakeAlloc);
 
-    supercfwd::fEnable= GetBoolArg("-supercfwd",true);
-    if(fDebug) LogPrintf("supercfwd::fEnable= %d",supercfwd::fEnable);
-
     while (!fShutdown)
     {
         //wait for next round
@@ -1374,8 +1203,6 @@ void StakeMiner(CWallet *pwallet)
             MinerStatus.Clear();
             continue;
         }
-
-        supercfwd::MaybeRequest();
 
         // Lock main lock since GetNextProject and subsequent calls
         // require the state to be static.
