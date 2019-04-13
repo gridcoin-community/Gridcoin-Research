@@ -6030,8 +6030,6 @@ string GetWarnings(string strFor)
             {
                 nPriority = alert.nPriority;
                 strStatusBar = alert.strStatusBar;
-                if (nPriority > 1000)
-                    strRPC = strStatusBar;
             }
         }
     }
@@ -6846,13 +6844,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         else if (neural_request=="neural_hash")
         {
-            if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
-            {
-                std::string r_hash;  vRecv >> r_hash;
-                supercfwd::SendResponse(pfrom,r_hash);
-            }
-            else
-                pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
+            pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
         }
         else if (neural_request=="explainmag")
         {
@@ -6864,11 +6856,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
             pfrom->PushMessage("quorum_nresp", NN::GetInstance()->GetNeuralContract());
-        }
-        else if (neural_request=="supercfwdr")
-        {
-            // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
-            supercfwd::QuorumResponseHook(pfrom,neural_request_id);
         }
     }
     else if (strCommand == "ping")
@@ -6949,15 +6936,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "hash_nresp")
     {
-            std::string neural_response = "";
-            vRecv >> neural_response;
-            // if (pfrom->nNeuralRequestSent != 0)
-            // nNeuralNonce must match request ID
-            pfrom->NeuralHash = neural_response;
-            if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
-
-            // Hook into miner for delegated sb staking
-            supercfwd::HashResponseHook(pfrom, neural_response);
+        std::string neural_response = "";
+        vRecv >> neural_response;
+        // if (pfrom->nNeuralRequestSent != 0)
+        // nNeuralNonce must match request ID
+        pfrom->NeuralHash = neural_response;
+        if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
     }
     else if (strCommand == "expmag_nresp")
     {
@@ -6973,12 +6957,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "quorum_nresp")
     {
-            std::string neural_contract = "";
-            vRecv >> neural_contract;
-            if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-
-            // Hook into miner for delegated sb staking
-            supercfwd::QuorumResponseHook(pfrom,neural_contract);
+        std::string neural_contract = "";
+        vRecv >> neural_contract;
+        if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
     }
     else if (strCommand == "ndata_nresp")
     {
