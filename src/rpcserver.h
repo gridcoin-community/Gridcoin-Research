@@ -50,7 +50,6 @@ class CRPCCommand
 public:
     std::string name;
     rpcfn_type actor;
-    bool okSafeMode;
     rpccategory category;
 };
 
