@@ -430,7 +430,7 @@ public:
                 vuserpass.push_back(std::make_pair(vlist[0], vlist[1]));
             }
 
-            _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
+            if (fDebug3) _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
 
             return true;
         }
@@ -498,7 +498,7 @@ public:
 
             oauthdata.write(outdata.value().c_str(), outdata.size());
 
-            _log(logattribute::INFO, "auth_data_export", "Exported");
+            if (fDebug3) _log(logattribute::INFO, "auth_data_export", "Exported");
 
             return true;
         }
@@ -577,7 +577,7 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
     ApplyCache("SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD", SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD);
 
-    if (fDebug)
+    if (fDebug3)
     {
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "scrapersleep = " + std::to_string(nScraperSleep));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "activebeforesb = " + std::to_string(nActiveBeforeSB));
@@ -634,15 +634,6 @@ void Scraper(bool bSingleShot)
         _log(logattribute::INFO, "Scraper", "Starting Scraper thread.");
     else
         _log(logattribute::INFO, "Scraper", "Running in single shot mode.");
-
-    // Hash check
-    std::string sHashCheck = "Hello world";
-    uint256 nHashCheck = Hash(sHashCheck.begin(), sHashCheck.end());
-
-    if (nHashCheck.GetHex() == "fe65ee46e01d18cebec555978abe82e021e5399171ce470e464996114d72dcf6")
-        _log(logattribute::INFO, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is correct.");
-    else
-        _log(logattribute::ERR, "Scraper", "Hash for \"Hello world\" is " + Hash(sHashCheck.begin(), sHashCheck.end()).GetHex() + " and is NOT correct.");
 
     uint256 nmScraperFileManifestHash = 0;
 
@@ -751,9 +742,6 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
-            // Signal stats event to UI.
-            uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
-
             // Get a read-only view of the current project whitelist: 
             const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
 
@@ -796,7 +784,7 @@ void Scraper(bool bSingleShot)
 
             DownloadProjectRacFilesByCPID(projectWhitelist);
 
-            _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
+            if (fDebug) _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
             ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
 
@@ -2783,12 +2771,12 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
     }
 
-    fs::path savepath = pathScraper / "incoming";
+    fs::path savepath = pathScraper / "manifest_dump";
 
-    // Check to see if the Scraper incoming directory exists and is a directory. If not create it.
+    // Check to see if the Scraper manifest_dump directory exists and is a directory. If not create it.
     if (fs::exists(savepath))
     {
-        // If it is a normal file, this is not right. Remove the file and replace with the Scraper directory.
+        // If it is a normal file, this is not right. Remove the file and replace with the directory.
         if (fs::is_regular_file(savepath))
         {
             fs::remove(savepath);
@@ -2797,6 +2785,23 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     }
     else
         fs::create_directory(savepath);
+
+    // Add on the hash subdirectory to the path. 7 digits of the hash is good enough.
+    savepath = savepath / nManifestHash.GetHex().substr(0, 7);
+
+    // Check to see if the Scraper manifest_dump/hash directory exists and is a directory. If not create it.
+    if (fs::exists(savepath))
+    {
+        // If it is a normal file, this is not right. Remove the file and replace with the directory.
+        if (fs::is_regular_file(savepath))
+        {
+            fs::remove(savepath);
+            fs::create_directory(savepath);
+        }
+    }
+    else
+        fs::create_directory(savepath);
+
 
     LOCK(CScraperManifest::cs_mapManifest);
     if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");

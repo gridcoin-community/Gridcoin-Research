@@ -443,7 +443,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     /* see if we do not already have it */
     if( AlreadyHave(pfrom,CInv(MSG_SCRAPERINDEX, hash)) )
     {
-        LogPrintf("ERROR: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
+        if (fDebug3) LogPrintf("INFO: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
         return false;
     }
     const auto it = mapManifest.emplace(hash,std::unique_ptr<CScraperManifest>(new CScraperManifest()));
@@ -504,7 +504,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     uint256 hash(Hash(ss.begin(),ss.end()));
     keySign.Sign(hash, m->signature);
     //ss << m->signature;
-    if (fDebug) LogPrintf("INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
+    if (fDebug3) LogPrintf("INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
     LogPrint("manifest", "adding new local manifest");
     /* at this point it is easier to pretend like it was received from network */
@@ -547,7 +547,7 @@ void CScraperManifest::Complete()
     /* Do something with the complete manifest */
     std::string bodystr;
     vParts[0]->getReader() >> bodystr;
-    if (fDebug) LogPrintf("INFO: CScraperManifest::Complete(): from %s with hash %s", sCManifestName, phash->GetHex());
+    if (fDebug3) LogPrintf("INFO: CScraperManifest::Complete(): from %s with hash %s", sCManifestName, phash->GetHex());
 }
 
 /* how?
@@ -605,22 +605,42 @@ UniValue CScraperManifest::dentry::ToJson() const
 
 UniValue listmanifests(const UniValue& params, bool fHelp)
 {
-    if(fHelp || params.size() != 0 )
+    if(fHelp || params.size() > 1 )
         throw std::runtime_error(
-                "listmanifests\n"
-                "Show detailed list of known ScraperManifest objects.\n"
+                "listmanifests [bool details]\n"
+                "Show [detailed] list of known ScraperManifest objects.\n"
                 );
-    UniValue result1(UniValue::VOBJ);
+    UniValue obj(UniValue::VOBJ);
+    UniValue subset(UniValue::VOBJ);
+
+    bool bShowDetails = false;
+
+    if (params.size() > 0)
+        bShowDetails = params[0].get_bool();
 
     LOCK(CScraperManifest::cs_mapManifest);
 
     for(const auto& pair : CScraperManifest::mapManifest)
     {
-        const uint256& hash= pair.first;
-        const CScraperManifest& manifest= *pair.second;
-        result1.pushKV(hash.GetHex(),manifest.ToJson());
+        const uint256& hash = pair.first;
+        const CScraperManifest& manifest = *pair.second;
+
+        if (bShowDetails)
+            obj.pushKV(hash.GetHex(), manifest.ToJson());
+        else
+        {
+#ifdef SCRAPER_NET_PK_AS_ADDRESS
+            subset.pushKV("scraper (manifest) address", CBitcoinAddress(manifest.pubkey.GetID()).ToString());
+#else
+            subset.pushKV("scraper (manifest) pubkey", manifest.pubkey.GetID().ToString());
+#endif
+            subset.pushKV("manifest datetime", DateTimeStrFormat(manifest.nTime));
+            subset.pushKV("manifest content hash", manifest.nContentHash.GetHex());
+            obj.pushKV(hash.GetHex(), subset);
+        }
+
     }
-    return result1;
+    return obj;
 }
 
 UniValue getmpart(const UniValue& params, bool fHelp)

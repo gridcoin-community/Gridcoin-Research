@@ -39,6 +39,7 @@ before_install:
     - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
     - sudo apt-get update -q
     - sudo apt-get install gcc-7 -y
+    - sudo apt-get install gcc-5-arm-linux-gnueabihf -y
 install:
     - if [ -n "$DPKG_ADD_ARCH" ]; then sudo dpkg --add-architecture "$DPKG_ADD_ARCH" ; fi
     - if [ -n "$PACKAGES" ]; then travis_retry sudo apt-get update; fi
