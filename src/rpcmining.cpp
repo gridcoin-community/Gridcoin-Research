@@ -128,7 +128,8 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     }
 
     obj.pushKV("MiningInfo 1", msMiningErrors);
-    obj.pushKV("MiningInfo 2", msPoll);
+    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
+    obj.pushKV("MiningInfo 2", "Poll: " + sMessageKey.substr(0,80));
     obj.pushKV("MiningInfo 5", msMiningErrors5);
     obj.pushKV("MiningInfo 6", msMiningErrors6);
     obj.pushKV("MiningInfo 7", msMiningErrors7);
