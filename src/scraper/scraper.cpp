@@ -944,9 +944,9 @@ bool ScraperHousekeeping()
         sSBCoreData = ScraperGetNeuralContract(true, false);
     }
 
-    if (!sSBCoreData.empty())
+    if (fDebug3 && !sSBCoreData.empty())
     {
-        // Temporarily here for compatibility checking...
+        // Contract binary pack/unpack check...
         _log(logattribute::INFO, "ScraperHousekeeping", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
         std::string sSBCoreData_out = UnpackBinarySuperblock(PackBinarySuperblock(sSBCoreData));
@@ -960,11 +960,11 @@ bool ScraperHousekeeping()
         }
     }
 
-    // Temporarily here to show this node's contract hash.
+    // Show this node's contract hash in the log.
     _log(logattribute::INFO, "ScraperHousekeeping", "neural contract (sSBCoreData) hash = " + ScraperGetNeuralHash(sSBCoreData));
 
-    // Temporarily here for visibility into the Quorum map...
-    if (fDebug)
+    // Visibility into the Quorum map...
+    if (fDebug3)
     {
         _log(logattribute::INFO, "ScraperHousekeeping", "mvNeuralNetworkHash dump");
         for (const auto& network_hash : mvNeuralNetworkHash)
@@ -981,7 +981,7 @@ bool ScraperHousekeeping()
     fs::path plogfile_out;
 
     if (log.archive(false, plogfile_out))
-        _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.string());
+        _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.filename().string());
 
     return true;
 }
