@@ -649,7 +649,7 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
 
-            _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
+            if (fDebug3) _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
@@ -2759,6 +2759,19 @@ std::string ExplainMagnitude(std::string sCPID)
 
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
+    // Check to see if the hash exists in the manifest map, and if not, bail.
+    LOCK(CScraperManifest::cs_mapManifest);
+    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
+    // Select manifest based on provided hash.
+    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
+
+    if (pair == CScraperManifest::mapManifest.end())
+    {
+        _log(logattribute::ERR, "ScraperSaveCScraperManifestToFiles", "Specified manifest hash does not exist. Save unsuccessful.");
+        return false;
+    }
+
     // Make sure the Scraper directory itself exists, because this function could be called from outside
     // the scraper thread loop, and therefore the directory may not have been set up yet.
     {
@@ -2802,12 +2815,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     else
         fs::create_directory(savepath);
 
-
-    LOCK(CScraperManifest::cs_mapManifest);
-    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
-
-    // Select manifest based on provided hash.
-    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
+    // This is from the map find above.
     const CScraperManifest& manifest = *pair->second;
 
     // Write out to files the parts. Note this assumes one-to-one part to file. Needs to
