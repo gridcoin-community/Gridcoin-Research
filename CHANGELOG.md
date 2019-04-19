@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## Next
+### Fixed
+ - Optimize getfilecontents to reduce chance of race on
+   client_state.xml #1426 (@cyrossignol).
+ - Fix freeze when unlocking wallet #1428 (@denravonska).
+
 ## [4.0.2.0] 2019-04-03, leisure
 ### Added
  - Add `rainbymagnitude` RPC command #1235 (@Foggyx420).
