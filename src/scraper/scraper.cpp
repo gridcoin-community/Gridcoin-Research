@@ -649,7 +649,7 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
 
-            _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
+            if (fDebug3) _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
@@ -890,7 +890,7 @@ void NeuralNetwork()
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
-            _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
+            if (fDebug3) _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
@@ -944,9 +944,9 @@ bool ScraperHousekeeping()
         sSBCoreData = ScraperGetNeuralContract(true, false);
     }
 
-    if (!sSBCoreData.empty())
+    if (fDebug3 && !sSBCoreData.empty())
     {
-        // Temporarily here for compatibility checking...
+        // Contract binary pack/unpack check...
         _log(logattribute::INFO, "ScraperHousekeeping", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
         std::string sSBCoreData_out = UnpackBinarySuperblock(PackBinarySuperblock(sSBCoreData));
@@ -960,11 +960,11 @@ bool ScraperHousekeeping()
         }
     }
 
-    // Temporarily here to show this node's contract hash.
+    // Show this node's contract hash in the log.
     _log(logattribute::INFO, "ScraperHousekeeping", "neural contract (sSBCoreData) hash = " + ScraperGetNeuralHash(sSBCoreData));
 
-    // Temporarily here for visibility into the Quorum map...
-    if (fDebug)
+    // Visibility into the Quorum map...
+    if (fDebug3)
     {
         _log(logattribute::INFO, "ScraperHousekeeping", "mvNeuralNetworkHash dump");
         for (const auto& network_hash : mvNeuralNetworkHash)
@@ -981,7 +981,7 @@ bool ScraperHousekeeping()
     fs::path plogfile_out;
 
     if (log.archive(false, plogfile_out))
-        _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.string());
+        _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.filename().string());
 
     return true;
 }
@@ -2759,6 +2759,19 @@ std::string ExplainMagnitude(std::string sCPID)
 
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
+    // Check to see if the hash exists in the manifest map, and if not, bail.
+    LOCK(CScraperManifest::cs_mapManifest);
+    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
+    // Select manifest based on provided hash.
+    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
+
+    if (pair == CScraperManifest::mapManifest.end())
+    {
+        _log(logattribute::ERR, "ScraperSaveCScraperManifestToFiles", "Specified manifest hash does not exist. Save unsuccessful.");
+        return false;
+    }
+
     // Make sure the Scraper directory itself exists, because this function could be called from outside
     // the scraper thread loop, and therefore the directory may not have been set up yet.
     {
@@ -2802,12 +2815,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     else
         fs::create_directory(savepath);
 
-
-    LOCK(CScraperManifest::cs_mapManifest);
-    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
-
-    // Select manifest based on provided hash.
-    auto pair = CScraperManifest::mapManifest.find(nManifestHash);
+    // This is from the map find above.
     const CScraperManifest& manifest = *pair->second;
 
     // Write out to files the parts. Note this assumes one-to-one part to file. Needs to
