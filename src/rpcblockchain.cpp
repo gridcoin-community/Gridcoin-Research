@@ -1907,7 +1907,7 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         entry.pushKV("base_url", project.BaseUrl());
         entry.pushKV("display_url", project.DisplayUrl());
         entry.pushKV("stats_url", project.StatsUrl());
-        entry.pushKV("time", project.m_timestamp);
+        entry.pushKV("time", DateTimeStrFormat(project.m_timestamp));
 
         res.pushKV(project.m_name, entry);
     }
