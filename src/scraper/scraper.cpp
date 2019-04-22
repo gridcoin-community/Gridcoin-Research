@@ -890,7 +890,7 @@ void NeuralNetwork()
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
-            _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
+            if (fDebug3) _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
