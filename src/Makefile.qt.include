@@ -130,8 +130,7 @@ GRIDCOIN_MM = \
 
 QT_MOC = \
   qt/overviewpage.moc \
-  qt/rpcconsole.moc \
-  qt/bitcoin.moc
+  qt/rpcconsole.moc
 
 QT_QRC_CPP = qt/qrc_bitcoin.cpp
 QT_QRC = qt/bitcoin.qrc
