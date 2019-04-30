@@ -71,12 +71,13 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool BreakForNoCoins(CMinerStatus& status, const char* message)
+bool BreakForNoCoins(CMinerStatus& status, const std::string& message)
 {
     LOCK(status.lock);
 
     status.Clear();
-    status.ReasonNotStaking += _(message);
+    status.ReasonNotStaking += message;
+    status.ReasonNotStaking += "; ";
 
     if (fDebug) {
         LogPrintf("CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
@@ -443,15 +444,15 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     //Request all the coins here, check reserve later
 
     if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, "No coins; ");
+        return BreakForNoCoins(MinerStatus, _("No coins"));
     } else if (!wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn)) {
-        return BreakForNoCoins(MinerStatus, "Waiting for coins to mature; ");
+        return BreakForNoCoins(MinerStatus, _("Waiting for coins to mature"));
     }
 
     BalanceToStake -= nReserveBalance;
 
     if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, "Entire balance reserved; ");
+        return BreakForNoCoins(MinerStatus, _("Entire balance reserved"));
     }
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
