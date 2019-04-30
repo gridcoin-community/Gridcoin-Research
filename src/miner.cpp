@@ -37,6 +37,7 @@ bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 
+namespace {
 // Some explaining would be appreciated
 class COrphan
 {
@@ -60,6 +61,30 @@ public:
             LogPrintf("   setDependsOn %s", hash.ToString().substr(0,10));
     }
 };
+
+//!
+//! \brief Helper: update the miner status with a message that indicates why
+//! \c CreateCoinStake() skipped a cycle and then return \c false .
+//!
+//! \param status  The global miner status object to update.
+//! \param message Describes why the wallet contains no coins for staking.
+//!
+//! \return Always \false - suitable for returning from the call directly.
+//!
+bool BreakForNoCoins(CMinerStatus& status, const char* message)
+{
+    LOCK(status.lock);
+
+    status.Clear();
+    status.ReasonNotStaking += _(message);
+
+    if (fDebug) {
+        LogPrintf("CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
+    }
+
+    return false;
+}
+} // anonymous namespace
 
 CMinerStatus::CMinerStatus(void)
 {
@@ -417,15 +442,17 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     int64_t nValueIn = 0;
     //Request all the coins here, check reserve later
 
-    if ( BalanceToStake<=0
-        || !wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn) )
-    {
-        LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+=_("No coins; ");
-        if (fDebug) LogPrintf("CreateCoinStake: %s",MinerStatus.ReasonNotStaking);
-        return false;
+    if (BalanceToStake <= 0) {
+        return BreakForNoCoins(MinerStatus, "No coins; ");
+    } else if (!wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn)) {
+        return BreakForNoCoins(MinerStatus, "Waiting for coins to mature; ");
     }
+
     BalanceToStake -= nReserveBalance;
+
+    if (BalanceToStake <= 0) {
+        return BreakForNoCoins(MinerStatus, "Entire balance reserved; ");
+    }
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
@@ -621,10 +648,10 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
     // vtx[1].vout size should be 2 at this point. If not something is really wrong so assert immediately.
     assert(blocknew.vtx[1].vout.size() == 2);
-    
+
     // Record the script public key for the base coinstake so we can reuse.
     CScript CoinStakeScriptPubKey = blocknew.vtx[1].vout[1].scriptPubKey;
-    
+
     // The maximum number of outputs allowed on the coinstake txn is 3 for block version 9 and below and
     // 8 for 10 and above. The first one must be empty, so that gives 2 and 7 usable ones, respectively.
     unsigned int nMaxOutputs = (blocknew.nVersion >= 10) ? 8 : 3;
@@ -634,7 +661,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;
     // Initialize nOutputUsed at 1, because one is already used for the empty coinstake flag output.
     unsigned int nOutputsUsed = 1;
-    
+
     // Initialize remaining stake output value to the total value of output for stake, which also includes
     // (interest or CBR) and research rewards.
     int64_t nRemainingStakeOutputValue = blocknew.vtx[1].vout[1].nValue;
@@ -647,10 +674,10 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // this function.
     blocknew.vtx[1].vout.pop_back();
     blocknew.vtx[1].vout.pop_back();
-    
+
     CScript SideStakeScriptPubKey;
     double dSumAllocation = 0.0;
-    
+
     if (fEnableSideStaking)
     {
         // Iterate through passed in SideStake vector until either all elements processed, the maximum number of
@@ -671,7 +698,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.", CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
                 continue;
             }
-            
+
             if (dSumAllocation + iterSideStake->second > 1.0)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100\%, ending sidestake allocations.");
@@ -716,7 +743,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
         if (dSumAllocation == 0.0)
             LogPrintf("WARN: SplitCoinStakeOutput: enablesidestaking was set in config but nothing has been allocated for distribution!");
     }
-    
+
     // By this point, if SideStaking was used and 100% was allocated nRemainingStakeOutputValue will be
     // the original base coinstake. The other extreme is no sidestaking, in which case nRemainingStakeOutputValue is the
     // base coinstake + all of the reward. In any case, we will now compute the number of split stake outputs needed,
@@ -1237,7 +1264,7 @@ void StakeMiner(CWallet *pwallet)
         if( !CreateGridcoinReward(StakeBlock, BoincData, StakeCoinAge, pindexPrev, nReward) )
             continue;
         LogPrintf("StakeMiner: added gridcoin reward to coinstake");
-        
+
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
