@@ -23,20 +23,6 @@ Distributed under the MIT/X11 software license, see the accompanying file COPYIN
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>
-This is experimental software.
-
-Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation type="vanished">
-Dette program er eksperimentelt.
-
-Det er gjort tilgængeligt under MIT/X11-softwarelicensen. Se den medfølgende fil &quot;COPYING&quot; eller http://www.opensource.org/licenses/mit-license.php.
-
-Produktet indeholder software, som er udviklet af OpenSSL Project til brug i OpenSSL Toolkit (http://www.openssl.org/). Kryptografisk software er skrevet af Eric Young (eay@cryptsoft.com), og UPnP-software er skrevet af Thomas Bernard.</translation>
-    </message>
 </context>
 <context>
     <name>AddressBookPage</name>
@@ -313,12 +299,12 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+531"/>
+        <location filename="../bitcoingui.cpp" line="+333"/>
         <source>Sign &amp;message...</source>
         <translation>Signér &amp;besked…</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-96"/>
         <source>&amp;Overview</source>
         <translation>&amp;Oversigt</translation>
     </message>
@@ -348,7 +334,7 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>Afslut program</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+12"/>
         <source>&amp;Options...</source>
         <translation>&amp;Indstillinger…</translation>
     </message>
@@ -358,17 +344,9 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>&amp;Kryptér tegnebog…</translation>
     </message>
     <message>
-        <source>&amp;Backup Wallet...</source>
-        <translation type="vanished">&amp;Sikkerhedskopiér tegnebog…</translation>
-    </message>
-    <message>
         <location line="+5"/>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Skift adgangskode…</translation>
-    </message>
-    <message>
-        <source>Backup wallet to another location</source>
-        <translation type="vanished">Lav sikkerhedskopi af tegnebogen til et andet sted</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -391,12 +369,12 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>&amp;Verificér besked…</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-214"/>
         <source>Wallet</source>
         <translation>Tegnebog</translation>
     </message>
     <message>
-        <location line="+276"/>
+        <location line="+122"/>
         <source>&amp;Send</source>
         <translation>&amp;Send</translation>
     </message>
@@ -406,12 +384,12 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>&amp;Modtag</translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+74"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Vis / skjul</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+76"/>
         <source>&amp;File</source>
         <translation>&amp;Fil</translation>
     </message>
@@ -421,12 +399,12 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>&amp;Opsætning</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+17"/>
         <source>&amp;Help</source>
         <translation>&amp;Hjælp</translation>
     </message>
     <message numerus="yes">
-        <location line="+279"/>
+        <location line="+285"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Bearbejdede %n blok med transaktionshistorik.</numerusform>
@@ -439,12 +417,12 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>Opdateret</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Catching up...</source>
         <translation>Indhenter…</translation>
     </message>
     <message>
-        <location line="+215"/>
+        <location line="+213"/>
         <source>Sent transaction</source>
         <translation>Afsendt transaktion</translation>
     </message>
@@ -454,16 +432,12 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>Indgående transaktion</translation>
     </message>
     <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="vanished">Tegnebog er &lt;b&gt;krypteret&lt;/b&gt; og i øjeblikket &lt;b&gt;ulåst&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+211"/>
+        <location line="+193"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Tegnebog er &lt;b&gt;krypteret&lt;/b&gt; og i øjeblikket &lt;b&gt;låst&lt;/b&gt;</translation>
     </message>
     <message>
-        <location line="-940"/>
+        <location line="-910"/>
         <source>Send coins to a Gridcoin address</source>
         <translation>Send mønter til en Gridcoin adresse</translation>
     </message>
@@ -529,7 +503,7 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+39"/>
         <source>Encrypt or decrypt wallet</source>
         <translation>Kryptere eller dekryptere tegnebog</translation>
     </message>
@@ -574,7 +548,7 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         <translation>Eksportere data i den aktuelle fane til en fil</translation>
     </message>
     <message numerus="yes">
-        <location line="+386"/>
+        <location line="+383"/>
         <source>%n second(s) ago</source>
         <translation type="unfinished">
             <numerusform>%n sekund siden</numerusform>
@@ -606,7 +580,7 @@ Produktet indeholder software, som er udviklet af OpenSSL Project til brug i Ope
         </translation>
     </message>
     <message>
-        <location line="+230"/>
+        <location line="+229"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -621,7 +595,7 @@ Adresse: %4
 ?} {4?}</translation>
     </message>
     <message>
-        <location line="+511"/>
+        <location line="+445"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -631,12 +605,42 @@ Adresse: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1525"/>
+        <location line="+32"/>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: superblock not needed - inactive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: downloading and processing stats.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Scraper: Convergence achieved, date/time %1. All projects on whitelist included.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Scraper: Convergence achieved, date/time %1 UTC. Project(s) excluded: %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1353"/>
         <source>Gridcoin</source>
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+344"/>
+        <location line="+190"/>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;Om Gridcoin</translation>
     </message>
@@ -646,28 +650,12 @@ Adresse: %4
         <translation>Vis oplysninger om Gridcoin</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>&amp;Neural Network</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Neural Network</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;New User Wizard</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+586"/>
+        <location line="+582"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-643"/>
+        <location line="-631"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -677,7 +665,7 @@ Adresse: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+51"/>
         <source>&amp;Diagnostics</source>
         <translation type="unfinished"></translation>
     </message>
@@ -692,14 +680,14 @@ Adresse: %4
         <translation>Ændre indstillingsmuligheder for Gridcoin</translation>
     </message>
     <message>
-        <location line="+222"/>
+        <location line="+215"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnetværk]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+65"/>
+        <location line="+69"/>
         <source>Gridcoin client</source>
         <translation>Gridcoin klient</translation>
     </message>
@@ -709,23 +697,7 @@ Adresse: %4
         <translation type="unfinished">%1 aktiv forbindelse til Gridcoin netværk</translation>
     </message>
     <message>
-        <source>%1 second(s) ago</source>
-        <translation type="obsolete">%1 sekund siden</translation>
-    </message>
-    <message>
-        <source>%1 minute(s) ago</source>
-        <translation type="obsolete">%1 minut siden</translation>
-    </message>
-    <message>
-        <source>%1 hour(s) ago</source>
-        <translation type="obsolete">%1 time siden</translation>
-    </message>
-    <message>
-        <source>%1 day(s) ago</source>
-        <translation type="obsolete">%1 dag siden</translation>
-    </message>
-    <message>
-        <location line="+60"/>
+        <location line="+59"/>
         <source>Last received block was generated %1.</source>
         <translation>Sidst modtagne blok blev genereret %1.</translation>
     </message>
@@ -770,19 +742,7 @@ Adresse: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="vanished">Dato: %1
-Beløb: %2
-Type: %3
-Adresse: %4
-</translation>
-    </message>
-    <message>
-        <location line="+199"/>
+        <location line="+181"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation>URI kan ikke tolkes! Dette kan skyldes en ugyldig Gridcoin adresse eller misdannede URI parametre.</translation>
@@ -841,7 +801,7 @@ Adresse: %4
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+232"/>
+        <location line="+184"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform>%n sekund</numerusform>
@@ -873,37 +833,12 @@ Adresse: %4
         </translation>
     </message>
     <message>
-        <source>Not staking because wallet is locked</source>
-        <translation type="vanished">Ingen rente fordi tegnebog er låst</translation>
-    </message>
-    <message>
-        <source>Not staking because wallet is offline</source>
-        <translation type="vanished">Ingen rente fordi tegnebog er offline</translation>
-    </message>
-    <message>
-        <source>Not staking because wallet is syncing</source>
-        <translation type="vanished">Ingen rente fordi tegnebog er ved at synkronisere</translation>
-    </message>
-    <message>
-        <source>Not staking because you don&apos;t have mature coins</source>
-        <translation type="vanished">Ingen rente fordi der ingen modne mønter eksistere </translation>
-    </message>
-    <message>
-        <source>Not staking</source>
-        <translation type="vanished">Ingen rente</translation>
-    </message>
-    <message>
-        <location line="-1032"/>
+        <location line="-966"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../bitcoin.cpp" line="+160"/>
+        <location filename="../bitcoin.cpp" line="+176"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Der opstod en fejl under forsøg på at gemme dataene i tegnebogen til den nye placering.</translation>
     </message>
@@ -911,7 +846,7 @@ Adresse: %4
 <context>
     <name>ClientModel</name>
     <message>
-        <location filename="../clientmodel.cpp" line="+117"/>
+        <location filename="../clientmodel.cpp" line="+119"/>
         <source>Network Alert</source>
         <translation>Netværksadvarsel</translation>
     </message>
@@ -952,10 +887,6 @@ Adresse: %4
         <location line="+63"/>
         <source>(un)select all</source>
         <translation>(af)vælg alle</translation>
-    </message>
-    <message>
-        <source>List mode</source>
-        <translation type="vanished">Listetilstand</translation>
     </message>
     <message>
         <location line="+74"/>
@@ -1376,7 +1307,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+863"/>
+        <location filename="../votingdialog.cpp" line="+871"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1473,10 +1404,6 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <location line="+9"/>
         <source>Map port using &amp;UPnP</source>
         <translation>Konfigurér port vha. &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>Proxy &amp;IP:</source>
-        <translation type="vanished">Proxy-&amp;IP:</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1827,6 +1754,14 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <location filename="../bitcoin.cpp" line="+182"/>
+        <source>%1 didn&apos;t yet exit safely...</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>QRCodeDialog</name>
     <message>
         <location filename="../forms/qrcodedialog.ui" line="+14"/>
@@ -1887,7 +1822,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+46"/>
+        <location filename="../forms/rpcconsole.ui" line="+51"/>
         <location line="+43"/>
         <location line="+47"/>
         <location line="+16"/>
@@ -1899,7 +1834,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <location line="+58"/>
         <location line="+43"/>
         <location line="+42"/>
-        <location filename="../rpcconsole.cpp" line="+391"/>
+        <location filename="../rpcconsole.cpp" line="+392"/>
         <source>N/A</source>
         <translation>N/A</translation>
     </message>
@@ -1979,7 +1914,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Udgående:</translation>
     </message>
     <message>
-        <location line="-353"/>
+        <location line="+120"/>
+        <source>&amp;Scraper</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-473"/>
         <source>Debug log file</source>
         <translation>Fejlsøgningslogfil</translation>
     </message>
@@ -1999,7 +1939,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Tast &lt;b&gt;help&lt;/b&gt; for en oversigt over de tilgængelige kommandoer.</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+118"/>
         <source>%1 B</source>
         <translation>%1 B</translation>
     </message>
@@ -2019,7 +1959,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>%1 GB</translation>
     </message>
     <message>
-        <location line="-119"/>
+        <location line="-126"/>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
@@ -2034,7 +1974,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+183"/>
         <source>%1 m</source>
         <translation type="unfinished">%1 m</translation>
     </message>
@@ -2049,12 +1989,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="-722"/>
+        <location filename="../forms/rpcconsole.ui" line="-727"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+330"/>
+        <location line="+335"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2386,22 +2326,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+172"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+155"/>
         <source>A&amp;mount:</source>
         <translation>&amp;Beløb:</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-106"/>
         <source>Pay &amp;To:</source>
         <translation>Betal &amp;til:</translation>
     </message>
     <message>
-        <location line="-33"/>
+        <location line="+93"/>
         <source>&amp;Label:</source>
         <translation>&amp;Mærkat:</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="-56"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2427,12 +2367,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Indtast en mærkat for denne adresse for at føje den til din adressebog</translation>
     </message>
     <message>
-        <location line="-42"/>
+        <location line="-26"/>
         <source>Form</source>
         <translation>Form</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+53"/>
         <source>The address to send the payment to  (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2447,17 +2387,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Fjern denne modtager</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+66"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-96"/>
+        <location line="-103"/>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2701,26 +2636,17 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Source</source>
         <translation>Kilde</translation>
     </message>
     <message>
-        <source>Generated</source>
-        <translation type="vanished">Genereret</translation>
-    </message>
-    <message>
-        <location line="-3"/>
+        <location line="-5"/>
         <source>Generated in CoinBase</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Generated, PoS</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+23"/>
         <location line="+18"/>
         <source>From</source>
         <translation>Fra</translation>
@@ -2835,18 +2761,6 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Transaction ID</source>
-        <translation type="vanished">Transaktions-ID</translation>
-    </message>
-    <message>
-        <source>Transaction</source>
-        <translation type="vanished">Transaktion</translation>
-    </message>
-    <message>
-        <source>Inputs</source>
-        <translation type="vanished">Input</translation>
-    </message>
-    <message>
         <location line="+23"/>
         <source>Amount</source>
         <translation>Beløb</translation>
@@ -2862,18 +2776,44 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>falsk</translation>
     </message>
     <message>
-        <location line="-334"/>
+        <location line="-350"/>
         <source>conflicted</source>
         <translation>konflikt</translation>
     </message>
     <message>
-        <location line="+255"/>
-        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <location line="+74"/>
+        <source>MINED - POS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Information</source>
-        <translation type="obsolete">Information</translation>
+        <location line="+1"/>
+        <source>MINED - POR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+192"/>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2889,12 +2829,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Transaktionsdetaljer</translation>
     </message>
     <message>
-        <location line="+34"/>
-        <source>View Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+37"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2903,21 +2838,11 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <source>C&amp;lose</source>
         <translation type="unfinished">&amp;Luk</translation>
     </message>
-    <message>
-        <location filename="../transactiondescdialog.cpp" line="+38"/>
-        <source>Gridcoin Documents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Document cannot be found on P2P server.</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>TransactionTableModel</name>
     <message>
-        <location filename="../transactiontablemodel.cpp" line="+239"/>
+        <location filename="../transactiontablemodel.cpp" line="+236"/>
         <source>Date</source>
         <translation>Dato</translation>
     </message>
@@ -2965,7 +2890,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Genereret, men ikke accepteret</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+44"/>
         <source>Received with</source>
         <translation>Modtaget med</translation>
     </message>
@@ -2985,12 +2910,42 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Betaling til dig selv</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+7"/>
+        <source>MINED - POS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - POR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>(n/a)</source>
         <translation>(n/a)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+190"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Transaktionsstatus. Hold musen over dette felt for at vise antallet af bekræftelser.</translation>
     </message>
@@ -3010,7 +2965,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Beløb trukket fra eller tilføjet balance.</translation>
     </message>
     <message>
-        <location line="-420"/>
+        <location line="-394"/>
         <source>Address</source>
         <translation>Adresse</translation>
     </message>
@@ -3035,27 +2990,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+80"/>
-        <source>Mined - DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+249"/>
+        <location line="+316"/>
         <source>Destination address of transaction.</source>
         <translation>Destinationsadresse for transaktion.</translation>
     </message>
@@ -3230,16 +3165,9 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
 </context>
 <context>
-    <name>UpgradeDialog</name>
-    <message>
-        <source>Hide</source>
-        <translation type="obsolete">Skjul</translation>
-    </message>
-</context>
-<context>
     <name>VotingChartDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="-396"/>
+        <location filename="../votingdialog.cpp" line="-405"/>
         <source>Poll Results</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3383,7 +3311,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3416,7 +3344,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+249"/>
+        <location filename="../walletmodel.cpp" line="+239"/>
         <source>Sending...</source>
         <translation>Sender...</translation>
     </message>
@@ -3424,37 +3352,37 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+215"/>
+        <location filename="../bitcoinstrings.cpp" line="+218"/>
         <source>Options:</source>
         <translation>Indstillinger:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+36"/>
         <source>Specify data directory</source>
         <translation>Angiv datamappe</translation>
     </message>
     <message>
-        <location line="-112"/>
+        <location line="-114"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
         <translation>Forbind til en knude for at modtage adresser på andre knuder, og afbryd derefter</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+117"/>
         <source>Specify your own public address</source>
         <translation>Angiv din egen offentlige adresse</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-154"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Acceptér kommandolinje- og JSON-RPC-kommandoer</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+130"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Kør i baggrunden som en service, og acceptér kommandoer</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Udfør kommando, når en transaktion i tegnebogen ændres (%s i kommandoen erstattes med TxID)</translation>
     </message>
@@ -3464,12 +3392,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Blokoprettelsestilvalg:</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+42"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Lytning på enhver port mislykkedes. Brug -listen=0, hvis du ønsker dette.</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+87"/>
         <source>Specify configuration file (default: gridcoinresearch.conf)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3499,7 +3427,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Adgangskode til JSON-RPC-forbindelser</translation>
     </message>
     <message>
-        <location line="-157"/>
+        <location line="-161"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
         <translation>Udfør kommando, når den bedste blok ændres (%s i kommandoen erstattes med blokhash)</translation>
     </message>
@@ -3509,7 +3437,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Tillad DNS-opslag for -addnode, -seednode og -connect</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+80"/>
         <source>Loading addresses...</source>
         <translation>Indlæser adresser…</translation>
     </message>
@@ -3519,12 +3447,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Ugyldig -proxy adresse: “%s”</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+89"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Ukendt netværk anført i -onlynet: “%s”</translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-91"/>
         <source>Insufficient funds</source>
         <translation>Manglende dækning</translation>
     </message>
@@ -3534,17 +3462,17 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Indlæser blokindeks…</translation>
     </message>
     <message>
-        <location line="-82"/>
+        <location line="-85"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
         <translation>Tilføj en knude til at forbinde til og forsøg at holde forbindelsen åben</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+86"/>
         <source>Loading wallet...</source>
         <translation>Indlæser tegnebog…</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-63"/>
         <source>Cannot downgrade wallet</source>
         <translation>Kan ikke nedgradere tegnebog</translation>
     </message>
@@ -3554,22 +3482,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Kan ikke skrive standardadresse</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Rescanning...</source>
         <translation>Genindlæser…</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-83"/>
         <source>Done loading</source>
         <translation>Indlæsning gennemført</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Error</source>
         <translation>Fejl</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+102"/>
         <source>This help message</source>
         <translation>Denne hjælpebesked</translation>
     </message>
@@ -3594,12 +3522,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Angiv tilslutningstimeout i millisekunder (standard: 5000)</translation>
     </message>
     <message>
-        <location line="-112"/>
+        <location line="-114"/>
         <source>Connect through socks proxy</source>
         <translation>Tilslut gennem socks proxy</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Vælg den version af socks proxy du vil bruge (4-5, standard: 5)</translation>
     </message>
@@ -3609,7 +3537,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Brug proxy til at nå tor skjulte services (Standard: samme som-proxy)</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished">Lyt efter forbindelser på &lt;port&gt; (default: 15714 eller Testnet: 25714) {32749 ?} {32748)?}</translation>
     </message>
@@ -3619,26 +3547,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Oprethold højest &lt;n&gt; forbindelser til andre i netværket (standard: 125)</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-60"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Tilslut kun til de(n) angivne knude(r)</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+79"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Tilslut kun til knuder i netværk &lt;net&gt; (IPv4, IPv6 eller Tor)</translation>
     </message>
     <message>
-        <location line="-69"/>
+        <location line="-70"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
         <translation>Find egen IP-adresse (standard: 1 når lytter og ingen -externalip)</translation>
     </message>
     <message>
-        <source>Find peers using internet relay chat (default: 0)</source>
-        <translation type="vanished">Find peers der bruger internet relay chat (default: 1) {? 0)}</translation>
-    </message>
-    <message>
-        <location line="-41"/>
+        <location line="-43"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
         <translation>Accepter forbindelser udefra (standard: 1 hvis hverken -proxy eller -connect)</translation>
     </message>
@@ -3648,26 +3572,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Binder til en given adresse. Brug [host]: port notation for IPv6</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+46"/>
         <source>Find peers using DNS lookup (default: 1)</source>
         <translation>Find peer bruges DNS-opslag (default: 1)</translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-93"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation>Synkroniser tid med andre noder. Deaktiver, hvis tiden på dit system er præcis eksempelvis synkroniseret med NTP (default: 1)</translation>
     </message>
     <message>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation type="vanished">Synkroniser checkpoints politik (default: streng)</translation>
-    </message>
-    <message>
-        <location line="+184"/>
+        <location line="+188"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Grænse for afbrydelse til dårlige forbindelser (standard: 100)</translation>
     </message>
     <message>
-        <location line="-190"/>
+        <location line="-194"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Antal sekunder dårlige forbindelser skal vente før reetablering (standard: 86400)</translation>
     </message>
@@ -3763,6 +3683,16 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Blocks Loaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Boinc Public Key</source>
         <translation type="unfinished"></translation>
@@ -3820,6 +3750,11 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     <message>
         <location line="+1"/>
         <source>ERROR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Entire balance reserved</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3889,11 +3824,6 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Messate Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Miner: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3928,12 +3858,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>No coins; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Offline; </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3943,12 +3868,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Out of rance exception while parsing Transaction Message -&gt; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Public Key</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4028,22 +3948,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Forsøg at bruge UPnP til at konfigurere den lyttende port (standard: 0)</translation>
     </message>
     <message>
-        <location line="-108"/>
+        <location line="-109"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Gebyr pr KB som tilføjes til transaktioner, du sender</translation>
     </message>
     <message>
-        <location line="-68"/>
+        <location line="-71"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation>Når du opretter transaktioner ignoreres input med værdi mindre end dette (standard: 0,01)</translation>
     </message>
     <message>
-        <location line="+179"/>
+        <location line="+183"/>
         <source>Use the test network</source>
         <translation>Brug testnetværket</translation>
     </message>
     <message>
-        <location line="-56"/>
+        <location line="-57"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Output ekstra debugging information. Indebærer alle andre-debug * muligheder</translation>
     </message>
@@ -4053,7 +3973,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Output ekstra netværk debugging information</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Prepend debug output with timestamp</source>
         <translation>Prepend debug output med tidsstempel</translation>
     </message>
@@ -4063,7 +3983,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Send trace / debug info til debugger</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Spor efter JSON-RPC-forbindelser på &lt;port&gt; (default: 15715 eller Testnet: 25715)</translation>
     </message>
@@ -4073,7 +3993,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Tillad JSON-RPC-forbindelser fra bestemt IP-adresse</translation>
     </message>
     <message>
-        <location line="+119"/>
+        <location line="+123"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Send kommandoer til knude, der kører på &lt;ip&gt; (standard: 127.0.0.1)</translation>
     </message>
@@ -4083,7 +4003,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Kræver en bekræftelser for forandring (default: 0)</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-184"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Gennemtving transaktions omkostninger scripts til at bruge canoniske PUSH operatører (default: 1)</translation>
     </message>
@@ -4093,7 +4013,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Udfør kommando, når en relevant advarsel er modtaget (% s i cmd erstattes af meddelelse)</translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+215"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Opgrader tegnebog til seneste format</translation>
     </message>
@@ -4108,7 +4028,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Gennemsøg blokkæden for manglende tegnebogstransaktioner</translation>
     </message>
     <message>
-        <location line="-109"/>
+        <location line="-113"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Forsøg at genskabe private nøgler fra ødelagt wallet.dat</translation>
     </message>
@@ -4128,7 +4048,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Boinc Mining</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4138,7 +4058,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Error obtaining next project.  Error 06172014.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4188,12 +4108,32 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Mining</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
+        <source>No coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No current polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Out of range exception while parsing Transaction Message -&gt; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>POR Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Please wait for new user wizard to start...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4208,12 +4148,12 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Indstil maks. blok størrelse i bytes (standard: 250000)</translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="-175"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Angiv maksimal størrelse på high-priority/low-fee transaktioner i bytes (standard: 27000)</translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+163"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL-indstillinger: (se Bitcoin Wiki for SSL-opsætningsinstruktioner)</translation>
     </message>
@@ -4233,21 +4173,17 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Serverens private nøgle (standard: server.pem)</translation>
     </message>
     <message>
-        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation type="vanished">Acceptable ciphers (default: TLSv1 + HØJ:! SSLv2: aNULL: eNULL: AH: 3DES: @ styrke)</translation>
-    </message>
-    <message>
-        <location line="-57"/>
+        <location line="-58"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Ugyldigt beløb for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-102"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Advarsel: -paytxfee er sat meget højt! Dette er det gebyr du vil betale, hvis du sender en transaktion.</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+101"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Ugyldigt beløb for-mininput = &lt;beløb&gt;: &apos;% s&apos;</translation>
     </message>
@@ -4257,22 +4193,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+105"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Wallet% s placeret udenfor data mappe% s.</translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-244"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Kan ikke få en lås på data mappe% s. Gridcoin kører sikkert allerede.</translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+241"/>
         <source>Verifying database integrity...</source>
         <translation>Bekræfter database integritet ...</translation>
     </message>
     <message>
-        <location line="-229"/>
+        <location line="-233"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Fejl initialisering database miljø% s! For at gendanne, BACKUP denne mappe, og derefter fjern alt bortset fra wallet.dat.</translation>
     </message>
@@ -4282,8 +4218,13 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Advarsel: wallet.dat ødelagt, data reddet! Oprindelig wallet.net gemt som wallet.{timestamp}.bak i %s; hvis din saldo eller dine transaktioner er forkert, bør du genskabe fra en sikkerhedskopi.</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Waiting for coins to mature</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4302,17 +4243,17 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>wallet.dat ødelagt, redning af data mislykkedes</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-19"/>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>Ukendt -socks proxy-version: %i</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Ugyldig-tor-adresse: &apos;% s&apos;</translation>
     </message>
     <message>
-        <location line="-48"/>
+        <location line="-49"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Kan ikke finde -bind adressen: &apos;%s&apos;</translation>
     </message>
@@ -4322,15 +4263,9 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Kan ikke finde -externalip adressen: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation>Ugyldigt beløb for-reservebalance = &lt;beløb&gt;</translation>
-    </message>
-    <message>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation type="vanished">Kan ikke logge checkpoint, forkert checkpointkey?
-</translation>
     </message>
     <message>
         <location line="-33"/>
@@ -4343,22 +4278,22 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Fejl ved indlæsning af wallet.dat: Tegnebog ødelagt</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-66"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Advarsel: fejl under læsning af wallet.dat! Alle nøgler blev læst korrekt, men transaktionsdata eller adressebogsposter kan mangle eller være forkerte.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+67"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation>Fejl ved indlæsning af wallet.dat: Wallet kræver en nyere version af Gridcoin</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+130"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Det er nødvendig for wallet at blive omskrevet: Genstart Gridcoin for fuldføre</translation>
     </message>
     <message>
-        <location line="-130"/>
+        <location line="-132"/>
         <source>Error loading wallet.dat</source>
         <translation>Fejl ved indlæsning af wallet.dat</translation>
     </message>
@@ -4378,17 +4313,17 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Fejl: kunne ikke starte node</translation>
     </message>
     <message>
-        <location line="-83"/>
+        <location line="-86"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>Kunne ikke binde sig til% s på denne computer. Gridcoin kører sikkert allerede.</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Kunne ikke tildele %s på denne computer (bind returnerede fejl %d, %s)</translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-106"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Fejl: Wallet låst, ude af stand til at skabe transaktion</translation>
     </message>
@@ -4398,59 +4333,47 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
         <translation>Fejl: Pung låst for at udregne rente, ude af stand til at skabe transaktion.</translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-108"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation>Fejl: Denne transaktion kræver et transaktionsgebyr på mindst% s på grund af dens størrelse, kompleksitet, eller anvendelse af nylig modtaget midler</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+106"/>
         <source>Error: Transaction creation failed  </source>
         <translation>Fejl: Transaktion oprettelse mislykkedes</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Sending...</source>
         <translation>Sender...</translation>
     </message>
     <message>
-        <location line="-186"/>
+        <location line="-190"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Fejl: Transaktionen blev afvist. Dette kan ske, hvis nogle af mønterne i din pung allerede er blevet brugt, som hvis du brugte en kopi af wallet.dat og mønterne blev brugt i kopien, men ikke markeret her.</translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+136"/>
         <source>Invalid amount</source>
         <translation>Ugyldigt beløb</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-101"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Advarsel: Kontroller venligst, at computerens dato og klokkeslæt er korrekt! Hvis dit ur er forkert vil Gridcoin ikke fungere korrekt.</translation>
     </message>
     <message>
-        <source>Warning: This version is obsolete, upgrade required!</source>
-        <translation type="vanished">Advarsel: Denne version er forældet, opgradering påkrævet!</translation>
-    </message>
-    <message>
-        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
-        <translation type="vanished">ADVARSEL: synkroniseret checkpoint overtrædelse opdaget, men skibbet!</translation>
-    </message>
-    <message>
-        <location line="+196"/>
+        <location line="+201"/>
         <source>Warning: Disk space is low!</source>
         <translation>Advarsel: Diskplads lav!</translation>
     </message>
     <message>
-        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
-        <translation type="vanished">ADVARSEL: Ugyldig checkpoint fundet! Viste transaktioner er måske ikke korrekte! Du kan være nødt til at opgradere, eller underrette udviklerne.</translation>
-    </message>
-    <message>
-        <location line="-21"/>
+        <location line="-22"/>
         <source>To use the %s option</source>
         <translation>For at bruge %s mulighed</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-249"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4484,12 +4407,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
 Hvis filen ikke eksisterer, opret den og giv ingen andre end ejeren læserettighed.</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+72"/>
         <source>Gridcoin version</source>
         <translation>Gridcoin version</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Usage:</source>
         <translation>Anvendelse:</translation>
     </message>
@@ -4499,7 +4422,7 @@ Hvis filen ikke eksisterer, opret den og giv ingen andre end ejeren læserettigh
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-46"/>
+        <location line="-47"/>
         <source>List commands</source>
         <translation>Liste over kommandoer</translation>
     </message>
