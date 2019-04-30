@@ -208,6 +208,23 @@ public:
 
         if (fDebug) LogPrintf("INFO: Scraper: Logger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
 
+        fs::path LogArchiveDir = pathDataDir / "logarchive";
+
+        // Check to see if the log archive directory exists and is a directory. If not create it.
+        if (fs::exists(LogArchiveDir))
+        {
+            // If it is a normal file, this is not right. Remove the file and replace with the log archive directory.
+            if (fs::is_regular_file(LogArchiveDir))
+            {
+                fs::remove(LogArchiveDir);
+                fs::create_directory(LogArchiveDir);
+            }
+        }
+        else
+        {
+            fs::create_directory(LogArchiveDir);
+        }
+
         if (fImmediate || (fArchiveDaily && ArchiveCheckDate > PrevArchiveCheckDate))
         {
             {
@@ -221,7 +238,7 @@ public:
 
                 plogfile = pathDataDir / "scraper.log";
                 pfile_temp = pathDataDir / ("scraper-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + ".log");
-                pfile_out = pathDataDir / ("scraper-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + ".log.gz");
+                pfile_out = LogArchiveDir / ("scraper-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + ".log.gz");
 
                 try
                 {
@@ -263,6 +280,40 @@ public:
             outgzfile.close();
 
             fs::remove(pfile_temp);
+
+            bool fDeleteOldLogArchives = GetBoolArg("-deleteoldlogarchives", true);
+
+            if (fDeleteOldLogArchives)
+            {
+                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 14);
+
+                std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
+
+                // Iterate through the log archive directory and delete the oldest files beyond the retention rule
+                // The names are in format scraper-YYYYMMDDHHMMSS for the scraper logs, so filter by containing scraper
+                // The greater than sort in the set should then return descending order by datetime.
+                for (fs::directory_entry& DirEntry : fs::directory_iterator(LogArchiveDir))
+                {
+                    std::string sFilename = DirEntry.path().filename().string();
+                    size_t FoundPos = sFilename.find("scraper");
+
+                    if (FoundPos != string::npos) SortedDirEntries.insert(DirEntry);
+                }
+
+                // Now iterate through set of filtered filenames. Delete all files greater than retention count.
+                unsigned int i = 0;
+                for (auto const& iter : SortedDirEntries)
+                {
+                    if (i >= nRetention)
+                    {
+                        fs::remove(iter.path());
+
+                        LogPrintf("INFO: logger: Removed old archive gzip file %s.", iter.path().filename().string());
+                    }
+
+                    ++i;
+                }
+            }
 
             return true;
         }
@@ -718,7 +769,7 @@ void Scraper(bool bSingleShot)
                 fs::path plogfile_out;
 
                 if (log.archive(false, plogfile_out))
-                    _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.string());
+                    _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.filename().string());
 
 
                 sbage = SuperblockAge();
@@ -4183,11 +4234,6 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
 
     fs::path pfile_out;
     bool ret = log.archive(true, pfile_out);
-
-    if(!ret)
-        return UniValue(ret);
-    else
-        return UniValue(pfile_out.c_str());
 
     return UniValue(ret);
 }
