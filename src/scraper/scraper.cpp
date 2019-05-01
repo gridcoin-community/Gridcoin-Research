@@ -190,7 +190,16 @@ public:
         return;
     }
 
+    void closelogfile()
+    {
+        LOCK(cs_log);
 
+        if (logfile.is_open())
+        {
+            logfile.flush();
+            logfile.close();
+        }
+    }
 
     bool archive(bool fImmediate, fs::path pfile_out)
     {
@@ -286,6 +295,7 @@ public:
             if (fDeleteOldLogArchives)
             {
                 unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 14);
+                LogPrintf ("INFO: logger: nRetention %i.", nRetention);
 
                 std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
 
@@ -354,6 +364,8 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
     logger log;
 
     log.output(sOut);
+
+    log.closelogfile();
 
     // Send to UI for log window.
     uiInterface.NotifyScraperEvent(scrapereventtypes::Log, CT_NEW, sOut);
@@ -771,6 +783,7 @@ void Scraper(bool bSingleShot)
                 if (log.archive(false, plogfile_out))
                     _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.filename().string());
 
+                log.closelogfile();
 
                 sbage = SuperblockAge();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
@@ -1033,6 +1046,8 @@ bool ScraperHousekeeping()
 
     if (log.archive(false, plogfile_out))
         _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.filename().string());
+
+    log.closelogfile();
 
     return true;
 }
@@ -4234,6 +4249,8 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
 
     fs::path pfile_out;
     bool ret = log.archive(true, pfile_out);
+
+    log.closelogfile();
 
     return UniValue(ret);
 }
