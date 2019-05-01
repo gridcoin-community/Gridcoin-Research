@@ -259,6 +259,13 @@ public:
                     return false;
                 }
 
+                // Re-open log file.
+                fs::path plogfile = pathDataDir / "scraper.log";
+                logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
+
+                if (!logfile.is_open())
+                    LogPrintf("ERROR: Scraper: Logger: Failed to open logging file\n");
+
                 PrevArchiveCheckDate = ArchiveCheckDate;
             }
 
@@ -328,9 +335,19 @@ public:
             return true;
         }
         else
+        {
             return false;
+        }
     }
 };
+
+logger& LogInstance()
+{
+    // This is similar to Bitcoin's newer approach.
+    static logger* scraperlogger{new logger()};
+    return *scraperlogger;
+}
+
 
 boost::gregorian::date logger::PrevArchiveCheckDate = boost::posix_time::from_time_t(GetAdjustedTime()).date();
 CCriticalSection logger::cs_log;
@@ -361,11 +378,13 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
     }
 
     sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
-    logger log;
+
+    //logger log;
+    logger& log = LogInstance();
 
     log.output(sOut);
 
-    log.closelogfile();
+    //log.closelogfile();
 
     // Send to UI for log window.
     uiInterface.NotifyScraperEvent(scrapereventtypes::Log, CT_NEW, sOut);
@@ -681,6 +700,7 @@ void ScraperApplyAppCacheEntries()
 // It can also be called in "single shot" mode.
 void Scraper(bool bSingleShot)
 {
+
     // Initialize these while still single-threaded. They cannot be initialized during declaration because GetDataDir()
     // gives the wrong value that early. If they are already initialized then leave them alone (because this function
     // can be called in singleshot mode.
@@ -692,6 +712,9 @@ void Scraper(bool bSingleShot)
 
         pathScraper = pathDataDir  / "Scraper";
     }
+
+    // Initialize log singleton. Must be after the imbue.
+    LogInstance();
 
     if (!bSingleShot)
         _log(logattribute::INFO, "Scraper", "Starting Scraper thread.");
@@ -776,14 +799,14 @@ void Scraper(bool bSingleShot)
                 }
 
                 // Need the log archive check here, because we don't run housekeeping in this while loop.
-                logger log;
+                logger& log = LogInstance();
 
                 fs::path plogfile_out;
 
                 if (log.archive(false, plogfile_out))
                     _log(logattribute::INFO, "Scraper", "Archived scraper.log to " + plogfile_out.filename().string());
 
-                log.closelogfile();
+                //log.closelogfile();
 
                 sbage = SuperblockAge();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
@@ -938,6 +961,9 @@ void NeuralNetwork()
         pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
 
         pathScraper = pathDataDir  / "Scraper";
+
+        // Initialize log singleton. Must be after the imbue.
+        LogInstance();
     }
 
 
@@ -1040,14 +1066,14 @@ bool ScraperHousekeeping()
                  + ", Popularity: " + std::to_string(network_hash.second));
     }
 
-    logger log;
+    logger& log = LogInstance();
 
     fs::path plogfile_out;
 
     if (log.archive(false, plogfile_out))
         _log(logattribute::INFO, "ScraperHousekeeping", "Archived scraper.log to " + plogfile_out.filename().string());
 
-    log.closelogfile();
+    //log.closelogfile();
 
     return true;
 }
@@ -4245,12 +4271,12 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
                 "archivescraperlog takes no arguments and results in immediate archiving of the scraper log\n"
                 );
 
-    logger log;
+    logger& log = LogInstance();
 
     fs::path pfile_out;
     bool ret = log.archive(true, pfile_out);
 
-    log.closelogfile();
+    //log.closelogfile();
 
     return UniValue(ret);
 }
