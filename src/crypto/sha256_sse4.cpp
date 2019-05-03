@@ -953,7 +953,6 @@ void Transform(uint32_t* s, const unsigned char* chunk, size_t blocks)
         : "m"(K256), "m"(FLIP_MASK), "m"(SHUF_00BA), "m"(SHUF_DC00)
         : "cc", "memory", "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "xmm8", "xmm9", "xmm10", "xmm11", "xmm12"
    );
-
 }
 }
 

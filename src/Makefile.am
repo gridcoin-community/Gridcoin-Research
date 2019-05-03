@@ -34,6 +34,10 @@ if ENABLE_AVX2
 LIBGRIDCOIN_CRYPTO_AVX2 = crypto/libgridcoin_crypto_avx2.a
 LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_AVX2)
 endif
+if ENABLE_SHANI
+LIBGRIDCOIN_CRYPTO_SHANI = crypto/libgridcoin_crypto_shani.a
+LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_SHANI)
+endif
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
@@ -235,6 +239,12 @@ crypto_libgridcoin_crypto_avx2_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_avx2_a_CXXFLAGS += $(AVX2_CXXFLAGS)
 crypto_libgridcoin_crypto_avx2_a_CPPFLAGS += -DENABLE_AVX2
 crypto_libgridcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp
+
+crypto_libgridcoin_crypto_shani_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libgridcoin_crypto_shani_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libgridcoin_crypto_shani_a_CXXFLAGS += $(SHANI_CXXFLAGS)
+crypto_libgridcoin_crypto_shani_a_CPPFLAGS += -DENABLE_SHANI
+crypto_libgridcoin_crypto_shani_a_SOURCES = crypto/sha256_shani.cpp
 
 CTAES_DIST =  crypto/ctaes/bench.c
 CTAES_DIST += crypto/ctaes/ctaes.c
