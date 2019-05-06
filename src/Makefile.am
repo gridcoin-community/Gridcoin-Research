@@ -75,7 +75,6 @@ GRIDCOIN_CORE_H = \
 	contract/polls.h \
 	contract/contract.h \
    contract/superblock.h \
-	cpid.h \
 	crypter.h \
 	db.h \
 	fwd.h \
@@ -136,7 +135,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	contract/polls.cpp \
 	contract/contract.cpp \
    contract/superblock.cpp \
-	cpid.cpp \
 	crypter.cpp \
 	db.cpp \
 	gridcoin.cpp \

@@ -6,12 +6,12 @@
 #include "main.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
-#include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
+#include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "backup.h"
 #include "appcache.h"
@@ -58,7 +58,6 @@ extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, s
 
 double Round(double d, int place);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
-extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 bool FullSyncWithDPORNodes();
@@ -702,16 +701,6 @@ bool TallyMagnitudesInSuperblock()
     }
 }
 
-bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
-{
-    uint256 hashRand = GetRandHash();
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    std::string cpidv2 = ComputeCPIDv2(email, bpk, hashRand);
-    std::string cpidv1 = cpidv2.substr(0,32);
-    return (externalcpid==cpidv1);
-}
-
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {
     sOutPrivKey = "BUG! deprecated field used";
@@ -746,10 +735,8 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string email = GetArgument("email", "NA");
         boost::to_lower(email);
         GlobalCPUMiningCPID.email=email;
-        GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
 
-        bool IsCPIDValid2 = CPID_IsCPIDValid(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2, hashRand);
-        if (!IsCPIDValid2)
+        if (!NN::Cpid::Parse(GlobalCPUMiningCPID.cpid).Matches(GlobalCPUMiningCPID.boincruntimepublickey, email))
         {
             sError="Invalid CPID";
             return false;

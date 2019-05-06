@@ -34,15 +34,10 @@
 #endif
 
 using namespace std;
-std::string DefaultWalletAddress();
 std::string NodeAddress(CNode* pfrom);
-
 extern std::string GetCommandNonce(std::string command);
 
-bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
 void ThreadMessageHandler2(void* parg);
