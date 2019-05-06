@@ -87,7 +87,6 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
-std::string RetrieveMd5(std::string s1);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -1780,38 +1779,6 @@ UniValue gatherneuralhashes(const UniValue& params, bool fHelp)
     GatherNeuralHashes();
 
     res.pushKV("Sent", ".");
-
-    return res;
-}
-
-UniValue genboinckey(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "genboinckey\n"
-                "\n"
-                "Generates a boinc key\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
-    GetNextProject(false);
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    GlobalCPUMiningCPID.email = email;
-    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
-    //Store the BPK in the aesskein, and the cpid in version
-    GlobalCPUMiningCPID.aesskein = email; //Good
-    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
-
-    //block version not needed for keys for now
-    std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
-    std::string sBase = EncodeBase64(sParam);
-
-    if (fDebug3)
-        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s", GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, sParam);
-
-    res.pushKV("[Specify in config file without quotes] boinckey=", sBase);
 
     return res;
 }

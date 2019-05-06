@@ -762,9 +762,6 @@ MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
 
 MiningCPID GetNextProject(bool bForce)
 {
-
-
-
     if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude >= 1)
     {
                 if (!Timer_Main("globalcpuminingcpid",10))
@@ -774,33 +771,12 @@ MiningCPID GetNextProject(bool bForce)
                 }
     }
 
-
-    std::string sBoincKey = GetArgument("boinckey","");
-    if (!sBoincKey.empty())
-    {
-        if (fDebug3 && LessVerbose(50)) LogPrintf("Using cached boinckey for project %s",GlobalCPUMiningCPID.projectname);
-                    msMiningProject = GlobalCPUMiningCPID.projectname;
-                    msMiningCPID = GlobalCPUMiningCPID.cpid;
-                    if (LessVerbose(5)) LogPrintf("BoincKey - Mining project %s     RAC(%f)",  GlobalCPUMiningCPID.projectname, GlobalCPUMiningCPID.rac);
-                    double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
-                    GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-                    GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-                    if (fDebug3) LogPrintf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude);
-                    msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? _("Staking Interest") : _("Mining");
-                    GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-                    GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
-                    return GlobalCPUMiningCPID;
-    }
-
-
     msMiningProject = "";
     msMiningCPID = "";
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
     std::string email = GetArgument("email", "NA");
     boost::to_lower(email);
-
-
 
     if (IsInitialBlockDownload() && !bForce)
     {
@@ -7357,56 +7333,11 @@ void HarvestCPIDs(bool cleardata)
     if (fDebug10)
         LogPrintf("loading BOINC cpids ...");
 
-    //Remote Boinc Feature - R Halford
-    std::string sBoincKey = GetArgument("boinckey","");
-
-    if (!sBoincKey.empty())
-    {
-        //Deserialize key into Global CPU Mining CPID 2-6-2015
-        LogPrintf("Using key %s ",sBoincKey);
-
-        std::string sDec=DecodeBase64(sBoincKey);
-        LogPrintf("Using key %s ",sDec);
-
-        if (sDec.empty()) LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
-        //Version not needed for keys for now
-        GlobalCPUMiningCPID = DeserializeBoincBlock(sDec,7);
-
-        GlobalCPUMiningCPID.initialized = true;
-
-        if (GlobalCPUMiningCPID.cpid.empty())
-        {
-                 LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
-        }
-        else
-        {
-            LogPrintf("CPUMiningCPID Initialized.");
-        }
-
-            GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            StructCPID structcpid = GetStructCPID();
-            structcpid.initialized = true;
-            structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
-            structcpid.projectname = GlobalCPUMiningCPID.projectname;
-        structcpid.team = "gridcoin";
-            structcpid.rac = GlobalCPUMiningCPID.rac;
-            structcpid.cpid = GlobalCPUMiningCPID.cpid;
-            structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
-            structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-            // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-        LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", GlobalCPUMiningCPID.email, structcpid.cpidhash, sDec);
-        structcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, structcpid.cpidhash, 0);
-            structcpid.Iscpidvalid = true;
-            mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
-            // CreditCheck(structcpid.cpid,false);
-            GetNextProject(false);
-            if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
-            if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
-        return;
-  }
+    if (!GetArgument("boinckey", "").empty()) {
+        // TODO: implement a safer way to export researcher context that doesn't
+        // risk accidental exposure of internal CPID and email address.
+        LogPrintf("ERROR: boinckey is no longer supported.");
+    }
 
  try
  {
