@@ -42,6 +42,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("blocks",        nBestHeight);
     diff.pushKV("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true)));
 
+    std::string current_poll;
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
@@ -65,6 +66,8 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
         obj.pushKV("kernel-diff-best",MinerStatus.KernelDiffMax);
         obj.pushKV("kernel-diff-sum",MinerStatus.KernelDiffSum);
+
+        current_poll = GetCurrentOverviewTabPoll();
     }
 
     int64_t nMinStakeSplitValue = 0;
@@ -128,8 +131,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     }
 
     obj.pushKV("MiningInfo 1", msMiningErrors);
-    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
-    obj.pushKV("MiningInfo 2", "Poll: " + sMessageKey.substr(0,80));
+    obj.pushKV("MiningInfo 2", "Poll: " + current_poll);
     obj.pushKV("MiningInfo 5", msMiningErrors5);
     obj.pushKV("MiningInfo 6", msMiningErrors6);
     obj.pushKV("MiningInfo 7", msMiningErrors7);

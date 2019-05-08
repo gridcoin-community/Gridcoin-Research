@@ -201,6 +201,7 @@ bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern void GetGlobalStatus();
+bool PollIsActive(const std::string& poll_contract);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -675,36 +676,33 @@ void GetGlobalStatus()
 
 std::string GetCurrentOverviewTabPoll()
 {
-    std::string poll = "";
-    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
-    std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
-    uint64_t uPollExpiration = 0;
-    // Alerts are displayed as polls but do not have an expiration
-    if(sPollExpiration.empty())
-    {
-        uPollExpiration = pindexBest->nTime;
+    AssertLockHeld(MinerStatus.lock);
+
+    // The global msPoll variable contains the poll most-recently published to
+    // the network. If it hasn't expired, return the title of this poll:
+    if (PollIsActive(msPoll)) {
+        return ExtractXML(msPoll, "<MK>", "</MK>").substr(0, 80);
     }
-    else
-    {
-        try
-        {
-            uPollExpiration = stoll(sPollExpiration);
-        }
-        catch(std::exception &e)
-        {
-            // Malformed poll expiration, don't display
-            uPollExpiration = 0;
+
+    // Otherwise, find the most recent active poll from the AppCache:
+    std::string selected_poll_title;
+    int64_t published_at = 0;
+
+    for (const auto& item : ReadCacheSection(Section::POLL)) {
+        if (item.second.timestamp > published_at && PollIsActive(item.second.value)) {
+            selected_poll_title = item.first;
+            published_at = item.second.timestamp;
         }
     }
-    if (uPollExpiration >= pindexBest->nTime)
-    {
-        poll = sMessageKey.substr(0,80);
+
+    // If we couldn't find a poll from the AppCache, no active polls exist:
+    if (selected_poll_title.empty()) {
+        return _("No current polls");
     }
-    else
-    {
-        poll = _("No current polls");
-    }
-    return poll;
+
+    // The key of the AppCache entry contains the poll title. Take the first 80
+    // characters for display in the GUI:
+    return selected_poll_title.substr(0, 80);
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)

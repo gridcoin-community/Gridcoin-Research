@@ -165,6 +165,22 @@ bool PollExpired(std::string pollname)
     return (expiration < (double)GetAdjustedTime()) ? true : false;
 }
 
+// Like PollExpired() except that it doesn't load the entire Section::POLL
+// AppCache section for every call:
+bool PollIsActive(const std::string& poll_contract)
+{
+    try
+    {
+        uint64_t expires = stoll(ExtractXML(poll_contract, "<EXPIRATION>", "</EXPIRATION>"));
+
+        return expires > GetAdjustedTime();
+    }
+    catch (const std::exception&)
+    {
+        return false;
+    }
+}
+
 bool PollCreatedAfterSecurityUpgrade(std::string pollname)
 {
     // If the expiration is after July 1 2017, use the new security features.
