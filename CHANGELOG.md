@@ -4,11 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## Next
+## [4.0.3.0] 2019-05-10, leisure
+### Added
+ - Replace NeuralNetwork with portable C++ scraper #1387 (@jamescowens,
+   @tomasbrod, @cycy, @TheCharlatan, @denravonska).
+ - Allow compile flags to be used for depends #1423 (@G-UK).
+ - Add stake splitting and side staking info to getmininginfo #1424
+   (@jamescowens).
+ - Add freedesktop.org desktop file and icon set #1438 (@a123b).
+
+### Changed
+ - Disable Qt for windows Travis builds #1276 (@TheCharlatan).
+ - Replace use of AppCache PROJECT section with strongly-typed structures #1415
+   (@cyrossignol).
+ - Change dumpwallet to use appropriate data directory #1416 (@jamescowens).
+ - Optimize ExtractXML() calls by avoiding unnecessary string copies #1419
+   (@cyrossignol).
+ - Change signature of IsLockTimeWithinMinutes #1422 (@jamescowens).
+ - Restore old poll output for getmininginfo RPC #1437 (@a123b).
+ - Prevent segfault when using rpc savescraperfilemanifest #1439 (@jamescowens).
+ - Improve miner status messages for ineligible staking balances #1447
+   (@cyrossignol).
+ - Enhance scraper log archiving #1449 (@jamescowens).
+
 ### Fixed
- - Optimize getfilecontents to reduce chance of race on
-   client_state.xml #1426 (@cyrossignol).
+ - Re-enable full GUI 32-bit Windows builds - part of #1387 (@jamescowens).
+ - Re-activate Windows Installer #1409 (@TheCharlatan).
+ - Fix Depends and Travis build issues for ARM #1417 (@jamescowens).
+ - Fix syncupdate icons #1421 (@jamescowens).
+ - Fix potential BOINC crash when reading projects #1426 (@cyrossignol).
  - Fix freeze when unlocking wallet #1428 (@denravonska).
+ - Fix RPC after high priority alert #1432 (@denravonska).
+ - Fix missing poll in GUI when most recent poll expired #1455 (@cyrossignol).
+
+### Removed
+ - Remove old, rudimentary side staking implementation #1381 (@denravonska).
+ - Remove auto unlock #1402 (@denravonska).
+ - Remove superblock forwarding #1430 (@denravonska).
 
 ## [4.0.2.0] 2019-04-03, leisure
 ### Added
