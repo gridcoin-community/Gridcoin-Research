@@ -150,6 +150,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
 
     // Mining
     { "explainmagnitude"       , 0 },
+    { "superblocks"            , 0 },
+    { "superblocks"            , 1 },
 
     // Developer
     { "debug"                  , 0 },
@@ -161,6 +163,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockstats"          , 0 },
     { "getblockstats"          , 1 },
     { "getblockstats"          , 2 },
+    { "listmanifests"          , 0 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
     { "sendalert"              , 4 },

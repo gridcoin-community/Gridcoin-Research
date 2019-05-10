@@ -42,6 +42,7 @@ GRIDCOIN_TESTS =\
   test/mruset_tests.cpp \
   test/multisig_tests.cpp \
   test/netbase_tests.cpp \
+  test/neuralnet/project_tests.cpp \
   test/rpc_tests.cpp \
   test/script_P2SH_tests.cpp \
   test/script_tests.cpp \
@@ -56,7 +57,7 @@ GRIDCOIN_TESTS =\
 
 test_test_gridcoin_SOURCES = $(GRIDCOIN_TESTS) $(JSON_TEST_FILES) $(OTHER_TEST_FILES)
 test_test_gridcoin_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES) -I$(builddir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
-test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
+test_test_gridcoin_LDADD = $(LIBGRIDCOIN_UTIL) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS)
 test_test_gridcoin_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 test_test_gridcoin_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGRIDCOIN_CRYPTO)

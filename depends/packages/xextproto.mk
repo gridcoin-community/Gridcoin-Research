@@ -1,11 +1,20 @@
 package=xextproto
+GCCFLAGS?=
 $(package)_version=7.3.0
 $(package)_download_path=http://xorg.freedesktop.org/releases/individual/proto
 $(package)_file_name=$(package)-$($(package)_version).tar.bz2
 $(package)_sha256_hash=f3f4b23ac8db9c3a9e0d8edb591713f3d70ef9c3b175970dd8823dfc92aa5bb0
 
+define $(package)_preprocess_cmds
+  cp -f $(BASEDIR)/config.guess $(BASEDIR)/config.sub .
+endef
+
 define $(package)_set_vars
-$(package)_config_opts=--disable-shared
+  $(package)_config_opts=--disable-shared
+  $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cxxflags_arm_linux = $(GCCFLAGS)
+  $(package)_cflags_arm_linux = $(GCCFLAGS)
 endef
 
 define $(package)_config_cmds

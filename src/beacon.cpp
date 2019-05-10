@@ -1,4 +1,5 @@
 #include "beacon.h"
+#include "block.h"
 #include "util.h"
 #include "uint256.h"
 #include "key.h"
@@ -11,7 +12,7 @@
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
 
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
 {
@@ -233,7 +234,7 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
         return error("ImportBeaconKeysFromConfig: Invalid private key");
     CKeyID vchAddress = key.GetPubKey().GetID();
 
-    LOCK2(cs_main, wallet->cs_wallet);
+    LOCK(wallet->cs_wallet);
 
     // Don't throw error in case a key is already there
     if (!wallet->HaveKey(vchAddress))
@@ -251,4 +252,44 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
         wallet->SetAddressBookName(vchAddress, "DPoR Beacon CPID " + cpid + " imported");
     }
     return true;
+}
+
+BeaconConsensus GetConsensusBeaconList()
+{
+    //BeaconMap mBeaconMap;
+    BeaconConsensus Consensus;
+
+    BlockFinder MaxConsensusLadder;
+
+    // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
+    // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
+    CBlockIndex* pMaxConsensusLadder = MaxConsensusLadder.FindByHeight((pindexBest->nHeight - CONSENSUS_LOOKBACK)
+                                                                        - (pindexBest->nHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
+
+    Consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
+
+    const int64_t maxTime = pMaxConsensusLadder->nTime;
+    const int64_t minTime = maxTime - MaxBeaconAge();
+
+    for(const auto& item : ReadCacheSection(Section::BEACON))
+    {
+        const std::string& key = item.first;
+        BeaconEntry beaconentry;
+
+        beaconentry.timestamp = item.second.timestamp;
+        beaconentry.value = item.second.value;
+
+        // Compare age restrictions if specified.
+        if((minTime && beaconentry.timestamp <= minTime) ||
+           (maxTime && beaconentry.timestamp >= maxTime))
+            continue;
+
+        // Skip invalid beacons.
+        if (Contains("INVESTOR", beaconentry.value))
+            continue;
+
+        Consensus.mBeaconMap[key] = beaconentry;
+    }
+
+    return Consensus;
 }

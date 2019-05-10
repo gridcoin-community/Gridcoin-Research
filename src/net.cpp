@@ -41,8 +41,7 @@ extern std::string GetCommandNonce(std::string command);
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 extern int nMaxConnections;
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end);
-std::string RetrieveMd5(std::string s1);
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 int MAX_OUTBOUND_CONNECTIONS = 8;
 
@@ -56,6 +55,10 @@ void ThreadMapPort2(void* parg);
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
 
+extern void Scraper(bool bSingleShot = false);
+extern void NeuralNetwork();
+
+extern bool fScraperActive;
 
 struct LocalServiceInfo {
     int nScore;
@@ -1611,7 +1614,56 @@ void static ThreadStakeMiner(void* parg)
     LogPrintf("ThreadStakeMiner exited");
 }
 
+void static ThreadScraper(void* parg)
+{
+    if (fDebug10) LogPrintf("ThreadSraper starting");
+    try
+    {
+        fScraperActive = true;
+        Scraper(false);
+    }
+    catch (std::exception& e)
+    {
+        fScraperActive = false;
+        PrintException(&e, "ThreadScraper()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        fScraperActive = false;
+        LogPrintf("ThreadScraper exited (interrupt)");
+        return;
+    }
+    catch (...)
+    {
+        fScraperActive = false;
+        PrintException(NULL, "ThreadScraper()");
+    }
+    fScraperActive = false;
+    LogPrintf("ThreadScraper exited");
+}
 
+void static ThreadNeuralNetwork(void* parg)
+{
+    if (fDebug10) LogPrintf("ThreadNeuralNetwork starting");
+    try
+    {
+        NeuralNetwork();
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadNeuralNetwork()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        LogPrintf("ThreadNeuralNetwork exited (interrupt)");
+        return;
+    }
+    catch (...)
+    {
+        PrintException(NULL, "ThreadNeuralNetwork()");
+    }
+    LogPrintf("ThreadNeuralNetwork exited");
+}
 
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
@@ -2187,6 +2239,24 @@ void StartNode(void* parg)
     else
         if (!netThreads->createThread(ThreadStakeMiner,pwalletMain,"ThreadStakeMiner"))
             LogPrintf("Error: createThread(ThreadStakeMiner) failed");
+
+    // Run the scraper or NN housekeeping thread, but not both. The NN housekeeping thread
+    // checks if the flag for the scraper thread is true, and basically becomes a no-op, but
+    // it is silly to run it if the scraper thread is running. The scraper thread does all
+    // of the same housekeeping functions as the NN housekeeping thread.
+    if (GetBoolArg("-scraper", false))
+    {
+        LogPrintf("Scraper enabled.");
+        if (!netThreads->createThread(ThreadScraper,NULL,"ThreadScraper"))
+            LogPrintf("Error: createThread(ThreadScraper) failed");
+    }
+    else
+    {
+        LogPrintf("Scraper disabled.");
+        LogPrintf("NN housekeeping thread enabled.");
+        if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
+            LogPrintf("Error: createThread(NeuralNetwork) failed");
+    }
 }
 
 bool StopNode()

@@ -11,7 +11,7 @@ export PYTHONPATH
 
 BITCOIND_BIN=$(top_builddir)/src/$(GRIDCOIN_DAEMON_NAME)$(EXEEXT)
 BITCOIN_QT_BIN=$(top_builddir)/src/qt/$(GRIDCOIN_GUI_NAME)$(EXEEXT)
-#BITCOIN_WIN_INSTALLER=$(PACKAGE)-$(PACKAGE_VERSION)-win$(WINDOWS_BITS)-setup$(EXEEXT)
+BITCOIN_WIN_INSTALLER=$(PACKAGE)-$(PACKAGE_VERSION)-win$(WINDOWS_BITS)-setup$(EXEEXT)
 
 empty :=
 space := $(empty) $(empty)
@@ -29,11 +29,13 @@ OSX_INSTALLER_ICONS=$(top_srcdir)/src/qt/res/icons/gridcoin.icns
 OSX_PLIST=$(top_builddir)/share/qt/Info.plist #not installed
 OSX_QT_TRANSLATIONS = da,de,es,hu,ru,uk,zh_CN,zh_TW
 
-DIST_DOCS = $(wildcard doc/*.md) $(wildcard doc/release-notes/*.md)
+DIST_DOCS = $(wildcard $(top_srcdir)/doc/*.md) $(wildcard $(top_srcdir)/doc/release-notes/*.md)
+DIST_DESKTOPFILE = $(top_srcdir)/contrib/gridcoinresearch.desktop
+DIST_ICONS = $(subst $(top_srcdir)/,,$(wildcard $(top_srcdir)/share/icons/*/*/*/*))
 
 BIN_CHECKS=$(top_srcdir)/contrib/devtools/symbol-check.py
 
-WINDOWS_PACKAGING = $(top_srcdir)/share/pixmaps/bitcoin.ico \
+WINDOWS_PACKAGING = $(top_srcdir)/share/pixmaps/gridcoin.ico \
   $(top_srcdir)/share/pixmaps/nsis-header.bmp \
   $(top_srcdir)/share/pixmaps/nsis-wizard.bmp
 
@@ -47,6 +49,14 @@ COVERAGE_INFO = baseline.info \
   test_bitcoin_filtered.info total_coverage.info \
   baseline_filtered.info functional_test.info functional_test_filtered.info \
   test_bitcoin_coverage.info test_bitcoin.info
+
+if ENABLE_QT
+desktopfiledir = $(datadir)/applications
+desktopfile_DATA = $(DIST_DESKTOPFILE)
+
+iconsdir = $(prefix)
+nobase_icons_DATA = $(DIST_ICONS)
+endif
 
 dist-hook:
 	-$(GIT) archive --format=tar HEAD -- src/version.cpp | $(AMTAR) -C $(top_distdir) -xf -
@@ -188,7 +198,7 @@ endif
 
 dist_noinst_SCRIPTS = autogen.sh
 
-EXTRA_DIST = $(top_srcdir)/share/genbuild.sh $(DIST_CONTRIB) $(DIST_DOCS) $(WINDOWS_PACKAGING) $(OSX_PACKAGING) $(BIN_CHECKS)
+EXTRA_DIST = $(top_srcdir)/share/genbuild.sh $(DIST_CONTRIB) $(DIST_DOCS) $(DIST_DESKTOPFILE) $(DIST_ICONS) $(WINDOWS_PACKAGING) $(OSX_PACKAGING) $(BIN_CHECKS)
 
 CLEANFILES = $(OSX_DMG) $(BITCOIN_WIN_INSTALLER)
 

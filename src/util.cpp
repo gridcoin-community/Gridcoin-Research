@@ -34,7 +34,7 @@ namespace boost {
 #include <openssl/rand.h>
 #include <cstdarg>
 
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 
 #ifdef WIN32
 #ifdef _MSC_VER
@@ -1288,10 +1288,10 @@ int64_t GetAdjustedTime()
 
 bool IsLockTimeWithin14days(int64_t locktime, int64_t reference)
 {
-    return IsLockTimeWithinMinutes(locktime, reference, 14 * 24 * 60);
+    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60, reference);
 }
 
-bool IsLockTimeWithinMinutes(int64_t locktime, int64_t reference, int minutes)
+bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference)
 {
     int64_t cutOff = reference - minutes * 60;
     return locktime >= cutOff;
@@ -1446,7 +1446,7 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
 std::string GetNeuralVersion()
 {
     std::string neural_v = "0";
-    int64_t neural_id = NN::IsNeuralNet();
+    int64_t neural_id = NN::GetInstance()->IsNeuralNet();
     neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
     return neural_v;
 }

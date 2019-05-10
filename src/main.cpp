@@ -21,12 +21,13 @@
 #include "boinc.h"
 #include "beacon.h"
 #include "miner.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
 #include "contract/contract.h"
 #include "contract/superblock.h"
+#include "scraper_net.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -48,14 +49,12 @@ bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
-extern bool CleanChain();
 extern void ResetTimerMain(std::string timer_name);
 bool TallyResearchAverages(CBlockIndex* index);
 bool TallyResearchAverages_retired(CBlockIndex* index);
 bool TallyResearchAverages_v9(CBlockIndex* index);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
 extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
-extern std::string getHardDriveSerial();
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void GridcoinServices();
 extern double SnapToGrid(double d);
@@ -65,28 +64,18 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 UniValue MagnitudeReport(std::string cpid);
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex);
 void ZeroOutResearcherTotals(StructCPID& stCpid);
-extern std::string getCpuHash();
-std::string TimestampToHRDate(double dtm);
 bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
-extern void FixInvalidResearchTotals(std::vector<CBlockIndex*> vDisconnect, std::vector<CBlockIndex*> vConnect);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-
 extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
 
-double DoubleFromAmount(int64_t amount);
-
-extern bool UpdateNeuralNetworkQuorumData();
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 extern bool FullSyncWithDPORNodes();
 
-bool CheckMessageSignature(std::string sMessageAction, std::string sMessageType, std::string sMsg, std::string sSig,std::string opt_pubkey);
-extern std::string strReplace(std::string& str, const std::string& oldStr, const std::string& newStr);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -100,7 +89,6 @@ extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
 extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
-std::string DefaultBlockKey(int key_length);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
 unsigned int nNodeLifespan;
@@ -120,11 +108,8 @@ CCriticalSection cs_main;
 extern std::string NodeAddress(CNode* pfrom);
 
 CTxMemPool mempool;
-unsigned int WHITELISTED_PROJECTS = 0;
-int64_t nLastPing = 0;
 int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
-int64_t nLastLoadAdminMessages = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
@@ -137,8 +122,6 @@ extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
 
 int64_t nLastBlockSolved = 0;  //Future timestamp
-int64_t nLastBlockSubmitted = 0;
-int64_t nLastCheckedForUpdate = 0;
 
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
@@ -210,17 +193,15 @@ BlockFinder blockFinder;
 // Gridcoin - Rob Halford
 
 extern std::string RetrieveMd5(std::string s1);
-extern std::string aes_complex_hash(uint256 scrypt_hash);
 
 bool bNetAveragesLoaded = false;
 bool bForceUpdate = false;
-bool bGlobalcomInitialized = false;
-bool bStakeMinerOutOfSyncWithNetwork = false;
 bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
 extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern void GetGlobalStatus();
+bool PollIsActive(const std::string& poll_contract);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
@@ -239,7 +220,6 @@ std::string    msMiningProject;
 std::string    msMiningCPID;
 std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
-double         mdLastPorNonce = 0;
 double         mdMachineTimerLast = 0;
 // Mining status variables
 std::string    msHashBoinc;
@@ -304,57 +284,25 @@ bool TimerMain(std::string timer_name, int max_ms)
     return false;
 }
 
-bool UpdateNeuralNetworkQuorumData()
-{
-    if (!bGlobalcomInitialized) return false;
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    std::string myNeuralHash = "";
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-    std::string data = "<QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::ExecuteDotNetStringFunction("SetQuorumData",data);
-    return true;
-}
-
 bool FullSyncWithDPORNodes()
 {
-    if(!NN::IsEnabled())
+    if(!NN::GetInstance()->IsEnabled())
         return false;
     // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
     // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
     double dCurrentPopularity = 0;
     std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-    std::string sMyNeuralHash = "";
-    sMyNeuralHash = NN::GetNeuralHash();
-    if (!sMyNeuralHash.empty() && !sCurrentNeuralSupermajorityHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
+    std::string sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
+    if (!sMyNeuralHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
     {
         bool bNodeOnline = RequestSupermajorityNeuralData();
-        if (bNodeOnline) return false;  // Async call to another node will continue after the node responds.
+        if (bNodeOnline)
+            return false;  // Async call to another node will continue after the node responds.
     }
+
     std::string errors1;
     LoadAdminMessages(false,errors1);
-
-    const int64_t iEndTime= (GetAdjustedTime()-CONSENSUS_LOOKBACK) - ( (GetAdjustedTime()-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
-    const int64_t nLookback = 30 * 6 * 86400;
-    const int64_t iStartTime = (iEndTime - nLookback) - ( (iEndTime - nLookback) % BLOCK_GRANULARITY);
-    std::string cpiddata = GetListOf(Section::BEACON, iStartTime, iEndTime);
-    std::string sWhitelist = GetListOf(Section::PROJECT);
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t superblock_age = GetAdjustedTime() - superblock_time;
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-    std::string sAge = ToString(superblock_age);
-    std::string sBlock = ReadCache(Section::SUPERBLOCK, "block_number").value;
-    std::string sTimestamp = TimestampToHRDate(superblock_time);
-    std::string data = "<WHITELIST>" + sWhitelist + "</WHITELIST><CPIDDATA>"
-                       + cpiddata + "</CPIDDATA><QUORUMDATA><AGE>" + sAge + "</AGE><HASH>" + consensus_hash + "</HASH><BLOCKNUMBER>" + sBlock + "</BLOCKNUMBER><TIMESTAMP>"
-                       + sTimestamp + "</TIMESTAMP><PRIMARYCPID>" + msPrimaryCPID + "</PRIMARYCPID></QUORUMDATA>";
-    NN::SynchronizeDPOR(data);
+    NN::GetInstance()->SynchronizeDPOR(GetConsensusBeaconList());
     return true;
 }
 
@@ -728,36 +676,33 @@ void GetGlobalStatus()
 
 std::string GetCurrentOverviewTabPoll()
 {
-    std::string poll = "";
-    std::string sMessageKey = ExtractXML(msPoll, "<MK>", "</MK>");
-    std::string sPollExpiration = ExtractXML(msPoll, "<EXPIRATION>", "</EXPIRATION>");
-    uint64_t uPollExpiration = 0;
-    // Alerts are displayed as polls but do not have an expiration
-    if(sPollExpiration.empty())
-    {
-        uPollExpiration = pindexBest->nTime;
+    AssertLockHeld(MinerStatus.lock);
+
+    // The global msPoll variable contains the poll most-recently published to
+    // the network. If it hasn't expired, return the title of this poll:
+    if (PollIsActive(msPoll)) {
+        return ExtractXML(msPoll, "<MK>", "</MK>").substr(0, 80);
     }
-    else
-    {
-        try
-        {
-            uPollExpiration = stoll(sPollExpiration);
-        }
-        catch(std::exception &e)
-        {
-            // Malformed poll expiration, don't display
-            uPollExpiration = 0;
+
+    // Otherwise, find the most recent active poll from the AppCache:
+    std::string selected_poll_title;
+    int64_t published_at = 0;
+
+    for (const auto& item : ReadCacheSection(Section::POLL)) {
+        if (item.second.timestamp > published_at && PollIsActive(item.second.value)) {
+            selected_poll_title = item.first;
+            published_at = item.second.timestamp;
         }
     }
-    if (uPollExpiration >= pindexBest->nTime)
-    {
-        poll = sMessageKey.substr(0,80);
+
+    // If we couldn't find a poll from the AppCache, no active polls exist:
+    if (selected_poll_title.empty()) {
+        return _("No current polls");
     }
-    else
-    {
-        poll = _("No current polls");
-    }
-    return poll;
+
+    // The key of the AppCache entry contains the poll title. Take the first 80
+    // characters for display in the GUI:
+    return selected_poll_title.substr(0, 80);
 }
 
 bool Timer_Main(std::string timer_name, int max_ms)
@@ -957,6 +902,8 @@ MiningCPID GetNextProject(bool bForce)
                                             LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2);
                                             continue;
                                         }
+#                                       else
+                                        (void)bResult;
 #                                       endif
 
 
@@ -2847,9 +2794,11 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
                 
                 try
                 {
-                DeleteCache(StringToSection(sMType), sMKey);
-                if(fDebug)
-                    LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
+                    if (!NN::DeleteContract(sMType, sMKey)) {
+                        DeleteCache(StringToSection(sMType), sMKey);
+                    }
+                    if(fDebug)
+                        LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
                 }
                 catch(const std::runtime_error& e)
                 {
@@ -3307,7 +3256,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         //Approve first coinstake in DPOR block
-        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) && !IsResearchAgeEnabled(pindex->nHeight))
+        if (IsResearcher(bb.cpid) && IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) && !IsResearchAgeEnabled(pindex->nHeight))
         {
             if (bb.ResearchSubsidy > (GetOwedAmount(bb.cpid)+1))
             {
@@ -3357,7 +3306,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if ((IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 15) || nVersion>=9) && !fColdBoot)
+            if ((IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) || nVersion>=9) && !fColdBoot)
             {
                 // Let this take effect together with stakev8
                 if (nVersion>=8)
@@ -3858,12 +3807,6 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
             if (fDebug) LogPrintf("SetBestChain: Updating Neural Supermajority (v9 %%3) height %d",nBestHeight);
             ComputeNeuralNetworkSupermajorityHashes();
         }
-        // Update quorum data.
-        if ((nBestHeight % 10) == 0 && !OutOfSyncByAge() && NeedASuperblock())
-        {
-            if (fDebug) LogPrintf("SetBestChain: Updating Neural Quorum (v9 M) height %d",nBestHeight);
-            UpdateNeuralNetworkQuorumData();
-        }
     }
     else if (!fIsInitialDownload)
         // Retally after reorganize to sync up amounts owed.
@@ -4292,7 +4235,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 if (IsProofOfStake())
                 {
                     uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), GetAdjustedTime(), 600) || nHeight >= 999000))
+                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), 600, GetAdjustedTime()) || nHeight >= 999000))
                     {
                         return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
                     }
@@ -4363,7 +4306,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
                 pnode->PushInventory(CInv(MSG_BLOCK, hash));
     }
 
-    if (fDebug) LogPrintf("{ACC}");
     nLastAskedForBlocks=GetAdjustedTime();
     ResetTimerMain("OrphanBarrage");
     return true;
@@ -4526,13 +4468,6 @@ void GridcoinServices()
                 if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 A) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
             }
-            if ((nBestHeight % 3) == 0 && !OutOfSyncByAge())
-            {
-                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 A) height %d",nBestHeight);
-                if (fDebug10) LogPrintf("#CNNSH# ");
-                UpdateNeuralNetworkQuorumData();
-            }
-
             // Perform retired tallies between the V9 block switch (1144000) and the
             // V9 tally switch (1144120) or else blocks will be rejected in between.
             if (IsV9Enabled(nBestHeight) && (nBestHeight % 20) == 0)
@@ -4557,12 +4492,6 @@ void GridcoinServices()
             {
                 if (fDebug) LogPrintf("SVC: Updating Neural Supermajority (v3 D) height %d",nBestHeight);
                 ComputeNeuralNetworkSupermajorityHashes();
-            }
-            if ((nBestHeight % 5)==0 && !OutOfSyncByAge())
-            {
-                if (fDebug) LogPrintf("SVC: Updating Neural Quorum (v3 E) height %d",nBestHeight);
-                if (fDebug3) LogPrintf("CNNSH2 ");
-                UpdateNeuralNetworkQuorumData();
             }
         }
     }
@@ -4623,7 +4552,7 @@ void GridcoinServices()
             {
                 // First verify my node has a synced contract
                 std::string contract;
-                contract = NN::GetNeuralContract();
+                contract = NN::GetInstance()->GetNeuralContract();
                 if (VerifySuperblock(contract, pindexBest))
                 {
                         AsyncNeuralRequest("quorum","gridcoin",25);
@@ -4659,7 +4588,7 @@ void GridcoinServices()
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 2)) return true;
+    if (IsLockTimeWithinMinutes(nLastAskedForBlocks, 2, GetAdjustedTime())) return true;
     nLastAskedForBlocks = GetAdjustedTime();
 
     int iAsked = 0;
@@ -4708,7 +4637,7 @@ void ClearOrphanBlocks()
 
 void CleanInboundConnections(bool bClearAll)
 {
-        if (IsLockTimeWithinMinutes(nLastCleaned, GetAdjustedTime(), 10)) return;
+        if (IsLockTimeWithinMinutes(nLastCleaned, 10, GetAdjustedTime())) return;
         nLastCleaned = GetAdjustedTime();
         LOCK(cs_vNodes);
         for(CNode* pNode : vNodes)
@@ -4858,8 +4787,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.erase(hashPrev);
 
     }
-
-    LogPrintf("{PB}: ACC; ");
 
     // Compatiblity while V8 is in use. Can be removed after the V9 switch.
     if(IsV9Enabled(pindexBest->nHeight) == false)
@@ -5093,21 +5020,21 @@ bool LoadBlockIndex(bool fAllowNew)
     return true;
 }
 
-std::string ExtractXML(std::string XMLdata, std::string key, std::string key_end)
+std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end)
 {
+    string::size_type loc = XMLdata.find(key, 0);
 
-    std::string extraction = "";
-    string::size_type loc = XMLdata.find( key, 0 );
-    if( loc != string::npos )
-    {
-        string::size_type loc_end = XMLdata.find( key_end, loc+3);
-        if (loc_end != string::npos )
-        {
-            extraction = XMLdata.substr(loc+(key.length()),loc_end-loc-(key.length()));
-
-        }
+    if (loc == string::npos) {
+        return "";
     }
-    return extraction;
+
+    string::size_type loc_end = XMLdata.find(key_end, loc + 3);
+
+    if (loc_end == string::npos) {
+        return "";
+    }
+
+    return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
 }
 
 std::string RetrieveMd5(std::string s1)
@@ -5140,43 +5067,32 @@ int GetFilesize(FILE* file)
 }
 
 
-
-
 std::string getfilecontents(std::string filename)
 {
-    std::string buffer;
-    std::string line;
-    ifstream myfile;
-    if (fDebug10) LogPrintf("loading file to string %s",filename);
-
-    filesystem::path path = filename;
-
-    if (!filesystem::exists(path)) {
-        LogPrintf("the file does not exist %s",path.string());
+    if (!filesystem::exists(filename)) {
+        LogPrintf("getfilecontents: file does not exist %s", filename);
         return "-1";
     }
 
-     FILE *file = fopen(filename.c_str(), "rb");
-     CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
-     int fileSize = GetFilesize(filein);
-     filein.fclose();
+    std::ifstream in(filename, std::ios::in | std::ios::binary);
 
-     myfile.open(filename.c_str());
-
-    buffer.reserve(fileSize);
-    if (fDebug10) LogPrintf("opening file %s",filename);
-
-    if(myfile)
-    {
-      while(getline(myfile, line))
-      {
-            buffer = buffer + line + "\n";
-      }
+    if (in.fail()) { 
+        LogPrintf("getfilecontents: error opening file %s", filename); 
+        return "-1";
     }
-    myfile.close();
-    return buffer;
-}
 
+    if (fDebug10) LogPrintf("loading file to string %s", filename);
+
+    std::ostringstream out;
+
+    out << in.rdbuf();
+
+    // Immediately close instead of waiting for the destructor to decrease the 
+    // chance of a race when calling this to read BOINC's client_state.xml:
+    in.close();
+
+    return out.str();
+}
 
 bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
 {
@@ -5449,7 +5365,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
 
     int64_t nGRCTime = ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
     int64_t nCPIDTime = ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
-    if (IsLockTimeWithinMinutes(nLastGRCtallied, GetAdjustedTime(), 100) &&
+    if (IsLockTimeWithinMinutes(nLastGRCtallied, 100, GetAdjustedTime()) &&
         (nGRCTime > 0 || nCPIDTime > 0))
         return true;
 
@@ -6112,8 +6028,6 @@ string GetWarnings(string strFor)
             {
                 nPriority = alert.nPriority;
                 strStatusBar = alert.strStatusBar;
-                if (nPriority > 1000)
-                    strRPC = strStatusBar;
             }
         }
     }
@@ -6234,9 +6148,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
     // Stay in Sync - 8-9-2016
-    if (!IsLockTimeWithinMinutes(nBootup, GetAdjustedTime(), 15))
+    if (!IsLockTimeWithinMinutes(nBootup, 15, GetAdjustedTime()))
     {
-        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, GetAdjustedTime(), 5) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
+        if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
             if(fDebug) LogPrintf("Bootup");
             AskForOutstandingBlocks(uint256(0));
@@ -6429,6 +6343,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 item.second.RelayTo(pfrom);
         }
 
+        /* Notify the peer about statsscraper blobs we have */
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        CScraperManifest::PushInvTo(pfrom);
+
         pfrom->fSuccessfullyConnected = true;
 
         if (fDebug10) LogPrintf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
@@ -6552,6 +6471,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->AddInventoryKnown(inv);
 
             bool fAlreadyHave = AlreadyHave(txdb, inv);
+
+            /* Check also the scraper data propagation system to see if it needs
+             * this inventory object */
+            {
+                LOCK(CScraperManifest::cs_mapManifest);
+
+                fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(pfrom, inv);
+            }
+
             if (fDebug10)
                 LogPrintf("  got inventory: %s  %s", inv.ToString(), fAlreadyHave ? "have" : "new");
 
@@ -6624,7 +6552,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                 }
             }
-             else if (inv.IsKnownType())
+            else if (inv.IsKnownType())
             {
                 // Send stream from relay memory
                 bool pushed = false;
@@ -6643,6 +6571,36 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         ss.reserve(1000);
                         ss << tx;
                         pfrom->PushMessage("tx", ss);
+                    }
+                }
+                else if(!pushed && MSG_PART == inv.type ) {
+                    CSplitBlob::SendPartTo(pfrom, inv.hash);
+                }
+                else if(!pushed && MSG_SCRAPERINDEX == inv.type )
+                {
+                    LOCK(CScraperManifest::cs_mapManifest);
+
+                    // Do not send manifests while out of sync.
+                    if (!OutOfSyncByAge())
+                    {
+                        // Do not send unauthorized manifests. This check needs to be done here, because in the
+                        // case of a scraper deauthorization, a request from another node to forward the manifest
+                        // may come before the housekeeping loop has a chance to do the periodic culling. This could
+                        // result in unnecessary node banscore. This will suppress "this" node from sending any
+                        // unauthorized manifests.
+
+                        auto iter = CScraperManifest::mapManifest.find(inv.hash);
+                        if (iter != CScraperManifest::mapManifest.end())
+                        {
+                            CScraperManifest& manifest = *iter->second;
+
+                            // We are not going to do anything with the banscore here, because this is the sending node,
+                            // but it is an out parameter of IsManifestAuthorized.
+                            unsigned int banscore_out = 0;
+
+                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out))
+                                CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                        }
                     }
                 }
             }
@@ -6873,40 +6831,30 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "neural")
     {
-            std::string neural_request = "";
-            std::string neural_request_id = "";
-            vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-            std::string neural_response = "generic_response";
+        std::string neural_request = "";
+        std::string neural_request_id = "";
+        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
+        std::string neural_response = "generic_response";
 
-            if (neural_request=="neural_data")
-            {
-                pfrom->PushMessage("ndata_nresp", NN::GetNeuralContract());
-            }
-            else if (neural_request=="neural_hash")
-            {
-            if(0==neural_request_id.compare(0,13,"supercfwd.rqa"))
-            {
-                std::string r_hash;  vRecv >> r_hash;
-                supercfwd::SendResponse(pfrom,r_hash);
-            }
-            else
-            pfrom->PushMessage("hash_nresp", NN::GetNeuralHash());
-            }
-            else if (neural_request=="explainmag")
-            {
-            neural_response = NN::ExecuteDotNetStringFunction("ExplainMag",neural_request_id);
-                pfrom->PushMessage("expmag_nresp", neural_response);
-                }
-            else if (neural_request=="quorum")
-            {
+        if (neural_request=="neural_data")
+        {
+            pfrom->PushMessage("ndata_nresp", NN::GetInstance()->GetNeuralContract());
+        }
+        else if (neural_request=="neural_hash")
+        {
+            pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
+        }
+        else if (neural_request=="explainmag")
+        {
+            pfrom->PushMessage(
+                        "expmag_nresp",
+                        NN::GetInstance()->ExplainMagnitude(neural_request_id));
+        }
+        else if (neural_request=="quorum")
+        {
             // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
-            pfrom->PushMessage("quorum_nresp", NN::GetNeuralContract());
-            }
-            else if (neural_request=="supercfwdr")
-            {
-                // this command could be done by reusing quorum_nresp, but I do not want to confuse the NN
-                supercfwd::QuorumResponseHook(pfrom,neural_request_id);
-            }
+            pfrom->PushMessage("quorum_nresp", NN::GetInstance()->GetNeuralContract());
+        }
     }
     else if (strCommand == "ping")
     {
@@ -6986,15 +6934,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "hash_nresp")
     {
-            std::string neural_response = "";
-            vRecv >> neural_response;
-            // if (pfrom->nNeuralRequestSent != 0)
-            // nNeuralNonce must match request ID
-            pfrom->NeuralHash = neural_response;
-            if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
-
-            // Hook into miner for delegated sb staking
-            supercfwd::HashResponseHook(pfrom, neural_response);
+        std::string neural_response = "";
+        vRecv >> neural_response;
+        // if (pfrom->nNeuralRequestSent != 0)
+        // nNeuralNonce must match request ID
+        pfrom->NeuralHash = neural_response;
+        if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
     }
     else if (strCommand == "expmag_nresp")
     {
@@ -7010,35 +6955,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "quorum_nresp")
     {
-            std::string neural_contract = "";
-            vRecv >> neural_contract;
-            if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-            if (neural_contract.length() > 10)
-            {
-                 std::string results = "";
-                 //Resolve discrepancies
-                results = NN::ExecuteDotNetStringFunction("ResolveDiscrepancies",neural_contract);
-                 if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-            }
-
-            // Hook into miner for delegated sb staking
-            supercfwd::QuorumResponseHook(pfrom,neural_contract);
+        std::string neural_contract = "";
+        vRecv >> neural_contract;
+        if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
     }
     else if (strCommand == "ndata_nresp")
     {
-            std::string neural_contract = "";
-            vRecv >> neural_contract;
-            if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-            if (neural_contract.length() > 10)
-            {
-                 std::string results = "";
-                 //Resolve discrepancies
-                LogPrintf("Sync neural network data from supermajority");
-                results = NN::ExecuteDotNetStringFunction("ResolveCurrentDiscrepancies",neural_contract);
-                if (fDebug && !results.empty()) LogPrintf("Quorum Resolution: %s ",results);
-                 // Resume the full DPOR sync at this point now that we have the supermajority data
-                 if (results=="SUCCESS")  FullSyncWithDPORNodes();
-            }
+        std::string neural_contract;
+        vRecv >> neural_contract;
+        if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
+        if (neural_contract.length() > 10)
+            FullSyncWithDPORNodes();
     }
     else if (strCommand == "alert")
     {
@@ -7068,6 +6995,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 pfrom->Misbehaving(10);
             }
         }
+    }
+
+    else if (strCommand == "scraperindex")
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        CScraperManifest::RecvManifest(pfrom,vRecv);
+    }
+    else if (strCommand == "part")
+    {
+        CSplitBlob::RecvPart(pfrom,vRecv);
     }
 
 
@@ -7479,8 +7417,8 @@ void HarvestCPIDs(bool cleardata)
  try
  {
     std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-    std::string sout = "";
-    sout = getfilecontents(sourcefile);
+    std::string sout = getfilecontents(sourcefile);
+
     if (sout == "-1")
     {
         LogPrintf("Unable to obtain Boinc CPIDs ");
@@ -7606,24 +7544,21 @@ void HarvestCPIDs(bool cleardata)
 
                         if (structcpid.Iscpidvalid)
                         {
-                                // Verify the CPID is a valid researcher:
-                                if (IsResearcher(structcpid.cpid))
-                                {
-                                    GlobalCPUMiningCPID.cpidhash = cpidhash;
-                                    GlobalCPUMiningCPID.email = email;
-                                    GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
-                                    LogPrintf("Setting bpk to %s", cpidhash);
+                            // Verify the CPID is a valid researcher:
+                            if (IsResearcher(structcpid.cpid))
+                            {
+                                GlobalCPUMiningCPID.cpidhash = cpidhash;
+                                GlobalCPUMiningCPID.email = email;
+                                GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
+                                LogPrintf("Setting bpk to %s", cpidhash);
 
-                                    if (structcpid.team=="gridcoin")
-                                    {
-                                        msPrimaryCPID = structcpid.cpid;
-                                            //Let the Neural Network know what your CPID is so it can be charted:
-                                            std::string sXML = "<KEY>PrimaryCPID</KEY><VALUE>" + msPrimaryCPID + "</VALUE>";
-                                        std::string sData = NN::ExecuteDotNetStringFunction("WriteKey",sXML);
-                                        //Try to get a neural RAC report
-                                        AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                                    }
+                                if (structcpid.team=="gridcoin")
+                                {
+                                    msPrimaryCPID = structcpid.cpid;
+                                    //Try to get a neural RAC report
+                                    AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
                                 }
+                            }
                         }
 
                         mvCPIDs[proj] = structcpid;
@@ -7891,7 +7826,20 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     while (!pto->mapAskFor.empty() && (*pto->mapAskFor.begin()).first <= nNow)
     {
         const CInv& inv = (*pto->mapAskFor.begin()).second;
-        if (!AlreadyHave(txdb, inv))
+
+        // Brod: do not request stuff if it was already removed from this map
+        // TODO: check thread safety - JCO - I think I have addressed.
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        const auto iaaf= mapAlreadyAskedFor.find(inv);
+
+        bool fAlreadyHave = AlreadyHave(txdb, inv);
+
+        /* Check also the scraper data propagation system to see if it needs
+         * this inventory object */
+        fAlreadyHave = fAlreadyHave && CScraperManifest::AlreadyHave(0, inv);
+
+        if ( iaaf!=mapAlreadyAskedFor.end() && !fAlreadyHave )
         {
             if (fDebugNet)        LogPrintf("sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
@@ -7900,7 +7848,8 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 pto->PushMessage("getdata", vGetData);
                 vGetData.clear();
             }
-            mapAlreadyAskedFor[inv] = nNow;
+
+            // mapAlreadyAskedFor[inv] = nNow; //TODO: check why this was here
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }
@@ -8066,96 +8015,101 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 {
     const std::string &msg = tx.hashBoinc;
     const int64_t &nTime = tx.nTime;
-          if (msg.empty()) return false;
-          bool fMessageLoaded = false;
+    if (msg.empty()) return false;
+    bool fMessageLoaded = false;
 
-          if (Contains(msg,"<MT>"))
-          {
-              std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-              std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-              std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-              std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-              std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-              std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-              if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
-              {
-                    sMessageValue="";
-              }
+    if (Contains(msg,"<MT>"))
+    {
+        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
+        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
+        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
+        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
+        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
+        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
+        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
+        {
+              sMessageValue="";
+        }
 
-              if (sMessageType=="superblock")
-              {
-                  // Deny access to superblock processing runtime data
-                  sMessageValue="";
-              }
+        if (sMessageType=="superblock")
+        {
+            // Deny access to superblock processing runtime data
+            sMessageValue="";
+        }
 
-              if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
-              {
-                  //Verify sig first
-                  bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                      sSignature,sMessagePublicKey);
+        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
+        {
+            //Verify sig first
+            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
+                sSignature,sMessagePublicKey);
 
-                  if (Verified)
-                  {
-                        if (sMessageAction=="A")
-                        {
-                                /* With this we allow verifying blocks with stupid beacon */
-                                if("beacon"==sMessageType)
-                                {
-                                    std::string out_cpid = "";
-                                    std::string out_address = "";
-                                    std::string out_publickey = "";
-                                    GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
+            if (Verified)
+            {
+                if (sMessageAction=="A")
+                {
+                    /* With this we allow verifying blocks with stupid beacon */
+                    if("beacon"==sMessageType)
+                    {
+                        std::string out_cpid = "";
+                        std::string out_address = "";
+                        std::string out_publickey = "";
+                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
                         WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                                }
+                    }
 
                     try
                     {
-                        WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
-                        if(fDebug10 && sMessageType=="beacon" )
-                                    LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                                }
+                        if (!NN::AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
+                            WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
+
+                            if(fDebug10 && sMessageType=="beacon" )
+                                LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
+                        }
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
                     }
 
-                                fMessageLoaded = true;
-                                if (sMessageType=="poll")
-                                {
+                    fMessageLoaded = true;
+                    if (sMessageType=="poll")
+                    {
                         msPoll = msg;
-                                        }
-                        }
-                        else if(sMessageAction=="D")
-                        {
-                                if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
-                                if(fDebug10 && sMessageType=="beacon" ){
-                                    LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
-                                }
+                    }
+                }
+                else if(sMessageAction=="D")
+                {
+                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
+                    if(fDebug10 && sMessageType=="beacon" ){
+                        LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
+                    }
                     
                     try
                     {
-                        DeleteCache(StringToSection(sMessageType), sMessageKey);
-                                fMessageLoaded = true;
+                        if (!NN::DeleteContract(sMessageType, sMessageKey)) {
+                            DeleteCache(StringToSection(sMessageType), sMessageKey);
                         }
+                        fMessageLoaded = true;
+                    }
                     catch(const std::runtime_error& e)
                     {
                         error("Attempting to add to unknown cache: %s", sMessageType);
                     }
                 }
-                        // If this is a boinc project, load the projects into the coin:
-                        if (sMessageType=="project" || sMessageType=="projectmapping")
-                        {
-                            //Reserved
-                            fMessageLoaded = true;
-                        }
-
-                        if(fDebug)
-                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
-                  }
+                // If this is a boinc project, load the projects into the coin:
+                if (sMessageType=="project" || sMessageType=="projectmapping")
+                {
+                    //Reserved
+                    fMessageLoaded = true;
                 }
+
+                if(fDebug)
+                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
+            }
+        }
     }
 
-   return fMessageLoaded;
+    return fMessageLoaded;
 }
 
 double GRCMagnitudeUnit(int64_t locktime)
@@ -8216,7 +8170,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string oper
             // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
             // Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
             int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
-            if (IsLockTimeWithinMinutes(iBeaconTimestamp, pindexBest->GetBlockTime(), 60*24*30*6))
+            if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6, pindexBest->GetBlockTime()))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;
                 int64_t iAccrual = (int64_t)((dNewbieAccrualAge*dCurrentMagnitude*dMagnitudeUnit*COIN) + (1*COIN));
@@ -8440,83 +8394,6 @@ std::string GetQuorumHash(const std::string& data)
     }
 
     return RetrieveMd5(sHashIn);
-}
-
-
-std::string getHardwareID()
-{
-    std::string ele1 = "?";
-    /*#ifdef QT_GUI
-        ele1 = getMacAddress();
-    #endif*/
-    ele1 += ":" + getCpuHash();
-    ele1 += ":" + getHardDriveSerial();
-
-    std::string hwid = RetrieveMd5(ele1);
-    return hwid;
-}
-
-#ifdef WIN32
-static void getCpuid( unsigned int* p, unsigned int ax )
- {
-    __asm __volatile
-    (   "movl %%ebx, %%esi\n\t"
-        "cpuid\n\t"
-        "xchgl %%ebx, %%esi"
-        : "=a" (p[0]), "=S" (p[1]),
-          "=c" (p[2]), "=d" (p[3])
-        : "0" (ax)
-    );
- }
-#endif
-
- std::string getCpuHash()
- {
-    std::string n = boost::asio::ip::host_name();
-    #ifdef WIN32
-        unsigned int cpuinfo[4] = { 0, 0, 0, 0 };
-        getCpuid( cpuinfo, 0 );
-        unsigned short hash = 0;
-        unsigned int* ptr = (&cpuinfo[0]);
-        for ( unsigned int i = 0; i < 4; i++ )
-            hash += (ptr[i] & 0xFFFF) + ( ptr[i] >> 16 );
-        double dHash = (double)hash;
-        return n + ";" + RoundToString(dHash,0);
-    #else
-        return n;
-    #endif
- }
-
-
-
-std::string SystemCommand(const char* cmd)
-{
-    FILE* pipe = popen(cmd, "r");
-    if (!pipe) return "ERROR";
-    char buffer[128];
-    std::string result = "";
-    while(!feof(pipe))
-    {
-        if(fgets(buffer, 128, pipe) != NULL)
-            result += buffer;
-    }
-    pclose(pipe);
-    return result;
-}
-
-
-std::string getHardDriveSerial()
-{
-    if (!msHDDSerial.empty()) return msHDDSerial;
-    std::string cmd1 = "";
-    #ifdef WIN32
-        cmd1 = "wmic path win32_physicalmedia get SerialNumber";
-    #else
-        cmd1 = "ls /dev/disk/by-uuid";
-    #endif
-    std::string result = SystemCommand(cmd1.c_str());
-    msHDDSerial = result;
-    return result;
 }
 
 bool IsContract(CBlockIndex* pIndex)

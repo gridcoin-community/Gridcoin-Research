@@ -735,102 +735,206 @@ public:
     }
 };
 
-/** Double ended buffer combining vector and stream-like interfaces.
+/** Double ended buffer wrapper combining vector and stream-like interfaces.
  *
- * >> and << read and write unformatted data using the above serialization templates.
- * Fills with data in linear time; some stringstream implementations take N^2 time.
+ * Operator >> read unformatted data using the above serialization templates.
+ * Takes the buffer by reference which means it must reamin valid.
  */
-class CDataStream
+class CReaderStream
 {
-protected:
+    protected:
     typedef CSerializeData vector_type;
-    vector_type vch;
+    const vector_type* vchro;
+    protected:
     unsigned int nReadPos;
     short state;
     short exceptmask;
-public:
+
+    public:
+
+    typedef vector_type::size_type        size_type;
+    typedef vector_type::difference_type  difference_type;
+    typedef vector_type::const_reference  const_reference;
+    typedef vector_type::value_type       value_type;
+    typedef vector_type::const_iterator   const_iterator;
+
     int nType;
     int nVersion;
 
-    typedef vector_type::allocator_type   allocator_type;
-    typedef vector_type::size_type        size_type;
-    typedef vector_type::difference_type  difference_type;
-    typedef vector_type::reference        reference;
-    typedef vector_type::const_reference  const_reference;
-    typedef vector_type::value_type       value_type;
-    typedef vector_type::iterator         iterator;
-    typedef vector_type::const_iterator   const_iterator;
-    typedef vector_type::reverse_iterator reverse_iterator;
-
-    explicit CDataStream(int nTypeIn, int nVersionIn)
-    {
-        Init(nTypeIn, nVersionIn);
-    }
-
-    CDataStream(const_iterator pbegin, const_iterator pend, int nTypeIn, int nVersionIn) : vch(pbegin, pend)
-    {
-        Init(nTypeIn, nVersionIn);
-    }
-
-#if !defined(_MSC_VER) || _MSC_VER >= 1300
-    CDataStream(const char* pbegin, const char* pend, int nTypeIn, int nVersionIn) : vch(pbegin, pend)
-    {
-        Init(nTypeIn, nVersionIn);
-    }
-#endif
-
-    CDataStream(const vector_type& vchIn, int nTypeIn, int nVersionIn) : vch(vchIn.begin(), vchIn.end())
-    {
-        Init(nTypeIn, nVersionIn);
-    }
-
-    CDataStream(const std::vector<char>& vchIn, int nTypeIn, int nVersionIn) : vch(vchIn.begin(), vchIn.end())
-    {
-        Init(nTypeIn, nVersionIn);
-    }
-
-    CDataStream(const std::vector<unsigned char>& vchIn, int nTypeIn, int nVersionIn) : vch((char*)&vchIn.begin()[0], (char*)&vchIn.end()[0])
-    {
-        Init(nTypeIn, nVersionIn);
-    }
-
-    void Init(int nTypeIn, int nVersionIn)
-    {
-        nReadPos = 0;
-        nType = nTypeIn;
-        nVersion = nVersionIn;
-        state = 0;
-        exceptmask = std::ios::badbit | std::ios::failbit;
-    }
-
-    CDataStream& operator+=(const CDataStream& b)
-    {
-        vch.insert(vch.end(), b.begin(), b.end());
-        return *this;
-    }
-
-    friend CDataStream operator+(const CDataStream& a, const CDataStream& b)
-    {
-        CDataStream ret = a;
-        ret += b;
-        return (ret);
-    }
+    CReaderStream(const CSerializeData* ivch, unsigned int iPos = 0, int iType = SER_NETWORK, int iVersion = 1)
+        :vchro(ivch)
+        ,nReadPos(iPos)
+        ,state(0)
+        ,exceptmask(std::ios::badbit | std::ios::failbit)
+        ,nType(iType)
+        ,nVersion(iVersion)
+    {};
 
     std::string str() const
     {
         return (std::string(begin(), end()));
     }
 
+    //
+    // Vector subset
+    //
+    const_iterator begin() const                     { return vchro->begin() + nReadPos; }
+    const_iterator end() const                       { return vchro->end(); }
+    size_type size() const                           { return vchro->size() - nReadPos; }
+    bool empty() const                               { return vchro->size() == nReadPos; }
+
+    bool Rewind(size_type n)
+    {
+        // Rewind by n characters if the buffer hasn't been compacted yet
+        if (n > nReadPos)
+            return false;
+        nReadPos -= n;
+        return true;
+    }
+
+
+    //
+    // Stream subset
+    //
+    void setstate(short bits, const char* psz)
+    {
+        state |= bits;
+        if (state & exceptmask)
+            throw std::ios_base::failure(psz);
+    }
+
+    bool eof() const             { return size() == 0; }
+    bool fail() const            { return state & (std::ios::badbit | std::ios::failbit); }
+    bool good() const            { return !eof() && (state == 0); }
+    void clear(short n)          { state = n; }  // name conflict with vector clear()
+    short exceptions()           { return exceptmask; }
+    short exceptions(short mask) { short prev = exceptmask; exceptmask = mask; setstate(0, "CDataStream"); return prev; }
+    CReaderStream* rdbuf()         { return this; }
+
+    int in_avail()               { return size(); }
+    void SetType(int n)          { nType = n; }
+    int GetType()                { return nType; }
+    void SetVersion(int n)       { nVersion = n; }
+    int GetVersion()             { return nVersion; }
+    void ReadVersion()           { *this >> nVersion; }
+
+    CReaderStream& read(char* pch, int nSize)
+    {
+        // Read from the beginning of the buffer
+        assert(nSize >= 0);
+        unsigned int nReadPosNext = nReadPos + nSize;
+        if (nReadPosNext > vchro->size())
+        {
+            setstate(std::ios::failbit, "CDataStream::read() : end of data");
+            memset(pch, 0, nSize);
+            if (vchro->size() > nReadPos)
+                nSize = vchro->size() - nReadPos;
+                else nSize= 0;
+            assert((nReadPos + nSize) == vchro->size());
+            nReadPosNext= nReadPos + nSize;
+        }
+        memcpy(pch, &(*vchro)[nReadPos], nSize);
+        nReadPos = nReadPosNext;
+        return (*this);
+    }
+
+    CReaderStream& ignore(int nSize)
+    {
+        // Ignore from the beginning of the buffer
+        assert(nSize >= 0);
+        unsigned int nReadPosNext = nReadPos + nSize;
+        if (nReadPosNext >= vchro->size())
+        {
+            if (nReadPosNext > vchro->size())
+                setstate(std::ios::failbit, "CDataStream::ignore() : end of data");
+            /* FIXME: this was here in CDataStream, but now vchro is const so we can not do this.
+            nReadPos = 0;
+            vchro->clear();
+            */
+            return (*this);
+        }
+        nReadPos = nReadPosNext;
+        return (*this);
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s, int nType, int nVersion) const
+    {
+        // Special case: stream << stream concatenates like stream += stream
+        if (!vchro->empty())
+            s.write((char*)&(*vchro)[0], vchro->size() * sizeof((*vchro)[0]));
+    }
+
+    template<typename T>
+    CReaderStream& operator>>(T& obj)
+    {
+        // Unserialize from this stream
+        ::Unserialize(*this, obj, nType, nVersion);
+        return (*this);
+    }
+
+};
+
+/** Double ended buffer combining vector and stream-like interfaces.
+ *
+ * >> and << read and write unformatted data using the above serialization templates.
+ * Fills with data in linear time; some stringstream implementations take N^2 time.
+ */
+class CDataStream
+    :public CReaderStream
+{
+protected:
+    vector_type vch;
+public:
+
+    typedef vector_type::allocator_type   allocator_type;
+    typedef vector_type::reference        reference;
+    typedef vector_type::iterator         iterator;
+    typedef vector_type::reverse_iterator reverse_iterator;
+
+    explicit CDataStream(int nTypeIn, int nVersionIn)
+        :CReaderStream(&vch,0,nTypeIn,nVersionIn)
+    {assert(&vch==vchro);}
+
+    CDataStream(const_iterator pbegin, const_iterator pend, int nTypeIn, int nVersionIn)
+        :CReaderStream(&vch,0,nTypeIn,nVersionIn)
+        ,vch(pbegin, pend)
+    {assert(&vch==vchro);}
+
+#if !defined(_MSC_VER) || _MSC_VER >= 1300
+    CDataStream(const char* pbegin, const char* pend, int nTypeIn, int nVersionIn)
+        :CReaderStream(&vch,0,nTypeIn,nVersionIn)
+        ,vch(pbegin, pend)
+    {assert(&vch==vchro);}
+#endif
+
+    CDataStream(const vector_type& vchIn, int nTypeIn, int nVersionIn)
+        :CReaderStream(&vch,0,nTypeIn,nVersionIn)
+        ,vch(vchIn.begin(), vchIn.end())
+    {assert(&vch==vchro);}
+
+    CDataStream(const std::vector<char>& vchIn, int nTypeIn, int nVersionIn)
+        :CReaderStream(&vch,0,nTypeIn,nVersionIn)
+        ,vch(vchIn.begin(), vchIn.end())
+    {assert(&vch==vchro);}
+
+    CDataStream(const std::vector<unsigned char>& vchIn, int nTypeIn, int nVersionIn)
+        :CReaderStream(&vch,0,nTypeIn,nVersionIn)
+        ,vch((char*)&vchIn.begin()[0], (char*)&vchIn.end()[0])
+    {assert(&vch==vchro);}
+
+    CDataStream& operator+=(const CReaderStream& b)
+    {
+        vch.insert(vch.end(), b.begin(), b.end());
+        return *this;
+    }
+
 
     //
     // Vector subset
     //
-    const_iterator begin() const                     { return vch.begin() + nReadPos; }
     iterator begin()                                 { return vch.begin() + nReadPos; }
-    const_iterator end() const                       { return vch.end(); }
     iterator end()                                   { return vch.end(); }
-    size_type size() const                           { return vch.size() - nReadPos; }
-    bool empty() const                               { return vch.size() == nReadPos; }
     void resize(size_type n, value_type c=0)         { vch.resize(n + nReadPos, c); }
     void reserve(size_type n)                        { vch.reserve(n + nReadPos); }
     const_reference operator[](size_type pos) const  { return vch[pos + nReadPos]; }
@@ -910,81 +1014,12 @@ public:
         nReadPos = 0;
     }
 
-    bool Rewind(size_type n)
-    {
-        // Rewind by n characters if the buffer hasn't been compacted yet
-        if (n > nReadPos)
-            return false;
-        nReadPos -= n;
-        return true;
-    }
-
 
     //
     // Stream subset
     //
-    void setstate(short bits, const char* psz)
-    {
-        state |= bits;
-        if (state & exceptmask)
-            throw std::ios_base::failure(psz);
-    }
 
-    bool eof() const             { return size() == 0; }
-    bool fail() const            { return state & (std::ios::badbit | std::ios::failbit); }
-    bool good() const            { return !eof() && (state == 0); }
-    void clear(short n)          { state = n; }  // name conflict with vector clear()
-    short exceptions()           { return exceptmask; }
-    short exceptions(short mask) { short prev = exceptmask; exceptmask = mask; setstate(0, "CDataStream"); return prev; }
-    CDataStream* rdbuf()         { return this; }
-    int in_avail()               { return size(); }
-
-    void SetType(int n)          { nType = n; }
-    int GetType()                { return nType; }
-    void SetVersion(int n)       { nVersion = n; }
-    int GetVersion()             { return nVersion; }
-    void ReadVersion()           { *this >> nVersion; }
     void WriteVersion()          { *this << nVersion; }
-
-    CDataStream& read(char* pch, int nSize)
-    {
-        // Read from the beginning of the buffer
-        assert(nSize >= 0);
-        unsigned int nReadPosNext = nReadPos + nSize;
-        if (nReadPosNext >= vch.size())
-        {
-            if (nReadPosNext > vch.size())
-            {
-                setstate(std::ios::failbit, "CDataStream::read() : end of data");
-                memset(pch, 0, nSize);
-                nSize = vch.size() - nReadPos;
-            }
-            memcpy(pch, &vch[nReadPos], nSize);
-            nReadPos = 0;
-            vch.clear();
-            return (*this);
-        }
-        memcpy(pch, &vch[nReadPos], nSize);
-        nReadPos = nReadPosNext;
-        return (*this);
-    }
-
-    CDataStream& ignore(int nSize)
-    {
-        // Ignore from the beginning of the buffer
-        assert(nSize >= 0);
-        unsigned int nReadPosNext = nReadPos + nSize;
-        if (nReadPosNext >= vch.size())
-        {
-            if (nReadPosNext > vch.size())
-                setstate(std::ios::failbit, "CDataStream::ignore() : end of data");
-            nReadPos = 0;
-            vch.clear();
-            return (*this);
-        }
-        nReadPos = nReadPosNext;
-        return (*this);
-    }
 
     CDataStream& write(const char* pch, int nSize)
     {
@@ -992,14 +1027,6 @@ public:
         assert(nSize >= 0);
         vch.insert(vch.end(), pch, pch + nSize);
         return (*this);
-    }
-
-    template<typename Stream>
-    void Serialize(Stream& s, int nType, int nVersion) const
-    {
-        // Special case: stream << stream concatenates like stream += stream
-        if (!vch.empty())
-            s.write((char*)&vch[0], vch.size() * sizeof(vch[0]));
     }
 
     template<typename T>
@@ -1017,18 +1044,38 @@ public:
         return (*this);
     }
 
-    template<typename T>
-    CDataStream& operator>>(T& obj)
-    {
-        // Unserialize from this stream
-        ::Unserialize(*this, obj, nType, nVersion);
-        return (*this);
-    }
-
     void GetAndClear(CSerializeData &data) {
         data.insert(data.end(), begin(), end());
         clear();
     }
+
+
+    CDataStream& operator= (CDataStream&& s) {
+        /* c++ is being mean so I had to define this */
+        vch= std::move(s.vch);
+        vchro = &vch;
+        nReadPos= s.nReadPos;
+        state= s.state;
+        exceptmask= s.exceptmask;
+        nType= s.nType;
+        nVersion= s.nVersion;
+        return *this;
+    }
+
+    CDataStream (const CDataStream& s)
+        :CReaderStream(&vch,s.nType,s.nVersion)
+    {
+        /* c++ is being mean so I had to define this */
+        vch= s.vch;
+        vchro = &vch;
+        nReadPos= s.nReadPos;
+        state= s.state;
+        exceptmask= s.exceptmask;
+        nType= s.nType;
+        nVersion= s.nVersion;
+    }
+    CDataStream (const CDataStream&& s) = delete;
+    CDataStream& operator= (CDataStream& s) = delete;
 };
 
 

@@ -8,9 +8,6 @@
 #include <utility>
 #include <string>
 
-double GetTotalBalance();
-bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
-
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 6)

@@ -11,7 +11,6 @@ extern std::string sRegVer;
 extern int nRegVersion;
 extern bool bNetAveragesLoaded;
 extern bool bForceUpdate;
-extern bool bGlobalcomInitialized;
 extern bool fQtActive;
 extern bool bGridcoinGUILoaded;
 

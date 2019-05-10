@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+#include "scraper/fwd.h"
+
 class CBasicKeyStore;
 class CWallet;
 class uint256;
@@ -23,6 +25,7 @@ class uint256;
 enum ChangeType
 {
     CT_NEW,
+    CT_UPDATING,
     CT_UPDATED,
     CT_DELETED
 };
@@ -96,6 +99,12 @@ public:
      * @note called with lock cs_mapAlerts held.
      */
     boost::signals2::signal<void (const uint256 &hash, ChangeType status)> NotifyAlertChanged;
+
+    /**
+     * Scraper event type - new or update
+     * @note called with lock cs_ConvergedScraperStatsCache held.
+     */
+    boost::signals2::signal<void (const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)> NotifyScraperEvent;
 };
 
 extern CClientUIInterface uiInterface;

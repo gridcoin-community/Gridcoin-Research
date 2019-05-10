@@ -63,6 +63,7 @@
         <file alias="tx_mined_ss">res/icons/tx_mined_ss.svg</file>
         <file alias="tx_cpumined">res/icons/tx_por.svg</file>
         <file alias="tx_cpumined_ss">res/icons/tx_por_ss.svg</file>
+        <file alias="notsynced">res/icons/notsynced.png</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>
@@ -73,9 +74,7 @@
         <file alias="gridcoin">res/images/gridcoin.svg</file>
         <file alias="about_light">res/images/about_light.svg</file>
     </qresource>
-    <qresource prefix="/movies">
-        <file alias="update_spinner">res/movies/update_spinner.gif</file>
-    </qresource>
+    <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">
         <file alias="light">res/stylesheets/light_stylesheet.qss</file>
         <file alias="native">res/stylesheets/native_stylesheet.qss</file>

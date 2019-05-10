@@ -1,4 +1,5 @@
 package=fontconfig
+GCCFLAGS?=
 $(package)_version=2.12.1
 $(package)_download_path=http://www.freedesktop.org/software/fontconfig/release/
 $(package)_file_name=$(package)-$($(package)_version).tar.bz2
@@ -8,6 +9,10 @@ $(package)_patches=0001-Avoid-conflicts-with-integer-width-macros-from-TS-18.pat
 
 define $(package)_set_vars
   $(package)_config_opts=--disable-docs --disable-static
+  $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cflags_aarch64_linux = $(GCCFLAGS)
+  $(package)_cxxflags_arm_linux = $(GCCFLAGS)
+  $(package)_cflags_arm_linux = $(GCCFLAGS)
 endef
 
 define $(package)_config_cmds

@@ -4,9 +4,9 @@
 
 DIST_SUBDIRS = univalue
 
-AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
+AM_LDFLAGS = ${libcurl_LIBS} $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
-AM_CPPFLAGS = $(HARDENED_CPPFLAGS) -DSTATICLIB -DMINIUPNP_STATICLIB
+AM_CPPFLAGS = ${libcurl_CFLAGS} $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB
 EXTRA_LIBRARIES =
 
 if EMBEDDED_UNIVALUE
@@ -19,7 +19,7 @@ LIBUNIVALUE = $(UNIVALUE_LIBS)
 endif
 
 GRIDCOIN_CONFIG_INCLUDES=-I$(builddir)/config
-GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS)
+GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
 
 LIBGRIDCOIN_UTIL=libgridcoin_util.a
 LIBGRIDCOINQT=qt/libgridcoinqt.a
@@ -86,7 +86,10 @@ GRIDCOIN_CORE_H = \
 	main.h \
 	miner.h \
 	mruset.h \
-	neuralnet.h \
+	neuralnet/neuralnet.h \
+   neuralnet/neuralnet_native.h \
+   neuralnet/neuralnet_stub.h \
+	neuralnet/project.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
@@ -95,6 +98,10 @@ GRIDCOIN_CORE_H = \
 	rpcclient.h \
 	rpcprotocol.h \
 	rpcserver.h \
+	scraper_net.h \
+	scraper/fwd.h \
+    scraper/http.h \
+	scraper/scraper.h \
 	script.h \
 	scrypt.h \
 	serialize.h \
@@ -134,6 +141,10 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	keystore.cpp \
 	main.cpp \
 	miner.cpp \
+   neuralnet/neuralnet.cpp \
+   neuralnet/neuralnet_native.cpp \
+   neuralnet/neuralnet_stub.cpp \
+	neuralnet/project.cpp \
 	netbase.cpp \
 	net.cpp \
 	noui.cpp \
@@ -150,6 +161,9 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	rpcserver.cpp \
 	rpcwallet.cpp \
 	rpcdataacq.cpp \
+	scraper_net.cpp \
+	scraper/http.cpp \
+	scraper/scraper.cpp \
 	script.cpp \
 	scrypt.cpp \
 	sync.cpp \
@@ -173,7 +187,8 @@ libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
-    neuralnet_stub.cpp \
+    neuralnet/neuralnet_stub.cpp \
+    neuralnet/neuralnet.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS
@@ -241,7 +256,7 @@ gridcoinresearchd_LDADD = \
  $(LIBLEVELDB_SSE42) \
  $(LIBMEMENV)
 
-gridcoinresearchd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
+gridcoinresearchd_LDADD += $(CURL_LIBS) $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZIP_LIBS)
 
 if TARGET_WINDOWS
 gridcoinresearchd_SOURCES += gridcoinresearchd-res.rc

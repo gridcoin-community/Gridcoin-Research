@@ -25,7 +25,7 @@ namespace
         { "trxid", Section::TRXID },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
-        { "project", Section::PROJECT }
+        { "scraper", Section::SCRAPER }
     };
     
     //static_assert(section_name_map.size() == NumCaches, "Section name table size mismatch");
@@ -86,53 +86,6 @@ void ClearCache(Section section)
 void DeleteCache(Section section, const std::string &key)
 {
     GetSection(section).erase(key);
-}
-
-std::string GetListOf(Section section)
-{
-    return GetListOf(section, 0, 0);
-}
-
-std::string GetListOf(
-        Section section,
-        int64_t minTime,
-        int64_t maxTime)
-{
-    std::string rows;
-    for(const auto& item : GetSection(section))
-    {
-        const std::string& key = item.first;
-        const AppCacheEntry& entry = item.second;
-
-        // Compare age restrictions if specified.
-        if((minTime && entry.timestamp <= minTime) ||
-           (maxTime && entry.timestamp >= maxTime))
-            continue;
-
-        // Skip invalid beacons.
-        if (section == Section::BEACON && Contains("INVESTOR", entry.value))
-            continue;
-
-        rows += key + "<COL>" + entry.value + "<ROW>";
-    }
-
-    return rows;
-}
-
-size_t GetCountOf(Section section)
-{
-    const std::string& data = GetListOf(section);
-    size_t count = 0;
-    size_t pos = 0;
-    const std::string needle("<ROW>");
-    const size_t width = needle.size();
-    while((pos = data.find(needle, pos)) != std::string::npos)
-    {
-       ++count;
-       pos += width;
-    }
-
-    return count;
 }
 
 Section StringToSection(const std::string &section)

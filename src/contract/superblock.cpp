@@ -84,7 +84,8 @@ std::string PackBinarySuperblock(std::string sBlock)
 
         // Ensure we do not blow out the binary space (technically we can handle 0-65535)
         double magnitude_d = strtod(ExtractValue(entry, ",", 1).c_str(), NULL);
-        magnitude_d = std::max(0.0, std::min(magnitude_d, 32767.0));
+        // Changed to 65535 for the new NN. This will still be able to be successfully unpacked by any node.
+        magnitude_d = std::max(0.0, std::min(magnitude_d, 65535.0));
         researcher.magnitude = htobe16(roundint(magnitude_d));
 
         stream.write((const char*) &researcher, sizeof(BinaryResearcher));

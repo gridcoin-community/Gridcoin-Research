@@ -9,16 +9,11 @@
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
-#include "neuralnet.h"
+#include "neuralnet/neuralnet.h"
 #include "global_objects_noui.hpp"
 using namespace std;
 
-int64_t GetCoinYearReward(int64_t nTime);
-
 double GRCMagnitudeUnit(int64_t locktime);
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-
-int64_t GetRSAWeightByCPID(std::string cpid);
 
 UniValue getmininginfo(const UniValue& params, bool fHelp)
 {
@@ -36,11 +31,18 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
     UniValue weight(UniValue::VOBJ);
+    UniValue stakesplitting(UniValue::VOBJ);
+    UniValue stakesplittingparam(UniValue::VOBJ);
+    UniValue sidestaking(UniValue::VOBJ);
+    UniValue sidestakingalloc(UniValue::VOBJ);
+    UniValue vsidestakingalloc(UniValue::VARR);
+
     double nNetworkWeight = GetEstimatedNetworkWeight();
     double nNetworkValue = nNetworkWeight / 80.0;
     obj.pushKV("blocks",        nBestHeight);
     diff.pushKV("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true)));
 
+    std::string current_poll;
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
@@ -64,7 +66,44 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
         obj.pushKV("kernel-diff-best",MinerStatus.KernelDiffMax);
         obj.pushKV("kernel-diff-sum",MinerStatus.KernelDiffSum);
+
+        current_poll = GetCurrentOverviewTabPoll();
     }
+
+    int64_t nMinStakeSplitValue = 0;
+    double dEfficiency = 0;
+    int64_t nDesiredStakeSplitValue = 0;
+    SideStakeAlloc vSideStakeAlloc;
+
+    // nMinStakeSplitValue, dEfficiency, and nDesiredStakeSplitValue are out parameters.
+    bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeSplitValue);
+
+    // vSideStakeAlloc is an out parameter.
+    bool fEnableSideStaking = GetSideStakingStatusAndAlloc(vSideStakeAlloc);
+
+    stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
+    if (fEnableStakeSplit)
+    {
+        stakesplittingparam.pushKV("min-stake-split-value", nMinStakeSplitValue / COIN);
+        stakesplittingparam.pushKV("efficiency", dEfficiency);
+        stakesplittingparam.pushKV("stake-split-UTXO-size-for-target-efficiency", nDesiredStakeSplitValue / COIN);
+        stakesplitting.pushKV("stake-splitting-params", stakesplittingparam);
+    }
+    obj.pushKV("stake-splitting", stakesplitting);
+
+    sidestaking.pushKV("side-staking-enabled", fEnableSideStaking);
+    if (fEnableSideStaking)
+    {
+        for (const auto& alloc : vSideStakeAlloc)
+        {
+            sidestakingalloc.pushKV("address", alloc.first);
+            sidestakingalloc.pushKV("allocation-pct", alloc.second);
+
+            vsidestakingalloc.push_back(sidestakingalloc);
+        }
+        sidestaking.pushKV("side-staking-allocations", vsidestakingalloc);
+    }
+    obj.pushKV("side-staking", sidestaking);
 
     obj.pushKV("difficulty",    diff);
     obj.pushKV("errors",        GetWarnings("statusbar"));
@@ -76,7 +115,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("PopularNeuralHash", neural_hash);
     obj.pushKV("NeuralPopularity", neural_popularity);
     //9-19-2015 - CM
-    obj.pushKV("MyNeuralHash", NN::GetNeuralHash());
+    obj.pushKV("MyNeuralHash", NN::GetInstance()->GetNeuralHash());
 
     obj.pushKV("CPID",msPrimaryCPID);
 
@@ -92,7 +131,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     }
 
     obj.pushKV("MiningInfo 1", msMiningErrors);
-    obj.pushKV("MiningInfo 2", msPoll);
+    obj.pushKV("MiningInfo 2", "Poll: " + current_poll);
     obj.pushKV("MiningInfo 5", msMiningErrors5);
     obj.pushKV("MiningInfo 6", msMiningErrors6);
     obj.pushKV("MiningInfo 7", msMiningErrors7);

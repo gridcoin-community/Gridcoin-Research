@@ -40,6 +40,10 @@ bool PollExists(std::string pollname);
 
 bool PollExpired(std::string pollname);
 
+// Like PollExpired() except that it doesn't load the entire Section::POLL
+// AppCache section for every call:
+bool PollIsActive(const std::string& poll_contract);
+
 bool PollCreatedAfterSecurityUpgrade(std::string pollname);
 
 double PollDuration(std::string pollname);
