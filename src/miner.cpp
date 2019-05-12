@@ -1067,7 +1067,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
     double dSumAllocation = 0.0;
 
     bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
-    LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
+    if (fDebug2) LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
 
     // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
     // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
@@ -1126,7 +1126,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
                 }
 
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
-                LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
+                if (fDebug2) LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
 
                 vSubParam.clear();
             }
@@ -1146,7 +1146,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 {
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
-    LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
+    if (fDebug2) LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
 
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
@@ -1158,13 +1158,13 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         else if (dEfficiency < 0.75)
             dEfficiency = 0.75;
 
-        LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
+        if (fDebug2) LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
 
         // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
         // Default to 800 and do not allow it to be specified below 800 GRC.
         nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
 
-        LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
+        if (fDebug2) LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
 
         // For the definition of the constant G, please see
         // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
