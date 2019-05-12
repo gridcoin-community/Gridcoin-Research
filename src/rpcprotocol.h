@@ -41,7 +41,6 @@ enum RPCErrorCode
 
     // General application defined errors
     RPC_MISC_ERROR                  = -1,  // std::exception thrown in command handling
-    RPC_FORBIDDEN_BY_SAFE_MODE      = -2,  // Server is in safe mode, and command is not allowed in safe mode
     RPC_TYPE_ERROR                  = -3,  // Unexpected type was passed as parameter
     RPC_INVALID_ADDRESS_OR_KEY      = -5,  // Invalid address or key
     RPC_OUT_OF_MEMORY               = -7,  // Ran out of memory during operation
