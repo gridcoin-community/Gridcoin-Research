@@ -454,7 +454,7 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply)
 
     catch (std::exception& ex)
     {
-        ui->checkClientVersionResultLbl->setText("Failed: std exception occured -> " + QString::fromUtf8(ex.what()));
+        ui->checkClientVersionResultLbl->setText("Failed: std exception occurred -> " + QString::fromUtf8(ex.what()));
     }
 
     return;

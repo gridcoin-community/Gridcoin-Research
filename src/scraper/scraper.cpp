@@ -372,7 +372,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
 
     catch (std::exception& ex)
     {
-        printf("Logger : exception occured in _log function (%s)\n", ex.what());
+        printf("Logger : exception occurred in _log function (%s)\n", ex.what());
 
         return;
     }
@@ -817,7 +817,7 @@ void Scraper(bool bSingleShot)
         }
 
         else if (sbage <= -1)
-            _log(logattribute::ERR, "Scraper", "RPC error occured, check logs");
+            _log(logattribute::ERR, "Scraper", "RPC error occurred, check logs");
 
         // This is the section to download statistics. Only do if authorized.
         else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
@@ -2186,7 +2186,7 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
         {
             StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-            if (fDebug) _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modifed nFileManifestMapHash.");
+            if (fDebug) _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modified nFileManifestMapHash.");
         }
     }
 
@@ -2210,7 +2210,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
     {
         StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-        if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modifed nFileManifestMapHash.");
+        if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modified nFileManifestMapHash.");
     }
 
     // Returns number of elements erased, either 0 or 1.
