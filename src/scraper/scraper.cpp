@@ -2186,7 +2186,7 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
         {
             StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-            if (fDebug) _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modifed nFileManifestMapHash.");
+            if (fDebug) _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modified nFileManifestMapHash.");
         }
     }
 
@@ -2210,7 +2210,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
     {
         StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-        if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modifed nFileManifestMapHash.");
+        if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modified nFileManifestMapHash.");
     }
 
     // Returns number of elements erased, either 0 or 1.
