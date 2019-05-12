@@ -6006,10 +6006,6 @@ string GetWarnings(string strFor)
 {
     int nPriority = 0;
     string strStatusBar;
-    string strRPC;
-
-    if (GetBoolArg("-testsafemode"))
-        strRPC = "test";
 
     // Misc warnings like out of disk space and clock is wrong
     if (strMiscWarning != "")
@@ -6034,8 +6030,6 @@ string GetWarnings(string strFor)
 
     if (strFor == "statusbar")
         return strStatusBar;
-    else if (strFor == "rpc")
-        return strRPC;
     assert(!"GetWarnings() : invalid parameter");
     return "error";
 }
