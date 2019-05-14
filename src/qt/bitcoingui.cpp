@@ -315,6 +315,10 @@ void BitcoinGUI::createActions()
     diagnosticsAction->setStatusTip(tr("Diagnostics"));
     diagnosticsAction->setMenuRole(QAction::TextHeuristicRole);
 
+    newUserWizardAction = new QAction(tr("&New User Wizard"), this);
+    newUserWizardAction->setStatusTip(tr("New User Wizard"));
+    newUserWizardAction->setMenuRole(QAction::TextHeuristicRole);
+
     optionsAction = new QAction(tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for Gridcoin"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
@@ -350,6 +354,7 @@ void BitcoinGUI::createActions()
     connect(signMessageAction, SIGNAL(triggered()), this, SLOT(gotoSignMessageTab()));
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
+    connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
 }
 
 void BitcoinGUI::setIcons()
@@ -372,6 +377,7 @@ void BitcoinGUI::setIcons()
     boincAction->setIcon(QPixmap(":/images/boinc"));
     quitAction->setIcon(QPixmap(":/icons/quit"));
     aboutAction->setIcon(QPixmap(":/images/gridcoin"));
+    newUserWizardAction->setIcon(QPixmap(":/images/gridcoin"));
     diagnosticsAction->setIcon(QPixmap(":/images/gridcoin"));
     optionsAction->setIcon(QPixmap(":/icons/options"));
     toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -409,6 +415,10 @@ void BitcoinGUI::createMenuBar()
     settings->addAction(unlockWalletAction);
     settings->addAction(lockWalletAction);
     settings->addSeparator();
+    // This new wizard menu item is disabled until we make the wizard more advanced, because the existing one it makes no sense
+    // to run it after the conf file is created.
+    //settings->addAction(newUserWizardAction);
+    //settings->addSeparator();
     settings->addAction(optionsAction);
 
     QMenu *community = appMenuBar->addMenu(tr("&Community"));
@@ -853,6 +863,12 @@ bool CreateNewConfigFile(std::string boinc_email)
     myConfig << row;
     row = "addnode=seeds.gridcoin.ifoggz-network.xyz \r\n";
     myConfig << row;
+    row = "addnode=ec2-3-81-39-58.compute-1.amazonaws.com \r\n";
+    myConfig << row;
+    row = "addnode=addnode-us-central.cycy.me \r\n";
+    myConfig << row;
+    row = "addnode=gridcoin.ddns.net \r\n";
+    myConfig << row;
     myConfig.close();
     return true;
 }
@@ -872,7 +888,8 @@ bool ForceInAddNode(std::string sMyAddNode)
 
 void BitcoinGUI::NewUserWizard()
 {
-    if (!IsConfigFileEmpty()) return;
+    if (IsConfigFileEmpty())
+    {
         QString boincemail = "";
         //Typhoon- Check to see if boinc exists in default path - 11-19-2014
 
@@ -883,10 +900,10 @@ void BitcoinGUI::NewUserWizard()
         std::string sBoincNarr = "";
         if (sout == "-1")
         {
-            LogPrintf("Boinc not installed in default location! ");
+            LogPrintf("BOINC not installed in default location! ");
             //BoincInstalled=false;
             std::string nicePath = GetBoincDataDir();
-            sBoincNarr = "Boinc is not installed in default location " + nicePath + "!  Please set boincdatadir=c:\\programdata\\boinc\\    to the correct path where Boincs programdata directory resides.";
+            sBoincNarr = "BOINC is not installed in the default location " + nicePath + "!  Please set boincdatadir in the gridcoinresearch.conf file to the correct path where the BOINC client_state.xml file resides.";
         }
 
         bool ok;
@@ -894,6 +911,7 @@ void BitcoinGUI::NewUserWizard()
                                           tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
                                           QLineEdit::Normal,
                                           "", &ok);
+
         if (ok && !boincemail.isEmpty())
         {
             std::string new_email = tostdstring(boincemail);
@@ -910,26 +928,26 @@ void BitcoinGUI::NewUserWizard()
         {
             //Create Config File
             CreateNewConfigFile("investor");
-            QString strMessage = tr("To get started with Boinc, run the boinc client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
+            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
             QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
         }
         // Read in the mapargs, and set the seed nodes 10-13-2015
         ReadConfigFile(mapArgs, mapMultiArgs);
+
         //Force some addnodes in to get user started
         ForceInAddNode("node.gridcoin.us");
-        ForceInAddNode("london.grcnode.co.uk");
-        ForceInAddNode("gridcoin.crypto.fans");
-        ForceInAddNode("seeds.gridcoin.ifoggz-network.xyz");
-        ForceInAddNode("nuad.de");
         ForceInAddNode("www.grcpool.com");
+        ForceInAddNode("seeds.gridcoin.ifoggz-network.xyz");
+        ForceInAddNode("ec2-3-81-39-58.compute-1.amazonaws.com");
+        ForceInAddNode("addnode-us-central.cycy.me");
+        ForceInAddNode("gridcoin.ddns.net");
 
         if (sBoincNarr != "")
         {
                 QString qsMessage = tr(sBoincNarr.c_str());
                 QMessageBox::warning(this, tr("Attention! - Boinc Path Error!"), qsMessage);
         }
-
-
+    }
 }
 
 
@@ -974,6 +992,12 @@ void BitcoinGUI::diagnosticsClicked()
     diagnosticsDialog->show();
     diagnosticsDialog->raise();
     diagnosticsDialog->activateWindow();
+}
+
+// Note this is for the menu item. The menu item is disabled until we implement a more advanced wizard.
+void BitcoinGUI::newUserWizardClicked()
+{
+    NewUserWizard();
 }
 
 // links to websites and services outside the gridcoin client
@@ -1298,7 +1322,14 @@ void BitcoinGUI::timerfire()
 {
     try
     {
-        // TODO: Check if these SetRPCResponse calls are really needed.
+        static bool bNewUserWizardNotified = false;
+         if (!bNewUserWizardNotified)
+         {
+             bNewUserWizardNotified=true;
+             NewUserWizard();
+         }
+
+         // TODO: Check if these SetRPCResponse calls are really needed.
         /*if (bGlobalcomInitialized)
         {
             //R Halford - Allow .NET to talk to Core: 6-21-2015
