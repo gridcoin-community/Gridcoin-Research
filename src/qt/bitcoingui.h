@@ -92,6 +92,7 @@ private:
 	QAction *exchangeAction;
     QAction *votingAction;
 	QAction *diagnosticsAction;
+    QAction *newUserWizardAction;
     QAction *verifyMessageAction;
     QAction *aboutAction;
     QAction *receiveCoinsAction;
@@ -193,6 +194,8 @@ private slots:
     void boincStatsClicked();
 	void chatClicked();
     void diagnosticsClicked();
+
+    void newUserWizardClicked();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */
