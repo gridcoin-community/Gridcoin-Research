@@ -1698,6 +1698,9 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             // Only do this if team membership filtering is specified by network policy.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
             {
+                // Set initial flag for whether user is on team whitelist to false.
+                bool bOnTeamWhitelist = false;
+
                 const std::string& sTeamID = ExtractXML(data, "<teamid>", "</teamid>");
                 int64_t nTeamID = 0;
 
@@ -1711,12 +1714,15 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                     continue;
                 }
 
-                // Check to see if the user's team ID is in the whitelist team ID map for the project. If not continue.
+                // Check to see if the user's team ID is in the whitelist team ID map for the project.
                 for (auto const& iTeam : mTeamIDsForProject)
                 {
                     if (iTeam.second == nTeamID)
-                        continue;
+                        bOnTeamWhitelist = true;
                 }
+
+                //If not continue the while loop and do not put the users stats for that project in the outputstatistics file.
+                if (!bOnTeamWhitelist) continue;
             }
 
             // User beacon verified. Append its statistics to the CSV output.
