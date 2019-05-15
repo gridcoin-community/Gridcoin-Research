@@ -1249,14 +1249,27 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 				        vCoins.push_back(COutput(pcoin, i, nDepth));
 				   }
 			}
-
         }
     }
 }
 
+void CWallet::AvailableCoinsSorted(
+    vector<COutput>& vCoins,
+    bool fOnlyConfirmed,
+    const CCoinControl *coinControl,
+    bool fIncludeStakedCoins) const
+{
+    AvailableCoins(vCoins, fOnlyConfirmed, coinControl, fIncludeStakedCoins);
+
+    const auto ascending_by_amount = [](const COutput& a, const COutput& b) {
+        return a.tx->vout[a.i].nValue < b.tx->vout[b.i].nValue;
+    };
+
+    std::sort(vCoins.begin(), vCoins.end(), ascending_by_amount);
+}
+
 void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSpendTime) const
 {
-
     vCoins.clear();
     {
         LOCK2(cs_main, cs_wallet);

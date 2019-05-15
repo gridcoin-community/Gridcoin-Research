@@ -1,5 +1,6 @@
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string.hpp>
+#include <boost/range/adaptor/reversed.hpp>
 
 #include "main.h"
 #include "polls.h"
@@ -316,15 +317,18 @@ std::string GetProvableVotingWeightXML()
     sXML += "</PROVABLEMAGNITUDE>";
 
     std::vector<COutput> vecOutputs;
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
+    pwalletMain->AvailableCoinsSorted(vecOutputs, false, NULL, true);
+
     std::string sRow = "";
     double dTotal = 0;
     double dBloatThreshhold = 100;
     double dCurrentItemCount = 0;
-    double dItemBloatThreshhold = 50;
+    double dItemBloatThreshhold = 200;
     // Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
     sXML += "<PROVABLEBALANCE>";
-    for (auto const& out : vecOutputs)
+
+    // Vote with the biggest UTXOs first:
+    for (auto const& out : boost::adaptors::reverse(vecOutputs))
     {
         int64_t nValue = out.tx->vout[out.i].nValue;
         const CScript& pk = out.tx->vout[out.i].scriptPubKey;
@@ -332,42 +336,43 @@ std::string GetProvableVotingWeightXML()
         CTxDestination address;
         if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
         {
-            if (CoinToDouble(nValue) > dBloatThreshhold)
+            if (CoinToDouble(nValue) < dBloatThreshhold) {
+                break;
+            }
+
+            std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
+            std::string strAddress=CBitcoinAddress(address).ToString();
+            CKeyID keyID;
+            const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
+            if (bcAddress.GetKeyID(keyID))
             {
-                std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
-                std::string strAddress=CBitcoinAddress(address).ToString();
-                CKeyID keyID;
-                const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
-                if (bcAddress.GetKeyID(keyID))
+                bool IsCompressed;
+                CKey vchSecret;
+                if (pwalletMain->GetKey(keyID, vchSecret))
                 {
-                    bool IsCompressed;
-                    CKey vchSecret;
-                    if (pwalletMain->GetKey(keyID, vchSecret))
-                    {
-                        // Here we use the secret key to sign the coins, then we abandon the key.
-                        CSecret csKey = vchSecret.GetSecret(IsCompressed);
-                        CKey keyInner;
-                        keyInner.SetSecret(csKey,IsCompressed);
-                        std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
-                        std::string public_key = HexStr(keyInner.GetPubKey().Raw());
-                        std::vector<unsigned char> vchSig;
-                        keyInner.Sign(out.tx->GetHash(), vchSig);
-                        // Sign the coins we own
-                        std::string sSig(vchSig.begin(), vchSig.end());
-                        // Increment the total balance weight voting ability
-                        dTotal += CoinToDouble(nValue);
-                        sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID>" +
-                                "<AMOUNT>" + RoundToString(CoinToDouble(nValue),2) + "</AMOUNT>" +
-                                "<POS>" + RoundToString((double)out.i,0) + "</POS>" +
-                                "<PUBKEY>" + public_key + "</PUBKEY>" +
-                                "<SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY>" +
-                                "<SIG>" + EncodeBase64(sSig) + "</SIG>" +
-                                "<MESSAGE></MESSAGE></ROW>";
-                        sXML += sRow;
-                        dCurrentItemCount++;
-                        if (dCurrentItemCount >= dItemBloatThreshhold)
-                            break;
-                    }
+                    // Here we use the secret key to sign the coins, then we abandon the key.
+                    CSecret csKey = vchSecret.GetSecret(IsCompressed);
+                    CKey keyInner;
+                    keyInner.SetSecret(csKey,IsCompressed);
+                    std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
+                    std::string public_key = HexStr(keyInner.GetPubKey().Raw());
+                    std::vector<unsigned char> vchSig;
+                    keyInner.Sign(out.tx->GetHash(), vchSig);
+                    // Sign the coins we own
+                    std::string sSig(vchSig.begin(), vchSig.end());
+                    // Increment the total balance weight voting ability
+                    dTotal += CoinToDouble(nValue);
+                    sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID>" +
+                            "<AMOUNT>" + RoundToString(CoinToDouble(nValue),2) + "</AMOUNT>" +
+                            "<POS>" + RoundToString((double)out.i,0) + "</POS>" +
+                            "<PUBKEY>" + public_key + "</PUBKEY>" +
+                            "<SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY>" +
+                            "<SIG>" + EncodeBase64(sSig) + "</SIG>" +
+                            "<MESSAGE></MESSAGE></ROW>";
+                    sXML += sRow;
+                    dCurrentItemCount++;
+                    if (dCurrentItemCount >= dItemBloatThreshhold)
+                        break;
                 }
             }
         }
