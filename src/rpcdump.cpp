@@ -112,6 +112,7 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
         "\n"
         "[label] -------> Optional; Label for imported address\n"
         "[bool:rescan] -> Optional; Default true\n"
+        "WARNING: if true rescan of blockchain will occur. This could take up to 20 minutes.\n"
         "\n"
         "Adds a private key (as returned by dumpprivkey) to your wallet\n");
 
