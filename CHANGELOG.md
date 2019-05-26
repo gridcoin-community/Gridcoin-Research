@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.0.4.0] 2019-05-16, leisure
+### Fixed
+ - Adds back the new user wizard inadvertently removed #1464 (@jamescowens).
+ - Repair scraper team filtering #1466 (@jamescowens).
+
 ## [4.0.3.0] 2019-05-10, leisure
 ### Added
  - Replace NeuralNetwork with portable C++ scraper #1387 (@jamescowens,
