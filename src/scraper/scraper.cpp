@@ -707,9 +707,6 @@ void Scraper(bool bSingleShot)
     if (pathDataDir.empty())
     {
         pathDataDir = GetDataDir();
-        // This is necessary to maintain compatibility with Windows.
-        // pathDataDir.imbue(std::locale(std::locale(), new std::codecvt<wchar_t, char, std::mbstate_t>));
-
         pathScraper = pathDataDir  / "Scraper";
     }
 
@@ -811,7 +808,7 @@ void Scraper(bool bSingleShot)
                 sbage = SuperblockAge();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
                 _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
-                
+
                 MilliSleep(nScraperSleep);
             }
         }
@@ -957,9 +954,6 @@ void NeuralNetwork()
     if (!fScraperActive && pathDataDir.empty())
     {
         pathDataDir = GetDataDir();
-        // This is necessary to maintain compatibility with Windows.
-        // pathDataDir.imbue(std::locale(std::locale(), new std::codecvt<wchar_t, char, std::mbstate_t>));
-
         pathScraper = pathDataDir  / "Scraper";
 
         // Initialize log singleton. Must be after the imbue.
