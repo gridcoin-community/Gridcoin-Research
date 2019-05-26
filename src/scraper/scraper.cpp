@@ -163,7 +163,7 @@ public:
         LOCK(cs_log);
 
         fs::path plogfile = pathDataDir / "scraper.log";
-        logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
+        logfile.open(plogfile, std::ios_base::out | std::ios_base::app);
 
         if (!logfile.is_open())
             LogPrintf("ERROR: Scraper: Logger: Failed to open logging file\n");
@@ -261,7 +261,7 @@ public:
 
                 // Re-open log file.
                 fs::path plogfile = pathDataDir / "scraper.log";
-                logfile.open(plogfile.c_str(), std::ios_base::out | std::ios_base::app);
+                logfile.open(plogfile, std::ios_base::out | std::ios_base::app);
 
                 if (!logfile.is_open())
                     LogPrintf("ERROR: Scraper: Logger: Failed to open logging file\n");
@@ -269,7 +269,7 @@ public:
                 PrevArchiveCheckDate = ArchiveCheckDate;
             }
 
-            std::ifstream infile(pfile_temp.string().c_str(), std::ios_base::in | std::ios_base::binary);
+            std::ifstream infile(pfile_temp.string(), std::ios_base::in | std::ios_base::binary);
 
             if (!infile)
             {
@@ -277,7 +277,7 @@ public:
                 return false;
             }
 
-            std::ofstream outgzfile(pfile_out.string().c_str(), std::ios_base::out | std::ios_base::binary);
+            std::ofstream outgzfile(pfile_out.string(), std::ios_base::out | std::ios_base::binary);
 
             if (!outgzfile)
             {
@@ -486,7 +486,7 @@ public:
 
         fs::path plistfile = GetDataDir() / "userpass.dat";
 
-        userpassfile.open(plistfile.c_str(), std::ios_base::in);
+        userpassfile.open(plistfile, std::ios_base::in);
 
         if (!userpassfile.is_open())
             _log(logattribute::CRITICAL, "userpass_data", "Failed to open userpass file");
@@ -542,9 +542,9 @@ public:
     authdata(const std::string& project)
     {
         std::string outfile = project + "_auth.dat";
-        fs::path poutfile = GetDataDir() / outfile.c_str();
+        fs::path poutfile = GetDataDir() / outfile;
 
-        oauthdata.open(poutfile.c_str(), std::ios_base::out | std::ios_base::app);
+        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::app);
 
         if (!oauthdata.is_open())
             _log(logattribute::CRITICAL, "auth_data", "Failed to open auth data file");
@@ -707,9 +707,6 @@ void Scraper(bool bSingleShot)
     if (pathDataDir.empty())
     {
         pathDataDir = GetDataDir();
-        // This is necessary to maintain compatibility with Windows.
-        pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
-
         pathScraper = pathDataDir  / "Scraper";
     }
 
@@ -811,7 +808,7 @@ void Scraper(bool bSingleShot)
                 sbage = SuperblockAge();
                 _log(logattribute::INFO, "Scraper", "Superblock not needed. age=" + std::to_string(sbage));
                 _log(logattribute::INFO, "Scraper", "Sleeping for " + std::to_string(nScraperSleep / 1000) +" seconds");
-                
+
                 MilliSleep(nScraperSleep);
             }
         }
@@ -957,9 +954,6 @@ void NeuralNetwork()
     if (!fScraperActive && pathDataDir.empty())
     {
         pathDataDir = GetDataDir();
-        // This is necessary to maintain compatibility with Windows.
-        pathDataDir.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>()));
-
         pathScraper = pathDataDir  / "Scraper";
 
         // Initialize log singleton. Must be after the imbue.
@@ -1293,7 +1287,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
             std::string team_file_name = prjs.m_name + "-team.gz";
 
-            fs::path team_file = pathScraper / team_file_name.c_str();
+            fs::path team_file = pathScraper / team_file_name;
 
             // Grab ETag of team file
             Http http;
@@ -1344,7 +1338,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
             }
 
             std::string chketagfile = prjs.m_name + "-" + sTeamETag + ".csv" + ".gz";
-            fs::path chkfile = pathScraper / chketagfile.c_str();
+            fs::path chkfile = pathScraper / chketagfile;
 
             if (fs::exists(chkfile))
             {
@@ -1387,7 +1381,7 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
     if (file.string().empty())
         return false;
 
-    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -1529,7 +1523,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
 
         std::string rac_file_name = prjs.m_name + +"-user.gz";
 
-        fs::path rac_file = pathScraper / rac_file_name.c_str();
+        fs::path rac_file = pathScraper / rac_file_name;
 
         // Grab ETag of rac file
         Http http;
@@ -1580,7 +1574,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         }
 
         std::string chketagfile = prjs.m_name + "-" + sRacETag + ".csv" + ".gz";
-        fs::path chkfile = pathScraper / chketagfile.c_str();
+        fs::path chkfile = pathScraper / chketagfile;
 
         if (fs::exists(chkfile))
         {
@@ -1636,7 +1630,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     if (file.string().empty())
         return false;
 
-    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -1778,7 +1772,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     try
     {
         size_t filea = fs::file_size(file);
-        fs::path temp = gzetagfile.c_str();
+        fs::path temp = gzetagfile;
         size_t fileb = fs::file_size(temp);
 
         _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processing new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
@@ -1933,7 +1927,7 @@ uint256 GetmScraperFileManifestHash()
 
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 {
-    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -1978,7 +1972,7 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 
 bool LoadTeamIDList(const fs::path& file)
 {
-    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -2077,7 +2071,7 @@ bool StoreBeaconList(const fs::path& file)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2122,7 +2116,7 @@ bool StoreTeamIDList(const fs::path& file)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2242,7 +2236,7 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
 
 bool LoadScraperFileManifest(const fs::path& file)
 {
-    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -2305,7 +2299,7 @@ bool StoreScraperFileManifest(const fs::path& file)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2363,7 +2357,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string().c_str(), std::ios_base::out | std::ios_base::binary);
+    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2441,7 +2435,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
-    std::ifstream ingzfile(file.string().c_str(), std::ios_base::in | std::ios_base::binary);
+    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -2931,7 +2925,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 
         outputfilewpath = savepath / outputfile;
 
-        std::ofstream outfile(outputfilewpath.string().c_str(), std::ios_base::out | std::ios_base::binary);
+        std::ofstream outfile(outputfilewpath.string(), std::ios_base::out | std::ios_base::binary);
 
         if (!outfile)
         {
