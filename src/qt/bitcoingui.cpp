@@ -94,8 +94,6 @@ extern std::string getMacAddress();
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
-std::string getfilecontents(std::string filename);
-
 void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
@@ -895,7 +893,7 @@ void BitcoinGUI::NewUserWizard()
 
         std::string sourcefile = GetBoincDataDir() + "client_state.xml";
         std::string sout = "";
-        sout = getfilecontents(sourcefile);
+        sout = GetFileContents(sourcefile);
         //bool BoincInstalled = true;
         std::string sBoincNarr = "";
         if (sout == "-1")

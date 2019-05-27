@@ -202,7 +202,6 @@ bool PollIsActive(const std::string& poll_contract);
 
 double GetNetworkAvgByProject(std::string projectname);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
-extern std::string getfilecontents(std::string filename);
 extern bool LessVerbose(int iMax1000);
 extern MiningCPID GetNextProject(bool bForce);
 extern void HarvestCPIDs(bool cleardata);
@@ -4991,33 +4990,6 @@ int GetFilesize(FILE* file)
 }
 
 
-std::string getfilecontents(std::string filename)
-{
-    if (!filesystem::exists(filename)) {
-        LogPrintf("getfilecontents: file does not exist %s", filename);
-        return "-1";
-    }
-
-    std::ifstream in(filename, std::ios::in | std::ios::binary);
-
-    if (in.fail()) { 
-        LogPrintf("getfilecontents: error opening file %s", filename); 
-        return "-1";
-    }
-
-    if (fDebug10) LogPrintf("loading file to string %s", filename);
-
-    std::ostringstream out;
-
-    out << in.rdbuf();
-
-    // Immediately close instead of waiting for the destructor to decrease the 
-    // chance of a race when calling this to read BOINC's client_state.xml:
-    in.close();
-
-    return out.str();
-}
-
 std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
 {
     int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
@@ -7198,7 +7170,7 @@ void HarvestCPIDs(bool cleardata)
  try
  {
     std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-    std::string sout = getfilecontents(sourcefile);
+    std::string sout = GetFileContents(sourcefile);
 
     if (sout == "-1")
     {
