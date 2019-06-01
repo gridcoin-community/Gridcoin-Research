@@ -643,7 +643,7 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
 
     std::multimap<int64_t, COutput> mInputs;
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     pwalletMain->AvailableCoins(vecInputs, false, NULL, false);
 
