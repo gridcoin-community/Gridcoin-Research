@@ -623,13 +623,16 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
     CBitcoinAddress OptimizeAddress(sAddress);
 
     int64_t nConsolidateLimit = 0;
-    // Set default maximum consolidation to 200 inputs if it is not specified.
-    unsigned int nInputNumberLimit = 200;
+    // Set default maximum consolidation to 50 inputs if it is not specified. This is based
+    // on performance tests on the Pi to ensure the transaction returns within a reasonable time.
+    // The performance tests on the Pi show about 3 UTXO's/second. Intel machines should do
+    // about 3x that. The GUI will not be responsive during the transaction.
+    unsigned int nInputNumberLimit = 50;
 
     if (params.size() > 1) nConsolidateLimit = AmountFromValue(params[1]);
     if (params.size() > 2) nInputNumberLimit = params[2].get_int();
 
-    // Clamp InputNumberLimit to 200.
+    // Clamp InputNumberLimit to 200. Above 200 risks an invalid transaction due to the size.
     nInputNumberLimit = std::min(nInputNumberLimit, (unsigned int) 200);
 
     if (!OptimizeAddress.IsValid())
@@ -641,10 +644,15 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
 
     std::vector<COutput> vecInputs;
 
+    // A convenient way to do a sort without the bother of writing a comparison operator.
+    // The map does it for us! It must be a multimap, because it is highly likely one or
+    // more UTXO's will have the same nValue.
     std::multimap<int64_t, COutput> mInputs;
 
+    // Have to lock both main and wallet to prevent deadlocks.
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    // Get the current UTXO's.
     pwalletMain->AvailableCoins(vecInputs, false, NULL, false);
 
     // Filter outputs by matching address and insert into sorted multimap.
@@ -661,7 +669,7 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
 
     CWalletTx wtxNew;
 
-    // For min fee
+    // For min fee calculation.
     CTransaction txDummy;
 
     set<pair<const CWalletTx*,unsigned int>> setCoins;
@@ -677,7 +685,7 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
         // Increment first so the count is 1 based.
         ++iInputCount;
 
-        if (fDebug) LogPrintf("INFO consolidateutxos: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
+        if (fDebug) LogPrintf("INFO: consolidateutxos: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
 
         setCoins.insert(make_pair(out.second.tx, out.second.i));
         nValue += out.second.tx->vout[out.second.i].nValue;
@@ -699,8 +707,8 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
 
     // Fee calculation to avoid change.
 
-    // Bytes - Assume two outputs (because there might be change for the time being).
-    // ----------The inputs to the tx - The one output.
+    // Bytes
+    // --------- The inputs to the tx - The one output.
     int64_t nBytes = iInputCount * 148 + 34 + 10;
 
     // Min Fee
