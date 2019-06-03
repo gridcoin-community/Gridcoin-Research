@@ -605,11 +605,11 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 }
 
 
-UniValue consolidateutxos(const UniValue& params, bool fHelp)
+UniValue consolidateunspent(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
-                "consolidateutxos <address> [UTXO size [maximum number of inputs]]\n"
+                "consolidateunspent <address> [UTXO size [maximum number of inputs]]\n"
                 "\n"
                 "Performs a single transaction to consolidate UTXOs on\n"
                 "a given address. The optional parameter of UTXO size will result\n"
@@ -685,7 +685,7 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
         // Increment first so the count is 1 based.
         ++iInputCount;
 
-        if (fDebug) LogPrintf("INFO: consolidateutxos: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
+        if (fDebug) LogPrintf("INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
 
         setCoins.insert(make_pair(out.second.tx, out.second.i));
         nValue += out.second.tx->vout[out.second.i].nValue;
@@ -722,14 +722,14 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
     if (pwalletMain->IsLocked())
     {
         string strError = _("Error: Wallet locked, unable to create transaction.");
-        LogPrintf("consolidateutxos: %s", strError);
+        LogPrintf("consolidateunspent: %s", strError);
         return strError;
     }
 
     if (fWalletUnlockStakingOnly)
     {
         string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
-        LogPrintf("consolidateutxos: %s", strError);
+        LogPrintf("consolidateunspent: %s", strError);
         return strError;
     }
 
@@ -752,7 +752,7 @@ UniValue consolidateutxos(const UniValue& params, bool fHelp)
             strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  "), FormatMoney(nFeeRequired));
         else
             strError = _("Error: Transaction creation failed  ");
-        LogPrintf("consolidateutxos: %s", strError);
+        LogPrintf("consolidateunspent: %s", strError);
         return strError;
     }
 
