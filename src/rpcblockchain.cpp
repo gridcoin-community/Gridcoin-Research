@@ -936,8 +936,6 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             if (dPayout <= 0)
                 continue;
 
-            dTotalAmount += dPayout;
-
             CBitcoinAddress address(sGRCAddress);
 
             if (!address.IsValid())
@@ -945,6 +943,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 LogPrintf("ERROR: rainbymagnitude: Invalid Gridcoin address: %s.", sGRCAddress);
                 continue;
             }
+
+            dTotalAmount += dPayout;
 
             setAddress.insert(address);
 
