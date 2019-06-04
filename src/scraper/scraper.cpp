@@ -51,6 +51,7 @@ struct ScraperFileManifestEntry
     uint256 hash; // hash of file
     int64_t timestamp;
     bool current;
+    bool excludefromcsmanifest;
 };
 
 typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
@@ -1797,6 +1798,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // By definition the record we are about to insert is current. If a new file is downloaded for
     // a given project, it has to be more up to date than any others.
     NewRecord.current = true;
+    NewRecord.excludefromcsmanifest = false;
     
     // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
     {
@@ -2201,7 +2203,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 
     // Delete corresponding file if it exists.
     if (fs::exists(pathScraper / entry.filename))
-        fs::remove(pathScraper /entry.filename);
+        fs::remove(pathScraper / entry.filename);
 
     ret = StructScraperFileManifest.mScraperFileManifest.erase(entry.filename);
 
@@ -2277,6 +2279,20 @@ bool LoadScraperFileManifest(const fs::path& file)
         
         LoadEntry.filename = vline[4];
 
+        // This handles startup with legacy manifest file without excludefromcsmanifest column.
+        if (vline.size() == 6)
+        {
+            // Intended for explorer mode, where files not to be included in CScraperManifest
+            // are to be maintained, such as team and host files.
+            LoadEntry.excludefromcsmanifest = std::stoi(vline[5]);
+        }
+        else
+        {
+            // The default if the field is not there is false. (Because scraper ver 1 all files are to be
+            // included.)
+            LoadEntry.excludefromcsmanifest = false;
+        }
+
         // Lock cs_StructScraperFileManifest before updating
         // global structure.
         {
@@ -2320,7 +2336,7 @@ bool StoreScraperFileManifest(const fs::path& file)
         if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
         
         // Header.
-        stream << "Hash," << "Current," << "Time," << "Project," << "Filename\n";
+        stream << "Hash," << "Current," << "Time," << "Project," << "Filename," << "ExcludeFromCSManifest" << "\n";
         
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -2330,7 +2346,8 @@ bool StoreScraperFileManifest(const fs::path& file)
                     + std::to_string(entry.second.current) + ","
                     + std::to_string(entry.second.timestamp) + ","
                     + entry.second.project + ","
-                    + entry.first + "\n";
+                    + entry.first + ","
+                    + std::to_string(entry.second.excludefromcsmanifest) + "\n";
             stream << sScraperFileManifestEntry;
         }
 
