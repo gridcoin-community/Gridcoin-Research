@@ -740,12 +740,12 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     // call. Just in case, the input address is specified as the return address via coincontrol.
     vecSend.push_back(std::make_pair(scriptDestPubKey, nValue - nFeeRequired));
 
-    CCoinControl* coinControl = new CCoinControl();
+    CCoinControl coinControl;
 
     // Send the change back to the same address.
-    coinControl->destChange = OptimizeAddress.Get();
+    coinControl.destChange = OptimizeAddress.Get();
 
-    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, coinControl))
+    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl))
     {
         string strError;
         if (nValue + nFeeRequired > pwalletMain->GetBalance())
