@@ -13,6 +13,7 @@
 #include "main.h"
 #include "net.h"
 #include "wallet.h"
+#include "coincontrol.h"
 
 using namespace std;
 using namespace boost;
@@ -603,6 +604,167 @@ UniValue listunspent(const UniValue& params, bool fHelp)
     return results;
 }
 
+
+UniValue consolidateunspent(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 3)
+        throw runtime_error(
+                "consolidateunspent <address> [UTXO size [maximum number of inputs]]\n"
+                "\n"
+                "Performs a single transaction to consolidate UTXOs on\n"
+                "a given address. The optional parameter of UTXO size will result\n"
+                "in consolidating UTXOs to generate an output of that size or\n"
+                "the output for the total value of the specified maximum,\n"
+                "maximum number of smallest inputs, whichever is less.\n");
+
+    UniValue result(UniValue::VOBJ);
+
+    std::string sAddress = params[0].get_str();
+    CBitcoinAddress OptimizeAddress(sAddress);
+
+    int64_t nConsolidateLimit = 0;
+    // Set default maximum consolidation to 50 inputs if it is not specified. This is based
+    // on performance tests on the Pi to ensure the transaction returns within a reasonable time.
+    // The performance tests on the Pi show about 3 UTXO's/second. Intel machines should do
+    // about 3x that. The GUI will not be responsive during the transaction.
+    unsigned int nInputNumberLimit = 50;
+
+    if (params.size() > 1) nConsolidateLimit = AmountFromValue(params[1]);
+    if (params.size() > 2) nInputNumberLimit = params[2].get_int();
+
+    // Clamp InputNumberLimit to 200. Above 200 risks an invalid transaction due to the size.
+    nInputNumberLimit = std::min(nInputNumberLimit, (unsigned int) 200);
+
+    if (!OptimizeAddress.IsValid())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ") + sAddress);
+
+    // Set the consolidation transaction address to the same as the inputs to consolidate.
+    CScript scriptDestPubKey;
+    scriptDestPubKey.SetDestination(OptimizeAddress.Get());
+
+    std::vector<COutput> vecInputs;
+
+    // A convenient way to do a sort without the bother of writing a comparison operator.
+    // The map does it for us! It must be a multimap, because it is highly likely one or
+    // more UTXO's will have the same nValue.
+    std::multimap<int64_t, COutput> mInputs;
+
+    // Have to lock both main and wallet to prevent deadlocks.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Get the current UTXO's.
+    pwalletMain->AvailableCoins(vecInputs, false, NULL, false);
+
+    // Filter outputs by matching address and insert into sorted multimap.
+    for (auto const& out : vecInputs)
+    {
+        CTxDestination outaddress;
+        int64_t nOutValue = out.tx->vout[out.i].nValue;
+
+        if (!ExtractDestination(out.tx->vout[out.i].scriptPubKey, outaddress)) continue;
+
+        if (CBitcoinAddress(outaddress) == OptimizeAddress)
+            mInputs.insert(std::make_pair(nOutValue, out));
+    }
+
+    CWalletTx wtxNew;
+
+    // For min fee calculation.
+    CTransaction txDummy;
+
+    set<pair<const CWalletTx*,unsigned int>> setCoins;
+
+    unsigned int iInputCount = 0;
+    int64_t nValue = 0;
+
+    // Construct the inputs to the consolidation transaction. Either all of the inputs from above, or 200,
+    // or when the total reaches/exceeds nConsolidateLimit, whichever is more limiting. The map allows us
+    // to elegantly select the UTXO's from the smallest upwards.
+    for (auto const& out : mInputs)
+    {
+        // Increment first so the count is 1 based.
+        ++iInputCount;
+
+        if (fDebug) LogPrintf("INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
+
+        setCoins.insert(make_pair(out.second.tx, out.second.i));
+        nValue += out.second.tx->vout[out.second.i].nValue;
+
+        if (iInputCount == nInputNumberLimit || (nValue >= nConsolidateLimit && nConsolidateLimit != 0)) break;
+    }
+
+    // If number of inputs that meet criteria is less than two, then do nothing.
+    if (iInputCount < 2)
+    {
+        result.pushKV("result", true);
+        result.pushKV("UTXOs consolidated", (uint64_t) 0);
+
+        return result;
+    }
+    
+    CReserveKey reservekey(pwalletMain);
+
+
+    // Fee calculation to avoid change.
+
+    // Bytes
+    // --------- The inputs to the tx - The one output.
+    int64_t nBytes = iInputCount * 148 + 34 + 10;
+
+    // Min Fee
+    int64_t nMinFee = txDummy.GetMinFee(1, GMF_SEND, nBytes);
+
+    int64_t nFee = nTransactionFee * (1 + nBytes / 1000);
+
+    int64_t nFeeRequired = max(nMinFee, nFee);
+
+
+    if (pwalletMain->IsLocked())
+    {
+        string strError = _("Error: Wallet locked, unable to create transaction.");
+        LogPrintf("consolidateunspent: %s", strError);
+        return strError;
+    }
+
+    if (fWalletUnlockStakingOnly)
+    {
+        string strError = _("Error: Wallet unlocked for staking only, unable to create transaction.");
+        LogPrintf("consolidateunspent: %s", strError);
+        return strError;
+    }
+
+    vector<pair<CScript, int64_t> > vecSend;
+
+    // Reduce the out value for the transaction by nFeeRequired from the total of the inputs to provide a fee
+    // to the staker. The fee has been calculated so that no change should be produced from the CreateTransaction
+    // call. Just in case, the input address is specified as the return address via coincontrol.
+    vecSend.push_back(std::make_pair(scriptDestPubKey, nValue - nFeeRequired));
+
+    CCoinControl coinControl;
+
+    // Send the change back to the same address.
+    coinControl.destChange = OptimizeAddress.Get();
+
+    if (!pwalletMain->CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRequired, &coinControl))
+    {
+        string strError;
+        if (nValue + nFeeRequired > pwalletMain->GetBalance())
+            strError = strprintf(_("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  "), FormatMoney(nFeeRequired));
+        else
+            strError = _("Error: Transaction creation failed  ");
+        LogPrintf("consolidateunspent: %s", strError);
+        return strError;
+    }
+
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+        return _("Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
+
+    result.pushKV("result", true);
+    result.pushKV("UTXOs consolidated", (uint64_t) iInputCount);
+    result.pushKV("Output UTXO value", (double)(nValue - nFeeRequired) / COIN);
+
+    return result;
+}
 
 
 UniValue createrawtransaction(const UniValue& params, bool fHelp)
