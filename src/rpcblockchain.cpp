@@ -929,17 +929,22 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             std::string sContract = DecodeBase64(scacheContract);
             std::string sGRCAddress = ExtractValue(sContract, ";", 2);
 
+            if (fDebug) LogPrintf("INFO: rainbymagnitude: sGRCaddress = %s.", sGRCAddress);
+
             double dPayout = (structMag.Magnitude / dTotalNetworkMagnitude) * dAmount;
 
             if (dPayout <= 0)
                 continue;
 
-            dTotalAmount += dPayout;
-
             CBitcoinAddress address(sGRCAddress);
 
             if (!address.IsValid())
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Gridcoin address: ") + sGRCAddress);
+            {
+                LogPrintf("ERROR: rainbymagnitude: Invalid Gridcoin address: %s.", sGRCAddress);
+                continue;
+            }
+
+            dTotalAmount += dPayout;
 
             setAddress.insert(address);
 

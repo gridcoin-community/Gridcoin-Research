@@ -132,6 +132,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listunspent"            , 0 },
     { "listunspent"            , 1 },
     { "listunspent"            , 2 },
+    { "consolidateunspent"     , 1 },
+    { "consolidateunspent"     , 2 },
     { "move"                   , 2 },
     { "move"                   , 3 },
     { "rainbymagnitude"        , 0 },
