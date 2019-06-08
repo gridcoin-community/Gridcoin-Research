@@ -50,6 +50,7 @@ extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
+extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
 
