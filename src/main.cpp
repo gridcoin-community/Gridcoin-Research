@@ -211,8 +211,7 @@ extern void HarvestCPIDs(bool cleardata);
 // Standard Boinc Projects ////
 ///////////////////////////////
 
-//Global variables to display current mined project in various places:
-std::string    msMiningCPID;
+//Global variables to display current mined project in various placesn:
 std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
 double         mdMachineTimerLast = 0;
@@ -765,7 +764,6 @@ MiningCPID GetNextProject(bool bForce)
                 }
     }
 
-    msMiningCPID = "";
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
     std::string email = GetArgument("email", "NA");
@@ -868,16 +866,12 @@ MiningCPID GetNextProject(bool bForce)
                                         (void)bResult;
 #                                       endif
 
-
-                                        //Only used for global status:
-                                        msMiningCPID = structcpid.cpid;
-
                                         double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
                                         GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
                                         GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
                                         if (fDebug && LessVerbose(2)) LogPrintf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
                                         //Reserved for GRC Speech Synthesis
-                                        msMiningErrors = (msMiningCPID == "INVESTOR" || !IsResearcher(msPrimaryCPID) || msMiningCPID.empty()) ? _("Staking Interest") : _("Boinc Mining");
+                                        msMiningErrors = !IsResearcher(msPrimaryCPID) ? _("Staking Interest") : _("Boinc Mining");
                                         GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
                                         GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
                                         return GlobalCPUMiningCPID;
@@ -894,7 +888,6 @@ MiningCPID GetNextProject(bool bForce)
         }
 
         msMiningErrors = (IsResearcher(msPrimaryCPID)) ? _("All BOINC projects exhausted.") : "";
-        msMiningCPID = "INVESTOR";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
         if (fDebug10) LogPrintf("-Investor mode-");
 
