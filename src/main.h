@@ -192,7 +192,6 @@ extern bool fEnforceCanonical;
 static const uint64_t nMinDiskSpace = 52428800;
 
 // PoB Miner Global Vars:
-extern std::string 	msMiningProject;
 extern std::string 	msMiningCPID;
 extern std::string  msPrimaryCPID;
 
@@ -227,7 +226,6 @@ struct globalStatusType
     std::string magnitude;
     std::string ETTS;
     std::string ERRperday;
-    std::string project;
     std::string cpid;
     std::string status;
     std::string poll;

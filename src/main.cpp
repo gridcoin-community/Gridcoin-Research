@@ -212,7 +212,6 @@ extern void HarvestCPIDs(bool cleardata);
 ///////////////////////////////
 
 //Global variables to display current mined project in various places:
-std::string    msMiningProject;
 std::string    msMiningCPID;
 std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
@@ -619,7 +618,6 @@ void GetGlobalStatus()
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
-        GlobalStatusStruct.project = msMiningProject;
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
         try
         {
@@ -767,7 +765,6 @@ MiningCPID GetNextProject(bool bForce)
                 }
     }
 
-    msMiningProject = "";
     msMiningCPID = "";
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
@@ -873,7 +870,6 @@ MiningCPID GetNextProject(bool bForce)
 
 
                                         //Only used for global status:
-                                        msMiningProject = structcpid.projectname;
                                         msMiningCPID = structcpid.cpid;
 
                                         double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
@@ -898,7 +894,6 @@ MiningCPID GetNextProject(bool bForce)
         }
 
         msMiningErrors = (IsResearcher(msPrimaryCPID)) ? _("All BOINC projects exhausted.") : "";
-        msMiningProject = "INVESTOR";
         msMiningCPID = "INVESTOR";
         GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
         if (fDebug10) LogPrintf("-Investor mode-");
