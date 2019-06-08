@@ -32,8 +32,6 @@ namespace
       {
          // Create a fake CPID
          StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
-         cpid.projectname = "My Simple Test Project";
-         cpid.entries = 1;
          cpid.cpid = TEST_CPID;
          cpid.payments = 123;
          //cpid.EarliestPaymentTime = 1490260000;

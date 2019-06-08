@@ -204,7 +204,6 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("CPID", bb.cpid);
     if (!IsResearchAgeEnabled(blockindex->nHeight))
     {
-        result.pushKV("ProjectName", bb.projectname);
         result.pushKV("RSAWeight",bb.RSAWeight);
     }
 
@@ -228,7 +227,6 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     }
     result.pushKV("ClientVersion",bb.clientversion);
 
-    if (!bb.cpidv2.empty())     result.pushKV("CPIDv2",bb.cpidv2.substr(0,32));
     bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
     result.pushKV("CPIDValid",IsCPIDValid2);
 
@@ -633,7 +631,6 @@ bool TallyMagnitudesInSuperblock()
         double NetworkAvgMagnitude = TotalNetworkMagnitude / (TotalNetworkEntries+.01);
         // Store the Total Network Magnitude:
         StructCPID& network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
-        network.projectname="NETWORK";
         network.NetworkMagnitude = TotalNetworkMagnitude;
         network.NetworkAvgMagnitude = NetworkAvgMagnitude;
         if (fDebug)
@@ -656,7 +653,6 @@ bool TallyMagnitudesInSuperblock()
                     if (project.length() > 1)
                     {
                         StructCPID& stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
-                        stProject.projectname = project;
                         //As of 7-16-2015, start pulling in Total RAC
                         mvNetworkCopy[project]=stProject;
                         TotalProjects++;
@@ -664,7 +660,6 @@ bool TallyMagnitudesInSuperblock()
                 }
             }
         }
-        network.NetworkProjects = TotalProjects;
         mvNetworkCopy["NETWORK"] = network;
         if (fDebug3) LogPrintf(".TMS43.");
         return true;
@@ -707,16 +702,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         }
 
         uint256 hashRand = GetRandHash();
-        std::string email = GetArgument("email", "NA");
-        boost::to_lower(email);
-        GlobalCPUMiningCPID.email=email;
-
-        if (!NN::Cpid::Parse(GlobalCPUMiningCPID.cpid).Matches(GlobalCPUMiningCPID.boincruntimepublickey, email))
-        {
-            sError="Invalid CPID";
-            return false;
-        }
-
         double nBalance = GetTotalBalance();
         if (nBalance < 1.01)
         {
@@ -734,11 +719,10 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         // Convert the new pubkey into legacy hex format
         sOutPubKey = HexStr(keyBeacon.GetPubKey().Raw());
 
-        GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
         std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,pindexBest->nVersion);
         std::string GRCAddress = DefaultWalletAddress();
         // Public Signing Key is stored in Beacon
-        std::string contract = GlobalCPUMiningCPID.cpidv2 + ";" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
+        std::string contract = "UNUSED;" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
         LogPrintf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
         std::string sBase = EncodeBase64(contract);
         std::string sAction = "add";
@@ -1890,9 +1874,9 @@ UniValue network(const UniValue& params, bool fHelp)
         {
             UniValue results(UniValue::VOBJ);
 
-            results.pushKV("Project", stNet.projectname);
+            results.pushKV("Project", (*ii).first);
 
-            if (stNet.projectname == "NETWORK")
+            if ((*ii).first == "NETWORK")
             {
                 double MaximumEmission = BLOCKS_PER_DAY*GetMaximumBoincSubsidy(GetAdjustedTime());
                 double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
@@ -2540,7 +2524,6 @@ UniValue MagnitudeReport(std::string cpid)
                         entry.pushKV("CPID",structMag.cpid);
                         entry.pushKV("Last Block Paid",structMag.LastBlock);
                         entry.pushKV("DPOR Magnitude",  structMag.Magnitude);
-                        entry.pushKV("Payment Magnitude",structMag.PaymentMagnitude);
                         entry.pushKV("Payment Timespan (Days)",structMag.PaymentTimespan);
                         entry.pushKV("Total Earned (14 days)",structMag.totalowed);
                         entry.pushKV("DPOR Payments (14 days)",structMag.payments);

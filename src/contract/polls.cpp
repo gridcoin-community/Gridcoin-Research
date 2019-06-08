@@ -82,10 +82,6 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     //6-20-2015
     double nBalance = GetTotalBalance();
     uint256 hashRand = GetRandHash();
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    GlobalCPUMiningCPID.email = email;
-    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
     if (!PollExists(sTitle))
         return std::make_pair("Error", "Poll does not exist.");
     if (PollExpired(sTitle))
@@ -125,7 +121,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
     else
     {
-        std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
+        std::string voter = "<CPID>"
                 + GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
                 + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
                 + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";

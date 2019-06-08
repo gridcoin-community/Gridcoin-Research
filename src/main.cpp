@@ -731,12 +731,6 @@ MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
     mc.initialized = true;
     mc.cpid=cpid;
     mc.projectname = cpid;
-    mc.cpidv2=cpid;
-    mc.cpidhash = "";
-    mc.email = cpid;
-    mc.boincruntimepublickey = cpid;
-    mc.encboincpublickey = "";
-    mc.enccpid = "";
     mc.Magnitude = 0;
     mc.clientversion = "";
     mc.RSAWeight = GetRSAWeightByCPID(cpid);
@@ -817,26 +811,15 @@ MiningCPID GetNextProject(bool bForce)
                             {
                                 if (true)
                                 {
-                                    GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
-
                                     if (true)
                                     {
-
-                                        GlobalCPUMiningCPID.email = email;
 
                                         if (LessVerbose(1) || fDebug || fDebug3) LogPrintf("Ready to CPU Mine project %s with CPID %s",
                                             structcpid.projectname.c_str(),structcpid.cpid.c_str());
                                         //Required for project to be mined in a block:
                                         GlobalCPUMiningCPID.cpid=structcpid.cpid;
                                         GlobalCPUMiningCPID.projectname = structcpid.projectname;
-                                        GlobalCPUMiningCPID.encboincpublickey = structcpid.boincpublickey;
-                                        GlobalCPUMiningCPID.encaes = structcpid.boincpublickey;
 
-
-                                        GlobalCPUMiningCPID.boincruntimepublickey = structcpid.cpidhash;
-                                        if(fDebug) LogPrintf("GNP: Setting bpk to %s",structcpid.cpidhash);
-
-                                        GlobalCPUMiningCPID.cpidv2 = structcpid.cpid;
                                         GlobalCPUMiningCPID.lastblockhash = "0";
                                         // Sign the block
                                         GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
@@ -852,7 +835,7 @@ MiningCPID GetNextProject(bool bForce)
                                         GlobalCPUMiningCPID.BoincSignature = sSignature;
                                         if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
                                         {
-                                            LogPrintf("CPID INVALID (GetNextProject) %s, %s  ",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2);
+                                            LogPrintf("CPID INVALID (GetNextProject) %s,  ",GlobalCPUMiningCPID.cpid);
                                             continue;
                                         }
 #                                       else
@@ -3164,8 +3147,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 {
                     if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
                         return DoS(20, error(
-                                       "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
-                                       bb.cpid.c_str(), bb.cpidv2.c_str(),
+                                       "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, LBH %s, Bad Hashboinc [%s]",
+                                       bb.cpid.c_str(),
                                        bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
                     else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
                 }
@@ -3987,8 +3970,8 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             || bb.BoincSignature.find(' ') != std::string::npos)
         {
             return DoS(20, error(
-                "Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
-                 height1, bb.cpid.c_str(), bb.cpidv2.c_str(),
+                "Bad CPID or Block Signature : height %i, CPID %s, LBH %s, Bad Hashboinc [%s]",
+                 height1, bb.cpid.c_str(),
                  bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
         }
     }
@@ -5145,7 +5128,6 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
         if (pIndex->nTime > stMag.HighLockTime)
             stMag.HighLockTime = pIndex->nTime;
 
-        stMag.entries++;
         stMag.payments += pIndex->nResearchSubsidy;
         stMag.interestPayments += pIndex->nInterestSubsidy;
         double total_owed = 0;
@@ -5524,7 +5506,6 @@ bool TallyResearchAverages_retired(CBlockIndex* index)
                 LogPrintf("Min block %i, Rows %i", pblockindex->nHeight, iRow);
 
             StructCPID& network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
-            network.projectname="NETWORK";
             network.payments = NetworkPayments;
             network.InterestSubsidy = NetworkInterest;
             mvNetworkCopy["NETWORK"] = network;
@@ -5643,7 +5624,6 @@ bool TallyResearchAverages_v9(CBlockIndex* index)
         if (pblockindex)
         {
             StructCPID& network = GetInitializedStructCPID2("NETWORK",mvNetworkCopy);
-            network.projectname="NETWORK";
             network.payments = NetworkPayments;
             network.InterestSubsidy = NetworkInterest;
             mvNetworkCopy["NETWORK"] = network;
@@ -6977,8 +6957,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
         mcpid.Organization = GetArg("-org", "windows");
         mcpid.OrganizationKey = "12345678"; //Only reveal 8 characters
     }
-    else
-        mcpid.projectname.clear();
 
     mcpid.LastPORBlockHash = GetLastPORBlockHash(mcpid.cpid);
 
@@ -6990,22 +6968,39 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
         mcpid.BoincPublicKey = GetBeaconPublicKey(mcpid.cpid, false);
     }
 
-    std::string bb = mcpid.cpid + delim + mcpid.projectname + delim + mcpid.aesskein + delim + ""
-                    + delim + "" + delim + ""
-                    + delim + mcpid.enccpid
-                    + delim + mcpid.encaes + delim + "" + delim + ""
+    // Note: Commented-out items recorded to document removed fields:
+    //
+    std::string bb = mcpid.cpid
+                    + delim // + mcpid.projectname                        // Obsolete
+                    + delim // + mcpid.aesskein                           // Obsolete
+                    + delim // + RoundToString(mcpid.rac,0)               // Obsolete
+                    + delim // + RoundToString(mcpid.pobdifficulty,5)     // Obsolete
+                    + delim // + RoundToString((double)mcpid.diffbytes,0) // Obsolete
+                    + delim // + mcpid.enccpid                            // Obsolete
+                    + delim // + mcpid.encaes                             // Obsolete
+                    + delim // + RoundToString(mcpid.nonce,0)             // Obsolete
+                    + delim // + RoundToString(mcpid.NetworkRAC,0)        // Obsolete
                     + delim + version
                     + delim + RoundToString(mcpid.ResearchSubsidy,subsidy_places)
                     + delim + RoundToString(mcpid.LastPaymentTime,0)
                     + delim + RoundToString(mcpid.RSAWeight,0)
-                    + delim + mcpid.cpidv2
+                    + delim // + mcpid.cpidv2                             // Obsolete
                     + delim + RoundToString(mcpid.Magnitude,0)
-                    + delim + mcpid.GRCAddress + delim + mcpid.lastblockhash
-                    + delim + RoundToString(mcpid.InterestSubsidy,subsidy_places) + delim + mcpid.Organization
-                    + delim + mcpid.OrganizationKey + delim + mcpid.NeuralHash + delim + mcpid.superblock
-                    + delim + RoundToString(mcpid.ResearchSubsidy2,2) + delim + RoundToString(mcpid.ResearchAge,6)
-                    + delim + RoundToString(mcpid.ResearchMagnitudeUnit,6) + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
-                    + delim + mcpid.LastPORBlockHash + delim + mcpid.CurrentNeuralHash + delim + mcpid.BoincPublicKey + delim + mcpid.BoincSignature;
+                    + delim + mcpid.GRCAddress
+                    + delim + mcpid.lastblockhash
+                    + delim + RoundToString(mcpid.InterestSubsidy,subsidy_places)
+                    + delim + mcpid.Organization
+                    + delim + mcpid.OrganizationKey
+                    + delim + mcpid.NeuralHash
+                    + delim + mcpid.superblock
+                    + delim // + RoundToString(mcpid.ResearchSubsidy2,2)  // Obsolete
+                    + delim + RoundToString(mcpid.ResearchAge,6)
+                    + delim + RoundToString(mcpid.ResearchMagnitudeUnit,6)
+                    + delim + RoundToString(mcpid.ResearchAverageMagnitude,2)
+                    + delim + mcpid.LastPORBlockHash
+                    + delim + mcpid.CurrentNeuralHash
+                    + delim + mcpid.BoincPublicKey
+                    + delim + mcpid.BoincSignature;
     return bb;
 }
 
@@ -7021,17 +7016,23 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
     std::vector<std::string> s = split(block,"<|>");
     if (s.size() > 7)
     {
+        // Note: Commented-out items recorded to document removed fields:
+        //
         surrogate.cpid = s[0];
-        surrogate.projectname = s[1];
-        boost::to_lower(surrogate.projectname);
-        surrogate.aesskein = s[2];
-        surrogate.enccpid = s[6];
-        surrogate.encboincpublickey = s[6];
-        surrogate.encaes = s[7];
-        if (s.size() > 9)
-        {
-            // Obsoleted network RAC.
-        }
+        //surrogate.projectname = s[1];                                // Obsolete
+        //boost::to_lower(surrogate.projectname);                      // Obsolete
+        //surrogate.aesskein = s[2];                                   // Obsolete
+        //surrogate.rac = RoundFromString(s[3],0);                     // Obsolete
+        //surrogate.pobdifficulty = RoundFromString(s[4],6);           // Obsolete
+        //surrogate.diffbytes = (unsigned int)RoundFromString(s[5],0); // Obsolete
+        //surrogate.enccpid = s[6];                                    // Obsolete
+        //surrogate.encboincpublickey = s[6];                          // Obsolete
+        //surrogate.encaes = s[7];                                     // Obsolete
+        //surrogate.nonce = RoundFromString(s[8],0);                   // Obsolete
+        //if (s.size() > 9)
+        //{
+        //    surrogate.NetworkRAC = RoundFromString(s[9],0);          // Obsolete
+        //}
         if (s.size() > 10)
         {
             surrogate.clientversion = s[10];
@@ -7048,10 +7049,10 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         {
             surrogate.RSAWeight = RoundFromString(s[13],0);
         }
-        if (s.size() > 14)
-        {
-            surrogate.cpidv2 = s[14];
-        }
+        //if (s.size() > 14)
+        //{
+        //    surrogate.cpidv2 = s[14];                                // Obsolete
+        //}
         if (s.size() > 15)
         {
             surrogate.Magnitude = RoundFromString(s[15],0);
@@ -7084,10 +7085,11 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         {
             surrogate.superblock = s[22];
         }
-        if (s.size() > 23)
-        {
-            surrogate.ResearchSubsidy2 = RoundFromString(s[23],subsidy_places);
-        }
+        //if (s.size() > 23)
+        //{
+        //    // Obsolete
+        //    surrogate.ResearchSubsidy2 = RoundFromString(s[23],subsidy_places);
+        //}
         if (s.size() > 24)
         {
             surrogate.ResearchAge = RoundFromString(s[24],6);
@@ -7187,11 +7189,8 @@ void HarvestCPIDs(bool cleardata)
                     std::string email_hash = ExtractXML(vCPID[i],"<email_hash>","</email_hash>");
                     std::string cpidhash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
                     std::string externalcpid = ExtractXML(vCPID[i],"<external_cpid>","</external_cpid>");
-                    std::string utc=ExtractXML(vCPID[i],"<user_total_credit>","</user_total_credit>");
-                    std::string rac=ExtractXML(vCPID[i],"<user_expavg_credit>","</user_expavg_credit>");
                     std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
                     std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
-                    std::string rectime = ExtractXML(vCPID[i],"<rec_time>","</rec_time>");
 
                     proj = LowerUnderscore(proj);
                     int64_t nStart = GetTimeMillis();
@@ -7202,13 +7201,10 @@ void HarvestCPIDs(bool cleardata)
                         to_lower(cpid_non);
                         StructCPID& structcpid = GetInitializedStructCPID2(proj,mvCPIDs);
                         iRow++;
-                        structcpid.cpidhash = cpidhash;
                         structcpid.projectname = proj;
                         boost::to_lower(team);
                         structcpid.team = team;
                         structcpid.cpid = externalcpid;
-                        structcpid.boincpublickey = AdvancedCrypt(cpid_non);
-                        structcpid.cpidv2 = externalcpid;
                         structcpid.Iscpidvalid = mining_id.Which() == NN::MiningId::Kind::CPID;
 
                         int64_t elapsed = GetTimeMillis()-nStart;
@@ -7228,11 +7224,6 @@ void HarvestCPIDs(bool cleardata)
                             structcpid.errors = "CPID calculation invalid.  Check e-mail address and try resetting the boinc project.";
                         }
 
-                        structcpid.utc = RoundFromString(utc,0);
-                        structcpid.rectime = RoundFromString(rectime,0);
-                        double currenttime =  GetAdjustedTime();
-                        double nActualTimespan = currenttime - structcpid.rectime;
-                        structcpid.age = nActualTimespan;
                         std::string sKey = structcpid.cpid + ":" + proj;
                         mvCPIDs[proj] = structcpid;
 
@@ -7273,9 +7264,6 @@ void HarvestCPIDs(bool cleardata)
                             // Verify the CPID is a valid researcher:
                             if (IsResearcher(structcpid.cpid))
                             {
-                                GlobalCPUMiningCPID.cpidhash = cpidhash;
-                                GlobalCPUMiningCPID.email = email;
-                                GlobalCPUMiningCPID.boincruntimepublickey = cpidhash;
                                 LogPrintf("Setting bpk to %s", cpidhash);
 
                                 if (structcpid.team=="gridcoin")
@@ -7323,19 +7311,10 @@ StructCPID GetStructCPID()
 {
     StructCPID c;
     c.initialized=false;
-    c.utc=0;
-    c.rectime=0;
-    c.age = 0;
-    c.verifiedutc=0;
-    c.verifiedage=0;
-    c.entries=0;
-    c.NetworkProjects=0;
     c.Iscpidvalid=false;
     c.Magnitude=0;
-    c.PaymentMagnitude=0;
     c.owed=0;
     c.payments=0;
-    c.verifiedMagnitude=0;
     c.TotalMagnitude=0;
     c.LowLockTime=0;
     c.HighLockTime=0;
@@ -7366,7 +7345,6 @@ MiningCPID GetMiningCPID()
     mc.LastPaymentTime=0;
     mc.ResearchSubsidy = 0;
     mc.InterestSubsidy = 0;
-    mc.ResearchSubsidy2 = 0;
     mc.ResearchAge = 0;
     mc.ResearchMagnitudeUnit = 0;
     mc.ResearchAverageMagnitude = 0;
