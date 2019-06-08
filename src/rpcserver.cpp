@@ -409,8 +409,6 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockchaininfo",       &getblockchaininfo,       cat_network       },
     { "getnetworkinfo",          &getnetworkinfo,          cat_network       },
     { "currenttime",             &currenttime,             cat_network       },
-    { "decryptphrase",           &decryptphrase,           cat_network       },
-    { "encryptphrase",           &encryptphrase,           cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },

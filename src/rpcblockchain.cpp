@@ -2321,48 +2321,6 @@ UniValue currenttime(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue decryptphrase(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "decryptphrase <phrase>\n"
-                "\n"
-                "<phrase> -> Encrypted phrase to decrypt\n"
-                "\n"
-                "Decrypts an encrypted phrase\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string sParam1 = params[0].get_str();
-    std::string test = AdvancedDecrypt(sParam1);
-
-    res.pushKV("Phrase", sParam1);
-    res.pushKV("Decrypted Phrase", test);
-
-    return res;
-}
-
-UniValue encryptphrase(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "encryptphrase <phrase>\n"
-                "\n"
-                "<phrase> Phase you wish to encrypt\n"
-                "\n"
-                "Encrypt a phrase\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string sParam1 = params[0].get_str();
-    std::string test = AdvancedCrypt(sParam1);
-
-    res.pushKV("Phrase", sParam1);
-    res.pushKV("Encrypted Phrase", test);
-
-    return res;
-}
-
 UniValue memorypool(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
