@@ -1857,27 +1857,6 @@ double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstr
     return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
 }
 
-
-
-// miner's coin base reward
-int64_t GetProofOfWorkReward(int64_t nFees, int64_t locktime, int64_t height)
-{    
-    //NOTE: THIS REWARD IS ONLY USED IN THE POW PHASE (Block < 8000):
-    int64_t nSubsidy = CalculatedMagnitude(locktime,true) * COIN;
-    if (fDebug && GetBoolArg("-printcreation"))
-        LogPrintf("GetProofOfWorkReward() : create=%s nSubsidy=%" PRId64, FormatMoney(nSubsidy), nSubsidy);
-    if (nSubsidy < (30*COIN)) nSubsidy=30*COIN;
-    //Gridcoin Foundation Block:
-    if (height==10)
-    {
-        nSubsidy = nGenesisSupply * COIN;
-    }
-    if (fTestNet) nSubsidy += 1000*COIN;
-
-    return nSubsidy + nFees;
-}
-
-
 int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
 {
     int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
