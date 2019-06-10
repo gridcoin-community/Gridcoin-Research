@@ -16,7 +16,6 @@ extern bool bGridcoinGUILoaded;
 struct StructCPID
 {
     bool initialized;
-    bool Iscpidvalid;
 
     double Magnitude;
     double owed;
@@ -37,8 +36,6 @@ struct StructCPID
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
     std::string cpid;
-    std::string team;
-    std::string errors;
     std::string BlockHash;
     std::set<const CBlockIndex*> rewardBlocks;
 };
@@ -57,11 +54,9 @@ struct MiningCPID
 
     std::string cpid;
     std::string clientversion;
-    std::string email;
     std::string GRCAddress;
     std::string lastblockhash;
     std::string Organization;
-    std::string OrganizationKey;
     std::string NeuralHash;
     std::string superblock;
     std::string LastPORBlockHash;
@@ -70,8 +65,6 @@ struct MiningCPID
     std::string BoincSignature;
 };
 
-//User CPIDs
-extern std::map<std::string, StructCPID> mvCPIDs;
 //Network Averages
 extern std::map<std::string, StructCPID> mvNetwork;
 extern std::map<std::string, StructCPID> mvNetworkCopy;

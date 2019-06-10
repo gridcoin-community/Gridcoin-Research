@@ -34,8 +34,6 @@ static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
 static const int64_t DEFAULT_CBR = 10 * COIN;
 
-extern int64_t nLastBlockSolved;
-
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
@@ -192,8 +190,6 @@ extern bool fEnforceCanonical;
 static const uint64_t nMinDiskSpace = 52428800;
 
 // PoB Miner Global Vars:
-extern std::string  msPrimaryCPID;
-
 extern double       mdPORNonce;
 extern double       mdMachineTimerLast;
 

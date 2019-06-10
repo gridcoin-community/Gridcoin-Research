@@ -17,11 +17,11 @@
 #include "global_objects_noui.hpp"
 #include "rpcserver.h"
 #include "rpcclient.h"
-#include "boinc.h"
 #include "beacon.h"
 #include "miner.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/researcher.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
@@ -30,13 +30,9 @@
 #include "scraper_net.h"
 
 #include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
-#include <boost/algorithm/string/join.hpp>
 #include <boost/thread.hpp>
-#include <boost/asio.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <openssl/md5.h>
 #include <ctime>
@@ -45,7 +41,6 @@
 extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
-bool ImportBeaconKeysFromConfig();
 extern void CleanInboundConnections(bool bClearAll);
 bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
@@ -54,14 +49,11 @@ bool TallyResearchAverages(CBlockIndex* index);
 bool TallyResearchAverages_retired(CBlockIndex* index);
 bool TallyResearchAverages_v9(CBlockIndex* index);
 extern void IncrementCurrentNeuralNetworkSupermajority(std::string NeuralHash, std::string GRCAddress, double distance);
-extern MiningCPID GetInitializedMiningCPID(std::string name, std::map<std::string, MiningCPID>& vRef);
 extern double ExtractMagnitudeFromExplainMagnitude();
 extern void GridcoinServices();
 extern double SnapToGrid(double d);
 extern bool StrLessThanReferenceHash(std::string rh);
 extern bool IsContract(CBlockIndex* pIndex);
-std::string ExtractValue(std::string data, std::string delimiter, int pos);
-UniValue MagnitudeReport(std::string cpid);
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex);
 void ZeroOutResearcherTotals(StructCPID& stCpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
@@ -112,21 +104,15 @@ int64_t nBootup = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
 
-double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
-int64_t GetRSAWeightByCPID(std::string cpid);
 extern MiningCPID GetMiningCPID();
 extern StructCPID GetStructCPID();
-
-int64_t nLastBlockSolved = 0;  //Future timestamp
 
 ///////////////////////MINOR VERSION////////////////////////////////
 std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
 // The Private Key is revealed by design, for public messages only:
 std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
-
-std::string YesNo(bool bin);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
@@ -202,15 +188,12 @@ bool PollIsActive(const std::string& poll_contract);
 
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
 extern bool LessVerbose(int iMax1000);
-extern MiningCPID GetNextProject(bool bForce);
-extern void HarvestCPIDs(bool cleardata);
 
 ///////////////////////////////
 // Standard Boinc Projects ////
 ///////////////////////////////
 
 //Global variables to display current mined project in various placesn:
-std::string    msPrimaryCPID;
 double         mdPORNonce = 0;
 double         mdMachineTimerLast = 0;
 // Mining status variables
@@ -245,7 +228,6 @@ MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
 int nBoincUtilization = 0;
 std::string sRegVer;
 
-std::map<std::string, StructCPID> mvCPIDs;        //Contains the project stats at the user level
 std::map<std::string, StructCPID> mvNetwork;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvNetworkCopy;      //Contains the project stats at the network level
 std::map<std::string, StructCPID> mvMagnitudes; // Contains Magnitudes by CPID & Outstanding Payments Owed per CPID
@@ -722,166 +704,6 @@ void UnregisterWallet(CWallet* pwalletIn)
         setpwalletRegistered.erase(pwalletIn);
     }
 }
-
-
-MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
-{
-
-    MiningCPID mc = GetMiningCPID();
-    mc.initialized = true;
-    mc.cpid=cpid;
-    mc.projectname = cpid;
-    mc.Magnitude = 0;
-    mc.clientversion = "";
-    mc.RSAWeight = GetRSAWeightByCPID(cpid);
-    mc.LastPaymentTime = nLastBlockSolved;
-    mc.lastblockhash = "0";
-    // Reuse for debugging
-    mc.Organization = GetArg("-org", "");
-    return mc;
-}
-
-
-MiningCPID GetNextProject(bool bForce)
-{
-    if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude >= 1)
-    {
-                if (!Timer_Main("globalcpuminingcpid",10))
-                {
-                    //Prevent Thrashing
-                    return GlobalCPUMiningCPID;
-                }
-    }
-
-    GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
-
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-
-    if (IsInitialBlockDownload() && !bForce)
-    {
-        if (LessVerbose(100)) LogPrintf("CPUMiner: Gridcoin is downloading blocks Or CPIDs are not yet loaded...");
-        MilliSleep(1);
-        return GlobalCPUMiningCPID;
-    }
-
-    try
-    {
-
-        if (mvCPIDs.size() < 1)
-        {
-            if (fDebug && LessVerbose(10)) LogPrintf("Gridcoin has no CPIDs...");
-            //Let control reach the investor area
-        }
-
-        int iValidProjects=0;
-        //Count valid projects:
-        for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-        {
-                StructCPID structcpid = mvCPIDs[(*ii).first];
-                if (        msPrimaryCPID == structcpid.cpid &&
-                    structcpid.initialized && structcpid.Iscpidvalid)           iValidProjects++;
-        }
-
-        // Find next available CPU project:
-        int iDistributedProject = 0;
-        int iRow = 0;
-
-        if (email=="" || email=="NA") iValidProjects = 0;  //Let control reach investor area
-
-
-        if (iValidProjects > 0)
-        {
-        for (int i = 0; i <= 4;i++)
-        {
-            iRow=0;
-            iDistributedProject = (rand() % iValidProjects)+1;
-
-            for(map<string,StructCPID>::iterator ii=mvCPIDs.begin(); ii!=mvCPIDs.end(); ++ii)
-            {
-                StructCPID structcpid = mvCPIDs[(*ii).first];
-
-                if (structcpid.initialized)
-                {
-                    if (msPrimaryCPID == structcpid.cpid &&
-                        structcpid.Iscpidvalid && structcpid.projectname.length() > 1)
-                    {
-                            iRow++;
-                            if (i==4 || iDistributedProject == iRow)
-                            {
-                                if (true)
-                                {
-                                    if (true)
-                                    {
-
-                                        if (LessVerbose(1) || fDebug || fDebug3) LogPrintf("Ready to CPU Mine project %s with CPID %s",
-                                            structcpid.projectname.c_str(),structcpid.cpid.c_str());
-                                        //Required for project to be mined in a block:
-                                        GlobalCPUMiningCPID.cpid=structcpid.cpid;
-                                        GlobalCPUMiningCPID.projectname = structcpid.projectname;
-
-                                        GlobalCPUMiningCPID.lastblockhash = "0";
-                                        // Sign the block
-                                        GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
-                                        std::string sSignature;
-                                        std::string sError;
-                                        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sSignature, sError, true);
-#                                       if 0
-                                        if (!bResult)
-                                        {
-                                            LogPrintf("GetNextProject: failed to sign block with cpid -> %s", sError);
-                                            continue;
-                                        }
-                                        GlobalCPUMiningCPID.BoincSignature = sSignature;
-                                        if (!IsCPIDValidv2(GlobalCPUMiningCPID,1))
-                                        {
-                                            LogPrintf("CPID INVALID (GetNextProject) %s,  ",GlobalCPUMiningCPID.cpid);
-                                            continue;
-                                        }
-#                                       else
-                                        (void)bResult;
-#                                       endif
-
-                                        GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-                                        if (fDebug && LessVerbose(2)) LogPrintf("For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.Magnitude);
-                                        //Reserved for GRC Speech Synthesis
-                                        msMiningErrors = !IsResearcher(msPrimaryCPID) ? _("Staking Interest") : _("Boinc Mining");
-                                        GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-                                        GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
-                                        return GlobalCPUMiningCPID;
-                                    }
-                                }
-                            }
-
-                    }
-
-                }
-            }
-
-        }
-        }
-
-        msMiningErrors = (IsResearcher(msPrimaryCPID)) ? _("All BOINC projects exhausted.") : "";
-        GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("INVESTOR");
-        if (fDebug10) LogPrintf("-Investor mode-");
-
-        }
-        catch (std::exception& e)
-        {
-            msMiningErrors = _("Error obtaining next project.  Error 16172014.");
-
-            LogPrintf("Error obtaining next project");
-        }
-        catch(...)
-        {
-            msMiningErrors = _("Error obtaining next project.  Error 06172014.");
-            LogPrintf("Error obtaining next project 2.");
-        }
-        return GlobalCPUMiningCPID;
-
-}
-
-
 
 // check whether the passed transaction is from us
 bool static IsFromMe(CTransaction& tx)
@@ -3442,7 +3264,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         //Block was disconnected - User is Re-eligibile for staking
         StructCPID& sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
-        nLastBlockSolved = 0;
         if (sMag.initialized)
         {
             sMag.LastPaymentTime = 0;
@@ -4390,10 +4211,12 @@ void GridcoinServices()
     {
         try
         {
-            if (msNeuralResponse.length() < 25 && IsResearcher(msPrimaryCPID))
+            std::string primary_cpid = NN::GetPrimaryCpid();
+
+            if (msNeuralResponse.length() < 25 && IsResearcher(primary_cpid))
             {
-                AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                if (fDebug3) LogPrintf("Async explainmag sent for %s.",msPrimaryCPID);
+                AsyncNeuralRequest("explainmag", primary_cpid, 5);
+                if (fDebug3) LogPrintf("Async explainmag sent for %s.", primary_cpid);
             }
             if (fDebug3) LogPrintf("MR Complete");
         }
@@ -5279,20 +5102,6 @@ StructCPID& GetLifetimeCPID(const std::string& cpid)
 
     return stCPID;
 }
-
-MiningCPID GetInitializedMiningCPID(std::string name,std::map<std::string, MiningCPID>& vRef)
-{
-    MiningCPID& cpid = vRef[name];
-    if (!cpid.initialized)
-    {
-        cpid = GetMiningCPID();
-        cpid.initialized=true;
-        cpid.LastPaymentTime = 0;
-    }
-
-    return cpid;
-}
-
 
 StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef)
 {
@@ -6934,7 +6743,6 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
     if (!IsResearchAgeEnabled(pindexBest->nHeight))
     {
         mcpid.Organization = GetArg("-org", "windows");
-        mcpid.OrganizationKey = "12345678"; //Only reveal 8 characters
     }
 
     mcpid.LastPORBlockHash = GetLastPORBlockHash(mcpid.cpid);
@@ -6969,7 +6777,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
                     + delim + mcpid.lastblockhash
                     + delim + RoundToString(mcpid.InterestSubsidy,subsidy_places)
                     + delim + mcpid.Organization
-                    + delim + mcpid.OrganizationKey
+                    + delim // + mcpid.OrganizationKey                    // Obsolete
                     + delim + mcpid.NeuralHash
                     + delim + mcpid.superblock
                     + delim // + RoundToString(mcpid.ResearchSubsidy2,2)  // Obsolete
@@ -7052,10 +6860,10 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         {
             surrogate.Organization = s[19];
         }
-        if (s.size() > 20)
-        {
-            surrogate.OrganizationKey = s[20];
-        }
+        //if (s.size() > 20)
+        //{
+        //    surrogate.OrganizationKey = s[20];                       // Obsolete
+        //}
         if (s.size() > 21)
         {
             surrogate.NeuralHash = s[21];
@@ -7107,190 +6915,10 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
     return surrogate;
 }
 
-std::string LowerUnderscore(std::string data)
-{
-    boost::to_lower(data);
-    boost::replace_all(data, "_", " ");
-    return data;
-}
-
-void HarvestCPIDs(bool cleardata)
-{
-    if (fDebug10)
-        LogPrintf("loading BOINC cpids ...");
-
-    if (!GetArgument("boinckey", "").empty()) {
-        // TODO: implement a safer way to export researcher context that doesn't
-        // risk accidental exposure of internal CPID and email address.
-        LogPrintf("ERROR: boinckey is no longer supported.");
-    }
-
- try
- {
-    std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-    std::string sout = GetFileContents(sourcefile);
-
-    if (sout == "-1")
-    {
-        LogPrintf("Unable to obtain Boinc CPIDs ");
-
-        if (mapArgs.count("-boincdatadir") && mapArgs["-boincdatadir"].length() > 0)
-        {
-            LogPrintf("Boinc data directory set in gridcoinresearch.conf has been incorrectly specified ");
-        }
-
-        else LogPrintf("Boinc data directory is not in the operating system's default location \nPlease move it there or specify its current location in gridcoinresearch.conf");
-
-        return;
-    }
-
-    if (cleardata)
-    {
-        mvCPIDs.clear();
-    }
-    std::string email = GetArgument("email","");
-    boost::to_lower(email);
-
-    int iRow = 0;
-    std::vector<std::string> vCPID = split(sout.c_str(),"<project>");
-    std::string investor = GetArgument("investor","false");
-
-    if (investor=="true")
-    {
-            msPrimaryCPID="INVESTOR";
-    }
-    else
-    {
-            if (vCPID.size() > 0)
-            {
-                for (unsigned int i = 0; i < vCPID.size(); i++)
-                {
-                    std::string email_hash = ExtractXML(vCPID[i],"<email_hash>","</email_hash>");
-                    std::string cpidhash = ExtractXML(vCPID[i],"<cross_project_id>","</cross_project_id>");
-                    std::string externalcpid = ExtractXML(vCPID[i],"<external_cpid>","</external_cpid>");
-                    std::string proj=ExtractXML(vCPID[i],"<project_name>","</project_name>");
-                    std::string team=ExtractXML(vCPID[i],"<team_name>","</team_name>");
-
-                    proj = LowerUnderscore(proj);
-                    int64_t nStart = GetTimeMillis();
-                    if (cpidhash.length() > 5 && proj.length() > 3)
-                    {
-                        NN::MiningId mining_id = NN::MiningId::Parse(externalcpid);
-                        std::string cpid_non = cpidhash+email;
-                        to_lower(cpid_non);
-                        StructCPID& structcpid = GetInitializedStructCPID2(proj,mvCPIDs);
-                        iRow++;
-                        structcpid.projectname = proj;
-                        boost::to_lower(team);
-                        structcpid.team = team;
-                        structcpid.cpid = externalcpid;
-                        structcpid.Iscpidvalid = mining_id.Which() == NN::MiningId::Kind::CPID;
-
-                        int64_t elapsed = GetTimeMillis()-nStart;
-                        if (fDebug3)
-                            LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
-
-                        std::string sLocalClientEmailHash = RetrieveMd5(email);
-
-                        if (email_hash != sLocalClientEmailHash)
-                        {
-                            structcpid.errors = "Gridcoin Email setting does not match project Email.  Check Gridcoin e-mail address setting or boinc project e-mail setting.";
-                            structcpid.Iscpidvalid=false;
-                        }
-
-                        if (!structcpid.Iscpidvalid)
-                        {
-                            structcpid.errors = "CPID calculation invalid.  Check e-mail address and try resetting the boinc project.";
-                        }
-
-                        std::string sKey = structcpid.cpid + ":" + proj;
-                        mvCPIDs[proj] = structcpid;
-
-                        if (!structcpid.Iscpidvalid)
-                        {
-                            structcpid.errors = "CPID invalid.  Check E-mail address.";
-                        }
-
-                        if (structcpid.team != "gridcoin")
-                        {
-                            structcpid.Iscpidvalid = false;
-                            structcpid.errors = "Team invalid";
-                        }
-
-                        if (const NN::CpidOption cpid = mining_id.TryCpid())
-                        {
-                            LogPrintf("External CPID not empty %s", externalcpid);
-
-                            if ((*cpid).Matches(cpidhash, email))
-                            {
-                                structcpid.cpid = externalcpid;
-                                LogPrintf(" Setting CPID to %s ",structcpid.cpid);
-                            }
-                            else
-                            {
-                                LogPrintf("External test failed.");
-
-                                structcpid.Iscpidvalid = false;
-                                structcpid.errors = "CPID corrupted Internal: %s, External: %s" + cpidhash + "," + externalcpid.c_str();
-                                LogPrintf("CPID corrupted Internal: %s, External: %s", cpidhash, externalcpid);
-                            }
-
-                            mvCPIDs[proj] = structcpid;
-                        }
-
-                        if (structcpid.Iscpidvalid)
-                        {
-                            // Verify the CPID is a valid researcher:
-                            if (IsResearcher(structcpid.cpid))
-                            {
-                                LogPrintf("Setting bpk to %s", cpidhash);
-
-                                if (structcpid.team=="gridcoin")
-                                {
-                                    msPrimaryCPID = structcpid.cpid;
-                                    //Try to get a neural RAC report
-                                    AsyncNeuralRequest("explainmag",msPrimaryCPID,5);
-                                }
-                            }
-                        }
-
-                        mvCPIDs[proj] = structcpid;
-                        if (fDebug10) LogPrintf("Adding Local Project %s ", structcpid.cpid);
-
-                    }
-
-                }
-
-            }
-            // If no valid boinc projects were found:
-            if (msPrimaryCPID.empty())
-                msPrimaryCPID="INVESTOR";
-        }
-    }
-    catch (std::exception &e)
-    {
-             LogPrintf("Error while harvesting CPIDs.");
-    }
-    catch(...)
-    {
-             LogPrintf("Error while harvesting CPIDs 2.");
-    }
-}
-
-void LoadCPIDs()
-{
-    LogPrintf("Load CPID; ");
-    HarvestCPIDs(true);
-    LogPrintf(" Getting first project;");
-    GetNextProject(false);
-    LogPrintf(" Finished getting first project");
-}
-
 StructCPID GetStructCPID()
 {
     StructCPID c;
     c.initialized=false;
-    c.Iscpidvalid=false;
     c.Magnitude=0;
     c.owed=0;
     c.payments=0;
@@ -7674,13 +7302,6 @@ std::string GetNeuralNetworkReport()
         report += entry.first + "," + RoundToString(entry.second, 0) + "\n";
 
     return report;
-}
-
-std::string GetOrgSymbolFromFeedKey(std::string feedkey)
-{
-    std::string Symbol = ExtractValue(feedkey,"-",0);
-    return Symbol;
-
 }
 
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)

@@ -19,6 +19,8 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 bool WalletOutOfSync();
 
+namespace NN { std::string GetPrimaryCpid(); }
+
 std::string GetShareType(double dShareType)
 {
     if (dShareType == 1) return "Magnitude";
@@ -286,23 +288,24 @@ std::string PollAnswers(std::string pollname)
 }
 std::string GetProvableVotingWeightXML()
 {
+    std::string primary_cpid = NN::GetPrimaryCpid();
     std::string sXML = "<PROVABLEMAGNITUDE>";
     //Retrieve the historical magnitude
-    if (IsResearcher(msPrimaryCPID))
+    if (IsResearcher(primary_cpid))
     {
-        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
-        CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
+        StructCPID& st1 = GetLifetimeCPID(primary_cpid);
+        CBlockIndex* pHistorical = GetHistoricalMagnitude(primary_cpid);
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
             std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
             std::string sError;
             std::string sSignature;
-            bool bResult = SignBlockWithCPID(msPrimaryCPID, pHistorical->GetBlockHash().GetHex(), sSignature, sError);
+            bool bResult = SignBlockWithCPID(primary_cpid, pHistorical->GetBlockHash().GetHex(), sSignature, sError);
             // Just because below comment it'll keep in line with that
             if (!bResult)
                 sSignature = sError;
             // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
-            sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>"
+            sXML += "<CPID>" + primary_cpid + "</CPID><INNERMAGNITUDE>"
                     + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
                     "<HEIGHT>" + ToString(pHistorical->nHeight)
                     + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
