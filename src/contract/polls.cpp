@@ -7,7 +7,6 @@
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "appcache.h"
-#include "cpid.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
 

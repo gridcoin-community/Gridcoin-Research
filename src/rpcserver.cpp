@@ -369,7 +369,6 @@ static const CRPCCommand vRPCCommands[] =
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "forcequorum",             &forcequorum,             cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      cat_developer     },
-    { "genboinckey",             &genboinckey,             cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
     { "getnextproject",          &getnextproject,          cat_developer     },

@@ -1,4 +1,3 @@
-#include "cpid.h"
 #include "init.h"
 #include "rpcclient.h"
 #include "rpcserver.h"

@@ -15,12 +15,12 @@
 #include "block.h"
 #include "scrypt.h"
 #include "global_objects_noui.hpp"
-#include "cpid.h"
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "boinc.h"
 #include "beacon.h"
 #include "miner.h"
+#include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "backup.h"
 #include "appcache.h"
@@ -64,7 +64,6 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 UniValue MagnitudeReport(std::string cpid);
 void RemoveCPIDBlockHash(const std::string& cpid, const CBlockIndex* pindex);
 void ZeroOutResearcherTotals(StructCPID& stCpid);
-bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
@@ -112,8 +111,6 @@ int64_t nLastAskedForBlocks = 0;
 int64_t nBootup = 0;
 int64_t nLastGRCtallied = 0;
 int64_t nLastCleaned = 0;
-
-extern bool IsCPIDValidv3(std::string cpidv2, bool allow_investor);
 
 double GetLastPaymentTimeByCPID(std::string cpid);
 extern double CoinToDouble(double surrogate);
@@ -204,7 +201,6 @@ extern void GetGlobalStatus();
 bool PollIsActive(const std::string& poll_contract);
 
 double GetNetworkAvgByProject(std::string projectname);
-extern bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey);
 extern bool IsCPIDValidv2(MiningCPID& mc, int height);
 extern std::string getfilecontents(std::string filename);
 extern bool LessVerbose(int iMax1000);
@@ -762,9 +758,6 @@ MiningCPID GetInitializedGlobalCPUMiningCPID(std::string cpid)
 
 MiningCPID GetNextProject(bool bForce)
 {
-
-
-
     if (GlobalCPUMiningCPID.projectname.length() > 3   &&  GlobalCPUMiningCPID.projectname != "INVESTOR"  && GlobalCPUMiningCPID.Magnitude >= 1)
     {
                 if (!Timer_Main("globalcpuminingcpid",10))
@@ -774,33 +767,12 @@ MiningCPID GetNextProject(bool bForce)
                 }
     }
 
-
-    std::string sBoincKey = GetArgument("boinckey","");
-    if (!sBoincKey.empty())
-    {
-        if (fDebug3 && LessVerbose(50)) LogPrintf("Using cached boinckey for project %s",GlobalCPUMiningCPID.projectname);
-                    msMiningProject = GlobalCPUMiningCPID.projectname;
-                    msMiningCPID = GlobalCPUMiningCPID.cpid;
-                    if (LessVerbose(5)) LogPrintf("BoincKey - Mining project %s     RAC(%f)",  GlobalCPUMiningCPID.projectname, GlobalCPUMiningCPID.rac);
-                    double ProjectRAC = GetNetworkAvgByProject(GlobalCPUMiningCPID.projectname);
-                    GlobalCPUMiningCPID.NetworkRAC = ProjectRAC;
-                    GlobalCPUMiningCPID.Magnitude = CalculatedMagnitude(GetAdjustedTime(),false);
-                    if (fDebug3) LogPrintf("(boinckey) For CPID %s Verified Magnitude = %f",GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.Magnitude);
-                    msMiningErrors = (msMiningCPID == "INVESTOR" || msPrimaryCPID=="INVESTOR" || msMiningCPID.empty()) ? _("Staking Interest") : _("Mining");
-                    GlobalCPUMiningCPID.RSAWeight = GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-                    GlobalCPUMiningCPID.LastPaymentTime = GetLastPaymentTimeByCPID(GlobalCPUMiningCPID.cpid);
-                    return GlobalCPUMiningCPID;
-    }
-
-
     msMiningProject = "";
     msMiningCPID = "";
     GlobalCPUMiningCPID = GetInitializedGlobalCPUMiningCPID("");
 
     std::string email = GetArgument("email", "NA");
     boost::to_lower(email);
-
-
 
     if (IsInitialBlockDownload() && !bForce)
     {
@@ -856,14 +828,8 @@ MiningCPID GetNextProject(bool bForce)
                                 if (true)
                                 {
                                     GlobalCPUMiningCPID.enccpid = structcpid.boincpublickey;
-                                    bool checkcpid = IsCPIDValid_Retired(structcpid.cpid,GlobalCPUMiningCPID.enccpid);
-                                    if (!checkcpid)
-                                    {
-                                        LogPrintf("CPID invalid %s  1.  ",structcpid.cpid);
-                                        continue;
-                                    }
 
-                                    if (checkcpid)
+                                    if (true)
                                     {
 
                                         GlobalCPUMiningCPID.email = email;
@@ -882,8 +848,7 @@ MiningCPID GetNextProject(bool bForce)
                                         GlobalCPUMiningCPID.boincruntimepublickey = structcpid.cpidhash;
                                         if(fDebug) LogPrintf("GNP: Setting bpk to %s",structcpid.cpidhash);
 
-                                        uint256 pbh = 1;
-                                        GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email,GlobalCPUMiningCPID.boincruntimepublickey, pbh);
+                                        GlobalCPUMiningCPID.cpidv2 = structcpid.cpid;
                                         GlobalCPUMiningCPID.lastblockhash = "0";
                                         // Sign the block
                                         GlobalCPUMiningCPID.BoincPublicKey = GetBeaconPublicKey(structcpid.cpid, false);
@@ -4036,45 +4001,16 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         }
     }
 
-    if (IsResearcher(bb.cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
+    if (!fLoadingIndex && IsResearcher(bb.cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
     {
-        if (bb.projectname.empty() && !IsResearchAgeEnabled(height1))
-            return DoS(1,error("CheckBlock::PoR Project Name invalid"));
-
-        if (!fLoadingIndex)
+        // Full "v3" signature check is performed in ConnectBlock
+        if (bb.lastblockhash.size() != 64 || bb.BoincSignature.size() < 16
+            || bb.BoincSignature.find(' ') != std::string::npos)
         {
-            bool cpidresult = false;
-            int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
-            int cpidV3CutOverHeight = fTestNet ? 196300 : 725000;
-            if (height1 < cpidV2CutOverHeight)
-            {
-                cpidresult = IsCPIDValid_Retired(bb.cpid,bb.enccpid);
-            }
-            else if (height1 <= cpidV3CutOverHeight)
-            {
-                cpidresult = CPID_IsCPIDValid(bb.cpid, bb.cpidv2, (uint256)bb.lastblockhash);
-            }
-            else
-            {
-
-                cpidresult = (bb.lastblockhash.size()==64)
-                    && (bb.BoincSignature.size()>=16)
-                    && (bb.BoincSignature.find(' ')==std::string::npos);
-
-                /* This is not used anywhere, so let it be.
-                cpidresult = cpidresult
-                    && (bb.BoincPublicKey.size()==130)
-                    && (bb.BoincPublicKey.find(' ')==std::string::npos);
-                */
-
-                /* full "v3" signature check is performed in ConnectBlock */
-            }
-
-            if(!cpidresult)
-                return DoS(20, error(
-                            "Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
-                             height1, bb.cpid.c_str(), bb.cpidv2.c_str(),
-                             bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
+            return DoS(20, error(
+                "Bad CPID or Block Signature : height %i, CPID %s, cpidv2 %s, LBH %s, Bad Hashboinc [%s]",
+                 height1, bb.cpid.c_str(), bb.cpidv2.c_str(),
+                 bb.lastblockhash.c_str(), vtx[0].hashBoinc.c_str()));
         }
     }
 
@@ -5094,16 +5030,6 @@ std::string getfilecontents(std::string filename)
     return out.str();
 }
 
-bool IsCPIDValidv3(std::string cpidv2, bool allow_investor)
-{
-    // Used for checking the local cpid
-    bool result=false;
-    if (allow_investor) if (cpidv2 == "INVESTOR" || cpidv2=="investor") return true;
-    if (cpidv2.length() < 34) return false;
-    result = CPID_IsCPIDValid(cpidv2.substr(0,32),cpidv2,0);
-    return result;
-}
-
 std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
 {
     int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
@@ -5131,98 +5057,33 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
 {
     //09-25-2016: Transition to CPID Keypairs.
     if (height < nGrandfather) return true;
-    bool result = false;
-    int cpidV2CutOverHeight = fTestNet ? 0 : 97000;
-    int cpidV3CutOverHeight = fTestNet ? 196300 : 725000;
-    if (height < cpidV2CutOverHeight)
-    {
-        result = IsCPIDValid_Retired(mc.cpid,mc.enccpid);
-    }
-    else if (height >= cpidV2CutOverHeight && height <= cpidV3CutOverHeight)
-    {
-        if (!IsResearcher(mc.cpid)) return true;
-        result = CPID_IsCPIDValid(mc.cpid, mc.cpidv2, (uint256)mc.lastblockhash);
-    }
-    else if (height >= cpidV3CutOverHeight)
-    {
-        if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
-        if (!IsResearcher(mc.cpid)) return true; /* is investor? */
+    if (mc.cpid.empty()) return error("IsCPIDValidv2(): cpid empty");
+    if (!IsResearcher(mc.cpid)) return true; /* is investor? */
 
-        const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
-        bool kmval = sBPK_n == mc.BoincPublicKey;
-        const bool scval_n = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
+    const std::string sBPK_n = GetBeaconPublicKey(mc.cpid, false);
+    bool kmval = sBPK_n == mc.BoincPublicKey;
+    bool result = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, sBPK_n);
 
-        result= scval_n;
-        if(!scval_n)
+    if (!result)
+    {
+        for (const std::string& key_alt : GetAlternativeBeaconKeys(mc.cpid))
         {
-            for(const std::string& key_alt : GetAlternativeBeaconKeys(mc.cpid))
-            {
-                const bool scval_alt = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, key_alt);
-                kmval = key_alt == mc.BoincPublicKey;
-                if(scval_alt)
-                {
-                    LogPrintf("WARNING: IsCPIDValidv2: good signature with alternative key");
-                    result= true;
-                }
+            const bool scval_alt = CheckMessageSignature("R","cpid", mc.cpid + mc.lastblockhash, mc.BoincSignature, key_alt);
+            kmval = key_alt == mc.BoincPublicKey;
+
+            if (scval_alt) {
+                LogPrintf("WARNING: IsCPIDValidv2: good signature with alternative key");
+                result = true;
             }
         }
+    }
 
-        if( !kmval )
-            LogPrintf("WARNING: IsCPIDValidv2: block key mismatch");
-
+    if (!kmval) {
+        LogPrintf("WARNING: IsCPIDValidv2: block key mismatch");
     }
 
     return result;
 }
-
-
-bool IsLocalCPIDValid(StructCPID& structcpid)
-{
-
-    bool new_result = IsCPIDValidv3(structcpid.cpidv2,true);
-    return new_result;
-
-}
-
-
-
-bool IsCPIDValid_Retired(std::string cpid, std::string ENCboincpubkey)
-{
-
-    try
-    {
-            if(cpid=="" || cpid.length() < 5)
-            {
-                LogPrintf("CPID length empty.");
-                return false;
-            }
-            if (!IsResearcher(cpid)) return true;
-            if (ENCboincpubkey == "" || ENCboincpubkey.length() < 5)
-            {
-                    if (fDebug10) LogPrintf("ENCBpk length empty.");
-                    return false;
-            }
-            std::string bpk = AdvancedDecrypt(ENCboincpubkey);
-            std::string bpmd5 = RetrieveMd5(bpk);
-            if (bpmd5==cpid) return true;
-            if (fDebug10) LogPrintf("Md5<>cpid, md5 %s cpid %s  root bpk %s",bpmd5, cpid, bpk);
-
-            return false;
-    }
-    catch (std::exception &e)
-    {
-                LogPrintf("Error while resolving CPID");
-                return false;
-    }
-    catch(...)
-    {
-                LogPrintf("Error while Resolving CPID[2].");
-                return false;
-    }
-    return false;
-
-}
-
 
 double GetTotalOwedAmount(std::string cpid)
 {
@@ -7328,23 +7189,6 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
     return surrogate;
 }
 
-
-void InitializeProjectStruct(StructCPID& project)
-{
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-
-    std::string cpid_non = project.cpidhash+email;
-    project.cpid = CPID(cpid_non).hexdigest();
-    std::string ENCbpk = AdvancedCrypt(cpid_non);
-    project.boincpublickey = ENCbpk;
-    project.cpidv2 = ComputeCPIDv2(email, project.cpidhash, 0);
-    //Local CPID with struct
-    //Must contain cpidv2, cpid, boincpublickey
-    project.Iscpidvalid = IsLocalCPIDValid(project);
-    if (fDebug10) LogPrintf("Memorizing local project %s, CPID Valid: %s;    ",project.projectname, YesNo(project.Iscpidvalid));
-}
-
 std::string LowerUnderscore(std::string data)
 {
     boost::to_lower(data);
@@ -7357,56 +7201,11 @@ void HarvestCPIDs(bool cleardata)
     if (fDebug10)
         LogPrintf("loading BOINC cpids ...");
 
-    //Remote Boinc Feature - R Halford
-    std::string sBoincKey = GetArgument("boinckey","");
-
-    if (!sBoincKey.empty())
-    {
-        //Deserialize key into Global CPU Mining CPID 2-6-2015
-        LogPrintf("Using key %s ",sBoincKey);
-
-        std::string sDec=DecodeBase64(sBoincKey);
-        LogPrintf("Using key %s ",sDec);
-
-        if (sDec.empty()) LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
-        //Version not needed for keys for now
-        GlobalCPUMiningCPID = DeserializeBoincBlock(sDec,7);
-
-        GlobalCPUMiningCPID.initialized = true;
-
-        if (GlobalCPUMiningCPID.cpid.empty())
-        {
-                 LogPrintf("Error while deserializing boinc key!  Please use execute genboinckey to generate a boinc key from the host with boinc installed.");
-        }
-        else
-        {
-            LogPrintf("CPUMiningCPID Initialized.");
-        }
-
-            GlobalCPUMiningCPID.email = GlobalCPUMiningCPID.aesskein;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            GlobalCPUMiningCPID.cpidhash = GlobalCPUMiningCPID.boincruntimepublickey;
-            LogPrintf("Using Serialized Boinc CPID %s with orig email of %s and bpk of %s with cpidhash of %s ",GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, GlobalCPUMiningCPID.cpidhash);
-            StructCPID structcpid = GetStructCPID();
-            structcpid.initialized = true;
-            structcpid.cpidhash = GlobalCPUMiningCPID.cpidhash;
-            structcpid.projectname = GlobalCPUMiningCPID.projectname;
-        structcpid.team = "gridcoin";
-            structcpid.rac = GlobalCPUMiningCPID.rac;
-            structcpid.cpid = GlobalCPUMiningCPID.cpid;
-            structcpid.boincpublickey = GlobalCPUMiningCPID.encboincpublickey;
-            structcpid.NetworkRAC = GlobalCPUMiningCPID.NetworkRAC;
-            // 2-6-2015 R Halford - Ensure CPIDv2 Is populated After deserializing GenBoincKey
-        LogPrintf("GenBoincKey using email %s and cpidhash %s key %s ", GlobalCPUMiningCPID.email, structcpid.cpidhash, sDec);
-        structcpid.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, structcpid.cpidhash, 0);
-            structcpid.Iscpidvalid = true;
-            mvCPIDs.insert(map<string,StructCPID>::value_type(structcpid.projectname,structcpid));
-            // CreditCheck(structcpid.cpid,false);
-            GetNextProject(false);
-            if (fDebug10) LogPrintf("GCMCPI %s",GlobalCPUMiningCPID.cpid);
-            if (fDebug10)           LogPrintf("Finished getting first remote boinc project");
-        return;
-  }
+    if (!GetArgument("boinckey", "").empty()) {
+        // TODO: implement a safer way to export researcher context that doesn't
+        // risk accidental exposure of internal CPID and email address.
+        LogPrintf("ERROR: boinckey is no longer supported.");
+    }
 
  try
  {
@@ -7461,6 +7260,7 @@ void HarvestCPIDs(bool cleardata)
                     int64_t nStart = GetTimeMillis();
                     if (cpidhash.length() > 5 && proj.length() > 3)
                     {
+                        NN::MiningId mining_id = NN::MiningId::Parse(externalcpid);
                         std::string cpid_non = cpidhash+email;
                         to_lower(cpid_non);
                         StructCPID& structcpid = GetInitializedStructCPID2(proj,mvCPIDs);
@@ -7469,7 +7269,11 @@ void HarvestCPIDs(bool cleardata)
                         structcpid.projectname = proj;
                         boost::to_lower(team);
                         structcpid.team = team;
-                        InitializeProjectStruct(structcpid);
+                        structcpid.cpid = externalcpid;
+                        structcpid.boincpublickey = AdvancedCrypt(cpid_non);
+                        structcpid.cpidv2 = externalcpid;
+                        structcpid.Iscpidvalid = mining_id.Which() == NN::MiningId::Kind::CPID;
+
                         int64_t elapsed = GetTimeMillis()-nStart;
                         if (fDebug3)
                             LogPrintf("Enumerating boinc local project %s cpid %s valid %s, elapsed %" PRId64, structcpid.projectname, structcpid.cpid, YesNo(structcpid.Iscpidvalid), elapsed);
@@ -7507,16 +7311,12 @@ void HarvestCPIDs(bool cleardata)
                             structcpid.Iscpidvalid = false;
                             structcpid.errors = "Team invalid";
                         }
-                        bool bTestExternal = true;
-                        bool bTestInternal = true;
 
-                        if (!externalcpid.empty())
+                        if (const NN::CpidOption cpid = mining_id.TryCpid())
                         {
                             LogPrintf("External CPID not empty %s", externalcpid);
 
-                            bTestExternal = CPIDAcidTest2(cpidhash,externalcpid);
-                            bTestInternal = CPIDAcidTest2(cpidhash,structcpid.cpid);
-                            if (bTestExternal)
+                            if ((*cpid).Matches(cpidhash, email))
                             {
                                 structcpid.cpid = externalcpid;
                                 LogPrintf(" Setting CPID to %s ",structcpid.cpid);
@@ -7524,15 +7324,12 @@ void HarvestCPIDs(bool cleardata)
                             else
                             {
                                 LogPrintf("External test failed.");
-                            }
 
-
-                            if (!bTestExternal && !bTestInternal)
-                            {
                                 structcpid.Iscpidvalid = false;
-                                structcpid.errors = "CPID corrupted Internal: %s, External: %s" + structcpid.cpid + "," + externalcpid.c_str();
-                                LogPrintf("CPID corrupted Internal: %s, External: %s", structcpid.cpid, externalcpid);
+                                structcpid.errors = "CPID corrupted Internal: %s, External: %s" + cpidhash + "," + externalcpid.c_str();
+                                LogPrintf("CPID corrupted Internal: %s, External: %s", cpidhash, externalcpid);
                             }
+
                             mvCPIDs[proj] = structcpid;
                         }
 

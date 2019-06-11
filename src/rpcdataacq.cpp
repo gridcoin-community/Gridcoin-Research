@@ -6,7 +6,6 @@
 
 #include "main.h"
 #include "rpcserver.h"
-#include "cpid.h"
 #include "kernel.h"
 #include "block.h"
 #include "txdb.h"

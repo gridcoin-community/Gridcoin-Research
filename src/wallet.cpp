@@ -13,7 +13,6 @@
 #include "coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
-#include "cpid.h"
 #include "block.h"
 #include "rpcserver.h"
 #include "rpcclient.h"
