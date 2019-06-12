@@ -837,7 +837,7 @@ void Scraper(bool bSingleShot)
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK", "download statistics block: cs_StructScraperFileManifest");
 
                 ScraperFileManifestMap::iterator entry;
 
@@ -853,7 +853,7 @@ void Scraper(bool bSingleShot)
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download statistics block: cs_StructScraperFileManifest");
             }
 
             AuthenticationETagClear();
@@ -907,7 +907,7 @@ void Scraper(bool bSingleShot)
             // Publish and/or local delete CScraperManifests.
             {
                 LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK2", "cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
 
                 // If the hash doesn't match (a new one is available), or there are none, then publish a new one.
                 if (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
@@ -923,7 +923,7 @@ void Scraper(bool bSingleShot)
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK2", "cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
             }
         }
 
@@ -1109,7 +1109,7 @@ bool ScraperDirectoryAndConfigSanity()
             // Lock the manifest while it is being manipulated.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK", "align directory with manifest file: cs_StructScraperFileManifest");
 
                 if (StructScraperFileManifest.mScraperFileManifest.empty())
                 {
@@ -1138,6 +1138,9 @@ bool ScraperDirectoryAndConfigSanity()
                             && fs::is_regular_file(dir))
                     {
                         entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
+                        
+                        if (fDebug10) _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through directory - checking file " + filename);
+                        
                         if (entry == StructScraperFileManifest.mScraperFileManifest.end())
                         {
                             fs::remove(dir.path());
@@ -1145,10 +1148,14 @@ bool ScraperDirectoryAndConfigSanity()
                             continue;
                         }
 
-                        if (entry->second.hash != GetFileHash(dir))
+                        // Only do the expensive hash checking on files that are included in published manifests.
+                        if (!entry->second.excludefromcsmanifest)
                         {
-                            _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "File failed hash check. Removing file.");
-                            fs::remove(dir.path());
+                            if (entry->second.hash != GetFileHash(dir))
+                            {
+                                _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "File failed hash check. Removing file.");
+                                fs::remove(dir.path());
+                            }
                         }
                     }
                 }
@@ -1161,6 +1168,8 @@ bool ScraperDirectoryAndConfigSanity()
                     ScraperFileManifestMap::iterator entry_copy = entry++;
 
                     int64_t nFileRetentionTime = fExplorer ? EXPLORER_EXTENDED_FILE_RETENTION_TIME : SCRAPER_FILE_RETENTION_TIME;
+                    
+                    if (fDebug10) _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through map - checking map entry " + entry_copy->first);
 
                     if (!fs::exists(pathScraper / entry_copy->first)
                             || ((GetAdjustedTime() - entry_copy->second.timestamp) > nFileRetentionTime)
@@ -1172,7 +1181,7 @@ bool ScraperDirectoryAndConfigSanity()
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "align directory with manifest file: cs_StructScraperFileManifest");
             }
 
             // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
@@ -1376,7 +1385,7 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
         // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
         {
             LOCK(cs_StructScraperFileManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+            if (fDebug3) _log(logattribute::INFO, "LOCK", "download host files: cs_StructScraperFileManifest");
 
             // Iterate mScraperFileManifest to find any prior host records for the same project and change current flag to false,
             // or delete if older than EXPLORER_EXTENDED_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
@@ -1419,7 +1428,7 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
                 _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
 
             // End LOCK(cs_StructScraperFileManifest)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download host files: cs_StructScraperFileManifest");
         }
     }
 
@@ -1570,7 +1579,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
             // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK", "download team files: cs_StructScraperFileManifest");
 
                 // Iterate mScraperFileManifest to find any prior team records for the same project and change current flag to false,
                 // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
@@ -1613,7 +1622,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
                     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download team files: cs_StructScraperFileManifest");
             }
         }
 
@@ -1851,7 +1860,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
     // After processing, update global structure with the timestamp of the latest file in the manifest.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
 
         int64_t nMaxTime = 0;
         for (const auto& entry : StructScraperFileManifest.mScraperFileManifest)
@@ -1862,7 +1871,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         StructScraperFileManifest.timestamp = nMaxTime;
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
     }
     return true;
 }
@@ -2053,7 +2062,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "rac (user) file processing record insert: cs_StructScraperFileManifest");
         
         // Iterate mScraperFileManifest to find any prior user records for the same project and change current flag to false,
         // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
@@ -2097,7 +2106,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "rac (user) file processing record insert: cs_StructScraperFileManifest");
     }
 
     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Complete Process");
@@ -2314,12 +2323,12 @@ bool StoreBeaconList(const fs::path& file)
     // Requires a lock.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
 
         StructScraperFileManifest.nConsensusBlockHash = Consensus.nBlockHash;
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
     }
 
     if (fs::exists(file))
@@ -2563,12 +2572,12 @@ bool LoadScraperFileManifest(const fs::path& file)
         // global structure.
         {
             LOCK(cs_StructScraperFileManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+            if (fDebug3) _log(logattribute::INFO, "LOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
 
             InsertScraperFileManifestEntry(LoadEntry);
 
             // End LOCK(cs_StructScraperFileManifest
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
         }
     }
 
@@ -2599,7 +2608,7 @@ bool StoreScraperFileManifest(const fs::path& file)
     //Lock StructScraperFileManifest during serialize to string.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
         
         // Header.
         stream << "Hash," << "Current," << "Time," << "Project," << "Filename," << "ExcludeFromCSManifest," << "Filetype" << "\n";
@@ -2619,7 +2628,7 @@ bool StoreScraperFileManifest(const fs::path& file)
         }
 
         // end LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
     }
 
     _log(logattribute::INFO, "StoreScraperFileManifest", "Finished processing manifest from map.");
@@ -2929,7 +2938,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     unsigned int nActiveProjects = 0;
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -2938,7 +2947,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
     }
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
@@ -2949,7 +2958,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -2973,7 +2982,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
     }
 
     ProcessNetworkWideFromProjectStats(Consensus.mBeaconMap, mScraperStats);
