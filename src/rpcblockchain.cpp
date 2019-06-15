@@ -1902,32 +1902,16 @@ UniValue projects(const UniValue& params, bool fHelp)
                 "Displays information on projects in the network as well as researcher data if available\n");
 
     UniValue res(UniValue::VARR);
-
-    LOCK(cs_main);
+    NN::ResearcherPtr researcher = NN::Researcher::Get();
 
     for (const auto& item : NN::GetWhitelist().Snapshot().Sorted())
     {
         UniValue entry(UniValue::VOBJ);
 
-        std::string sProjectName = item.m_name;
+        entry.pushKV("Project", item.DisplayName());
+        entry.pushKV("URL", item.DisplayUrl());
 
-        if (sProjectName.empty())
-            continue;
-
-        std::string sProjectURL = item.m_url;
-        sProjectURL.erase(std::remove(sProjectURL.begin(), sProjectURL.end(), '@'), sProjectURL.end());
-
-        // If contains an additional stats URL for project stats; remove it for the user to goto the correct website.
-        if (sProjectURL.find("stats/") != string::npos)
-        {
-            std::size_t tFound = sProjectURL.find("stats/");
-            sProjectURL.erase(tFound, sProjectURL.length());
-        }
-
-        entry.pushKV("Project", sProjectName);
-        entry.pushKV("URL", sProjectURL);
-
-        if (const NN::ProjectOption project = NN::Researcher::Get()->Projects().Try(item.m_name)) {
+        if (const NN::ProjectOption project = researcher->Project(item.m_name)) {
             UniValue researcher(UniValue::VOBJ);
 
             researcher.pushKV("CPID", project->m_cpid.ToString());
