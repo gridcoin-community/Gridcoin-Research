@@ -7,7 +7,6 @@
 #include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
-#include "cpid.h"
 #include "main.h"
 #include "appcache.h"
 #include "neuralnet/neuralnet.h"

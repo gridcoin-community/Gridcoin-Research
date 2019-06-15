@@ -75,7 +75,6 @@ GRIDCOIN_CORE_H = \
 	contract/polls.h \
 	contract/contract.h \
    contract/superblock.h \
-	cpid.h \
 	crypter.h \
 	db.h \
 	fwd.h \
@@ -90,6 +89,7 @@ GRIDCOIN_CORE_H = \
 	main.h \
 	miner.h \
 	mruset.h \
+	neuralnet/cpid.h \
 	neuralnet/neuralnet.h \
    neuralnet/neuralnet_native.h \
    neuralnet/neuralnet_stub.h \
@@ -135,7 +135,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	contract/polls.cpp \
 	contract/contract.cpp \
    contract/superblock.cpp \
-	cpid.cpp \
 	crypter.cpp \
 	db.cpp \
 	gridcoin.cpp \
@@ -148,6 +147,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
    neuralnet/neuralnet.cpp \
    neuralnet/neuralnet_native.cpp \
    neuralnet/neuralnet_stub.cpp \
+	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
 	netbase.cpp \
 	net.cpp \

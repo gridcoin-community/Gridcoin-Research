@@ -6,12 +6,12 @@
 #include "main.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
-#include "cpid.h"
 #include "kernel.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
+#include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "backup.h"
 #include "appcache.h"
@@ -58,7 +58,6 @@ extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, s
 
 double Round(double d, int place);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
-extern bool CPIDAcidTest2(std::string bpk, std::string externalcpid);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 bool FullSyncWithDPORNodes();
@@ -87,7 +86,6 @@ double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
-std::string RetrieveMd5(std::string s1);
 
 extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
@@ -703,16 +701,6 @@ bool TallyMagnitudesInSuperblock()
     }
 }
 
-bool CPIDAcidTest2(std::string bpk, std::string externalcpid)
-{
-    uint256 hashRand = GetRandHash();
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    std::string cpidv2 = ComputeCPIDv2(email, bpk, hashRand);
-    std::string cpidv1 = cpidv2.substr(0,32);
-    return (externalcpid==cpidv1);
-}
-
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {
     sOutPrivKey = "BUG! deprecated field used";
@@ -747,10 +735,8 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string email = GetArgument("email", "NA");
         boost::to_lower(email);
         GlobalCPUMiningCPID.email=email;
-        GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, hashRand);
 
-        bool IsCPIDValid2 = CPID_IsCPIDValid(GlobalCPUMiningCPID.cpid,GlobalCPUMiningCPID.cpidv2, hashRand);
-        if (!IsCPIDValid2)
+        if (!NN::Cpid::Parse(GlobalCPUMiningCPID.cpid).Matches(GlobalCPUMiningCPID.boincruntimepublickey, email))
         {
             sError="Invalid CPID";
             return false;
@@ -1780,38 +1766,6 @@ UniValue gatherneuralhashes(const UniValue& params, bool fHelp)
     GatherNeuralHashes();
 
     res.pushKV("Sent", ".");
-
-    return res;
-}
-
-UniValue genboinckey(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "genboinckey\n"
-                "\n"
-                "Generates a boinc key\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    //Gridcoin - R Halford - Generate Boinc Mining Key - 2-6-2015
-    GetNextProject(false);
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    GlobalCPUMiningCPID.email = email;
-    GlobalCPUMiningCPID.cpidv2 = ComputeCPIDv2(GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, 0);
-    //Store the BPK in the aesskein, and the cpid in version
-    GlobalCPUMiningCPID.aesskein = email; //Good
-    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
-
-    //block version not needed for keys for now
-    std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID,7);
-    std::string sBase = EncodeBase64(sParam);
-
-    if (fDebug3)
-        LogPrintf("GenBoincKey: Utilizing email %s with %s for %s", GlobalCPUMiningCPID.email, GlobalCPUMiningCPID.boincruntimepublickey, sParam);
-
-    res.pushKV("[Specify in config file without quotes] boinckey=", sBase);
 
     return res;
 }
