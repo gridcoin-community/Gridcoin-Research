@@ -3073,7 +3073,7 @@ std::string ExplainMagnitude(std::string sCPID)
 
     stringbuilder out;
 
-    out.append("CPID,Project,RAC,Project_Total_RAC,Project_Avg_RAC,Project Mag,Cumulative RAC,Cumulative Mag,Errors<ROW>");
+    out.append("CPID,Project,CPID RAC,Project RAC,Project Mag,CPID Mag<ROW>");
 
     double dCPIDCumulativeRAC = 0.0;
     double dCPIDCumulativeMag = 0.0;
@@ -3103,17 +3103,13 @@ std::string ExplainMagnitude(std::string sCPID)
 
             out.append(sCPID + ",");
             out.append(sProject + ",");
-            out.fixeddoubleappend(iProject->second.statsvalue.dRAC, 2);
+            out.fixeddoubleappend(entry.second.statsvalue.dRAC, 2);
             out.append(",");
-            out.fixeddoubleappend(iProject->second.statsvalue.dAvgRAC, 2);
+            out.fixeddoubleappend(iProject->second.statsvalue.dRAC, 2);
             out.append(",");
             out.fixeddoubleappend(iProject->second.statsvalue.dMag, 2);
             out.append(",");
-            out.fixeddoubleappend(dCPIDCumulativeRAC, 2);
-            out.append(",");
-            out.fixeddoubleappend(dCPIDCumulativeMag, 2);
-            out.append(",");
-            //The last field is for errors, but there are not any, so the <ROW> is next.
+            out.fixeddoubleappend(entry.second.statsvalue.dMag, 2);
             out.append("<ROW>");
         }
     }
