@@ -3515,7 +3515,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
         // If SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES is false, only include current files to send across the network.
-        // Also continue (exlude) if it is a non-publishable entry (excludefromcsmanifest is true).
+        // Also continue (exclude) if it is a non-publishable entry (excludefromcsmanifest is true).
         if ((!SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES && !entry.second.current) || entry.second.excludefromcsmanifest)
             continue;
 
@@ -3683,6 +3683,48 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                  + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                  + " agreeing.");
 
+            _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Content hash " + iter.second.GetHex());
+
+            auto ConvergenceRange = mManifestsBinnedbyContent.equal_range(iter.second);
+
+            // Record included scrapers in convergence.
+            for (auto iter2 = ConvergenceRange.first; iter2 != ConvergenceRange.second; ++iter2)
+            {
+                // -------------------------------------------------  ScraperID ------------ manifest hash
+                StructConvergedManifest.mIncludedScraperManifests[iter2->second.first] = iter2->second.second;
+            }
+
+            // Record scrapers that are not part of the convergence by iterating through the top level of the double map (which is keyed by ScraperID)
+            for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+            {
+                // If the scraper is not found in the mIncludedScraperManifests, then it was not part of the convergence.
+                if (StructConvergedManifest.mIncludedScraperManifests.find(iScraper.first) == StructConvergedManifest.mIncludedScraperManifests.end())
+                {
+                    StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Scraper " + iScraper.first + " not in convergence.");
+                }
+                else
+                {
+                    StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
+                    // Scraper was in the convergence. Log if in fDebug3.
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Scraper " + iScraper.first + " in convergence.");
+                }
+            }
+
+            // Retrieve the complete list of scrapers from the AppCache to determine scrapers not publishing at all.
+            AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+            for (const auto& iScraper : mScrapers)
+            {
+                if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                        == std::end(StructConvergedManifest.vExcludedScrapers)
+                    && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                        == std::end(StructConvergedManifest.vIncludedScrapers))
+                {
+                     StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                }
+            }
+
             bConvergenceSuccessful = true;
 
             // Note this break is VERY important, it prevents considering essentially the same manifest that meets convergence multiple times.
@@ -3754,19 +3796,11 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
             StructConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
 
-            // Fill out the excluded projects vector...
+            // Determine if there is an excluded project. If so, set convergence back to false and drop back to project level to try and recover project by project.
             for (const auto& iProjects : projectWhitelist)
             {
                 if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
                 {
-                    // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                    //StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.m_name, "Converged manifests (agreed by multiple scrapers) excluded project."));
-                    //_log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                    //     + iProjects.m_name
-                    //     + " was excluded because the converged manifests from the scrapers all excluded the project.");
-
-                    // To deal with a corner case of a medium term project fallout at the head of the list (more recent) where it is still available within
-                    // the 48 hour retention window, fallback to project level convergence to attempt to recover the project.
                     _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
                          + iProjects.m_name
                          + " was excluded because the converged manifests from the scrapers all excluded the project. \n"
@@ -3920,7 +3954,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
             unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(std::get<0>(iter.second));
             if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
             {
-                // Find the first one of equivalent parts ------------------ by hash.
+                // Find the first one of equivalent parts ------------------ by object hash.
                 ProjectConvergence = mProjectObjectsBinnedbyContent.find(std::get<0>(iter.second));
 
                 _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Found convergence on project object " + ProjectConvergence->first.GetHex()
@@ -3928,7 +3962,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                      + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                      + " agreeing.");
 
-                // Get the actual part ----------------- by hash.
+                // Get the actual part ----------------- by object hash.
                 auto iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
 
                 uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
@@ -3939,6 +3973,18 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                          + nContentHashCheck.GetHex() + " and nContentHash = " + iPart->first.GetHex());
                     break;
                 }
+
+                auto ProjectConvergenceRange = mProjectObjectsBinnedbyContent.equal_range(std::get<0>(iter.second));
+
+                // Record included scrapers included for the project level convergence keyed by project and the reverse. A multimap is convenient here for both.
+                for (auto iter2 = ProjectConvergenceRange.first; iter2 != ProjectConvergenceRange.second; ++iter2)
+                {
+                    // ------------------------------------------------------------------------- project -------------- ScraperID.
+                    StructConvergedManifest.mIncludedScrapersbyProject.insert(std::make_pair(iter2->second.second, iter2->second.first));
+                    // ------------------------------------------------------------------------ ScraperID -------------- project.
+                    StructConvergedManifest.mIncludedProjectsbyScraper.insert(std::make_pair(iter2->second.first, iter2->second.second));
+                }
+
 
                 // Put Project Object (Part) in StructConvergedManifest keyed by project.
                 StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.m_name, iPart->second.data));
@@ -4000,7 +4046,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
              + " projects at "
              + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
-        // Fill out the excluded projects vector...
+        // Fill out the the excluded projects vector and the included scraper count (by project) map
         for (const auto& iProjects : projectWhitelist)
         {
             if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
@@ -4010,6 +4056,47 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                 _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
                      + iProjects.m_name
                      + " was excluded because there was no convergence from the scrapers for this project at the project level.");
+
+                continue;
+            }
+
+            unsigned int nScraperConvergenceCount = StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
+            StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name, nScraperConvergenceCount));
+
+            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
+                              + ": " + std::to_string(nScraperConvergenceCount) + " scraper(s) converged");
+        }
+
+        // Fill out the included and excluded scraper vector for scrapers that did not participate in any project level convergence.
+        for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+        {
+            if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
+            {
+                StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
+                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                                  + iScraper.first
+                                  + " was included in one or more project level convergences.");
+            }
+            else
+            {
+                StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
+                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                     + iScraper.first
+                     + " was excluded because it was not included in any project level convergence.");
+            }
+        }
+
+        // Retrieve the complete list of scrapers from the AppCache to determine scrapers not publishing at all.
+        AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+        for (const auto& iScraper : mScrapers)
+        {
+            if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                    == std::end(StructConvergedManifest.vExcludedScrapers)
+                && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                    == std::end(StructConvergedManifest.vIncludedScrapers))
+            {
+                 StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
             }
         }
 
@@ -4337,7 +4424,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
                     ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
                     ConvergedScraperStatsCache.sContract = sSBCoreData;
-                    ConvergedScraperStatsCache.vExcludedProjects = StructConvergedManifest.vExcludedProjects;
+                    ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
                     // Signal UI of SBContract status
                     if (!sSBCoreData.empty())
