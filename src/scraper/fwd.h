@@ -118,7 +118,7 @@ typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKe
 
 struct ConvergedScraperStats
 {
-    bool bDirty;
+    bool bClean = false;
     int64_t nTime;
     ScraperStats mScraperConvergedStats;
     std::string sContractHash;

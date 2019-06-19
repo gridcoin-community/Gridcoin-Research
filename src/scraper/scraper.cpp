@@ -74,7 +74,7 @@ std::string lowercase(std::string s);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 ScraperFileManifest StructScraperFileManifest = {};
 
-// Global cache for converged scraper stats. Access must be through a lock.
+// Global cache for converged scraper stats. Access must be with the lock cs_ConvergedScraperStatsCache taken.
 ConvergedScraperStats ConvergedScraperStatsCache = {};
 
 CCriticalSection cs_Scraper;
@@ -3047,7 +3047,7 @@ std::string ExplainMagnitude(std::string sCPID)
         if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
 
-        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < nScraperSleep)
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
             bConvergenceUpdateNeeded = false;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
@@ -4368,7 +4368,8 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
         LOCK(cs_ConvergedScraperStatsCache);
         if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
-        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000))
+        // If the cache is less than nScraperSleep in minutes old OR not dirty...
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
             bConvergenceUpdateNeeded = false;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
@@ -4425,6 +4426,9 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                     ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
                     ConvergedScraperStatsCache.sContract = sSBCoreData;
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
+
+                    // Mark the cache clean, because it was just updated.
+                    ConvergedScraperStatsCache.bClean = true;
 
                     // Signal UI of SBContract status
                     if (!sSBCoreData.empty())
