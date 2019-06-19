@@ -608,7 +608,7 @@ void GetGlobalStatus()
             LogPrintf("Error obtaining last poll: %s", e.what());
         }
 
-        GlobalStatusStruct.status.clear();
+        GlobalStatusStruct.status = msMiningErrors;
 
         if(MinerStatus.WeightSum)
             GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
@@ -640,7 +640,7 @@ void GetGlobalStatus()
     }
     catch (std::exception& e)
     {
-        msMiningErrors = _("Error obtaining status.");
+        GlobalStatusStruct.errors = _("Error obtaining status.");
 
         LogPrintf("Error obtaining status");
         return;
