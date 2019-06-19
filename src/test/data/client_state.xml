@@ -1,0 +1,384 @@
+<!--
+
+This BOINC client_state.xml stub contains several fake project sections for unit
+tests that verify the application's ability to load CPIDs on startup. The mocked
+project data matches assertions in the tests. This file contains additional data
+from a typical client_state.xml file to enhance the realism of the tests, but it
+doesn't contain all of the sections present in the wild.
+
+External CPIDs in this file were generated for this email address:
+
+  researcher@example.com
+
+The file also contains invalid project sections for negative test cases.
+
+-->
+
+<client_state>
+<host_info>
+    <timezone>0</timezone>
+    <domain_name>host.example.com</domain_name>
+    <ip_addr>127.0.0.1</ip_addr>
+    <host_cpid>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</host_cpid>
+    <p_ncpus>4</p_ncpus>
+    <p_vendor>AuthenticAMD</p_vendor>
+    <p_model>AMD A8-7650K Radeon R7, 10 Compute Cores 4C+6G [Family 21 Model 48 Stepping 1]</p_model>
+    <p_features>fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 popcnt aes xsave avx f16c lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs xop skinit wdt lwp fma4 tce nodeid_msr tbm topoext perfctr_core perfctr_nb bpext ptsc cpb hw_pstate ssbd vmmcall fsgsbase bmi1 xsaveopt arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold overflow_recov</p_features>
+    <p_fpops>2844945151.944860</p_fpops>
+    <p_iops>84103715299.331421</p_iops>
+    <p_membw>1000000000.000000</p_membw>
+    <p_calculated>1553593033.290475</p_calculated>
+    <p_vm_extensions_disabled>0</p_vm_extensions_disabled>
+    <m_nbytes>15775625r16.000000</m_nbytes>
+    <m_cache>2097652.000000</m_cache>
+    <m_swap>2147479152.000000</m_swap>
+    <d_total>112926989856.000000</d_total>
+    <d_free>38705620136.000000</d_free>
+    <os_name>Linux Ubuntu</os_name>
+    <os_version>Ubuntu 18.04 LTS [4.15.0-46-generic|libc 2.27 (Ubuntu GLIBC 2.27-3ubuntu1)]</os_version>
+    <n_usable_coprocs>1</n_usable_coprocs>
+    <coprocs>
+<coproc_ati>
+   <count>1</count>
+   <name>AMD Radeon Graphics</name>
+   <available_ram>2270572544.000000</available_ram>
+   <have_cal>0</have_cal>
+   <have_opencl>1</have_opencl>
+   <peak_flops>552960000000.000000</peak_flops>
+   <CALVersion></CALVersion>
+   <target>0</target>
+   <localRAM>2165</localRAM>
+   <uncachedRemoteRAM>0</uncachedRemoteRAM>
+   <cachedRemoteRAM>0</cachedRemoteRAM>
+   <engineClock>720</engineClock>
+   <memoryClock>0</memoryClock>
+   <wavefrontSize>0</wavefrontSize>
+   <numberOfSIMD>0</numberOfSIMD>
+   <doublePrecision>0</doublePrecision>
+   <pitch_alignment>0</pitch_alignment>
+   <surface_alignment>0</surface_alignment>
+   <maxResource1DWidth>0</maxResource1DWidth>
+   <maxResource2DWidth>0</maxResource2DWidth>
+   <maxResource2DHeight>0</maxResource2DHeight>
+   <coproc_opencl>
+      <name>AMD Radeon Graphics</name>
+      <vendor>Advanced Micro Devices, Inc.</vendor>
+      <vendor_id>4098</vendor_id>
+      <available>1</available>
+      <half_fp_config>0</half_fp_config>
+      <single_fp_config>190</single_fp_config>
+      <double_fp_config>63</double_fp_config>
+      <endian_little>1</endian_little>
+      <execution_capabilities>1</execution_capabilities>
+      <extensions>cl_khr_fp64 cl_amd_fp64 cl_khr_global_int32_base_atomics cl_khr_global_int32_extended_atomics cl_khr_local_int32_base_atomics cl_khr_local_int32_extended_atomics cl_khr_int64_base_atomics cl_khr_int64_extended_atomics cl_khr_3d_image_writes cl_khr_byte_addressable_store cl_khr_gl_sharing cl_amd_device_attribute_query cl_amd_vec3 cl_amd_printf cl_amd_media_ops cl_amd_media_ops2 cl_amd_popcnt cl_khr_image2d_from_buffer cl_khr_spir cl_khr_gl_event</extensions>
+      <global_mem_size>2270572544</global_mem_size>
+      <local_mem_size>32768</local_mem_size>
+      <max_clock_frequency>720</max_clock_frequency>
+      <max_compute_units>6</max_compute_units>
+      <nv_compute_capability_major>0</nv_compute_capability_major>
+      <nv_compute_capability_minor>0</nv_compute_capability_minor>
+      <amd_simd_per_compute_unit>4</amd_simd_per_compute_unit>
+      <amd_simd_width>16</amd_simd_width>
+      <amd_simd_instruction_width>1</amd_simd_instruction_width>
+      <opencl_platform_version>OpenCL 2.1 AMD-APP (2671.3)</opencl_platform_version>
+      <opencl_device_version>OpenCL 1.2 AMD-APP (2671.3)</opencl_device_version>
+      <opencl_driver_version>2671.3</opencl_driver_version>
+   </coproc_opencl>
+</coproc_ati>
+    </coprocs>
+</host_info>
+<time_stats>
+    <on_frac>0.999004</on_frac>
+    <connected_frac>-1.000000</connected_frac>
+    <cpu_and_network_available_frac>0.999985</cpu_and_network_available_frac>
+    <active_frac>0.999985</active_frac>
+    <gpu_active_frac>0.999985</gpu_active_frac>
+    <client_start_time>1553573000.312873</client_start_time>
+    <total_start_time>1537809806.529388</total_start_time>
+    <total_duration>16359738.928552</total_duration>
+    <total_active_duration>16358557.023707</total_active_duration>
+    <total_gpu_active_duration>16358236.640803</total_gpu_active_duration>
+    <previous_uptime>773537.446470</previous_uptime>
+    <last_update>1554346531.751300</last_update>
+</time_stats>
+<net_stats>
+    <bwup>103958.517311</bwup>
+    <avg_up>11943404.327771</avg_up>
+    <avg_time_up>1554346536.891153</avg_time_up>
+    <bwdown>2750980.763047</bwdown>
+    <avg_down>44292501.573256</avg_down>
+    <avg_time_down>1554343775.473025</avg_time_down>
+</net_stats>
+<!-- Valid project -->
+<project>
+    <master_url>https://project1.example.com/boinc/</master_url>
+    <project_name>Valid_Project_1</project_name>
+    <symstore></symstore>
+    <user_name>researcher</user_name>
+    <team_name>gridcoin</team_name>
+    <host_venue></host_venue>
+    <email_hash>b8b58cce3c90c7dc9f3601674202b21c</email_hash>
+    <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+    <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+    <cpid_time>1541012345.000000</cpid_time>
+    <user_total_credit>0.000000</user_total_credit>
+    <user_expavg_credit>0.000000</user_expavg_credit>
+    <user_create_time>1540012345.000000</user_create_time>
+    <rpc_seqno>3</rpc_seqno>
+    <userid>12345</userid>
+    <teamid>1806</teamid>
+    <hostid>12345</hostid>
+    <host_total_credit>0.000000</host_total_credit>
+    <host_expavg_credit>0.000000</host_expavg_credit>
+    <host_create_time>1540012345.000000</host_create_time>
+    <nrpc_failures>0</nrpc_failures>
+    <master_fetch_failures>0</master_fetch_failures>
+    <min_rpc_time>0.000000</min_rpc_time>
+    <next_rpc_time>0.000000</next_rpc_time>
+    <rec>0.000000</rec>
+    <rec_time>1550012345.000000</rec_time>
+    <resource_share>100.000000</resource_share>
+    <desired_disk_usage>0.000000</desired_disk_usage>
+    <duration_correction_factor>1.000000</duration_correction_factor>
+    <sched_rpc_pending>0</sched_rpc_pending>
+    <send_time_stats_log>0</send_time_stats_log>
+    <send_job_log>0</send_job_log>
+    <njobs_success>0</njobs_success>
+    <njobs_error>0</njobs_error>
+    <elapsed_time>0.000000</elapsed_time>
+    <last_rpc_time>1540012345.000000</last_rpc_time>
+    <dont_use_dcf/>
+    <dont_request_more_work/>
+    <attached_via_acct_mgr/>
+    <rsc_backoff_time>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <rsc_backoff_time>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <scheduler_url>https://project1.example.com/boinc_cgi/cgi</scheduler_url>
+    <cpu_ec>0.000000</cpu_ec>
+    <cpu_time>0.000000</cpu_time>
+    <gpu_ec>0.000000</gpu_ec>
+    <gpu_time>0.000000</gpu_time>
+    <disk_usage>0.000000</disk_usage>
+    <disk_share>1073712345.000000</disk_share>
+</project>
+<!-- Valid project -->
+<project>
+    <master_url>https://project2.example.com/boinc/</master_url>
+    <project_name>Valid_project 2</project_name>
+    <symstore></symstore>
+    <user_name>researcher</user_name>
+    <team_name>Gridcoin</team_name>
+    <host_venue></host_venue>
+    <email_hash>b8b58cce3c90c7dc9f3601674202b21c</email_hash>
+    <cross_project_id>YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</cross_project_id>
+    <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
+    <cpid_time>1541012345.000000</cpid_time>
+    <user_total_credit>0.000000</user_total_credit>
+    <user_expavg_credit>0.000000</user_expavg_credit>
+    <user_create_time>1540012345.000000</user_create_time>
+    <rpc_seqno>3</rpc_seqno>
+    <userid>12345</userid>
+    <teamid>1806</teamid>
+    <hostid>12345</hostid>
+    <host_total_credit>0.000000</host_total_credit>
+    <host_expavg_credit>0.000000</host_expavg_credit>
+    <host_create_time>1540012345.000000</host_create_time>
+    <nrpc_failures>0</nrpc_failures>
+    <master_fetch_failures>0</master_fetch_failures>
+    <min_rpc_time>0.000000</min_rpc_time>
+    <next_rpc_time>0.000000</next_rpc_time>
+    <rec>0.000000</rec>
+    <rec_time>1550012345.000000</rec_time>
+    <resource_share>100.000000</resource_share>
+    <desired_disk_usage>0.000000</desired_disk_usage>
+    <duration_correction_factor>1.000000</duration_correction_factor>
+    <sched_rpc_pending>0</sched_rpc_pending>
+    <send_time_stats_log>0</send_time_stats_log>
+    <send_job_log>0</send_job_log>
+    <njobs_success>0</njobs_success>
+    <njobs_error>0</njobs_error>
+    <elapsed_time>0.000000</elapsed_time>
+    <last_rpc_time>1540012345.000000</last_rpc_time>
+    <dont_use_dcf/>
+    <dont_request_more_work/>
+    <attached_via_acct_mgr/>
+    <rsc_backoff_time>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <rsc_backoff_time>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <scheduler_url>https://project2.example.com/boinc_cgi/cgi</scheduler_url>
+    <cpu_ec>0.000000</cpu_ec>
+    <cpu_time>0.000000</cpu_time>
+    <gpu_ec>0.000000</gpu_ec>
+    <gpu_time>0.000000</gpu_time>
+    <disk_usage>0.000000</disk_usage>
+    <disk_share>1073712345.000000</disk_share>
+</project>
+<!-- Invalid project: internal CPID mismatch -->
+<project>
+    <master_url>https://project3.example.com/boinc/</master_url>
+    <project_name>invalid project 3</project_name>
+    <symstore></symstore>
+    <user_name>researcher</user_name>
+    <team_name>Gridcoin</team_name>
+    <host_venue></host_venue>
+    <email_hash>b8b58cce3c90c7dc9f3601674202b21c</email_hash>
+    <cross_project_id>ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ</cross_project_id>
+    <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
+    <cpid_time>1541012345.000000</cpid_time>
+    <user_total_credit>0.000000</user_total_credit>
+    <user_expavg_credit>0.000000</user_expavg_credit>
+    <user_create_time>1540012345.000000</user_create_time>
+    <rpc_seqno>3</rpc_seqno>
+    <userid>12345</userid>
+    <teamid>1806</teamid>
+    <hostid>12345</hostid>
+    <host_total_credit>0.000000</host_total_credit>
+    <host_expavg_credit>0.000000</host_expavg_credit>
+    <host_create_time>1540012345.000000</host_create_time>
+    <nrpc_failures>0</nrpc_failures>
+    <master_fetch_failures>0</master_fetch_failures>
+    <min_rpc_time>0.000000</min_rpc_time>
+    <next_rpc_time>0.000000</next_rpc_time>
+    <rec>0.000000</rec>
+    <rec_time>1550012345.000000</rec_time>
+    <resource_share>100.000000</resource_share>
+    <desired_disk_usage>0.000000</desired_disk_usage>
+    <duration_correction_factor>1.000000</duration_correction_factor>
+    <sched_rpc_pending>0</sched_rpc_pending>
+    <send_time_stats_log>0</send_time_stats_log>
+    <send_job_log>0</send_job_log>
+    <njobs_success>0</njobs_success>
+    <njobs_error>0</njobs_error>
+    <elapsed_time>0.000000</elapsed_time>
+    <last_rpc_time>1540012345.000000</last_rpc_time>
+    <dont_use_dcf/>
+    <dont_request_more_work/>
+    <attached_via_acct_mgr/>
+    <rsc_backoff_time>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <rsc_backoff_time>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <scheduler_url>https://project3.example.com/boinc_cgi/cgi</scheduler_url>
+    <cpu_ec>0.000000</cpu_ec>
+    <cpu_time>0.000000</cpu_time>
+    <gpu_ec>0.000000</gpu_ec>
+    <gpu_time>0.000000</gpu_time>
+    <disk_usage>0.000000</disk_usage>
+    <disk_share>1073712345.000000</disk_share>
+</project>
+<!-- Invalid project: missing project name (will be skipped) -->
+<project>
+    <master_url>https://invalid-project.example.com/boinc/</master_url>
+    <symstore></symstore>
+    <user_name>researcher</user_name>
+    <team_name>Gridcoin</team_name>
+    <host_venue></host_venue>
+    <email_hash>b8b58cce3c90c7dc9f3601674202b21c</email_hash>
+    <cross_project_id>YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</cross_project_id>
+    <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
+    <cpid_time>1541012345.000000</cpid_time>
+    <user_total_credit>0.000000</user_total_credit>
+    <user_expavg_credit>0.000000</user_expavg_credit>
+    <user_create_time>1540012345.000000</user_create_time>
+    <rpc_seqno>3</rpc_seqno>
+    <userid>12345</userid>
+    <teamid>1806</teamid>
+    <hostid>12345</hostid>
+    <host_total_credit>0.000000</host_total_credit>
+    <host_expavg_credit>0.000000</host_expavg_credit>
+    <host_create_time>1540012345.000000</host_create_time>
+    <nrpc_failures>0</nrpc_failures>
+    <master_fetch_failures>0</master_fetch_failures>
+    <min_rpc_time>0.000000</min_rpc_time>
+    <next_rpc_time>0.000000</next_rpc_time>
+    <rec>0.000000</rec>
+    <rec_time>1550012345.000000</rec_time>
+    <resource_share>100.000000</resource_share>
+    <desired_disk_usage>0.000000</desired_disk_usage>
+    <duration_correction_factor>1.000000</duration_correction_factor>
+    <sched_rpc_pending>0</sched_rpc_pending>
+    <send_time_stats_log>0</send_time_stats_log>
+    <send_job_log>0</send_job_log>
+    <njobs_success>0</njobs_success>
+    <njobs_error>0</njobs_error>
+    <elapsed_time>0.000000</elapsed_time>
+    <last_rpc_time>1540012345.000000</last_rpc_time>
+    <dont_use_dcf/>
+    <dont_request_more_work/>
+    <attached_via_acct_mgr/>
+    <rsc_backoff_time>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>cpu</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <rsc_backoff_time>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_time>
+    <rsc_backoff_interval>
+        <name>ati</name>
+        <value>0.000000</value>
+    </rsc_backoff_interval>
+    <scheduler_url>https://invalid-project.example.com/boinc_cgi/cgi</scheduler_url>
+    <cpu_ec>0.000000</cpu_ec>
+    <cpu_time>0.000000</cpu_time>
+    <gpu_ec>0.000000</gpu_ec>
+    <gpu_time>0.000000</gpu_time>
+    <disk_usage>0.000000</disk_usage>
+    <disk_share>1073712345.000000</disk_share>
+</project>
+<platform_name>x86_64-pc-linux-gnu</platform_name>
+<core_client_major_version>7</core_client_major_version>
+<core_client_minor_version>9</core_client_minor_version>
+<core_client_release>3</core_client_release>
+<user_run_request>1</user_run_request>
+<user_run_prev_request>3</user_run_prev_request>
+<user_gpu_request>1</user_gpu_request>
+<user_gpu_prev_request>3</user_gpu_prev_request>
+<user_network_request>2</user_network_request>
+<new_version_check_time>1530012345.000000</new_version_check_time>
+<all_projects_list_check_time>1550012345.000000</all_projects_list_check_time>
+<alt_platform>i686-pc-linux-gnu</alt_platform>
+<host_venue>home</host_venue>
+</client_state>
