@@ -19,26 +19,18 @@ struct StructCPID
     bool initialized;
     bool Iscpidvalid;
 
-    double rac;
     double utc;
     double rectime;
     double age;
-    double verifiedrac;
     double verifiedutc;
-    double verifiedrectime;
     double verifiedage;
     uint32_t entries;
-    double AverageRAC;
     double NetworkProjects;
-    double NetworkRAC;
-    double TotalRAC;
-    double TotalNetworkRAC;
     double Magnitude;
     double PaymentMagnitude;
     double owed;
     double payments;
     double interestPayments;
-    double verifiedTotalRAC;
     double verifiedMagnitude;
     double TotalMagnitude;
     uint32_t LowLockTime;
@@ -67,12 +59,7 @@ struct StructCPID
 
 struct MiningCPID
 {
-    double rac;
-    double pobdifficulty;
-    unsigned int diffbytes;
     bool initialized;
-    double nonce;
-    double NetworkRAC;
     double Magnitude;
     double RSAWeight;
     double LastPaymentTime;

@@ -87,19 +87,8 @@ extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
 bool IsCPIDValidv2(MiningCPID& mc, int height);
 
-extern double GetNetworkAvgByProject(std::string projectname);
 void HarvestCPIDs(bool cleardata);
 BlockFinder RPCBlockFinder;
-
-double GetNetworkAvgByProject(std::string projectname)
-{
-    boost::replace_all(projectname, "_", " ");
-    if (mvNetwork.size() < 1)   return 0;
-    StructCPID structcpid = mvNetwork[projectname];
-    if (!structcpid.initialized) return 0;
-    double networkavgrac = structcpid.AverageRAC;
-    return networkavgrac;
-}
 
 double GetDifficulty(const CBlockIndex* blockindex)
 {
@@ -216,8 +205,6 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     if (!IsResearchAgeEnabled(blockindex->nHeight))
     {
         result.pushKV("ProjectName", bb.projectname);
-        result.pushKV("RAC", bb.rac);
-        result.pushKV("NetworkRAC", bb.NetworkRAC);
         result.pushKV("RSAWeight",bb.RSAWeight);
     }
 
@@ -626,7 +613,6 @@ bool TallyMagnitudesInSuperblock()
                     StructCPID& stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
                     stMagg.cpid = cpid;
                     stMagg.Magnitude = stCPID.Magnitude;
-                    stMagg.PaymentMagnitude = LederstrumpfMagnitude2(magnitude,GetAdjustedTime());
                     //Adjust total owed - in case they are a newbie:
                     if (true)
                     {
@@ -654,15 +640,12 @@ bool TallyMagnitudesInSuperblock()
             LogPrintf("TallyMagnitudesInSuperblock: Extracted %.0f magnitude entries from cached superblock %s", TotalNetworkEntries, ReadCache(Section::SUPERBLOCK, "block_number").value);
 
         double TotalProjects = 0;
-        double TotalRAC = 0;
-        double AVGRac = 0;
         // Load boinc project averages from neural network
         std::string projects = ReadCache(Section::SUPERBLOCK, "averages").value;
         if (projects.empty()) return false;
         std::vector<std::string> vProjects = split(projects.c_str(),";");
         if (vProjects.size() > 0)
         {
-            double totalRAC = 0;
             for (unsigned int i = 0; i < vProjects.size(); i++)
             {
                 // For each Project in the contract
@@ -674,21 +657,13 @@ bool TallyMagnitudesInSuperblock()
                     {
                         StructCPID& stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
                         stProject.projectname = project;
-                        stProject.AverageRAC = avg;
                         //As of 7-16-2015, start pulling in Total RAC
-                        totalRAC = 0;
-                        totalRAC = RoundFromString("0" + ExtractValue(vProjects[i],",",2),0);
-                        stProject.rac = totalRAC;
                         mvNetworkCopy[project]=stProject;
                         TotalProjects++;
-                        TotalRAC += avg;
                     }
                 }
             }
         }
-        AVGRac = TotalRAC/(TotalProjects+.01);
-        network.AverageRAC = AVGRac;
-        network.rac = TotalRAC;
         network.NetworkProjects = TotalProjects;
         mvNetworkCopy["NETWORK"] = network;
         if (fDebug3) LogPrintf(".TMS43.");
@@ -1916,7 +1891,6 @@ UniValue network(const UniValue& params, bool fHelp)
             UniValue results(UniValue::VOBJ);
 
             results.pushKV("Project", stNet.projectname);
-            results.pushKV("Avg RAC", stNet.AverageRAC);
 
             if (stNet.projectname == "NETWORK")
             {
@@ -2528,9 +2502,9 @@ UniValue MagnitudeReport(std::string cpid)
                 if (cpid.empty() || (Contains(structMag.cpid,cpid)))
                 {
                     UniValue entry(UniValue::VOBJ);
+
                     if (IsResearchAgeEnabled(pindexBest->nHeight))
                     {
-
                         StructCPID& stCPID = GetLifetimeCPID(structMag.cpid);
                         double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                         entry.pushKV("CPID",structMag.cpid);
