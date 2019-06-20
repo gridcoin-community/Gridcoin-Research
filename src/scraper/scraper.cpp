@@ -4052,7 +4052,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
             if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
             {
                 // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.m_name, "No convergence was found at the fallback (project) level."));
+                StructConvergedManifest.vExcludedProjects.push_back(iProjects.m_name);
                 _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
                      + iProjects.m_name
                      + " was excluded because there was no convergence from the scrapers for this project at the project level.");

@@ -80,8 +80,8 @@ struct ConvergedManifest
     // convergences by project.
     std::map<std::string, unsigned int> mScraperConvergenceCountbyProject;
 
-    // ------------------ project ----- reason for exclusion
-    std::vector<std::pair<std::string, std::string>> vExcludedProjects;
+    // --------- project
+    std::vector<std::string> vExcludedProjects;
 };
 
 

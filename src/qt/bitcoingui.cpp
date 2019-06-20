@@ -85,6 +85,7 @@
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/algorithm/string/join.hpp>
 #include "boinc.h"
 #include "util.h"
 
@@ -1452,27 +1453,22 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
 
-    std::string sExcludedProjects;
-    std::string sIncludedScrapers;
-    std::string sExcludedScrapers;
-    std::string sScrapersNotPublishing;
+    QString qsExcludedProjects;
+    QString qsIncludedScrapers;
+    QString qsExcludedScrapers;
+    QString qsScrapersNotPublishing;
 
     bool bDisplayScrapers = false;
 
+    // Note that the translation macro tr is applied in the setToolTip call below.
     // If the convergence cache has excluded projects...
     if (!ConvergedScraperStatsCache.Convergence.vExcludedProjects.empty())
     {
-        for (const auto& iter : ConvergedScraperStatsCache.Convergence.vExcludedProjects)
-        {
-            if (sExcludedProjects.empty())
-                sExcludedProjects += iter.first;
-            else
-                sExcludedProjects += ", " + iter.first;
-        }
+        qsExcludedProjects = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedProjects, ", ")).c_str());
     }
     else
     {
-        sExcludedProjects = "none";
+        qsExcludedProjects = tr("none");
     }
 
     // If fDebug3 then show scrapers in tooltip...
@@ -1480,42 +1476,25 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     {
         bDisplayScrapers = true;
 
-        for (const auto& iter : ConvergedScraperStatsCache.Convergence.vIncludedScrapers)
-        {
-            if (sIncludedScrapers.empty())
-                sIncludedScrapers += iter;
-            else
-                sIncludedScrapers += ", " + iter;
-        } // Don't need the else for empty here.
+        // No need to include "none" for included scrapers, because if no scrapers there will not be a convergence.
+        qsIncludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vIncludedScrapers, ", ")).c_str());
 
         if (!ConvergedScraperStatsCache.Convergence.vExcludedScrapers.empty())
         {
-            for (const auto& iter : ConvergedScraperStatsCache.Convergence.vExcludedScrapers)
-            {
-                if (sExcludedScrapers.empty())
-                    sExcludedScrapers += iter;
-                else
-                    sExcludedScrapers += ", " + iter;
-            }
+            qsExcludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedScrapers, ", ")).c_str());
         }
         else
         {
-            sExcludedScrapers = "none";
+            qsExcludedScrapers = tr("none");
         }
 
         if (ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
         {
-            for (const auto& iter : ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing)
-            {
-                if (sScrapersNotPublishing.empty())
-                    sScrapersNotPublishing += iter;
-                else
-                    sScrapersNotPublishing += ", " + iter;
-            }
+            qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing, ", ")).c_str());
         }
         else
         {
-            sScrapersNotPublishing = "none";
+            qsScrapersNotPublishing = tr("none");
         }
     }
 
@@ -1547,17 +1526,17 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
                                             "Scraper(s) excluded: %4. \n"
                                             "Scraper(s) not publishing: %5.")
                                          .arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str()))
-                                         .arg(QString(sExcludedProjects.c_str()))
-                                         .arg(QString(sIncludedScrapers.c_str()))
-                                         .arg(QString(sExcludedScrapers.c_str()))
-                                         .arg(QString(sScrapersNotPublishing.c_str())));
+                                         .arg(qsExcludedProjects)
+                                         .arg(qsIncludedScrapers)
+                                         .arg(qsExcludedScrapers)
+                                         .arg(qsScrapersNotPublishing));
         }
         else
         {
             labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1 UTC. \n"
                                             " Project(s) excluded: %2.")
                                          .arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str()))
-                                         .arg(QString(sExcludedProjects.c_str())));
+                                         .arg(qsExcludedProjects));
         }
     }
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
