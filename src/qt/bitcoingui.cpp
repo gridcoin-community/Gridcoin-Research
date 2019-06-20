@@ -1459,8 +1459,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     bool bDisplayScrapers = false;
 
-    // If the convergence cache has excluded projects and/or is in fallback (by parts)...
-    if (ConvergedScraperStatsCache.Convergence.vExcludedProjects.size() || ConvergedScraperStatsCache.Convergence.bByParts)
+    // If the convergence cache has excluded projects...
+    if (!ConvergedScraperStatsCache.Convergence.vExcludedProjects.empty())
     {
         for (const auto& iter : ConvergedScraperStatsCache.Convergence.vExcludedProjects)
         {
@@ -1470,8 +1470,10 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
                 sExcludedProjects += ", " + iter.first;
         }
     }
-
-    if (ConvergedScraperStatsCache.Convergence.vExcludedProjects.empty()) sExcludedProjects = "none";
+    else
+    {
+        sExcludedProjects = "none";
+    }
 
     // If fDebug3 then show scrapers in tooltip...
     if (fDebug3)
@@ -1484,29 +1486,38 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
                 sIncludedScrapers += iter;
             else
                 sIncludedScrapers += ", " + iter;
-        }
+        } // Don't need the else for empty here.
 
-        for (const auto& iter : ConvergedScraperStatsCache.Convergence.vExcludedScrapers)
+        if (!ConvergedScraperStatsCache.Convergence.vExcludedScrapers.empty())
         {
-            if (sExcludedScrapers.empty())
-                sExcludedScrapers += iter;
-            else
-                sExcludedScrapers += ", " + iter;
+            for (const auto& iter : ConvergedScraperStatsCache.Convergence.vExcludedScrapers)
+            {
+                if (sExcludedScrapers.empty())
+                    sExcludedScrapers += iter;
+                else
+                    sExcludedScrapers += ", " + iter;
+            }
         }
-
-        if (ConvergedScraperStatsCache.Convergence.vExcludedScrapers.empty()) sExcludedScrapers = "none";
-
-        for (const auto& iter : ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing)
+        else
         {
-            if (sScrapersNotPublishing.empty())
-                sScrapersNotPublishing += iter;
-            else
-                sScrapersNotPublishing += ", " + iter;
+            sExcludedScrapers = "none";
         }
 
-        if (ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty()) sScrapersNotPublishing = "none";
+        if (ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
+        {
+            for (const auto& iter : ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing)
+            {
+                if (sScrapersNotPublishing.empty())
+                    sScrapersNotPublishing += iter;
+                else
+                    sScrapersNotPublishing += ", " + iter;
+            }
+        }
+        else
+        {
+            sScrapersNotPublishing = "none";
+        }
     }
-
 
     if (scraperEventtype == (int)scrapereventtypes::OutOfSync && status == CT_UPDATING)
     {

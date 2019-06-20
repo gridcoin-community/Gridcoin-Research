@@ -415,9 +415,21 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
 bool CScraperManifest::DeleteManifest(const uint256& nHash)
 {
     if (mapManifest.erase(nHash))
+    {
+        // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
+        // that could have been used in the cached convergence, so the convergence may change.
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
+
+            ConvergedScraperStatsCache.bClean = false;
+        }
+
         return true;
+    }
     else
+    {
         return false;
+    }
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
