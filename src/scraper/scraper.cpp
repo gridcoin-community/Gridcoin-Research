@@ -1421,11 +1421,11 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
             // The manifest file is actually very small though, and this primitive implementation will suffice. I could
             // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
             // sync if the wallet is ended during the middle of pulling the files.
-            _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Persisting manifest entry to disk.");
+            _log(logattribute::INFO, "DownloadProjectHostFiles", "Persisting manifest entry to disk.");
             if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "StoreScraperFileManifest error occurred");
+                _log(logattribute::ERR, "DownloadProjectHostFiles", "StoreScraperFileManifest error occurred");
             else
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
+                _log(logattribute::INFO, "DownloadProjectHostFiles", "Stored Manifest");
 
             // End LOCK(cs_StructScraperFileManifest)
             if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download host files: cs_StructScraperFileManifest");
@@ -1615,11 +1615,11 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
                 // The manifest file is actually very small though, and this primitive implementation will suffice. I could
                 // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
                 // sync if the wallet is ended during the middle of pulling the files.
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Persisting manifest entry to disk.");
+                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Persisting manifest entry to disk.");
                 if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                    _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "StoreScraperFileManifest error occurred");
+                    _log(logattribute::ERR, "DownloadProjectTeamFiles", "StoreScraperFileManifest error occurred");
                 else
-                    _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
+                    _log(logattribute::INFO, "DownloadProjectTeamFiles", "Stored Manifest");
 
                 // End LOCK(cs_StructScraperFileManifest)
                 if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download team files: cs_StructScraperFileManifest");
