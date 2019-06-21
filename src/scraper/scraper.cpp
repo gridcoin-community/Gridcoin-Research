@@ -105,6 +105,7 @@ bool LoadScraperFileManifest(const fs::path& file);
 bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
+bool AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
@@ -1371,65 +1372,7 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
         }
 
         // Save host xml files to file manifest map with exclude from CSManifest flag set to true.
-        ScraperFileManifestEntry NewRecord;
-
-        NewRecord.filename = host_file_name;
-        NewRecord.project = prjs.m_name;
-        NewRecord.hash = GetFileHash(host_file);
-        NewRecord.timestamp = GetAdjustedTime();
-        NewRecord.current = true;
-        // Host files are not included in CScraperManifests (published manifests).
-        NewRecord.excludefromcsmanifest = true;
-        NewRecord.filetype = "host";
-
-        // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
-        {
-            LOCK(cs_StructScraperFileManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "download host files: cs_StructScraperFileManifest");
-
-            // Iterate mScraperFileManifest to find any prior host records for the same project and change current flag to false,
-            // or delete if older than EXPLORER_EXTENDED_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
-            // is false.
-
-            ScraperFileManifestMap::iterator entry;
-            for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
-            {
-                ScraperFileManifestMap::iterator entry_copy = entry++;
-
-                if (entry_copy->second.project == prjs.m_name && entry_copy->second.current == true && entry_copy->second.filetype == "host")
-                {
-                    _log(logattribute::INFO, "DownloadProjectHostFiles", "Marking old project manifest host entry as current = false.");
-                    MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
-                }
-
-                // If host records are older than EXPLORER_EXTENDED_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
-                // delete all non-current records, including the one just marked non-current. (EXPLORER_EXTENDED_FILE_RETENTION_TIME rather
-                // then SCRAPER_FILE_RETENTION_TIME is used, because this section is only active if fExplorer is true.)
-                if (entry_copy->second.filetype == "host" && (((GetAdjustedTime() - entry_copy->second.timestamp) > EXPLORER_EXTENDED_FILE_RETENTION_TIME)
-                                                              || (entry_copy->second.project == prjs.m_name && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES)))
-                {
-                    DeleteScraperFileManifestEntry(entry_copy->second);
-                }
-            }
-
-            if (!InsertScraperFileManifestEntry(NewRecord))
-                _log(logattribute::WARNING, "DownloadProjectHostFiles", "Manifest entry already exists for " + NewRecord.hash.ToString() + " " + host_file_name);
-            else
-                _log(logattribute::INFO, "DownloadProjectHostFiles", "Created manifest entry for " + NewRecord.hash.ToString() + " " + host_file_name);
-
-            // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
-            // The manifest file is actually very small though, and this primitive implementation will suffice. I could
-            // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
-            // sync if the wallet is ended during the middle of pulling the files.
-            _log(logattribute::INFO, "DownloadProjectHostFiles", "Persisting manifest entry to disk.");
-            if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                _log(logattribute::ERR, "DownloadProjectHostFiles", "StoreScraperFileManifest error occurred");
-            else
-                _log(logattribute::INFO, "DownloadProjectHostFiles", "Stored Manifest");
-
-            // End LOCK(cs_StructScraperFileManifest)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download host files: cs_StructScraperFileManifest");
-        }
+        AlignScraperFileManifestEntries(host_file, "host", prjs.m_name, true);
     }
 
     return true;
@@ -1563,68 +1506,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         }
 
         // If in explorer mode, save team xml files to file manifest map with exclude from CSManifest flag set to true.
-        if (fExplorer)
-        {
-            ScraperFileManifestEntry NewRecord;
-
-            NewRecord.filename = team_file_name;
-            NewRecord.project = prjs.m_name;
-            NewRecord.hash = GetFileHash(team_file);
-            NewRecord.timestamp = GetAdjustedTime();
-            NewRecord.current = true;
-            // Team files are not included in CScraperManifests (published manifests).
-            NewRecord.excludefromcsmanifest = true;
-            NewRecord.filetype = "team";
-
-            // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
-            {
-                LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "download team files: cs_StructScraperFileManifest");
-
-                // Iterate mScraperFileManifest to find any prior team records for the same project and change current flag to false,
-                // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
-                // is false.
-
-                ScraperFileManifestMap::iterator entry;
-                for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
-                {
-                    ScraperFileManifestMap::iterator entry_copy = entry++;
-
-                    if (entry_copy->second.project == prjs.m_name && entry_copy->second.current == true && entry_copy->second.filetype == "team")
-                    {
-                        _log(logattribute::INFO, "DownloadProjectTeamFiles", "Marking old project manifest team entry as current = false.");
-                        MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
-                    }
-
-                    // If team records are older than EXPLORER_EXTENDED_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
-                    // delete all non-current records, including the one just marked non-current. (EXPLORER_EXTENDED_FILE_RETENTION_TIME rather
-                    // then SCRAPER_FILE_RETENTION_TIME is used, because this section is only active if fExplorer is true.)
-                    if (entry_copy->second.filetype == "team" && (((GetAdjustedTime() - entry_copy->second.timestamp) > EXPLORER_EXTENDED_FILE_RETENTION_TIME)
-                                                                  || (entry_copy->second.project == prjs.m_name && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES)))
-                    {
-                        DeleteScraperFileManifestEntry(entry_copy->second);
-                    }
-                }
-
-                if (!InsertScraperFileManifestEntry(NewRecord))
-                    _log(logattribute::WARNING, "DownloadProjectTeamFiles", "Manifest entry already exists for " + NewRecord.hash.ToString() + " " + team_file_name);
-                else
-                    _log(logattribute::INFO, "DownloadProjectTeamFiles", "Created manifest entry for " + NewRecord.hash.ToString() + " " + team_file_name);
-
-                // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
-                // The manifest file is actually very small though, and this primitive implementation will suffice. I could
-                // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
-                // sync if the wallet is ended during the middle of pulling the files.
-                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Persisting manifest entry to disk.");
-                if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-                    _log(logattribute::ERR, "DownloadProjectTeamFiles", "StoreScraperFileManifest error occurred");
-                else
-                    _log(logattribute::INFO, "DownloadProjectTeamFiles", "Stored Manifest");
-
-                // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download team files: cs_StructScraperFileManifest");
-            }
-        }
+        if (fExplorer) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true);
 
         std::map<std::string, int64_t> mTeamIDsForProject;
 
@@ -1780,10 +1662,6 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
     {
         _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.m_name);
 
-        std::string rac_file_name = prjs.m_name + +"-user.gz";
-
-        fs::path rac_file = pathScraper / rac_file_name;
-
         // Grab ETag of rac file
         Http http;
         std::string sRacETag;
@@ -1832,17 +1710,43 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
                 _log(logattribute::CRITICAL, "DownloadProjectRacFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
         }
 
-        std::string chketagfile = prjs.m_name + "-" + sRacETag + ".csv" + ".gz";
-        fs::path chkfile = pathScraper / chketagfile;
+        std::string rac_file_name;
+        fs::path rac_file;
 
-        if (fs::exists(chkfile))
+        std::string processed_rac_file_name;
+        fs::path processed_rac_file;
+
+        processed_rac_file_name = prjs.m_name + "-" + sRacETag + ".csv" + ".gz";
+        processed_rac_file = pathScraper / processed_rac_file_name;
+
+        if (fExplorer)
         {
-            _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
-            //_log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file size " + std::to_string(fs::file_size(chkfile)));
-            continue;
+            // Use eTag versioning for source file.
+            rac_file_name = prjs.m_name + sRacETag + "-user.gz";
+            rac_file = pathScraper / rac_file_name;
+
+            //  If the file was already processed, both should be here. If both here, skip processing.
+            if (fs::exists(rac_file) && fs::exists(processed_rac_file))
+            {
+                _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
+                continue;
+            }
         }
         else
-            fs::remove(chkfile);
+        {
+            // No versioning for source file. If file exists delete it and download anew, unless processed file already present.
+            rac_file_name = prjs.m_name + "-user.gz";
+            rac_file = pathScraper / rac_file_name;
+
+            if (fs::exists(rac_file)) fs::remove(rac_file);
+
+            //  If the file was already processed, skip processing.
+            if (fs::exists(processed_rac_file))
+            {
+                _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
+                continue;
+            }
+        }
 
         try
         {
@@ -1854,6 +1758,10 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
             continue;
         }
 
+        // If in explorer mode, save user (rac) source xml files to file manifest map with exclude from CSManifest flag set to true.
+        if (fExplorer) AlignScraperFileManifestEntries(rac_file, "user_source", prjs.m_name, true);
+
+        // Now that the source file is handled, process the file.
         ProcessProjectRacFileByCPID(prjs.m_name, rac_file.string(), sRacETag, Consensus);
     }
 
@@ -1865,7 +1773,8 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         int64_t nMaxTime = 0;
         for (const auto& entry : StructScraperFileManifest.mScraperFileManifest)
         {
-            nMaxTime = std::max(nMaxTime, entry.second.timestamp);
+            // Only consider processed (user) files
+            if (entry.second.filetype == "user") nMaxTime = std::max(nMaxTime, entry.second.timestamp);
         }
 
         StructScraperFileManifest.timestamp = nMaxTime;
@@ -1997,18 +1906,15 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     {
         _log(logattribute::CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
 
-        std::string efile = etag + ".gz";
-        fs::path fsepfile = pathScraper/ efile;
         ingzfile.close();
         outgzfile.flush();
         outgzfile.close();
 
-        if (fs::exists(fsepfile))
-            fs::remove(fsepfile);
-
+        // Remove the source file because it was bad. (Probable incomplete download.)
         if (fs::exists(file))
             fs::remove(file);
 
+        // Remove the errored out processed file.
         if (fs::exists(gzetagfile))
             fs::remove(gzetagfile);
 
@@ -2034,7 +1940,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         fs::path temp = gzetagfile;
         size_t fileb = fs::file_size(temp);
 
-        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processing new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
+        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processed new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
 
         ndownloadsize += (int64_t)filea;
         nuploadsize += (int64_t)fileb;
@@ -2044,77 +1950,16 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "FS Error -> " + std::string(e.what()));
     }
 
-    fs::remove(file);
+    // If not in explorer mode, no need to retain source file.
+    if (!fExplorer) fs::remove(file);
 
-    ScraperFileManifestEntry NewRecord;
-
-    // Don't include path in Manifest, because this is local node dependent.
-    NewRecord.filename = gzetagfile_no_path;
-    NewRecord.project = project;
-    NewRecord.hash = nFileHash;
-    NewRecord.timestamp = GetAdjustedTime();
-    // By definition the record we are about to insert is current. If a new file is downloaded for
-    // a given project, it has to be more up to date than any others.
-    NewRecord.current = true;
-    NewRecord.excludefromcsmanifest = false;
-    NewRecord.filetype = "user";
-    
-    // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
-    {
-        LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "rac (user) file processing record insert: cs_StructScraperFileManifest");
-        
-        // Iterate mScraperFileManifest to find any prior user records for the same project and change current flag to false,
-        // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
-        // is false.
-
-        ScraperFileManifestMap::iterator entry;
-        for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
-        {
-            ScraperFileManifestMap::iterator entry_copy = entry++;
-
-            if (entry_copy->second.project == project && entry_copy->second.current == true && entry_copy->second.filetype == "user")
-            {
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Marking old project manifest user entry as current = false.");
-                MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
-            }
-
-            // If user records are older than nFileRetentionTime delete record, or if fScraperRetainNonCurrentFiles is false,
-            // delete all non-current records, including the one just marked non-current.
-            int64_t nFileRetentionTime = fExplorer ? EXPLORER_EXTENDED_FILE_RETENTION_TIME : SCRAPER_FILE_RETENTION_TIME;
-
-            if (entry_copy->second.filetype == "user" && (((GetAdjustedTime() - entry_copy->second.timestamp) > nFileRetentionTime)
-                                                            || (entry_copy->second.project == project && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES)))
-            {
-                DeleteScraperFileManifestEntry(entry_copy->second);
-            }
-        }
-
-        if (!InsertScraperFileManifestEntry(NewRecord))
-            _log(logattribute::WARNING, "ProcessProjectRacFileByCPID", "Manifest entry already exists for " + nFileHash.ToString() + " " + gzetagfile);
-        else
-            _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Created manifest entry for " + nFileHash.ToString() + " " + gzetagfile);
-
-        // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
-        // The manifest file is actually very small though, and this primitive implementation will suffice. I could
-        // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
-        // sync if the wallet is ended during the middle of pulling the files.
-        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Persisting manifest entry to disk.");
-        if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-            _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "StoreScraperFileManifest error occurred");
-        else
-            _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
-
-        // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "rac (user) file processing record insert: cs_StructScraperFileManifest");
-    }
+    // Here, regardless of explorer mode, save processed rac files to file manifest map with exclude from CSManifest flag set to false.
+    AlignScraperFileManifestEntries(gzetagfile, "user", project, false);
 
     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Complete Process");
 
     return true;
 }
-
-
 
 
 uint256 GetFileHash(const fs::path& inputfile)
@@ -2494,6 +2339,89 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
     if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Marked File Manifest Entry non-current and stored modified nFileManifestMapHash.");
 
     return true;
+}
+
+
+bool AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest)
+{
+    ScraperFileManifestEntry NewRecord;
+
+    std::string file_name = file.filename().string();
+
+    NewRecord.filename = file_name;
+    NewRecord.project = sProject;
+    NewRecord.hash = GetFileHash(file);
+    NewRecord.timestamp = GetAdjustedTime();
+    NewRecord.current = true;
+    NewRecord.excludefromcsmanifest = excludefromcsmanifest;
+    NewRecord.filetype = filetype;
+
+    // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
+    {
+        LOCK(cs_StructScraperFileManifest);
+        if (fDebug3)
+        {
+            if (excludefromcsmanifest)
+            {
+                _log(logattribute::INFO, "LOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+            else
+            {
+                _log(logattribute::INFO, "LOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+        }
+
+        // Iterate mScraperFileManifest to find any prior filetype records for the same project and change current flag to false,
+        // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
+        // is false.
+
+        ScraperFileManifestMap::iterator entry;
+        for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
+        {
+            ScraperFileManifestMap::iterator entry_copy = entry++;
+
+            if (entry_copy->second.project == sProject && entry_copy->second.current == true && entry_copy->second.filetype == filetype)
+            {
+                _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Marking old project manifest "+ filetype + " entry as current = false.");
+                MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
+            }
+
+            // If filetype records are older than EXPLORER_EXTENDED_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
+            // delete all non-current records, including the one just marked non-current. (EXPLORER_EXTENDED_FILE_RETENTION_TIME rather
+            // then SCRAPER_FILE_RETENTION_TIME is used, because this section is only active if fExplorer is true.)
+            if (entry_copy->second.filetype == filetype && (((GetAdjustedTime() - entry_copy->second.timestamp) > EXPLORER_EXTENDED_FILE_RETENTION_TIME)
+                                                          || (entry_copy->second.project == sProject && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES)))
+            {
+                DeleteScraperFileManifestEntry(entry_copy->second);
+            }
+        }
+
+        if (!InsertScraperFileManifestEntry(NewRecord))
+            _log(logattribute::WARNING, "AlignScraperFileManifestEntries", "Manifest entry already exists for " + NewRecord.hash.ToString() + " " + file_name);
+        else
+            _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Created manifest entry for " + NewRecord.hash.ToString() + " " + file_name);
+
+        // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
+        // The manifest file is actually very small though, and this primitive implementation will suffice.
+        _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Persisting manifest entry to disk.");
+        if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
+            _log(logattribute::ERR, "AlignScraperFileManifestEntries", "StoreScraperFileManifest error occurred");
+        else
+            _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Stored Manifest");
+
+        // End LOCK(cs_StructScraperFileManifest)
+        if (fDebug3)
+        {
+            if (excludefromcsmanifest)
+            {
+                _log(logattribute::INFO, "ENDLOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+            else
+            {
+                _log(logattribute::INFO, "ENDLOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+        }
+    }
 }
 
 
