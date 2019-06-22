@@ -3644,12 +3644,16 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
             for (const auto& iScraper : mScrapers)
             {
-                if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
-                        == std::end(StructConvergedManifest.vExcludedScrapers)
-                    && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
-                        == std::end(StructConvergedManifest.vIncludedScrapers))
+                // Only include scrapers enabled in protocol.
+                if (iScraper.second.value == "true" || iScraper.second.value == "1")
                 {
-                     StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                    if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                            == std::end(StructConvergedManifest.vExcludedScrapers)
+                        && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                            == std::end(StructConvergedManifest.vIncludedScrapers))
+                    {
+                         StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                    }
                 }
             }
 
@@ -4019,12 +4023,16 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
 
         for (const auto& iScraper : mScrapers)
         {
-            if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
-                    == std::end(StructConvergedManifest.vExcludedScrapers)
-                && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
-                    == std::end(StructConvergedManifest.vIncludedScrapers))
+            // Only include scrapers enabled in protocol.
+            if (iScraper.second.value == "true" || iScraper.second.value == "1")
             {
-                 StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                        == std::end(StructConvergedManifest.vExcludedScrapers)
+                    && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                        == std::end(StructConvergedManifest.vIncludedScrapers))
+                {
+                     StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                }
             }
         }
 
