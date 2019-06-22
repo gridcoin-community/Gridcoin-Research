@@ -25,7 +25,6 @@ using namespace std;
 //
 
 unsigned int nMinerSleep;
-MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double CoinToDouble(double surrogate);
 
@@ -35,6 +34,8 @@ std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
+
+namespace NN { std::string GetPrimaryCpid(); }
 
 namespace {
 // Some explaining would be appreciated
@@ -973,7 +974,6 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
 
     miningcpid.lastblockhash = pbh.GetHex();
     miningcpid.ResearchSubsidy = OUT_POR;
-    miningcpid.ResearchSubsidy2 = OUT_POR;
     miningcpid.ResearchAge = dAccrualAge;
     miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
     miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
@@ -983,16 +983,6 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid.NeuralHash = "";
     miningcpid.superblock = "";
     miningcpid.GRCAddress = DefaultWalletAddress();
-
-    // Make sure this deprecated fields are empty
-    miningcpid.cpidv2.clear();
-    miningcpid.email.clear();
-    miningcpid.boincruntimepublickey.clear();
-    miningcpid.aesskein.clear();
-    miningcpid.enccpid.clear();
-    miningcpid.encboincpublickey.clear();
-    miningcpid.encaes.clear();
-
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
@@ -1041,7 +1031,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+=_("Net averages not yet loaded; ");
-        if (LessVerbose(100) && IsResearcher(msPrimaryCPID)) LogPrintf("ResearchMiner:Net averages not yet loaded...");
+        if (LessVerbose(100) && IsResearcher(NN::GetPrimaryCpid())) LogPrintf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
 
@@ -1231,11 +1221,7 @@ void StakeMiner(CWallet *pwallet)
             continue;
         }
 
-        // Lock main lock since GetNextProject and subsequent calls
-        // require the state to be static.
         LOCK(cs_main);
-
-        GetNextProject(true);
 
         // * Create a bare block
         StakeBlock.nTime= GetAdjustedTime();
@@ -1290,7 +1276,6 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: block processed");
         { LOCK(MinerStatus.lock);
             MinerStatus.AcceptedCnt++;
-            nLastBlockSolved = GetAdjustedTime();
         }
 
     } //end while(!fShutdown)

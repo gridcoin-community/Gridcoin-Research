@@ -13,6 +13,7 @@
 #include <numeric>
 #include <fstream>
 
+namespace NN { std::string GetPrimaryCpid(); }
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
     QDialog(parent),
@@ -78,17 +79,19 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
         cpid.erase(pos, cpid.length());
     }
 
-    return (msPrimaryCPID == cpid) ? true : false;
+    return (NN::GetPrimaryCpid() == cpid) ? true : false;
 }
 
 bool DiagnosticsDialog::VerifyCPIDIsInNeuralNetwork()
 {
-    if(!IsResearcher(msPrimaryCPID))
+    std::string primary_cpid = NN::GetPrimaryCpid();
+
+    if(!IsResearcher(primary_cpid))
         return false;
 
     for(const auto& entry : GetConsensusBeaconList().mBeaconMap)
     {
-        if(boost::iequals(entry.first, msPrimaryCPID))
+        if(boost::iequals(entry.first, primary_cpid))
             return true;
     }
 

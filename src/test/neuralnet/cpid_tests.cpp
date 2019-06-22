@@ -182,6 +182,19 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(bytes == expected);
 }
 
+BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
+{
+    NN::Cpid cpid(std::vector<unsigned char> {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    });
+
+    std::hash<NN::Cpid> hasher;
+
+    // 0x0706050403020100 + 0x1514131211100908 (CPID halves, little endian)
+    BOOST_CHECK(hasher(cpid) == 2024957465561532936);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // -----------------------------------------------------------------------------

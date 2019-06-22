@@ -14,6 +14,7 @@
 #include "tally.h"
 #include "beacon.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/researcher.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -32,7 +33,6 @@ extern boost::thread_group threadGroup;
 void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
-void LoadCPIDs();
 bool IsConfigFileEmpty();
 
 #ifndef WIN32
@@ -934,10 +934,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     ComputeNeuralNetworkSupermajorityHashes();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-    LoadCPIDs();
+    NN::Researcher::Reload();
 
     if(!pwalletMain->IsLocked())
-       ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
+       ImportBeaconKeysFromConfig(NN::GetPrimaryCpid(), pwalletMain);
 
     if (!CheckDiskSpace())
         return false;

@@ -82,6 +82,7 @@
 #include "rpcprotocol.h"
 #include "contract/polls.h"
 #include "contract/contract.h"
+#include "neuralnet/researcher.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -94,12 +95,9 @@ extern std::string getMacAddress();
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
-std::string getfilecontents(std::string filename);
-
 void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
-void HarvestCPIDs(bool cleardata);
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -895,7 +893,7 @@ void BitcoinGUI::NewUserWizard()
 
         std::string sourcefile = GetBoincDataDir() + "client_state.xml";
         std::string sout = "";
-        sout = getfilecontents(sourcefile);
+        sout = GetFileContents(sourcefile);
         //bool BoincInstalled = true;
         std::string sBoincNarr = "";
         if (sout == "-1")
@@ -908,7 +906,7 @@ void BitcoinGUI::NewUserWizard()
 
         bool ok;
         boincemail = QInputDialog::getText(this, tr("New User Wizard"),
-                                          tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
+                                          tr("Please enter your BOINC E-mail address, or click <Cancel> to skip for now:"),
                                           QLineEdit::Normal,
                                           "", &ok);
 
@@ -921,14 +919,15 @@ void BitcoinGUI::NewUserWizard()
             CreateNewConfigFile(new_email);
             QString strMessage = tr("Created new Configuration File Successfully. ");
             QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
-            //Load CPIDs:
-            HarvestCPIDs(true);
+
+            // Reload BOINC CPIDs now that we know the user's email address:
+            NN::Researcher::Reload();
         }
         else
         {
             //Create Config File
             CreateNewConfigFile("investor");
-            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
+            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your BOINC e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
             QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
         }
         // Read in the mapargs, and set the seed nodes 10-13-2015
@@ -945,7 +944,7 @@ void BitcoinGUI::NewUserWizard()
         if (sBoincNarr != "")
         {
                 QString qsMessage = tr(sBoincNarr.c_str());
-                QMessageBox::warning(this, tr("Attention! - Boinc Path Error!"), qsMessage);
+                QMessageBox::warning(this, tr("Attention! - BOINC Path Error!"), qsMessage);
         }
     }
 }

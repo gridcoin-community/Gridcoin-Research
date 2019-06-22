@@ -211,6 +211,16 @@ void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 void ShrinkDebugFile();
+
+//!
+//! \brief Read the contents of the specified file into memory.
+//!
+//! \param filepath The path to the file. Provide absolute paths when possible.
+//!
+//! \return The file contents as a string.
+//!
+std::string GetFileContents(std::string filepath);
+
 int GetRandInt(int nMax);
 uint64_t GetRand(uint64_t nMax);
 uint256 GetRandHash();

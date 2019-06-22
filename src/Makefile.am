@@ -94,6 +94,7 @@ GRIDCOIN_CORE_H = \
    neuralnet/neuralnet_native.h \
    neuralnet/neuralnet_stub.h \
 	neuralnet/project.h \
+	neuralnet/researcher.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
@@ -149,6 +150,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
    neuralnet/neuralnet_stub.cpp \
 	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
+	neuralnet/researcher.cpp \
 	netbase.cpp \
 	net.cpp \
 	noui.cpp \

@@ -19,7 +19,6 @@ extern std::map<std::string, StructCPID> mvDPOR;
 extern std::string GetQuorumHash(const std::string& data);
 extern bool fTestNet;
 double RoundFromString(std::string s, int place);
-std::string LowerUnderscore(std::string data);
 
 namespace
 {
@@ -32,8 +31,6 @@ namespace
       {
          // Create a fake CPID
          StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
-         cpid.projectname = "My Simple Test Project";
-         cpid.entries = 1;
          cpid.cpid = TEST_CPID;
          cpid.payments = 123;
          //cpid.EarliestPaymentTime = 1490260000;
@@ -102,11 +99,6 @@ BOOST_AUTO_TEST_CASE(gridcoin_ValidateUnpackBinarySuperblock)
     const std::string packed(superblock_packed_bin, superblock_packed_bin + superblock_packed_bin_len);
     const std::string expected(superblock_unpacked_txt, superblock_unpacked_txt + superblock_unpacked_txt_len);
     BOOST_CHECK_EQUAL(UnpackBinarySuperblock(packed), expected);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_LowerUnderscoreShouldConvertToLowerCaseAndReplaceUnderscoresWithSpaces)
-{
-    BOOST_CHECK_EQUAL("hello test string", LowerUnderscore("Hello_TEST_string"));
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_V8ShouldBeEnabledOnBlock1010000InProduction)

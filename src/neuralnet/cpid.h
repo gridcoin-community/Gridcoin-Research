@@ -344,4 +344,36 @@ private:
     //!
     boost::variant<Invalid, Investor, Cpid> m_variant;
 }; // MiningId
+} // namespace NN
+
+namespace std {
+//!
+//! \brief Specializes std::hash<T> for NN::Cpid.
+//!
+//! This enables the use of NN::Cpid as a key in a std::unordered_map object.
+//!
+//! CONSENSUS: Don't use the hash produced by this routine (or by any std::hash
+//! specialization) in protocol-specific implementations. It ignores endianness
+//! and outputs a value with a chance of collision probably too great for usage
+//! besides the intended local look-up functionality.
+//!
+template<>
+struct hash<NN::Cpid>
+{
+    //!
+    //! \brief Create a hash of the supplied CPID object.
+    //!
+    //! \param cpid Contains the bytes to hash.
+    //!
+    //! \return A hash as the sum of the two halves of the bytes in the CPID.
+    //!
+    size_t operator()(const NN::Cpid& cpid) const
+    {
+        // Just convert the CPID into a value that we can store in a size_t
+        // object. CPIDs are already unique identifiers.
+        //
+        return *reinterpret_cast<const uint64_t*>(cpid.Raw().data())
+            + *reinterpret_cast<const uint64_t*>(cpid.Raw().data() + 8);
+    }
+};
 }
