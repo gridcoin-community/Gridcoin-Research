@@ -1722,7 +1722,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         if (fExplorer)
         {
             // Use eTag versioning for source file.
-            rac_file_name = prjs.m_name + sRacETag + "-user.gz";
+            rac_file_name = prjs.m_name + "-" + sRacETag + "-user.gz";
             rac_file = pathScraper / rac_file_name;
 
             //  If the file was already processed, both should be here. If both here, skip processing.
