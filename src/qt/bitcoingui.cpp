@@ -1487,7 +1487,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
             qsExcludedScrapers = tr("none");
         }
 
-        if (ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
+        if (!ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
         {
             qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing, ", ")).c_str());
         }
