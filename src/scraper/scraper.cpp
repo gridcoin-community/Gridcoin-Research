@@ -3645,6 +3645,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             for (const auto& iScraper : mScrapers)
             {
                 // Only include scrapers enabled in protocol.
+
                 if (iScraper.second.value == "true" || iScraper.second.value == "1")
                 {
                     if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
@@ -3653,6 +3654,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                             == std::end(StructConvergedManifest.vIncludedScrapers))
                     {
                          StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                         _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Scraper " + iScraper.first + " authorized but not publishing.");
                     }
                 }
             }
@@ -4032,6 +4034,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                         == std::end(StructConvergedManifest.vIncludedScrapers))
                 {
                      StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                     _log(logattribute::INFO, "ScraperConstructConvergedManifesByProject", "Scraper " + iScraper.first + " authorized but not publishing.");
                 }
             }
         }
