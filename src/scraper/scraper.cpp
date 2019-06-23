@@ -51,6 +51,8 @@ struct ScraperFileManifestEntry
     uint256 hash; // hash of file
     int64_t timestamp;
     bool current;
+    bool excludefromcsmanifest;
+    std::string filetype;
 };
 
 typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
@@ -72,7 +74,7 @@ std::string lowercase(std::string s);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 ScraperFileManifest StructScraperFileManifest = {};
 
-// Global cache for converged scraper stats. Access must be through a lock.
+// Global cache for converged scraper stats. Access must be with the lock cs_ConvergedScraperStatsCache taken.
 ConvergedScraperStats ConvergedScraperStatsCache = {};
 
 CCriticalSection cs_Scraper;
@@ -103,6 +105,7 @@ bool LoadScraperFileManifest(const fs::path& file);
 bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
+bool AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
 ScraperStats GetScraperStatsByConsensusBeaconList();
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
@@ -123,6 +126,7 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 // Overloaded. See alternative in scraper.h.
 std::string ScraperGetNeuralHash(std::string sNeuralContract);
 
+bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::map<std::string, int64_t>& mTeamIdsForProject_out);
 bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist);
@@ -644,6 +648,7 @@ void ScraperApplyAppCacheEntries()
 
     ApplyCache("SCRAPER_RETAIN_NONCURRENT_FILES", SCRAPER_RETAIN_NONCURRENT_FILES);
     ApplyCache("SCRAPER_FILE_RETENTION_TIME", SCRAPER_FILE_RETENTION_TIME);
+    ApplyCache("EXPLORER_EXTENDED_FILE_RETENTION_TIME", EXPLORER_EXTENDED_FILE_RETENTION_TIME);
     ApplyCache("SCRAPER_CMANIFEST_RETAIN_NONCURRENT", SCRAPER_CMANIFEST_RETAIN_NONCURRENT);
     ApplyCache("SCRAPER_CMANIFEST_RETENTION_TIME", SCRAPER_CMANIFEST_RETENTION_TIME);
     ApplyCache("SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES", SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES);
@@ -666,6 +671,7 @@ void ScraperApplyAppCacheEntries()
 
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_RETAIN_NONCURRENT_FILES = " + std::to_string(SCRAPER_RETAIN_NONCURRENT_FILES));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_FILE_RETENTION_TIME = " + std::to_string(SCRAPER_FILE_RETENTION_TIME));
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "EXPLORER_EXTENDED_FILE_RETENTION_TIME = " + std::to_string(EXPLORER_EXTENDED_FILE_RETENTION_TIME));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETAIN_NONCURRENT = " + std::to_string(SCRAPER_CMANIFEST_RETAIN_NONCURRENT));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETENTION_TIME = " + std::to_string(SCRAPER_CMANIFEST_RETENTION_TIME));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = " + std::to_string(SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES));
@@ -832,7 +838,7 @@ void Scraper(bool bSingleShot)
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK", "download statistics block: cs_StructScraperFileManifest");
 
                 ScraperFileManifestMap::iterator entry;
 
@@ -848,7 +854,7 @@ void Scraper(bool bSingleShot)
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download statistics block: cs_StructScraperFileManifest");
             }
 
             AuthenticationETagClear();
@@ -862,11 +868,14 @@ void Scraper(bool bSingleShot)
 
             // If team filtering is set by policy then pull down and retrieve team ID's as needed. This loads the TeamIDMap global.
             // Note that the call(s) to ScraperDirectoryAndConfigSanity() above will preload the team ID map from the persisted file
-            // if it exists, so this will minimize the work that DownloadProjectTeamFiles() has to do.
-            if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
-                DownloadProjectTeamFiles(projectWhitelist);
+            // if it exists, so this will minimize the work that DownloadProjectTeamFiles() has to do, unless explorer mode (fExplorer) is true.
+            if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP || fExplorer) DownloadProjectTeamFiles(projectWhitelist);
 
             DownloadProjectRacFilesByCPID(projectWhitelist);
+
+            // If explorer mode is set (fExplorer is true), then download host files. These are currently not use for any other processing,
+            // so there is no corresponding Process function for the host files.
+            if (fExplorer) DownloadProjectHostFiles(projectWhitelist);
 
             if (fDebug) _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
@@ -899,7 +908,7 @@ void Scraper(bool bSingleShot)
             // Publish and/or local delete CScraperManifests.
             {
                 LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK2", "cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
 
                 // If the hash doesn't match (a new one is available), or there are none, then publish a new one.
                 if (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
@@ -915,7 +924,7 @@ void Scraper(bool bSingleShot)
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK2", "cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
             }
         }
 
@@ -1101,7 +1110,7 @@ bool ScraperDirectoryAndConfigSanity()
             // Lock the manifest while it is being manipulated.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "LOCK", "align directory with manifest file: cs_StructScraperFileManifest");
 
                 if (StructScraperFileManifest.mScraperFileManifest.empty())
                 {
@@ -1130,6 +1139,9 @@ bool ScraperDirectoryAndConfigSanity()
                             && fs::is_regular_file(dir))
                     {
                         entry = StructScraperFileManifest.mScraperFileManifest.find(dir.path().filename().string());
+                        
+                        if (fDebug10) _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through directory - checking file " + filename);
+                        
                         if (entry == StructScraperFileManifest.mScraperFileManifest.end())
                         {
                             fs::remove(dir.path());
@@ -1137,23 +1149,31 @@ bool ScraperDirectoryAndConfigSanity()
                             continue;
                         }
 
-                        if (entry->second.hash != GetFileHash(dir))
+                        // Only do the expensive hash checking on files that are included in published manifests.
+                        if (!entry->second.excludefromcsmanifest)
                         {
-                            _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "File failed hash check. Removing file.");
-                            fs::remove(dir.path());
+                            if (entry->second.hash != GetFileHash(dir))
+                            {
+                                _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "File failed hash check. Removing file.");
+                                fs::remove(dir.path());
+                            }
                         }
                     }
                 }
 
                 // Now iterate through the Manifest map and remove entries with no file, or entries and files older than
-                // SCRAPER_FILE_RETENTION_TIME, whether they are current or not, and remove non-current files regardless of time
+                // nRetentionTime, whether they are current or not, and remove non-current files regardless of time
                 //if fScraperRetainNonCurrentFiles is false.
                 for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
                 {
                     ScraperFileManifestMap::iterator entry_copy = entry++;
 
+                    int64_t nFileRetentionTime = fExplorer ? EXPLORER_EXTENDED_FILE_RETENTION_TIME : SCRAPER_FILE_RETENTION_TIME;
+                    
+                    if (fDebug10) _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Iterating through map - checking map entry " + entry_copy->first);
+
                     if (!fs::exists(pathScraper / entry_copy->first)
-                            || ((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
+                            || ((GetAdjustedTime() - entry_copy->second.timestamp) > nFileRetentionTime)
                             || (!SCRAPER_RETAIN_NONCURRENT_FILES && entry_copy->second.current == false))
                     {
                         _log(logattribute::WARNING, "ScraperDirectoryAndConfigSanity", "Removing stale or orphan manifest entry: " + entry_copy->first);
@@ -1162,11 +1182,11 @@ bool ScraperDirectoryAndConfigSanity()
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "align directory with manifest file: cs_StructScraperFileManifest");
             }
 
             // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
-            // team file downloads for projects whose team ID's have already been found and stored.
+            // team file downloads for projects whose team ID's have already been found and stored, unless explorer mode (fExplorer) is true.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
             {
                 LOCK(cs_TeamIDMap);
@@ -1245,130 +1265,263 @@ bool UserpassPopulated()
 
 
 
+
+/**********************
+* Project Host Files  *
+**********************/
+
+bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
+{
+    // If fExplorer is false then skip processing. (This should not be called anyway, but return immediately just in case.
+    if (!fExplorer)
+    {
+        _log(logattribute::INFO, "DownloadProjectHostFiles", "Not in explorer mode. Skipping host file download and processing.");
+        return false;
+    }
+
+    if (!projectWhitelist.Populated())
+    {
+        _log(logattribute::CRITICAL, "DownloadProjectHostFiles", "Whitelist is not populated");
+
+        return false;
+    }
+
+    _log(logattribute::INFO, "DownloadProjectHostFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
+
+    if (!UserpassPopulated())
+    {
+        _log(logattribute::CRITICAL, "DownloadProjectHostFiles", "Userpass is not populated");
+
+        return false;
+    }
+
+    for (const auto& prjs : projectWhitelist)
+    {
+        _log(logattribute::INFO, "DownloadProjectHostFiles", "Downloading project host file for " + prjs.m_name);
+
+        // Grab ETag of host file
+        Http http;
+        std::string sHostETag;
+
+        bool buserpass = false;
+        std::string userpass;
+
+        for (const auto& up : vuserpass)
+        {
+            if (up.first == prjs.m_name)
+            {
+                buserpass = true;
+
+                userpass = up.second;
+
+                break;
+            }
+        }
+
+        try
+        {
+            sHostETag = http.GetEtag(prjs.StatsUrl("host"), userpass);
+        }
+        catch (const std::runtime_error& e)
+        {
+            _log(logattribute::ERR, "DownloadProjectHostFiles", "Failed to pull host header file for " + prjs.m_name);
+            continue;
+        }
+
+        if (sHostETag.empty())
+        {
+            _log(logattribute::ERR, "DownloadProjectHostFiles", "ETag for project is empty" + prjs.m_name);
+
+            continue;
+        }
+        else
+            _log(logattribute::INFO, "DownloadProjectHostFiles", "Successfully pulled host header file for " + prjs.m_name);
+
+        if (buserpass)
+        {
+            authdata ad(lowercase(prjs.m_name));
+
+            ad.setoutputdata("host", prjs.m_name, sHostETag);
+
+            if (!ad.xport())
+                _log(logattribute::CRITICAL, "DownloadProjectHostFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
+        }
+
+        std::string host_file_name;
+        fs::path host_file;
+
+        // Use eTag versioning.
+        host_file_name = prjs.m_name + "-" + sHostETag + "-host.gz";
+        host_file = pathScraper / host_file_name;
+
+        // If the file with the same eTag already exists, don't download it again.
+        if (fs::exists(host_file))
+        {
+            _log(logattribute::INFO, "DownloadProjectHostFiles", "Etag file for " + prjs.m_name + " already exists");
+            continue;
+        }
+
+        try
+        {
+            http.Download(prjs.StatsUrl("host"), host_file.string(), userpass);
+        }
+        catch(const std::runtime_error& e)
+        {
+            _log(logattribute::ERR, "DownloadProjectHostFiles", "Failed to download project host file for " + prjs.m_name);
+            continue;
+        }
+
+        // Save host xml files to file manifest map with exclude from CSManifest flag set to true.
+        AlignScraperFileManifestEntries(host_file, "host", prjs.m_name, true);
+    }
+
+    return true;
+}
+
+
+
+
+
 /**********************
 * Project Team Files  *
 **********************/
 
 bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 {
-        if (!projectWhitelist.Populated())
-        {
-            _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Whitelist is not populated");
+    if (!projectWhitelist.Populated())
+    {
+        _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Whitelist is not populated");
 
-            return false;
+        return false;
+    }
+
+    _log(logattribute::INFO, "DownloadProjectTeamFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
+
+    if (!UserpassPopulated())
+    {
+        _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Userpass is not populated");
+
+        return false;
+    }
+
+    for (const auto& prjs : projectWhitelist)
+    {
+        LOCK(cs_TeamIDMap);
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+
+        const auto iter = TeamIDMap.find(prjs.m_name);
+
+        // If fExplorer is false, which means we do not need to retain team files, and there is an entry in the TeamIDMap for the project,
+        // and in the submap (team name and team id) there are the correct number of team entries, then skip processing.
+        if (!fExplorer && iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, ",").size())
+        {
+            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
+                 + prjs.m_name + " project. Skipping team file download and processing.");
+            continue;
         }
 
-        _log(logattribute::INFO, "DownloadProjectTeamFiles", "Whitelist is populated; Contains " + std::to_string(projectWhitelist.size()) + " projects");
+        _log(logattribute::INFO, "DownloadProjectTeamFiles", "Downloading project file for " + prjs.m_name);
 
-        if (!UserpassPopulated())
+        // Grab ETag of team file
+        Http http;
+        std::string sTeamETag;
+
+        bool buserpass = false;
+        std::string userpass;
+
+        for (const auto& up : vuserpass)
         {
-            _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Userpass is not populated");
+            if (up.first == prjs.m_name)
+            {
+                buserpass = true;
 
-            return false;
+                userpass = up.second;
+
+                break;
+            }
         }
 
-        for (const auto& prjs : projectWhitelist)
+        try
         {
-            LOCK(cs_TeamIDMap);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+            sTeamETag = http.GetEtag(prjs.StatsUrl("team"), userpass);
+        }
+        catch (const std::runtime_error& e)
+        {
+            _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.m_name);
+            continue;
+        }
 
-            const auto iter = TeamIDMap.find(prjs.m_name);
+        if (sTeamETag.empty())
+        {
+            _log(logattribute::ERR, "DownloadProjectTeamFiles", "ETag for project is empty" + prjs.m_name);
 
-            // If there is an entry in the TeamIDMap for the project, and in the submap (team name and team id) there
-            // are the correct number of team entries, then skip processing.
-            if (iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, ",").size())
-            {
-                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
-                     + prjs.m_name + " project. Skipping team file download and processing.");
-                continue;
-            }
+            continue;
+        }
+        else
+            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Successfully pulled team header file for " + prjs.m_name);
 
-            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Downloading project file for " + prjs.m_name);
+        if (buserpass)
+        {
+            authdata ad(lowercase(prjs.m_name));
 
-            std::string team_file_name = prjs.m_name + "-team.gz";
+            ad.setoutputdata("team", prjs.m_name, sTeamETag);
 
-            fs::path team_file = pathScraper / team_file_name;
+            if (!ad.xport())
+                _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
+        }
 
-            // Grab ETag of team file
-            Http http;
-            std::string sTeamETag;
+        std::string team_file_name;
+        fs::path team_file;
 
-            bool buserpass = false;
-            std::string userpass;
+        if (fExplorer)
+        {
+            // Use eTag versioning.
+            team_file_name = prjs.m_name + "-" + sTeamETag + "-team.gz";
+            team_file = pathScraper / team_file_name;
 
-            for (const auto& up : vuserpass)
-            {
-                if (up.first == prjs.m_name)
-                {
-                    buserpass = true;
-
-                    userpass = up.second;
-
-                    break;
-                }
-            }
-
-            try
-            {
-                sTeamETag = http.GetEtag(prjs.StatsUrl("team"), userpass);
-            }
-            catch (const std::runtime_error& e)
-            {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to pull team header file for " + prjs.m_name);
-                continue;
-            }
-
-            if (sTeamETag.empty())
-            {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "ETag for project is empty" + prjs.m_name);
-
-                continue;
-            }
-            else
-                _log(logattribute::INFO, "DownloadProjectTeamFiles", "Successfully pulled team header file for " + prjs.m_name);
-
-            if (buserpass)
-            {
-                authdata ad(lowercase(prjs.m_name));
-
-                ad.setoutputdata("team", prjs.m_name, sTeamETag);
-
-                if (!ad.xport())
-                    _log(logattribute::CRITICAL, "DownloadProjectTeamFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
-            }
-
-            std::string chketagfile = prjs.m_name + "-" + sTeamETag + ".csv" + ".gz";
-            fs::path chkfile = pathScraper / chketagfile;
-
-            if (fs::exists(chkfile))
+            // If the file with the same eTag already exists, don't download it again.
+            if (fs::exists(team_file))
             {
                 _log(logattribute::INFO, "DownloadProjectTeamFiles", "Etag file for " + prjs.m_name + " already exists");
                 continue;
             }
-            else
-                fs::remove(team_file);
+        }
+        else
+        {
+            // No versioning. If file exists delete it and download anew.
+            team_file_name = prjs.m_name + "-team.gz";
+            team_file = pathScraper / team_file_name;
 
-            try
-            {
-                http.Download(prjs.StatsUrl("team"), team_file.string(), userpass);
-            }
-            catch(const std::runtime_error& e)
-            {
-                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name);
-                continue;
-            }
+            if (fs::exists(team_file)) fs::remove(team_file);
+        }
 
+        try
+        {
+            http.Download(prjs.StatsUrl("team"), team_file.string(), userpass);
+        }
+        catch(const std::runtime_error& e)
+        {
+            _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name);
+            continue;
+        }
 
-            std::map<std::string, int64_t> mTeamIDsForProject = {};
+        // If in explorer mode, save team xml files to file manifest map with exclude from CSManifest flag set to true.
+        if (fExplorer) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true);
 
+        std::map<std::string, int64_t> mTeamIDsForProject;
+
+        // We need this check because we could be in explorer mode (if fExplorer is true).
+        if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
+        {
             if (ProcessProjectTeamFile(team_file.string(), sTeamETag, mTeamIDsForProject))
             {
                 // Insert or update team IDs for the project into the team ID map.
                 TeamIDMap[prjs.m_name] = mTeamIDsForProject;
             }
-
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
         }
+
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+    }
 
     return true;
 }
@@ -1397,12 +1550,11 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
-    std::string gzetagfile = "";
+    // Insert csv in output filename. (This is not really used currently, but may be in the future.)
+    // std::string gzetagfile = std::string::replace(std::string::find(file.filename().string(), ".gz"), 3, ".csv.gz");
 
-    gzetagfile = etag + ".csv" + ".gz";
-
-    // Put path in.
-    gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
+    // Put path back in.
+    // gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
 
     _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.string());
 
@@ -1451,28 +1603,17 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
     {
         _log(logattribute::CRITICAL, "ProcessProjectTeamFile", "Error in data processing of " + file.string());
 
-        std::string efile = etag + ".gz";
-        fs::path fsepfile = pathScraper/ efile;
         ingzfile.close();
 
-        if (fs::exists(fsepfile))
-            fs::remove(fsepfile);
-
-        if (fs::exists(file))
-            fs::remove(file);
+        if (fs::exists(file)) fs::remove(file);
 
         return false;
     }
 
-    std::string efile = etag + ".gz";
-    fs::path fsepfile = pathScraper/ efile;
     ingzfile.close();
 
-    if (fs::exists(fsepfile))
-        fs::remove(fsepfile);
-
-    if (fs::exists(file))
-        fs::remove(file);
+    // If not explorer mode, delete input file after processing.
+    if (!fExplorer && fs::exists(file)) fs::remove(file);
 
     if (mTeamIdsForProject_out.size() < vTeamWhiteList.size())
         _log(logattribute::ERR, "ProcessProjectTeamFile", "Unable to determine team IDs for one or more whitelisted teams.");
@@ -1520,10 +1661,6 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
     for (const auto& prjs : projectWhitelist)
     {
         _log(logattribute::INFO, "DownloadProjectRacFiles", "Downloading project file for " + prjs.m_name);
-
-        std::string rac_file_name = prjs.m_name + +"-user.gz";
-
-        fs::path rac_file = pathScraper / rac_file_name;
 
         // Grab ETag of rac file
         Http http;
@@ -1573,17 +1710,43 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
                 _log(logattribute::CRITICAL, "DownloadProjectRacFiles", "Failed to export etag for " + prjs.m_name + " to authentication file");
         }
 
-        std::string chketagfile = prjs.m_name + "-" + sRacETag + ".csv" + ".gz";
-        fs::path chkfile = pathScraper / chketagfile;
+        std::string rac_file_name;
+        fs::path rac_file;
 
-        if (fs::exists(chkfile))
+        std::string processed_rac_file_name;
+        fs::path processed_rac_file;
+
+        processed_rac_file_name = prjs.m_name + "-" + sRacETag + ".csv" + ".gz";
+        processed_rac_file = pathScraper / processed_rac_file_name;
+
+        if (fExplorer)
         {
-            _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
-            //_log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file size " + std::to_string(fs::file_size(chkfile)));
-            continue;
+            // Use eTag versioning for source file.
+            rac_file_name = prjs.m_name + "-" + sRacETag + "-user.gz";
+            rac_file = pathScraper / rac_file_name;
+
+            //  If the file was already processed, both should be here. If both here, skip processing.
+            if (fs::exists(rac_file) && fs::exists(processed_rac_file))
+            {
+                _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
+                continue;
+            }
         }
         else
-            fs::remove(chkfile);
+        {
+            // No versioning for source file. If file exists delete it and download anew, unless processed file already present.
+            rac_file_name = prjs.m_name + "-user.gz";
+            rac_file = pathScraper / rac_file_name;
+
+            if (fs::exists(rac_file)) fs::remove(rac_file);
+
+            //  If the file was already processed, skip processing.
+            if (fs::exists(processed_rac_file))
+            {
+                _log(logattribute::INFO, "DownloadProjectRacFiles", "Etag file for " + prjs.m_name + " already exists");
+                continue;
+            }
+        }
 
         try
         {
@@ -1595,24 +1758,29 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
             continue;
         }
 
+        // If in explorer mode, save user (rac) source xml files to file manifest map with exclude from CSManifest flag set to true.
+        if (fExplorer) AlignScraperFileManifestEntries(rac_file, "user_source", prjs.m_name, true);
+
+        // Now that the source file is handled, process the file.
         ProcessProjectRacFileByCPID(prjs.m_name, rac_file.string(), sRacETag, Consensus);
     }
 
     // After processing, update global structure with the timestamp of the latest file in the manifest.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
 
         int64_t nMaxTime = 0;
         for (const auto& entry : StructScraperFileManifest.mScraperFileManifest)
         {
-            nMaxTime = std::max(nMaxTime, entry.second.timestamp);
+            // Only consider processed (user) files
+            if (entry.second.filetype == "user") nMaxTime = std::max(nMaxTime, entry.second.timestamp);
         }
 
         StructScraperFileManifest.timestamp = nMaxTime;
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
     }
     return true;
 }
@@ -1738,18 +1906,15 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     {
         _log(logattribute::CRITICAL, "ProcessProjectRacFileByCPID", "Error in data processing of " + file.string() + "; Aborted processing");
 
-        std::string efile = etag + ".gz";
-        fs::path fsepfile = pathScraper/ efile;
         ingzfile.close();
         outgzfile.flush();
         outgzfile.close();
 
-        if (fs::exists(fsepfile))
-            fs::remove(fsepfile);
-
+        // Remove the source file because it was bad. (Probable incomplete download.)
         if (fs::exists(file))
             fs::remove(file);
 
+        // Remove the errored out processed file.
         if (fs::exists(gzetagfile))
             fs::remove(gzetagfile);
 
@@ -1775,7 +1940,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         fs::path temp = gzetagfile;
         size_t fileb = fs::file_size(temp);
 
-        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processing new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
+        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Processed new rac file " + file.string() + "(" + std::to_string(filea) + " -> " + std::to_string(fileb) + ")");
 
         ndownloadsize += (int64_t)filea;
         nuploadsize += (int64_t)fileb;
@@ -1785,73 +1950,16 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
         _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "FS Error -> " + std::string(e.what()));
     }
 
-    fs::remove(file);
+    // If not in explorer mode, no need to retain source file.
+    if (!fExplorer) fs::remove(file);
 
-    ScraperFileManifestEntry NewRecord;
-
-    // Don't include path in Manifest, because this is local node dependent.
-    NewRecord.filename = gzetagfile_no_path;
-    NewRecord.project = project;
-    NewRecord.hash = nFileHash;
-    NewRecord.timestamp = GetAdjustedTime();
-    // By definition the record we are about to insert is current. If a new file is downloaded for
-    // a given project, it has to be more up to date than any others.
-    NewRecord.current = true;
-    
-    // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
-    {
-        LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
-        
-        // Iterate mScraperFileManifest to find any prior records for the same project and change current flag to false,
-        // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
-        // is false.
-
-        ScraperFileManifestMap::iterator entry;
-        for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
-        {
-            ScraperFileManifestMap::iterator entry_copy = entry++;
-
-            if (entry_copy->second.project == project && entry_copy->second.current == true)
-            {
-                _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Marking old project manifest entry as current = false.");
-                MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
-            }
-
-            // If records are older than SCRAPER_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
-            // delete all non-current records, including the one just marked non-current.
-            if (((GetAdjustedTime() - entry_copy->second.timestamp) > SCRAPER_FILE_RETENTION_TIME)
-                    || (entry_copy->second.project == project && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES))
-            {
-                DeleteScraperFileManifestEntry(entry_copy->second);
-            }
-        }
-
-        if (!InsertScraperFileManifestEntry(NewRecord))
-            _log(logattribute::WARNING, "ProcessProjectRacFileByCPID", "Manifest entry already exists for " + nFileHash.ToString() + " " + gzetagfile);
-        else
-            _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Created manifest entry for " + nFileHash.ToString() + " " + gzetagfile);
-
-        // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
-        // The manifest file is actually very small though, and this primitive implementation will suffice. I could
-        // put it up in the while loop above, but then there is a much higher risk that the manifest file could be out of
-        // sync if the wallet is ended during the middle of pulling the files.
-        _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Persisting manifest entry to disk.");
-        if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
-            _log(logattribute::ERR, "ProcessProjectRacFileByCPID", "StoreScraperFileManifest error occurred");
-        else
-            _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Stored Manifest");
-
-        // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
-    }
+    // Here, regardless of explorer mode, save processed rac files to file manifest map with exclude from CSManifest flag set to false.
+    AlignScraperFileManifestEntries(gzetagfile, "user", project, false);
 
     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Complete Process");
 
     return true;
 }
-
-
 
 
 uint256 GetFileHash(const fs::path& inputfile)
@@ -2060,12 +2168,12 @@ bool StoreBeaconList(const fs::path& file)
     // Requires a lock.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
 
         StructScraperFileManifest.nConsensusBlockHash = Consensus.nBlockHash;
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
     }
 
     if (fs::exists(file))
@@ -2201,7 +2309,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
 
     // Delete corresponding file if it exists.
     if (fs::exists(pathScraper / entry.filename))
-        fs::remove(pathScraper /entry.filename);
+        fs::remove(pathScraper / entry.filename);
 
     ret = StructScraperFileManifest.mScraperFileManifest.erase(entry.filename);
 
@@ -2231,6 +2339,89 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
     if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Marked File Manifest Entry non-current and stored modified nFileManifestMapHash.");
 
     return true;
+}
+
+
+bool AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest)
+{
+    ScraperFileManifestEntry NewRecord;
+
+    std::string file_name = file.filename().string();
+
+    NewRecord.filename = file_name;
+    NewRecord.project = sProject;
+    NewRecord.hash = GetFileHash(file);
+    NewRecord.timestamp = GetAdjustedTime();
+    NewRecord.current = true;
+    NewRecord.excludefromcsmanifest = excludefromcsmanifest;
+    NewRecord.filetype = filetype;
+
+    // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
+    {
+        LOCK(cs_StructScraperFileManifest);
+        if (fDebug3)
+        {
+            if (excludefromcsmanifest)
+            {
+                _log(logattribute::INFO, "LOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+            else
+            {
+                _log(logattribute::INFO, "LOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+        }
+
+        // Iterate mScraperFileManifest to find any prior filetype records for the same project and change current flag to false,
+        // or delete if older than SCRAPER_FILE_RETENTION_TIME or non-current and fScraperRetainNonCurrentFiles
+        // is false.
+
+        ScraperFileManifestMap::iterator entry;
+        for (entry = StructScraperFileManifest.mScraperFileManifest.begin(); entry != StructScraperFileManifest.mScraperFileManifest.end(); )
+        {
+            ScraperFileManifestMap::iterator entry_copy = entry++;
+
+            if (entry_copy->second.project == sProject && entry_copy->second.current == true && entry_copy->second.filetype == filetype)
+            {
+                _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Marking old project manifest "+ filetype + " entry as current = false.");
+                MarkScraperFileManifestEntryNonCurrent(entry_copy->second);
+            }
+
+            // If filetype records are older than EXPLORER_EXTENDED_FILE_RETENTION_TIME delete record, or if fScraperRetainNonCurrentFiles is false,
+            // delete all non-current records, including the one just marked non-current. (EXPLORER_EXTENDED_FILE_RETENTION_TIME rather
+            // then SCRAPER_FILE_RETENTION_TIME is used, because this section is only active if fExplorer is true.)
+            if (entry_copy->second.filetype == filetype && (((GetAdjustedTime() - entry_copy->second.timestamp) > EXPLORER_EXTENDED_FILE_RETENTION_TIME)
+                                                          || (entry_copy->second.project == sProject && entry_copy->second.current == false && !SCRAPER_RETAIN_NONCURRENT_FILES)))
+            {
+                DeleteScraperFileManifestEntry(entry_copy->second);
+            }
+        }
+
+        if (!InsertScraperFileManifestEntry(NewRecord))
+            _log(logattribute::WARNING, "AlignScraperFileManifestEntries", "Manifest entry already exists for " + NewRecord.hash.ToString() + " " + file_name);
+        else
+            _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Created manifest entry for " + NewRecord.hash.ToString() + " " + file_name);
+
+        // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
+        // The manifest file is actually very small though, and this primitive implementation will suffice.
+        _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Persisting manifest entry to disk.");
+        if (!StoreScraperFileManifest(pathScraper / "Manifest.csv.gz"))
+            _log(logattribute::ERR, "AlignScraperFileManifestEntries", "StoreScraperFileManifest error occurred");
+        else
+            _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Stored Manifest");
+
+        // End LOCK(cs_StructScraperFileManifest)
+        if (fDebug3)
+        {
+            if (excludefromcsmanifest)
+            {
+                _log(logattribute::INFO, "ENDLOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+            else
+            {
+                _log(logattribute::INFO, "ENDLOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+            }
+        }
+    }
 }
 
 
@@ -2277,16 +2468,44 @@ bool LoadScraperFileManifest(const fs::path& file)
         
         LoadEntry.filename = vline[4];
 
+        // This handles startup with legacy manifest file without excludefromcsmanifest column.
+        if (vline.size() >= 6)
+        {
+            // Intended for explorer mode, where files not to be included in CScraperManifest
+            // are to be maintained, such as team and host files.
+            LoadEntry.excludefromcsmanifest = std::stoi(vline[5]);
+        }
+        else
+        {
+            // The default if the field is not there is false. (Because scraper ver 1 all files are to be
+            // included.)
+            LoadEntry.excludefromcsmanifest = false;
+        }
+
+        // This handles startup with legacy manifest file without filetype column.
+        if (vline.size() >= 7)
+        {
+            // In scraper ver 2, we have to support explorer mode, which includes retention of other files besides
+            // user statistics.
+            LoadEntry.filetype = vline[6];
+        }
+        else
+        {
+            // The default if the field is not there is user. (Because scraper ver 1 all files in the manifest are
+            // user.)
+            LoadEntry.filetype = "user";
+        }
+
         // Lock cs_StructScraperFileManifest before updating
         // global structure.
         {
             LOCK(cs_StructScraperFileManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+            if (fDebug3) _log(logattribute::INFO, "LOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
 
             InsertScraperFileManifestEntry(LoadEntry);
 
             // End LOCK(cs_StructScraperFileManifest
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
         }
     }
 
@@ -2317,10 +2536,10 @@ bool StoreScraperFileManifest(const fs::path& file)
     //Lock StructScraperFileManifest during serialize to string.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
         
         // Header.
-        stream << "Hash," << "Current," << "Time," << "Project," << "Filename\n";
+        stream << "Hash," << "Current," << "Time," << "Project," << "Filename," << "ExcludeFromCSManifest," << "Filetype" << "\n";
         
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -2330,12 +2549,14 @@ bool StoreScraperFileManifest(const fs::path& file)
                     + std::to_string(entry.second.current) + ","
                     + std::to_string(entry.second.timestamp) + ","
                     + entry.second.project + ","
-                    + entry.first + "\n";
+                    + entry.first + ","
+                    + std::to_string(entry.second.excludefromcsmanifest) + ","
+                    + entry.second.filetype + "\n";
             stream << sScraperFileManifestEntry;
         }
 
         // end LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
     }
 
     _log(logattribute::INFO, "StoreScraperFileManifest", "Finished processing manifest from map.");
@@ -2645,16 +2866,16 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     unsigned int nActiveProjects = 0;
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
-            if (entry.second.current)
-                nActiveProjects++;
+            //
+            if (entry.second.current && !entry.second.excludefromcsmanifest) nActiveProjects++;
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
     }
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
@@ -2665,12 +2886,12 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
 
-            if (entry.second.current)
+            if (entry.second.current && !entry.second.excludefromcsmanifest)
             {
                 std::string project = entry.first;
                 fs::path file = pathScraper / entry.second.filename;
@@ -2689,7 +2910,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_StructScraperFileManifest");
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
     }
 
     ProcessNetworkWideFromProjectStats(Consensus.mBeaconMap, mScraperStats);
@@ -2754,7 +2975,7 @@ std::string ExplainMagnitude(std::string sCPID)
         if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
 
-        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < nScraperSleep)
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
             bConvergenceUpdateNeeded = false;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
@@ -2780,7 +3001,7 @@ std::string ExplainMagnitude(std::string sCPID)
 
     stringbuilder out;
 
-    out.append("CPID,Project,RAC,Project_Total_RAC,Project_Avg_RAC,Project Mag,Cumulative RAC,Cumulative Mag,Errors<ROW>");
+    out.append("CPID,Project,CPID RAC,Project RAC,Project Mag,CPID Mag<ROW>");
 
     double dCPIDCumulativeRAC = 0.0;
     double dCPIDCumulativeMag = 0.0;
@@ -2810,17 +3031,13 @@ std::string ExplainMagnitude(std::string sCPID)
 
             out.append(sCPID + ",");
             out.append(sProject + ",");
-            out.fixeddoubleappend(iProject->second.statsvalue.dRAC, 2);
+            out.fixeddoubleappend(entry.second.statsvalue.dRAC, 2);
             out.append(",");
-            out.fixeddoubleappend(iProject->second.statsvalue.dAvgRAC, 2);
+            out.fixeddoubleappend(iProject->second.statsvalue.dRAC, 2);
             out.append(",");
             out.fixeddoubleappend(iProject->second.statsvalue.dMag, 2);
             out.append(",");
-            out.fixeddoubleappend(dCPIDCumulativeRAC, 2);
-            out.append(",");
-            out.fixeddoubleappend(dCPIDCumulativeMag, 2);
-            out.append(",");
-            //The last field is for errors, but there are not any, so the <ROW> is next.
+            out.fixeddoubleappend(entry.second.statsvalue.dMag, 2);
             out.append("<ROW>");
         }
     }
@@ -3226,7 +3443,8 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
     {
         // If SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES is false, only include current files to send across the network.
-        if (!SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES && !entry.second.current)
+        // Also continue (exclude) if it is a non-publishable entry (excludefromcsmanifest is true).
+        if ((!SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES && !entry.second.current) || entry.second.excludefromcsmanifest)
             continue;
 
         fs::path inputfile = entry.first;
@@ -3393,6 +3611,52 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                  + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                  + " agreeing.");
 
+            _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Content hash " + iter.second.GetHex());
+
+            auto ConvergenceRange = mManifestsBinnedbyContent.equal_range(iter.second);
+
+            // Record included scrapers in convergence.
+            for (auto iter2 = ConvergenceRange.first; iter2 != ConvergenceRange.second; ++iter2)
+            {
+                // -------------------------------------------------  ScraperID ------------ manifest hash
+                StructConvergedManifest.mIncludedScraperManifests[iter2->second.first] = iter2->second.second;
+            }
+
+            // Record scrapers that are not part of the convergence by iterating through the top level of the double map (which is keyed by ScraperID)
+            for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+            {
+                // If the scraper is not found in the mIncludedScraperManifests, then it was not part of the convergence.
+                if (StructConvergedManifest.mIncludedScraperManifests.find(iScraper.first) == StructConvergedManifest.mIncludedScraperManifests.end())
+                {
+                    StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Scraper " + iScraper.first + " not in convergence.");
+                }
+                else
+                {
+                    StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
+                    // Scraper was in the convergence. Log if in fDebug3.
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Scraper " + iScraper.first + " in convergence.");
+                }
+            }
+
+            // Retrieve the complete list of scrapers from the AppCache to determine scrapers not publishing at all.
+            AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+            for (const auto& iScraper : mScrapers)
+            {
+                // Only include scrapers enabled in protocol.
+                if (iScraper.second.value == "true" || iScraper.second.value == "1")
+                {
+                    if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                            == std::end(StructConvergedManifest.vExcludedScrapers)
+                        && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                            == std::end(StructConvergedManifest.vIncludedScrapers))
+                    {
+                         StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                    }
+                }
+            }
+
             bConvergenceSuccessful = true;
 
             // Note this break is VERY important, it prevents considering essentially the same manifest that meets convergence multiple times.
@@ -3464,19 +3728,11 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
             StructConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
 
-            // Fill out the excluded projects vector...
+            // Determine if there is an excluded project. If so, set convergence back to false and drop back to project level to try and recover project by project.
             for (const auto& iProjects : projectWhitelist)
             {
                 if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
                 {
-                    // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                    //StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.m_name, "Converged manifests (agreed by multiple scrapers) excluded project."));
-                    //_log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                    //     + iProjects.m_name
-                    //     + " was excluded because the converged manifests from the scrapers all excluded the project.");
-
-                    // To deal with a corner case of a medium term project fallout at the head of the list (more recent) where it is still available within
-                    // the 48 hour retention window, fallback to project level convergence to attempt to recover the project.
                     _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
                          + iProjects.m_name
                          + " was excluded because the converged manifests from the scrapers all excluded the project. \n"
@@ -3630,7 +3886,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
             unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(std::get<0>(iter.second));
             if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
             {
-                // Find the first one of equivalent parts ------------------ by hash.
+                // Find the first one of equivalent parts ------------------ by object hash.
                 ProjectConvergence = mProjectObjectsBinnedbyContent.find(std::get<0>(iter.second));
 
                 _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Found convergence on project object " + ProjectConvergence->first.GetHex()
@@ -3638,7 +3894,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                      + " with " + std::to_string(nIdenticalContentManifestCount) + " scrapers out of " + std::to_string(nScraperCount)
                      + " agreeing.");
 
-                // Get the actual part ----------------- by hash.
+                // Get the actual part ----------------- by object hash.
                 auto iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
 
                 uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
@@ -3649,6 +3905,18 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                          + nContentHashCheck.GetHex() + " and nContentHash = " + iPart->first.GetHex());
                     break;
                 }
+
+                auto ProjectConvergenceRange = mProjectObjectsBinnedbyContent.equal_range(std::get<0>(iter.second));
+
+                // Record included scrapers included for the project level convergence keyed by project and the reverse. A multimap is convenient here for both.
+                for (auto iter2 = ProjectConvergenceRange.first; iter2 != ProjectConvergenceRange.second; ++iter2)
+                {
+                    // ------------------------------------------------------------------------- project -------------- ScraperID.
+                    StructConvergedManifest.mIncludedScrapersbyProject.insert(std::make_pair(iter2->second.second, iter2->second.first));
+                    // ------------------------------------------------------------------------ ScraperID -------------- project.
+                    StructConvergedManifest.mIncludedProjectsbyScraper.insert(std::make_pair(iter2->second.first, iter2->second.second));
+                }
+
 
                 // Put Project Object (Part) in StructConvergedManifest keyed by project.
                 StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.m_name, iPart->second.data));
@@ -3710,16 +3978,61 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
              + " projects at "
              + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
-        // Fill out the excluded projects vector...
+        // Fill out the the excluded projects vector and the included scraper count (by project) map
         for (const auto& iProjects : projectWhitelist)
         {
             if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
             {
                 // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                StructConvergedManifest.vExcludedProjects.push_back(std::make_pair(iProjects.m_name, "No convergence was found at the fallback (project) level."));
+                StructConvergedManifest.vExcludedProjects.push_back(iProjects.m_name);
                 _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
                      + iProjects.m_name
                      + " was excluded because there was no convergence from the scrapers for this project at the project level.");
+
+                continue;
+            }
+
+            unsigned int nScraperConvergenceCount = StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
+            StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name, nScraperConvergenceCount));
+
+            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
+                              + ": " + std::to_string(nScraperConvergenceCount) + " scraper(s) converged");
+        }
+
+        // Fill out the included and excluded scraper vector for scrapers that did not participate in any project level convergence.
+        for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+        {
+            if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
+            {
+                StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
+                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                                  + iScraper.first
+                                  + " was included in one or more project level convergences.");
+            }
+            else
+            {
+                StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
+                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                     + iScraper.first
+                     + " was excluded because it was not included in any project level convergence.");
+            }
+        }
+
+        // Retrieve the complete list of scrapers from the AppCache to determine scrapers not publishing at all.
+        AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+        for (const auto& iScraper : mScrapers)
+        {
+            // Only include scrapers enabled in protocol.
+            if (iScraper.second.value == "true" || iScraper.second.value == "1")
+            {
+                if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                        == std::end(StructConvergedManifest.vExcludedScrapers)
+                    && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                        == std::end(StructConvergedManifest.vIncludedScrapers))
+                {
+                     StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                }
             }
         }
 
@@ -3991,7 +4304,8 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
         LOCK(cs_ConvergedScraperStatsCache);
         if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
-        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000))
+        // If the cache is less than nScraperSleep in minutes old OR not dirty...
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
             bConvergenceUpdateNeeded = false;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
@@ -4047,7 +4361,10 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
                     ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
                     ConvergedScraperStatsCache.sContract = sSBCoreData;
-                    ConvergedScraperStatsCache.vExcludedProjects = StructConvergedManifest.vExcludedProjects;
+                    ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
+
+                    // Mark the cache clean, because it was just updated.
+                    ConvergedScraperStatsCache.bClean = true;
 
                     // Signal UI of SBContract status
                     if (!sSBCoreData.empty())

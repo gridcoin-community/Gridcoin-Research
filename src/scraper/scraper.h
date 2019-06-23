@@ -49,12 +49,17 @@ unsigned int nScraperSleep = 300000;
 // The amount of time before SB is due to start scraping.
 unsigned int nActiveBeforeSB = 14400;
 
+// Explorer mode flag. Only effective if scraper is active.
+bool fExplorer = false;
+
 // These can be overridden by ScraperApplyAppCacheEntries().
 
 // The flag to control whether non-current statistics files are retained.
 bool SCRAPER_RETAIN_NONCURRENT_FILES = true;
 // Define 48 hour retention time for stats files, current or not.
 int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+// Define extended file retention time for explorer mode.
+int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME = 168 * 3600;
 // Define whether prior CScraperManifests are kept.
 bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
 // Define CManifest scraper object retention time.

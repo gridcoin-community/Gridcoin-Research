@@ -23,7 +23,9 @@ extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 extern AppCacheSectionExt mScrapersExt;
 extern std::atomic<int64_t> nSyncTime;
+extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_mScrapersExt;
+extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
@@ -413,9 +415,21 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
 bool CScraperManifest::DeleteManifest(const uint256& nHash)
 {
     if (mapManifest.erase(nHash))
+    {
+        // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
+        // that could have been used in the cached convergence, so the convergence may change.
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
+
+            ConvergedScraperStatsCache.bClean = false;
+        }
+
         return true;
+    }
     else
+    {
         return false;
+    }
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
@@ -473,6 +487,15 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         }
         return false;
     }
+
+    // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a new manifest is present,
+    // so the convergence may change.
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache.bClean = false;
+    }
+
     LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
     if( manifest.isComplete() )
     {
@@ -531,6 +554,15 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
 
     // Call manifest complete to notify peers of new manifest.
     manifest.Complete();
+
+    // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a new manifest is present,
+    // so the convergence may change.
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache.bClean = false;
+    }
+
     return true;
 }
 

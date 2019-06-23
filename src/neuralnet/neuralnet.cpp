@@ -6,6 +6,7 @@
 #include <vector>
 
 extern bool GetBoolArg(const std::string& strArg, bool fDefault);
+extern bool fExplorer;
 
 using namespace NN;
 
@@ -33,14 +34,15 @@ INeuralNetPtr NN::CreateNeuralNet()
         // Then if -scraper is specified (set to true)...
         if (GetBoolArg("-scraper", false))
         {
+            // Activate explorer extended features if -explorer is set
+            if (GetBoolArg("-explorer", false)) fExplorer = true;
+
             // And -usenewnn is specified (set to true)...
-            if (GetBoolArg("-usenewnn", false))
-                fRunNN = true;
+            if (GetBoolArg("-usenewnn", false)) fRunNN = true;
         }
         // Else if -scraper is NOT specified (or set to true),
         // and -usenewnn is NOT specified (defaults to true here) or set to true
-        else if (GetBoolArg("-usenewnn", true))
-            fRunNN = true;
+        else if (GetBoolArg("-usenewnn", true)) fRunNN = true;
     }
 
     if (fRunNN)

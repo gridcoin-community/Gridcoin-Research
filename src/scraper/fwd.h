@@ -53,15 +53,35 @@ typedef std::map<std::string, CSerializeData> mConvergedManifestParts;
 struct ConvergedManifest
 {
     // IMPORTANT... nContentHash is NOT the hash of part hashes in the order of vParts unlike CScraper::manifest.
-    // It is the hash of the data in the ConvergedManifestPartsMap in the order of the key.
+    // It is the hash of the data in the ConvergedManifestPartsMap in the order of the key. It represents
+    // the composite convergence by taking parts piecewise in the case of the fallback to bByParts (project) level.
     uint256 nContentHash;
     uint256 ConsensusBlock;
     int64_t timestamp;
     bool bByParts;
 
     mConvergedManifestParts ConvergedManifestPartsMap;
-    // ------------------ project ----- reason for exclusion
-    std::vector<std::pair<std::string, std::string>> vExcludedProjects;
+
+    // Used when convergence is at the manifest level (normal)
+    std::map<ScraperID, uint256> mIncludedScraperManifests;
+
+    // Used when convergence is at the manifest level (normal) and also at the part (project) level for
+    // scrapers that are not part of any part (project) level convergence.
+    std::vector<ScraperID> vIncludedScrapers;
+    std::vector<ScraperID> vExcludedScrapers;
+    std::vector<ScraperID> vScrapersNotPublishing;
+
+    // Used when convergence is at the project (bByParts) level (fallback)
+    // ----- Project --------- ScraperID
+    std::multimap<std::string, ScraperID> mIncludedScrapersbyProject;
+    // ----- ScraperID ------- Project
+    std::multimap<ScraperID, std::string> mIncludedProjectsbyScraper;
+    // When bByParts (project) level convergence occurs, this records the the count of scrapers in the
+    // convergences by project.
+    std::map<std::string, unsigned int> mScraperConvergenceCountbyProject;
+
+    // --------- project
+    std::vector<std::string> vExcludedProjects;
 };
 
 
@@ -98,11 +118,13 @@ typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKe
 
 struct ConvergedScraperStats
 {
+    bool bClean = false;
     int64_t nTime;
     ScraperStats mScraperConvergedStats;
     std::string sContractHash;
     std::string sContract;
-    std::vector<std::pair<std::string, std::string>> vExcludedProjects;
+
+    ConvergedManifest Convergence;
 };
 
 // Extended AppCache structures similar to those in AppCache.h, except a deleted flag is provided
