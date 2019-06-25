@@ -30,6 +30,7 @@ double CoinToDouble(double surrogate);
 
 void ThreadTopUpKeyPool(void* parg);
 
+bool HasActiveBeacon(const std::string& cpid);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
@@ -832,9 +833,8 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
 {
-    //Append beacon signature to coinbase
-    std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
-    if (!PublicKey.empty())
+    // Append beacon signature to coinbase
+    if (HasActiveBeacon(GlobalCPUMiningCPID.cpid))
     {
         std::string sBoincSignature;
         std::string sError;
