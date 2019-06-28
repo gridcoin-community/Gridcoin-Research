@@ -735,12 +735,18 @@ void Scraper(bool bSingleShot)
         // beforehand.
         while (OutOfSyncByAge())
         {
+            // Set atomic out of sync flag to true.
+            fOutOfSyncByAge = true;
+
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
 
             if (fDebug3) _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
+
+        // Set atomic out of sync flag to false.
+        fOutOfSyncByAge = false;
 
         nSyncTime = GetAdjustedTime();
 
@@ -980,12 +986,18 @@ void NeuralNetwork()
         // We do NOT want to filter statistics with an out-of-date beacon list or project whitelist.
         while (OutOfSyncByAge())
         {
+            // Set atomic out of sync flag to true.
+            fOutOfSyncByAge = true;
+
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
             if (fDebug3) _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
+
+        // Set atomic out of sync flag to false.
+        fOutOfSyncByAge = false;
 
         nSyncTime = GetAdjustedTime();
 
@@ -4293,11 +4305,10 @@ std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
 
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
 {
-    // NOTE - out of sync check here is removed, because in all instances, it is being checked before this function is
-    // called. OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit.
+    // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
+    // and the scraper or neuralnet loop nearly simultaneously. So we use an atomic flag updated by the scraper or neuralnet loop.
     // If not in sync then immediately bail with a empty string.
-    // if (OutOfSyncByAge())
-    //    return std::string();
+    if (fOutOfSyncByAge) return std::string();
 
     // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds), then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
