@@ -98,3 +98,159 @@ std::string PackBinarySuperblock(std::string sBlock)
                     "<QUOTES>" << ExtractXML(sBlock,"<QUOTES>","</QUOTES>") << "</QUOTES>";
     return block_stream.str();
 }
+
+
+
+
+void Superblock::PopulateReducedMaps()
+{
+
+    uint16_t iProject = 0;
+    for (auto const& entry : mScraperSBStats)
+    {
+        if (entry.first.objecttype == statsobjecttype::byProject)
+        {
+            mProjectRef[entry.first.objectID] = iProject;
+            mProjectStats[iProject] = std::make_pair((uint64_t) std::round(entry.second.statsvalue.dAvgRAC),
+                                                             (uint64_t) std::round(entry.second.statsvalue.dRAC));
+            ++iProject;
+        }
+    }
+
+
+     // Find the single network wide NN entry and put in string.
+    ScraperObjectStatsKey StatsKey;
+    StatsKey.objecttype = statsobjecttype::NetworkWide;
+    StatsKey.objectID = "";
+
+    const auto& iter = mScraperSBStats.find(StatsKey);
+
+    mProjectRef["Network"] = iProject;
+    mProjectStats[iProject] = std::make_pair((uint64_t) iter->second.statsvalue.dAvgRAC,
+                                         (uint64_t) iter->second.statsvalue.dRAC);
+
+    nNetworkMagnitude = (uint64_t) std::round(iter->second.statsvalue.dMag);
+
+    uint32_t iCPID = 0;
+    nZeroMagCPIDs = 0;
+    for (auto const& entry : mScraperSBStats)
+    {
+        if (entry.first.objecttype == statsobjecttype::byCPID)
+        {
+            // If the magnitude entry is zero suppress the CPID and increment the zero counter.
+            if (std::round(entry.second.statsvalue.dMag) > 0)
+            {
+                mCPIDRef[NN::Cpid::Parse(entry.first.objectID)] = iCPID;
+                mCPIDMagnitudes[iCPID] = (uint16_t) std::round(entry.second.statsvalue.dMag);
+
+                ++iCPID;
+            }
+            else
+            {
+                nZeroMagCPIDs++;
+            }
+        }
+    }
+
+    for (auto const& entry : mScraperSBStats)
+    {
+        if (entry.first.objecttype == statsobjecttype::byCPIDbyProject)
+        {
+
+            std::vector<std::string> vObjectID = split(entry.first.objectID, ",");
+
+            const auto& iterProject = mProjectRef.find(vObjectID[0]);
+            const auto& iterCPID = mCPIDRef.find(NN::Cpid::Parse(vObjectID[1]));
+
+            mProjectCPIDStats[iterProject->second][iterCPID->second] = std::make_tuple((uint64_t) std::round(entry.second.statsvalue.dTC),
+                                                                                      (uint64_t) std::round(entry.second.statsvalue.dRAC),
+                                                                                      (uint16_t) std::round(entry.second.statsvalue.dMag));
+        }
+
+    }
+
+    fReducedMapsPopulated = true;
+}
+
+void Superblock::SerializeSuperblock(CDataStream& ss, int nType, int nVersion) const
+{
+    WriteCompactSize(ss, mScraperSBStats.size());
+
+    for (const auto& entry : mScraperSBStats)
+    {
+       ss << (unsigned int) entry.first.objecttype;
+       ss << entry.first.objectID;
+       ss << entry.second.statsvalue.dTC;
+       ss << entry.second.statsvalue.dRAT;
+       ss << entry.second.statsvalue.dRAC;
+       ss << entry.second.statsvalue.dAvgRAC;
+       ss << entry.second.statsvalue.dMag;
+    }
+
+    ss << nTime;
+    ss << nSBVersion;
+}
+
+void Superblock::UnserializeSuperblock(CReaderStream& ss)
+{
+    //ss >> mScraperConvergedStats;
+    int64_t nSize = ReadCompactSize(ss);
+
+
+    unsigned int iEntry = 0;
+    for (auto entry = ss.begin(); entry < ss.end(); ++entry)
+    {
+        if (iEntry == nSize) break;
+
+        ScraperObjectStats StatsEntry;
+        unsigned int nObjectType;
+
+        ss >> nObjectType;
+        StatsEntry.statskey.objecttype = (statsobjecttype) nObjectType;
+        ss >> StatsEntry.statskey.objectID;
+        ss >> StatsEntry.statsvalue.dTC;
+        ss >> StatsEntry.statsvalue.dRAT;
+        ss >> StatsEntry.statsvalue.dRAC;
+        ss >> StatsEntry.statsvalue.dAvgRAC;
+        ss >> StatsEntry.statsvalue.dMag;
+
+        mScraperSBStats[StatsEntry.statskey] = StatsEntry;
+
+        ++iEntry;
+    }
+
+    ss >> nTime;
+    ss >> nSBVersion;
+}
+
+void Superblock::SerializeSuperblock2(CDataStream& ss, int nType, int nVersion) const
+{
+    ss << mProjectRef;
+    ss << mCPIDRef;
+
+    ss << mProjectStats;
+    ss << mCPIDMagnitudes;
+    ss << mProjectCPIDStats;
+
+    ss << nNetworkMagnitude;
+    ss << nZeroMagCPIDs;
+    ss << nHeight;
+    ss << nTime;
+    ss << nSBVersion;
+}
+
+void Superblock::UnserializeSuperblock2(CReaderStream& ss)
+{
+    ss >> mProjectRef;
+    ss >> mCPIDRef;
+
+    ss >> mProjectStats;
+    ss >> mCPIDMagnitudes;
+    ss >> mProjectCPIDStats;
+
+    ss >> nNetworkMagnitude;
+    ss >> nZeroMagCPIDs;
+    ss >> nHeight;
+    ss >> nTime;
+    ss >> nSBVersion;
+}

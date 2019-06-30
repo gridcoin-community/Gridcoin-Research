@@ -77,6 +77,30 @@ public:
     bool operator!=(const Cpid& other) const;
 
     //!
+    //! \brief Compare a supplied CPID value for less than other.
+    //!
+    //! \param other A CPID value to check whether current is less than.
+    //!
+    //! \return \c true if the supplied CPID's bytes do not match.
+    //!
+    bool operator<(const Cpid& other) const
+    {
+        return ToString() < other.ToString();
+    }
+
+    //!
+    //! \brief Compare a supplied CPID value for greater than other.
+    //!
+    //! \param other A CPID value to check whether current is greater than.
+    //!
+    //! \return \c true if the supplied CPID's bytes do not match.
+    //!
+    bool operator>(const Cpid& other) const
+    {
+        return ToString() > other.ToString();
+    }
+
+    //!
     //! \brief Determine whether the CPID contains only zeros.
     //!
     //! \return \c true if every byte in the CPID equals \c 0x00.

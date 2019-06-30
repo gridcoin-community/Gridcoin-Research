@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <cassert>
 #include <limits>
@@ -322,6 +323,11 @@ template<typename K, typename T, typename Pred, typename A> unsigned int GetSeri
 template<typename Stream, typename K, typename T, typename Pred, typename A> void Serialize(Stream& os, const std::map<K, T, Pred, A>& m, int nType, int nVersion);
 template<typename Stream, typename K, typename T, typename Pred, typename A> void Unserialize(Stream& is, std::map<K, T, Pred, A>& m, int nType, int nVersion);
 
+// unordered_map
+template<typename K, typename T, typename Pred, typename A> unsigned int GetSerializeSize(const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion);
+template<typename Stream, typename K, typename T, typename Pred, typename A> void Serialize(Stream& os, const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion);
+template<typename Stream, typename K, typename T, typename Pred, typename A> void Unserialize(Stream& is, std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion);
+
 // set
 template<typename K, typename Pred, typename A> unsigned int GetSerializeSize(const std::set<K, Pred, A>& m, int nType, int nVersion);
 template<typename Stream, typename K, typename Pred, typename A> void Serialize(Stream& os, const std::set<K, Pred, A>& m, int nType, int nVersion);
@@ -623,6 +629,42 @@ void Unserialize(Stream& is, std::map<K, T, Pred, A>& m, int nType, int nVersion
     }
 }
 
+
+
+
+//
+// unordered_map
+//
+template<typename K, typename T, typename Pred, typename A>
+unsigned int GetSerializeSize(const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion)
+{
+    unsigned int nSize = GetSizeOfCompactSize(m.size());
+    for (typename std::unordered_map<K, T, Pred, A>::const_iterator mi = m.begin(); mi != m.end(); ++mi)
+        nSize += GetSerializeSize((*mi), nType, nVersion);
+    return nSize;
+}
+
+template<typename Stream, typename K, typename T, typename Pred, typename A>
+void Serialize(Stream& os, const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion)
+{
+    WriteCompactSize(os, m.size());
+    for (typename std::unordered_map<K, T, Pred, A>::const_iterator mi = m.begin(); mi != m.end(); ++mi)
+        Serialize(os, (*mi), nType, nVersion);
+}
+
+template<typename Stream, typename K, typename T, typename Pred, typename A>
+void Unserialize(Stream& is, std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion)
+{
+    m.clear();
+    unsigned int nSize = ReadCompactSize(is);
+    typename std::unordered_map<K, T, Pred, A>::iterator mi = m.begin();
+    for (unsigned int i = 0; i < nSize; i++)
+    {
+        std::pair<K, T> item;
+        Unserialize(is, item, nType, nVersion);
+        mi = m.insert(mi, item);
+    }
+}
 
 
 //

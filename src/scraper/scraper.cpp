@@ -4,6 +4,8 @@
 #include "http.h"
 #include "ui_interface.h"
 
+#include "contract/superblock.h"
+
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -1054,7 +1056,8 @@ bool ScraperHousekeeping()
         // Contract binary pack/unpack check...
         _log(logattribute::INFO, "ScraperHousekeeping", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
-        std::string sSBCoreData_out = UnpackBinarySuperblock(PackBinarySuperblock(sSBCoreData));
+        std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
+        std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
 
         if (sSBCoreData == sSBCoreData_out)
             _log(logattribute::INFO, "ScraperHousekeeping", "Generated contract passed binary pack/unpack");
@@ -1063,6 +1066,99 @@ bool ScraperHousekeeping()
             _log(logattribute::ERR, "ScraperHousekeeping", "Generated contract FAILED binary pack/unpack");
             _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData_out = \n" + sSBCoreData_out);
         }
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
+        _log(logattribute::INFO, "ScraperHousekeeping", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
+
+        Superblock NewFormatSuperblock;
+        Superblock NewFormatSuperblock_out;
+        CDataStream ss(SER_NETWORK, 1);
+        CDataStream ss2(SER_NETWORK, 1);
+        CDataStream ss3(SER_NETWORK, 1);
+        CDataStream ss4(SER_NETWORK, 1);
+        unsigned int nNewFormatSuperblockSerSize;
+        unsigned int nNewFormatSuperblock_outSerSize;
+        unsigned int nNewFormatSuperblockSerSize2;
+        unsigned int nNewFormatSuperblock_outSerSize2;
+        uint256 nNewFormatSuperblockHash;
+        uint256 nNewFormatSuperblock_outHash;
+        uint256 nNewFormatSuperblockHash2;
+        uint256 nNewFormatSuperblock_outHash2;
+
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
+
+            NewFormatSuperblock.nSBVersion = 2;
+            NewFormatSuperblock.nTime = ConvergedScraperStatsCache.nTime;
+            NewFormatSuperblock.mScraperSBStats = ConvergedScraperStatsCache.mScraperConvergedStats;
+        }
+
+        NewFormatSuperblock.PopulateReducedMaps();
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "mProjRef size = " + std::to_string(NewFormatSuperblock.mProjectRef.size()));
+        _log(logattribute::INFO, "ScraperHousekeeping", "mCPIDRef size = " + std::to_string(NewFormatSuperblock.mCPIDRef.size()));
+        _log(logattribute::INFO, "ScraperHousekeeping", "mProjectCPIDStats size = " + std::to_string(NewFormatSuperblock.mProjectCPIDStats.size()));
+
+        unsigned int nmProjectCPIDStatsTotalSize = 0;
+        for (auto const& entry : NewFormatSuperblock.mProjectCPIDStats)
+        {
+            _log(logattribute::INFO, "ScraperHousekeeping", "mProjectCPIDStats ProjID " + std::to_string(entry.first)
+                 + ", CPID size " + std::to_string(entry.second.size()));
+            nmProjectCPIDStatsTotalSize += entry.second.size();
+        }
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "mProjectCPIDStats total size = " + std::to_string(nmProjectCPIDStatsTotalSize));
+
+
+        NewFormatSuperblock.SerializeSuperblock(ss, SER_NETWORK, 1);
+
+        nNewFormatSuperblockSerSize = ss.size();
+        nNewFormatSuperblockHash = Hash(ss.begin(), ss.end());
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
+
+        NewFormatSuperblock_out.UnserializeSuperblock(ss);
+
+        NewFormatSuperblock_out.SerializeSuperblock(ss2, SER_NETWORK, 1);
+
+        nNewFormatSuperblock_outSerSize = ss2.size();
+        nNewFormatSuperblock_outHash = Hash(ss2.begin(), ss2.end());
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
+
+        if (nNewFormatSuperblockHash == nNewFormatSuperblock_outHash)
+            _log(logattribute::INFO, "ScraperHousekeeping", "NewFormatSuperblock serialization passed.");
+        else
+        {
+            _log(logattribute::ERR, "ScraperHousekeeping", "NewFormatSuperblock serialization FAILED.");
+        }
+
+
+
+        NewFormatSuperblock.SerializeSuperblock2(ss3, SER_NETWORK, 1);
+
+        nNewFormatSuperblockSerSize2 = ss3.size();
+        nNewFormatSuperblockHash2 = Hash(ss3.begin(), ss3.end());
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblockSerSize2 = " + std::to_string(nNewFormatSuperblockSerSize2));
+
+
+        NewFormatSuperblock_out.UnserializeSuperblock2(ss3);
+
+        NewFormatSuperblock_out.SerializeSuperblock2(ss4, SER_NETWORK, 1);
+
+        nNewFormatSuperblock_outSerSize2 = ss4.size();
+        nNewFormatSuperblock_outHash2 = Hash(ss4.begin(), ss4.end());
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblock_outSerSize2 = " + std::to_string(nNewFormatSuperblock_outSerSize2));
+
+        if (nNewFormatSuperblockHash2 == nNewFormatSuperblock_outHash2)
+            _log(logattribute::INFO, "ScraperHousekeeping", "NewFormatSuperblock2 serialization passed.");
+        else
+        {
+            _log(logattribute::ERR, "ScraperHousekeeping", "NewFormatSuperblock2 serialization FAILED.");
+        }
+
     }
 
     // Show this node's contract hash in the log.
