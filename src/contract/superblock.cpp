@@ -174,51 +174,32 @@ void Superblock::PopulateReducedMaps()
 
 void Superblock::SerializeSuperblock(CDataStream& ss, int nType, int nVersion) const
 {
-    WriteCompactSize(ss, mScraperSBStats.size());
+    ss << mProjectRef;
+    ss << mCPIDRef;
 
-    for (const auto& entry : mScraperSBStats)
-    {
-       ss << (unsigned int) entry.first.objecttype;
-       ss << entry.first.objectID;
-       ss << entry.second.statsvalue.dTC;
-       ss << entry.second.statsvalue.dRAT;
-       ss << entry.second.statsvalue.dRAC;
-       ss << entry.second.statsvalue.dAvgRAC;
-       ss << entry.second.statsvalue.dMag;
-    }
+    ss << mProjectStats;
+    ss << mCPIDMagnitudes;
+    //ss << mProjectCPIDStats;
 
+    ss << nNetworkMagnitude;
+    ss << nZeroMagCPIDs;
+    ss << nHeight;
     ss << nTime;
     ss << nSBVersion;
 }
 
 void Superblock::UnserializeSuperblock(CReaderStream& ss)
 {
-    //ss >> mScraperConvergedStats;
-    int64_t nSize = ReadCompactSize(ss);
+    ss >> mProjectRef;
+    ss >> mCPIDRef;
 
+    ss >> mProjectStats;
+    ss >> mCPIDMagnitudes;
+    //ss >> mProjectCPIDStats;
 
-    unsigned int iEntry = 0;
-    for (auto entry = ss.begin(); entry < ss.end(); ++entry)
-    {
-        if (iEntry == nSize) break;
-
-        ScraperObjectStats StatsEntry;
-        unsigned int nObjectType;
-
-        ss >> nObjectType;
-        StatsEntry.statskey.objecttype = (statsobjecttype) nObjectType;
-        ss >> StatsEntry.statskey.objectID;
-        ss >> StatsEntry.statsvalue.dTC;
-        ss >> StatsEntry.statsvalue.dRAT;
-        ss >> StatsEntry.statsvalue.dRAC;
-        ss >> StatsEntry.statsvalue.dAvgRAC;
-        ss >> StatsEntry.statsvalue.dMag;
-
-        mScraperSBStats[StatsEntry.statskey] = StatsEntry;
-
-        ++iEntry;
-    }
-
+    ss >> nNetworkMagnitude;
+    ss >> nZeroMagCPIDs;
+    ss >> nHeight;
     ss >> nTime;
     ss >> nSBVersion;
 }
