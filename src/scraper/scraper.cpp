@@ -4,7 +4,7 @@
 #include "http.h"
 #include "ui_interface.h"
 
-#include "contract/superblock.h"
+#include "neuralnet/superblock.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>

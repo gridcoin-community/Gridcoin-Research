@@ -22,11 +22,11 @@
 #include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/superblock.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
 #include "contract/contract.h"
-#include "contract/superblock.h"
 #include "scraper_net.h"
 
 #include <boost/filesystem.hpp>

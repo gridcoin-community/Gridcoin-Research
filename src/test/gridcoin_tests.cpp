@@ -3,7 +3,7 @@
 #include "main.h"
 #include "global_objects_noui.hpp"
 #include "appcache.h"
-#include "contract/superblock.h"
+#include "neuralnet/superblock.h"
 
 #include "data/superblock.txt.h"
 #include "data/superblock_packed.bin.h"
