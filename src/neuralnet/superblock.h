@@ -8,7 +8,7 @@
 std::string UnpackBinarySuperblock(std::string block);
 std::string PackBinarySuperblock(std::string sBlock);
 
-
+namespace NN {
 class Superblock
 {
 public: /* fields */
@@ -86,3 +86,4 @@ public: /* public methods */
 
     */
 };
+}

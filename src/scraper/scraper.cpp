@@ -1070,8 +1070,8 @@ bool ScraperHousekeeping()
         _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
         _log(logattribute::INFO, "ScraperHousekeeping", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
 
-        Superblock NewFormatSuperblock;
-        Superblock NewFormatSuperblock_out;
+        NN::Superblock NewFormatSuperblock;
+        NN::Superblock NewFormatSuperblock_out;
         CDataStream ss(SER_NETWORK, 1);
         CDataStream ss2(SER_NETWORK, 1);
         CDataStream ss3(SER_NETWORK, 1);
@@ -4753,8 +4753,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     _log(logattribute::INFO, "testnewsb", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
     res.pushKV("sSBPackedCoreData size", (uint64_t) sPackedSBCoreData.size());
 
-    Superblock NewFormatSuperblock;
-    Superblock NewFormatSuperblock_out;
+    NN::Superblock NewFormatSuperblock;
+    NN::Superblock NewFormatSuperblock_out;
     CDataStream ss(SER_NETWORK, 1);
     CDataStream ss2(SER_NETWORK, 1);
     CDataStream ss3(SER_NETWORK, 1);

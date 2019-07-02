@@ -1,8 +1,10 @@
-#include "superblock.h"
+#include "neuralnet/superblock.h"
 #include "uint256.h"
 #include "util.h"
 #include "main.h"
 #include "compat/endian.h"
+
+using namespace NN;
 
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 
