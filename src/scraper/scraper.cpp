@@ -4709,3 +4709,153 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
 }
 
 
+
+UniValue testnewsb(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0 )
+        throw std::runtime_error(
+                "testnewsb\n"
+                "Test the new Superblock class.\n"
+                );
+
+    LOCK(cs_ConvergedScraperStatsCache);
+
+    if (ConvergedScraperStatsCache.sContract.empty())
+        throw std::runtime_error(
+                "Wait until a convergence is formed.\n"
+                );
+
+    UniValue res(UniValue::VOBJ);
+
+    // Contract binary pack/unpack check...
+    _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
+
+    std::string& sSBCoreData = ConvergedScraperStatsCache.sContract;
+
+    std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
+    std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
+
+    if (sSBCoreData == sSBCoreData_out)
+    {
+        _log(logattribute::INFO, "testnewsb", "Generated contract passed binary pack/unpack");
+        res.pushKV("Generated legacy contract", "passed");
+    }
+    else
+    {
+        _log(logattribute::ERR, "testnewsb", "Generated contract FAILED binary pack/unpack");
+        _log(logattribute::INFO, "testnewsb", "sSBCoreData_out = \n" + sSBCoreData_out);
+        res.pushKV("Generated legacy contract", "FAILED");
+
+    }
+
+    _log(logattribute::INFO, "testnewsb", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
+    res.pushKV("sSBCoreData size", (uint64_t) sSBCoreData.size());
+    _log(logattribute::INFO, "testnewsb", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
+    res.pushKV("sSBPackedCoreData size", (uint64_t) sPackedSBCoreData.size());
+
+    Superblock NewFormatSuperblock;
+    Superblock NewFormatSuperblock_out;
+    CDataStream ss(SER_NETWORK, 1);
+    CDataStream ss2(SER_NETWORK, 1);
+    CDataStream ss3(SER_NETWORK, 1);
+    CDataStream ss4(SER_NETWORK, 1);
+    uint64_t nNewFormatSuperblockSerSize;
+    uint64_t nNewFormatSuperblock_outSerSize;
+    uint64_t nNewFormatSuperblockSerSize2;
+    uint64_t nNewFormatSuperblock_outSerSize2;
+    uint256 nNewFormatSuperblockHash;
+    uint256 nNewFormatSuperblock_outHash;
+    uint256 nNewFormatSuperblockHash2;
+    uint256 nNewFormatSuperblock_outHash2;
+
+    NewFormatSuperblock.nSBVersion = 2;
+    NewFormatSuperblock.nTime = ConvergedScraperStatsCache.nTime;
+    NewFormatSuperblock.mScraperSBStats = ConvergedScraperStatsCache.mScraperConvergedStats;
+
+    NewFormatSuperblock.PopulateReducedMaps();
+
+    _log(logattribute::INFO, "testnewsb", "mProjRef size = " + std::to_string(NewFormatSuperblock.mProjectRef.size()));
+    res.pushKV("mProjRef size", (uint64_t) NewFormatSuperblock.mProjectRef.size());
+    _log(logattribute::INFO, "testnewsb", "mCPIDRef size = " + std::to_string(NewFormatSuperblock.mCPIDRef.size()));
+    res.pushKV("mCPIDRef size", (uint64_t) NewFormatSuperblock.mCPIDRef.size());
+    _log(logattribute::INFO, "testnewsb", "mProjectCPIDStats size = " + std::to_string(NewFormatSuperblock.mProjectCPIDStats.size()));
+    res.pushKV("mProjectCPIDStats size", (uint64_t) NewFormatSuperblock.mProjectCPIDStats.size());
+
+    uint64_t nmProjectCPIDStatsTotalSize = 0;
+    for (auto const& entry : NewFormatSuperblock.mProjectCPIDStats)
+    {
+        _log(logattribute::INFO, "testnewsb", "mProjectCPIDStats ProjID " + std::to_string(entry.first)
+             + ", CPID size " + std::to_string(entry.second.size()));
+        nmProjectCPIDStatsTotalSize += entry.second.size();
+    }
+
+    _log(logattribute::INFO, "testnewsb", "mProjectCPIDStats total size = " + std::to_string(nmProjectCPIDStatsTotalSize));
+    res.pushKV("mProjectCPIDStats total size", nmProjectCPIDStatsTotalSize);
+
+
+    NewFormatSuperblock.SerializeSuperblock(ss, SER_NETWORK, 1);
+
+    nNewFormatSuperblockSerSize = ss.size();
+    nNewFormatSuperblockHash = Hash(ss.begin(), ss.end());
+
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
+    res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
+
+    NewFormatSuperblock_out.UnserializeSuperblock(ss);
+
+    NewFormatSuperblock_out.SerializeSuperblock(ss2, SER_NETWORK, 1);
+
+
+    nNewFormatSuperblock_outSerSize = ss2.size();
+    nNewFormatSuperblock_outHash = Hash(ss2.begin(), ss2.end());
+
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
+    res.pushKV("nNewFormatSuperblock_outSerSize", nNewFormatSuperblock_outSerSize);
+
+    if (nNewFormatSuperblockHash == nNewFormatSuperblock_outHash)
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock serialization passed.");
+        res.pushKV("NewFormatSuperblock serialization", "passed");
+    }
+    else
+    {
+        _log(logattribute::ERR, "testnewsb", "NewFormatSuperblock serialization FAILED.");
+        res.pushKV("NewFormatSuperblock serialization", "FAILED");
+    }
+
+
+
+    NewFormatSuperblock.SerializeSuperblock2(ss3, SER_NETWORK, 1);
+
+    nNewFormatSuperblockSerSize2 = ss3.size();
+    nNewFormatSuperblockHash2 = Hash(ss3.begin(), ss3.end());
+
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize2 = " + std::to_string(nNewFormatSuperblockSerSize2));
+    res.pushKV("nNewFormatSuperblockSerSize2", nNewFormatSuperblockSerSize2);
+
+
+    NewFormatSuperblock_out.UnserializeSuperblock2(ss3);
+
+    NewFormatSuperblock_out.SerializeSuperblock2(ss4, SER_NETWORK, 1);
+
+    nNewFormatSuperblock_outSerSize2 = ss4.size();
+    nNewFormatSuperblock_outHash2 = Hash(ss4.begin(), ss4.end());
+
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize2 = " + std::to_string(nNewFormatSuperblock_outSerSize2));
+    res.pushKV("nNewFormatSuperblock_outSerSize2", nNewFormatSuperblock_outSerSize2);
+
+    if (nNewFormatSuperblockHash2 == nNewFormatSuperblock_outHash2)
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock2 serialization passed.");
+        res.pushKV("NewFormatSuperblock2 serialization", "passed");
+    }
+    else
+    {
+        _log(logattribute::ERR, "testnewsb", "NewFormatSuperblock2 serialization FAILED.");
+        res.pushKV("NewFormatSuperblock2 serialization", "FAILED");
+    }
+
+    return res;
+}
+
+

@@ -219,6 +219,7 @@ extern UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
 extern UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
 extern UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
 extern UniValue archivescraperlog(const UniValue& params, bool fHelp);
+extern UniValue testnewsb(const UniValue& params, bool fHelp);
 
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
