@@ -15,7 +15,7 @@ namespace
         std::array<unsigned char, 16> cpid;
         int16_t magnitude;
     };
-    
+
     // Ensure that the compiler does not add padding between the cpid and the
     // magnitude. If it does it does it to align the data, at which point the
     // pointer cast in UnpackBinarySuperblock will be illegal. In such a
@@ -23,7 +23,11 @@ namespace
     static_assert(offsetof(struct BinaryResearcher, magnitude) ==
                   sizeof(struct BinaryResearcher) - sizeof(int16_t),
                   "Unexpected padding in BinaryResearcher");
-}
+} // anonymous namespace
+
+// -----------------------------------------------------------------------------
+// Functions
+// -----------------------------------------------------------------------------
 
 std::string UnpackBinarySuperblock(std::string sBlock)
 {
@@ -101,139 +105,89 @@ std::string PackBinarySuperblock(std::string sBlock)
     return block_stream.str();
 }
 
+// -----------------------------------------------------------------------------
+// Class: Superblock
+// -----------------------------------------------------------------------------
 
-
-
-void Superblock::PopulateReducedMaps()
+void Superblock::LoadStats(const ScraperStats& stats)
 {
+    // TODO: this routine depends entirely on the order of items in the scraper
+    // stats map. Need to verify that it isn't too fragile...
+    for (const auto& entry: stats) {
+        switch (entry.first.objecttype) {
+            case statsobjecttype::byCPID:
+                {
+                    uint16_t mag = std::round(entry.second.statsvalue.dMag);
 
-    uint16_t iProject = 0;
-    for (auto const& entry : mScraperSBStats)
-    {
-        if (entry.first.objecttype == statsobjecttype::byProject)
-        {
-            mProjectRef[entry.first.objectID] = iProject;
-            mProjectStats[iProject] = std::make_pair((uint64_t) std::round(entry.second.statsvalue.dAvgRAC),
-                                                             (uint64_t) std::round(entry.second.statsvalue.dRAC));
-            ++iProject;
+                    if (mag > 0) {
+                        m_cpids.emplace(NN::Cpid::Parse(entry.first.objectID), mag);
+                    } else {
+                        m_network.m_zero_mag_cpid_count++;
+                    }
+                }
+                break;
+
+            case statsobjecttype::byProject:
+                m_projects.emplace(entry.first.objectID, ProjectStats(
+                    std::round(entry.second.statsvalue.dAvgRAC),
+                    std::round(entry.second.statsvalue.dRAC)));
+
+                break;
+
+            case statsobjecttype::byCPIDbyProject:
+                {
+                    std::vector<std::string> vObjectID = split(entry.first.objectID, ",");
+                    Cpid cpid = NN::Cpid::Parse(vObjectID[1]);
+
+                    m_projects[vObjectID[0]].m_cpids.emplace(
+                        std::distance(m_cpids.begin(), m_cpids.find(cpid)),
+                        CpidStats(
+                            std::round(entry.second.statsvalue.dTC),
+                            std::round(entry.second.statsvalue.dRAC),
+                            std::round(entry.second.statsvalue.dMag)));
+                }
+                break;
+
+            case statsobjecttype::NetworkWide:
+                m_network.m_average_rac = entry.second.statsvalue.dAvgRAC;
+                m_network.m_rac = entry.second.statsvalue.dRAC;
+                m_network.m_magnitude = std::round(entry.second.statsvalue.dMag);
+
+                break;
         }
     }
-
-
-     // Find the single network wide NN entry and put in string.
-    ScraperObjectStatsKey StatsKey;
-    StatsKey.objecttype = statsobjecttype::NetworkWide;
-    StatsKey.objectID = "";
-
-    const auto& iter = mScraperSBStats.find(StatsKey);
-
-    mProjectRef["Network"] = iProject;
-    mProjectStats[iProject] = std::make_pair((uint64_t) iter->second.statsvalue.dAvgRAC,
-                                         (uint64_t) iter->second.statsvalue.dRAC);
-
-    nNetworkMagnitude = (uint64_t) std::round(iter->second.statsvalue.dMag);
-
-    uint32_t iCPID = 0;
-    nZeroMagCPIDs = 0;
-    for (auto const& entry : mScraperSBStats)
-    {
-        if (entry.first.objecttype == statsobjecttype::byCPID)
-        {
-            // If the magnitude entry is zero suppress the CPID and increment the zero counter.
-            if (std::round(entry.second.statsvalue.dMag) > 0)
-            {
-                mCPIDRef[NN::Cpid::Parse(entry.first.objectID)] = iCPID;
-                mCPIDMagnitudes[iCPID] = (uint16_t) std::round(entry.second.statsvalue.dMag);
-
-                ++iCPID;
-            }
-            else
-            {
-                nZeroMagCPIDs++;
-            }
-        }
-    }
-
-    for (auto const& entry : mScraperSBStats)
-    {
-        if (entry.first.objecttype == statsobjecttype::byCPIDbyProject)
-        {
-
-            std::vector<std::string> vObjectID = split(entry.first.objectID, ",");
-
-            const auto& iterProject = mProjectRef.find(vObjectID[0]);
-            const auto& iterCPID = mCPIDRef.find(NN::Cpid::Parse(vObjectID[1]));
-
-            mProjectCPIDStats[iterProject->second][iterCPID->second] = std::make_tuple((uint64_t) std::round(entry.second.statsvalue.dTC),
-                                                                                      (uint64_t) std::round(entry.second.statsvalue.dRAC),
-                                                                                      (uint16_t) std::round(entry.second.statsvalue.dMag));
-        }
-
-    }
-
-    fReducedMapsPopulated = true;
 }
 
-void Superblock::SerializeSuperblock(CDataStream& ss, int nType, int nVersion) const
+// -----------------------------------------------------------------------------
+// Class: Superblock::CpidStats
+// -----------------------------------------------------------------------------
+
+Superblock::CpidStats::CpidStats()
+    : m_total_credit(0)
+    , m_rac(0)
+    , m_magnitude(0)
 {
-    ss << mProjectRef;
-    ss << mCPIDRef;
-
-    ss << mProjectStats;
-    ss << mCPIDMagnitudes;
-    //ss << mProjectCPIDStats;
-
-    ss << nNetworkMagnitude;
-    ss << nZeroMagCPIDs;
-    ss << nHeight;
-    ss << nTime;
-    ss << nSBVersion;
 }
 
-void Superblock::UnserializeSuperblock(CReaderStream& ss)
+Superblock::CpidStats::CpidStats(
+    uint64_t total_credit,
+    uint64_t rac,
+    uint16_t magnitude)
+    : m_total_credit(total_credit)
+    , m_rac(rac)
+    , m_magnitude(magnitude)
 {
-    ss >> mProjectRef;
-    ss >> mCPIDRef;
-
-    ss >> mProjectStats;
-    ss >> mCPIDMagnitudes;
-    //ss >> mProjectCPIDStats;
-
-    ss >> nNetworkMagnitude;
-    ss >> nZeroMagCPIDs;
-    ss >> nHeight;
-    ss >> nTime;
-    ss >> nSBVersion;
 }
 
-void Superblock::SerializeSuperblock2(CDataStream& ss, int nType, int nVersion) const
+// -----------------------------------------------------------------------------
+// Class: Superblock::ProjectStats
+// -----------------------------------------------------------------------------
+
+Superblock::ProjectStats::ProjectStats() : m_average_rac(0) , m_rac(0)
 {
-    ss << mProjectRef;
-    ss << mCPIDRef;
-
-    ss << mProjectStats;
-    ss << mCPIDMagnitudes;
-    ss << mProjectCPIDStats;
-
-    ss << nNetworkMagnitude;
-    ss << nZeroMagCPIDs;
-    ss << nHeight;
-    ss << nTime;
-    ss << nSBVersion;
 }
 
-void Superblock::UnserializeSuperblock2(CReaderStream& ss)
+Superblock::ProjectStats::ProjectStats(uint64_t average_rac, uint64_t rac)
+    : m_average_rac(average_rac), m_rac(rac)
 {
-    ss >> mProjectRef;
-    ss >> mCPIDRef;
-
-    ss >> mProjectStats;
-    ss >> mCPIDMagnitudes;
-    ss >> mProjectCPIDStats;
-
-    ss >> nNetworkMagnitude;
-    ss >> nZeroMagCPIDs;
-    ss >> nHeight;
-    ss >> nTime;
-    ss >> nSBVersion;
 }

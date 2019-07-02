@@ -1034,6 +1034,7 @@ void NeuralNetwork()
     }
 }
 
+UniValue testnewsb(const UniValue& params, bool fHelp);
 
 bool ScraperHousekeeping()
 {
@@ -1053,112 +1054,8 @@ bool ScraperHousekeeping()
 
     if (fDebug3 && !sSBCoreData.empty())
     {
-        // Contract binary pack/unpack check...
-        _log(logattribute::INFO, "ScraperHousekeeping", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
-
-        std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
-        std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
-
-        if (sSBCoreData == sSBCoreData_out)
-            _log(logattribute::INFO, "ScraperHousekeeping", "Generated contract passed binary pack/unpack");
-        else
-        {
-            _log(logattribute::ERR, "ScraperHousekeeping", "Generated contract FAILED binary pack/unpack");
-            _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData_out = \n" + sSBCoreData_out);
-        }
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
-        _log(logattribute::INFO, "ScraperHousekeeping", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
-
-        NN::Superblock NewFormatSuperblock;
-        NN::Superblock NewFormatSuperblock_out;
-        CDataStream ss(SER_NETWORK, 1);
-        CDataStream ss2(SER_NETWORK, 1);
-        CDataStream ss3(SER_NETWORK, 1);
-        CDataStream ss4(SER_NETWORK, 1);
-        unsigned int nNewFormatSuperblockSerSize;
-        unsigned int nNewFormatSuperblock_outSerSize;
-        unsigned int nNewFormatSuperblockSerSize2;
-        unsigned int nNewFormatSuperblock_outSerSize2;
-        uint256 nNewFormatSuperblockHash;
-        uint256 nNewFormatSuperblock_outHash;
-        uint256 nNewFormatSuperblockHash2;
-        uint256 nNewFormatSuperblock_outHash2;
-
-        {
-            LOCK(cs_ConvergedScraperStatsCache);
-
-            NewFormatSuperblock.nSBVersion = 2;
-            NewFormatSuperblock.nTime = ConvergedScraperStatsCache.nTime;
-            NewFormatSuperblock.mScraperSBStats = ConvergedScraperStatsCache.mScraperConvergedStats;
-        }
-
-        NewFormatSuperblock.PopulateReducedMaps();
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "mProjRef size = " + std::to_string(NewFormatSuperblock.mProjectRef.size()));
-        _log(logattribute::INFO, "ScraperHousekeeping", "mCPIDRef size = " + std::to_string(NewFormatSuperblock.mCPIDRef.size()));
-        _log(logattribute::INFO, "ScraperHousekeeping", "mProjectCPIDStats size = " + std::to_string(NewFormatSuperblock.mProjectCPIDStats.size()));
-
-        unsigned int nmProjectCPIDStatsTotalSize = 0;
-        for (auto const& entry : NewFormatSuperblock.mProjectCPIDStats)
-        {
-            _log(logattribute::INFO, "ScraperHousekeeping", "mProjectCPIDStats ProjID " + std::to_string(entry.first)
-                 + ", CPID size " + std::to_string(entry.second.size()));
-            nmProjectCPIDStatsTotalSize += entry.second.size();
-        }
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "mProjectCPIDStats total size = " + std::to_string(nmProjectCPIDStatsTotalSize));
-
-
-        NewFormatSuperblock.SerializeSuperblock(ss, SER_NETWORK, 1);
-
-        nNewFormatSuperblockSerSize = ss.size();
-        nNewFormatSuperblockHash = Hash(ss.begin(), ss.end());
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
-
-        NewFormatSuperblock_out.UnserializeSuperblock(ss);
-
-        NewFormatSuperblock_out.SerializeSuperblock(ss2, SER_NETWORK, 1);
-
-        nNewFormatSuperblock_outSerSize = ss2.size();
-        nNewFormatSuperblock_outHash = Hash(ss2.begin(), ss2.end());
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
-
-        if (nNewFormatSuperblockHash == nNewFormatSuperblock_outHash)
-            _log(logattribute::INFO, "ScraperHousekeeping", "NewFormatSuperblock serialization passed.");
-        else
-        {
-            _log(logattribute::ERR, "ScraperHousekeeping", "NewFormatSuperblock serialization FAILED.");
-        }
-
-
-
-        NewFormatSuperblock.SerializeSuperblock2(ss3, SER_NETWORK, 1);
-
-        nNewFormatSuperblockSerSize2 = ss3.size();
-        nNewFormatSuperblockHash2 = Hash(ss3.begin(), ss3.end());
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblockSerSize2 = " + std::to_string(nNewFormatSuperblockSerSize2));
-
-
-        NewFormatSuperblock_out.UnserializeSuperblock2(ss3);
-
-        NewFormatSuperblock_out.SerializeSuperblock2(ss4, SER_NETWORK, 1);
-
-        nNewFormatSuperblock_outSerSize2 = ss4.size();
-        nNewFormatSuperblock_outHash2 = Hash(ss4.begin(), ss4.end());
-
-        _log(logattribute::INFO, "ScraperHousekeeping", "nNewFormatSuperblock_outSerSize2 = " + std::to_string(nNewFormatSuperblock_outSerSize2));
-
-        if (nNewFormatSuperblockHash2 == nNewFormatSuperblock_outHash2)
-            _log(logattribute::INFO, "ScraperHousekeeping", "NewFormatSuperblock2 serialization passed.");
-        else
-        {
-            _log(logattribute::ERR, "ScraperHousekeeping", "NewFormatSuperblock2 serialization FAILED.");
-        }
-
+        UniValue dummy_params(UniValue::VARR);
+        testnewsb(dummy_params, false);
     }
 
     // Show this node's contract hash in the log.
@@ -4757,57 +4654,45 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     NN::Superblock NewFormatSuperblock_out;
     CDataStream ss(SER_NETWORK, 1);
     CDataStream ss2(SER_NETWORK, 1);
-    CDataStream ss3(SER_NETWORK, 1);
-    CDataStream ss4(SER_NETWORK, 1);
     uint64_t nNewFormatSuperblockSerSize;
     uint64_t nNewFormatSuperblock_outSerSize;
-    uint64_t nNewFormatSuperblockSerSize2;
-    uint64_t nNewFormatSuperblock_outSerSize2;
     uint256 nNewFormatSuperblockHash;
     uint256 nNewFormatSuperblock_outHash;
-    uint256 nNewFormatSuperblockHash2;
-    uint256 nNewFormatSuperblock_outHash2;
 
-    NewFormatSuperblock.nSBVersion = 2;
+    NewFormatSuperblock.m_version = 1;
     NewFormatSuperblock.nTime = ConvergedScraperStatsCache.nTime;
-    NewFormatSuperblock.mScraperSBStats = ConvergedScraperStatsCache.mScraperConvergedStats;
 
-    NewFormatSuperblock.PopulateReducedMaps();
+    NewFormatSuperblock.LoadStats(ConvergedScraperStatsCache.mScraperConvergedStats);
 
-    _log(logattribute::INFO, "testnewsb", "mProjRef size = " + std::to_string(NewFormatSuperblock.mProjectRef.size()));
-    res.pushKV("mProjRef size", (uint64_t) NewFormatSuperblock.mProjectRef.size());
-    _log(logattribute::INFO, "testnewsb", "mCPIDRef size = " + std::to_string(NewFormatSuperblock.mCPIDRef.size()));
-    res.pushKV("mCPIDRef size", (uint64_t) NewFormatSuperblock.mCPIDRef.size());
-    _log(logattribute::INFO, "testnewsb", "mProjectCPIDStats size = " + std::to_string(NewFormatSuperblock.mProjectCPIDStats.size()));
-    res.pushKV("mProjectCPIDStats size", (uint64_t) NewFormatSuperblock.mProjectCPIDStats.size());
+    _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock.m_projects.size()));
+    res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock.m_projects.size());
+    _log(logattribute::INFO, "testnewsb", "m_cpids size = " + std::to_string(NewFormatSuperblock.m_cpids.size()));
+    res.pushKV("m_cpids size", (uint64_t) NewFormatSuperblock.m_cpids.size());
 
     uint64_t nmProjectCPIDStatsTotalSize = 0;
-    for (auto const& entry : NewFormatSuperblock.mProjectCPIDStats)
+    for (auto const& entry : NewFormatSuperblock.m_projects)
     {
-        _log(logattribute::INFO, "testnewsb", "mProjectCPIDStats ProjID " + std::to_string(entry.first)
-             + ", CPID size " + std::to_string(entry.second.size()));
-        nmProjectCPIDStatsTotalSize += entry.second.size();
+        _log(logattribute::INFO, "testnewsb", "m_projects ProjID " + entry.first
+             + ", CPID size " + std::to_string(entry.second.m_cpids.size()));
+        nmProjectCPIDStatsTotalSize += entry.second.m_cpids.size();
     }
 
-    _log(logattribute::INFO, "testnewsb", "mProjectCPIDStats total size = " + std::to_string(nmProjectCPIDStatsTotalSize));
-    res.pushKV("mProjectCPIDStats total size", nmProjectCPIDStatsTotalSize);
+    _log(logattribute::INFO, "testnewsb", "m_projects.m_cpids total size = " + std::to_string(nmProjectCPIDStatsTotalSize));
+    res.pushKV("m_projects.m_cpids total size", nmProjectCPIDStatsTotalSize);
 
-
-    NewFormatSuperblock.SerializeSuperblock(ss, SER_NETWORK, 1);
-
-    nNewFormatSuperblockSerSize = ss.size();
-    nNewFormatSuperblockHash = Hash(ss.begin(), ss.end());
+    // Version 1: compare serialization without full project stats:
+    //
+    nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
     res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
 
-    NewFormatSuperblock_out.UnserializeSuperblock(ss);
+    ss << NewFormatSuperblock;
+    ss >> NewFormatSuperblock_out;
 
-    NewFormatSuperblock_out.SerializeSuperblock(ss2, SER_NETWORK, 1);
-
-
-    nNewFormatSuperblock_outSerSize = ss2.size();
-    nNewFormatSuperblock_outHash = Hash(ss2.begin(), ss2.end());
+    nNewFormatSuperblock_outSerSize = NewFormatSuperblock_out.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblock_outHash = SerializeHash(NewFormatSuperblock_out);
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
     res.pushKV("nNewFormatSuperblock_outSerSize", nNewFormatSuperblock_outSerSize);
@@ -4824,27 +4709,26 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     }
 
 
+    // Version 2: compare serialization with full project stats:
+    //
+    NewFormatSuperblock.m_version = 2;
 
-    NewFormatSuperblock.SerializeSuperblock2(ss3, SER_NETWORK, 1);
+    nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
 
-    nNewFormatSuperblockSerSize2 = ss3.size();
-    nNewFormatSuperblockHash2 = Hash(ss3.begin(), ss3.end());
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize2 = " + std::to_string(nNewFormatSuperblockSerSize));
+    res.pushKV("nNewFormatSuperblockSerSize2", nNewFormatSuperblockSerSize);
 
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize2 = " + std::to_string(nNewFormatSuperblockSerSize2));
-    res.pushKV("nNewFormatSuperblockSerSize2", nNewFormatSuperblockSerSize2);
+    ss2 << NewFormatSuperblock;
+    ss2 >> NewFormatSuperblock_out;
 
+    nNewFormatSuperblock_outSerSize = NewFormatSuperblock_out.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblock_outHash = SerializeHash(NewFormatSuperblock_out);
 
-    NewFormatSuperblock_out.UnserializeSuperblock2(ss3);
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize2 = " + std::to_string(nNewFormatSuperblock_outSerSize));
+    res.pushKV("nNewFormatSuperblock_outSerSize2", nNewFormatSuperblock_outSerSize);
 
-    NewFormatSuperblock_out.SerializeSuperblock2(ss4, SER_NETWORK, 1);
-
-    nNewFormatSuperblock_outSerSize2 = ss4.size();
-    nNewFormatSuperblock_outHash2 = Hash(ss4.begin(), ss4.end());
-
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize2 = " + std::to_string(nNewFormatSuperblock_outSerSize2));
-    res.pushKV("nNewFormatSuperblock_outSerSize2", nNewFormatSuperblock_outSerSize2);
-
-    if (nNewFormatSuperblockHash2 == nNewFormatSuperblock_outHash2)
+    if (nNewFormatSuperblockHash == nNewFormatSuperblock_outHash)
     {
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock2 serialization passed.");
         res.pushKV("NewFormatSuperblock2 serialization", "passed");
@@ -4857,5 +4741,3 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     return res;
 }
-
-
