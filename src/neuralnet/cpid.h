@@ -79,26 +79,26 @@ public:
     //!
     //! \brief Compare a supplied CPID value for less than other.
     //!
+    //! The comparison checks from left to right with the most significant byte
+    //! on the left (byte order equivalent to the hex string representation).
+    //!
     //! \param other A CPID value to check whether current is less than.
     //!
-    //! \return \c true if the supplied CPID's bytes do not match.
+    //! \return \c true if the supplied CPID's bytes represent a greater number.
     //!
-    bool operator<(const Cpid& other) const
-    {
-        return ToString() < other.ToString();
-    }
+    bool operator<(const Cpid& other) const;
 
     //!
     //! \brief Compare a supplied CPID value for greater than other.
     //!
+    //! The comparison checks from left to right with the most significant byte
+    //! on the left (byte order equivalent to the hex string representation).
+    //!
     //! \param other A CPID value to check whether current is greater than.
     //!
-    //! \return \c true if the supplied CPID's bytes do not match.
+    //! \return \c true if the supplied CPID's bytes represent a lesser number.
     //!
-    bool operator>(const Cpid& other) const
-    {
-        return ToString() > other.ToString();
-    }
+    bool operator>(const Cpid& other) const;
 
     //!
     //! \brief Determine whether the CPID contains only zeros.
