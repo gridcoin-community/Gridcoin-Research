@@ -82,6 +82,16 @@ bool Cpid::operator!=(const Cpid& other) const
     return m_bytes != other.m_bytes;
 }
 
+bool Cpid::operator<(const Cpid& other) const
+{
+    return m_bytes < other.m_bytes;
+}
+
+bool Cpid::operator>(const Cpid& other) const
+{
+    return m_bytes > other.m_bytes;
+}
+
 bool Cpid::IsZero() const
 {
     const auto zero = [](const unsigned char& i) { return i == 0; };
