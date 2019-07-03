@@ -74,7 +74,6 @@ GRIDCOIN_CORE_H = \
 	compat/endian.h \
 	contract/polls.h \
 	contract/contract.h \
-   contract/superblock.h \
 	crypter.h \
 	db.h \
 	fwd.h \
@@ -95,6 +94,7 @@ GRIDCOIN_CORE_H = \
    neuralnet/neuralnet_stub.h \
 	neuralnet/project.h \
 	neuralnet/researcher.h \
+	neuralnet/superblock.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
@@ -135,7 +135,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	checkpoints.cpp \
 	contract/polls.cpp \
 	contract/contract.cpp \
-   contract/superblock.cpp \
 	crypter.cpp \
 	db.cpp \
 	gridcoin.cpp \
@@ -151,6 +150,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
 	neuralnet/researcher.cpp \
+	neuralnet/superblock.cpp \
 	netbase.cpp \
 	net.cpp \
 	noui.cpp \
