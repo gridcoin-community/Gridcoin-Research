@@ -600,7 +600,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_requirement_when_set_by_protocol)
     }
 
     // Clean up:
-    SetArgument("email", "researcher@example.com");
+    SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     NN::Researcher::Reload({ });
 }

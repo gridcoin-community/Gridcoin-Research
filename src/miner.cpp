@@ -30,6 +30,7 @@ double CoinToDouble(double surrogate);
 
 void ThreadTopUpKeyPool(void* parg);
 
+double CalculatedMagnitude(int64_t locktime, bool bUseLederstrumpf);
 bool HasActiveBeacon(const std::string& cpid);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
@@ -973,6 +974,7 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     pbh=pindexPrev->GetBlockHash();
 
     miningcpid.lastblockhash = pbh.GetHex();
+    miningcpid.Magnitude = CalculatedMagnitude(blocknew.nTime, false);
     miningcpid.ResearchSubsidy = OUT_POR;
     miningcpid.ResearchAge = dAccrualAge;
     miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;

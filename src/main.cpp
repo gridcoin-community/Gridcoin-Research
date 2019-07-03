@@ -4751,17 +4751,6 @@ std::string RetrieveMd5(std::string s1)
     }
 }
 
-int GetFilesize(FILE* file)
-{
-    int nSavePos = ftell(file);
-    int nFilesize = -1;
-    if (fseek(file, 0, SEEK_END) == 0)
-        nFilesize = ftell(file);
-    fseek(file, nSavePos, SEEK_SET);
-    return nFilesize;
-}
-
-
 std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
 {
     int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
