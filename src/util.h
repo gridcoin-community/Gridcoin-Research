@@ -192,8 +192,6 @@ bool WildcardMatch(const char* psz, const char* mask);
 bool WildcardMatch(const std::string& str, const std::string& mask);
 void FileCommit(FILE *fileout);
 
-int GetFilesize(FILE* file);
-
 std::string TimestampToHRDate(double dtm);
 
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
