@@ -434,31 +434,6 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-void filecopy(FILE *dest, FILE *src)
-{
-    const int size = 16384;
-    char buffer[size];
-
-    while (!feof(src))
-    {
-        int n = fread(buffer, 1, size, src);
-        fwrite(buffer, 1, n, dest);
-    }
-
-    fflush(dest);
-}
-
-void fileopen_and_copy(std::string src, std::string dest)
-{
-    FILE * infile  = fopen(src.c_str(),  "rb");
-    FILE * outfile = fopen(dest.c_str(), "wb");
-
-    filecopy(outfile, infile);
-
-    fclose(infile);
-    fclose(outfile);
-}
-
 std::string ExtractValue(std::string data, std::string delimiter, int pos)
 {
     std::vector<std::string> vKeys = split(data.c_str(),delimiter);
