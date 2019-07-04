@@ -3929,11 +3929,6 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     return (nFound >= nRequired);
 }
 
-bool ServicesIncludesNN(CNode* pNode)
-{
-    return (Contains(pNode->strSubVer,"1999")) ? true : false;
-}
-
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
 {
     // Pre-condition checks.
