@@ -4653,35 +4653,21 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     NN::Superblock NewFormatSuperblock;
     NN::Superblock NewFormatSuperblock_out;
     CDataStream ss(SER_NETWORK, 1);
-    CDataStream ss2(SER_NETWORK, 1);
     uint64_t nNewFormatSuperblockSerSize;
     uint64_t nNewFormatSuperblock_outSerSize;
     uint256 nNewFormatSuperblockHash;
     uint256 nNewFormatSuperblock_outHash;
 
-    NewFormatSuperblock.m_version = 1;
-    NewFormatSuperblock.nTime = ConvergedScraperStatsCache.nTime;
-
-    NewFormatSuperblock.LoadStats(ConvergedScraperStatsCache.mScraperConvergedStats);
+    NewFormatSuperblock = NN::Superblock::FromStats(ConvergedScraperStatsCache.mScraperConvergedStats);
+    NewFormatSuperblock.m_timestamp = ConvergedScraperStatsCache.nTime;
 
     _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock.m_projects.size()));
     res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock.m_projects.size());
     _log(logattribute::INFO, "testnewsb", "m_cpids size = " + std::to_string(NewFormatSuperblock.m_cpids.size()));
     res.pushKV("m_cpids size", (uint64_t) NewFormatSuperblock.m_cpids.size());
+    _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+    res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock.m_cpids.Zeros());
 
-    uint64_t nmProjectCPIDStatsTotalSize = 0;
-    for (auto const& entry : NewFormatSuperblock.m_projects)
-    {
-        _log(logattribute::INFO, "testnewsb", "m_projects ProjID " + entry.first
-             + ", CPID size " + std::to_string(entry.second.m_cpids.size()));
-        nmProjectCPIDStatsTotalSize += entry.second.m_cpids.size();
-    }
-
-    _log(logattribute::INFO, "testnewsb", "m_projects.m_cpids total size = " + std::to_string(nmProjectCPIDStatsTotalSize));
-    res.pushKV("m_projects.m_cpids total size", nmProjectCPIDStatsTotalSize);
-
-    // Version 1: compare serialization without full project stats:
-    //
     nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
     nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
 
@@ -4708,35 +4694,19 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock serialization", "FAILED");
     }
 
+    NewFormatSuperblock = NN::Superblock::UnpackLegacy(sSBCoreData_out);
+    NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblock);
+    std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
 
-    // Version 2: compare serialization with full project stats:
-    //
-    NewFormatSuperblock.m_version = 2;
+    res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
+    res.pushKV("old_legacy_hash", old_legacy_hash);
 
-    nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
-    nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
-
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize2 = " + std::to_string(nNewFormatSuperblockSerSize));
-    res.pushKV("nNewFormatSuperblockSerSize2", nNewFormatSuperblockSerSize);
-
-    ss2 << NewFormatSuperblock;
-    ss2 >> NewFormatSuperblock_out;
-
-    nNewFormatSuperblock_outSerSize = NewFormatSuperblock_out.GetSerializeSize(SER_NETWORK, 1);
-    nNewFormatSuperblock_outHash = SerializeHash(NewFormatSuperblock_out);
-
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize2 = " + std::to_string(nNewFormatSuperblock_outSerSize));
-    res.pushKV("nNewFormatSuperblock_outSerSize2", nNewFormatSuperblock_outSerSize);
-
-    if (nNewFormatSuperblockHash == nNewFormatSuperblock_outHash)
-    {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock2 serialization passed.");
-        res.pushKV("NewFormatSuperblock2 serialization", "passed");
-    }
-    else
-    {
-        _log(logattribute::ERR, "testnewsb", "NewFormatSuperblock2 serialization FAILED.");
-        res.pushKV("NewFormatSuperblock2 serialization", "FAILED");
+    if (new_legacy_hash == old_legacy_hash) {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash passed.");
+        res.pushKV("NewFormatSuperblock legacy hash", "passed");
+    } else {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash FAILED.");
+        res.pushKV("NewFormatSuperblock legacy hash", "FAILED");
     }
 
     return res;
