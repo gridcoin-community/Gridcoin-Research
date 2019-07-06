@@ -100,6 +100,9 @@ AppCacheSectionExt mScrapersExt = {};
 
 // Lets try to start using some lockless synchronization.
 std::atomic<int64_t> nSyncTime {0};
+// Starting state is always out of sync. This atomic is to avoid multiple threads calling
+// OutOfSyncByAge(), which takes a lock on cs_main and can cause deadlocks.
+std::atomic<bool> fOutOfSyncByAge {true};
 
 CCriticalSection cs_mScrapersExt;
 
