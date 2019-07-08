@@ -166,40 +166,19 @@ BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
 {
     CBlockIndex index;
     index.nTime = 1538066417;
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), CONSTANT_BLOCK_REWARD);
 }
 
-BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
+BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldBeIgnored)
 {
     const int64_t time = 123456;
-    const int64_t cbr = 14.9 * COIN;
 
     CBlockIndex index;
     index.nVersion = 10;
     index.nTime = time;
 
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), cbr);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
-{
-    const int64_t time = 123456;
-    CBlockIndex index;
-    index.nTime = time;
-
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), 0);
-}
-
-BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
-{
-    const int64_t time = 123456;
-    CBlockIndex index;
-    index.nTime = time;
-
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 2.1), time);
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR * 2);
+    WriteCache(Section::PROTOCOL, "blockreward1", "15", time);
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), CONSTANT_BLOCK_REWARD);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
@@ -212,7 +191,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
     // relative to the block.
     WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
 
-    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), DEFAULT_CBR);
+    BOOST_CHECK_EQUAL(GetConstantBlockReward(&index), CONSTANT_BLOCK_REWARD);
 }
 
 

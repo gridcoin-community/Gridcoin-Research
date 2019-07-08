@@ -32,7 +32,7 @@ static const int LAST_POW_BLOCK = 2050;
 static const int CONSENSUS_LOOKBACK = 5;  //Amount of blocks to go back from best block, to avoid counting forked blocks
 static const int BLOCK_GRANULARITY = 10;  //Consensus block divisor
 static const int TALLY_GRANULARITY = BLOCK_GRANULARITY;
-static const int64_t DEFAULT_CBR = 10 * COIN;
+static const int64_t CONSTANT_BLOCK_REWARD = 10 * COIN;
 
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;

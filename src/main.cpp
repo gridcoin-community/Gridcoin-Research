@@ -1792,27 +1792,15 @@ double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetConstantBlockReward(const CBlockIndex* index)
 {
-    // The constant block reward is set to a default, voted on value, but this can
-    // be overridden using an admin message. This allows us to change the reward
-    // amount without having to release a mandatory with updated rules. In the case
-    // there is a breach or leaked admin keys the rewards are clamped to twice that
-    // of the default value.    
-    const int64_t MIN_CBR = 0;
-    const int64_t MAX_CBR = DEFAULT_CBR * 2;
-
-    int64_t reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = ReadCache(Section::PROTOCOL, "blockreward1");
-
-    //TODO: refactor the expire checking to subroutine
-    //Note: time constant is same as GetBeaconPublicKey
-    if( (index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60) )
-    {
-        reward = atoi64(oCBReward.value);
-    }
-
-    reward = std::max(reward, MIN_CBR);
-    reward = std::min(reward, MAX_CBR);
-    return reward;
+    // Constant block reward used to be configurable through an admin message.
+    // While convenient it should probably be more explicit through hard coded
+    // values and poll driven decisions. This also makes the implementation
+    // easier as there is no need for handling abnormal CBR reward values due
+    // to leaked keys.
+    //
+    // If the reward values changes in the future the value can be
+    // conditionally set here based on the version of "index".
+    return CONSTANT_BLOCK_REWARD;
 }
 
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
