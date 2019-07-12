@@ -393,9 +393,7 @@ std::string Superblock::PackLegacy() const
         << "<BINARY>";
 
     for (const auto& cpid_pair : m_cpids) {
-        uint16_t mag = htobe16(
-            // Allowed magnitude range is 0 to 65535:
-            std::max<uint16_t>(0, std::min<uint16_t>(cpid_pair.second, 65535)));
+        uint16_t mag = htobe16(cpid_pair.second);
 
         out.write(reinterpret_cast<const char*>(cpid_pair.first.Raw().data()), 16);
         out.write(reinterpret_cast<const char*>(&mag), sizeof(uint16_t));
