@@ -258,7 +258,7 @@ bool CheckProofOfResearch(
     const CBlockIndex* pindexPrev, //previous block in chain index
     const CBlock &block);    //block to check
 
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake);
+unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
 int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
@@ -288,8 +288,6 @@ double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 void AddRARewardBlock(const CBlockIndex* pIndex);
 MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 
-unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime);
-unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime);
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);

@@ -1228,7 +1228,7 @@ void StakeMiner(CWallet *pwallet)
         // * Create a bare block
         StakeBlock.nTime= GetAdjustedTime();
         StakeBlock.nNonce= 0;
-        StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
+        StakeBlock.nBits = GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
         //tx 0 is coin_base
         CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
