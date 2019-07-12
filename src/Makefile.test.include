@@ -46,6 +46,7 @@ GRIDCOIN_TESTS =\
   test/rpc_tests.cpp \
   test/script_P2SH_tests.cpp \
   test/script_tests.cpp \
+  test/serialize_tests.cpp \
   test/sigopcount_tests.cpp \
   test/test_gridcoin.cpp \
   test/transaction_tests.cpp \
