@@ -33,17 +33,6 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
 
-namespace
-{
-    int64_t CoinFromValue(double dAmount)
-    {
-        if (dAmount <= 0.0 || dAmount > MAX_MONEY)        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-        int64_t nAmount = roundint64(dAmount * COIN);
-        if (!MoneyRange(nAmount))                         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-        return nAmount;
-    }
-}
-
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapWallet
