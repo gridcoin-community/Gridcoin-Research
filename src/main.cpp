@@ -4685,12 +4685,6 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     return result;
 }
 
-double GetTotalOwedAmount(std::string cpid)
-{
-    StructCPID& o = GetInitializedStructCPID2(cpid,mvMagnitudes);
-    return o.totalowed;
-}
-
 double GetOwedAmount(std::string cpid)
 {
     if (mvMagnitudes.size() > 1)
