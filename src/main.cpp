@@ -2252,17 +2252,6 @@ bool LessVerbose(int iMax1000)
      return false;
 }
 
-
-bool KeyEnabled(std::string key)
-{
-    if (mapArgs.count("-" + key))
-    {
-            std::string sBool = GetArg("-" + key, "false");
-            if (sBool == "true") return true;
-    }
-    return false;
-}
-
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
 {
     if (IsCoinBase())
