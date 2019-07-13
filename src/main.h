@@ -1110,8 +1110,6 @@ public:
         return (int64_t)nTime;
     }
 
-    void UpdateTime(const CBlockIndex* pindexPrev);
-
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
     {
