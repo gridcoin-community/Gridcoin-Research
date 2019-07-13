@@ -78,7 +78,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
-extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
@@ -7153,24 +7152,6 @@ std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
     
     out_popularity = highest_popularity;
     return neural_hash;
-}
-
-std::string GetNeuralNetworkReport()
-{
-    //Returns a report of the networks neural hashes in order of popularity
-    std::string neural_hash = "";
-    std::string report = "Neural_hash, Popularity\n";
-    std::string row = "";
-    
-    // Copy to a sorted map.
-    std::map<std::string, double> sorted_hashes(
-                mvNeuralNetworkHash.begin(),
-                mvNeuralNetworkHash.end());
-    
-    for(auto& entry : sorted_hashes)
-        report += entry.first + "," + RoundToString(entry.second, 0) + "\n";
-
-    return report;
 }
 
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
