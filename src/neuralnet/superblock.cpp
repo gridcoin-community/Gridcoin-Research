@@ -350,14 +350,14 @@ Superblock Superblock::FromStats(const ScraperStats& stats)
             case statsobjecttype::byCPID:
                 superblock.m_cpids.Add(
                     Cpid::Parse(object_id),
-                    std::nearbyint(entry.second.statsvalue.dMag));
+                    std::round(entry.second.statsvalue.dMag));
 
                 break;
 
             case statsobjecttype::byProject:
                 superblock.m_projects.Add(object_id, ProjectStats(
-                    std::nearbyint(entry.second.statsvalue.dAvgRAC),
-                    std::nearbyint(entry.second.statsvalue.dRAC)));
+                    std::round(entry.second.statsvalue.dAvgRAC),
+                    std::round(entry.second.statsvalue.dRAC)));
 
                 break;
 
