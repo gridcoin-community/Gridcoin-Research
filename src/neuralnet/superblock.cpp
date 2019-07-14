@@ -356,6 +356,7 @@ Superblock Superblock::FromStats(const ScraperStats& stats)
 
             case statsobjecttype::byProject:
                 superblock.m_projects.Add(object_id, ProjectStats(
+                    std::round(entry.second.statsvalue.dTC),
                     std::round(entry.second.statsvalue.dAvgRAC),
                     std::round(entry.second.statsvalue.dRAC)));
 
@@ -537,12 +538,27 @@ void Superblock::CpidIndex::Add(const MiningId id, const uint16_t magnitude)
 // Class: Superblock::ProjectStats
 // -----------------------------------------------------------------------------
 
-Superblock::ProjectStats::ProjectStats() : m_average_rac(0) , m_rac(0)
+Superblock::ProjectStats::ProjectStats()
+    : m_total_credit(0)
+    , m_average_rac(0)
+    , m_rac(0)
+{
+}
+
+Superblock::ProjectStats::ProjectStats(
+    uint64_t total_credit,
+    uint64_t average_rac,
+    uint64_t rac)
+    : m_total_credit(total_credit)
+    , m_average_rac(average_rac)
+    , m_rac(rac)
 {
 }
 
 Superblock::ProjectStats::ProjectStats(uint64_t average_rac, uint64_t rac)
-    : m_average_rac(average_rac), m_rac(rac)
+    : m_total_credit(0)
+    , m_average_rac(average_rac)
+    , m_rac(rac)
 {
 }
 

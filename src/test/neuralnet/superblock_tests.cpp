@@ -403,6 +403,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
     BOOST_CHECK(projects.AverageRac() == 205.0);
 
     if (const auto project_1 = projects.Try("project_1")) {
+        BOOST_CHECK(project_1->m_total_credit == 3000);
         BOOST_CHECK(project_1->m_average_rac == 102);
         BOOST_CHECK(project_1->m_rac == 203);
     } else {
@@ -410,6 +411,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
     }
 
     if (const auto project_2 = projects.Try("project_2")) {
+        BOOST_CHECK(project_2->m_total_credit == 7000);
         BOOST_CHECK(project_2->m_average_rac == 104);
         BOOST_CHECK(project_2->m_rac == 207);
     } else {
@@ -462,6 +464,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
     BOOST_CHECK(superblock.m_projects.AverageRac() == 511.5);
 
     if (const auto project_1 = superblock.m_projects.Try("project_1")) {
+        BOOST_CHECK(project_1->m_total_credit == 0);
         BOOST_CHECK(project_1->m_average_rac == 123);
         BOOST_CHECK(project_1->m_rac == 456);
     } else {
@@ -469,6 +472,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
     }
 
     if (const auto project_2 = superblock.m_projects.Try("project_2")) {
+        BOOST_CHECK(project_2->m_total_credit == 0);
         BOOST_CHECK(project_2->m_average_rac == 234);
         BOOST_CHECK(project_2->m_rac == 567);
     } else {
@@ -519,6 +523,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     BOOST_CHECK(superblock.m_projects.AverageRac() == 511.5);
 
     if (const auto project_1 = superblock.m_projects.Try("project_1")) {
+        BOOST_CHECK(project_1->m_total_credit == 0);
         BOOST_CHECK(project_1->m_average_rac == 123);
         BOOST_CHECK(project_1->m_rac == 456);
     } else {
@@ -526,6 +531,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     }
 
     if (const auto project_2 = superblock.m_projects.Try("project_2")) {
+        BOOST_CHECK(project_2->m_total_credit == 0);
         BOOST_CHECK(project_2->m_average_rac == 234);
         BOOST_CHECK(project_2->m_rac == 567);
     } else {
@@ -597,10 +603,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
+        0x96, 0x38,                                     // Total credit (VARINT)
         0x66,                                           // Average RAC (VARINT)
         0x80, 0x4b,                                     // Total RAC (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
+        0xb5, 0x58,                                     // Total credit (VARINT)
         0x68,                                           // Average RAC (VARINT)
         0x80, 0x4f,                                     // Total RAC (VARINT)
     };
@@ -631,10 +639,12 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
+        0x96, 0x38,                                     // Total credit (VARINT)
         0x66,                                           // Average RAC (VARINT)
         0x80, 0x4b,                                     // Total RAC (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
+        0xb5, 0x58,                                     // Total credit (VARINT)
         0x68,                                           // Average RAC (VARINT)
         0x80, 0x4f,                                     // Total RAC (VARINT)
     };
@@ -662,6 +672,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(projects.AverageRac() == 205.0);
 
     if (const auto project1 = projects.Try("project_1")) {
+        BOOST_CHECK(project1->m_total_credit == 3000);
         BOOST_CHECK(project1->m_average_rac == 102);
         BOOST_CHECK(project1->m_rac == 203);
     } else {
@@ -669,6 +680,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     }
 
     if (const auto project2 = projects.Try("project_2")) {
+        BOOST_CHECK(project2->m_total_credit == 7000);
         BOOST_CHECK(project2->m_average_rac == 104);
         BOOST_CHECK(project2->m_rac == 207);
     } else {
@@ -962,16 +974,64 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_zero_statistics_object)
 {
     NN::Superblock::ProjectStats stats;
 
+    BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 0);
     BOOST_CHECK(stats.m_rac == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_statistics)
 {
+    NN::Superblock::ProjectStats stats(123, 456, 789);
+
+    BOOST_CHECK(stats.m_total_credit == 123);
+    BOOST_CHECK(stats.m_average_rac == 456);
+    BOOST_CHECK(stats.m_rac == 789);
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_supplied_legacy_superblock_statistics)
+{
     NN::Superblock::ProjectStats stats(123, 456);
 
+    BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 123);
     BOOST_CHECK(stats.m_rac == 456);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    const std::vector<unsigned char> expected {
+        0x01, // Total credit (VARINT)
+        0x02, // Average RAC (VARINT)
+        0x03, // Total RAC (VARINT)
+    };
+
+    NN::Superblock::ProjectStats project(1, 2, 3);
+
+    BOOST_CHECK(project.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << project;
+    std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output == expected);
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    const std::vector<unsigned char> bytes {
+        0x01, // Total credit (VARINT)
+        0x02, // Average RAC (VARINT)
+        0x03, // Total RAC (VARINT)
+    };
+
+    NN::Superblock::ProjectStats project;
+
+    CDataStream stream(bytes, SER_NETWORK, 1);
+    stream >> project;
+
+    BOOST_CHECK(project.m_total_credit == 1);
+    BOOST_CHECK(project.m_average_rac == 2);
+    BOOST_CHECK(project.m_rac == 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1023,11 +1083,12 @@ BOOST_AUTO_TEST_CASE(it_fetches_the_statistics_of_a_specific_project)
 {
     NN::Superblock::ProjectIndex projects;
 
-    projects.Add("project_name", NN::Superblock::ProjectStats(123, 456));
+    projects.Add("project_name", NN::Superblock::ProjectStats(123, 456, 789));
 
     if (const auto project = projects.Try("project_name")) {
-        BOOST_CHECK(project->m_average_rac == 123);
-        BOOST_CHECK(project->m_rac == 456);
+        BOOST_CHECK(project->m_total_credit == 123);
+        BOOST_CHECK(project->m_average_rac == 456);
+        BOOST_CHECK(project->m_rac == 789);
     } else {
         BOOST_FAIL("Project not found in index.");
     }
@@ -1165,18 +1226,20 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
-        0x01,                                           // Average RAC (VARINT)
-        0x02,                                           // Total RAC (VARINT)
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
-        0x01,                                           // Average RAC (VARINT)
-        0x02,                                           // Total RAC (VARINT)
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
     };
 
     NN::Superblock::ProjectIndex projects;
 
-    projects.Add("project_1", NN::Superblock::ProjectStats(1, 2));
-    projects.Add("project_2", NN::Superblock::ProjectStats(1, 2));
+    projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
+    projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
 
     BOOST_CHECK(projects.GetSerializeSize(SER_NETWORK, 1) == expected.size());
 
@@ -1193,12 +1256,14 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
-        0x01,                                           // Average RAC (VARINT)
-        0x02,                                           // Total RAC (VARINT)
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
-        0x01,                                           // Average RAC (VARINT)
-        0x02,                                           // Total RAC (VARINT)
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
     };
 
     NN::Superblock::ProjectIndex projects;
@@ -1209,21 +1274,23 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(projects.size() == 2);
 
     if (const auto project1 = projects.Try("project_1")) {
-        BOOST_CHECK(project1->m_average_rac == 1);
-        BOOST_CHECK(project1->m_rac == 2);
+        BOOST_CHECK(project1->m_total_credit == 1);
+        BOOST_CHECK(project1->m_average_rac == 2);
+        BOOST_CHECK(project1->m_rac == 3);
     } else {
         BOOST_FAIL("Project 1 not found in index.");
     }
 
     if (const auto project2 = projects.Try("project_2")) {
-        BOOST_CHECK(project2->m_average_rac == 1);
-        BOOST_CHECK(project2->m_rac == 2);
+        BOOST_CHECK(project2->m_total_credit == 1);
+        BOOST_CHECK(project2->m_average_rac == 2);
+        BOOST_CHECK(project2->m_rac == 3);
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
 
-    BOOST_CHECK(projects.TotalRac() == 4);
-    BOOST_CHECK(projects.AverageRac() == 2);
+    BOOST_CHECK(projects.TotalRac() == 6);
+    BOOST_CHECK(projects.AverageRac() == 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END();
@@ -1267,8 +1334,8 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     cpids.Add(NN::Cpid::Parse("15141312111009080706050403020100"), 1);
 
     auto& projects = superblock.m_projects;
-    projects.Add("project_1", NN::Superblock::ProjectStats(0, 0));
-    projects.Add("project_2", NN::Superblock::ProjectStats(0, 0));
+    projects.Add("project_1", NN::Superblock::ProjectStats(0, 0, 0));
+    projects.Add("project_2", NN::Superblock::ProjectStats(0, 0, 0));
 
     std::vector<unsigned char> input {
         0x02,                                            // CPIDs size
@@ -1282,10 +1349,12 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
         0x02,                                            // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74,  // "project_1" key
         0x5f, 0x31,                                      // ...
+        0x00,                                            // Total credit
         0x00,                                            // Average RAC
         0x00,                                            // Total RAC
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74,  // "project_2" key
         0x5f, 0x32,                                      // ...
+        0x00,                                            // Total credit
         0x00,                                            // Average RAC
         0x00,                                            // Total RAC
     };
@@ -1297,7 +1366,7 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
     BOOST_CHECK(hash == expected);
     BOOST_CHECK(hash.ToString()
-        == "3982613952361133c39baa28ec85cbe3cb35ec6f5bf4418538fae7f7420fd77c");
+        == "99b20dca6d76a3ab1b704925535ec08a9d46fbf95ca3036396b628e23db00156");
 }
 
 BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)

@@ -301,16 +301,28 @@ public:
         //!
         //! \brief Initialize an object with the provided statistics.
         //!
+        //! \param total_credit All-time credit produced by the project.
+        //! \param average_rac  Average recent average credit of the project.
+        //! \param rac          Sum of the RAC of all the project CPIDs.
+        //!
+        ProjectStats(uint64_t total_credit, uint64_t average_rac, uint64_t rac);
+
+        //!
+        //! \brief Initialize an object with the provided statistics available
+        //! in a legacy superblock.
+        //!
         //! \param average_rac Average recent average credit of the project.
         //! \param rac         Sum of the RAC of all the project CPIDs.
         //!
         ProjectStats(uint64_t average_rac, uint64_t rac);
 
-        uint64_t m_average_rac; //!< Average project recent average credit.
-        uint64_t m_rac;         //!< Sum of the RAC of all the project CPIDs.
+        uint64_t m_total_credit; //!< All-time credit produced by the project.
+        uint64_t m_average_rac;  //!< Average project recent average credit.
+        uint64_t m_rac;          //!< Sum of the RAC of all the project CPIDs.
 
         IMPLEMENT_SERIALIZE
         (
+            READWRITE(VARINT(m_total_credit));
             READWRITE(VARINT(m_average_rac));
             READWRITE(VARINT(m_rac));
         )
@@ -437,7 +449,8 @@ public:
     //!
     //! Version 2: Superblock data serializable using the built-in serialize.h
     //! facilities. Stored in the superblock field of a block rather than in a
-    //! transaction to provide for a greater size.
+    //! transaction to provide for a greater size. It includes total credit of
+    //! each project to facilitate automated greylisting.
     //!
     uint32_t m_version = CURRENT_VERSION;
 
