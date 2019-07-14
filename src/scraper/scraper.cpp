@@ -4694,7 +4694,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock serialization", "FAILED");
     }
 
-    NewFormatSuperblock = NN::Superblock::UnpackLegacy(sSBCoreData_out);
+    NewFormatSuperblock = NN::Superblock::UnpackLegacy(sPackedSBCoreData);
     NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblock);
     std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
 
@@ -4708,6 +4708,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash FAILED.");
         res.pushKV("NewFormatSuperblock legacy hash", "FAILED");
     }
+
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
 
     return res;
 }
