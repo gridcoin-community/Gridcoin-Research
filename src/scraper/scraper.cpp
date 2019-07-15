@@ -4529,7 +4529,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
 
                     NN::Superblock superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
 
-                    superblock.FromStats(mScraperConvergedStats);
+                    superblock = NN::Superblock::FromStats(mScraperConvergedStats);
 
                     ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
@@ -4582,7 +4582,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
             // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
             // appropriate for the single shot.
             ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
-            superblock.FromStats(mScraperStats);
+            superblock = NN::Superblock::FromStats(mScraperStats);
 
             // Signal the UI there is a contract.
             if(superblock.GetSerializeSize(SER_NETWORK, 1))
