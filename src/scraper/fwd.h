@@ -7,7 +7,6 @@
 
 #include "util.h"
 
-
 /*********************
 * Scraper ENUMS      *
 *********************/
@@ -116,17 +115,6 @@ struct ScraperObjectStatsKeyComp
 
 typedef std::map<ScraperObjectStatsKey, ScraperObjectStats, ScraperObjectStatsKeyComp> ScraperStats;
 
-struct ConvergedScraperStats
-{
-    bool bClean = false;
-    int64_t nTime;
-    ScraperStats mScraperConvergedStats;
-    std::string sContractHash;
-    std::string sContract;
-
-    ConvergedManifest Convergence;
-};
-
 // Extended AppCache structures similar to those in AppCache.h, except a deleted flag is provided
 struct AppCacheEntryExt
 {
@@ -136,7 +124,5 @@ struct AppCacheEntryExt
 };
 
 typedef std::unordered_map<std::string, AppCacheEntryExt> AppCacheSectionExt;
-
-
 
 #endif // FWD_H

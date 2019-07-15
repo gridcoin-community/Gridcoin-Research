@@ -626,3 +626,35 @@ private:
     boost::variant<Invalid, uint256, Md5Sum> m_hash;
 }; // QuorumHash
 }
+
+
+
+// This is part of the scraper but is put here, because it needs the complete NN:Superblock class.
+struct ConvergedScraperStats
+{
+    // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
+    // This flag is marked true in ScraperGetNeuralContract and false on receipt or deletion of statistics objects.
+    bool bClean = false;
+
+    int64_t nTime;
+    ScraperStats mScraperConvergedStats;
+    ConvergedManifest Convergence;
+
+    // Legacy superblock contract and hash.
+    std::string sContractHash;
+    std::string sContract;
+
+    // New superblock object and hash.
+    NN::Superblock NewFormatSuperblock;
+    NN::QuorumHash nNewFormatSuperblockHash;
+
+    uint32_t GetVersion()
+    {
+        uint32_t nVersion = 0;
+
+        if (sContractHash.empty() && sContract.empty()) nVersion = NewFormatSuperblock.m_version;
+
+        return nVersion;
+    }
+
+};

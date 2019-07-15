@@ -28,6 +28,7 @@
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "fwd.h"
+#include "neuralnet/superblock.h"
 
 /*********************
 * Scraper Namepsace  *
@@ -117,7 +118,9 @@ std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
+NN::QuorumHash ScraperGetSuperblockHash();
 bool ScraperSynchronizeDPOR();
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };

@@ -12,6 +12,9 @@ extern std::string ExplainMagnitude(std::string sCPID);
 
 using namespace NN;
 
+extern Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+extern QuorumHash ScraperGetSuperblockHash();
+
 bool NeuralNetNative::IsEnabled()
 {
     return GetArgument("disableneuralnetwork", "false") == "false";
@@ -29,9 +32,19 @@ std::string NeuralNetNative::GetNeuralHash()
     return ScraperGetNeuralHash();
 }
 
+QuorumHash NeuralNetNative::GetSuperblockHash()
+{
+    return ScraperGetSuperblockHash();
+}
+
 std::string NeuralNetNative::GetNeuralContract()
 {
     return ScraperGetNeuralContract(false, false);
+}
+
+Superblock NeuralNetNative::GetSuperblockContract()
+{
+    return ScraperGetSuperblockContract(false, false);
 }
 
 // Note that the data argument is still used here for compatibility, but I don't think it will
@@ -50,5 +63,6 @@ int64_t NeuralNetNative::IsNeuralNet()
 {
     // This is the NN version number. TODO: Consider different number for new NN?
     int64_t nNeuralNetVersion = 1999;
+
     return nNeuralNetVersion;
 }
