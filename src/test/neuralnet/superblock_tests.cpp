@@ -1470,4 +1470,32 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     BOOST_CHECK(hash.ToString() == "00000000000000000000000000000000");
 }
 
+BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
+{
+    std::hash<NN::QuorumHash> hasher;
+
+    NN::QuorumHash hash_invalid;
+
+    BOOST_CHECK(hasher(hash_invalid) == 0);
+
+    NN::QuorumHash hash_sha256(uint256(std::vector<unsigned char> {
+        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    }));
+
+
+    // 0x01 + 0x02 + 0x03 + 0x04 (SHA256 quarters, big endian)
+    BOOST_CHECK(hasher(hash_sha256) == 10);
+
+    NN::QuorumHash hash_md5(std::array<unsigned char, 16> {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    });
+
+    // 0x0706050403020100 + 0x1514131211100908 (MD5 halves, little endian)
+    BOOST_CHECK(hasher(hash_md5) == 2024957465561532936);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

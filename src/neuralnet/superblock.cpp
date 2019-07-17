@@ -744,6 +744,18 @@ bool QuorumHash::Valid() const
     return Which() != Kind::INVALID;
 }
 
+const unsigned char* QuorumHash::Raw() const
+{
+    switch (Which()) {
+        case Kind::INVALID:
+            return nullptr;
+        case Kind::SHA256:
+            return boost::get<uint256>(m_hash).begin();
+        case Kind::MD5:
+            return boost::get<Md5Sum>(m_hash).data();
+    }
+}
+
 std::string QuorumHash::ToString() const
 {
     return boost::apply_visitor(QuorumHashToStringVisitor(), m_hash);
