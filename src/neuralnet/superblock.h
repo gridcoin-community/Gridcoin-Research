@@ -580,6 +580,18 @@ public:
     QuorumHash(Md5Sum legacy_hash);
 
     //!
+    //! \brief Initialize the appropriate quorum hash variant from the supplied
+    //! bytes.
+    //!
+    //! Initializes to an invalid hash variant when the bytes do not represent
+    //! a valid quorum hash.
+    //!
+    //! \param bytes 32 bytes for a SHA256 hash or 16 bytes for a legacy MD5
+    //! hash.
+    //!
+    QuorumHash(const std::vector<unsigned char>& bytes);
+
+    //!
     //! \brief Hash the provided superblock.
     //!
     //! \param superblock Superblock object containing the data to hash.
@@ -588,6 +600,19 @@ public:
     //! version number of the superblock.
     //!
     static QuorumHash Hash(const Superblock& superblock);
+
+    //!
+    //! \brief Initialize a quorum hash object by parsing the supplied string
+    //! representation of a hash.
+    //!
+    //! \param hex A 64-character hex-encoded string for a SHA256 hash, or a
+    //! 32-character hex-encoded string for a legacy MD5 hash.
+    //!
+    //! \return A quorum hash object that contains the bytes of the hash value
+    //! represented by the string or an invalid quorum hash if the string does
+    //! not contain a well-formed MD5 or SHA256 hash.
+    //!
+    static QuorumHash Parse(const std::string& hex);
 
     bool operator==(const QuorumHash& other) const;
     bool operator!=(const QuorumHash& other) const;
