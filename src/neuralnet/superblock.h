@@ -611,6 +611,14 @@ public:
     bool Valid() const;
 
     //!
+    //! \brief Get a pointer to the bytes in the hash.
+    //!
+    //! \return A pointer to the beginning of the bytes in the hash, or a
+    //! \c nullptr value if the object contains an invalid hash.
+    //!
+    const unsigned char* Raw() const;
+
+    //!
     //! \brief Get the string representation of the hash.
     //!
     //! \return A 64-character hex-encoded string for a SHA256 hash, or a
@@ -625,9 +633,57 @@ private:
     //!
     boost::variant<Invalid, uint256, Md5Sum> m_hash;
 }; // QuorumHash
-}
+} // namespace NN
 
+namespace std {
+//!
+//! \brief Specializes std::hash<T> for NN::QuorumHash.
+//!
+//! This enables the use of NN::QuorumHash as a key in a std::unordered_map
+//! object.
+//!
+//! CONSENSUS: Don't use the hash produced by this routine (or by any std::hash
+//! specialization) in protocol-specific implementations. It ignores endianness
+//! and outputs a value with a chance of collision probably too great for usage
+//! besides the intended local look-up functionality.
+//!
+template<>
+struct hash<NN::QuorumHash>
+{
+    //!
+    //! \brief Create a hash of the supplied quorum hash object.
+    //!
+    //! \param quorum_hash Contains the bytes to hash.
+    //!
+    //! \return A hash as the sum of the two halves of the bytes in a legacy
+    //! MD5 hash, or the sum of the quarters of a SHA256 hash. Returns 0 for
+    //! an invalid hash.
+    //!
+    size_t operator()(const NN::QuorumHash& quorum_hash) const
+    {
+        // Just convert the quorum hash into a value that we can store in a
+        // size_t object. The hashes are already unique identifiers.
+        //
+        size_t out = 0;
+        const unsigned char* const bytes = quorum_hash.Raw();
 
+        switch (quorum_hash.Which()) {
+            case NN::QuorumHash::Kind::INVALID:
+                break; // 0 represents invalid
+            case NN::QuorumHash::Kind::SHA256:
+                out = *reinterpret_cast<const uint64_t*>(bytes + 16)
+                    + *reinterpret_cast<const uint64_t*>(bytes + 24);
+                // Pass-through case.
+            case NN::QuorumHash::Kind::MD5:
+                out += *reinterpret_cast<const uint64_t*>(bytes)
+                    + *reinterpret_cast<const uint64_t*>(bytes + 8);
+                break;
+        }
+
+        return out;
+    }
+};
+} // namespace std
 
 // This is part of the scraper but is put here, because it needs the complete NN:Superblock class.
 struct ConvergedScraperStats
