@@ -1325,6 +1325,46 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_a_legacy_md5_hash)
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
 }
 
+BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_bytes)
+{
+    NN::QuorumHash hash_invalid(std::vector<unsigned char> { 0x00 });
+
+    BOOST_CHECK(hash_invalid.Valid() == false);
+    BOOST_CHECK(hash_invalid.Which() == NN::QuorumHash::Kind::INVALID);
+
+    const std::vector<unsigned char> sha256_bytes {
+        0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+
+    NN::QuorumHash hash_sha256(sha256_bytes);
+
+    BOOST_CHECK(hash_sha256.Valid() == true);
+    BOOST_CHECK(hash_sha256.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        sha256_bytes.begin(),
+        sha256_bytes.end(),
+        hash_sha256.Raw(),
+        hash_sha256.Raw() + 32);
+
+    const std::vector<unsigned char> md5_bytes {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    NN::QuorumHash hash_md5(md5_bytes);
+
+    BOOST_CHECK(hash_md5.Valid() == true);
+    BOOST_CHECK(hash_md5.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        md5_bytes.begin(),
+        md5_bytes.end(),
+        hash_md5.Raw(),
+        hash_md5.Raw() + 16);
+}
+
 BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 {
     NN::Superblock superblock;
@@ -1367,6 +1407,76 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     BOOST_CHECK(hash == expected);
     BOOST_CHECK(hash.ToString()
         == "99b20dca6d76a3ab1b704925535ec08a9d46fbf95ca3036396b628e23db00156");
+}
+
+BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
+{
+    const std::vector<unsigned char> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    NN::QuorumHash hash = NN::QuorumHash::Parse(HexStr(expected));
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        expected.begin(),
+        expected.end(),
+        hash.Raw(),
+        hash.Raw() + 32);
+}
+
+BOOST_AUTO_TEST_CASE(it_parses_a_legacy_md5_hash_string)
+{
+    const std::vector<unsigned char> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    NN::QuorumHash hash = NN::QuorumHash::Parse(HexStr(expected));
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        expected.begin(),
+        expected.end(),
+        hash.Raw(),
+        hash.Raw() + 16);
+}
+
+BOOST_AUTO_TEST_CASE(it_parses_an_invalid_quorum_hash_to_an_invalid_variant)
+{
+    // Empty:
+    NN::QuorumHash hash = NN::QuorumHash::Parse("");
+    BOOST_CHECK(hash.Valid() == false);
+
+    // Too short MD5: 31 characters
+    hash = NN::QuorumHash::Parse("0001020304050607080910111213141");
+    BOOST_CHECK(hash.Valid() == false);
+
+    // Too long MD5: 33 characters
+    hash = NN::QuorumHash::Parse("000102030405060708091011121314155");
+    BOOST_CHECK(hash.Valid() == false);
+
+    // Non-hex character at the end:
+    hash = NN::QuorumHash::Parse("0001020304050607080910111213141Z");
+    BOOST_CHECK(hash.Valid() == false);
+
+    // Too short SHA256: 63 characters
+    hash = NN::QuorumHash::Parse(
+        "000102030405060708091011121314150001020304050607080910111213141");
+    BOOST_CHECK(hash.Valid() == false);
+
+    // Too long SHA256: 65 characters
+    hash = NN::QuorumHash::Parse(
+        "00010203040506070809101112131415000102030405060708091011121314155");
+    BOOST_CHECK(hash.Valid() == false);
+
+    // Non-hex character at the end:
+    hash = NN::QuorumHash::Parse(
+        "000102030405060708091011121314150001020304050607080910111213141Z");
+    BOOST_CHECK(hash.Valid() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)

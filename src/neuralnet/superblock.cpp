@@ -633,6 +633,9 @@ void Superblock::ProjectIndex::Add(std::string name, const ProjectStats& stats)
 // Class: QuorumHash
 // -----------------------------------------------------------------------------
 
+static_assert(sizeof(uint256) == 32);
+static_assert(sizeof(QuorumHash::Md5Sum) == 16);
+
 QuorumHash::QuorumHash() : m_hash(Invalid())
 {
 }
@@ -643,6 +646,16 @@ QuorumHash::QuorumHash(uint256 hash) : m_hash(hash)
 
 QuorumHash::QuorumHash(Md5Sum legacy_hash) : m_hash(legacy_hash)
 {
+}
+
+QuorumHash::QuorumHash(const std::vector<unsigned char>& bytes) : QuorumHash()
+{
+    if (bytes.size() == sizeof(uint256)) {
+        m_hash = uint256(bytes);
+    } else if (bytes.size() == sizeof(Md5Sum)) {
+        m_hash = Md5Sum();
+        std::copy(bytes.begin(), bytes.end(), boost::get<Md5Sum>(m_hash).begin());
+    }
 }
 
 QuorumHash QuorumHash::Hash(const Superblock& superblock)
@@ -668,6 +681,15 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     MD5((const unsigned char*)input.data(), input.size(), output.data());
 
     return QuorumHash(output);
+}
+
+QuorumHash QuorumHash::Parse(const std::string& hex)
+{
+    if (hex.size() != sizeof(uint256) * 2 && hex.size() != sizeof(Md5Sum) * 2) {
+        return QuorumHash();
+    }
+
+    return QuorumHash(ParseHex(hex));
 }
 
 bool QuorumHash::operator==(const QuorumHash& other) const
@@ -715,11 +737,11 @@ bool QuorumHash::operator==(const std::string& other) const
             return other.empty();
 
         case Kind::SHA256:
-            return other.size() == 64
+            return other.size() == sizeof(uint256) * 2
                 && boost::get<uint256>(m_hash) == uint256(other);
 
         case Kind::MD5:
-            return other.size() == 32
+            return other.size() == sizeof(Md5Sum) * 2
                 && std::equal(
                     boost::get<Md5Sum>(m_hash).begin(),
                     boost::get<Md5Sum>(m_hash).end(),
@@ -754,6 +776,8 @@ const unsigned char* QuorumHash::Raw() const
         case Kind::MD5:
             return boost::get<Md5Sum>(m_hash).data();
     }
+
+    return nullptr;
 }
 
 std::string QuorumHash::ToString() const
