@@ -33,6 +33,8 @@ int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
 
+namespace NN { std::string GetPrimaryCpid(); }
+
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapWallet
@@ -167,7 +169,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
             {
-                ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, this);
+                ImportBeaconKeysFromConfig(NN::GetPrimaryCpid(), this);
                 return true;
             }
         }

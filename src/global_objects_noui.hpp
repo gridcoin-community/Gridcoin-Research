@@ -70,9 +70,6 @@ extern std::map<std::string, StructCPID> mvNetworkCopy;
 extern std::map<std::string, StructCPID> mvMagnitudes;
 extern std::map<std::string, StructCPID> mvMagnitudesCopy;
 
-//Global CPU Mining CPID:
-extern MiningCPID GlobalCPUMiningCPID;
-
 // Timers
 extern std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 

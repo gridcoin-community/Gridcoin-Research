@@ -71,12 +71,12 @@ bool FindStakeModifierRev(uint64_t& StakeModifier,CBlockIndex* pindexPrev);
 
 // Kernel for V8
 CBigNum CalculateStakeHashV8(
-    const CBlock &CoinBlock, const CTransaction &CoinTx,
-    unsigned CoinTxN, unsigned nTimeTx,
-    uint64_t StakeModifier,
-    const MiningCPID &BoincData);
-int64_t CalculateStakeWeightV8(
-    const CTransaction &CoinTx, unsigned CoinTxN,
-    const MiningCPID &BoincData);
+    const CBlock &CoinBlock,
+    const CTransaction &CoinTx,
+    unsigned CoinTxN,
+    unsigned nTimeTx,
+    uint64_t StakeModifier);
+
+int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN);
 
 #endif // PPCOIN_KERNEL_H

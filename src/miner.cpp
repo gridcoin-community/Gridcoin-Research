@@ -31,8 +31,10 @@ double CoinToDouble(double surrogate);
 
 void ThreadTopUpKeyPool(void* parg);
 
+extern MiningCPID GetMiningCPID();
 double CalculatedMagnitude(int64_t locktime, bool bUseLederstrumpf);
 double GetLastPaymentTimeByCPID(std::string cpid);
+int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 bool HasActiveBeacon(const std::string& cpid);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
@@ -485,8 +487,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         uint64_t StakeModifier = 0;
         if(!FindStakeModifierRev(StakeModifier,pindexPrev))
             continue;
-        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
-        StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
+        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN);
+        StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier);
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -824,17 +826,17 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
 {
     // Append beacon signature to coinbase
-    if (HasActiveBeacon(GlobalCPUMiningCPID.cpid))
+    if (HasActiveBeacon(BoincData.cpid))
     {
         std::string sBoincSignature;
         std::string sError;
-        bool bResult = SignBlockWithCPID(GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, sBoincSignature, sError);
+        bool bResult = SignBlockWithCPID(BoincData.cpid, BoincData.lastblockhash, sBoincSignature, sError);
         if (!bResult)
         {
             return error("SignStakeBlock: Failed to sign boinchash -> %s", sError);
         }
         BoincData.BoincSignature = sBoincSignature;
-        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s", GlobalCPUMiningCPID.cpid, GlobalCPUMiningCPID.lastblockhash, BoincData.BoincSignature);
+        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s", BoincData.cpid, BoincData.lastblockhash, BoincData.BoincSignature);
     }
     block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
 
@@ -937,46 +939,54 @@ void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
 
 bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev, int64_t &nReward)
 {
+    const std::string primary_cpid = NN::GetPrimaryCpid();
+
     //remove fees from coinbase
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
     blocknew.vtx[0].vout[0].SetEmpty();
 
     double OUT_POR = 0;
     double out_interest = 0;
-    double dAccrualAge = 0;
-    double dAccrualMagnitudeUnit = 0;
-    double dAccrualMagnitude = 0;
+    double out_AccrualAge = 0;
+    double out_AccrualMagnitudeUnit = 0;
+    double out_AccrualMagnitude = 0;
 
     // ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD ***************
     // ResearchAge 2
     // Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
 
+    nReward = GetProofOfStakeReward(
+        nCoinAge,
+        nFees,
+        primary_cpid,
+        false,  // Is verifying block? (no)
+        0,      // Verification phase (N/A)
+        pindexPrev->nTime,
+        pindexPrev,
+        OUT_POR,
+        out_interest,
+        out_AccrualAge,
+        out_AccrualMagnitudeUnit,
+        out_AccrualMagnitude);
 
-        nReward = GetProofOfStakeReward(
-        nCoinAge, nFees, GlobalCPUMiningCPID.cpid, false, 0,
-        pindexPrev->nTime, pindexPrev,"createcoinstake",
-        OUT_POR,out_interest,dAccrualAge,dAccrualMagnitudeUnit,dAccrualMagnitude);
-
-
-    miningcpid = GlobalCPUMiningCPID;
     uint256 pbh = 0;
     pbh=pindexPrev->GetBlockHash();
 
+    miningcpid.cpid = primary_cpid;
     miningcpid.lastblockhash = pbh.GetHex();
     miningcpid.LastPaymentTime = GetLastPaymentTimeByCPID(miningcpid.cpid);
     miningcpid.Magnitude = CalculatedMagnitude(blocknew.nTime, false);
+    miningcpid.LastPaymentTime = GetLastPaymentTimeByCPID(primary_cpid);
     miningcpid.ResearchSubsidy = OUT_POR;
-    miningcpid.ResearchAge = dAccrualAge;
-    miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
-    miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
+    miningcpid.ResearchAge = out_AccrualAge;
+    miningcpid.ResearchMagnitudeUnit = out_AccrualMagnitudeUnit;
+    miningcpid.ResearchAverageMagnitude = out_AccrualMagnitude;
     miningcpid.InterestSubsidy = out_interest;
     miningcpid.BoincSignature = "";
     miningcpid.CurrentNeuralHash = "";
     miningcpid.NeuralHash = "";
     miningcpid.superblock = "";
     miningcpid.GRCAddress = DefaultWalletAddress();
-
-    GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
 
     LogPrintf(
         "CreateGridcoinReward: for %s mint %f Research %f, Interest %f ",
@@ -1177,7 +1187,7 @@ void StakeMiner(CWallet *pwallet)
 
         CBlockIndex* pindexPrev = pindexBest;
         CBlock StakeBlock;
-        MiningCPID BoincData;
+        MiningCPID BoincData = GetMiningCPID();
         { LOCK(MinerStatus.lock);
             //clear miner messages
             MinerStatus.ReasonNotStaking="";

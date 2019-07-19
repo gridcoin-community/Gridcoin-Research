@@ -266,9 +266,9 @@ bool CheckProofOfResearch(
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
-int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
-	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
+	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);

@@ -643,14 +643,16 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
     sOutPrivKey = "BUG! deprecated field used";
     LOCK(cs_main);
     {
-        if (!IsResearcher(GlobalCPUMiningCPID.cpid))
+        const std::string primary_cpid = NN::GetPrimaryCpid();
+
+        if (!IsResearcher(primary_cpid))
         {
             sError = "INVESTORS_CANNOT_SEND_BEACONS";
             return false;
         }
 
         //If beacon is already in the chain, exit early
-        if (!GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true).empty())
+        if (!GetBeaconPublicKey(primary_cpid, true).empty())
         {
             // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
             // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)
@@ -676,7 +678,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         }
 
         CKey keyBeacon;
-        if(!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, keyBeacon))
+        if(!GenerateBeaconKeys(primary_cpid, keyBeacon))
         {
             sError = "GEN_KEY_FAIL";
             return false;
@@ -688,11 +690,11 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string GRCAddress = DefaultWalletAddress();
         // Public Signing Key is stored in Beacon
         std::string contract = "UNUSED;" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
-        LogPrintf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
+        LogPrintf("Creating beacon for cpid %s, %s",primary_cpid, contract);
         std::string sBase = EncodeBase64(contract);
         std::string sAction = "add";
         std::string sType = "beacon";
-        std::string sName = GlobalCPUMiningCPID.cpid;
+        std::string sName = primary_cpid;
         try
         {
             // Backup config with old keys like a normal backup
@@ -941,7 +943,8 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
      * nothing to import. This saves a migrating users from copy-pasting
      * the key string to importprivkey command.
      */
-    bool importResult= ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
+    const std::string primary_cpid = NN::GetPrimaryCpid();
+    bool importResult= ImportBeaconKeysFromConfig(primary_cpid, pwalletMain);
     res.pushKV("ConfigKeyImported", importResult);
 
     std::string sOutPubKey = "";
@@ -951,7 +954,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
     res.pushKV("Result", fResult ? "SUCCESS" : "FAIL");
-    res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
+    res.pushKV("CPID",primary_cpid.c_str());
     res.pushKV("Message",sMessage.c_str());
 
     if (!sError.empty())
@@ -1130,7 +1133,8 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
     // First try local node before bothering network...
 
-    std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(GlobalCPUMiningCPID.cpid);
+    const std::string primary_cpid = NN::GetPrimaryCpid();
+    std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(primary_cpid);
 
     if (sNeuralResponse.length() < 25)
     {
@@ -1143,7 +1147,7 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
                 msNeuralResponse = "";
 
-                AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
+                AsyncNeuralRequest("explainmag", primary_cpid, 10);
             }
         }
 
@@ -1334,8 +1338,8 @@ UniValue staketime(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    std::string cpid = GlobalCPUMiningCPID.cpid;
-    std::string GRCAddress = DefaultWalletAddress();
+    const std::string cpid = NN::GetPrimaryCpid();
+    const std::string GRCAddress = DefaultWalletAddress();
     GetEarliestStakeTime(GRCAddress, cpid);
 
     res.pushKV("GRCTime", ReadCache(Section::GLOBAL, "nGRCTime").timestamp);

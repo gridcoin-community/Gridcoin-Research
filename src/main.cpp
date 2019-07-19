@@ -224,7 +224,6 @@ bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
 
 // Gridcoin status    *************
-MiningCPID GlobalCPUMiningCPID = GetMiningCPID();
 int nBoincUtilization = 0;
 std::string sRegVer;
 
@@ -597,7 +596,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
-        GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
+        GlobalStatusStruct.cpid = NN::Researcher::Get()->Id().ToString();
         try
         {
             GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
@@ -1660,9 +1659,7 @@ static CBigNum GetProofOfStakeLimit(int nHeight)
 double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf)
 {
     // Get neural network magnitude:
-    std::string cpid = "";
-    if (GlobalCPUMiningCPID.initialized && !GlobalCPUMiningCPID.cpid.empty()) cpid = GlobalCPUMiningCPID.cpid;
-    StructCPID& stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
+    StructCPID& stDPOR = GetInitializedStructCPID2(NN::GetPrimaryCpid(), mvDPOR);
     return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
 }
 
@@ -1796,7 +1793,7 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
 }
 
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
-    bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
+    bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
     double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
 
@@ -1834,7 +1831,7 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     else
     {
             // Research Age Subsidy - PROD
-            int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, operation, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+            int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
             int64_t nInterest = 0;
 
             // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
@@ -1998,7 +1995,7 @@ bool CheckProofOfResearch(
     }
 
     int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, block.nTime,
-                                                        pindexBest, "checkblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                                                        pindexBest, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
     if(!IsV9Enabled_Tally(pindexPrev->nHeight))
     {
@@ -2011,7 +2008,7 @@ bool CheckProofOfResearch(
             TallyResearchAverages(pindexBest);
             GetLifetimeCPID(bb.cpid);
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, block.nTime,
-                                                        pindexBest, "checkblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                                                        pindexBest, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         }
     }
     (void)nCalculatedResearch;
@@ -2708,7 +2705,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             double unused;
             int64_t calculatedResearchReward = GetProofOfStakeReward(
                         nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                        pindex, "connectblock_investor",
+                        pindex,
                         OUT_POR, OUT_INTEREST_OWED, unused, unused, unused);
 
             if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
@@ -2762,7 +2759,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         // ResearchAge 1:
         GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 1, nTime,
-                              pindex, "connectblock_researcher", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                              pindex, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
         if (IsResearcher(bb.cpid))
         {
             //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
@@ -2824,7 +2821,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 {
                     GetLifetimeCPID(pindex->GetCPID()); // Rescan...
                     GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
-                                          pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                                          pindex, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
                     if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                     {
@@ -3118,13 +3115,13 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     /* fix up after disconnecting, prepare for new blocks */
     if(cnt_dis>0)
     {
-
-        //Block was disconnected - User is Re-eligibile for staking
-        StructCPID& sMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid,mvMagnitudes);
+        // Block was disconnected - User is Re-eligibile for staking
+        const std::string primary_cpid = NN::GetPrimaryCpid();
+        StructCPID& sMag = GetInitializedStructCPID2(primary_cpid, mvMagnitudes);
         if (sMag.initialized)
         {
             sMag.LastPaymentTime = 0;
-            mvMagnitudes[GlobalCPUMiningCPID.cpid]=sMag;
+            mvMagnitudes[primary_cpid] = sMag;
         }
 
         // Resurrect memory transactions that were in the disconnected branch
@@ -4078,23 +4075,21 @@ void GridcoinServices()
     }
 
     /* Do this only for users with valid CPID */
-    if (TimerMain("send_beacon",180) && IsResearcher(GlobalCPUMiningCPID.cpid))
-    {
-        std::string tBeaconPublicKey = GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true);
-
-        /* If there is no public key, beacon needs advertising */
-        if (tBeaconPublicKey.empty())
-        {
-            std::string sOutPubKey = "";
-            std::string sOutPrivKey = "";
-            std::string sError = "";
-            std::string sMessage = "";
-            bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
-            if (!fResult)
-            {
-                LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError, sMessage);
-                LOCK(MinerStatus.lock);
-                msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
+    if (TimerMain("send_beacon", 180)) {
+        if (const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid()) {
+            // If there is no public key, beacon needs advertising
+            if (GetBeaconPublicKey(cpid->ToString(), true).empty()) {
+                std::string sOutPubKey = "";
+                std::string sOutPrivKey = "";
+                std::string sError = "";
+                std::string sMessage = "";
+                bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
+                if (!fResult)
+                {
+                    LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError, sMessage);
+                    LOCK(MinerStatus.lock);
+                    msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
+                }
             }
         }
     }
@@ -7226,7 +7221,7 @@ double GRCMagnitudeUnit(int64_t locktime)
 }
 
 
-int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
+int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, CBlockIndex* pindexLast, bool bVerifyingBlock, int iVerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
     // If not a researcher save cpu cycles and return 0
     if (!IsResearcher(cpid))

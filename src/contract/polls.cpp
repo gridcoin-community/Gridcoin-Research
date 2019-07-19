@@ -93,16 +93,17 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         std::string acceptable_answers = PollAnswers(sTitle);
         return std::make_pair("Error", "Sorry, Answer " + sAnswer + " is not one of the acceptable answers, allowable answers are: " + acceptable_answers + ".  If you are voting multiple choice, please use a semicolon delimited vote string such as : 'dog;cat'.");
     }
-    std::string sParam = SerializeBoincBlock(GlobalCPUMiningCPID, pindexBest->nVersion);
+
+    const std::string primary_cpid = NN::GetPrimaryCpid();
+
     std::string GRCAddress = DefaultWalletAddress();
-    StructCPID& structMag = GetInitializedStructCPID2(GlobalCPUMiningCPID.cpid, mvMagnitudes);
+    StructCPID& structMag = GetInitializedStructCPID2(primary_cpid, mvMagnitudes);
     double dmag = structMag.Magnitude;
     double poll_duration = PollDuration(sTitle) * 86400;
 
     // Prevent Double Voting
-    std::string cpid1 = GlobalCPUMiningCPID.cpid;
     std::string GRCAddress1 = DefaultWalletAddress();
-    GetEarliestStakeTime(GRCAddress1, cpid1);
+    GetEarliestStakeTime(GRCAddress1, primary_cpid);
     double cpid_age = GetAdjustedTime() - ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
     double stake_age = GetAdjustedTime() - ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
 
@@ -123,12 +124,12 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     else
     {
         std::string voter = "<CPID>"
-                + GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
+                + primary_cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
                 + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
                 + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
         // Add the provable balance and the provable magnitude - this goes into effect July 1 2017
         voter += GetProvableVotingWeightXML();
-        std::string pk = sTitle + ";" + GRCAddress + ";" + GlobalCPUMiningCPID.cpid;
+        std::string pk = sTitle + ";" + GRCAddress + ";" + primary_cpid;
         std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
         std::string result = SendContract("vote",pk,contract);
         std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
