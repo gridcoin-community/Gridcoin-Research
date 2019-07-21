@@ -1,6 +1,7 @@
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
 
+#include <array>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -1995,6 +1996,129 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
 
     // 0x0706050403020100 + 0x1514131211100908 (MD5 halves, little endian)
     BOOST_CHECK(hasher(hash_md5) == 2024957465561532936);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
+{
+    const NN::QuorumHash hash;
+
+    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 1);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << hash;
+
+    BOOST_CHECK(stream.size() == 1);
+    BOOST_CHECK(stream[0] == 0x00); // QuorumHash::Kind::INVALID
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_sha256)
+{
+    const std::vector<unsigned char> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    const NN::QuorumHash hash(expected);
+
+    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 33);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << hash;
+    const std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output[0] == 0x01); // QuorumHash::Kind::SHA256
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        ++output.begin(), // we already checked the first byte
+        output.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_md5)
+{
+    const std::vector<unsigned char> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    const NN::QuorumHash hash(expected);
+
+    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 17);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << hash;
+    const std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output[0] == 0x02); // QuorumHash::Kind::MD5
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        ++output.begin(), // we already checked the first byte
+        output.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_invalid)
+{
+    // Initialize quorum hash with a valid value to test invalid:
+    NN::QuorumHash hash(NN::QuorumHash::Md5Sum { }); // Initialize to zeros
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << (unsigned char)0x00; // QuorumHash::Kind::INVALID
+    stream >> hash;
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::INVALID);
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
+{
+    NN::QuorumHash hash;
+
+    const std::array<unsigned char, 32> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << (unsigned char)0x01; // QuorumHash::Kind::SHA256
+    stream << FLATDATA(expected);
+    stream >> hash;
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        hash.Raw(),
+        hash.Raw() + 32,
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
+{
+    NN::QuorumHash hash;
+
+    const std::array<unsigned char, 16> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << (unsigned char)0x02; // QuorumHash::Kind::MD5
+    stream << FLATDATA(expected);
+    stream >> hash;
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        hash.Raw(),
+        hash.Raw() + 16,
+        expected.begin(),
+        expected.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

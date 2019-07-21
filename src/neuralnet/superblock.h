@@ -735,9 +735,90 @@ public:
     //!
     std::string ToString() const;
 
+    //!
+    //! \brief Get the size of the data to serialize.
+    //!
+    //! \param nType    Target protocol type (network, disk, etc.).
+    //! \param nVersion Protocol version.
+    //!
+    //! \return Size of the data in bytes.
+    //!
+    unsigned int GetSerializeSize(int nType, int nVersion) const;
+
+    //!
+    //! \brief Serialize the object to the provided stream.
+    //!
+    //! \param stream   The output stream.
+    //! \param nType    Target protocol type (network, disk, etc.).
+    //! \param nVersion Protocol version.
+    //!
+    template<typename Stream>
+    void Serialize(Stream& stream, int nType, int nVersion) const
+    {
+        unsigned char kind = m_hash.which();
+
+        ::Serialize(stream, kind, nType, nVersion);
+
+        switch (static_cast<Kind>(kind)) {
+            case Kind::INVALID:
+                break; // Suppress warning.
+
+            case Kind::SHA256:
+                boost::get<uint256>(m_hash).Serialize(stream, nType, nVersion);
+                break;
+
+            case Kind::MD5: {
+                const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
+
+                FLATDATA(hash).Serialize(stream, nType, nVersion);
+                break;
+            }
+        }
+    }
+
+    //!
+    //! \brief Deserialize the object from the provided stream.
+    //!
+    //! \param stream   The input stream.
+    //! \param nType    Target protocol type (network, disk, etc.).
+    //! \param nVersion Protocol version.
+    //!
+    template<typename Stream>
+    void Unserialize(Stream& stream, int nType, int nVersion)
+    {
+        unsigned char kind;
+
+        ::Unserialize(stream, kind, nType, nVersion);
+
+        switch (static_cast<Kind>(kind)) {
+            case Kind::SHA256: {
+                uint256 hash;
+                hash.Unserialize(stream, nType, nVersion);
+
+                m_hash = hash;
+                break;
+            }
+
+            case Kind::MD5: {
+                Md5Sum hash;
+                FLATDATA(hash).Unserialize(stream, nType, nVersion);
+
+                m_hash = hash;
+                break;
+            }
+
+            default:
+                m_hash = Invalid();
+                break;
+        }
+    }
+
 private:
     //!
     //! \brief Contains the bytes of a SHA256 or MD5 digest.
+    //!
+    //! CONSENSUS: Do not remove or reorder the types in this variant. This
+    //! class relies on the type ordinality to tag serialized values.
     //!
     boost::variant<Invalid, uint256, Md5Sum> m_hash;
 }; // QuorumHash
