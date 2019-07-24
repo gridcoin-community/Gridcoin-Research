@@ -120,11 +120,7 @@ To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
-
-If ```./configure``` fails to detect your QT installation, you have to run:
-
-		sudo apt-get install libqt5*
+    sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 libqt5charts5-dev qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
 
 to install all QT5 packages available for your Linux Distribution.
 
@@ -179,7 +175,7 @@ To build without GUI pass `--without-gui` to configure.
 
 To build with Qt 5 (recommended) you need the following:
 
-    sudo zypper install libQt5Gui5 libQt5Core5 libQt5DBus5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
+    sudo zypper install libQt5Gui5 libQt5Core5 libQt5DBus5 libQt5Charts5 libQt5Network-devel libqt5-qttools-devel libqt5-qttools
 
 Additionally for Tumbleweed:
 
