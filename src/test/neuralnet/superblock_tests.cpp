@@ -668,6 +668,15 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     }
 }
 
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock_for_empty_strings)
+{
+    NN::Superblock superblock = NN::Superblock::UnpackLegacy("");
+
+    BOOST_CHECK(superblock.m_version == 1);
+    BOOST_CHECK(superblock.m_cpids.empty());
+    BOOST_CHECK(superblock.m_projects.empty());
+}
+
 BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 {
     const std::string legacy_contract(

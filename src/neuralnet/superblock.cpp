@@ -406,6 +406,10 @@ Superblock Superblock::FromStats(const ScraperStats& stats)
 
 Superblock Superblock::UnpackLegacy(const std::string& packed)
 {
+    if (packed.empty()) {
+        return Superblock(1);
+    }
+
     // Legacy-packed superblocks always initialize to version 1:
     Superblock superblock(1);
     LegacySuperblockParser legacy(packed);
