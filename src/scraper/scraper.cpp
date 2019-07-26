@@ -1419,7 +1419,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
         // If fExplorer is false, which means we do not need to retain team files, and there is an entry in the TeamIDMap for the project,
         // and in the submap (team name and team id) there are the correct number of team entries, then skip processing.
-        if (!fExplorer && iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, ",").size())
+        if (!fExplorer && iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, "|").size())
         {
             _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
                  + prjs.m_name + " project. Skipping team file download and processing.");
@@ -1564,7 +1564,7 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
 
     _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.string());
 
-    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, ",");
+    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
 
     std::string line;
     stringbuilder builder;
@@ -2105,7 +2105,7 @@ bool LoadTeamIDList(const fs::path& file)
     std::getline(in, line);
 
     // This is in the form Project, Gridcoin, ...."
-    std::vector<std::string> vTeamNames = split(line, ",");
+    std::vector<std::string> vTeamNames = split(line, "|");
     if (fDebug3) _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
 
     while (std::getline(in, line))
@@ -2113,7 +2113,7 @@ bool LoadTeamIDList(const fs::path& file)
         std::string sProject = {};
         std::map<std::string, int64_t> mTeamIDsForProject = {};
 
-        std::vector<std::string> vline = split(line, ",");
+        std::vector<std::string> vline = split(line, "|");
 
         unsigned int iTeamName = 0;
         // Populate team IDs into map.
@@ -2248,7 +2248,7 @@ bool StoreTeamIDList(const fs::path& file)
     // Header
     stream << "Project";
 
-    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, ",");
+    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
     std::set<std::string> setTeamWhiteList;
 
     // Ensure that the team names are in the correct order.
@@ -2256,7 +2256,7 @@ bool StoreTeamIDList(const fs::path& file)
         setTeamWhiteList.insert(iTeam);
 
     for (auto const& iTeam: setTeamWhiteList)
-        stream << "," << iTeam;
+        stream << "|" << iTeam;
 
     stream << std::endl;
 
@@ -2268,7 +2268,7 @@ bool StoreTeamIDList(const fs::path& file)
         stream << iProject.first;
 
         for (auto const& iTeam : iProject.second)
-            sProjectEntry += "," + std::to_string(iTeam.second);
+            sProjectEntry += "|" + std::to_string(iTeam.second);
 
         stream << sProjectEntry << std::endl;
     }
