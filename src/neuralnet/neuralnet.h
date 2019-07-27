@@ -2,6 +2,7 @@
 
 #include "beacon.h"
 #include "project.h"
+#include "superblock.h"
 
 #include <string>
 #include <memory>
@@ -53,6 +54,16 @@ namespace NN
         virtual std::string GetNeuralHash() = 0;
 
         //!
+        //! \brief Get current superblock hash from scraper.
+        //!
+        //! \note This is a synchoronous operation.
+        //!
+        //! \return Current superblock hash. This might be empty if it has
+        //! not been calculated yet.
+        //!
+        virtual NN::QuorumHash GetSuperblockHash() = 0;
+
+        //!
         //! \brief Get the most recently updated neural network contract.
         //!
         //! Synchronously queries the neural network process for the current
@@ -61,6 +72,16 @@ namespace NN
         //! \return Most recent neural contract if available.
         //!
         virtual std::string GetNeuralContract() = 0;
+
+        //!
+        //! \brief Get the most recently updated superblock contract.
+        //!
+        //! Synchronously queries the scraper for the current
+        //! superblock contract.
+        //!
+        //! \return Most recent superblock contract if available.
+        //!
+        virtual NN::Superblock GetSuperblockContract() = 0;
 
         //!
         //! \brief Synchronize DPOR data.

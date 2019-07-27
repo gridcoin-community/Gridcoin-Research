@@ -77,6 +77,36 @@ public:
     bool operator!=(const Cpid& other) const;
 
     //!
+    //! \brief Compare a supplied CPID value for less than other.
+    //!
+    //! The comparison checks from left to right with the most significant byte
+    //! on the left (byte order equivalent to the hex string representation).
+    //!
+    //! CONSENSUS: Changing the behavior of this comparison operator will affect
+    //! the sort order of protocol-sensitive maps (for example, superblocks).
+    //!
+    //! \param other A CPID value to check whether current is less than.
+    //!
+    //! \return \c true if the supplied CPID's bytes represent a greater number.
+    //!
+    bool operator<(const Cpid& other) const;
+
+    //!
+    //! \brief Compare a supplied CPID value for greater than other.
+    //!
+    //! The comparison checks from left to right with the most significant byte
+    //! on the left (byte order equivalent to the hex string representation).
+    //!
+    //! CONSENSUS: Changing the behavior of this comparison operator will affect
+    //! the sort order of protocol-sensitive maps (for example, superblocks).
+    //!
+    //! \param other A CPID value to check whether current is greater than.
+    //!
+    //! \return \c true if the supplied CPID's bytes represent a lesser number.
+    //!
+    bool operator>(const Cpid& other) const;
+
+    //!
     //! \brief Determine whether the CPID contains only zeros.
     //!
     //! \return \c true if every byte in the CPID equals \c 0x00.

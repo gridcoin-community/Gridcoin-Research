@@ -82,6 +82,22 @@ bool Cpid::operator!=(const Cpid& other) const
     return m_bytes != other.m_bytes;
 }
 
+bool Cpid::operator<(const Cpid& other) const
+{
+    // CONSENSUS: Changing the behavior of this comparison operator will affect
+    // the sort order of protocol-sensitive maps (for example, superblocks).
+    //
+    return m_bytes < other.m_bytes;
+}
+
+bool Cpid::operator>(const Cpid& other) const
+{
+    // CONSENSUS: Changing the behavior of this comparison operator will affect
+    // the sort order of protocol-sensitive maps (for example, superblocks).
+    //
+    return m_bytes > other.m_bytes;
+}
+
 bool Cpid::IsZero() const
 {
     const auto zero = [](const unsigned char& i) { return i == 0; };

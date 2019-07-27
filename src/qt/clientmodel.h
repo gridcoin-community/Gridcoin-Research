@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include "scraper/fwd.h"
+#include "neuralnet/superblock.h"
 
 class OptionsModel;
 class AddressTableModel;

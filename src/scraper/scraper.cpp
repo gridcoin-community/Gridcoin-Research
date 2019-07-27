@@ -4,6 +4,8 @@
 #include "http.h"
 #include "ui_interface.h"
 
+#include "neuralnet/superblock.h"
+
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -125,6 +127,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
 std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
 // Overloaded. See alternative in scraper.h.
 std::string ScraperGetNeuralHash(std::string sNeuralContract);
+NN::QuorumHash ScraperGetSuperblockHash(NN::Superblock& superblock);
 
 bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist);
@@ -1032,6 +1035,7 @@ void NeuralNetwork()
     }
 }
 
+UniValue testnewsb(const UniValue& params, bool fHelp);
 
 bool ScraperHousekeeping()
 {
@@ -1051,18 +1055,8 @@ bool ScraperHousekeeping()
 
     if (fDebug3 && !sSBCoreData.empty())
     {
-        // Contract binary pack/unpack check...
-        _log(logattribute::INFO, "ScraperHousekeeping", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
-
-        std::string sSBCoreData_out = UnpackBinarySuperblock(PackBinarySuperblock(sSBCoreData));
-
-        if (sSBCoreData == sSBCoreData_out)
-            _log(logattribute::INFO, "ScraperHousekeeping", "Generated contract passed binary pack/unpack");
-        else
-        {
-            _log(logattribute::ERR, "ScraperHousekeeping", "Generated contract FAILED binary pack/unpack");
-            _log(logattribute::INFO, "ScraperHousekeeping", "sSBCoreData_out = \n" + sSBCoreData_out);
-        }
+        UniValue dummy_params(UniValue::VARR);
+        testnewsb(dummy_params, false);
     }
 
     // Show this node's contract hash in the log.
@@ -1425,7 +1419,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
         // If fExplorer is false, which means we do not need to retain team files, and there is an entry in the TeamIDMap for the project,
         // and in the submap (team name and team id) there are the correct number of team entries, then skip processing.
-        if (!fExplorer && iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, ",").size())
+        if (!fExplorer && iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, "|").size())
         {
             _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
                  + prjs.m_name + " project. Skipping team file download and processing.");
@@ -1570,7 +1564,7 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
 
     _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.string());
 
-    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, ",");
+    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
 
     std::string line;
     stringbuilder builder;
@@ -2111,7 +2105,7 @@ bool LoadTeamIDList(const fs::path& file)
     std::getline(in, line);
 
     // This is in the form Project, Gridcoin, ...."
-    std::vector<std::string> vTeamNames = split(line, ",");
+    std::vector<std::string> vTeamNames = split(line, "|");
     if (fDebug3) _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
 
     while (std::getline(in, line))
@@ -2119,7 +2113,7 @@ bool LoadTeamIDList(const fs::path& file)
         std::string sProject = {};
         std::map<std::string, int64_t> mTeamIDsForProject = {};
 
-        std::vector<std::string> vline = split(line, ",");
+        std::vector<std::string> vline = split(line, "|");
 
         unsigned int iTeamName = 0;
         // Populate team IDs into map.
@@ -2254,7 +2248,7 @@ bool StoreTeamIDList(const fs::path& file)
     // Header
     stream << "Project";
 
-    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, ",");
+    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
     std::set<std::string> setTeamWhiteList;
 
     // Ensure that the team names are in the correct order.
@@ -2262,7 +2256,7 @@ bool StoreTeamIDList(const fs::path& file)
         setTeamWhiteList.insert(iTeam);
 
     for (auto const& iTeam: setTeamWhiteList)
-        stream << "," << iTeam;
+        stream << "|" << iTeam;
 
     stream << std::endl;
 
@@ -2274,7 +2268,7 @@ bool StoreTeamIDList(const fs::path& file)
         stream << iProject.first;
 
         for (auto const& iTeam : iProject.second)
-            sProjectEntry += "," + std::to_string(iTeam.second);
+            sProjectEntry += "|" + std::to_string(iTeam.second);
 
         stream << sProjectEntry << std::endl;
     }
@@ -4466,40 +4460,201 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
     return sSBCoreData;
 }
 
+// This is for SB version 2+ (bv11+).
+NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
+{
+    NN::Superblock empty_superblock;
 
-// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes. See the comments below.
+    // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
+    // and the scraper or neuralnet loop nearly simultaneously. So we use an atomic flag updated by the scraper or neuralnet loop.
+    // If not in sync then immediately bail with a empty string.
+    if (fOutOfSyncByAge) return empty_superblock;
+
+    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds), then simply report back the cache contents.
+    // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
+    // the scraper loop if it is running, but that is ok. The scraper loop updates the time in the cache too.
+    bool bConvergenceUpdateNeeded = true;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+        // If the cache is less than nScraperSleep in minutes old OR not dirty...
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
+            bConvergenceUpdateNeeded = false;
+
+        // End LOCK(cs_ConvergedScraperStatsCache)
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+    }
+
+    ConvergedManifest StructConvergedManifest;
+    BeaconMap mBeaconMap;
+    NN::Superblock superblock;
+
+    // if bConvergenceUpdate is needed, and...
+    // If bContractDirectFromStatsUpdate is set to true, this means that this is being called from
+    // ScraperSynchronizeDPOR() in fallback mode to force a single shot update of the stats files and
+    // direct generation of the contract from the single shot run. This will return immediately with a blank if
+    // IsScraperAuthorized() evaluates to false, because that means that by network policy, no non-scraper
+    // stats downloads are allowed by unauthorized scraper nodes.
+    // (If bConvergenceUpdate is not needed, then the scraper is operating by convergence already...
+    if (bConvergenceUpdateNeeded)
+    {
+        if (!bContractDirectFromStatsUpdate)
+        {
+            // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
+            // you can't make a SB core and you can't make a contract, so return the empty string.
+            if (ScraperConstructConvergedManifest(StructConvergedManifest))
+            {
+                // This is to display the element count in the beacon map.
+                LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
+
+                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
+
+                _log(logattribute::INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+
+                if (bStoreConvergedStats)
+                {
+                    if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
+                        _log(logattribute::ERR, "ScraperGetNeuralContract", "StoreStats error occurred");
+                    else
+                        _log(logattribute::INFO, "ScraperGetNeuralContract", "Stored converged stats.");
+                }
+
+                // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
+                // lock before and do a direct assignment, but that will lock the cache for the whole stats computation,
+                // which is not really necessary.
+                {
+                    LOCK(cs_ConvergedScraperStatsCache);
+                    if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+                    NN::Superblock superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
+
+                    superblock = NN::Superblock::FromStats(mScraperConvergedStats);
+
+                    ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
+                    ConvergedScraperStatsCache.nTime = GetAdjustedTime();
+                    ConvergedScraperStatsCache.nNewFormatSuperblockHash = ScraperGetSuperblockHash(superblock);
+                    ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
+                    ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
+
+                    // Mark the cache clean, because it was just updated.
+                    ConvergedScraperStatsCache.bClean = true;
+
+                    // Signal UI of SBContract status
+                    if (superblock.GetSerializeSize(SER_NETWORK, 1))
+                    {
+                        if (superblock_Prev.GetSerializeSize(SER_NETWORK, 1))
+                        {
+                            // If the current is not empty and the previous is not empty and not the same, then there is an updated contract.
+                            if (ScraperGetSuperblockHash(superblock) != ScraperGetSuperblockHash(superblock_Prev))
+                                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
+                        }
+                        else
+                            // If the previous was empty and the current is not empty, then there is a new contract.
+                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
+                    }
+                    else
+                        if (superblock_Prev.GetSerializeSize(SER_NETWORK, 1))
+                            // If the current is empty and the previous was not empty, then the contract has been deleted.
+                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED, {});
+
+                    // End LOCK(cs_ConvergedScraperStatsCache)
+                    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+                }
+
+
+                _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object generated from convergence");
+
+                return superblock;
+            }
+            else
+                return empty_superblock;
+        }
+        // If bContractDirectFromStatsUpdate is true, then this is the single shot pass.
+        else if (IsScraperAuthorized())
+        {
+            // This part is the "second trip through from ScraperSynchronizeDPOR() as a fallback, if
+            // authorized.
+
+            // Do a single shot through the main scraper function to update all of the files.
+            ScraperSingleShot();
+
+            // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
+            // appropriate for the single shot.
+            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
+            superblock = NN::Superblock::FromStats(mScraperStats);
+
+            // Signal the UI there is a contract.
+            if(superblock.GetSerializeSize(SER_NETWORK, 1))
+                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
+
+            _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object generated from single shot");
+
+            return superblock;
+        }
+    }
+    else
+    {
+        // If we are here, we are using cached information.
+
+        LOCK(cs_ConvergedScraperStatsCache);
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+        superblock = ConvergedScraperStatsCache.NewFormatSuperblock;
+
+        // Signal the UI of the "updated" contract. This needs to be sent because the scraper loop could
+        // have changed the state to something else, even though an update to the contract really hasn't happened,
+        // because it is cached.
+        uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
+
+        _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object from cached converged stats");
+
+        // End LOCK(cs_ConvergedScraperStatsCache)
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+
+    }
+
+    return superblock;
+}
+
+
+// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes.
 std::string ScraperGetNeuralHash()
 {
     std::string sNeuralContract = ScraperGetNeuralContract(false, false);
 
     std::string sHash;
 
-    //sHash = Hash(sNeuralContract.begin(), sNeuralContract.end()).GetHex();
-
-    // This is the hash currently used by the old NN. Continue to use it for compatibility purpose until the next mandatory
-    // after the new NN rollout, when the old NN hash function can be retired in favor of the commented out code above.
-    // The intent will be to uncomment out the above line, and then reverse the roles of ScraperGetNeuralHash() and
-    // GetQuorumHash().
     sHash = GetQuorumHash(sNeuralContract);
 
     return sHash;
 }
 
 
-// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes. See the comments below.
+// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes.
 std::string ScraperGetNeuralHash(std::string sNeuralContract)
 {
     std::string sHash;
 
-    //sHash = Hash(sNeuralContract.begin(), sNeuralContract.end()).GetHex();
-
-    // This is the hash currently used by the old NN. Continue to use it for compatibility purpose until the next mandatory
-    // after the new NN rollout, when the old NN hash function can be retired in favor of the commented out code above.
-    // The intent will be to uncomment out the above line, and then reverse the roles of ScraperGetNeuralHash() and
-    // GetQuorumHash().
     sHash = GetQuorumHash(sNeuralContract);
 
     return sHash;
+}
+
+// Note: This is the native hash for SB ver 2+ (bv11+).
+NN::QuorumHash ScraperGetSuperblockHash()
+{
+    NN::QuorumHash nSuperblockContractHash = NN::QuorumHash::Hash(ScraperGetSuperblockContract(false, false));
+
+    return nSuperblockContractHash;
+}
+
+// Note: This is the native hash for SB ver 2+ (bv11+).
+NN::QuorumHash ScraperGetSuperblockHash(NN::Superblock& superblock)
+{
+    NN::QuorumHash nSuperblockContractHash = NN::QuorumHash::Hash(superblock);
+
+    return nSuperblockContractHash;
 }
 
 
@@ -4613,3 +4768,110 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
 }
 
 
+
+UniValue testnewsb(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0 )
+        throw std::runtime_error(
+                "testnewsb\n"
+                "Test the new Superblock class.\n"
+                );
+
+    LOCK(cs_ConvergedScraperStatsCache);
+
+    if (ConvergedScraperStatsCache.sContract.empty())
+        throw std::runtime_error(
+                "Wait until a convergence is formed.\n"
+                );
+
+    UniValue res(UniValue::VOBJ);
+
+    // Contract binary pack/unpack check...
+    _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
+
+    std::string& sSBCoreData = ConvergedScraperStatsCache.sContract;
+
+    std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
+    std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
+
+    if (sSBCoreData == sSBCoreData_out)
+    {
+        _log(logattribute::INFO, "testnewsb", "Generated contract passed binary pack/unpack");
+        res.pushKV("Generated legacy contract", "passed");
+    }
+    else
+    {
+        _log(logattribute::ERR, "testnewsb", "Generated contract FAILED binary pack/unpack");
+        _log(logattribute::INFO, "testnewsb", "sSBCoreData_out = \n" + sSBCoreData_out);
+        res.pushKV("Generated legacy contract", "FAILED");
+
+    }
+
+    _log(logattribute::INFO, "testnewsb", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
+    res.pushKV("sSBCoreData size", (uint64_t) sSBCoreData.size());
+    _log(logattribute::INFO, "testnewsb", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
+    res.pushKV("sSBPackedCoreData size", (uint64_t) sPackedSBCoreData.size());
+
+    NN::Superblock NewFormatSuperblock;
+    NN::Superblock NewFormatSuperblock_out;
+    CDataStream ss(SER_NETWORK, 1);
+    uint64_t nNewFormatSuperblockSerSize;
+    uint64_t nNewFormatSuperblock_outSerSize;
+    uint256 nNewFormatSuperblockHash;
+    uint256 nNewFormatSuperblock_outHash;
+
+    NewFormatSuperblock = NN::Superblock::FromStats(ConvergedScraperStatsCache.mScraperConvergedStats);
+    NewFormatSuperblock.m_timestamp = ConvergedScraperStatsCache.nTime;
+
+    _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock.m_projects.size()));
+    res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock.m_projects.size());
+    _log(logattribute::INFO, "testnewsb", "m_cpids size = " + std::to_string(NewFormatSuperblock.m_cpids.size()));
+    res.pushKV("m_cpids size", (uint64_t) NewFormatSuperblock.m_cpids.size());
+    _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+    res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock.m_cpids.Zeros());
+
+    nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
+
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
+    res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
+
+    ss << NewFormatSuperblock;
+    ss >> NewFormatSuperblock_out;
+
+    nNewFormatSuperblock_outSerSize = NewFormatSuperblock_out.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblock_outHash = SerializeHash(NewFormatSuperblock_out);
+
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
+    res.pushKV("nNewFormatSuperblock_outSerSize", nNewFormatSuperblock_outSerSize);
+
+    if (nNewFormatSuperblockHash == nNewFormatSuperblock_outHash)
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock serialization passed.");
+        res.pushKV("NewFormatSuperblock serialization", "passed");
+    }
+    else
+    {
+        _log(logattribute::ERR, "testnewsb", "NewFormatSuperblock serialization FAILED.");
+        res.pushKV("NewFormatSuperblock serialization", "FAILED");
+    }
+
+    NewFormatSuperblock = NN::Superblock::UnpackLegacy(sPackedSBCoreData);
+    NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblock);
+    std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
+
+    res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
+    res.pushKV("old_legacy_hash", old_legacy_hash);
+
+    if (new_legacy_hash == old_legacy_hash) {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash passed.");
+        res.pushKV("NewFormatSuperblock legacy hash", "passed");
+    } else {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash FAILED.");
+        res.pushKV("NewFormatSuperblock legacy hash", "FAILED");
+    }
+
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+
+    return res;
+}

@@ -22,11 +22,11 @@
 #include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/superblock.h"
 #include "backup.h"
 #include "appcache.h"
 #include "tally.h"
 #include "contract/contract.h"
-#include "contract/superblock.h"
 #include "scraper_net.h"
 
 #include <boost/filesystem.hpp>
@@ -1880,7 +1880,8 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             }
 
             int64_t nTotalSubsidy = nSubsidy + nFees;
-            if (nBoinc > 1)
+            // This rule does not apply in v11
+            if (nBoinc > 1 && pindexLast->nVersion <= 10)
             {
                 std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
                 if (sTotalSubsidy.length() > 7)

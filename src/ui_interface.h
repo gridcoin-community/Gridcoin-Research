@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include "scraper/fwd.h"
+#include "neuralnet/superblock.h"
 
 class CBasicKeyStore;
 class CWallet;

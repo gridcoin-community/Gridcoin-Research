@@ -14,6 +14,7 @@
 #include "scraper_net.h"
 #include "appcache.h"
 #include "scraper/fwd.h"
+#include "neuralnet/superblock.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
