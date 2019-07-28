@@ -3,9 +3,10 @@
 #include "neuralnet/cpid.h"
 
 #include <boost/optional.hpp>
+#include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 namespace NN {
 //!
@@ -34,7 +35,7 @@ struct MiningProject
     enum class Error
     {
         NONE,            //!< Eligible project; no errors.
-        INVALID_TEAM,    //!< Project not joined to team Gridcoin.
+        INVALID_TEAM,    //!< Project not joined to a whitelisted team.
         MALFORMED_CPID,  //!< Failed to parse a valid external CPID.
         MISMATCHED_CPID, //!< External CPID failed internal CPID + email test.
     };
@@ -58,16 +59,16 @@ struct MiningProject
     //!
     static MiningProject Parse(const std::string& xml);
 
-    std::string m_name; //<! Normalized project name.
-    Cpid m_cpid;        //<! CPID of the BOINC account for the project.
-    std::string m_team; //<! Name of the team joined for the project.
-    Error m_error;      //<! May describe why a project is ineligible.
+    std::string m_name; //!< Normalized project name.
+    Cpid m_cpid;        //!< CPID of the BOINC account for the project.
+    std::string m_team; //!< Name of the team joined for the project.
+    Error m_error;      //!< May describe why a project is ineligible.
 
     //!
     //! \brief Determine whether the project is eligible for reward.
     //!
     //! \return \c true if the project represents a BOINC account with a valid
-    //! CPID joined to team Gridcoin.
+    //! CPID joined to a whitelisted team.
     //!
     bool Eligible() const;
 
@@ -94,7 +95,7 @@ typedef boost::optional<const MiningProject&> ProjectOption;
 //!
 class MiningProjectMap
 {
-    using ProjectStorage = std::unordered_map<std::string, MiningProject>;
+    using ProjectStorage = std::map<std::string, MiningProject>;
 
 public:
     typedef ProjectStorage::size_type size_type;
@@ -105,6 +106,18 @@ public:
     //! \brief Initialize an empty BOINC project map.
     //!
     MiningProjectMap();
+
+    //!
+    //! \brief Parse the supplied collection of BOINC project XML sections into
+    //! a new project map instance.
+    //!
+    //! \param xml Each element contains a project's XML data as parsed from
+    //! BOINC's client_state.xml file.
+    //!
+    //! \return A new map with data for the local BOINC projects used to select
+    //! an eligible CPID from. Must be filtered for team eligibility.
+    //!
+    static MiningProjectMap Parse(const std::vector<std::string>& xml);
 
     //!
     //! \brief Returns an iterator to the beginning.
@@ -220,10 +233,22 @@ public:
     //! \brief Reload the wallet's researcher mining context from the supplied
     //! collection of BOINC project data.
     //!
-    //! \param projects_xml Data for one or more projects in the XML format
-    //! contained in BOINC's client_state.xml file.
+    //! \param projects Data for one or more projects as loaded from BOINC's
+    //! client_state.xml file.
     //!
-    static void Reload(const std::vector<std::string>& projects_xml);
+    static void Reload(MiningProjectMap projects);
+
+    //!
+    //! \brief Rescan the set of in-memory projects for eligible CPIDs without
+    //! reloading the projects from disk.
+    //!
+    //! This method provides a hook for dynamic protocol configuration messages
+    //! that update eligibility of local CPIDs. For example, when the receiving
+    //! a protocol directive that enables or disables the team requirement, the
+    //! application calls this method to update the researcher context with any
+    //! newly eligible or ineligible CPIDs.
+    //!
+    static void Refresh();
 
     //!
     //! \brief Get the primary mining ID that identifies the owner of the wallet.
