@@ -10,6 +10,7 @@
 #include "main.h"
 #include "appcache.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/researcher.h"
 #include "contract/contract.h"
 #include "util.h"
 
@@ -26,20 +27,12 @@ using namespace std;
 //
 
 unsigned int nMinerSleep;
-void ThreadCleanWalletPassphrase(void* parg);
 double CoinToDouble(double surrogate);
-
-void ThreadTopUpKeyPool(void* parg);
-
-extern MiningCPID GetMiningCPID();
-double CalculatedMagnitude(int64_t locktime, bool bUseLederstrumpf);
+double CalculatedMagnitude2(std::string cpid, int64_t locktime, bool bUseLederstrumpf);
 double GetLastPaymentTimeByCPID(std::string cpid);
-int64_t GetRSAWeightByBlock(MiningCPID boincblock);
+std::string GetLastPORBlockHash(std::string cpid);
 bool HasActiveBeacon(const std::string& cpid);
-std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
-
-namespace NN { std::string GetPrimaryCpid(); }
 
 namespace {
 // Some explaining would be appreciated
@@ -88,6 +81,51 @@ bool ReturnMinerError(CMinerStatus& status, const std::string& message)
     }
 
     return false;
+}
+
+//!
+//! \brief Sign the research reward claim context in the provided block.
+//!
+//! \param claim An initialized claim to sign for a newly-minted block.
+//!
+//! \return \c true if the miner holds active beacon keys used to successfully
+//! sign the claim in the block.
+//!
+bool SignClaim(NN::Claim& claim)
+{
+    const NN::CpidOption cpid = claim.m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return false; // Skip beacon signature for investors.
+    }
+
+    const std::string cpid_str = cpid->ToString();
+
+    if (!HasActiveBeacon(cpid_str)) {
+        return false;
+    }
+
+    CKey beacon_key;
+
+    if (!GetStoredBeaconPrivateKey(cpid_str, beacon_key)) {
+        return error("SignStakeBlock: Failed to sign claim -> No beacon key.");
+    }
+
+    if (!claim.Sign(beacon_key)) {
+        return error(
+            "SignStakeBlock: Failed to sign claim -> "
+            "Unable to sign message, check beacon private key.");
+    }
+
+    if (fDebug2) {
+        LogPrintf(
+            "Signing claim for cpid %s and blockhash %s with sig %s",
+            cpid_str,
+            claim.m_last_block_hash.ToString(),
+            HexStr(claim.m_signature));
+    }
+
+    return true;
 }
 } // anonymous namespace
 
@@ -821,24 +859,15 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
     return(nStakeOutputs);
 }
 
-
-
-bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
+bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
-    // Append beacon signature to coinbase
-    if (HasActiveBeacon(BoincData.cpid))
-    {
-        std::string sBoincSignature;
-        std::string sError;
-        bool bResult = SignBlockWithCPID(BoincData.cpid, BoincData.lastblockhash, sBoincSignature, sError);
-        if (!bResult)
-        {
-            return error("SignStakeBlock: Failed to sign boinchash -> %s", sError);
-        }
-        BoincData.BoincSignature = sBoincSignature;
-        if(fDebug2) LogPrintf("Signing BoincBlock for cpid %s and blockhash %s with sig %s", BoincData.cpid, BoincData.lastblockhash, BoincData.BoincSignature);
+    SignClaim(block.m_claim);
+
+    if (block.nVersion <= 10) {
+        block.vtx[0].hashBoinc = block.m_claim.ToString(block.nVersion);
+    } else {
+        block.vtx[0].hashBoinc = block.m_claim.GetHash().ToString();
     }
-    block.vtx[0].hashBoinc = SerializeBoincBlock(BoincData,block.nVersion);
 
     //Sign the coinstake transaction
     unsigned nIn = 0;
@@ -860,143 +889,118 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
     return true;
 }
 
-void AddNeuralContractOrVote(const CBlock &blocknew, MiningCPID &bb)
+void AddNeuralContractOrVote(CBlock& blocknew)
 {
-    if(OutOfSyncByAge())
-    {
-        LogPrintf("AddNeuralContractOrVote: Out Of Sync");
+    if (OutOfSyncByAge()) {
+        LogPrintf("AddNeuralContractOrVote: Out of sync.");
         return;
     }
 
-    if(!IsNeuralNodeParticipant(bb.GRCAddress, blocknew.nTime))
-    {
-        LogPrintf("AddNeuralContractOrVote: Not Participating");
+    std::string quorum_address = DefaultWalletAddress();
+
+    if (!IsNeuralNodeParticipant(quorum_address, blocknew.nTime)) {
+        LogPrintf("AddNeuralContractOrVote: Not participating.");
         return;
     }
 
-    if(blocknew.nVersion >= 9)
-    {
-        // break away from block timing
-        if (fDebug) LogPrintf("AddNeuralContractOrVote: Updating Neural Supermajority (v9 M) height %d",nBestHeight);
-        ComputeNeuralNetworkSupermajorityHashes();
+    if (fDebug) {
+        LogPrintf("AddNeuralContractOrVote: Updating neural supermajority...");
     }
 
-    if(!NeedASuperblock())
-    {
-        LogPrintf("AddNeuralContractOrVote: not Needed");
+    ComputeNeuralNetworkSupermajorityHashes();
+
+    if (!NeedASuperblock()) {
+        LogPrintf("AddNeuralContractOrVote: Not needed.");
         return;
     }
 
     int pending_height = RoundFromString(ReadCache(Section::NEURALSECURITY, "pending").value, 0);
 
-    if (pending_height>=(pindexBest->nHeight-200))
-    {
-        LogPrintf("AddNeuralContractOrVote: already Pending");
+    if (pending_height >= (pindexBest->nHeight - 200)) {
+        LogPrintf("AddNeuralContractOrVote: Already pending.");
         return;
     }
 
     double popularity = 0;
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 
-    /* Retrive the neural Contract */
-    const std::string& sb_contract = NN::GetInstance()->GetNeuralContract();
-    const std::string& sb_hash = GetQuorumHash(sb_contract);
+    // Add our Neural Vote
+    //
+    // GetSuperblockHash() returns an invalid QuorumHash when the node has not
+    // yet received enough scraper data to resolve a convergence locally so it
+    // cannot vote for a superblock.
+    //
+    blocknew.m_claim.m_quorum_hash = NN::GetInstance()->GetSuperblockHash();
 
-    if(!sb_contract.empty())
-    {
-
-        /* To save network bandwidth, start posting the neural hashes in the
-           CurrentNeuralHash field, so that out of sync neural network nodes can
-           request neural data from those that are already synced and agree with the
-           supermajority over the last 24 hrs
-           Note: CurrentNeuralHash is not actually used for sb validity
-        */
-        bb.CurrentNeuralHash = sb_hash;
-
-        /* Add our Neural Vote */
-        bb.NeuralHash = sb_hash;
-        LogPrintf("AddNeuralContractOrVote: Added our Neural Vote %s",sb_hash);
-
-        if (consensus_hash!=sb_hash)
-        {
-            LogPrintf("AddNeuralContractOrVote: not in Consensus");
-            return;
-        }
-
-        /* We have consensus, Add our neural contract */
-        bb.superblock = PackBinarySuperblock(sb_contract);
-        LogPrintf("AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ")",bb.superblock.length());
-    }
-    else
-    {
-        LogPrintf("AddNeuralContractOrVote: Local Contract Empty");
-
-        /* Do NOT add a Neural Vote alone, because this hash is not Trusted! */
+    if (!blocknew.m_claim.m_quorum_hash.Valid()) {
+        LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+        return;
     }
 
-    return;
+    blocknew.m_claim.m_quorum_address = std::move(quorum_address);
+
+    LogPrintf(
+        "AddNeuralContractOrVote: Added our quorum vote: %s",
+        blocknew.m_claim.m_quorum_hash.ToString());
+
+    if (blocknew.m_claim.m_quorum_hash != consensus_hash) {
+        LogPrintf("AddNeuralContractOrVote: Not in consensus.");
+        return;
+    }
+
+    // We have consensus, add our superblock contract:
+    blocknew.m_claim.m_superblock = NN::GetInstance()->GetSuperblockContract();
+
+    LogPrintf(
+        "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+        GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
 }
 
-bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nCoinAge, CBlockIndex* pindexPrev, int64_t &nReward)
+bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pindexPrev, int64_t &nReward)
 {
-    const std::string primary_cpid = NN::GetPrimaryCpid();
-
-    //remove fees from coinbase
+    // Remove fees from coinbase:
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
     blocknew.vtx[0].vout[0].SetEmpty();
 
-    double OUT_POR = 0;
-    double out_interest = 0;
-    double out_AccrualAge = 0;
-    double out_AccrualMagnitudeUnit = 0;
-    double out_AccrualMagnitude = 0;
+    NN::Claim& claim = blocknew.m_claim;
+    claim.m_mining_id = NN::Researcher::Get()->Id();
 
-    // ************************************************* CREATE PROOF OF RESEARCH REWARD ****************************** R HALFORD ***************
-    // ResearchAge 2
-    // Note: Since research Age must be exact, we need to transmit the Block nTime here so it matches AcceptBlock
-
+    // Note: Since research age must be exact, we need to transmit the block
+    // nTime here so it matches AcceptBlock():
     nReward = GetProofOfStakeReward(
         nCoinAge,
         nFees,
-        primary_cpid,
+        claim.m_mining_id.ToString(),
         false,  // Is verifying block? (no)
         0,      // Verification phase (N/A)
         pindexPrev->nTime,
         pindexPrev,
-        OUT_POR,
-        out_interest,
-        out_AccrualAge,
-        out_AccrualMagnitudeUnit,
-        out_AccrualMagnitude);
+        claim.m_research_subsidy,
+        claim.m_block_subsidy,
+        claim.m_research_age,
+        claim.m_magnitude_unit,
+        claim.m_average_magnitude);
 
-    uint256 pbh = 0;
-    pbh=pindexPrev->GetBlockHash();
+    claim.m_client_version = FormatFullVersion();
+    claim.m_organization = GetArgument("org", "");
+    claim.m_last_payment_time = GetLastPaymentTimeByCPID(claim.m_mining_id.ToString());
+    claim.m_last_block_hash = pindexPrev->GetBlockHash();
+    claim.m_last_por_block_hash = uint256(GetLastPORBlockHash(claim.m_mining_id.ToString()));
 
-    miningcpid.cpid = primary_cpid;
-    miningcpid.lastblockhash = pbh.GetHex();
-    miningcpid.LastPaymentTime = GetLastPaymentTimeByCPID(miningcpid.cpid);
-    miningcpid.Magnitude = CalculatedMagnitude(blocknew.nTime, false);
-    miningcpid.LastPaymentTime = GetLastPaymentTimeByCPID(primary_cpid);
-    miningcpid.ResearchSubsidy = OUT_POR;
-    miningcpid.ResearchAge = out_AccrualAge;
-    miningcpid.ResearchMagnitudeUnit = out_AccrualMagnitudeUnit;
-    miningcpid.ResearchAverageMagnitude = out_AccrualMagnitude;
-    miningcpid.InterestSubsidy = out_interest;
-    miningcpid.BoincSignature = "";
-    miningcpid.CurrentNeuralHash = "";
-    miningcpid.NeuralHash = "";
-    miningcpid.superblock = "";
-    miningcpid.GRCAddress = DefaultWalletAddress();
+    if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
+        claim.m_magnitude = CalculatedMagnitude2(cpid->ToString(), blocknew.nTime, false);
+    }
 
     LogPrintf(
-        "CreateGridcoinReward: for %s mint %f Research %f, Interest %f ",
-        miningcpid.cpid.c_str(),
+        "CreateGridcoinReward: for %s mint %f magnitude %d Research %f, Interest %f ",
+        claim.m_mining_id.ToString(),
         CoinToDouble(nReward),
-        miningcpid.ResearchSubsidy,
-        miningcpid.InterestSubsidy);
+        claim.m_magnitude,
+        claim.m_research_subsidy,
+        claim.m_block_subsidy);
 
-    //fill in reward and boinc
     blocknew.vtx[1].vout[1].nValue += nReward;
+
     return true;
 }
 
@@ -1187,7 +1191,7 @@ void StakeMiner(CWallet *pwallet)
 
         CBlockIndex* pindexPrev = pindexBest;
         CBlock StakeBlock;
-        MiningCPID BoincData = GetMiningCPID();
+
         { LOCK(MinerStatus.lock);
             //clear miner messages
             MinerStatus.ReasonNotStaking="";
@@ -1236,19 +1240,23 @@ void StakeMiner(CWallet *pwallet)
 
         // * add gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
-        if( !CreateGridcoinReward(StakeBlock, BoincData, StakeCoinAge, pindexPrev, nReward) )
+        if(!CreateGridcoinReward(StakeBlock, StakeCoinAge, pindexPrev, nReward)) {
             continue;
+        }
+
         LogPrintf("StakeMiner: added gridcoin reward to coinstake");
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking, vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
 
-        AddNeuralContractOrVote(StakeBlock, BoincData);
+        AddNeuralContractOrVote(StakeBlock);
 
         // * sign boinchash, coinstake, wholeblock
-        if( !SignStakeBlock(StakeBlock,BlockKey,StakeInputs,pwallet,BoincData) )
+        if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
             continue;
+        }
+
         LogPrintf("StakeMiner: signed boinchash, coinstake, wholeblock");
 
         { LOCK(MinerStatus.lock);
