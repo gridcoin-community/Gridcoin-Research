@@ -962,6 +962,8 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
                 "\n"
                 "Advertise a beacon (Requires wallet to be fully unlocked)\n");
 
+    EnsureWalletIsUnlocked();
+
     UniValue res(UniValue::VOBJ);
 
     /* Try to copy key from config. The call is no-op if already imported or
