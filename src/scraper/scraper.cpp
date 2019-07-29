@@ -131,7 +131,7 @@ NN::QuorumHash ScraperGetSuperblockHash(NN::Superblock& superblock);
 
 bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist);
-bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::map<std::string, int64_t>& mTeamIdsForProject_out);
+bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag);
 bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist);
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,  BeaconConsensus& Consensus);
 bool AuthenticationETagUpdate(const std::string& project, const std::string& etag);
@@ -1478,6 +1478,8 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
         std::string team_file_name;
         fs::path team_file;
+        std::map<std::string, int64_t> mTeamIDsForProject;
+        bool bDownloadFlag = false;
 
         if (fExplorer)
         {
@@ -1485,11 +1487,15 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
             team_file_name = prjs.m_name + "-" + sTeamETag + "-team.gz";
             team_file = pathScraper / team_file_name;
 
-            // If the file with the same eTag already exists, don't download it again.
+            // If the file with the same eTag already exists, don't download it again. Leave bDownloadFlag false.
             if (fs::exists(team_file))
             {
                 _log(logattribute::INFO, "DownloadProjectTeamFiles", "Etag file for " + prjs.m_name + " already exists");
-                continue;
+                 // continue;
+            }
+            else
+            {
+                bDownloadFlag = true;
             }
         }
         else
@@ -1499,32 +1505,31 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
             team_file = pathScraper / team_file_name;
 
             if (fs::exists(team_file)) fs::remove(team_file);
+
+            bDownloadFlag = true;
         }
 
-        try
+        // If in explorer mode and a new file is detected, or not in explorer mode, then download new file. (I.e. bDownload flag is true).
+        if (bDownloadFlag)
         {
-            http.Download(prjs.StatsUrl("team"), team_file.string(), userpass);
-        }
-        catch(const std::runtime_error& e)
-        {
-            _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name);
-            continue;
-        }
-
-        // If in explorer mode, save team xml files to file manifest map with exclude from CSManifest flag set to true.
-        if (fExplorer) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true);
-
-        std::map<std::string, int64_t> mTeamIDsForProject;
-
-        // We need this check because we could be in explorer mode (if fExplorer is true).
-        if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
-        {
-            if (ProcessProjectTeamFile(team_file.string(), sTeamETag, mTeamIDsForProject))
+            try
             {
-                // Insert or update team IDs for the project into the team ID map.
-                TeamIDMap[prjs.m_name] = mTeamIDsForProject;
+                http.Download(prjs.StatsUrl("team"), team_file.string(), userpass);
+            }
+            catch(const std::runtime_error& e)
+            {
+                _log(logattribute::ERR, "DownloadProjectTeamFiles", "Failed to download project team file for " + prjs.m_name);
+                continue;
             }
         }
+
+        // If in explorer mode and new file downloaded, save team xml files to file manifest map with exclude from CSManifest flag set to true.
+        // If not in explorer mode, this is not necessary, because the team xml file is just temporary and can be discarded after
+        // processing.
+        if (fExplorer && bDownloadFlag) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true);
+
+        // If require team whitelist is set, then process the file. This also populates the whitelist.
+        if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP) ProcessProjectTeamFile(prjs.m_name, team_file, sTeamETag);
 
         if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
@@ -1534,8 +1539,10 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
 
 
-bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::map<std::string, int64_t>& mTeamIdsForProject_out)
+bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag)
 {
+    std::map<std::string, int64_t> mTeamIdsForProject;
+
     // If passed an empty file, immediately return false.
     if (file.string().empty())
         return false;
@@ -1544,25 +1551,19 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
 
     if (!ingzfile)
     {
-        _log(logattribute::ERR, "ProcessProjectTeamFile", "Failed to open team gzip file (" + file.string() + ")");
+        _log(logattribute::ERR, "ProcessProjectTeamFile", "Failed to open team gzip file (" + file.filename().string() + ")");
 
         return 0;
     }
 
-    _log(logattribute::INFO, "ProcessProjectTeamFile", "Opening team file (" + file.string() + ")");
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Opening team file (" + file.filename().string() + ")");
 
     boostio::filtering_istream in;
 
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
-    // Insert csv in output filename. (This is not really used currently, but may be in the future.)
-    // std::string gzetagfile = std::string::replace(std::string::find(file.filename().string(), ".gz"), 3, ".csv.gz");
-
-    // Put path back in.
-    // gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
-
-    _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.string());
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.filename().string());
 
     std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
 
@@ -1599,13 +1600,13 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
                 continue;
             }
 
-            mTeamIdsForProject_out[sTeamName] = nTeamID;
+            mTeamIdsForProject[sTeamName] = nTeamID;
         }
         else
             builder.append(line);
     }
 
-    if (mTeamIdsForProject_out.empty())
+    if (mTeamIdsForProject.empty())
     {
         _log(logattribute::CRITICAL, "ProcessProjectTeamFile", "Error in data processing of " + file.string());
 
@@ -1618,10 +1619,10 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
 
     ingzfile.close();
 
-    // If not explorer mode, delete input file after processing.
-    if (!fExplorer && fs::exists(file)) fs::remove(file);
+    // Insert or update team IDs for the project into the team ID map. This must be done before the StoreTeamIDList.
+    TeamIDMap[project] = mTeamIdsForProject;
 
-    if (mTeamIdsForProject_out.size() < vTeamWhiteList.size())
+    if (mTeamIdsForProject.size() < vTeamWhiteList.size())
         _log(logattribute::ERR, "ProcessProjectTeamFile", "Unable to determine team IDs for one or more whitelisted teams.");
 
     // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
@@ -1632,7 +1633,10 @@ bool ProcessProjectTeamFile(const fs::path& file, const std::string& etag, std::
     else
         _log(logattribute::INFO, "ProcessProjectTeamFile", "Stored Team ID entries.");
 
-    _log(logattribute::INFO, "ProcessProjectTeamFile", "Finished processing " + file.string());
+    // If not explorer mode, delete input file after processing.
+    if (!fExplorer && fs::exists(file)) fs::remove(file);
+
+    _log(logattribute::INFO, "ProcessProjectTeamFile", "Finished processing " + file.filename().string());
 
     return true;
 }
@@ -2100,12 +2104,26 @@ bool LoadTeamIDList(const fs::path& file)
     in.push(ingzfile);
 
     std::string line;
+    std::string separator;
 
     // Header. This is used to construct the team names vector, since the team IDs were stored in the same order.
     std::getline(in, line);
 
+    // This is to detect and handle the loading of a legacy existing TeamID.csv.gz file that contains commas rather than pipes.
+    // The file will be rewritten with pipe separators when the team files are processed.
+    if (line.find("|") != std::string::npos)
+    {
+        separator = "|";
+    }
+    else
+    {
+        _log(logattribute::INFO, "LoadTeamIDList", "Loading from legacy TeamID.csv.gz file with comma separator. This will be converted to pipe separator.");
+
+        separator = ",";
+    }
+
     // This is in the form Project, Gridcoin, ...."
-    std::vector<std::string> vTeamNames = split(line, "|");
+    std::vector<std::string> vTeamNames = split(line, separator);
     if (fDebug3) _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
 
     while (std::getline(in, line))
@@ -2113,7 +2131,7 @@ bool LoadTeamIDList(const fs::path& file)
         std::string sProject = {};
         std::map<std::string, int64_t> mTeamIDsForProject = {};
 
-        std::vector<std::string> vline = split(line, "|");
+        std::vector<std::string> vline = split(line, separator);
 
         unsigned int iTeamName = 0;
         // Populate team IDs into map.
@@ -2259,6 +2277,8 @@ bool StoreTeamIDList(const fs::path& file)
         stream << "|" << iTeam;
 
     stream << std::endl;
+
+    if (fDebug3) _log(logattribute::INFO, "StoreTeamIDList", "TeamIDMap size = " + std::to_string(TeamIDMap.size()));
 
     // Data
     for (auto const& iProject : TeamIDMap)
