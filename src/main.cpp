@@ -7386,6 +7386,19 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     fMessageLoaded = true;
                 }
 
+                // Support dynamic team requirement or whitelist configuration:
+                //
+                // TODO: move this into the appropriate contract handler.
+                //
+                if (sMessageType == "protocol"
+                    && (sMessageKey == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                        || sMessageKey == "TEAM_WHITELIST"))
+                {
+                    // Rescan in-memory project CPIDs to resolve a primary CPID
+                    // that fits the now active team requirement settings:
+                    NN::Researcher::Refresh();
+                }
+
                 if(fDebug)
                     WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
             }

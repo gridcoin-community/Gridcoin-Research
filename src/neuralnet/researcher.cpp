@@ -6,7 +6,9 @@
 #include "util.h"
 
 #include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <set>
 
 using namespace NN;
 
@@ -75,10 +77,10 @@ bool ConfiguredForInvestorMode()
 boost::optional<std::string> ReadClientStateXml()
 {
     const std::string path = GetBoincDataDir();
-    const std::string contents = GetFileContents(path + "client_state.xml");
+    std::string contents = GetFileContents(path + "client_state.xml");
 
     if (contents != "-1") {
-        return contents;
+        return boost::make_optional(std::move(contents));
     }
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
@@ -119,19 +121,15 @@ std::vector<std::string> FetchProjectsXml()
 
     // Drop the first element which never contains a project:
     //
-    // We could swap-n-pop the element to avoid shifting the whole sequence.
-    // However, BOINC sorts the projects in client_state.xml by name, and we
-    // select the last valid CPID present in this file. To avoid a surprise,
-    // we'll just erase the first item. This routine doesn't run very often.
-    //
-    projects.erase(projects.begin());
+    std::swap(projects.front(), projects.back());
+    projects.pop_back();
 
     return projects;
 }
 
 //!
 //! \brief Determine whether BOINC projects should be checked for membership in
-//! team Gridcoin before enabling the associated CPID.
+//! a whitelisted team before enabling the associated CPID.
 //!
 //! \return \c true when the protocol is configured to require team membership
 //! or when no protocol directive exists.
@@ -142,63 +140,64 @@ bool ShouldEnforceTeamMembership()
 }
 
 //!
-//! \brief Process the provided project XML from BOINC's client_state.xml file
-//! and load it into the supplied researcher context if valid.
+//! \brief Fetch the current set of whitelisted teams.
 //!
-//! \param mining_id   Updated with the project CPID if eligible.
-//! \param projects    Projects map to store the loaded project in.
-//! \param project_xml As extracted from BOINC's client_state.xml file.
+//! \return The set of whitelisted teams configured in the protocol or a set
+//! with only team "gridcoin" when no protocol directive exists. Supplies an
+//! empty set when the team requirement is not active.
 //!
-void LoadProject(
-    MiningId& mining_id,
-    MiningProjectMap& projects,
-    const std::string& project_xml)
+std::set<std::string> GetTeamWhitelist()
 {
-    MiningProject project = MiningProject::Parse(project_xml);
-
-    if (project.m_name.empty()) {
-        LogPrintf("Skipping invalid BOINC project with empty name.");
-        return;
+    if (!ShouldEnforceTeamMembership()) {
+        return { };
     }
 
-    // TODO: maybe we should support the TEAM_WHITELIST protocol directive:
-    if (ShouldEnforceTeamMembership() && project.m_team != "gridcoin") {
-        LogPrintf("Project %s is not joined to team Gridcoin.", project.m_name);
-        project.m_error = MiningProject::Error::INVALID_TEAM;
-        projects.Set(std::move(project));
+    const AppCacheEntry entry = ReadCache(Section::PROTOCOL, "TEAM_WHITELIST");
 
-        return;
+    if (entry.value.empty()) {
+        return { "gridcoin" };
     }
 
-    if (project.m_cpid.IsZero()) {
-        const std::string external_cpid
-            = ExtractXML(project_xml, "<external_cpid>", "</external_cpid>");
+    std::set<std::string> teams;
 
-        // For the extremely rare case that a BOINC project assigned a user a
-        // CPID that contains only zeroes, double check that a CPID parsed to
-        // zero is actually invalid:
-        //
-        if (MiningId::Parse(external_cpid).Which() != MiningId::Kind::CPID) {
-            LogPrintf("Invalid external CPID for project %s.", project.m_name);
-            project.m_error = MiningProject::Error::MALFORMED_CPID;
-            projects.Set(std::move(project));
-
-            return;
+    for (auto&& team_name : split(entry.value, "|")) {
+        if (team_name.empty()) {
+            continue;
         }
+
+        boost::to_lower(team_name);
+
+        teams.emplace(std::move(team_name));
     }
 
-    // We compare the digest of the internal CPID and email address to the
-    // external CPID as a smoke test to avoid running with corrupted CPIDs.
-    //
-    if (!project.m_cpid.Matches(
-        ExtractXML(project_xml, "<cross_project_id>", "</cross_project_id>"),
-        Researcher::Email()))
-    {
-        LogPrintf("CPID mismatch. Check email for %s.", project.m_name);
-        project.m_error = MiningProject::Error::MISMATCHED_CPID;
-        projects.Set(std::move(project));
+    if (teams.empty()) {
+        return { "gridcoin" };
+    }
 
-        return;
+    return teams;
+}
+
+//!
+//! \brief Select the provided project's CPID if the project passes the rules
+//! for eligibility.
+//!
+//! \param mining_id Updated with the project CPID if eligible.
+//! \param project   Project with the CPID to determine eligibility for.
+//!
+void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
+{
+    switch (project.m_error) {
+        case MiningProject::Error::NONE:
+            break; // Suppress warning.
+        case MiningProject::Error::MALFORMED_CPID:
+            LogPrintf("Invalid external CPID for project %s.", project.m_name);
+            return;
+        case MiningProject::Error::MISMATCHED_CPID:
+            LogPrintf("CPID mismatch. Check email for %s.", project.m_name);
+            return;
+        case MiningProject::Error::INVALID_TEAM:
+            LogPrintf("Project %s's team is not whitelisted.", project.m_name);
+            return;
     }
 
     mining_id = project.m_cpid;
@@ -207,8 +206,6 @@ void LoadProject(
         "Found eligible project %s with CPID %s.",
         project.m_name,
         project.m_cpid.ToString());
-
-    projects.Set(std::move(project));
 }
 
 //!
@@ -319,10 +316,36 @@ MiningProject::MiningProject(std::string name, Cpid cpid, std::string team)
 
 MiningProject MiningProject::Parse(const std::string& xml)
 {
-    return MiningProject(
+    MiningProject project(
         ExtractXML(xml, "<project_name>", "</project_name>"),
         Cpid::Parse(ExtractXML(xml, "<external_cpid>", "</external_cpid>")),
         ExtractXML(xml, "<team_name>","</team_name>"));
+
+    if (project.m_cpid.IsZero()) {
+        const std::string external_cpid
+            = ExtractXML(xml, "<external_cpid>", "</external_cpid>");
+
+        // For the extremely rare case that a BOINC project assigned a user a
+        // CPID that contains only zeroes, double check that a CPID parsed to
+        // zero is actually invalid:
+        //
+        if (MiningId::Parse(external_cpid).Which() != MiningId::Kind::CPID) {
+            project.m_error = MiningProject::Error::MALFORMED_CPID;
+            return project;
+        }
+    }
+
+    // We compare the digest of the internal CPID and email address to the
+    // external CPID as a smoke test to avoid running with corrupted CPIDs.
+    //
+    if (!project.m_cpid.Matches(
+        ExtractXML(xml, "<cross_project_id>", "</cross_project_id>"),
+        Researcher::Email()))
+    {
+        project.m_error = MiningProject::Error::MISMATCHED_CPID;
+    }
+
+    return project;
 }
 
 bool MiningProject::Eligible() const
@@ -347,6 +370,24 @@ std::string MiningProject::ErrorMessage() const
 
 MiningProjectMap::MiningProjectMap()
 {
+}
+
+MiningProjectMap MiningProjectMap::Parse(const std::vector<std::string>& xml)
+{
+    MiningProjectMap projects;
+
+    for (const auto& project_xml : xml) {
+        MiningProject project = MiningProject::Parse(project_xml);
+
+        if (project.m_name.empty()) {
+            LogPrintf("Skipping invalid BOINC project with empty name.");
+            continue;
+        }
+
+        projects.Set(std::move(project));
+    }
+
+    return projects;
 }
 
 MiningProjectMap::const_iterator MiningProjectMap::begin() const
@@ -383,6 +424,28 @@ ProjectOption MiningProjectMap::Try(const std::string& name) const
 void MiningProjectMap::Set(MiningProject project)
 {
     m_projects.emplace(project.m_name, std::move(project));
+}
+
+void MiningProjectMap::ApplyTeamWhitelist(const std::set<std::string>& teams)
+{
+    for (auto& project_pair : m_projects) {
+        MiningProject& project = project_pair.second;
+
+        switch (project.m_error) {
+            case MiningProject::Error::NONE:
+                if (!teams.empty() && !teams.count(project.m_team)) {
+                    project.m_error = MiningProject::Error::INVALID_TEAM;
+                }
+                break;
+            case MiningProject::Error::INVALID_TEAM:
+                if (teams.empty() || teams.count(project.m_team)) {
+                    project.m_error = MiningProject::Error::NONE;
+                }
+                break;
+            default:
+                continue;
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -428,25 +491,42 @@ void Researcher::Reload()
         LogPrintf("WARNING: boinckey is no longer supported.");
     }
 
-    Reload(FetchProjectsXml());
+    Reload(MiningProjectMap::Parse(FetchProjectsXml()));
 }
 
-void Researcher::Reload(const std::vector<std::string>& projects_xml)
+void Researcher::Reload(MiningProjectMap projects)
 {
-    Researcher researcher;
+    const std::set<std::string> team_whitelist = GetTeamWhitelist();
 
-    for (const auto& project_xml : projects_xml) {
-        LoadProject(researcher.m_mining_id, researcher.m_projects, project_xml);
+    if (team_whitelist.empty()) {
+        LogPrintf("BOINC team requirement inactive at last known block.");
+    } else {
+        LogPrintf(
+            "BOINC team requirement active at last known block. Whitelist: %s",
+            boost::algorithm::join(team_whitelist, ", "));
     }
 
-    if (const CpidOption cpid = researcher.m_mining_id.TryCpid()) {
-        DetectSplitCpid(researcher.m_projects);
+    projects.ApplyTeamWhitelist(team_whitelist);
+
+    MiningId mining_id = MiningId::ForInvestor();
+
+    for (const auto& project_pair : projects) {
+        TryProjectCpid(mining_id, project_pair.second);
+    }
+
+    if (const CpidOption cpid = mining_id.TryCpid()) {
+        DetectSplitCpid(projects);
         LogPrintf("Selected primary CPID: %s", cpid->ToString());
-    } else if (!researcher.m_projects.empty()) {
+    } else if (!projects.empty()) {
         LogPrintf("WARNING: no projects eligible for research rewards.");
     }
 
-    StoreResearcher(std::move(researcher));
+    StoreResearcher(Researcher(std::move(mining_id), std::move(projects)));
+}
+
+void Researcher::Refresh()
+{
+    Reload(Get()->m_projects);
 }
 
 const MiningId& Researcher::Id() const

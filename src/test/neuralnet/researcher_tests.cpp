@@ -87,6 +87,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
 
 BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
 {
+    SetArgument("email", "researcher@example.com");
+
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file:
     //
@@ -95,6 +97,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
         <project>
           <project_name>Project Name</project_name>
           <team_name>Team Name</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
         </project>
         )XML");
@@ -105,6 +108,9 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
+
+    // Clean up:
+    SetArgument("email", "");
 }
 
 BOOST_AUTO_TEST_CASE(it_normalizes_project_names)
@@ -178,6 +184,86 @@ BOOST_AUTO_TEST_CASE(it_is_iterable)
     BOOST_CHECK(counter == 2);
 }
 
+BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
+{
+    // External CPIDs generated with this email address:
+    SetArgument("email", "researcher@example.com");
+
+    NN::MiningProjectMap projects = NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <project_name>Project Name 1</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <project_name>Project Name 2</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</cross_project_id>
+          <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
+        </project>
+        )XML",
+    });
+
+    NN::Cpid cpid_1 = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+    NN::Cpid cpid_2 = NN::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
+
+    BOOST_CHECK(projects.size() == 2);
+
+    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+        BOOST_CHECK(project1->m_name == "project name 1");
+        BOOST_CHECK(project1->m_cpid == cpid_1);
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project name 2")) {
+        BOOST_CHECK(project2->m_name == "project name 2");
+        BOOST_CHECK(project2->m_cpid == cpid_2);
+        BOOST_CHECK(project2->m_team == "gridcoin");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    // Clean up:
+    SetArgument("email", "");
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
+{
+    NN::MiningProjectMap projects = NN::MiningProjectMap::Parse({
+        // Empty <project_name> element:
+        R"XML(
+        <project>
+          <project_name></project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        // Missing <project_name> element:
+        R"XML(
+        <project>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    });
+
+    // No valid projects loaded; mining ID should remain INVESTOR:
+    BOOST_CHECK(projects.empty() == true);
+}
+
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
 {
     NN::MiningProjectMap projects;
@@ -219,6 +305,97 @@ BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
     projects.Set(NN::MiningProject("project name", NN::Cpid(), "team name 2"));
 
     BOOST_CHECK(projects.Try("project name").value().m_team == "team name 1");
+}
+
+BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
+{
+    NN::MiningProjectMap projects;
+
+    projects.Set(NN::MiningProject("project 1", NN::Cpid(), "gridcoin"));
+    projects.Set(NN::MiningProject("project 2", NN::Cpid(), "team 1"));
+    projects.Set(NN::MiningProject("project 3", NN::Cpid(), "team 2"));
+
+    // Before applying a whitelist, all projects are eligible:
+
+    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Applying this whitelist disables eligibility for project 1:
+    //
+    projects.ApplyTeamWhitelist({ "team 1", "team 2" });
+
+    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project1->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Applying an empty whitelist removes the team requirement:
+    //
+    projects.ApplyTeamWhitelist({ });
+
+    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -304,7 +481,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(std::vector<std::string> {
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
           <project_name>Project Name 1</project_name>
@@ -321,7 +498,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
           <external_cpid>8edc235ddcecf9c416a5f9417d56f4fd</external_cpid>
         </project>
         )XML",
-    });
+    }));
 
     NN::Cpid cpid_1 = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
     NN::Cpid cpid_2 = NN::Cpid::Parse("8edc235ddcecf9c416a5f9417d56f4fd");
@@ -354,7 +531,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
@@ -362,7 +539,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(std::vector<std::string> {
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
           <project_name>Name</project_name>
@@ -371,7 +548,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
         </project>
         )XML",
-    });
+    }));
 
     NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
@@ -389,12 +566,12 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_parsing_no_projects)
 {
-    NN::Researcher::Reload(std::vector<std::string> { });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 
     BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
     BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
@@ -405,7 +582,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
 
-    NN::Researcher::Reload(std::vector<std::string> {
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         // Required team mismatch:
         R"XML(
         <project>
@@ -457,7 +634,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
         </project>
         )XML",
-    });
+    }));
 
     NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
@@ -529,12 +706,12 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
 
     // Clean up:
     SetArgument("email", "");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
 {
-    NN::Researcher::Reload(std::vector<std::string> {
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         // Empty <project_name> element:
         R"XML(
         <project>
@@ -552,17 +729,17 @@ BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
         </project>
         )XML",
-    });
+    }));
 
     // No valid projects loaded; mining ID should remain INVESTOR:
     BOOST_CHECK(NN::Researcher::Get()->Id() == NN::MiningId::ForInvestor());
     BOOST_CHECK(NN::Researcher::Get()->Projects().empty() == true);
 
     // Clean up:
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
-BOOST_AUTO_TEST_CASE(it_ignores_the_team_requirement_when_set_by_protocol)
+BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
 {
     // External CPIDs generated with this email address:
     SetArgument("email", "researcher@example.com");
@@ -570,7 +747,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_requirement_when_set_by_protocol)
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
-    NN::Researcher::Reload(std::vector<std::string> {
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
           <project_name>Project Name 1</project_name>
@@ -579,7 +756,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_requirement_when_set_by_protocol)
           <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
         </project>
         )XML",
-    });
+    }));
 
     NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
 
@@ -602,7 +779,341 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_requirement_when_set_by_protocol)
     // Clean up:
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
+{
+    // External CPIDs generated with this email address:
+    SetArgument("email", "researcher@example.com");
+
+    // Simulate a protocol control directive with whitelisted teams:
+    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "team 1|Team 2", 1);
+
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <project_name>Project Name 1</project_name>
+          <team_name>! Not Gridcoin !</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <project_name>Project Name 2</project_name>
+          <team_name>Team 1</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <project_name>Project Name 3</project_name>
+          <team_name>Team 2</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+
+    // Primary CPID is selected from the last valid CPID loaded:
+    BOOST_CHECK(NN::Researcher::Get()->Id() == cpid);
+
+    const NN::MiningProjectMap& projects = NN::Researcher::Get()->Projects();
+    BOOST_CHECK(projects.size() == 3);
+
+    if (const NN::ProjectOption project1 = projects.Try("project name 1")) {
+        BOOST_CHECK(project1->m_name == "project name 1");
+        BOOST_CHECK(project1->m_cpid == cpid);
+        BOOST_CHECK(project1->m_team == "! not gridcoin !");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project1->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project name 2")) {
+        BOOST_CHECK(project2->m_name == "project name 2");
+        BOOST_CHECK(project2->m_cpid == cpid);
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project name 3")) {
+        BOOST_CHECK(project3->m_name == "project name 3");
+        BOOST_CHECK(project3->m_cpid == cpid);
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Clean up:
+    SetArgument("email", "");
+    DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
+{
+    // External CPIDs generated with this email address:
+    SetArgument("email", "researcher@example.com");
+
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <project_name>name</project_name>
+          <team_name>! Not Gridcoin !</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == true);
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("name")) {
+        BOOST_CHECK(project->m_team == "! not gridcoin !");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project does not exist in the mining project map.");
+    }
+
+    // Simulate a protocol control directive that disables the team requirement:
+    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
+
+    // Rescan in-memory projects for previously-ineligible teams:
+    NN::Researcher::Refresh();
+
+    BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == false);
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("name")) {
+        BOOST_CHECK(project->m_team == "! not gridcoin !");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project does not exist in the mining project map.");
+    }
+
+    // Simulate a protocol control directive that enables the team requirement:
+    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
+
+    // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::Refresh();
+
+    BOOST_CHECK(NN::Researcher::Get()->IsInvestor() == true);
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("name")) {
+        BOOST_CHECK(project->m_team == "! not gridcoin !");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project does not exist in the mining project map.");
+    }
+
+    // Clean up:
+    SetArgument("email", "");
+    DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
+{
+    // External CPIDs generated with this email address:
+    SetArgument("email", "researcher@example.com");
+
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <project_name>p1</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <project_name>p2</project_name>
+          <team_name>Team 1</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <project_name>p3</project_name>
+          <team_name>Team 2</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+        BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p2")) {
+        BOOST_CHECK(project->m_team == "team 1");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p3")) {
+        BOOST_CHECK(project->m_team == "team 2");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Simulate a protocol control directive that enables the team whitelist:
+    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
+
+    // Rescan in-memory projects for previously-ineligible teams:
+    NN::Researcher::Refresh();
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+        BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p2")) {
+        BOOST_CHECK(project->m_team == "team 1");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p3")) {
+        BOOST_CHECK(project->m_team == "team 2");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Simulate a protocol control directive that disables the team whitelist:
+    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "", 1);
+
+    // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::Refresh();
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+        BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p2")) {
+        BOOST_CHECK(project->m_team == "team 1");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p3")) {
+        BOOST_CHECK(project->m_team == "team 2");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Clean up:
+    SetArgument("email", "");
+    DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    NN::Researcher::Reload(NN::MiningProjectMap());
+}
+
+BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
+{
+    // External CPIDs generated with this email address:
+    SetArgument("email", "researcher@example.com");
+
+    // Simulate a protocol control directive that disables the team requirement:
+    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
+
+    NN::Researcher::Reload(NN::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <project_name>p1</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+        BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project does not exist in the mining project map.");
+    }
+
+    // Simulate a protocol control directive that enables the team whitelist:
+    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
+
+    // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::Refresh();
+
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == true);
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+        BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project does not exist in the mining project map.");
+    }
+
+    // Simulate a protocol control directive that enables the team requirement
+    // (and thus, the whitelist):
+    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
+
+    // Rescan in-memory projects for previously-eligible teams:
+    NN::Researcher::Refresh();
+
+    BOOST_CHECK(NN::Researcher::Get()->Eligible() == false);
+
+    if (const NN::ProjectOption project = NN::Researcher::Get()->Project("p1")) {
+        BOOST_CHECK(project->m_team == "gridcoin");
+        BOOST_CHECK(project->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project does not exist in the mining project map.");
+    }
+
+    // Clean up:
+    SetArgument("email", "");
+    DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
+    DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 // Note: the precondition skips this test case when the test harness cannot
@@ -672,7 +1183,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_from_a_client_state_xml_file,
     // Clean up:
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 // Note: the precondition skips this test case when the test harness cannot
@@ -696,7 +1207,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_missing_email_address,
 
     // Clean up:
     SetArgument("boincdatadir", "");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 // Note: the precondition skips this test case when the test harness cannot
@@ -726,7 +1237,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_explicitly_configured,
     SetArgument("investor", "0");
     SetArgument("email", "");
     SetArgument("boincdatadir", "");
-    NN::Researcher::Reload({ });
+    NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
