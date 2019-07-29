@@ -82,7 +82,6 @@ double GetTotalBalance();
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
-bool IsCPIDValidv2(MiningCPID& mc, int height);
 
 BlockFinder RPCBlockFinder;
 
@@ -143,19 +142,81 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
+namespace {
+UniValue ClaimToJson(const NN::Claim& claim)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)claim.m_version);
+    json.pushKV("mining_id", claim.m_mining_id.ToString());
+    json.pushKV("client_version", claim.m_client_version);
+    json.pushKV("organization", claim.m_organization);
+
+    json.pushKV("block_subsidy", claim.m_block_subsidy);
+    json.pushKV("last_payment_time", TimestampToHRDate(claim.m_last_payment_time));
+    json.pushKV("last_block_hash", claim.m_last_block_hash.ToString());
+    json.pushKV("last_por_block_hash", claim.m_last_por_block_hash.ToString());
+
+    json.pushKV("research_subsidy", claim.m_research_subsidy);
+    json.pushKV("research_age", claim.m_research_age);
+    json.pushKV("magnitude", claim.m_magnitude);
+    json.pushKV("magnitude_unit", claim.m_magnitude_unit);
+    json.pushKV("average_magnitude", claim.m_average_magnitude);
+
+    json.pushKV("public_key", HexStr(claim.m_public_key.Raw()));
+    json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
+
+    json.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
+    json.pushKV("quorum_address", claim.m_quorum_address);
+
+    return json;
+}
+
+UniValue SuperblockToJson(const NN::Superblock& superblock)
+{
+    UniValue magnitudes(UniValue::VOBJ);
+
+    for (const auto& cpid_pair : superblock.m_cpids) {
+        magnitudes.pushKV(cpid_pair.first.ToString(), cpid_pair.second);
+    }
+
+    UniValue projects(UniValue::VOBJ);
+
+    for (const auto& project_pair : superblock.m_projects) {
+        UniValue project(UniValue::VOBJ);
+
+        project.pushKV("average_rac", project_pair.second.m_average_rac);
+        project.pushKV("rac", project_pair.second.m_rac);
+        project.pushKV("total_credit", project_pair.second.m_total_credit);
+
+        projects.pushKV(project_pair.first, project);
+    }
+
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)superblock.m_version);
+    json.pushKV("magnitudes", std::move(magnitudes));
+    json.pushKV("projects", std::move(projects));
+
+    return json;
+}
+} // anonymous namespace
+
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     UniValue result(UniValue::VOBJ);
+
     result.pushKV("hash", block.GetHash().GetHex());
+
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
+
     result.pushKV("confirmations", txGen.GetDepthInMainChain());
     result.pushKV("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION));
     result.pushKV("height", blockindex->nHeight);
     result.pushKV("version", block.nVersion);
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
-    double mint = CoinToDouble(blockindex->nMint);
-    result.pushKV("mint", mint);
+    result.pushKV("mint", CoinToDouble(blockindex->nMint));
     result.pushKV("MoneySupply", blockindex->nMoneySupply);
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
@@ -163,22 +224,30 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
     result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
+
     if (blockindex->pprev)
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
     if (blockindex->pnext)
         result.pushKV("nextblockhash", blockindex->pnext->GetBlockHash().GetHex());
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);    
-    bool IsPoR = false;
-    IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
+
+    const NN::Claim& claim = block.GetClaim();
+
     std::string PoRNarr = "";
-    if (IsPoR) PoRNarr = "proof-of-research";
-    result.pushKV("flags",
-        strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr);
+    if (blockindex->IsProofOfStake() && claim.HasResearchReward()) {
+        PoRNarr = "proof-of-research";
+    }
+
+    result.pushKV("flags", strprintf("%s%s",
+        blockindex->IsProofOfStake() ? "proof-of-stake" : "proof-of-work",
+        blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr);
+
     result.pushKV("proofhash", blockindex->hashProof.GetHex());
     result.pushKV("entropybit", (int)blockindex->GetStakeEntropyBit());
     result.pushKV("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier));
     result.pushKV("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum));
+
     UniValue txinfo(UniValue::VARR);
+
     for (auto const& tx : block.vtx)
     {
         if (fPrintTransactionDetail)
@@ -195,51 +264,21 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     }
 
     result.pushKV("tx", txinfo);
+
     if (block.IsProofOfStake())
         result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
-    result.pushKV("CPID", bb.cpid);
 
-    result.pushKV("Magnitude", bb.Magnitude);
+    result.pushKV("claim", ClaimToJson(block.GetClaim()));
+
     if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
-    result.pushKV("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime));
 
-    result.pushKV("ResearchSubsidy",bb.ResearchSubsidy);
-    result.pushKV("ResearchAge",bb.ResearchAge);
-    result.pushKV("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit);
-    result.pushKV("ResearchAverageMagnitude",bb.ResearchAverageMagnitude);
-    result.pushKV("LastPORBlockHash",bb.LastPORBlockHash);
-    result.pushKV("Interest",bb.InterestSubsidy);
-    result.pushKV("GRCAddress",bb.GRCAddress);
-    if (!bb.BoincPublicKey.empty())
-    {
-        result.pushKV("BoincPublicKey",bb.BoincPublicKey);
-        result.pushKV("BoincSignature",bb.BoincSignature);
-        bool fValidSig = VerifyCPIDSignature(bb.cpid, bb.lastblockhash, bb.BoincSignature);
-        result.pushKV("SignatureValid",fValidSig);
+    if (fPrintTransactionDetail && blockindex->nIsSuperBlock == 1) {
+        result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
     }
-    result.pushKV("ClientVersion",bb.clientversion);
 
-    bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
-    result.pushKV("CPIDValid",IsCPIDValid2);
-
-    result.pushKV("NeuralHash",bb.NeuralHash);
-    if (bb.superblock.length() > 20)
-    {
-        //12-20-2015 Support for Binary Superblocks
-        std::string superblock=UnpackBinarySuperblock(bb.superblock);
-        std::string neural_hash = GetQuorumHash(superblock);
-        result.pushKV("SuperblockHash", neural_hash);
-        result.pushKV("SuperblockUnpackedLength", (int)superblock.length());
-        result.pushKV("SuperblockLength", (int)bb.superblock.length());
-        bool bIsBinary = Contains(bb.superblock,"<BINARY>");
-        result.pushKV("IsBinary",bIsBinary);
-        if(fPrintTransactionDetail)
-        {
-            result.pushKV("SuperblockContents", superblock);
-        }
-    }
     result.pushKV("IsSuperBlock", (int)blockindex->nIsSuperBlock);
     result.pushKV("IsContract", (int)blockindex->nIsContract);
+
     return result;
 }
 
