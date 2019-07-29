@@ -10,7 +10,6 @@ class CTransaction;
 class CWallet;
 
 // Gridcoin
-struct MiningCPID;
 struct StructCPID;
 
 class ThreadHandler;

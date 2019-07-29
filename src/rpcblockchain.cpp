@@ -45,7 +45,6 @@ extern UniValue MagnitudeReport(std::string cpid);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
@@ -2358,28 +2357,25 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         if (!pblockindex->IsInMainChain()) continue;
         if (IsSuperBlock(pblockindex))
         {
-            MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-            if (bb.superblock.length() > 20)
+            const NN::ClaimOption claim = GetClaimByIndex(pblockindex);
+
+            if (claim && claim->ContainsSuperblock())
             {
-                double out_beacon_count = 0;
-                double out_participant_count = 0;
-                double out_avg = 0;
-                // Binary Support 12-20-2015
-                std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
+                const NN::Superblock& superblock = claim->m_superblock;
 
                 UniValue c(UniValue::VOBJ);
                 c.pushKV("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex());
                 c.pushKV("Date",TimestampToHRDate(pblockindex->nTime));
-                c.pushKV("Average Mag",out_avg);
-                c.pushKV("Wallet Version",bb.clientversion);
-                double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
-                if (!cpid.empty())
+                c.pushKV("Average Mag", superblock.m_cpids.AverageMagnitude());
+                c.pushKV("Wallet Version", claim->m_client_version);
+
+                if (const NN::CpidOption cpid_parsed = NN::MiningId::Parse(cpid).TryCpid())
                 {
-                    c.pushKV("Magnitude",mag);
+                    c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed));
                 }
+
                 if (displaycontract)
-                    c.pushKV("Contract Contents: ", superblock);
+                    c.pushKV("Contract Contents", SuperblockToJson(superblock));
 
                 results.push_back(c);
             }

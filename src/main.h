@@ -273,8 +273,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
-MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
-std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
@@ -292,7 +290,7 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
 void AddRARewardBlock(const CBlockIndex* pIndex);
-MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
+NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
