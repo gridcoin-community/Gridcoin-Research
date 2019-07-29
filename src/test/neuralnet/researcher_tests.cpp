@@ -307,6 +307,97 @@ BOOST_AUTO_TEST_CASE(it_does_not_overwrite_projects_with_the_same_name)
     BOOST_CHECK(projects.Try("project name").value().m_team == "team name 1");
 }
 
+BOOST_AUTO_TEST_CASE(it_applies_a_provided_team_whitelist)
+{
+    NN::MiningProjectMap projects;
+
+    projects.Set(NN::MiningProject("project 1", NN::Cpid(), "gridcoin"));
+    projects.Set(NN::MiningProject("project 2", NN::Cpid(), "team 1"));
+    projects.Set(NN::MiningProject("project 3", NN::Cpid(), "team 2"));
+
+    // Before applying a whitelist, all projects are eligible:
+
+    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Applying this whitelist disables eligibility for project 1:
+    //
+    projects.ApplyTeamWhitelist({ "team 1", "team 2" });
+
+    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::INVALID_TEAM);
+        BOOST_CHECK(project1->Eligible() == false);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+
+    // Applying an empty whitelist removes the team requirement:
+    //
+    projects.ApplyTeamWhitelist({ });
+
+    if (const NN::ProjectOption project1 = projects.Try("project 1")) {
+        BOOST_CHECK(project1->m_team == "gridcoin");
+        BOOST_CHECK(project1->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project1->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 1 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project2 = projects.Try("project 2")) {
+        BOOST_CHECK(project2->m_team == "team 1");
+        BOOST_CHECK(project2->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project2->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 2 does not exist in the mining project map.");
+    }
+
+    if (const NN::ProjectOption project3 = projects.Try("project 3")) {
+        BOOST_CHECK(project3->m_team == "team 2");
+        BOOST_CHECK(project3->m_error == NN::MiningProject::Error::NONE);
+        BOOST_CHECK(project3->Eligible() == true);
+    } else {
+        BOOST_FAIL("Project 3 does not exist in the mining project map.");
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // -----------------------------------------------------------------------------

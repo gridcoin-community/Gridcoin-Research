@@ -181,39 +181,24 @@ std::set<std::string> GetTeamWhitelist()
 //! \brief Select the provided project's CPID if the project passes the rules
 //! for eligibility.
 //!
-//! \param mining_id      Updated with the project CPID if eligible.
-//! \param project        Project to determine eligibility for.
-//! \param team_whitelist The set of whitelisted teams to validate the provided
-//!                       project's team against or an empty container when the
-//!                       protocol team requirement is disabled.
+//! \param mining_id Updated with the project CPID if eligible.
+//! \param project   Project with the CPID to determine eligibility for.
 //!
-void LoadProject(
-    MiningId& mining_id,
-    MiningProject& project,
-    const std::set<std::string>& team_whitelist)
+void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
 {
     switch (project.m_error) {
+        case MiningProject::Error::NONE:
+            break; // Suppress warning.
         case MiningProject::Error::MALFORMED_CPID:
             LogPrintf("Invalid external CPID for project %s.", project.m_name);
             return;
         case MiningProject::Error::MISMATCHED_CPID:
             LogPrintf("CPID mismatch. Check email for %s.", project.m_name);
             return;
-        default:
-            break; // Suppress warning.
+        case MiningProject::Error::INVALID_TEAM:
+            LogPrintf("Project %s's team is not whitelisted.", project.m_name);
+            return;
     }
-
-    if (!team_whitelist.empty() && !team_whitelist.count(project.m_team)) {
-        LogPrintf("Project %s's team is not whitelisted.", project.m_name);
-        project.m_error = MiningProject::Error::INVALID_TEAM;
-
-        return;
-    }
-
-    // Clear any previously-set INVALID_TEAM error when a dynamic protocol
-    // directive applies a configuration that now authorizes this project:
-    //
-    project.m_error = MiningProject::Error::NONE;
 
     mining_id = project.m_cpid;
 
@@ -441,6 +426,28 @@ void MiningProjectMap::Set(MiningProject project)
     m_projects.emplace(project.m_name, std::move(project));
 }
 
+void MiningProjectMap::ApplyTeamWhitelist(const std::set<std::string>& teams)
+{
+    for (auto& project_pair : m_projects) {
+        MiningProject& project = project_pair.second;
+
+        switch (project.m_error) {
+            case MiningProject::Error::NONE:
+                if (!teams.empty() && !teams.count(project.m_team)) {
+                    project.m_error = MiningProject::Error::INVALID_TEAM;
+                }
+                break;
+            case MiningProject::Error::INVALID_TEAM:
+                if (teams.empty() || teams.count(project.m_team)) {
+                    project.m_error = MiningProject::Error::NONE;
+                }
+                break;
+            default:
+                continue;
+        }
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Class: Researcher
 // -----------------------------------------------------------------------------
@@ -489,8 +496,6 @@ void Researcher::Reload()
 
 void Researcher::Reload(MiningProjectMap projects)
 {
-    MiningId mining_id = MiningId::ForInvestor();
-
     const std::set<std::string> team_whitelist = GetTeamWhitelist();
 
     if (team_whitelist.empty()) {
@@ -501,8 +506,12 @@ void Researcher::Reload(MiningProjectMap projects)
             boost::algorithm::join(team_whitelist, ", "));
     }
 
-    for (auto& project_pair : projects) {
-        LoadProject(mining_id, REF(project_pair.second), team_whitelist);
+    projects.ApplyTeamWhitelist(team_whitelist);
+
+    MiningId mining_id = MiningId::ForInvestor();
+
+    for (const auto& project_pair : projects) {
+        TryProjectCpid(mining_id, project_pair.second);
     }
 
     if (const CpidOption cpid = mining_id.TryCpid()) {

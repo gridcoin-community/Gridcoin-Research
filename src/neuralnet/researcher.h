@@ -158,6 +158,16 @@ public:
     //!
     void Set(MiningProject project);
 
+    //!
+    //! \brief Set the eligibility status of the projects in the map based
+    //! on their association with the provided set of teams.
+    //!
+    //! \param teams The set of whitelisted teams to validate the provided
+    //!              project's team against or an empty container when the
+    //!              protocol team requirement is disabled.
+    //!
+    void ApplyTeamWhitelist(const std::set<std::string>& teams);
+
 private:
     //!
     //! \brief Stores the local BOINC projects loaded from client_state.xml.
