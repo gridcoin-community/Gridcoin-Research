@@ -2760,21 +2760,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     }
 
     double mint = CoinToDouble(pindex->nMint);
-    double PORDiff = GetBlockDifficulty(nBits);
 
     if (pindex->nHeight > nGrandfather && !fReorganizing)
     {
-        if(nVersion < 10)
-        {
-            // Block Spamming
-            if (mint < MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime()))
-            {
-                return error("CheckProofOfStake[] : Mint too Small, %f",(double)mint);
-            }
-
-            if (mint == 0) return error("CheckProofOfStake[] : Mint is ZERO! %f",(double)mint);
-        }
-
         double OUT_POR = 0;
         double OUT_INTEREST = 0;
         double dAccrualAge = 0;
@@ -3657,23 +3645,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     // Gridcoin: check proof-of-stake block signature
     if (IsProofOfStake() && height1 > nGrandfather)
     {
-        //Mint limiter checks 1-20-2015
-        double PORDiff = GetBlockDifficulty(nBits);
-        double mint1 = CoinToDouble(Mint);
-        double total_subsidy = bb.ResearchSubsidy + bb.InterestSubsidy;
-        double limiter = MintLimiter(PORDiff,bb.RSAWeight,bb.cpid,GetBlockTime());
-        if (fDebug10) LogPrintf("CheckBlock[]: TotalSubsidy %f, Height %i, %s, %f, Res %f, Interest %f, hb: %s ",
-                             total_subsidy, height1, bb.cpid,
-                             mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
-        if ((nVersion < 10) && (total_subsidy < limiter))
-        {
-            if (fDebug3) LogPrintf("****CheckBlock[]: Total Mint too Small %s, mint %f, Res %f, Interest %f, hash %s ",bb.cpid,
-                                mint1,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
-            //1-21-2015 - Prevent Hackers from spamming the network with small blocks
-            return error("****CheckBlock[]: Total Mint too Small %f < %f Research %f Interest %f BOINC %s",
-                         total_subsidy,limiter,bb.ResearchSubsidy,bb.InterestSubsidy,vtx[0].hashBoinc);
-        }
-
         if (fCheckSig && !CheckBlockSignature())
             return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
     }
@@ -3772,19 +3743,19 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
         return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
-    if (nHeight > nGrandfather || nHeight >= 999000)
+    if (nHeight > nGrandfather)
     {
-            // Check coinbase timestamp
-            if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
-            {
-                return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
-            }
-            // Check timestamp against prev
-            if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
-                return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
-            // Check proof-of-work or proof-of-stake
-            if (nBits != GetNextTargetRequired(pindexPrev))
-                return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
+        // Check coinbase timestamp
+        if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
+        {
+            return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
+        }
+        // Check timestamp against prev
+        if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
+            return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
+        // Check proof-of-work or proof-of-stake
+        if (nBits != GetNextTargetRequired(pindexPrev))
+            return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
     }
 
     for (auto const& tx : vtx)
@@ -3805,19 +3776,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 
     uint256 hashProof;
 
-    // Verify hash target and signature of coinstake tx
-    if ((nHeight > nGrandfather || nHeight >= 999000) && nVersion <= 7)
-    {
-                if (IsProofOfStake())
-                {
-                    uint256 targetProofOfStake;
-                    if (!CheckProofOfStake(pindexPrev, vtx[1], nBits, hashProof, targetProofOfStake, vtx[0].hashBoinc, generated_by_me, nNonce) && (IsLockTimeWithinMinutes(GetBlockTime(), 600, GetAdjustedTime()) || nHeight >= 999000))
-                    {
-                        return error("WARNING: AcceptBlock(): check proof-of-stake failed for block %s, nonce %f    ", hash.ToString().c_str(),(double)nNonce);
-                    }
-
-                }
-    }
     if (nVersion >= 8)
     {
         //must be proof of stake
@@ -6614,7 +6572,7 @@ std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion)
                     + delim + version
                     + delim + RoundToString(mcpid.ResearchSubsidy,subsidy_places)
                     + delim + RoundToString(mcpid.LastPaymentTime,0)
-                    + delim + RoundToString(mcpid.RSAWeight,0)
+                    + delim // + RoundToString(mcpid.RSAWeight,0)         // Obsolete
                     + delim // + mcpid.cpidv2                             // Obsolete
                     + delim + RoundToString(mcpid.Magnitude,0)
                     + delim + mcpid.GRCAddress
@@ -6676,10 +6634,10 @@ MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion)
         {
             surrogate.LastPaymentTime = RoundFromString(s[12],0);
         }
-        if (s.size() > 13)
-        {
-            surrogate.RSAWeight = RoundFromString(s[13],0);
-        }
+        //if (s.size() > 13)
+        //{
+        //    surrogate.RSAWeight = RoundFromString(s[13],0);          // Obsolete
+        //}
         //if (s.size() > 14)
         //{
         //    surrogate.cpidv2 = s[14];                                // Obsolete
@@ -6792,7 +6750,6 @@ MiningCPID GetMiningCPID()
     mc.initialized = false;
     mc.lastblockhash = "0";
     mc.Magnitude = 0;
-    mc.RSAWeight = 0;
     mc.LastPaymentTime=0;
     mc.ResearchSubsidy = 0;
     mc.InterestSubsidy = 0;

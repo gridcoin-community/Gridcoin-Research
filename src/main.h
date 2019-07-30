@@ -265,8 +265,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid,int64_t locktime);
-
 MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
 std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();

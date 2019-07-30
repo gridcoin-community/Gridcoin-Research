@@ -255,7 +255,6 @@ void SetLegacyResearcherContext(const Researcher& researcher)
     mc.cpid = researcher.Id().ToString();
     mc.Magnitude = 0;
     mc.clientversion = "";
-    mc.RSAWeight = 0;
     mc.LastPaymentTime = 0;
     mc.lastblockhash = "0";
     // Reuse for debugging

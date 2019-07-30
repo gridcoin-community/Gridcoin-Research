@@ -10,8 +10,6 @@
 #include "key.h"
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
-int64_t GetRSAWeightByCPIDWithRA(std::string cpid);
-
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 bool GenerateBeaconKeys(const std::string &cpid, CKey &outPrivPubKey)
@@ -112,17 +110,35 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
 
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
-    AssertLockHeld(cs_main);
-    const AppCacheEntry& entry =  ReadCache(Section::BEACON, cpid);
-    std::string sBeacon = entry.value;
-    int64_t iLocktime = entry.timestamp;
-    int64_t iRSAWeight = GetRSAWeightByCPIDWithRA(cpid);
-    if (fDebug10)
-        LogPrintf("Beacon %s, Weight %" PRId64 ", Locktime %" PRId64, sBeacon, iRSAWeight, iLocktime);
-    if (bZeroOutAfterPOR && iRSAWeight==0)
-        iLocktime = 0;
-    return iLocktime;
+    if (!IsResearcher(cpid)) {
+        return 0;
+    }
 
+    AssertLockHeld(cs_main);
+
+    const StructCPID& stMagnitude = GetInitializedStructCPID2(cpid, mvMagnitudes);
+    const StructCPID& stLifetime  = GetInitializedStructCPID2(cpid, mvResearchAge);
+
+    // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as
+    // long as it is within 6 months old and NN mag > 0 and newbie is in the
+    // superblock and their lifetime paid is zero.
+    //
+    // Note: If Magnitude is zero, or the researcher is not in a superblock,
+    // or lifetimepaid > 0, this function returns zero:
+    //
+    if (bZeroOutAfterPOR
+        && (stMagnitude.Magnitude <= 0 || stLifetime.ResearchSubsidy != 0))
+    {
+        return 0;
+    }
+
+    const AppCacheEntry& entry = ReadCache(Section::BEACON, cpid);
+
+    if (fDebug10) {
+        LogPrintf("Beacon %s, Locktime %" PRId64, entry.value, entry.timestamp);
+    }
+
+    return entry.timestamp;
 }
 
 bool HasActiveBeacon(const std::string& cpid)
