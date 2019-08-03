@@ -78,7 +78,6 @@ extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_
 
 extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
-extern std::string GetNeuralNetworkReport();
 std::string GetCommandNonce(std::string command);
 
 extern double GRCMagnitudeUnit(int64_t locktime);
@@ -1679,20 +1678,6 @@ double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstr
     return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
 }
 
-int64_t GetProofOfWorkMaxReward(int64_t nFees, int64_t locktime, int64_t height)
-{
-    int64_t nSubsidy = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
-    if (height==10)
-    {
-        //R.Halford: 10-11-2014: Gridcoin Foundation Block:
-        //Note: Gridcoin Classic emitted these coins.  So we had to add them to block 10.  The coins were burned then given back to the owners that mined them in classic (as research coins).
-        nSubsidy = nGenesisSupply * COIN;
-    }
-
-    if (fTestNet) nSubsidy += 1000*COIN;
-    return nSubsidy + nFees;
-}
-
 //Survey Results: Start inflation rate: 9%, end=1%, 30 day steps, 9 steps, mag multiplier start: 2, mag end .3, 9 steps
 int64_t GetMaximumBoincSubsidy(int64_t nTime)
 {
@@ -1901,44 +1886,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
 
 static const int64_t nTargetTimespan = 16 * 60;  // 16 mins
 
-//
-// maximum nBits value could possible be required nTime after
-//
-unsigned int ComputeMaxBits(CBigNum bnTargetLimit, unsigned int nBase, int64_t nTime)
-{
-    CBigNum bnResult;
-    bnResult.SetCompact(nBase);
-    bnResult *= 2;
-    while (nTime > 0 && bnResult < bnTargetLimit)
-    {
-        // Maximum 200% adjustment per day...
-        bnResult *= 2;
-        nTime -= 24 * 60 * 60;
-    }
-    if (bnResult > bnTargetLimit)
-        bnResult = bnTargetLimit;
-    return bnResult.GetCompact();
-}
-
-//
-// minimum amount of work that could possibly be required nTime after
-// minimum proof-of-work required was nBase
-//
-unsigned int ComputeMinWork(unsigned int nBase, int64_t nTime)
-{
-    return ComputeMaxBits(bnProofOfWorkLimit, nBase, nTime);
-}
-
-//
-// minimum amount of stake that could possibly be required nTime after
-// minimum proof-of-stake required was nBase
-//
-unsigned int ComputeMinStake(unsigned int nBase, int64_t nTime, unsigned int nBlockTime)
-{
-    return ComputeMaxBits(bnProofOfStakeLimit, nBase, nTime);
-}
-
-
 // ppcoin: find last block index up to pindex
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
 {
@@ -1947,49 +1894,17 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
     return pindex;
 }
 
-
-static unsigned int GetNextTargetRequiredV1(const CBlockIndex* pindexLast, bool fProofOfStake)
+unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast)
 {
-    CBigNum bnTargetLimit = fProofOfStake ? bnProofOfStakeLimit : bnProofOfWorkLimit;
+    CBigNum bnTargetLimit = GetProofOfStakeLimit(pindexLast->nHeight);
 
     if (pindexLast == NULL)
         return bnTargetLimit.GetCompact(); // genesis block
 
-    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
+    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, true);
     if (pindexPrev->pprev == NULL)
         return bnTargetLimit.GetCompact(); // first block
-    const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, fProofOfStake);
-    if (pindexPrevPrev->pprev == NULL)
-        return bnTargetLimit.GetCompact(); // second block
-
-    int64_t nTargetSpacing = GetTargetSpacing(pindexLast->nHeight);
-    int64_t nActualSpacing = pindexPrev->GetBlockTime() - pindexPrevPrev->GetBlockTime();
-
-    // ppcoin: target change every block
-    // ppcoin: retarget with exponential moving toward target spacing
-    CBigNum bnNew;
-    bnNew.SetCompact(pindexPrev->nBits);
-    int64_t nInterval = nTargetTimespan / nTargetSpacing;
-    bnNew *= ((nInterval - 1) * nTargetSpacing + nActualSpacing + nActualSpacing);
-    bnNew /= ((nInterval + 1) * nTargetSpacing);
-
-    if (bnNew > bnTargetLimit)
-        bnNew = bnTargetLimit;
-
-    return bnNew.GetCompact();
-}
-
-static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool fProofOfStake)
-{
-    CBigNum bnTargetLimit = fProofOfStake ? GetProofOfStakeLimit(pindexLast->nHeight) : bnProofOfWorkLimit;
-
-    if (pindexLast == NULL)
-        return bnTargetLimit.GetCompact(); // genesis block
-
-    const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
-    if (pindexPrev->pprev == NULL)
-        return bnTargetLimit.GetCompact(); // first block
-    const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, fProofOfStake);
+    const CBlockIndex* pindexPrevPrev = GetLastBlockIndex(pindexPrev->pprev, true);
     if (pindexPrevPrev->pprev == NULL)
         return bnTargetLimit.GetCompact(); // second block
 
@@ -2029,15 +1944,6 @@ static unsigned int GetNextTargetRequiredV2(const CBlockIndex* pindexLast, bool 
     }
 
     return bnNew.GetCompact();
-}
-
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfStake)
-{
-    //After block 89600, new diff algorithm is used
-    if (pindexLast->nHeight < 89600)
-        return GetNextTargetRequiredV1(pindexLast, fProofOfStake);
-    else
-        return GetNextTargetRequiredV2(pindexLast, fProofOfStake);
 }
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits)
@@ -2171,14 +2077,6 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
       nBestBlockTrust.Get64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 }
-
-
-void CBlock::UpdateTime(const CBlockIndex* pindexPrev)
-{
-    nTime = max(GetBlockTime(), GetAdjustedTime());
-}
-
-
 
 bool CTransaction::DisconnectInputs(CTxDB& txdb)
 {
@@ -2345,17 +2243,6 @@ bool LessVerbose(int iMax1000)
      int iVerbosityLevel = rand() % 1000;
      if (iVerbosityLevel < iMax1000) return true;
      return false;
-}
-
-
-bool KeyEnabled(std::string key)
-{
-    if (mapArgs.count("-" + key))
-    {
-            std::string sBool = GetArg("-" + key, "false");
-            if (sBool == "true") return true;
-    }
-    return false;
 }
 
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
@@ -2781,16 +2668,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
 
         mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
-    }
-
-    if (IsProofOfWork() && pindex->nHeight > nGrandfather)
-    {
-        int64_t nReward = GetProofOfWorkMaxReward(nFees,nTime,pindex->nHeight);
-        // Check coinbase reward
-        if (vtx[0].GetValueOut() > nReward)
-            return DoS(50, error("ConnectBlock[] : coinbase reward exceeded (actual=%" PRId64 " vs calculated=%" PRId64 ")",
-                                 vtx[0].GetValueOut(),
-                       nReward));
     }
 
     MiningCPID bb = DeserializeBoincBlock(vtx[0].hashBoinc,nVersion);
@@ -3906,7 +3783,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
             if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
                 return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
             // Check proof-of-work or proof-of-stake
-            if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
+            if (nBits != GetNextTargetRequired(pindexPrev))
                 return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
     }
 
@@ -4019,23 +3896,6 @@ uint256 CBlockIndex::GetBlockTrust() const
     int64_t block_mag = 0;
     uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();
     return chaintrust;
-}
-
-bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned int nRequired, unsigned int nToCheck)
-{
-    unsigned int nFound = 0;
-    for (unsigned int i = 0; i < nToCheck && nFound < nRequired && pstart != NULL; i++)
-    {
-        if (pstart->nVersion >= minVersion)
-            ++nFound;
-        pstart = pstart->pprev;
-    }
-    return (nFound >= nRequired);
-}
-
-bool ServicesIncludesNN(CNode* pNode)
-{
-    return (Contains(pNode->strSubVer,"1999")) ? true : false;
 }
 
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
@@ -4805,12 +4665,6 @@ bool IsCPIDValidv2(MiningCPID& mc, int height)
     }
 
     return result;
-}
-
-double GetTotalOwedAmount(std::string cpid)
-{
-    StructCPID& o = GetInitializedStructCPID2(cpid,mvMagnitudes);
-    return o.totalowed;
 }
 
 double GetOwedAmount(std::string cpid)
@@ -7274,24 +7128,6 @@ std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
     
     out_popularity = highest_popularity;
     return neural_hash;
-}
-
-std::string GetNeuralNetworkReport()
-{
-    //Returns a report of the networks neural hashes in order of popularity
-    std::string neural_hash = "";
-    std::string report = "Neural_hash, Popularity\n";
-    std::string row = "";
-    
-    // Copy to a sorted map.
-    std::map<std::string, double> sorted_hashes(
-                mvNeuralNetworkHash.begin(),
-                mvNeuralNetworkHash.end());
-    
-    for(auto& entry : sorted_hashes)
-        report += entry.first + "," + RoundToString(entry.second, 0) + "\n";
-
-    return report;
 }
 
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
