@@ -3788,6 +3788,18 @@ bool CBlock::AcceptBlock(bool generated_by_me)
             return false;
         }
     }
+    else if (nVersion == 7 && (nHeight >= 999000 || nHeight > nGrandfather))
+    {
+        // Calculate a proof hash for these version 7 blocks for the block index
+        // so we can carry the stake modifier into version 8+:
+        //
+        // mainnet: block 999000 to version 8 (1010000)
+        // testnet: nGrandfather (196551) to version 8 (311999)
+        //
+        if (!CalculateLegacyV3HashProof(*this, nNonce, hashProof)) {
+            return error("AcceptBlock(): Failed to carry v7 proof hash.");
+        }
+    }
 
     if(nVersion<9)
     {

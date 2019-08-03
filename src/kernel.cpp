@@ -13,6 +13,58 @@ using namespace std;
 StructCPID GetStructCPID();
 extern double GetLastPaymentTimeByCPID(std::string cpid);
 
+namespace {
+//!
+//! \brief Calculate a legacy RSA weight value from the supplied claim block.
+//!
+//! This function exists support the \c CalculateLegacyV3HashProof() function
+//! used to carry the stake modifiers and proof hashes of version 7 blocks to
+//! version 8 and later. RSA weight is an input parameter to the legacy proof
+//! hash algorithm of the version 3 staking kernel, so we reproduce the value
+//! from the claim context in the same way as the old version.
+//!
+//! \param bb A serialized "BoincBlock" string from a coinbase transaction's
+//! \c hashBoinc field that contains the claim context to extract RSA weight
+//! component values from.
+//!
+//! \return Sum of the RSA weight and magnitude from the claim, or zero when
+//! the claim contains no CPID (for an investor).
+//!
+int64_t GetRSAWeightByBlock(const std::string& bb)
+{
+    constexpr size_t cpid_offset = 0;
+    constexpr size_t rsa_weight_offset = 13;
+    constexpr size_t magnitude_offset = 15;
+
+    int64_t rsa_weight = 0;
+
+    // General-purpose deserialization of claim contexts in the hashBoinc field
+    // no longer parses out the RSA weight field, so we handle the special case
+    // for legacy version 7 blocks by extracting only the CPID, RSA weight, and
+    // magnitude fields:
+    //
+    for (size_t n = 0, offset = 0, end = bb.find("<|>");
+        n <= magnitude_offset && end != std::string::npos;
+        n++)
+    {
+        if (n == cpid_offset && !IsResearcher(bb.substr(offset, end - offset))) {
+            return 0;
+        } else if (n == rsa_weight_offset || n == magnitude_offset) {
+            rsa_weight += std::atoi(bb.substr(offset, end - offset).c_str());
+        }
+
+        offset = end + 3;
+        end = bb.find("<|>", offset);
+    }
+
+    if (rsa_weight < 0) {
+        return 0;
+    }
+
+    return rsa_weight;
+}
+} // anonymous namespace
+
 // Get time weight
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd)
 {
@@ -257,6 +309,44 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 // Check stake modifier hard checkpoints
 bool CheckStakeModifierCheckpoints(int nHeight, unsigned int nStakeModifierChecksum)
 {
+    return true;
+}
+
+bool CalculateLegacyV3HashProof(
+    const CBlock& block,
+    const double por_nonce,
+    uint256& out_hash_proof)
+{
+    const CTransaction& coinstake = block.vtx[1];
+
+    CTxDB txdb("r");
+    CTransaction input_tx;
+    CTxIndex tx_index;
+
+    if (!input_tx.ReadFromDisk(txdb, coinstake.vin[0].prevout, tx_index)) {
+        // Previous tx not in main chain, may occur during initial download:
+        return coinstake.DoS(1, error(
+            "CalculateLegacyV3HashProof(): Read coinstake input_tx failed."));
+    }
+
+    CBlock input_block; // TODO: can we avoid hitting the disk?
+
+    if (!input_block.ReadFromDisk(tx_index.pos.nFile, tx_index.pos.nBlockPos, false)) {
+        return error("CalculateLegacyV3HashProof(): Read input_block failed.");
+    }
+
+    CDataStream out(SER_GETHASH, 0);
+
+    out << GetRSAWeightByBlock(block.vtx[0].hashBoinc)
+        << input_block.nTime
+        << input_tx.nTime
+        << input_tx.GetHash()
+        << coinstake.vin[0].prevout.n
+        << coinstake.nTime
+        << por_nonce;
+
+    out_hash_proof = CBigNum(Hash(out.begin(), out.end())).getuint256();
+
     return true;
 }
 
