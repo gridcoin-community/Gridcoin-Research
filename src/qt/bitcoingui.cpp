@@ -453,8 +453,6 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(addressBookAction);
     toolbar->addAction(votingAction);
 
-    // Prevent Lock from falling off the page
-
     QWidget* spacer = new QWidget();
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolbar->addWidget(spacer);
@@ -462,13 +460,6 @@ void BitcoinGUI::createToolBars()
     // Unlock Wallet
     toolbar->addAction(unlockWalletAction);
     toolbar->addAction(lockWalletAction);
-    QWidget* webSpacer = new QWidget();
-
-    webSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    webSpacer->setMaximumHeight(10);
-    toolbar->addWidget(webSpacer);
-    webSpacer->setObjectName("WebSpacer");
-
 
     // Status bar notification icons
     QFrame *frameBlocks = new QFrame();
