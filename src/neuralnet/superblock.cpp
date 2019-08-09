@@ -328,9 +328,12 @@ Superblock::Superblock(uint32_t version)
 Superblock Superblock::FromStats(const ScraperStats& stats)
 {
     // The loop below depends on the relative value of these enum types:
-    static_assert(statsobjecttype::NetworkWide < statsobjecttype::byCPID);
-    static_assert(statsobjecttype::byCPID < statsobjecttype::byCPIDbyProject);
-    static_assert(statsobjecttype::byProject < statsobjecttype::byCPIDbyProject);
+    static_assert(statsobjecttype::NetworkWide < statsobjecttype::byCPID,
+        "Unexpected enumeration order of scraper stats map object types.");
+    static_assert(statsobjecttype::byCPID < statsobjecttype::byCPIDbyProject,
+        "Unexpected enumeration order of scraper stats map object types.");
+    static_assert(statsobjecttype::byProject < statsobjecttype::byCPIDbyProject,
+        "Unexpected enumeration order of scraper stats map object types.");
 
     Superblock superblock;
 
@@ -633,8 +636,8 @@ void Superblock::ProjectIndex::Add(std::string name, const ProjectStats& stats)
 // Class: QuorumHash
 // -----------------------------------------------------------------------------
 
-static_assert(sizeof(uint256) == 32);
-static_assert(sizeof(QuorumHash::Md5Sum) == 16);
+static_assert(sizeof(uint256) == 32, "Unexpected uint256 size.");
+static_assert(sizeof(QuorumHash::Md5Sum) == 16, "Unexpected MD5 size.");
 
 QuorumHash::QuorumHash() : m_hash(Invalid())
 {

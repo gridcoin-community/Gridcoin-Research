@@ -434,31 +434,6 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
 }
 
-void filecopy(FILE *dest, FILE *src)
-{
-    const int size = 16384;
-    char buffer[size];
-
-    while (!feof(src))
-    {
-        int n = fread(buffer, 1, size, src);
-        fwrite(buffer, 1, n, dest);
-    }
-
-    fflush(dest);
-}
-
-void fileopen_and_copy(std::string src, std::string dest)
-{
-    FILE * infile  = fopen(src.c_str(),  "rb");
-    FILE * outfile = fopen(dest.c_str(), "wb");
-
-    filecopy(outfile, infile);
-
-    fclose(infile);
-    fclose(outfile);
-}
-
 std::string ExtractValue(std::string data, std::string delimiter, int pos)
 {
     std::vector<std::string> vKeys = split(data.c_str(),delimiter);
@@ -962,6 +937,8 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
                 "\n"
                 "Advertise a beacon (Requires wallet to be fully unlocked)\n");
 
+    EnsureWalletIsUnlocked();
+
     UniValue res(UniValue::VOBJ);
 
     /* Try to copy key from config. The call is no-op if already imported or
@@ -1053,25 +1030,30 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
     res.pushKV("Magnitude (As of last superblock)", dMagnitude);
 
-    if (dMagnitude==0)
+    const bool is_mine = sCPID == NN::GetPrimaryCpid();
+    res.pushKV("Mine", is_mine);
+
+    if (is_mine && dMagnitude == 0)
         res.pushKV("Warning","Your magnitude is 0 as of the last superblock: this may keep you from staking POR blocks.");
 
-    // Staking Test 10-15-2016 - Simulate signing an actual block to verify this CPID keypair will work.
-    uint256 hashBlock = GetRandHash();
-
-    if (!sPubKey.empty())
+    if (!sPubKey.empty() && is_mine)
     {
+        EnsureWalletIsUnlocked();
+
         bool bResult;
         std::string sSignature;
         std::string sError;
+
+        // Staking Test 10-15-2016 - Simulate signing an actual block to verify this CPID keypair will work.
+        uint256 hashBlock = GetRandHash();
 
         bResult = SignBlockWithCPID(sCPID, hashBlock.GetHex(), sSignature, sError);
 
         if (!bResult)
         {
-            sErr += "Failed to sign block with cpid ";
+            sErr += "Failed to sign block with cpid: ";
             sErr += sError;
-            sErr += ";";
+            sErr += "; ";
         }
 
         bool fResult = VerifyCPIDSignature(sCPID, hashBlock.GetHex(), sSignature);
