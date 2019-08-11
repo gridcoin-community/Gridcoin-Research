@@ -4285,7 +4285,15 @@ bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManif
 
     _log(logattribute::INFO, "LoadBeaconListFromConvergedManifest", "mBeaconMap element count: " + std::to_string(mBeaconMap.size()));
 
-    return true;
+    // If the Beacon Map has no entries return false.
+    if (mBeaconMap.size())
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 
@@ -4418,12 +4426,10 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
         if (!bContractDirectFromStatsUpdate)
         {
             // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
-            // you can't make a SB core and you can't make a contract, so return the empty string.
-            if (ScraperConstructConvergedManifest(StructConvergedManifest))
+            // you can't make a SB core and you can't make a contract, so return the empty string. Also check
+            // to make sure the BeaconMap has been populated properly.
+            if (ScraperConstructConvergedManifest(StructConvergedManifest) && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
             {
-                // This is to display the element count in the beacon map.
-                LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-
                 ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
 
                 _log(logattribute::INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
@@ -4584,12 +4590,10 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
         if (!bContractDirectFromStatsUpdate)
         {
             // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
-            // you can't make a SB core and you can't make a contract, so return the empty string.
-            if (ScraperConstructConvergedManifest(StructConvergedManifest))
+            // you can't make a SB core and you can't make a contract, so return the empty string. Also check
+            // to make sure the BeaconMap has been populated properly.
+            if (ScraperConstructConvergedManifest(StructConvergedManifest) && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
             {
-                // This is to display the element count in the beacon map.
-                LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap);
-
                 ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
 
                 _log(logattribute::INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
