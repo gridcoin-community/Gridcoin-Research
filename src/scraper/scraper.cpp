@@ -67,9 +67,17 @@ struct ScraperFileManifest
     int64_t timestamp;
 };
 
+// Both TeamIDMap and ProjTeamETags are protected by cs_TeamIDMap.
 // --------------- project -------------team name -- teamID
 typedef std::map<std::string, std::map<std::string, int64_t>> mTeamIDs;
 mTeamIDs TeamIDMap;
+
+// ProjTeamETags is not persisted to disk. There would be little to be gained by doing so. The scrapers are restarted very
+// rarely, and on restart, this would only save downloading team files for those projects that have one or TeamIDs missing AND
+// an ETag had NOT changed since the last pull. Not worth the complexity.
+// --------------- project ---- eTag
+typedef std::map<std::string, std::string> mProjectTeamETags;
+mProjectTeamETags ProjTeamETags;
 
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
@@ -1416,10 +1424,13 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
 
         const auto iter = TeamIDMap.find(prjs.m_name);
+        bool fProjTeamIDsMissing = false;
 
-        // If fExplorer is false, which means we do not need to retain team files, and there is an entry in the TeamIDMap for the project,
-        // and in the submap (team name and team id) there are the correct number of team entries, then skip processing.
-        if (!fExplorer && iter != TeamIDMap.end() && iter->second.size() == split(TEAM_WHITELIST, "|").size())
+        if (iter == TeamIDMap.end() || iter->second.size() != split(TEAM_WHITELIST, "|").size()) fProjTeamIDsMissing = true;
+
+        // If fExplorer is false, which means we do not need to retain team files, and there are no TeamID entries missing,
+        // then skip processing altogether.
+        if (!fExplorer && !fProjTeamIDsMissing)
         {
             _log(logattribute::INFO, "DownloadProjectTeamFiles", "Correct team whitelist entries already in the team ID map for "
                  + prjs.m_name + " project. Skipping team file download and processing.");
@@ -1478,12 +1489,26 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
         std::string team_file_name;
         fs::path team_file;
-        std::map<std::string, int64_t> mTeamIDsForProject;
         bool bDownloadFlag = false;
+        bool bETagChanged = false;
+
+        // Detect change in ETag from in memory versioning.
+        // ProjTeamETags is not persisted to disk. There would be little to be gained by doing so. The scrapers are restarted very
+        // rarely, and on restart, this would only save downloading team files for those projects that have one or TeamIDs missing AND
+        // an ETag had NOT changed since the last pull. Not worth the complexity.
+        auto const& iPrevETag = ProjTeamETags.find(prjs.m_name);
+
+        if (iPrevETag == ProjTeamETags.end() || iPrevETag->second != sTeamETag)
+        {
+            bETagChanged  = true;
+
+            _log(logattribute::INFO, "DownloadProjectTeamFiles", "Team header file ETag has changed for " + prjs.m_name);
+        }
+
 
         if (fExplorer)
         {
-            // Use eTag versioning.
+            // Use eTag versioning ON THE DISK with eTag versioned team files per project.
             team_file_name = prjs.m_name + "-" + sTeamETag + "-team.gz";
             team_file = pathScraper / team_file_name;
 
@@ -1500,16 +1525,26 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         }
         else
         {
-            // No versioning. If file exists delete it and download anew.
+            // Not in explorer mode...
+            // No versioning ON THE DISK for the individual team files for a given project. However, if the eTag pulled from the header
+            // does not match the entry in ProjTeamETags, then download the file and process. Note that this combined with the size check
+            // above means that the size of the inner map for the mTeamIDs for this project already doesn't match, which means either there
+            // were teams that cannot be associated (-1 entries in the file), or there was an addition to or deletion from the team
+            // whitelist. Either way if the ETag has changed under this condition, the -1 entries may be subject to change so the team file
+            // must be downloaded and processed to see if it has and update. If the ETag matches what was in the map, then the state
+            // has not changed since the team file was last processed, and no need to download and process again.
             team_file_name = prjs.m_name + "-team.gz";
             team_file = pathScraper / team_file_name;
 
-            if (fs::exists(team_file)) fs::remove(team_file);
+            if (bETagChanged)
+            {
+                if (fs::exists(team_file)) fs::remove(team_file);
 
-            bDownloadFlag = true;
+                bDownloadFlag = true;
+            }
         }
 
-        // If in explorer mode and a new file is detected, or not in explorer mode, then download new file. (I.e. bDownload flag is true).
+        // If a new team file at the project site is detected, then download new file. (I.e. bDownload flag is true).
         if (bDownloadFlag)
         {
             try
@@ -1528,8 +1563,9 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         // processing.
         if (fExplorer && bDownloadFlag) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true);
 
-        // If require team whitelist is set, then process the file. This also populates the whitelist.
-        if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP) ProcessProjectTeamFile(prjs.m_name, team_file, sTeamETag);
+        // If require team whitelist is set and bETagChanged is true, then process the file. This also populates/updated the team whitelist TeamIDs
+        // in the TeamIDMap and the ETag entries in the ProjTeamETags map.
+        if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP && bETagChanged) ProcessProjectTeamFile(prjs.m_name, team_file, sTeamETag);
 
         if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
@@ -1538,7 +1574,8 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
 }
 
 
-
+// Note this should be called with a lock held on cs_TeamIDMap, which is intended to protect both
+// TeamIDMap and ProjTeamETags.
 bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag)
 {
     std::map<std::string, int64_t> mTeamIdsForProject;
@@ -1553,7 +1590,7 @@ bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, co
     {
         _log(logattribute::ERR, "ProcessProjectTeamFile", "Failed to open team gzip file (" + file.filename().string() + ")");
 
-        return 0;
+        return false;
     }
 
     _log(logattribute::INFO, "ProcessProjectTeamFile", "Opening team file (" + file.filename().string() + ")");
@@ -1622,8 +1659,11 @@ bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, co
     // Insert or update team IDs for the project into the team ID map. This must be done before the StoreTeamIDList.
     TeamIDMap[project] = mTeamIdsForProject;
 
+    // Populate/update ProjTeamETags with the eTag to provide in memory versioning.
+    ProjTeamETags[project] = etag;
+
     if (mTeamIdsForProject.size() < vTeamWhiteList.size())
-        _log(logattribute::ERR, "ProcessProjectTeamFile", "Unable to determine team IDs for one or more whitelisted teams.");
+        _log(logattribute::WARNING, "ProcessProjectTeamFile", "Unable to determine team IDs for one or more whitelisted teams. This is not necessarily an error.");
 
     // The below is not an ideal implementation, because the entire map is going to be written out to disk each time.
     // The TeamIDs file is actually very small though, and this primitive implementation will suffice.
@@ -2158,9 +2198,13 @@ bool LoadTeamIDList(const fs::path& file)
                     continue;
                 }
 
-                std::string sTeamName = vTeamNames.at(iTeamName);
+                // Don't populate a map entry for a TeamID of -1, because that indicates the association does not exist.
+                if (nTeamID != -1)
+                {
+                    std::string sTeamName = vTeamNames.at(iTeamName);
 
-                mTeamIDsForProject[sTeamName] = nTeamID;
+                    mTeamIDsForProject[sTeamName] = nTeamID;
+                }
             }
 
             iTeamName++;
@@ -2287,8 +2331,26 @@ bool StoreTeamIDList(const fs::path& file)
 
         stream << iProject.first;
 
+        for (auto const& iTeam: setTeamWhiteList)
+        {
+            // iter will point to the key in the inner map for that team. The second value of the iter will then be
+            // the TeamID. If it doesn't exist, store a -1 as a "NA" placeholder.
+            auto const& iter = iProject.second.find(iTeam);
+
+            if (iter != iProject.second.end())
+            {
+                sProjectEntry += "|" + std::to_string(iter->second);
+            }
+            else
+            {
+                sProjectEntry += "|-1";
+            }
+        }
+
+   /*
         for (auto const& iTeam : iProject.second)
             sProjectEntry += "|" + std::to_string(iTeam.second);
+    */
 
         stream << sProjectEntry << std::endl;
     }
