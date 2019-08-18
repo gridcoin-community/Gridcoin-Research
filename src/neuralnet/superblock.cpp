@@ -445,6 +445,13 @@ std::string Superblock::PackLegacy() const
     return out.str();
 }
 
+bool Superblock::WellFormed() const
+{
+    return m_version > 0 && m_version <= Superblock::CURRENT_VERSION
+        && !m_cpids.empty()
+        && !m_projects.empty();
+}
+
 bool Superblock::ConvergedByProject() const
 {
     return m_projects.m_converged_by_project;

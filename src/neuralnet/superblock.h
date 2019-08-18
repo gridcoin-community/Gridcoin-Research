@@ -599,6 +599,13 @@ public:
     std::string PackLegacy() const;
 
     //!
+    //! \brief Determine whether the instance represents a complete superblock.
+    //!
+    //! \return \c true if the superblock contains all of the required elements.
+    //!
+    bool WellFormed() const;
+
+    //!
     //! \brief Determine whether the superblock was generated from a fallback-
     //! to-project-level scraper convergence.
     //!

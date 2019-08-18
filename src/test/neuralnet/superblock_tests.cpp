@@ -707,6 +707,34 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
     BOOST_CHECK(Legacy::GetQuorumHash(unpacked) == expected_hash);
 }
 
+BOOST_AUTO_TEST_CASE(it_determines_whether_it_represents_a_complete_superblock)
+{
+    NN::Superblock valid;
+
+    valid.m_cpids.Add(NN::Cpid(), 123);
+    valid.m_projects.Add("name", NN::Superblock::ProjectStats());
+
+    BOOST_CHECK(valid.WellFormed() == true);
+
+    NN::Superblock invalid = valid;
+
+    invalid.m_version = 0;
+    BOOST_CHECK(invalid.WellFormed() == false);
+
+    invalid.m_version = std::numeric_limits<decltype(invalid.m_version)>::max();
+    BOOST_CHECK(invalid.WellFormed() == false);
+
+    invalid = valid;
+
+    invalid.m_cpids = NN::Superblock::CpidIndex();
+    BOOST_CHECK(invalid.WellFormed() == false);
+
+    invalid = valid;
+
+    invalid.m_projects = NN::Superblock::ProjectIndex();
+    BOOST_CHECK(invalid.WellFormed() == false);
+}
+
 BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
 {
     NN::Superblock superblock;
