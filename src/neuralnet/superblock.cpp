@@ -6,6 +6,7 @@
 #include "util.h"
 #include "util/reverse_iterator.h"
 
+#include <bitset>
 #include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
 
@@ -1966,4 +1967,85 @@ const unsigned char* QuorumHash::Raw() const
 std::string QuorumHash::ToString() const
 {
     return boost::apply_visitor(QuorumHashToStringVisitor(), m_hash);
+}
+
+// -----------------------------------------------------------------------------
+// Class: ZeroCreditTally
+// -----------------------------------------------------------------------------
+
+namespace {
+//!
+//! \brief Number of bits that each represent a day in a project's zero-credit
+//! days bitset field.
+//!
+//! We serialize these bits as a 32-bit integer so the field holds 32 days. It
+//! costs no more to retain these extra days so we maintain 32 days of history
+//! even though the protocol only considers \c ZCD_DAYS back for the greylist.
+//! This allows us to increase the lookback in the future if needed.
+//!
+constexpr size_t ZCD_BITSET_SIZE = sizeof(uint32_t) * 8;
+
+//!
+//! \brief Represents the credit history of a BOINC project to determine the
+//! number of days that the project produced no credit.
+//!
+//! A bit of one or true represents a zero-credit day. Zero represents a day
+//! that the project produced non-zero credit. More significant bits contain
+//! the values for earlier days:
+//!
+//!     1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1
+//!
+//! The bit on the far left represents a zero-credit day 31 days ago and the
+//! bit on the far right represents a zero-credit day today (for example).
+//!
+typedef std::bitset<ZCD_BITSET_SIZE> ZeroCreditBitset;
+} // anonymous namespace
+
+ZeroCreditTally::ZeroCreditTally() : m_packed(0)
+{
+}
+
+ZeroCreditTally::ZeroCreditTally(uint32_t zcd_packed) : m_packed(zcd_packed)
+{
+}
+
+size_t ZeroCreditTally::Count() const
+{
+    uint32_t zcd = m_packed;
+
+    // Drop zero-credit days before 20 days ago:
+    zcd = zcd << (ZCD_BITSET_SIZE - ZCD_DAYS);
+    zcd = zcd >> (ZCD_BITSET_SIZE - ZCD_DAYS);
+
+    return ZeroCreditBitset(zcd).count();
+}
+
+bool ZeroCreditTally::Greylisted() const
+{
+    return Count() >= ZCD_DAYS_LIMIT;
+}
+
+ZeroCreditTally ZeroCreditTally::Advance(const bool is_zero_credit) const
+{
+    // Shift the earliest day off the far end:
+    uint32_t zcd = m_packed << 1;
+
+    // If the latest day is a zero-credit day, set the bit:
+    if (is_zero_credit) {
+        zcd |= 1;
+    }
+
+    return ZeroCreditTally(zcd);
+}
+
+ZeroCreditTally ZeroCreditTally::AdvanceByDelta(
+    const uint64_t previous_credit,
+    const uint64_t current_credit) const
+{
+    return Advance(current_credit - previous_credit <= 0);
+}
+
+std::string ZeroCreditTally::ToString() const
+{
+    return ZeroCreditBitset(m_packed).to_string('N', 'Y');
 }

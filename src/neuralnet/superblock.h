@@ -226,6 +226,105 @@ private:
 }; // QuorumHash
 
 //!
+//! \brief Stores the number recent of zero credit days for a BOINC project.
+//! Used for automated project greylisting.
+//!
+class ZeroCreditTally
+{
+public:
+    //!
+    //! \brief The number of days of history to consider for the zero-credit
+    //! days greylisting rule.
+    //!
+    static constexpr size_t ZCD_DAYS = 20;
+
+    //!
+    //! \brief The number of recent days that a project produces zero credit
+    //! after which it is greylisted by the zero-credit days rule.
+    //!
+    static constexpr size_t ZCD_DAYS_LIMIT = 7;
+
+    //!
+    //! \brief Initialize an empty tally.
+    //!
+    ZeroCreditTally();
+
+    //!
+    //! \brief Initialize a tally from the packed representation of the zero
+    //! credit days.
+    //!
+    //! \param zcd_packed 1-bits represent zero credit days.
+    //!
+    ZeroCreditTally(uint32_t zcd_packed);
+
+    //!
+    //! \brief Count the number of zero-credit days present in the tally.
+    //!
+    //! \return The number of recent days that a project produced no credit.
+    //!
+    size_t Count() const;
+
+    //!
+    //! \brief Determine whether a project triggered the zero-credit days rule
+    //! for automated greylisting.
+    //!
+    bool Greylisted() const;
+
+    //!
+    //! \brief Shift the tally by one day and append the status of the latest
+    //! day. The earliest day is dropped from the history.
+    //!
+    //! \brief is_zero_credit If true, set the latest day to a zero-credit day.
+    //!
+    //! \return A copy of the tally adjusted for the latest day.
+    //!
+    ZeroCreditTally Advance(const bool is_zero_credit) const;
+
+    //!
+    //! \brief Shift the tally by one day and append the status of the latest
+    //! day by calculating the difference in project credit. The earliest day
+    //! is dropped from the history.
+    //!
+    //! \param previous_credit Project credit preceeding the latest day.
+    //! \param current_credit  Project credit on the latest day.
+    //!
+    //! \return A copy of the tally adjusted for the latest day.
+    //!
+    ZeroCreditTally AdvanceByDelta(
+        const uint64_t previous_credit,
+        const uint64_t current_credit) const;
+
+    //!
+    //! \brief Get the string representation of the tally.
+    //!
+    //! \return 32 characters where 'Y' represents a zero-credit day, and 'N'
+    //! represents a non-zero-credit day. Ordered from earliest to latest.
+    //!
+    std::string ToString() const;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        // Most projects rarely produce zero-credit days, so we serialize
+        // the field with VARINT encoding. This produces in a single byte
+        // of overhead for each project most of the time.
+        //
+        READWRITE(VARINT(m_packed));
+    }
+
+private:
+    //!
+    //! \brief Zero-credit day bits represented as an integer.
+    //!
+    //! Each bit in this integer represents a day for a total of 32 days. The
+    //! bits set to 1 represent zero-credit days.
+    //!
+    uint32_t m_packed;
+}; // ZeroCreditTally
+
+//!
 //! \brief A snapshot of BOINC statistics used to calculate and verify research
 //! rewards.
 //!

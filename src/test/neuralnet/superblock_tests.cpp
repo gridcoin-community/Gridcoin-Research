@@ -2189,3 +2189,145 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+// -----------------------------------------------------------------------------
+// ZeroCreditTally
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(ZeroCreditTally)
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_all_zero_zero_credit_days)
+{
+    const NN::ZeroCreditTally tally;
+
+    BOOST_CHECK_EQUAL(tally.Count(), 0);
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_zero_credit_days)
+{
+    // A "1" represents a zero-credit day:
+    const uint32_t bits = (1 << 1) | (1 << 2) | (1 << 3);
+    const NN::ZeroCreditTally tally(bits);
+
+    BOOST_CHECK_EQUAL(tally.Count(), 3);
+}
+
+BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_greylisted)
+{
+    const NN::ZeroCreditTally not_greylisted;
+
+    BOOST_CHECK_EQUAL(not_greylisted.Greylisted(), false);
+
+    uint32_t bits = 0;
+
+    // Set 7 zero-credit days to trigger the greylist rule:
+    //
+    for (size_t i = 0; i < 7; ++i) {
+        bits |= (1 << i);
+    }
+
+    const NN::ZeroCreditTally greylisted(bits);
+
+    BOOST_CHECK_EQUAL(greylisted.Count(), 7);
+    BOOST_CHECK_EQUAL(greylisted.Greylisted(), true);
+}
+
+BOOST_AUTO_TEST_CASE(it_counts_only_the_most_recent_20_days_for_greylist)
+{
+    uint32_t bits = 0;
+
+    // Set the earliest 13 out of 32 days to zero-credit days.
+    //
+    // The ZCD greylisting rule only considers the most recent 20 days. We
+    // set zero-credit days for the earliest 13 days in the tally. It must
+    // ignore the fist 12, and the 13th day in the 20-day window shall not
+    // trigger the greylist rule alone.
+    //
+    for (size_t i = 31; i > 18; --i) {
+        bits |= (1 << i);
+    }
+
+    const NN::ZeroCreditTally tally(bits);
+
+    BOOST_CHECK_EQUAL(tally.Count(), 1);
+    BOOST_CHECK_EQUAL(tally.Greylisted(), false);
+}
+
+BOOST_AUTO_TEST_CASE(it_advances_the_tally)
+{
+    const NN::ZeroCreditTally tally;
+
+    BOOST_CHECK_EQUAL(tally.Count(), 0);
+    BOOST_CHECK_EQUAL(tally.Advance(false).Count(), 0);
+    BOOST_CHECK_EQUAL(tally.Advance(true).Count(), 1);
+    BOOST_CHECK_EQUAL(tally.Advance(true).Advance(false).Count(), 1);
+    BOOST_CHECK_EQUAL(tally.Advance(true).Advance(true).Count(), 2);
+}
+
+BOOST_AUTO_TEST_CASE(it_advances_the_tally_by_difference_in_credit)
+{
+    const NN::ZeroCreditTally tally;
+
+    const uint64_t prev_credit = 123;
+    const uint64_t next_credit = 456;
+
+    BOOST_CHECK_EQUAL(tally.Count(), 0);
+    BOOST_CHECK_EQUAL(tally.AdvanceByDelta(prev_credit, next_credit).Count(), 0);
+    BOOST_CHECK_EQUAL(tally.AdvanceByDelta(prev_credit, prev_credit).Count(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
+{
+    const NN::ZeroCreditTally zero_days;
+
+    BOOST_CHECK_EQUAL(zero_days.ToString(), "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN");
+
+    const NN::ZeroCreditTally one_day = zero_days.Advance(true);
+
+    BOOST_CHECK_EQUAL(one_day.ToString(), "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNY");
+
+    NN::ZeroCreditTally all_days;
+
+    for (size_t i = 0; i < 32; ++i) {
+        all_days = all_days.Advance(true);
+    }
+
+    BOOST_CHECK_EQUAL(all_days.ToString(), "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY");
+
+    all_days = all_days.Advance(false);
+
+    BOOST_CHECK_EQUAL(all_days.ToString(), "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYN");
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    const uint32_t four_days = 15;
+    NN::ZeroCreditTally tally(four_days);
+
+    CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
+    expected << VARINT(four_days);
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << tally;
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        stream.begin(),
+        stream.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    const uint32_t four_days = 15;
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << VARINT(four_days);
+
+    NN::ZeroCreditTally tally;
+    stream >> tally;
+
+    BOOST_CHECK_EQUAL(tally.Count(), 4);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
