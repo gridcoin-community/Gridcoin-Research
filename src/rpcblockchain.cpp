@@ -198,10 +198,6 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     if (block.IsProofOfStake())
         result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
     result.pushKV("CPID", bb.cpid);
-    if (!IsResearchAgeEnabled(blockindex->nHeight))
-    {
-        result.pushKV("RSAWeight",bb.RSAWeight);
-    }
 
     result.pushKV("Magnitude", bb.Magnitude);
     if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);

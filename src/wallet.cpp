@@ -25,8 +25,6 @@
 
 using namespace std;
 
-int64_t GetRSAWeightByCPID(std::string cpid);
-
 MiningCPID DeserializeBoincBlock(std::string block);
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
@@ -1678,28 +1676,6 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
 }
 
-
-
-
-double MintLimiter(double PORDiff,int64_t RSA_WEIGHT,std::string cpid, int64_t locktime)
-{
-    double MaxSubsidy = GetMaximumBoincSubsidy(locktime);
-    double por_min = IsResearcher(cpid) ? (MaxSubsidy/40) : 0;
-    if (RSA_WEIGHT >= 24999) return 0;
-    //Dynamically determines the minimum GRC block subsidy required amount for current network conditions
-    if (fTestNet && (PORDiff >=0 && PORDiff < 1)) return .00001;
-    if (PORDiff >= 0   && PORDiff < 1)   return 1;
-    if (PORDiff >= 1   && PORDiff < 6)   return por_min + (MaxSubsidy/400);
-    if (PORDiff >= 6   && PORDiff < 10)  return por_min + (MaxSubsidy/80);
-    if (PORDiff >= 10  && PORDiff < 50)  return por_min + (MaxSubsidy/40);
-    if (PORDiff >= 50  && PORDiff < 100) return por_min + (MaxSubsidy/25);
-    if (PORDiff >= 100 && PORDiff < 500) return por_min + (MaxSubsidy/13);
-    if (PORDiff >= 500) return por_min + (MaxSubsidy/12);  //ToDo for Mandatory: Halve this, then halve all of them.
-    return 1;
-}
-
-
-
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
 {
     // Choose coins to use
@@ -1723,9 +1699,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     int64_t nCurrentTime = GetAdjustedTime();
     CTxDB txdb("r");
-    //Retrieve CPID RSA_WEIGHT
-    int64_t RSA_WEIGHT = IsV8Enabled(nBestHeight+1) ? 0 : GetRSAWeightByCPID(GlobalCPUMiningCPID.cpid);
-    ////////////////////////////////////////////////////////////////////////////////
 
     LOCK2(cs_main, cs_wallet);
     for (auto const& pcoin : setCoins)
@@ -1738,7 +1711,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
         {
             if (nCurrentTime - pcoin.first->nTime > nStakeMinAge)
             {
-                nWeight += (pcoin.first->vout[pcoin.second].nValue + (RSA_WEIGHT*COIN));
+                nWeight += (pcoin.first->vout[pcoin.second].nValue);
             }
         }
         else

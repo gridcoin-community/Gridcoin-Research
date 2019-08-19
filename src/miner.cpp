@@ -36,8 +36,6 @@ bool HasActiveBeacon(const std::string& cpid);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
-int64_t GetRSAWeightByBlock(MiningCPID boincblock);
-
 namespace NN { std::string GetPrimaryCpid(); }
 
 namespace {
@@ -498,20 +496,11 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             StakeCoinAgeSum += bn.getuint64();
         }
 
-        if(blocknew.nVersion==7)
-        {
-            NetworkTimer();
-            CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
-            StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
-        }
-        else
-        {
-            uint64_t StakeModifier = 0;
-            if(!FindStakeModifierRev(StakeModifier,pindexPrev))
-                continue;
-            CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
-            StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
-        }
+        uint64_t StakeModifier = 0;
+        if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+            continue;
+        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
+        StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -524,17 +513,14 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
 
         if (fDebug2) {
-            int64_t RSA_WEIGHT = GetRSAWeightByBlock(GlobalCPUMiningCPID);
             LogPrintf(
 "CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
-" RSA_WEIGHT %.f\n"
 " Stk %72s\n"
 " Trg %72s\n"
 " Diff %0.7f of %0.7f",
             blocknew.nVersion,
             (double)txnew.nTime, mdPORNonce,
             (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
-            (double)RSA_WEIGHT,
             StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
             StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
             );
@@ -988,26 +974,14 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid.superblock = "";
     miningcpid.GRCAddress = DefaultWalletAddress();
 
-    int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
 
-    double mint = CoinToDouble(nReward);
-    double PORDiff = GetBlockDifficulty(blocknew.nBits);
-
-    LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f ",
-        miningcpid.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
-
-    // Mint Limiter
-    if(blocknew.nVersion < 10)
-    {
-        double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
-        //INVESTORS
-        if(blocknew.nVersion < 8) mintlimit = std::max(mintlimit, 0.0051);
-        if (nReward == 0 || mint < mintlimit)
-        {
-                return error("CreateGridcoinReward: Mint %f of %f too small",(double)mint,(double)mintlimit);
-        }
-    }
+    LogPrintf(
+        "CreateGridcoinReward: for %s mint %f Research %f, Interest %f ",
+        miningcpid.cpid.c_str(),
+        CoinToDouble(nReward),
+        miningcpid.ResearchSubsidy,
+        miningcpid.InterestSubsidy);
 
     //fill in reward and boinc
     blocknew.vtx[1].vout[1].nValue += nReward;

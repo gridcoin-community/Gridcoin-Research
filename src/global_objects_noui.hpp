@@ -44,7 +44,6 @@ struct MiningCPID
 {
     bool initialized;
     double Magnitude;
-    double RSAWeight;
     double LastPaymentTime;
     double ResearchSubsidy;
     double ResearchAge;

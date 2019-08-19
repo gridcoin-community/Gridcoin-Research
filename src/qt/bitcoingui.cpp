@@ -1370,18 +1370,6 @@ void BitcoinGUI::timerfire()
 
 }
 
-double GetPOREstimatedTime(double RSAWeight)
-{
-    if (RSAWeight == 0) return 0;
-    //RSA Weight ranges from 0 - 5600
-    double orf = 5600-RSAWeight;
-    if (orf < 1) orf = 1;
-    double eta = orf/5600;
-    if (eta > 1) orf = 1;
-    eta = eta * (60*60*24);
-    return eta;
-}
-
 QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
 {
     QString text;
