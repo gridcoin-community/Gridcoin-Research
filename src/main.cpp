@@ -63,7 +63,7 @@ extern void IncrementVersionCount(const std::string& Version);
 double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_avg,bool bIgnoreBeacons, int nHeight);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-extern double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf);
+extern double CalculatedMagnitude2(std::string cpid, int64_t locktime);
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
 extern bool FullSyncWithDPORNodes();
@@ -114,7 +114,7 @@ std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0
 std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
-extern double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf);
+extern double CalculatedMagnitude(int64_t locktime);
 extern int64_t GetCoinYearReward(int64_t nTime);
 
 BlockMap mapBlockIndex;
@@ -567,7 +567,7 @@ void GetGlobalStatus()
 
     try
     {
-        double boincmagnitude = CalculatedMagnitude(GetAdjustedTime(),false);
+        double boincmagnitude = CalculatedMagnitude(GetAdjustedTime());
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
         nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
@@ -1654,18 +1654,18 @@ static CBigNum GetProofOfStakeLimit(int nHeight)
 }
 
 
-double CalculatedMagnitude(int64_t locktime,bool bUseLederstrumpf)
+double CalculatedMagnitude(int64_t locktime)
 {
     // Get neural network magnitude:
     StructCPID& stDPOR = GetInitializedStructCPID2(NN::GetPrimaryCpid(), mvDPOR);
-    return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
+    return stDPOR.Magnitude;
 }
 
-double CalculatedMagnitude2(std::string cpid, int64_t locktime,bool bUseLederstrumpf)
+double CalculatedMagnitude2(std::string cpid, int64_t locktime)
 {
     // Get neural network magnitude:
     StructCPID& stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
-    return bUseLederstrumpf ? LederstrumpfMagnitude2(stDPOR.Magnitude,locktime) : stDPOR.Magnitude;
+    return stDPOR.Magnitude;
 }
 
 //Survey Results: Start inflation rate: 9%, end=1%, 30 day steps, 9 steps, mag multiplier start: 2, mag end .3, 9 steps
@@ -1985,7 +1985,7 @@ bool CheckProofOfResearch(
         return true;
 
     // 6-4-2017 - Verify researchers stored block magnitude
-    double dNeuralNetworkMagnitude = CalculatedMagnitude2(cpid, block.nTime, false);
+    double dNeuralNetworkMagnitude = CalculatedMagnitude2(cpid, block.nTime);
 
     if (claim.m_magnitude > (dNeuralNetworkMagnitude*1.25)
         && (fTestNet || (!fTestNet && pindexPrev->nHeight > 947000)))
@@ -2790,7 +2790,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 // 6-4-2017 - Verify researchers stored block magnitude
                 // 2018 02 04 - Moved here for better effect.
-                double dNeuralNetworkMagnitude = CalculatedMagnitude2(cpid, nTime, false);
+                double dNeuralNetworkMagnitude = CalculatedMagnitude2(cpid, nTime);
                 if (claim.m_magnitude > (dNeuralNetworkMagnitude * 1.25)
                     && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000)))
                 {
@@ -6997,7 +6997,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, CBlockIndex* pin
     if (!IsResearcher(cpid))
         return 0;
 
-    double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime, false);
+    double dCurrentMagnitude = CalculatedMagnitude2(cpid, nTime);
     if(pindexLast->nVersion>=9)
     {
         // Bugfix for newbie rewards always being around 1 GRC
