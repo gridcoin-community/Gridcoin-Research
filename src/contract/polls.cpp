@@ -7,7 +7,6 @@
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "appcache.h"
-#include "cpid.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
 
@@ -19,6 +18,8 @@ std::string PubKeyToAddress(const CScript& scriptPubKey);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 bool WalletOutOfSync();
+
+namespace NN { std::string GetPrimaryCpid(); }
 
 std::string GetShareType(double dShareType)
 {
@@ -83,10 +84,6 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     //6-20-2015
     double nBalance = GetTotalBalance();
     uint256 hashRand = GetRandHash();
-    std::string email = GetArgument("email", "NA");
-    boost::to_lower(email);
-    GlobalCPUMiningCPID.email = email;
-    GlobalCPUMiningCPID.lastblockhash = GlobalCPUMiningCPID.cpidhash;
     if (!PollExists(sTitle))
         return std::make_pair("Error", "Poll does not exist.");
     if (PollExpired(sTitle))
@@ -126,7 +123,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
     else
     {
-        std::string voter = "<CPIDV2>"+GlobalCPUMiningCPID.cpidv2 + "</CPIDV2><CPID>"
+        std::string voter = "<CPID>"
                 + GlobalCPUMiningCPID.cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
                 + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
                 + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
@@ -291,23 +288,24 @@ std::string PollAnswers(std::string pollname)
 }
 std::string GetProvableVotingWeightXML()
 {
+    std::string primary_cpid = NN::GetPrimaryCpid();
     std::string sXML = "<PROVABLEMAGNITUDE>";
     //Retrieve the historical magnitude
-    if (IsResearcher(msPrimaryCPID))
+    if (IsResearcher(primary_cpid))
     {
-        StructCPID& st1 = GetLifetimeCPID(msPrimaryCPID);
-        CBlockIndex* pHistorical = GetHistoricalMagnitude(msPrimaryCPID);
+        StructCPID& st1 = GetLifetimeCPID(primary_cpid);
+        CBlockIndex* pHistorical = GetHistoricalMagnitude(primary_cpid);
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
             std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
             std::string sError;
             std::string sSignature;
-            bool bResult = SignBlockWithCPID(msPrimaryCPID, pHistorical->GetBlockHash().GetHex(), sSignature, sError);
+            bool bResult = SignBlockWithCPID(primary_cpid, pHistorical->GetBlockHash().GetHex(), sSignature, sError);
             // Just because below comment it'll keep in line with that
             if (!bResult)
                 sSignature = sError;
             // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
-            sXML += "<CPID>" + msPrimaryCPID + "</CPID><INNERMAGNITUDE>"
+            sXML += "<CPID>" + primary_cpid + "</CPID><INNERMAGNITUDE>"
                     + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
                     "<HEIGHT>" + ToString(pHistorical->nHeight)
                     + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";

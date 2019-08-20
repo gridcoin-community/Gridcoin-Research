@@ -23,20 +23,6 @@ Distributed under the MIT/X11 software license, see the accompanying file COPYIN
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>
-This is experimental software.
-
-Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation type="vanished">
-Questo è un software sperimentale.
-
-Distribuito sotto la licenza software MIT/X11, vedi il file COPYING incluso oppure su http://www.opensource.org/licenses/mit-license.php.
-
-Questo prodotto include software sviluppato dal progetto OpenSSL per l&apos;uso del Toolkit OpenSSL (http://www.openssl.org/), software crittografico scritto da Eric Young (eay@cryptsoft.com) e software UPnP scritto da Thomas Bernard.</translation>
-    </message>
 </context>
 <context>
     <name>AddressBookPage</name>
@@ -313,12 +299,12 @@ Questo prodotto include software sviluppato dal progetto OpenSSL per l&apos;uso 
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+531"/>
+        <location filename="../bitcoingui.cpp" line="+333"/>
         <source>Sign &amp;message...</source>
         <translation>Firma &amp;messaggio...</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-96"/>
         <source>&amp;Overview</source>
         <translation>&amp;Sintesi</translation>
     </message>
@@ -414,7 +400,7 @@ Questo prodotto include software sviluppato dal progetto OpenSSL per l&apos;uso 
         <translation>Chiudi applicazione</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+12"/>
         <source>&amp;Options...</source>
         <translation>&amp;Opzioni...</translation>
     </message>
@@ -429,7 +415,7 @@ Questo prodotto include software sviluppato dal progetto OpenSSL per l&apos;uso 
         <translation>Cifra o decifra il portamonete</translation>
     </message>
     <message numerus="yes">
-        <location line="+400"/>
+        <location line="+397"/>
         <source>%n second(s) ago</source>
         <translation type="unfinished">
             <numerusform>%n secondo fa</numerusform>
@@ -461,7 +447,7 @@ Questo prodotto include software sviluppato dal progetto OpenSSL per l&apos;uso 
         </translation>
     </message>
     <message>
-        <location line="+230"/>
+        <location line="+229"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -476,7 +462,7 @@ Indirizzo: %4
 ?} {4?}</translation>
     </message>
     <message>
-        <location line="+511"/>
+        <location line="+445"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -486,17 +472,39 @@ Indirizzo: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>&amp;Backup Wallet...</source>
-        <translation type="vanished">&amp;Backup portamonete...</translation>
+        <location line="+32"/>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1156"/>
+        <location line="+5"/>
+        <source>Scraper: superblock not needed - inactive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: downloading and processing stats.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Scraper: Convergence achieved, date/time %1. All projects on whitelist included.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Scraper: Convergence achieved, date/time %1 UTC. Project(s) excluded: %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1146"/>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Cambia passphrase...</translation>
-    </message>
-    <message>
-        <source>Backup wallet to another location</source>
-        <translation type="vanished">Effettua il backup del portamonete</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -549,7 +557,7 @@ Indirizzo: %4
         <translation>&amp;Verifica messaggio...</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-214"/>
         <source>Wallet</source>
         <translation>Portamonete</translation>
     </message>
@@ -559,7 +567,7 @@ Indirizzo: %4
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+276"/>
+        <location line="+122"/>
         <source>&amp;Send</source>
         <translation>&amp;Invia</translation>
     </message>
@@ -567,30 +575,6 @@ Indirizzo: %4
         <location line="+5"/>
         <source>&amp;Receive</source>
         <translation>&amp;Ricevi</translation>
-    </message>
-    <message>
-        <source>&amp;Rebuild Block Chain</source>
-        <translation type="vanished">&amp;Ricostruisci la Block Chain</translation>
-    </message>
-    <message>
-        <source>Rebuild Block Chain</source>
-        <translation type="vanished">Ricoustruisci la Block Chain</translation>
-    </message>
-    <message>
-        <source>&amp;Download Blocks</source>
-        <translation type="vanished">&amp;Scarica i blocchi</translation>
-    </message>
-    <message>
-        <source>Download Blocks</source>
-        <translation type="vanished">Scarica i blocchi</translation>
-    </message>
-    <message>
-        <source>&amp;Upgrade Client</source>
-        <translation type="vanished">&amp;Aggiorna il client</translation>
-    </message>
-    <message>
-        <source>Upgrade Client</source>
-        <translation type="vanished">Aggiorna il client</translation>
     </message>
     <message>
         <location line="+63"/>
@@ -603,36 +587,12 @@ Indirizzo: %4
         <translation>Mostra informazioni su Gridcoin</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>&amp;Neural Network</source>
-        <translation>&amp;Rete neurale</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Neural Network</source>
-        <translation>Rete neurale</translation>
-    </message>
-    <message>
-        <source>&amp;Advanced Configuration</source>
-        <translation type="vanished">&amp;Impostazioni avanzate</translation>
-    </message>
-    <message>
-        <source>Advanced Configuration</source>
-        <translation type="vanished">Impostazioni avanzate</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;New User Wizard</source>
-        <translation>&amp;Procedura guidata nuovo utente</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+586"/>
+        <location line="+582"/>
         <source>New User Wizard</source>
         <translation>Procedura guidata nuovo utente</translation>
     </message>
     <message>
-        <location line="-643"/>
+        <location line="-631"/>
         <source>&amp;Voting</source>
         <translation>&amp;Voto</translation>
     </message>
@@ -642,15 +602,7 @@ Indirizzo: %4
         <translation>Voto</translation>
     </message>
     <message>
-        <source>&amp;Foundation</source>
-        <translation type="vanished">&amp;Fondazione</translation>
-    </message>
-    <message>
-        <source>Foundation</source>
-        <translation type="vanished">Fondazione</translation>
-    </message>
-    <message>
-        <location line="+59"/>
+        <location line="+51"/>
         <source>&amp;Diagnostics</source>
         <translation>&amp;Diagnostica</translation>
     </message>
@@ -658,14 +610,6 @@ Indirizzo: %4
         <location line="+1"/>
         <source>Diagnostics</source>
         <translation>Diagnostica</translation>
-    </message>
-    <message>
-        <source>FA&amp;Q</source>
-        <translation type="vanished">&amp;FAQ</translation>
-    </message>
-    <message>
-        <source>Interactive FAQ</source>
-        <translation type="vanished">FAQ interattiva</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -688,14 +632,14 @@ Indirizzo: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+215"/>
+        <location line="+208"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+65"/>
+        <location line="+69"/>
         <source>Gridcoin client</source>
         <translation>Client Gridcoin</translation>
     </message>
@@ -705,23 +649,7 @@ Indirizzo: %4
         <translation>%1 connessione(i) attiva(e) verso la rete Gridcoin</translation>
     </message>
     <message>
-        <source>%1 second(s) ago</source>
-        <translation type="vanished">%1 secondo(i) fa</translation>
-    </message>
-    <message>
-        <source>%1 minute(s) ago</source>
-        <translation type="vanished">%1 minuto(i) fa</translation>
-    </message>
-    <message>
-        <source>%1 hour(s) ago</source>
-        <translation type="vanished">%1 ora(e) fa</translation>
-    </message>
-    <message>
-        <source>%1 day(s) ago</source>
-        <translation type="vanished">%1 giorno(i) fa</translation>
-    </message>
-    <message>
-        <location line="+60"/>
+        <location line="+59"/>
         <source>Last received block was generated %1.</source>
         <translation>L&apos;ultimo blocco ricevuto è stato generato %1.</translation>
     </message>
@@ -766,19 +694,7 @@ Indirizzo: %4
         <translation>Attenzione! - Errore percorso BOINC!</translation>
     </message>
     <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="vanished">Data: %1
-Quantità: %2
-Tipo: %3
-Indirizzo: %4
-</translation>
-    </message>
-    <message>
-        <location line="+199"/>
+        <location line="+181"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation>L&apos;URI non può essere analizzato! Ciò può essere causato da un indirizzo Gridcoin non valido o da parametri URI non validi.</translation>
@@ -837,7 +753,7 @@ Indirizzo: %4
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+232"/>
+        <location line="+184"/>
         <source>%n second(s)</source>
         <translation>
             <numerusform>%n secondo</numerusform>
@@ -869,39 +785,7 @@ Indirizzo: %4
         </translation>
     </message>
     <message>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3. %4</source>
-        <translation type="vanished">In Staking.&lt;br&gt;Il tuo peso è %1&lt;br&gt;Il peso della rete è %2&lt;br&gt;Il tempo &lt;b&gt;stimato&lt;/b&gt; per ricevere una ricompensa è di %3. %4</translation>
-    </message>
-    <message>
-        <source>Not staking because wallet is locked</source>
-        <translation type="vanished">Non in staking perché il portamonete è bloccato</translation>
-    </message>
-    <message>
-        <source>Not staking because wallet is offline</source>
-        <translation type="vanished">Non in staking perché il portamonete è offline</translation>
-    </message>
-    <message>
-        <source>Not staking because wallet is syncing</source>
-        <translation type="vanished">Non in staking perché il portamonete è in sincronizzazione</translation>
-    </message>
-    <message>
-        <source>Not staking because you don&apos;t have mature coins and stake weight is too low.</source>
-        <translation type="vanished">Non in staking perché non possiedi monete mature e lo stake weight è troppo basso.</translation>
-    </message>
-    <message>
-        <source>Not staking because you don&apos;t have mature coins</source>
-        <translation type="vanished">Non in staking perché non possiedi monete mature</translation>
-    </message>
-    <message>
-        <source>Searching for mature coins... Please wait</source>
-        <translation type="vanished">Cerco monete mature... Attendi</translation>
-    </message>
-    <message>
-        <source>Not staking</source>
-        <translation type="vanished">Non in staking</translation>
-    </message>
-    <message>
-        <location line="-1049"/>
+        <location line="-983"/>
         <source>&amp;File</source>
         <translation>&amp;File</translation>
     </message>
@@ -916,17 +800,12 @@ Indirizzo: %4
         <translation>&amp;Community</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>&amp;Advanced</source>
-        <translation>&amp;Avanzate</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>&amp;Help</source>
         <translation>&amp;Aiuto</translation>
     </message>
     <message numerus="yes">
-        <location line="+279"/>
+        <location line="+285"/>
         <source>Processed %n block(s) of transaction history.</source>
         <translation>
             <numerusform>Elaborato %n blocco dello storico transazioni.</numerusform>
@@ -939,12 +818,12 @@ Indirizzo: %4
         <translation>Aggiornato</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Catching up...</source>
         <translation>In aggiornamento...</translation>
     </message>
     <message>
-        <location line="+215"/>
+        <location line="+213"/>
         <source>Sent transaction</source>
         <translation>Transazione inviata</translation>
     </message>
@@ -954,16 +833,12 @@ Indirizzo: %4
         <translation>Transazione ricevuta</translation>
     </message>
     <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="vanished">Il portamonete è &lt;b&gt;cifrato&lt;/b&gt; ed attualmente &lt;b&gt;sbloccato&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+211"/>
+        <location line="+193"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Il portamonete è &lt;b&gt;cifrato&lt;/b&gt; ed attualmente &lt;b&gt;bloccato&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../bitcoin.cpp" line="+160"/>
+        <location filename="../bitcoin.cpp" line="+176"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>Si è verificato un errore irreversibile. Gridcoin non può più continuare in sicurezza e verrà chiuso.</translation>
     </message>
@@ -971,7 +846,7 @@ Indirizzo: %4
 <context>
     <name>ClientModel</name>
     <message>
-        <location filename="../clientmodel.cpp" line="+117"/>
+        <location filename="../clientmodel.cpp" line="+119"/>
         <source>Network Alert</source>
         <translation>Avviso di rete</translation>
     </message>
@@ -1052,10 +927,6 @@ Indirizzo: %4
         <location line="+63"/>
         <source>(un)select all</source>
         <translation>(de)seleziona tutto</translation>
-    </message>
-    <message>
-        <source>List mode</source>
-        <translation type="vanished">Modalità lista</translation>
     </message>
     <message>
         <location line="+74"/>
@@ -1436,7 +1307,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+863"/>
+        <location filename="../votingdialog.cpp" line="+871"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation>Crea Sondaggio</translation>
@@ -1650,10 +1521,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Mappa le porte tramite &amp;UPnP</translation>
     </message>
     <message>
-        <source>Proxy &amp;IP:</source>
-        <translation type="vanished">&amp;IP del proxy:</translation>
-    </message>
-    <message>
         <location line="+45"/>
         <source>&amp;Port:</source>
         <translation>&amp;Porta:</translation>
@@ -1820,10 +1687,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>DPOR Weight:</source>
-        <translation type="vanished">Peso DPOR:</translation>
-    </message>
-    <message>
         <location line="-251"/>
         <source>Magnitude:</source>
         <translation>Magnitudine:</translation>
@@ -1847,10 +1710,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+213"/>
         <source>Current Poll:</source>
         <translation>Sondaggio corrente:</translation>
-    </message>
-    <message>
-        <source>Client Messages:</source>
-        <translation type="vanished">Messaggi del client:</translation>
     </message>
     <message>
         <location line="-456"/>
@@ -1892,6 +1751,14 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+1"/>
         <source>out of sync</source>
         <translation>fuori sincrono</translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <location filename="../bitcoin.cpp" line="+182"/>
+        <source>%1 didn&apos;t yet exit safely...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1955,7 +1822,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+46"/>
+        <location filename="../forms/rpcconsole.ui" line="+51"/>
         <location line="+43"/>
         <location line="+47"/>
         <location line="+16"/>
@@ -1967,7 +1834,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+58"/>
         <location line="+43"/>
         <location line="+42"/>
-        <location filename="../rpcconsole.cpp" line="+391"/>
+        <location filename="../rpcconsole.cpp" line="+392"/>
         <source>N/A</source>
         <translation>N/D</translation>
     </message>
@@ -2047,7 +1914,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Uscita:</translation>
     </message>
     <message>
-        <location line="-353"/>
+        <location line="+120"/>
+        <source>&amp;Scraper</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-473"/>
         <source>Debug log file</source>
         <translation>File log del debug</translation>
     </message>
@@ -2077,7 +1949,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Scrivi &lt;b&gt;help&lt;/b&gt; per un riassunto dei comandi disponibili.</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+118"/>
         <source>%1 B</source>
         <translation>%1 B</translation>
     </message>
@@ -2112,12 +1984,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>%1 h %2 m</translation>
     </message>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="-722"/>
+        <location filename="../forms/rpcconsole.ui" line="-727"/>
         <source>Gridcoin - Debug Console</source>
         <translation>Gridcoin - Console di Debug</translation>
     </message>
     <message>
-        <location line="+330"/>
+        <location line="+335"/>
         <source>Boost version</source>
         <translation>Versione Boost</translation>
     </message>
@@ -2187,7 +2059,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Nome del client</translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-133"/>
+        <location filename="../rpcconsole.cpp" line="-140"/>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation>Benvenuto nella console RPC di Gridcoin! </translation>
     </message>
@@ -2454,22 +2326,22 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+172"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+155"/>
         <source>A&amp;mount:</source>
         <translation>&amp;Importo:</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-106"/>
         <source>Pay &amp;To:</source>
         <translation>Paga &amp;a:</translation>
     </message>
     <message>
-        <location line="-33"/>
+        <location line="+93"/>
         <source>&amp;Label:</source>
         <translation>&amp;Etichetta:</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="-56"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2489,12 +2361,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Messaggio:</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-112"/>
         <source>Form</source>
         <translation>Modulo</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+23"/>
         <location line="+3"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Inserisci un&apos;etichetta per questo indirizzo per aggiungerlo alla rubrica</translation>
@@ -2515,21 +2387,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Rimuovi questo beneficiario</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+66"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
         <translation>Invia un messaggio personalizzato a un beneficiario Gridcoin</translation>
     </message>
     <message>
-        <source>Track Coins</source>
-        <translation type="vanished">Traccia le monete</translation>
-    </message>
-    <message>
-        <location line="+22"/>
-        <source>Add Attachment</source>
-        <translation>Aggiungi allegato</translation>
-    </message>
-    <message>
-        <location line="-96"/>
+        <location line="-103"/>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation>Inserisci un indirizzo Gridcoin (es. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</translation>
     </message>
@@ -2760,22 +2623,47 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+4"/>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Source</source>
         <translation>Sorgente</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="-5"/>
         <source>Generated in CoinBase</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Generated, PoS</source>
+        <location line="+11"/>
+        <source>MINED - POS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+164"/>
+        <location line="+1"/>
+        <source>MINED - POR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+167"/>
         <source>TX ID</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2811,10 +2699,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Generated</source>
-        <translation type="vanished">Generato</translation>
-    </message>
-    <message>
         <location line="-240"/>
         <location line="+18"/>
         <source>From</source>
@@ -2847,21 +2731,9 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         </translation>
     </message>
     <message>
-        <source>Block Type</source>
-        <translation type="vanished">Tipo di blocco</translation>
-    </message>
-    <message>
-        <source>Block Number</source>
-        <translation type="vanished">Numero blocco</translation>
-    </message>
-    <message>
         <location line="+119"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
         <translation>Le monete generate da Gridcoin devono maturare 110 blocchi prima che possano essere spese. Quando hai generato questo blocco, è stato trasmesso alla rete per essere aggiunto alla catena di blocchi. Se non riuscirà ad entrare nella catena, il suo stato cambierà in &quot;non accettato&quot; e non sarà spendibile. Questo può accadere occasionalmente se un altro nodo genera un blocco entro pochi secondi dal tuo.</translation>
-    </message>
-    <message>
-        <source>Information</source>
-        <translation type="vanished">Informazioni</translation>
     </message>
     <message>
         <location line="-162"/>
@@ -2911,18 +2783,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Commento</translation>
     </message>
     <message>
-        <source>Transaction ID</source>
-        <translation type="vanished">ID della transazione</translation>
-    </message>
-    <message>
-        <source>Transaction</source>
-        <translation type="vanished">Transazione</translation>
-    </message>
-    <message>
-        <source>Inputs</source>
-        <translation type="vanished">Input</translation>
-    </message>
-    <message>
         <location line="+105"/>
         <source>Amount</source>
         <translation>Importo</translation>
@@ -2938,7 +2798,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>falso</translation>
     </message>
     <message numerus="yes">
-        <location line="-345"/>
+        <location line="-361"/>
         <source>Open for %n more block(s)</source>
         <translation>
             <numerusform>Aperto per %n altro blocco</numerusform>
@@ -2969,12 +2829,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Questo pannello mostra una descrizione dettagliata della transazione</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>View Attachment</source>
-        <translation>Mostra allegati</translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+28"/>
         <source>Execute Contract</source>
         <translation>Esegui contratto</translation>
     </message>
@@ -2983,21 +2838,11 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <source>C&amp;lose</source>
         <translation>C&amp;hiudi</translation>
     </message>
-    <message>
-        <location filename="../transactiondescdialog.cpp" line="+38"/>
-        <source>Gridcoin Documents</source>
-        <translation>Documenti Gridcoin</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Document cannot be found on P2P server.</source>
-        <translation>Il documento non può essere trovato sul server P2P.</translation>
-    </message>
 </context>
 <context>
     <name>TransactionTableModel</name>
     <message>
-        <location filename="../transactiontablemodel.cpp" line="+239"/>
+        <location filename="../transactiontablemodel.cpp" line="+236"/>
         <source>Date</source>
         <translation>Data</translation>
     </message>
@@ -3050,37 +2895,17 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Questo blocco non è stato ricevuto da nessun altro nodo&lt;br&gt; e probabilmente non sarà accettato!</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+49"/>
         <source>Received from</source>
         <translation>Ricevuto da</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>Mined - DPOR</source>
-        <translation>Estratto - DPOR</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
-        <translation>Coniato - DPOR (Locale)</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
-        <translation>Estratto - PoR</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
-        <translation>Estratto - Interesse</translation>
-    </message>
-    <message>
-        <location line="+249"/>
+        <location line="+267"/>
         <source>Destination address of transaction.</source>
         <translation>Indirizzo di destinazione della transazione.</translation>
     </message>
     <message>
-        <location line="-360"/>
+        <location line="-334"/>
         <source>Offline</source>
         <translation>Offline</translation>
     </message>
@@ -3100,7 +2925,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Generato, ma non accettato</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+44"/>
         <source>Received with</source>
         <translation>Ricevuto tramite</translation>
     </message>
@@ -3115,12 +2940,42 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Pagamento a te stesso</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+7"/>
+        <source>MINED - POS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - POR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>(n/a)</source>
         <translation>(n/d)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+190"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Stato della transazione. Passare con il mouse su questo campo per vedere il numero di conferme.</translation>
     </message>
@@ -3310,28 +3165,9 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
 </context>
 <context>
-    <name>UpgradeDialog</name>
-    <message>
-        <source>Gridcoin Upgrading Facility</source>
-        <translation type="vanished">Servizio Aggiornamento Gridcoin</translation>
-    </message>
-    <message>
-        <source>Retry Download</source>
-        <translation type="vanished">Riprova il download</translation>
-    </message>
-    <message>
-        <source>Upgrade</source>
-        <translation type="vanished">Aggiorna</translation>
-    </message>
-    <message>
-        <source>Hide</source>
-        <translation type="vanished">Nascondi</translation>
-    </message>
-</context>
-<context>
     <name>VotingChartDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="-396"/>
+        <location filename="../votingdialog.cpp" line="-405"/>
         <source>Poll Results</source>
         <translation>Risultati sondaggio</translation>
     </message>
@@ -3422,14 +3258,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Tipo quota</translation>
     </message>
     <message>
-        <source>Question</source>
-        <translation type="vanished">Domanda</translation>
-    </message>
-    <message>
-        <source>Answers</source>
-        <translation type="vanished">Risposte</translation>
-    </message>
-    <message>
         <location line="-2"/>
         <source># Voters</source>
         <translation># Elettori</translation>
@@ -3438,10 +3266,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <location line="+1"/>
         <source>Total Shares</source>
         <translation>Totale partecipazione</translation>
-    </message>
-    <message>
-        <source>URL</source>
-        <translation type="vanished">URL</translation>
     </message>
     <message>
         <location line="-2"/>
@@ -3469,10 +3293,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Tipo quota.</translation>
     </message>
     <message>
-        <source>Question.</source>
-        <translation type="vanished">Domanda.</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Total Participants.</source>
         <translation>Totale partecipanti.</translation>
@@ -3483,10 +3303,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Totale quote.</translation>
     </message>
     <message>
-        <source>URL.</source>
-        <translation type="vanished">URL.</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Best Answer.</source>
         <translation>Miglior risposta.</translation>
@@ -3495,7 +3311,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation>PlaceVote</translation>
     </message>
@@ -3528,7 +3344,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+249"/>
+        <location filename="../walletmodel.cpp" line="+239"/>
         <source>Sending...</source>
         <translation>Invio...</translation>
     </message>
@@ -3536,19 +3352,15 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+215"/>
+        <location filename="../bitcoinstrings.cpp" line="+218"/>
         <source>Options:</source>
         <translation>Opzioni:</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+43"/>
         <source>This help message</source>
         <translation>Questo messaggio di aiuto
 </translation>
-    </message>
-    <message>
-        <source>Specify configuration file (default: gridcoin.conf)</source>
-        <translation type="vanished">Specifica il file di configurazione (default: gridcoin.conf)</translation>
     </message>
     <message>
         <location line="-6"/>
@@ -3581,12 +3393,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Specifica il timeout di connessione in millisecondi (predefinito: 5000)</translation>
     </message>
     <message>
-        <location line="-112"/>
+        <location line="-114"/>
         <source>Connect through socks proxy</source>
         <translation>Collegati tramite proxy socks</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Seleziona la versione del proxy socks da utilizzare (4-5, default: 5)</translation>
     </message>
@@ -3596,7 +3408,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Usa il proxy per raggiungere servizzi tor nascosti (default: come -proxy)</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation>Resta in ascolto per le connessioni sulla &lt;porta&gt; (default: 32749 o testnet: 32748)</translation>
     </message>
@@ -3606,7 +3418,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Mantieni al massimo &lt;n&gt; connessioni ai peer (predefinite: 125)</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-60"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Connetti solo al nodo specificato</translation>
     </message>
@@ -3616,26 +3428,22 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Connessione ad un nodo e successiva disconnessione per recuperare gli indirizzi dei peer</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+117"/>
         <source>Specify your own public address</source>
         <translation>Specifica il tuo indirizzo pubblico</translation>
     </message>
     <message>
-        <location line="-39"/>
+        <location line="-40"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Connetti solo a nodi nella rete &lt;rete&gt; (IPv4, IPv6 o Tor)</translation>
     </message>
     <message>
-        <location line="-69"/>
+        <location line="-70"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
         <translation>Scoprire il prorio indirizzo IP (predefinito: 1 se in ascolto e -externalip non impostato)</translation>
     </message>
     <message>
-        <source>Find peers using internet relay chat (default: 0)</source>
-        <translation type="vanished">Trova peers che stanno usando la internet relay chat (default: 0)</translation>
-    </message>
-    <message>
-        <location line="-41"/>
+        <location line="-43"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
         <translation>Accetta connessioni dall&apos;esterno (predefinito: 1 se -proxy o -connect non impostati)</translation>
     </message>
@@ -3645,26 +3453,22 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Collegati ad un determinato indirizzo. Usa la notazione [host]:porta per IPv6</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+46"/>
         <source>Find peers using DNS lookup (default: 1)</source>
         <translation>Trova i peer usando DNS lookup (default: 1)</translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-93"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation>Sincronizza l&apos;ora con gli altri nodi. Disabilitare nel caso in cui l&apos;ora sul proprio sistema sia precisa es. sincronizzazione tramite NTP (default: 1)</translation>
     </message>
     <message>
-        <source>Sync checkpoints policy (default: strict)</source>
-        <translation type="vanished">Politica sincronizzazione checkpoint (default: strict)</translation>
-    </message>
-    <message>
-        <location line="+184"/>
+        <location line="+188"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Soglia di disconnessione dei peer di cattiva qualità (predefinita: 100)</translation>
     </message>
     <message>
-        <location line="-190"/>
+        <location line="-194"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Numero di secondi che i peer di cattiva qualità devono attendere prima di riconnettersi (predefiniti: 86400)</translation>
     </message>
@@ -3760,6 +3564,16 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Blocks Loaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Boinc Public Key</source>
         <translation type="unfinished"></translation>
@@ -3817,6 +3631,11 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     <message>
         <location line="+1"/>
         <source>ERROR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Entire balance reserved</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3886,11 +3705,6 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>Messate Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Miner: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3925,12 +3739,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>No coins; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Offline; </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3940,12 +3749,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Out of rance exception while parsing Transaction Message -&gt; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Public Key</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4025,12 +3829,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Usa UPnP per mappare la porta in ascolto (default: 0)</translation>
     </message>
     <message>
-        <location line="-108"/>
+        <location line="-109"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Commissione per KB da aggiungere alle transazioni che invii</translation>
     </message>
     <message>
-        <location line="-68"/>
+        <location line="-71"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation>Quando si creano transazioni, ignora input con valori minori di questo (default: 0.01)</translation>
     </message>
@@ -4040,13 +3844,13 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Accetta comandi da riga di comando e JSON-RPC</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+175"/>
         <source>Use the test network</source>
         <translation>Utilizza la rete di prova
 </translation>
     </message>
     <message>
-        <location line="-56"/>
+        <location line="-57"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Visualizza informazioni extra di debug. Implica tutte le altre opzioni -debug*</translation>
     </message>
@@ -4056,7 +3860,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Visualizza informazioni extra di debug della rete</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Prepend debug output with timestamp</source>
         <translation>Anteponi timestamp agli output del debug</translation>
     </message>
@@ -4066,7 +3870,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Invia informazioni di trace/debug al debugger</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Resta in ascolto per le connessioni JSON-RPC sulla &lt;porta&gt; (default: 15715 o testnet: 25715)</translation>
     </message>
@@ -4077,7 +3881,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 </translation>
     </message>
     <message>
-        <location line="+119"/>
+        <location line="+123"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Inviare comandi al nodo in esecuzione su &lt;ip&gt; (default: 127.0.0.1)</translation>
     </message>
@@ -4087,7 +3891,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Richiedi una conferma per il resto (default: 0)</translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-184"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Forza gli script delle transazioni ad utilizzare gli operatori PUSH canonici (default: 1)</translation>
     </message>
@@ -4097,7 +3901,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Esegui comando quando viene ricevuto un avviso pertinente (%s in cmd è sostituito dal messaggio)</translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+215"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Aggiorna il wallet all&apos;ultimo formato</translation>
     </message>
@@ -4113,7 +3917,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
 </translation>
     </message>
     <message>
-        <location line="-109"/>
+        <location line="-113"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Tenta di recuperare le chiavi private da un wallet.dat corrotto</translation>
     </message>
@@ -4133,7 +3937,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Boinc Mining</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4143,7 +3947,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Error obtaining next project.  Error 06172014.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4193,12 +3997,32 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Mining</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
+        <source>No coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No current polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Out of range exception while parsing Transaction Message -&gt; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>POR Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Please wait for new user wizard to start...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4213,12 +4037,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Imposta la dimensione massima di un blocco in byte (default: 250000)</translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="-175"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Imposta la dimensione massima delle transazioni high-priority/low-fee in byte (default: 27000)</translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+163"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>Opzioni SSL: (vedi il wiki di Bitcoin per le istruzioni di configurazione SSL)</translation>
     </message>
@@ -4239,21 +4063,17 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Chiave privata del server (default: server.pem)</translation>
     </message>
     <message>
-        <source>Acceptable ciphers (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</source>
-        <translation type="vanished">Cifrari accettabili (default: TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!AH:!3DES:@STRENGTH)</translation>
-    </message>
-    <message>
-        <location line="-57"/>
+        <location line="-58"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Importo non valido per -paytxfee=&lt;importo&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-102"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Attenzione: -paytxfee è molto alta. Questa è la commissione che si paga quando si invia una transazione.</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+101"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Importo non valido per -mininput=&lt;importo&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4263,22 +4083,22 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Verifica d&apos;integrita di inizializzazione fallita. Gridcoin verrà chiuso.</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+105"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Il portamonete %s è fuori dalla cartella dati %s.</translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-244"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Impossibile ottenere un lock sulla cartella dati %s.  Gridcoin è probabilmente già in esecuzione.</translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+241"/>
         <source>Verifying database integrity...</source>
         <translation>Verifica dell&apos;integrità del database...</translation>
     </message>
     <message>
-        <location line="-229"/>
+        <location line="-233"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Errore durante l&apos;inizializzazione dell&apos;ambiente del database %s! Per ripristinare, FARE IL BACKUP DI QUELLA CARTELLA, poi rimuoverne tutto il contenuto tranne wallet.dat.</translation>
     </message>
@@ -4288,9 +4108,14 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Attenzione: wallet.dat corrotto, dati salvati! Il wallet.dat originale salvato come wallet.{timestamp}.bak in %s; se il tuo bilancio o le transazioni non sono corrette dovresti ripristinare da un backup.</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Vote</source>
         <translation type="unfinished">Vota</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Waiting for coins to mature</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4308,17 +4133,17 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>wallet.dat corrotto, salvataggio fallito</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-19"/>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>Richiesta versione -socks proxy sconosciuta: %i</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Indirizzo -tor non valido: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-48"/>
+        <location line="-49"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Impossibile risolvere indirizzo -bind: &apos;%s&apos;</translation>
     </message>
@@ -4328,15 +4153,9 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Impossibile risolvere indirizzo -externalip: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation>Importo non valido per -reservebalance=&lt;importo&gt;</translation>
-    </message>
-    <message>
-        <source>Unable to sign checkpoint, wrong checkpointkey?
-</source>
-        <translation type="vanished">Impossibile firmare checkpoint, chiave checkpoint errata?
-</translation>
     </message>
     <message>
         <location line="-33"/>
@@ -4349,22 +4168,22 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Errore caricamento wallet.dat: portamonete corrotto</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-66"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Attenzione: errore di lettura di wallet.dat!  Tutte le chiavi lette correttamente, ma i dati delle transazioni o le voci in rubrica potrebbero mancare o non essere corretti.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+67"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation>Errore durante il caricamento di wallet.dat: il portamonete richiede una versione più recente di Gridcoin</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+130"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Il portamonete doveva essere riscritto: riavviare Gridcoin per completare</translation>
     </message>
     <message>
-        <location line="-130"/>
+        <location line="-132"/>
         <source>Error loading wallet.dat</source>
         <translation>Errore caricamento wallet.dat</translation>
     </message>
@@ -4384,17 +4203,17 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Errore: impossibile avviare il nodo</translation>
     </message>
     <message>
-        <location line="-83"/>
+        <location line="-86"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>Impossibile collegarsi alla %s su questo computer. Gridcoin è probabilmente già in esecuzione.</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Impossibile collegarsi alla %s su questo computer (bind returned error %d, %s)</translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-106"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Errore: portamonete bloccato, impossibile creare la transazione  </translation>
     </message>
@@ -4404,59 +4223,47 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Errore: portamonete sbloccato solo per lo staking, impossibile creare la transazione.</translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-108"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation>Errore: questa transazione richiede una commissione di transazione di almeno %s a causa del suo importo, della sua complessità o dell&apos;utilizzo di fondi ricevuti di recente  </translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+106"/>
         <source>Error: Transaction creation failed  </source>
         <translation>Errore: creazione della transazione fallita  </translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Sending...</source>
         <translation>Invio...</translation>
     </message>
     <message>
-        <location line="-186"/>
+        <location line="-190"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Errore: la transazione è stata rifiutata. Questo può accadere se alcune monete nel tuo portafoglio sono già state spese, ad esempio se hai usato una copia di wallet.dat e le monete sono state spese nella copia ma non sono state contrassegnate come spese qui.</translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+136"/>
         <source>Invalid amount</source>
         <translation>Importo non valido</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-101"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Attenzione: verificare che la data e l&apos;ora del computer siano corrette! Se il tuo orologio è sbagliato, Gridcoin non funzionerà correttamente.</translation>
     </message>
     <message>
-        <source>Warning: This version is obsolete, upgrade required!</source>
-        <translation type="vanished">Attenzione: questa versione è obsoleta, aggiornamento necessario!</translation>
-    </message>
-    <message>
-        <source>WARNING: synchronized checkpoint violation detected, but skipped!</source>
-        <translation type="vanished">ATTENZIONE: rilevata violazione del checkpoint sincronizzato, ma ignorata!</translation>
-    </message>
-    <message>
-        <location line="+196"/>
+        <location line="+201"/>
         <source>Warning: Disk space is low!</source>
         <translation>Attenzione: lo spazio su disco è ridotto!</translation>
     </message>
     <message>
-        <source>WARNING: Invalid checkpoint found! Displayed transactions may not be correct! You may need to upgrade, or notify developers.</source>
-        <translation type="vanished">ATTENZIONE: trovato checkpoint non valido! Le transazioni visualizzate potrebbero non essere corrette! Potrebbe essere necessario aggiornare o informare gli sviluppatori.</translation>
-    </message>
-    <message>
-        <location line="-52"/>
+        <location line="-53"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Esegui in background come demone ed accetta i comandi</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Esegue un comando quando lo stato di una transazione del portamonete cambia (%s in cmd è sostituito da TxID)</translation>
     </message>
@@ -4466,12 +4273,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Opzioni creazione blocco:</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+42"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Nessuna porta disponibile per l&apos;ascolto. Usa -listen=0 se vuoi procedere comunque.</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+91"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Specifica il file del portamonete (all&apos;interno della cartella dati)</translation>
     </message>
@@ -4496,7 +4303,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Password per connessioni JSON-RPC</translation>
     </message>
     <message>
-        <location line="-157"/>
+        <location line="-161"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
         <translation>Esegue un comando quando il miglior blocco cambia (%s nel cmd è sostituito dall&apos;hash del blocco)</translation>
     </message>
@@ -4506,12 +4313,12 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
         <translation>Consente interrogazioni DNS per -addnode, -seednode e -connect</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+151"/>
         <source>To use the %s option</source>
         <translation>Per usare l&apos;opzione %s</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-249"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4553,12 +4360,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Devi settare rpcpassword=&lt;password&gt; nel file di configurazione: %s Se il file non esiste, crealo con i permessi di amministratore.</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+72"/>
         <source>Gridcoin version</source>
         <translation>Versione Gridcoin</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Usage:</source>
         <translation>Utilizzo:</translation>
     </message>
@@ -4568,7 +4375,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Invia comando a -server o gridcoind</translation>
     </message>
     <message>
-        <location line="-46"/>
+        <location line="-47"/>
         <source>List commands</source>
         <translation>Lista comandi
 </translation>
@@ -4595,12 +4402,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Indirizzo -proxy non valido: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+89"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Rete sconosciuta specificata in -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-91"/>
         <source>Insufficient funds</source>
         <translation>Fondi insufficienti</translation>
     </message>
@@ -4610,17 +4417,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Caricamento dell&apos;indice dei blocchi...</translation>
     </message>
     <message>
-        <location line="-82"/>
+        <location line="-85"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
         <translation>Aggiunge un nodo a cui connettersi e tenta di mantenere aperta la connessione</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+86"/>
         <source>Loading wallet...</source>
         <translation>Caricamento portamonete...</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-63"/>
         <source>Cannot downgrade wallet</source>
         <translation>Non è possibile effettuare il downgrade del portamonete</translation>
     </message>
@@ -4630,17 +4437,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Non è possibile scrivere l&apos;indirizzo predefinito</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Rescanning...</source>
         <translation>Ripetizione scansione...</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-83"/>
         <source>Done loading</source>
         <translation>Caricamento completato</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Error</source>
         <translation>Errore</translation>
     </message>

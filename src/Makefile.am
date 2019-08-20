@@ -34,6 +34,10 @@ if ENABLE_AVX2
 LIBGRIDCOIN_CRYPTO_AVX2 = crypto/libgridcoin_crypto_avx2.a
 LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_AVX2)
 endif
+if ENABLE_SHANI
+LIBGRIDCOIN_CRYPTO_SHANI = crypto/libgridcoin_crypto_shani.a
+LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_SHANI)
+endif
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
@@ -70,8 +74,6 @@ GRIDCOIN_CORE_H = \
 	compat/endian.h \
 	contract/polls.h \
 	contract/contract.h \
-   contract/superblock.h \
-	cpid.h \
 	crypter.h \
 	db.h \
 	fwd.h \
@@ -86,10 +88,13 @@ GRIDCOIN_CORE_H = \
 	main.h \
 	miner.h \
 	mruset.h \
+	neuralnet/cpid.h \
 	neuralnet/neuralnet.h \
    neuralnet/neuralnet_native.h \
    neuralnet/neuralnet_stub.h \
 	neuralnet/project.h \
+	neuralnet/researcher.h \
+	neuralnet/superblock.h \
 	netbase.h \
 	net.h \
 	pbkdf2.h \
@@ -130,8 +135,6 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	checkpoints.cpp \
 	contract/polls.cpp \
 	contract/contract.cpp \
-   contract/superblock.cpp \
-	cpid.cpp \
 	crypter.cpp \
 	db.cpp \
 	gridcoin.cpp \
@@ -144,7 +147,10 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
    neuralnet/neuralnet.cpp \
    neuralnet/neuralnet_native.cpp \
    neuralnet/neuralnet_stub.cpp \
+	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
+	neuralnet/researcher.cpp \
+	neuralnet/superblock.cpp \
 	netbase.cpp \
 	net.cpp \
 	noui.cpp \
@@ -235,6 +241,12 @@ crypto_libgridcoin_crypto_avx2_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_avx2_a_CXXFLAGS += $(AVX2_CXXFLAGS)
 crypto_libgridcoin_crypto_avx2_a_CPPFLAGS += -DENABLE_AVX2
 crypto_libgridcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp
+
+crypto_libgridcoin_crypto_shani_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libgridcoin_crypto_shani_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libgridcoin_crypto_shani_a_CXXFLAGS += $(SHANI_CXXFLAGS)
+crypto_libgridcoin_crypto_shani_a_CPPFLAGS += -DENABLE_SHANI
+crypto_libgridcoin_crypto_shani_a_SOURCES = crypto/sha256_shani.cpp
 
 CTAES_DIST =  crypto/ctaes/bench.c
 CTAES_DIST += crypto/ctaes/ctaes.c

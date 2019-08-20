@@ -50,7 +50,6 @@ class CRPCCommand
 public:
     std::string name;
     rpcfn_type actor;
-    bool okSafeMode;
     rpccategory category;
 };
 
@@ -134,6 +133,7 @@ extern UniValue listreceivedbyaddress(const UniValue& params, bool fHelp);
 extern UniValue listsinceblock(const UniValue& params, bool fHelp);
 extern UniValue listtransactions(const UniValue& params, bool fHelp);
 extern UniValue listunspent(const UniValue& params, bool fHelp);
+extern UniValue consolidateunspent(const UniValue& params, bool fHelp);
 extern UniValue makekeypair(const UniValue& params, bool fHelp);
 extern UniValue movecmd(const UniValue& params, bool fHelp);
 extern UniValue rain(const UniValue& params, bool fHelp);
@@ -189,10 +189,8 @@ extern UniValue debugnet(const UniValue& params, bool fHelp);
 extern UniValue dportally(const UniValue& params, bool fHelp);
 extern UniValue forcequorum(const UniValue& params, bool fHelp);
 extern UniValue gatherneuralhashes(const UniValue& params, bool fHelp);
-extern UniValue genboinckey(const UniValue& params, bool fHelp);
 extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 extern UniValue getlistof(const UniValue& params, bool fHelp);
-extern UniValue getnextproject(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue memorizekeys(const UniValue& params, bool fHelp);
@@ -221,14 +219,13 @@ extern UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
 extern UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
 extern UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
 extern UniValue archivescraperlog(const UniValue& params, bool fHelp);
+extern UniValue testnewsb(const UniValue& params, bool fHelp);
 
 // Network
 extern UniValue addnode(const UniValue& params, bool fHelp);
 extern UniValue addpoll(const UniValue& params, bool fHelp);
 extern UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
-extern UniValue decryptphrase(const UniValue& params, bool fHelp);
-extern UniValue encryptphrase(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
 extern UniValue getblock(const UniValue& params, bool fHelp);

@@ -19,10 +19,26 @@ std::string NeuralNetStub::GetNeuralHash()
     return std::string();
 }
 
+NN::QuorumHash NeuralNetStub::GetSuperblockHash()
+{
+    NN::QuorumHash EmptyQuorumHash;
+
+    //Initialize a purposefully empty (invalid) hash.
+    return EmptyQuorumHash;
+}
+
 std::string NeuralNetStub::GetNeuralContract()
 {
     return std::string();
 }
+
+NN::Superblock NeuralNetStub::GetSuperblockContract()
+{
+    NN::Superblock EmptySuperblock;
+
+    return EmptySuperblock;
+}
+
 
 bool NeuralNetStub::SynchronizeDPOR(const BeaconConsensus& beacons)
 {

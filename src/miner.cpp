@@ -7,7 +7,6 @@
 #include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
-#include "cpid.h"
 #include "main.h"
 #include "appcache.h"
 #include "neuralnet/neuralnet.h"
@@ -26,16 +25,20 @@ using namespace std;
 //
 
 unsigned int nMinerSleep;
-MiningCPID GetNextProject(bool bForce);
 void ThreadCleanWalletPassphrase(void* parg);
 double CoinToDouble(double surrogate);
 
 void ThreadTopUpKeyPool(void* parg);
 
+double CalculatedMagnitude(int64_t locktime, bool bUseLederstrumpf);
+double GetLastPaymentTimeByCPID(std::string cpid);
+bool HasActiveBeacon(const std::string& cpid);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
 
 int64_t GetRSAWeightByBlock(MiningCPID boincblock);
+
+namespace NN { std::string GetPrimaryCpid(); }
 
 namespace {
 // Some explaining would be appreciated
@@ -71,12 +74,13 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool BreakForNoCoins(CMinerStatus& status, const char* message)
+bool BreakForNoCoins(CMinerStatus& status, const std::string& message)
 {
     LOCK(status.lock);
 
     status.Clear();
-    status.ReasonNotStaking += _(message);
+    status.ReasonNotStaking += message;
+    status.ReasonNotStaking += "; ";
 
     if (fDebug) {
         LogPrintf("CreateCoinStake: %s", MinerStatus.ReasonNotStaking);
@@ -443,15 +447,15 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     //Request all the coins here, check reserve later
 
     if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, "No coins; ");
+        return BreakForNoCoins(MinerStatus, _("No coins"));
     } else if (!wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn)) {
-        return BreakForNoCoins(MinerStatus, "Waiting for coins to mature; ");
+        return BreakForNoCoins(MinerStatus, _("Waiting for coins to mature"));
     }
 
     BalanceToStake -= nReserveBalance;
 
     if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, "Entire balance reserved; ");
+        return BreakForNoCoins(MinerStatus, _("Entire balance reserved"));
     }
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
@@ -831,9 +835,8 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet, MiningCPID& BoincData)
 {
-    //Append beacon signature to coinbase
-    std::string PublicKey = GlobalCPUMiningCPID.BoincPublicKey;
-    if (!PublicKey.empty())
+    // Append beacon signature to coinbase
+    if (HasActiveBeacon(GlobalCPUMiningCPID.cpid))
     {
         std::string sBoincSignature;
         std::string sError;
@@ -972,8 +975,9 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     pbh=pindexPrev->GetBlockHash();
 
     miningcpid.lastblockhash = pbh.GetHex();
+    miningcpid.LastPaymentTime = GetLastPaymentTimeByCPID(miningcpid.cpid);
+    miningcpid.Magnitude = CalculatedMagnitude(blocknew.nTime, false);
     miningcpid.ResearchSubsidy = OUT_POR;
-    miningcpid.ResearchSubsidy2 = OUT_POR;
     miningcpid.ResearchAge = dAccrualAge;
     miningcpid.ResearchMagnitudeUnit = dAccrualMagnitudeUnit;
     miningcpid.ResearchAverageMagnitude = dAccrualMagnitude;
@@ -983,16 +987,6 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid.NeuralHash = "";
     miningcpid.superblock = "";
     miningcpid.GRCAddress = DefaultWalletAddress();
-
-    // Make sure this deprecated fields are empty
-    miningcpid.cpidv2.clear();
-    miningcpid.email.clear();
-    miningcpid.boincruntimepublickey.clear();
-    miningcpid.aesskein.clear();
-    miningcpid.enccpid.clear();
-    miningcpid.encboincpublickey.clear();
-    miningcpid.encaes.clear();
-
 
     int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
@@ -1041,7 +1035,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+=_("Net averages not yet loaded; ");
-        if (LessVerbose(100) && IsResearcher(msPrimaryCPID)) LogPrintf("ResearchMiner:Net averages not yet loaded...");
+        if (LessVerbose(100) && IsResearcher(NN::GetPrimaryCpid())) LogPrintf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
 
@@ -1067,7 +1061,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
     double dSumAllocation = 0.0;
 
     bool fEnableSideStaking = GetBoolArg("-enablesidestaking");
-    LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
+    if (fDebug2) LogPrintf("StakeMiner: fEnableSideStaking = %u", fEnableSideStaking);
 
     // If side staking is enabled, parse destinations and allocations. We don't need to worry about any that are rejected
     // other than a warning message, because any unallocated rewards will go back into the coinstake output(s).
@@ -1126,7 +1120,7 @@ bool GetSideStakingStatusAndAlloc(SideStakeAlloc& vSideStakeAlloc)
                 }
 
                 vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
-                LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
+                if (fDebug2) LogPrintf("StakeMiner: SideStakeAlloc Address %s, Allocation %f", sAddress.c_str(), dAllocation);
 
                 vSubParam.clear();
             }
@@ -1146,7 +1140,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 {
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = GetBoolArg("-enablestakesplit");
-    LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
+    if (fDebug2) LogPrintf("StakeMiner: fEnableStakeSplit = %u", fEnableStakeSplit);
 
     // If stake output splitting is enabled, determine efficiency and minimum stake split value.
     if (fEnableStakeSplit)
@@ -1158,13 +1152,13 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
         else if (dEfficiency < 0.75)
             dEfficiency = 0.75;
 
-        LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
+        if (fDebug2) LogPrintf("StakeMiner: dEfficiency = %f", dEfficiency);
 
         // Pull Minimum Post Stake UTXO Split Value from config or command line parameter.
         // Default to 800 and do not allow it to be specified below 800 GRC.
         nMinStakeSplitValue = max(GetArg("-minstakesplitvalue", MIN_STAKE_SPLIT_VALUE_GRC), MIN_STAKE_SPLIT_VALUE_GRC) * COIN;
 
-        LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
+        if (fDebug2) LogPrintf("StakeMiner: nMinStakeSplitValue = %f", CoinToDouble(nMinStakeSplitValue));
 
         // For the definition of the constant G, please see
         // https://docs.google.com/document/d/1OyuTwdJx1Ax2YZ42WYkGn_UieN0uY13BTlA5G5IAN00/edit?usp=sharing
@@ -1231,16 +1225,12 @@ void StakeMiner(CWallet *pwallet)
             continue;
         }
 
-        // Lock main lock since GetNextProject and subsequent calls
-        // require the state to be static.
         LOCK(cs_main);
-
-        GetNextProject(true);
 
         // * Create a bare block
         StakeBlock.nTime= GetAdjustedTime();
         StakeBlock.nNonce= 0;
-        StakeBlock.nBits = GetNextTargetRequired(pindexPrev, true);
+        StakeBlock.nBits = GetNextTargetRequired(pindexPrev);
         StakeBlock.vtx.resize(2);
         //tx 0 is coin_base
         CTransaction &StakeTX= StakeBlock.vtx[1]; //tx 1 is coin_stake
@@ -1290,7 +1280,6 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("StakeMiner: block processed");
         { LOCK(MinerStatus.lock);
             MinerStatus.AcceptedCnt++;
-            nLastBlockSolved = GetAdjustedTime();
         }
 
     } //end while(!fShutdown)

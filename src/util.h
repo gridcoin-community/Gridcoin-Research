@@ -192,8 +192,6 @@ bool WildcardMatch(const char* psz, const char* mask);
 bool WildcardMatch(const std::string& str, const std::string& mask);
 void FileCommit(FILE *fileout);
 
-int GetFilesize(FILE* file);
-
 std::string TimestampToHRDate(double dtm);
 
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
@@ -211,6 +209,16 @@ void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 void ShrinkDebugFile();
+
+//!
+//! \brief Read the contents of the specified file into memory.
+//!
+//! \param filepath The path to the file. Provide absolute paths when possible.
+//!
+//! \return The file contents as a string.
+//!
+std::string GetFileContents(std::string filepath);
+
 int GetRandInt(int nMax);
 uint64_t GetRand(uint64_t nMax);
 uint256 GetRandHash();
@@ -341,7 +349,8 @@ std::string HexStr(const T itbegin, const T itend, bool fSpaces=false)
     return rv;
 }
 
-inline std::string HexStr(const std::vector<unsigned char>& vch, bool fSpaces=false)
+template<typename T>
+inline std::string HexStr(const T& vch, bool fSpaces=false)
 {
     return HexStr(vch.begin(), vch.end(), fSpaces);
 }

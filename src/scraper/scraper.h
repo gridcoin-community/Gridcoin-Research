@@ -28,6 +28,7 @@
 
 // See fwd.h for certain forward declarations that need to be included in other areas.
 #include "fwd.h"
+#include "neuralnet/superblock.h"
 
 /*********************
 * Scraper Namepsace  *
@@ -49,12 +50,17 @@ unsigned int nScraperSleep = 300000;
 // The amount of time before SB is due to start scraping.
 unsigned int nActiveBeforeSB = 14400;
 
+// Explorer mode flag. Only effective if scraper is active.
+bool fExplorer = false;
+
 // These can be overridden by ScraperApplyAppCacheEntries().
 
 // The flag to control whether non-current statistics files are retained.
 bool SCRAPER_RETAIN_NONCURRENT_FILES = true;
 // Define 48 hour retention time for stats files, current or not.
 int64_t SCRAPER_FILE_RETENTION_TIME = 48 * 3600;
+// Define extended file retention time for explorer mode.
+int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME = 168 * 3600;
 // Define whether prior CScraperManifests are kept.
 bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT = true;
 // Define CManifest scraper object retention time.
@@ -95,6 +101,9 @@ AppCacheSectionExt mScrapersExt = {};
 
 // Lets try to start using some lockless synchronization.
 std::atomic<int64_t> nSyncTime {0};
+// Starting state is always out of sync. This atomic is to avoid multiple threads calling
+// OutOfSyncByAge(), which takes a lock on cs_main and can cause deadlocks.
+std::atomic<bool> fOutOfSyncByAge {true};
 
 CCriticalSection cs_mScrapersExt;
 
@@ -109,7 +118,9 @@ std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
+NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
+NN::QuorumHash ScraperGetSuperblockHash();
 bool ScraperSynchronizeDPOR();
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };

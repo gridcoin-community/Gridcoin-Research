@@ -1955,9 +1955,19 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
     if (!pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_ALREADY_UNLOCKED, "Error: Wallet is already unlocked, use walletlock first if need to change unlock settings.");
 
+    // Adapted from Bitcoin (20190511)...
+    // Get the timeout
     int64_t nSleepTime = params[1].get_int64();
-    if (nSleepTime <= 0 || nSleepTime >= std::numeric_limits<int64_t>::max() / 1000000000)
-        throw runtime_error("timeout is out of bounds");
+    // Timeout cannot be negative or zero, otherwise it will relock immediately.
+    if (nSleepTime <= 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Timeout cannot be negative or zero.");
+    }
+    // Clamp timeout
+    constexpr int64_t MAX_SLEEP_TIME = 100000000; // larger values trigger a macos/libevent bug?
+    if (nSleepTime > MAX_SLEEP_TIME) {
+        nSleepTime = MAX_SLEEP_TIME;
+        LogPrintf("WARN: walletpassphrase: timeout is too large. Set to limit of 10000000 seconds.");
+    }
 
     // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
     SecureString strWalletPass;

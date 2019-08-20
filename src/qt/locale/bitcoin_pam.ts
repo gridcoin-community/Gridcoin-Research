@@ -23,18 +23,6 @@ Distributed under the MIT/X11 software license, see the accompanying file COPYIN
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>
-This is experimental software.
-
-Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation type="vanished">
-Metung ya ining experimental software.
-Me-distribute ya lalam na ning lisensya na ning MIT/X11 software, lawan ye ing makayabeng file COPYING o http://www.opensource.org/licenses/mit-license.php.
-Ing produktung ini atin yang makayabeng software a gewa dareng OpenSSL Project para gamit king OpenSSL Toolkit(http://www.openssl.org/) at cryptographic software a sinulat ng Eric Young (eay@cryptsoft.com) at UPnp software a sinulat ng Thomas Bernard.</translation>
-    </message>
 </context>
 <context>
     <name>AddressBookPage</name>
@@ -311,17 +299,17 @@ Ing produktung ini atin yang makayabeng software a gewa dareng OpenSSL Project p
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+531"/>
+        <location filename="../bitcoingui.cpp" line="+333"/>
         <source>Sign &amp;message...</source>
         <translation>I-sign ing &amp;mensayi</translation>
     </message>
     <message>
-        <location line="-375"/>
+        <location line="-213"/>
         <source>Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+271"/>
+        <location line="+117"/>
         <source>&amp;Overview</source>
         <translation>&amp;Overview</translation>
     </message>
@@ -437,28 +425,42 @@ Ing produktung ini atin yang makayabeng software a gewa dareng OpenSSL Project p
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1134"/>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: superblock not needed - inactive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: downloading and processing stats.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Scraper: Convergence achieved, date/time %1. All projects on whitelist included.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+3"/>
-        <source>&amp;Neural Network</source>
+        <source>Scraper: Convergence achieved, date/time %1 UTC. Project(s) excluded: %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Neural Network</source>
+        <location line="+7"/>
+        <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>&amp;New User Wizard</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+586"/>
+        <location line="-580"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-643"/>
+        <location line="-631"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -468,7 +470,7 @@ Ing produktung ini atin yang makayabeng software a gewa dareng OpenSSL Project p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+51"/>
         <source>&amp;Diagnostics</source>
         <translation type="unfinished"></translation>
     </message>
@@ -528,24 +530,19 @@ Ing produktung ini atin yang makayabeng software a gewa dareng OpenSSL Project p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+77"/>
         <source>&amp;Community</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+114"/>
+        <location line="+120"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testnet]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+65"/>
+        <location line="+69"/>
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
@@ -562,7 +559,7 @@ Ing produktung ini atin yang makayabeng software a gewa dareng OpenSSL Project p
         </translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+47"/>
         <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -622,7 +619,7 @@ Address: %4
 ?} {4?}</translation>
     </message>
     <message>
-        <location line="+511"/>
+        <location line="+445"/>
         <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; time to earn reward is %3.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -632,19 +629,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="vanished">Aldo: %1
-Alaga: %2
-Type: %3
-Address: %4
-</translation>
-    </message>
-    <message>
-        <location line="-351"/>
+        <location line="-303"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation type="unfinished"></translation>
@@ -703,7 +688,7 @@ Address: %4
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+232"/>
+        <location line="+184"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -731,7 +716,7 @@ Address: %4
         </translation>
     </message>
     <message>
-        <location line="-1132"/>
+        <location line="-1062"/>
         <source>&amp;Options...</source>
         <translation>&amp;Pipamilian...</translation>
     </message>
@@ -741,17 +726,9 @@ Address: %4
         <translation>I-&amp;Encrypt in Wallet...</translation>
     </message>
     <message>
-        <source>&amp;Backup Wallet...</source>
-        <translation type="vanished">I-&amp;Backup ing Wallet...</translation>
-    </message>
-    <message>
         <location line="+5"/>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Alilan ing Passphrase...</translation>
-    </message>
-    <message>
-        <source>Backup wallet to another location</source>
-        <translation type="vanished">I-backup ing wallet king aliwang lugal</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -774,17 +751,17 @@ Address: %4
         <translation>&amp;Beripikan ing message...</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-214"/>
         <source>Wallet</source>
         <translation>Wallet</translation>
     </message>
     <message>
-        <location line="+363"/>
+        <location line="+201"/>
         <source>&amp;Show / Hide</source>
         <translation>&amp;Ipalto / Isalikut</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+76"/>
         <source>&amp;File</source>
         <translation>&amp;File</translation>
     </message>
@@ -794,12 +771,12 @@ Address: %4
         <translation>&amp;Pamag-ayus</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+17"/>
         <source>&amp;Help</source>
         <translation>&amp;Saup</translation>
     </message>
     <message numerus="yes">
-        <location line="+292"/>
+        <location line="+298"/>
         <source>%n second(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -832,12 +809,12 @@ Address: %4
         <translation>Makatuki ya king aldo</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Catching up...</source>
         <translation>Catching up...</translation>
     </message>
     <message>
-        <location line="+215"/>
+        <location line="+213"/>
         <source>Sent transaction</source>
         <translation>Mipadalang transaksion</translation>
     </message>
@@ -847,16 +824,12 @@ Address: %4
         <translation>Paparatang a transaksion</translation>
     </message>
     <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="vanished">Maka-&lt;b&gt;encrypt&lt;/b&gt; ya ing wallet at kasalukuyan yang maka-&lt;b&gt;unlocked&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <location line="+211"/>
+        <location line="+193"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Maka-&lt;b&gt;encrypt&lt;/b&gt; ya ing wallet at kasalukuyan yang maka-&lt;b&gt;locked&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../bitcoin.cpp" line="+160"/>
+        <location filename="../bitcoin.cpp" line="+176"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -864,7 +837,7 @@ Address: %4
 <context>
     <name>ClientModel</name>
     <message>
-        <location filename="../clientmodel.cpp" line="+117"/>
+        <location filename="../clientmodel.cpp" line="+119"/>
         <source>Network Alert</source>
         <translation>Alertu ning Network</translation>
     </message>
@@ -1311,7 +1284,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+863"/>
+        <location filename="../votingdialog.cpp" line="+871"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1528,10 +1501,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="-330"/>
         <source>Map port using &amp;UPnP</source>
         <translation>Mapa ng ning port gamit ing &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>Proxy &amp;IP:</source>
-        <translation type="vanished">Proxy &amp;IP:</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1762,6 +1731,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <location filename="../bitcoin.cpp" line="+182"/>
+        <source>%1 didn&apos;t yet exit safely...</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>QRCodeDialog</name>
     <message>
         <location filename="../forms/qrcodedialog.ui" line="+14"/>
@@ -1822,7 +1799,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+46"/>
+        <location filename="../forms/rpcconsole.ui" line="+51"/>
         <location line="+43"/>
         <location line="+47"/>
         <location line="+16"/>
@@ -1834,7 +1811,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+58"/>
         <location line="+43"/>
         <location line="+42"/>
-        <location filename="../rpcconsole.cpp" line="+391"/>
+        <location filename="../rpcconsole.cpp" line="+392"/>
         <source>N/A</source>
         <translation>N/A</translation>
     </message>
@@ -1919,7 +1896,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>I-type ing &lt;b&gt;help&lt;/b&gt; ban akit la reng ati at magsilbing commands.</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+118"/>
         <source>%1 B</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1954,12 +1931,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="-722"/>
+        <location filename="../forms/rpcconsole.ui" line="-727"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+330"/>
+        <location line="+335"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2054,7 +2031,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../rpcconsole.cpp" line="-133"/>
+        <location line="+120"/>
+        <source>&amp;Scraper</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../rpcconsole.cpp" line="-140"/>
         <source>Welcome to the Gridcoin RPC console! </source>
         <translation type="unfinished"></translation>
     </message>
@@ -2321,22 +2303,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+172"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+155"/>
         <source>A&amp;mount:</source>
         <translation>A&amp;laga:</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-106"/>
         <source>Pay &amp;To:</source>
         <translation>Ibayad &amp;kang:</translation>
     </message>
     <message>
-        <location line="-33"/>
+        <location line="+93"/>
         <source>&amp;Label:</source>
         <translation>&amp;Label:</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="-56"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2356,12 +2338,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Mensayi:</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-112"/>
         <source>Form</source>
         <translation type="unfinished">Form</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+23"/>
         <location line="+3"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Magpalub kang label para king address a ini ban a-iabe me king aklat dareng address</translation>
@@ -2382,17 +2364,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+66"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-96"/>
+        <location line="-103"/>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2639,26 +2616,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+4"/>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Source</source>
         <translation>Pikuanan</translation>
     </message>
     <message>
-        <source>Generated</source>
-        <translation type="vanished">Megawa</translation>
-    </message>
-    <message>
-        <location line="-3"/>
+        <location line="-5"/>
         <source>Generated in CoinBase</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Generated, PoS</source>
+        <location line="+11"/>
+        <source>MINED - POS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
+        <source>MINED - POR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <location line="+18"/>
         <source>From</source>
         <translation>Menibat</translation>
@@ -2772,21 +2770,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Transaction ID</source>
-        <translation type="vanished">ID ning Transaksion</translation>
-    </message>
-    <message>
         <location line="-55"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Information</source>
-        <translation type="obsolete">&amp;Impormasion</translation>
-    </message>
-    <message>
-        <source>Transaction</source>
-        <translation type="vanished">Transaksion</translation>
     </message>
     <message>
         <location line="+78"/>
@@ -2817,12 +2803,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ining pane a ini magpakit yang detalyadung description ning transaksion</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>View Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+28"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2831,21 +2812,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>C&amp;lose</source>
         <translation type="unfinished">I&amp;sara</translation>
     </message>
-    <message>
-        <location filename="../transactiondescdialog.cpp" line="+38"/>
-        <source>Gridcoin Documents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Document cannot be found on P2P server.</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>TransactionTableModel</name>
     <message>
-        <location filename="../transactiontablemodel.cpp" line="+239"/>
+        <location filename="../transactiontablemodel.cpp" line="+236"/>
         <source>Date</source>
         <translation>Kaaldauan</translation>
     </message>
@@ -2917,7 +2888,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Me-generate ya oneng ali ya metanggap</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+44"/>
         <source>Received with</source>
         <translation>Atanggap kayabe ning</translation>
     </message>
@@ -2937,32 +2908,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Kabayaran keka</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Mined - DPOR</source>
+        <location line="+7"/>
+        <source>MINED - POS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
+        <location line="+1"/>
+        <source>MINED - POR</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>(n/a)</source>
         <translation>(n/a)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+190"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Status ning Transaksion: Itapat me babo na ning field a ini ban ipakit dala reng bilang dareng me-kumpirma na</translation>
     </message>
@@ -3159,7 +3140,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingChartDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="-396"/>
+        <location filename="../votingdialog.cpp" line="-405"/>
         <source>Poll Results</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3303,7 +3284,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3336,7 +3317,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+249"/>
+        <location filename="../walletmodel.cpp" line="+239"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3344,37 +3325,37 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+215"/>
+        <location filename="../bitcoinstrings.cpp" line="+218"/>
         <source>Options:</source>
         <translation>Pipamilian:</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+36"/>
         <source>Specify data directory</source>
         <translation>Pilinan ing data directory</translation>
     </message>
     <message>
-        <location line="-112"/>
+        <location line="-114"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
         <translation>Kumunekta king note ban ayakua mula reng peer address, at mako king panga konekta</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+117"/>
         <source>Specify your own public address</source>
         <translation>Sabyan me ing kekang pampublikong address</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-154"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Tumanggap command line at JSON-RPC commands</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+130"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Gumana king gulut bilang daemon at tumanggap commands</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-110"/>
         <source>Block creation options:</source>
         <translation>Pipamilian king pamag-gawang block:</translation>
     </message>
@@ -3470,6 +3451,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Blocks Loaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Boinc Public Key</source>
         <translation type="unfinished"></translation>
@@ -3527,6 +3518,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>ERROR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Entire balance reserved</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3591,11 +3587,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>Messate Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Miner: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3630,12 +3621,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>No coins; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Offline; </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3645,12 +3631,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Out of rance exception while parsing Transaction Message -&gt; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Public Key</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3740,7 +3721,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Password para king JSON-RPC koneksion</translation>
     </message>
     <message>
-        <location line="-157"/>
+        <location line="-161"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
         <translation>I-execute ing command istung mialilan ya ing best block (%s in cmd is replaced by block hash)</translation>
     </message>
@@ -3750,7 +3731,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Payagan ing pamaglawe DNS para king -addnode, -seednode and -connect</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+80"/>
         <source>Loading addresses...</source>
         <translation>Lo-load da ne ing address...</translation>
     </message>
@@ -3760,12 +3741,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ali katanggap-tanggap a -proxy addresss: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+89"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>E kilalang network ing mepili king -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-91"/>
         <source>Insufficient funds</source>
         <translation>Kulang a pondo</translation>
     </message>
@@ -3775,17 +3756,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Lo-load dane ing block index...</translation>
     </message>
     <message>
-        <location line="-82"/>
+        <location line="-85"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
         <translation>Magdagdag a node ban kumunekta at subuknan apanatili yang makabuklat ing koneksion</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+86"/>
         <source>Loading wallet...</source>
         <translation>Lo-load dane ing wallet...</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-63"/>
         <source>Cannot downgrade wallet</source>
         <translation>Ali ya magsilbing i-downgrade ing wallet</translation>
     </message>
@@ -3795,27 +3776,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Eya misulat ing default address</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Rescanning...</source>
         <translation>I-scan deng pasibayu...</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-83"/>
         <source>Done loading</source>
         <translation>Yari ne ing pamag-load</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Error</source>
         <translation>Mali</translation>
     </message>
     <message>
-        <location line="+104"/>
+        <location line="+105"/>
         <source>To use the %s option</source>
         <translation>Para agamit ing %s a pimamilian</translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-249"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -3849,12 +3830,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
 Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+72"/>
         <source>Gridcoin version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Usage:</source>
         <translation>Pamanggamit:</translation>
     </message>
@@ -3864,7 +3845,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-46"/>
+        <location line="-47"/>
         <source>List commands</source>
         <translation>Listahan dareng commands</translation>
     </message>
@@ -3879,7 +3860,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+89"/>
+        <location line="+90"/>
         <source>This help message</source>
         <translation>Ining saup a mensayi</translation>
     </message>
@@ -3909,12 +3890,12 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-112"/>
+        <location line="-114"/>
         <source>Connect through socks proxy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3924,7 +3905,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3934,22 +3915,22 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>Mag-maintain peka &lt;n&gt; koneksion keng peers (default: 125)</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-60"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Kumunekta mu king mepiling node(s)</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+79"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-69"/>
+        <location line="-70"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
         <translation>I-discover ing sariling IP address (default: 1 istung makiramdam at -externalip)</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-43"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
         <translation>Tumanggap koneksion menibat king kilwal (default: 1 if no -proxy or -connect)</translation>
     </message>
@@ -3959,27 +3940,27 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+46"/>
         <source>Find peers using DNS lookup (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-93"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+184"/>
+        <location line="+188"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Threshold for disconnecting misbehaving peers (default: 100)</translation>
     </message>
     <message>
-        <location line="-190"/>
+        <location line="-194"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</translation>
     </message>
     <message>
-        <location line="+129"/>
+        <location line="+132"/>
         <source>Maximum per-connection receive buffer, &lt;n&gt;*1000 bytes (default: 5000)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3989,7 +3970,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3999,22 +3980,22 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-108"/>
+        <location line="-109"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-68"/>
+        <location line="-71"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+179"/>
+        <location line="+183"/>
         <source>Use the test network</source>
         <translation>Gamitan ing test network</translation>
     </message>
     <message>
-        <location line="-56"/>
+        <location line="-57"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4024,7 +4005,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Prepend debug output with timestamp</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4039,7 +4020,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4049,22 +4030,22 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>Payagan ya i JSON-RPC koneksion para king metung a IP address</translation>
     </message>
     <message>
-        <location line="+119"/>
+        <location line="+123"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Magpadalang command king node a gagana king &lt;ip&gt;(default: 127.0.0.1)</translation>
     </message>
     <message>
-        <location line="-173"/>
+        <location line="-177"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+165"/>
+        <location line="+169"/>
         <source>Require a confirmations for change (default: 0)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-184"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4074,7 +4055,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+215"/>
         <source>Upgrade wallet to latest format</source>
         <translation>I-upgrade ing wallet king pekabayung porma</translation>
     </message>
@@ -4089,7 +4070,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>I-scan pasibayu ing block chain para kareng mauaualang transaksion</translation>
     </message>
     <message>
-        <location line="-109"/>
+        <location line="-113"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4109,7 +4090,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Boinc Mining</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4119,7 +4100,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Error obtaining next project.  Error 06172014.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4169,12 +4150,32 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Mining</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
+        <source>No coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No current polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Out of range exception while parsing Transaction Message -&gt; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>POR Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Please wait for new user wizard to start...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4189,12 +4190,12 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="-175"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+163"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>Pipamilian ning SSL: (lawen ye ing Bitcoin Wiki para king SSL setup instructions)</translation>
     </message>
@@ -4214,17 +4215,17 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>Server private key (default: server.pem)</translation>
     </message>
     <message>
-        <location line="-57"/>
+        <location line="-58"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Eya maliari ing alaga keng -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-102"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Kapabaluan: Sobra ya katas ing makalage king -paytxfee. Ini ing maging bayad mu para king bayad na ning transaksion istung pepadala me ing transaksion a ini.</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+101"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4234,22 +4235,22 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+105"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-244"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+241"/>
         <source>Verifying database integrity...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-229"/>
+        <location line="-233"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4259,8 +4260,13 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Waiting for coins to mature</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4279,17 +4285,17 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-19"/>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation>E kilalang -socks proxy version requested: %i</translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-48"/>
+        <location line="-49"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Eya me-resolve ing -bind address: &apos;%s&apos;</translation>
     </message>
@@ -4299,7 +4305,7 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>Eya me-resolve ing -externalip address: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4314,22 +4320,22 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>Me-mali ya ing pamag-load king wallet.dat: Me-corrupt ya ing wallet</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-66"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+67"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+130"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-130"/>
+        <location line="-132"/>
         <source>Error loading wallet.dat</source>
         <translation>Me-mali ya ing pamag-load king wallet.dat</translation>
     </message>
@@ -4349,17 +4355,17 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-83"/>
+        <location line="-86"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Ali ya magsilbing mag-bind keng %s kening kompyuter a ini (bind returned error %d, %s)</translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-106"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation type="unfinished"></translation>
     </message>
@@ -4369,41 +4375,37 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-108"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+106"/>
         <source>Error: Transaction creation failed  </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-186"/>
+        <location line="-190"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+136"/>
         <source>Invalid amount</source>
         <translation>Ing alaga e ya katanggap-tanggap</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-101"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Warning: This version is obsolete, upgrade required!</source>
-        <translation type="vanished">Kapabaluan: Ing bersioin a ini laus ne, kailangan nang mag-upgrade!</translation>
-    </message>
-    <message>
-        <location line="+196"/>
+        <location line="+201"/>
         <source>Warning: Disk space is low!</source>
         <translation type="unfinished"></translation>
     </message>

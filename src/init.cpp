@@ -14,6 +14,7 @@
 #include "tally.h"
 #include "beacon.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/researcher.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -32,7 +33,6 @@ extern boost::thread_group threadGroup;
 void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
-void LoadCPIDs();
 bool IsConfigFileEmpty();
 
 #ifndef WIN32
@@ -50,6 +50,7 @@ extern unsigned int nDerivationMethodIndex;
 extern unsigned int nMinerSleep;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
+extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
 
@@ -540,11 +541,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!lock.try_lock())
         return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
 
-    // Set the scraper file staging directory.
-    pathScraper = GetDataDir() / "Scraper";
-
-
-
 #if !defined(WIN32) 
     if (fDaemon)
     {
@@ -939,10 +935,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     ComputeNeuralNetworkSupermajorityHashes();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
-    LoadCPIDs();
+    NN::Researcher::Reload();
 
     if(!pwalletMain->IsLocked())
-       ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
+       ImportBeaconKeysFromConfig(NN::GetPrimaryCpid(), pwalletMain);
 
     if (!CheckDiskSpace())
         return false;

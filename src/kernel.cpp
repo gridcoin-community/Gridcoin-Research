@@ -520,7 +520,7 @@ static bool CheckStakeKernelHashV1(unsigned int nBits, const CBlock& blockFrom, 
             //Use this area to log the submitters cpid and mint amount:
             if (!checking_local || fDebug)
             {
-                if (LessVerbose(75)) LogPrintf("{Vitals}: cpid %s, project %s, RSA_WEIGHT: %" PRId64, cpid, boincblock.projectname, RSA_WEIGHT);
+                if (LessVerbose(75)) LogPrintf("{Vitals}: cpid %s, RSA_WEIGHT: %" PRId64, cpid, RSA_WEIGHT);
             }
             return false;
         }

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <cassert>
 #include <limits>
@@ -241,8 +242,139 @@ uint64_t ReadCompactSize(Stream& is)
     return nSizeRet;
 }
 
+class CSizeComputer;
 
+/**
+ * Variable-length integers: bytes are a MSB base-128 encoding of the number.
+ * The high bit in each byte signifies whether another digit follows. To make
+ * sure the encoding is one-to-one, one is subtracted from all but the last digit.
+ * Thus, the byte sequence a[] with length len, where all but the last byte
+ * has bit 128 set, encodes the number:
+ *
+ *  (a[len-1] & 0x7F) + sum(i=1..len-1, 128^i*((a[len-i-1] & 0x7F)+1))
+ *
+ * Properties:
+ * * Very small (0-127: 1 byte, 128-16511: 2 bytes, 16512-2113663: 3 bytes)
+ * * Every integer has exactly one encoding
+ * * Encoding does not depend on size of original integer type
+ * * No redundancy: every (infinite) byte sequence corresponds to a list
+ *   of encoded integers.
+ *
+ * 0:         [0x00]  256:        [0x81 0x00]
+ * 1:         [0x01]  16383:      [0xFE 0x7F]
+ * 127:       [0x7F]  16384:      [0xFF 0x00]
+ * 128:  [0x80 0x00]  16511:      [0xFF 0x7F]
+ * 255:  [0x80 0x7F]  65535: [0x82 0xFE 0x7F]
+ * 2^32:           [0x8E 0xFE 0xFE 0xFF 0x00]
+ */
 
+/**
+ * Mode for encoding VarInts.
+ *
+ * Currently there is no support for signed encodings. The default mode will not
+ * compile with signed values, and the legacy "nonnegative signed" mode will
+ * accept signed values, but improperly encode and decode them if they are
+ * negative. In the future, the DEFAULT mode could be extended to support
+ * negative numbers in a backwards compatible way, and additional modes could be
+ * added to support different varint formats (e.g. zigzag encoding).
+ */
+enum class VarIntMode { DEFAULT, NONNEGATIVE_SIGNED };
+
+template <VarIntMode Mode, typename I>
+struct CheckVarIntMode {
+    constexpr CheckVarIntMode()
+    {
+        static_assert(Mode != VarIntMode::DEFAULT || std::is_unsigned<I>::value, "Unsigned type required with mode DEFAULT.");
+        static_assert(Mode != VarIntMode::NONNEGATIVE_SIGNED || std::is_signed<I>::value, "Signed type required with mode NONNEGATIVE_SIGNED.");
+    }
+};
+
+template<VarIntMode Mode, typename I>
+inline unsigned int GetSizeOfVarInt(I n)
+{
+    CheckVarIntMode<Mode, I>();
+    int nRet = 0;
+    while(true) {
+        nRet++;
+        if (n <= 0x7F)
+            break;
+        n = (n >> 7) - 1;
+    }
+    return nRet;
+}
+
+template<typename I>
+inline void WriteVarInt(CSizeComputer& os, I n);
+
+template<typename Stream, VarIntMode Mode, typename I>
+void WriteVarInt(Stream& os, I n)
+{
+    CheckVarIntMode<Mode, I>();
+    unsigned char tmp[(sizeof(n)*8+6)/7];
+    int len=0;
+    while(true) {
+        tmp[len] = (n & 0x7F) | (len ? 0x80 : 0x00);
+        if (n <= 0x7F)
+            break;
+        n = (n >> 7) - 1;
+        len++;
+    }
+    do {
+        Serialize(os, tmp[len], SER_NETWORK, 1);
+    } while(len--);
+}
+
+template<typename Stream, VarIntMode Mode, typename I>
+I ReadVarInt(Stream& is)
+{
+    CheckVarIntMode<Mode, I>();
+    I n = 0;
+    while(true) {
+        unsigned char chData;
+        Unserialize(is, chData, SER_NETWORK, 1);
+        if (n > (std::numeric_limits<I>::max() >> 7)) {
+           throw std::ios_base::failure("ReadVarInt(): size too large");
+        }
+        n = (n << 7) | (chData & 0x7F);
+        if (chData & 0x80) {
+            if (n == std::numeric_limits<I>::max()) {
+                throw std::ios_base::failure("ReadVarInt(): size too large");
+            }
+            n++;
+        } else {
+            return n;
+        }
+    }
+}
+
+template<VarIntMode Mode, typename I>
+class CVarInt
+{
+protected:
+    I &n;
+public:
+    explicit CVarInt(I& nIn) : n(nIn) { }
+
+    unsigned int GetSerializeSize(int nType = 0, int nVersion = 0) const
+    {
+        return GetSizeOfVarInt<Mode, I>(n);
+    }
+
+    template<typename Stream>
+    void Serialize(Stream &s, int nType = 0, int nVersion = 0) const {
+        WriteVarInt<Stream,Mode,I>(s, n);
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& s, int nType = 0, int nVersion = 0) {
+        n = ReadVarInt<Stream,Mode,I>(s);
+    }
+};
+
+template<VarIntMode Mode=VarIntMode::DEFAULT, typename I>
+CVarInt<Mode, I> WrapVarInt(I& n) { return CVarInt<Mode, I>{n}; }
+
+#define VARINT(obj, ...) WrapVarInt<__VA_ARGS__>(REF(obj))
 #define FLATDATA(obj)   REF(CFlatData((char*)&(obj), (char*)&(obj) + sizeof(obj)))
 
 /** Wrapper for serializing arrays and POD.
@@ -322,6 +454,11 @@ template<typename K, typename T, typename Pred, typename A> unsigned int GetSeri
 template<typename Stream, typename K, typename T, typename Pred, typename A> void Serialize(Stream& os, const std::map<K, T, Pred, A>& m, int nType, int nVersion);
 template<typename Stream, typename K, typename T, typename Pred, typename A> void Unserialize(Stream& is, std::map<K, T, Pred, A>& m, int nType, int nVersion);
 
+// unordered_map
+template<typename K, typename T, typename Pred, typename A> unsigned int GetSerializeSize(const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion);
+template<typename Stream, typename K, typename T, typename Pred, typename A> void Serialize(Stream& os, const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion);
+template<typename Stream, typename K, typename T, typename Pred, typename A> void Unserialize(Stream& is, std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion);
+
 // set
 template<typename K, typename Pred, typename A> unsigned int GetSerializeSize(const std::set<K, Pred, A>& m, int nType, int nVersion);
 template<typename Stream, typename K, typename Pred, typename A> void Serialize(Stream& os, const std::set<K, Pred, A>& m, int nType, int nVersion);
@@ -350,7 +487,7 @@ inline void Serialize(Stream& os, const T& a, long nType, int nVersion)
 }
 
 template<typename Stream, typename T>
-inline void Unserialize(Stream& is, T& a, long nType, int nVersion)
+inline void Unserialize(Stream& is, T&& a, long nType, int nVersion)
 {
     a.Unserialize(is, (int)nType, nVersion);
 }
@@ -625,6 +762,42 @@ void Unserialize(Stream& is, std::map<K, T, Pred, A>& m, int nType, int nVersion
 
 
 
+
+//
+// unordered_map
+//
+template<typename K, typename T, typename Pred, typename A>
+unsigned int GetSerializeSize(const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion)
+{
+    unsigned int nSize = GetSizeOfCompactSize(m.size());
+    for (typename std::unordered_map<K, T, Pred, A>::const_iterator mi = m.begin(); mi != m.end(); ++mi)
+        nSize += GetSerializeSize((*mi), nType, nVersion);
+    return nSize;
+}
+
+template<typename Stream, typename K, typename T, typename Pred, typename A>
+void Serialize(Stream& os, const std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion)
+{
+    WriteCompactSize(os, m.size());
+    for (typename std::unordered_map<K, T, Pred, A>::const_iterator mi = m.begin(); mi != m.end(); ++mi)
+        Serialize(os, (*mi), nType, nVersion);
+}
+
+template<typename Stream, typename K, typename T, typename Pred, typename A>
+void Unserialize(Stream& is, std::unordered_map<K, T, Pred, A>& m, int nType, int nVersion)
+{
+    m.clear();
+    unsigned int nSize = ReadCompactSize(is);
+    typename std::unordered_map<K, T, Pred, A>::iterator mi = m.begin();
+    for (unsigned int i = 0; i < nSize; i++)
+    {
+        std::pair<K, T> item;
+        Unserialize(is, item, nType, nVersion);
+        mi = m.insert(mi, item);
+    }
+}
+
+
 //
 // set
 //
@@ -682,7 +855,7 @@ inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersio
 }
 
 template<typename Stream, typename T>
-inline unsigned int SerReadWrite(Stream& s, T& obj, int nType, int nVersion, CSerActionUnserialize ser_action)
+inline unsigned int SerReadWrite(Stream& s, T&& obj, int nType, int nVersion, CSerActionUnserialize ser_action)
 {
     ::Unserialize(s, obj, nType, nVersion);
     return 0;
@@ -866,7 +1039,7 @@ class CReaderStream
     }
 
     template<typename T>
-    CReaderStream& operator>>(T& obj)
+    CReaderStream& operator>>(T&& obj)
     {
         // Unserialize from this stream
         ::Unserialize(*this, obj, nType, nVersion);
@@ -890,6 +1063,7 @@ public:
     typedef vector_type::allocator_type   allocator_type;
     typedef vector_type::reference        reference;
     typedef vector_type::iterator         iterator;
+    typedef vector_type::const_iterator   const_iterator;
     typedef vector_type::reverse_iterator reverse_iterator;
 
     explicit CDataStream(int nTypeIn, int nVersionIn)
@@ -934,7 +1108,9 @@ public:
     // Vector subset
     //
     iterator begin()                                 { return vch.begin() + nReadPos; }
+    const_iterator begin() const                     { return vch.begin() + nReadPos; }
     iterator end()                                   { return vch.end(); }
+    const_iterator end() const                       { return vch.end(); }
     void resize(size_type n, value_type c=0)         { vch.resize(n + nReadPos, c); }
     void reserve(size_type n)                        { vch.reserve(n + nReadPos); }
     const_reference operator[](size_type pos) const  { return vch[pos + nReadPos]; }

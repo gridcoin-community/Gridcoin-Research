@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef GRIDCOIN_CRYPTO_RIPEMD160_H
-#define GRIDCOIN_CRYPTO_RIPEMD160_H
+#ifndef BITCOIN_CRYPTO_RIPEMD160_H
+#define BITCOIN_CRYPTO_RIPEMD160_H
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -25,4 +25,4 @@ public:
     CRIPEMD160& Reset();
 };
 
-#endif // GRIDCOIN_CRYPTO_RIPEMD160_H
+#endif // BITCOIN_CRYPTO_RIPEMD160_H

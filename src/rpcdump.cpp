@@ -112,6 +112,7 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
         "\n"
         "[label] -------> Optional; Label for imported address\n"
         "[bool:rescan] -> Optional; Default true\n"
+        "WARNING: if true rescan of blockchain will occur. This could take up to 20 minutes.\n"
         "\n"
         "Adds a private key (as returned by dumpprivkey) to your wallet\n");
 
@@ -183,10 +184,18 @@ UniValue importwallet(const UniValue& params, bool fHelp)
             "\n"
             "<filename> -> filename of the wallet to import\n"
             "\n"
-            "Imports keys from a wallet dump file (see dumpwallet)\n");
+            "Imports keys from a wallet dump file (see dumpwallet)\n"
+            "If a path is not specified in the filename, the data directory is used.");
+
+    boost::filesystem::path PathForImport = boost::filesystem::path(params[0].get_str());
+    boost::filesystem::path DefaultPathDataDir = GetDataDir();
+
+    // If provided filename does not have a path, then append parent path, otherwise leave alone.
+    if (PathForImport.parent_path().empty())
+        PathForImport = DefaultPathDataDir / PathForImport;
 
     ifstream file;
-    file.open(params[0].get_str().c_str());
+    file.open(PathForImport.string().c_str());
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 

@@ -392,8 +392,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=10000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Loaded";
-                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+                uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("Blocks Loaded")));
                 fprintf(stdout,"%d ",nLoaded); fflush(stdout);
             }
         }
@@ -484,8 +483,7 @@ bool CTxDB::LoadBlockIndex()
                 nLoaded +=1000;
                 if (nLoaded > nHighest) nHighest=nLoaded;
                 if (nHighest < nGrandfather) nHighest=nGrandfather;
-                std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " Blocks Verified";
-                uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+                uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("Blocks Verified")));
             }
         }
 
@@ -618,8 +616,7 @@ bool CTxDB::LoadBlockIndex()
             nLoaded +=10000;
             if (nLoaded > nHighest) nHighest=nLoaded;
             if (nHighest < nGrandfather) nHighest=nGrandfather;
-            std::string sBlocksLoaded = ToString(nLoaded) + "/" + ToString(nHighest) + " POR Blocks Verified";
-            uiInterface.InitMessage(_(sBlocksLoaded.c_str()));
+            uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("POR Blocks Verified")));
         }
 
         // Block repair and reward collection only needs to be done after

@@ -13,7 +13,6 @@
 #include "coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
-#include "cpid.h"
 #include "block.h"
 #include "rpcserver.h"
 #include "rpcclient.h"
@@ -33,17 +32,6 @@ MiningCPID DeserializeBoincBlock(std::string block);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
-
-namespace
-{
-    int64_t CoinFromValue(double dAmount)
-    {
-        if (dAmount <= 0.0 || dAmount > MAX_MONEY)        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-        int64_t nAmount = roundint64(dAmount * COIN);
-        if (!MoneyRange(nAmount))                         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-        return nAmount;
-    }
-}
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -1530,19 +1518,19 @@ bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendT
     return true;
 }
 
-bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, const CCoinControl* coinControl)
+bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
+                                CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
 {
 
-    int64_t nValue = 0;
+    int64_t nValueOut = 0;
 
     for (auto const& s : vecSend)
     {
-        if (nValue < 0)
+        if (nValueOut < 0)
             return false;
-        nValue += s.second;
+        nValueOut += s.second;
     }
-    if (vecSend.empty() || nValue < 0)
+    if (vecSend.empty() || nValueOut < 0)
         return false;
 
     wtxNew.BindWallet(this);
@@ -1559,24 +1547,36 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 wtxNew.vout.clear();
                 wtxNew.fFromMe = true;
 
-                int64_t nTotalValue = nValue + nFeeRet;
+                int64_t nTotalValue = nValueOut + nFeeRet;
                 double dPriority = 0;
                 // vouts to the payees
                 for (auto const& s : vecSend)
                     wtxNew.vout.push_back(CTxOut(s.second, s.first));
 
-                // Choose coins to use
-                set<pair<const CWalletTx*,unsigned int> > setCoins;
                 int64_t nValueIn = 0;
-                if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl))
-                    return false;
+
+                // If provided coin set is empty, choose coins to use.
+                if (!setCoins.size())
+                {
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl))
+                        return false;
+                }
+                else
+                {
+                    // Add up input value for the provided set of coins.
+                    for (auto const& input : setCoins)
+                    {
+                        nValueIn += input.first->vout[input.second].nValue;
+                    }
+                }
+
                 for (auto const& pcoin : setCoins)
                 {
                     int64_t nCredit = pcoin.first->vout[pcoin.second].nValue;
                     dPriority += (double)nCredit * pcoin.first->GetDepthInMainChain();
                 }
 
-                int64_t nChange = nValueIn - nValue - nFeeRet;
+                int64_t nChange = nValueIn - nValueOut - nFeeRet;
                 // if sub-cent change is required, the fee must be raised to at least MIN_TX_FEE
                 // or until nChange becomes zero
                 // NOTE: this depends on the exact behaviour of GetMinFee
@@ -1658,6 +1658,18 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     }
     return true;
 }
+
+bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+    int64_t& nFeeRet, const CCoinControl* coinControl)
+{
+    // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
+    set<pair<const CWalletTx*,unsigned int>> setCoins;
+
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, coinControl);
+}
+
+
+
 
 bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl)
 {

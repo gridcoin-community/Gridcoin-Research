@@ -1253,6 +1253,33 @@ void ShrinkDebugFile()
     }
 }
 
+std::string GetFileContents(std::string filepath)
+{
+    if (!boost::filesystem::exists(filepath)) {
+        LogPrintf("GetFileContents: file does not exist %s", filepath);
+        return "-1";
+    }
+
+    std::ifstream in(filepath, std::ios::in | std::ios::binary);
+
+    if (in.fail()) {
+        LogPrintf("GetFileContents: error opening file %s", filepath);
+        return "-1";
+    }
+
+    if (fDebug10) LogPrintf("loading file to string %s", filepath);
+
+    std::ostringstream out;
+
+    out << in.rdbuf();
+
+    // Immediately close instead of waiting for the destructor to decrease the
+    // chance of a race when calling this to read BOINC's client_state.xml:
+    in.close();
+
+    return out.str();
+}
+
 //
 // "Never go to sea with two chronometers; take one or three."
 // Our three time sources are:

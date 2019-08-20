@@ -82,9 +82,11 @@
 #include "rpcprotocol.h"
 #include "contract/polls.h"
 #include "contract/contract.h"
+#include "neuralnet/researcher.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
+#include <boost/algorithm/string/join.hpp>
 #include "boinc.h"
 #include "util.h"
 
@@ -94,12 +96,9 @@ extern std::string getMacAddress();
 extern std::string FromQString(QString qs);
 extern std::string qtExecuteDotNetStringFunction(std::string function, std::string data);
 
-std::string getfilecontents(std::string filename);
-
 void GetGlobalStatus();
 
 bool IsConfigFileEmpty();
-void HarvestCPIDs(bool cleardata);
 
 BitcoinGUI::BitcoinGUI(QWidget *parent):
     QMainWindow(parent),
@@ -454,8 +453,6 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(addressBookAction);
     toolbar->addAction(votingAction);
 
-    // Prevent Lock from falling off the page
-
     QWidget* spacer = new QWidget();
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     toolbar->addWidget(spacer);
@@ -463,13 +460,6 @@ void BitcoinGUI::createToolBars()
     // Unlock Wallet
     toolbar->addAction(unlockWalletAction);
     toolbar->addAction(lockWalletAction);
-    QWidget* webSpacer = new QWidget();
-
-    webSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    webSpacer->setMaximumHeight(10);
-    toolbar->addWidget(webSpacer);
-    webSpacer->setObjectName("WebSpacer");
-
 
     // Status bar notification icons
     QFrame *frameBlocks = new QFrame();
@@ -895,7 +885,7 @@ void BitcoinGUI::NewUserWizard()
 
         std::string sourcefile = GetBoincDataDir() + "client_state.xml";
         std::string sout = "";
-        sout = getfilecontents(sourcefile);
+        sout = GetFileContents(sourcefile);
         //bool BoincInstalled = true;
         std::string sBoincNarr = "";
         if (sout == "-1")
@@ -908,7 +898,7 @@ void BitcoinGUI::NewUserWizard()
 
         bool ok;
         boincemail = QInputDialog::getText(this, tr("New User Wizard"),
-                                          tr("Please enter your boinc E-mail address, or click <Cancel> to skip for now:"),
+                                          tr("Please enter your BOINC E-mail address, or click <Cancel> to skip for now:"),
                                           QLineEdit::Normal,
                                           "", &ok);
 
@@ -921,14 +911,15 @@ void BitcoinGUI::NewUserWizard()
             CreateNewConfigFile(new_email);
             QString strMessage = tr("Created new Configuration File Successfully. ");
             QMessageBox::warning(this, tr("New Account Created - Welcome Aboard!"), strMessage);
-            //Load CPIDs:
-            HarvestCPIDs(true);
+
+            // Reload BOINC CPIDs now that we know the user's email address:
+            NN::Researcher::Reload();
         }
         else
         {
             //Create Config File
             CreateNewConfigFile("investor");
-            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your boinc e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
+            QString strMessage = tr("To get started with BOINC, run the BOINC client, choose projects, then populate the gridcoinresearch.conf file in %appdata%\\GridcoinResearch with your BOINC e-mail address.  To run this wizard again, please delete the gridcoinresearch.conf file. ");
             QMessageBox::warning(this, tr("New User Wizard - Skipped"), strMessage);
         }
         // Read in the mapargs, and set the seed nodes 10-13-2015
@@ -945,7 +936,7 @@ void BitcoinGUI::NewUserWizard()
         if (sBoincNarr != "")
         {
                 QString qsMessage = tr(sBoincNarr.c_str());
-                QMessageBox::warning(this, tr("Attention! - Boinc Path Error!"), qsMessage);
+                QMessageBox::warning(this, tr("Attention! - BOINC Path Error!"), qsMessage);
         }
     }
 }
@@ -1452,21 +1443,48 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
 
-    std::string sExcludedProjects = {};
+    QString qsExcludedProjects;
+    QString qsIncludedScrapers;
+    QString qsExcludedScrapers;
+    QString qsScrapersNotPublishing;
 
-    bool bExcludedProjects = false;
+    bool bDisplayScrapers = false;
 
+    // Note that the translation macro tr is applied in the setToolTip call below.
     // If the convergence cache has excluded projects...
-    if (ConvergedScraperStatsCache.vExcludedProjects.size())
+    if (!ConvergedScraperStatsCache.Convergence.vExcludedProjects.empty())
     {
-        bExcludedProjects = true;
+        qsExcludedProjects = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedProjects, ", ")).c_str());
+    }
+    else
+    {
+        qsExcludedProjects = tr("none");
+    }
 
-        for (const auto& iter : ConvergedScraperStatsCache.vExcludedProjects)
+    // If fDebug3 then show scrapers in tooltip...
+    if (fDebug3)
+    {
+        bDisplayScrapers = true;
+
+        // No need to include "none" for included scrapers, because if no scrapers there will not be a convergence.
+        qsIncludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vIncludedScrapers, ", ")).c_str());
+
+        if (!ConvergedScraperStatsCache.Convergence.vExcludedScrapers.empty())
         {
-            if (sExcludedProjects.empty())
-                sExcludedProjects += iter.first;
-            else
-                sExcludedProjects += ", " + iter.first;
+            qsExcludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedScrapers, ", ")).c_str());
+        }
+        else
+        {
+            qsExcludedScrapers = tr("none");
+        }
+
+        if (!ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
+        {
+            qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing, ", ")).c_str());
+        }
+        else
+        {
+            qsScrapersNotPublishing = tr("none");
         }
     }
 
@@ -1490,12 +1508,26 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     {
         labelScraperIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
-        if (!bExcludedProjects)
-            labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1."
-                                            " All projects on whitelist included.").arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str())));
+        if (bDisplayScrapers)
+        {
+            labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1 UTC. \n"
+                                            "Project(s) excluded: %2. \n"
+                                            "Scrapers included: %3. \n"
+                                            "Scraper(s) excluded: %4. \n"
+                                            "Scraper(s) not publishing: %5.")
+                                         .arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str()))
+                                         .arg(qsExcludedProjects)
+                                         .arg(qsIncludedScrapers)
+                                         .arg(qsExcludedScrapers)
+                                         .arg(qsScrapersNotPublishing));
+        }
         else
-            labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1 UTC."
-                                            " Project(s) excluded: %2.").arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str())).arg(QString(sExcludedProjects.c_str())));
+        {
+            labelScraperIcon->setToolTip(tr("Scraper: Convergence achieved, date/time %1 UTC. \n"
+                                            " Project(s) excluded: %2.")
+                                         .arg(QString(DateTimeStrFormat("%x %H:%M:%S", nConvergenceTime).c_str()))
+                                         .arg(qsExcludedProjects));
+        }
     }
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && status == CT_DELETED)

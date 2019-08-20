@@ -34,18 +34,20 @@ GRIDCOIN_TESTS =\
   test/beacon_tests.cpp \
   test/bignum_tests.cpp \
   test/block_tests.cpp \
-  test/cpid_tests.cpp \
-  test/crypter_tests.cpp \
   test/getarg_tests.cpp \
   test/gridcoin_tests.cpp \
   test/key_tests.cpp \
   test/mruset_tests.cpp \
   test/multisig_tests.cpp \
   test/netbase_tests.cpp \
+  test/neuralnet/cpid_tests.cpp \
   test/neuralnet/project_tests.cpp \
+  test/neuralnet/researcher_tests.cpp \
+  test/neuralnet/superblock_tests.cpp \
   test/rpc_tests.cpp \
   test/script_P2SH_tests.cpp \
   test/script_tests.cpp \
+  test/serialize_tests.cpp \
   test/sigopcount_tests.cpp \
   test/test_gridcoin.cpp \
   test/transaction_tests.cpp \

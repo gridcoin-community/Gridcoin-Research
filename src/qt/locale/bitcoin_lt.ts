@@ -23,19 +23,6 @@ Distributed under the MIT/X11 software license, see the accompanying file COPYIN
 This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (https://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
         <translation type="unfinished"></translation>
     </message>
-    <message>
-        <source>
-This is experimental software.
-
-Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-This product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit (http://www.openssl.org/) and cryptographic software written by Eric Young (eay@cryptsoft.com) and UPnP software written by Thomas Bernard.</source>
-        <translation type="vanished">Tai eksperimentinė programa.
-
-Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.opensource.org/licenses/mit-license.php.
-
-Šiame produkte yra OpenSSL projekto kuriamas OpenSSL Toolkit (http://www.openssl.org/), Eric Young parašyta kriptografinė programinė įranga bei Thomas Bernard sukurta UPnP programinė įranga.</translation>
-    </message>
 </context>
 <context>
     <name>AddressBookPage</name>
@@ -312,12 +299,12 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoingui.cpp" line="+531"/>
+        <location filename="../bitcoingui.cpp" line="+333"/>
         <source>Sign &amp;message...</source>
         <translation>Pasirašyti ži&amp;nutę...</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-96"/>
         <source>&amp;Overview</source>
         <translation>&amp;Apžvalga</translation>
     </message>
@@ -413,7 +400,7 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation>Išjungti programą</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+12"/>
         <source>&amp;Options...</source>
         <translation>&amp;Parinktys...</translation>
     </message>
@@ -428,17 +415,9 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>&amp;Backup Wallet...</source>
-        <translation type="vanished">&amp;Backup piniginę...</translation>
-    </message>
-    <message>
         <location line="+4"/>
         <source>&amp;Change Passphrase...</source>
         <translation>&amp;Keisti slaptafrazę...</translation>
-    </message>
-    <message>
-        <source>Backup wallet to another location</source>
-        <translation type="vanished">Daryti piniginės atsarginę kopiją</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -491,7 +470,7 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation>&amp;Tikrinti žinutę...</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-214"/>
         <source>Wallet</source>
         <translation>Piniginė</translation>
     </message>
@@ -501,7 +480,7 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+276"/>
+        <location line="+122"/>
         <source>&amp;Send</source>
         <translation>&amp;Siųsti</translation>
     </message>
@@ -521,28 +500,12 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>&amp;Neural Network</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Neural Network</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>&amp;New User Wizard</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+586"/>
+        <location line="+582"/>
         <source>New User Wizard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-643"/>
+        <location line="-631"/>
         <source>&amp;Voting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -552,7 +515,7 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+51"/>
         <source>&amp;Diagnostics</source>
         <translation type="unfinished"></translation>
     </message>
@@ -582,14 +545,14 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+215"/>
+        <location line="+208"/>
         <location line="+9"/>
         <source>[testnet]</source>
         <translation>[testavimotinklas]</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+65"/>
+        <location line="+69"/>
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
@@ -608,7 +571,7 @@ Platinama pagal MIT/X11 licenciją, kurią rasite faile COPYING arba http://www.
         </translation>
     </message>
     <message>
-        <location line="+255"/>
+        <location line="+254"/>
         <source>Date: %1
 Amount: %2
 Type: %3
@@ -622,7 +585,7 @@ Adresas: %4 {1
 ?} {4?}</translation>
     </message>
     <message>
-        <location line="+200"/>
+        <location line="+182"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
         <translation type="unfinished"></translation>
     </message>
@@ -669,7 +632,7 @@ Adresas: %4 {1
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+232"/>
+        <location line="+184"/>
         <source>%n second(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -715,7 +678,37 @@ Adresas: %4 {1
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1082"/>
+        <location line="+32"/>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: superblock not needed - inactive.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Scraper: downloading and processing stats.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Scraper: Convergence achieved, date/time %1. All projects on whitelist included.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Scraper: Convergence achieved, date/time %1 UTC. Project(s) excluded: %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-1076"/>
         <source>&amp;File</source>
         <translation>&amp;Failas</translation>
     </message>
@@ -730,17 +723,12 @@ Adresas: %4 {1
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>&amp;Advanced</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>&amp;Help</source>
         <translation>&amp;Pagalba</translation>
     </message>
     <message numerus="yes">
-        <location line="+292"/>
+        <location line="+298"/>
         <source>%n second(s) ago</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -781,12 +769,12 @@ Adresas: %4 {1
         <translation>Atnaujinta</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Catching up...</source>
         <translation>Vejamasi...</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+8"/>
         <source>Last received block was generated %1.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -841,18 +829,7 @@ Adresas: %4 {1
         <translation>Ateinantis sandoris</translation>
     </message>
     <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4
-</source>
-        <translation type="vanished">Data: %1
-Suma: %2
-Tipas: %3
-Adresas: %4</translation>
-    </message>
-    <message>
-        <location line="+168"/>
+        <location line="+150"/>
         <location line="+15"/>
         <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
         <translation type="unfinished"></translation>
@@ -864,16 +841,12 @@ Adresas: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;unlocked&lt;/b&gt;</source>
-        <translation type="vanished">Piniginė &lt;b&gt;užšifruota&lt;/b&gt; ir šiuo metu &lt;b&gt;atrakinta&lt;/b&gt;</translation>
-    </message>
-    <message>
         <location line="+28"/>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Piniginė &lt;b&gt;užšifruota&lt;/b&gt; ir šiuo metu &lt;b&gt;užrakinta&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../bitcoin.cpp" line="+160"/>
+        <location filename="../bitcoin.cpp" line="+176"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -881,7 +854,7 @@ Adresas: %4</translation>
 <context>
     <name>ClientModel</name>
     <message>
-        <location filename="../clientmodel.cpp" line="+117"/>
+        <location filename="../clientmodel.cpp" line="+119"/>
         <source>Network Alert</source>
         <translation>Tinklo įspėjimas</translation>
     </message>
@@ -962,10 +935,6 @@ Adresas: %4</translation>
         <location line="+18"/>
         <source>Priority</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>List mode</source>
-        <translation type="vanished">Sąrašo režimas</translation>
     </message>
     <message>
         <location line="-28"/>
@@ -1332,7 +1301,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>NewPollDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="+863"/>
+        <location filename="../votingdialog.cpp" line="+871"/>
         <location line="+96"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
@@ -1549,10 +1518,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+9"/>
         <source>Map port using &amp;UPnP</source>
         <translation>Persiųsti prievadą naudojant &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>Proxy &amp;IP:</source>
-        <translation type="vanished">Tarpinio serverio &amp;IP:</translation>
     </message>
     <message>
         <location line="+45"/>
@@ -1783,6 +1748,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <location filename="../bitcoin.cpp" line="+182"/>
+        <source>%1 didn&apos;t yet exit safely...</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>QRCodeDialog</name>
     <message>
         <location filename="../forms/qrcodedialog.ui" line="+14"/>
@@ -1843,7 +1816,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>RPCConsole</name>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="+46"/>
+        <location filename="../forms/rpcconsole.ui" line="+51"/>
         <location line="+43"/>
         <location line="+47"/>
         <location line="+16"/>
@@ -1855,7 +1828,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+58"/>
         <location line="+43"/>
         <location line="+42"/>
-        <location filename="../rpcconsole.cpp" line="+391"/>
+        <location filename="../rpcconsole.cpp" line="+392"/>
         <source>N/A</source>
         <translation>nėra</translation>
     </message>
@@ -1950,7 +1923,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+118"/>
         <source>%1 B</source>
         <translation>%1 B</translation>
     </message>
@@ -1985,12 +1958,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../forms/rpcconsole.ui" line="-722"/>
+        <location filename="../forms/rpcconsole.ui" line="-727"/>
         <source>Gridcoin - Debug Console</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+330"/>
+        <location line="+335"/>
         <source>Boost version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2077,6 +2050,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+80"/>
         <source>Out:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>&amp;Scraper</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2342,22 +2320,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>SendCoinsEntry</name>
     <message>
-        <location filename="../forms/sendcoinsentry.ui" line="+172"/>
+        <location filename="../forms/sendcoinsentry.ui" line="+155"/>
         <source>A&amp;mount:</source>
         <translation>Su&amp;ma:</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-106"/>
         <source>Pay &amp;To:</source>
         <translation>Mokėti &amp;gavėjui:</translation>
     </message>
     <message>
-        <location line="-33"/>
+        <location line="+93"/>
         <source>&amp;Label:</source>
         <translation>Ž&amp;ymė:</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="-56"/>
         <source>Alt+A</source>
         <translation>Alt+A</translation>
     </message>
@@ -2377,12 +2355,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Žinutė:</translation>
     </message>
     <message>
-        <location line="-128"/>
+        <location line="-112"/>
         <source>Form</source>
         <translation type="unfinished">Forma</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+23"/>
         <location line="+3"/>
         <source>Enter a label for this address to add it to your address book</source>
         <translation>Įveskite žymę šiam adresui kad galėtumėte įtraukti jį į adresų knygelę</translation>
@@ -2403,17 +2381,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+66"/>
         <source>Send Custom Message to a Gridcoin Recipient</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Add Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-96"/>
+        <location line="-103"/>
         <source>Enter a Gridcoin address (e.g. S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2664,26 +2637,47 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+4"/>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Source</source>
         <translation>Šaltinis</translation>
     </message>
     <message>
-        <source>Generated</source>
-        <translation type="vanished">Sugeneruotas</translation>
-    </message>
-    <message>
-        <location line="-3"/>
+        <location line="-5"/>
         <source>Generated in CoinBase</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
-        <source>Generated, PoS</source>
+        <location line="+11"/>
+        <source>MINED - POS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+1"/>
+        <source>MINED - POR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <location line="+18"/>
         <source>From</source>
         <translation>Nuo</translation>
@@ -2799,21 +2793,9 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Transaction ID</source>
-        <translation type="vanished">Sandorio ID</translation>
-    </message>
-    <message>
         <location line="-55"/>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to &quot;not accepted&quot; and it won&apos;t be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
         <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Information</source>
-        <translation type="vanished">Informacija</translation>
-    </message>
-    <message>
-        <source>Transaction</source>
-        <translation type="vanished">Sandoris</translation>
     </message>
     <message>
         <location line="+78"/>
@@ -2844,12 +2826,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Šis langas sandorio detalų aprašymą</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>View Attachment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
+        <location line="+28"/>
         <source>Execute Contract</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2858,21 +2835,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <source>C&amp;lose</source>
         <translation type="unfinished">&amp;Užverti</translation>
     </message>
-    <message>
-        <location filename="../transactiondescdialog.cpp" line="+38"/>
-        <source>Gridcoin Documents</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Document cannot be found on P2P server.</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 <context>
     <name>TransactionTableModel</name>
     <message>
-        <location filename="../transactiontablemodel.cpp" line="+239"/>
+        <location filename="../transactiontablemodel.cpp" line="+236"/>
         <source>Date</source>
         <translation>Data</translation>
     </message>
@@ -2946,7 +2913,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Išgauta bet nepriimta</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+44"/>
         <source>Received with</source>
         <translation>Gauta su</translation>
     </message>
@@ -2966,32 +2933,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Mokėjimas sau</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Mined - DPOR</source>
+        <location line="+7"/>
+        <source>MINED - POS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Minted - (Local) DPOR</source>
+        <location line="+1"/>
+        <source>MINED - POR</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Mined - PoR</source>
+        <location line="+1"/>
+        <source>MINED - ORPHANED</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Mined - Interest</source>
+        <location line="+1"/>
+        <source>POS SIDE STAKE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+1"/>
+        <source>POR SIDE STAKE</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>MINED - UNKNOWN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>(n/a)</source>
         <translation>nepasiekiama</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+190"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation>Sandorio būklė. Užvedus pelės žymeklį ant šios srities matysite patvirtinimų skaičių.</translation>
     </message>
@@ -3188,7 +3165,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingChartDialog</name>
     <message>
-        <location filename="../votingdialog.cpp" line="-396"/>
+        <location filename="../votingdialog.cpp" line="-405"/>
         <source>Poll Results</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3332,7 +3309,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingVoteDialog</name>
     <message>
-        <location line="+533"/>
+        <location line="+528"/>
         <source>PlaceVote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3365,7 +3342,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>WalletModel</name>
     <message>
-        <location filename="../walletmodel.cpp" line="+249"/>
+        <location filename="../walletmodel.cpp" line="+239"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3373,12 +3350,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>bitcoin-core</name>
     <message>
-        <location filename="../bitcoinstrings.cpp" line="+215"/>
+        <location filename="../bitcoinstrings.cpp" line="+218"/>
         <source>Options:</source>
         <translation>Parinktys:</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+43"/>
         <source>This help message</source>
         <translation>Pagalbos žinutė</translation>
     </message>
@@ -3413,12 +3390,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Nustatyti sujungimo trukm? milisekund?mis (pagal nutyl?jim?: 5000)</translation>
     </message>
     <message>
-        <location line="-112"/>
+        <location line="-114"/>
         <source>Connect through socks proxy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3428,7 +3405,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-86"/>
+        <location line="-87"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3438,7 +3415,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Palaikyti ne daugiau &lt;n&gt; jung?i? kolegoms (pagal nutyl?jim?: 125)</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-60"/>
         <source>Connect only to the specified node(s)</source>
         <translation>Prisijungti tik prie nurodyto mazgo</translation>
     </message>
@@ -3448,22 +3425,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+117"/>
         <source>Specify your own public address</source>
         <translation>Nurodykite savo nuosavą viešą adresą</translation>
     </message>
     <message>
-        <location line="-39"/>
+        <location line="-40"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-69"/>
+        <location line="-70"/>
         <source>Discover own IP address (default: 1 when listening and no -externalip)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-43"/>
         <source>Accept connections from outside (default: 1 if no -proxy or -connect)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3473,22 +3450,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+46"/>
         <source>Find peers using DNS lookup (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-93"/>
         <source>Sync time with other nodes. Disable if time on your system is precise e.g. syncing with NTP (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+184"/>
+        <location line="+188"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Atjungimo d?l netinkamo koleg? elgesio riba  (pagal nutyl?jim?: 100)</translation>
     </message>
     <message>
-        <location line="-190"/>
+        <location line="-194"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Sekundži? kiekis eikiamas palaikyti ryš? d?l lygiarangi? nestabilumo (pagal nutyl?jim?: 86.400)</translation>
     </message>
@@ -3508,7 +3485,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Boinc Mining</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3518,7 +3495,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Error obtaining next project.  Error 06172014.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3563,12 +3540,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Maksimalus buferis siuntimo sujungimui &lt;n&gt;*1000 bit? (pagal nutyl?jim?: 1000)</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Mining</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+7"/>
+        <source>No coins</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No current polls</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Out of range exception while parsing Transaction Message -&gt; </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>POR Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Please wait for new user wizard to start...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3598,12 +3595,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bandymas naudoti UPnP strukt?ra klausymosi prievadui (default: 0)</translation>
     </message>
     <message>
-        <location line="-108"/>
+        <location line="-109"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-68"/>
+        <location line="-71"/>
         <source>When creating transactions, ignore inputs with value less than this (default: 0.01)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3704,6 +3701,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Blocks Loaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blocks Verified</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Boinc Public Key</source>
         <translation type="unfinished"></translation>
@@ -3764,6 +3771,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Entire balance reserved</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Expires</source>
         <translation type="unfinished"></translation>
@@ -3820,11 +3832,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>Messate Type</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Miner: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3859,12 +3866,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>No coins; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>Offline; </source>
         <translation type="unfinished"></translation>
     </message>
@@ -3874,12 +3876,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Out of rance exception while parsing Transaction Message -&gt; </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Public Key</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3949,7 +3946,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Naudoti testavimo tinkl?</translation>
     </message>
     <message>
-        <location line="-56"/>
+        <location line="-57"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3959,7 +3956,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Prepend debug output with timestamp</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3974,7 +3971,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-173"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3984,12 +3981,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Leisti JSON-RPC tik iš nurodyt? IP adres?</translation>
     </message>
     <message>
-        <location line="+119"/>
+        <location line="+123"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Si?sti komand? mazgui dirban?iam &lt;ip&gt; (pagal nutyl?jim?: 127.0.0.1)</translation>
     </message>
     <message>
-        <location line="-170"/>
+        <location line="-174"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3999,12 +3996,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+165"/>
+        <location line="+169"/>
         <source>Require a confirmations for change (default: 0)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-180"/>
+        <location line="-184"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4014,7 +4011,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+211"/>
+        <location line="+215"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Atnaujinti pinigin? ? naujausi? format?</translation>
     </message>
@@ -4029,12 +4026,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Ieškoti  prarast? pinigin?s sandori? blok? grandin?je</translation>
     </message>
     <message>
-        <location line="-109"/>
+        <location line="-113"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+56"/>
         <source>How many blocks to check at startup (default: 2500, 0 = all)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4049,12 +4046,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-54"/>
         <source>Block creation options:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+124"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4064,12 +4061,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="-175"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+163"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL opcijos (žr.e Bitcoin Wiki for SSL setup instructions)</translation>
     </message>
@@ -4089,17 +4086,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Serverio privatus raktas (pagal nutyl?jim?: server.pem)</translation>
     </message>
     <message>
-        <location line="-57"/>
+        <location line="-58"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Neteisinga suma -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-102"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>?sp?jimas: -paytxfee yra nustatytas per didelis. Tai sandorio mokestis, kur? tur?site mok?ti, jei si?site sandor?.</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+101"/>
         <source>Invalid amount for -mininput=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4109,22 +4106,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+105"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-244"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+241"/>
         <source>Verifying database integrity...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-229"/>
+        <location line="-233"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4134,8 +4131,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Vote</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Waiting for coins to mature</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -4154,7 +4156,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-19"/>
         <source>Unknown -socks proxy version requested: %i</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4164,27 +4166,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-87"/>
+        <location line="-88"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-48"/>
+        <location line="-49"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+32"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-30"/>
+        <location line="-31"/>
         <source>Cannot resolve -externalip address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+51"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4199,32 +4201,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation> wallet.dat pakrovimo klaida,  wallet.dat sugadintas</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-66"/>
         <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+67"/>
         <source>Error loading wallet.dat: Wallet requires newer version of Gridcoin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+130"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-130"/>
+        <location line="-132"/>
         <source>Error loading wallet.dat</source>
         <translation> wallet.dat pakrovimo klaida</translation>
     </message>
     <message>
-        <location line="-20"/>
+        <location line="-21"/>
         <source>Cannot downgrade wallet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+43"/>
         <source>Importing blockchain data file.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4239,17 +4241,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-83"/>
+        <location line="-86"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+190"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Nepavyko susieti šiame kompiuteryje prievado %s (bind returned error %d, %s)</translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-106"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation type="unfinished"></translation>
     </message>
@@ -4259,42 +4261,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-108"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+106"/>
         <source>Error: Transaction creation failed  </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-186"/>
+        <location line="-190"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+136"/>
         <source>Invalid amount</source>
         <translation>Neteisinga suma</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-101"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+201"/>
         <source>Warning: Disk space is low!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-47"/>
+        <location line="-48"/>
         <source>Send trace/debug info to console instead of debug.log file</source>
         <translation>Siųsti atsekimo/derinimo info į konsolę vietoj debug.log failo</translation>
     </message>
@@ -4309,17 +4311,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Slaptažodis JSON-RPC sujungimams</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-111"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>Leisti DNS paiešką sujungimui ir mazgo pridėjimui</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+151"/>
         <source>To use the %s option</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-245"/>
+        <location line="-249"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4351,12 +4353,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+72"/>
         <source>Gridcoin version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Usage:</source>
         <translation>Naudojimas:</translation>
     </message>
@@ -4366,7 +4368,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-46"/>
+        <location line="-47"/>
         <source>List commands</source>
         <translation>Komand? s?rašas</translation>
     </message>
@@ -4401,32 +4403,32 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Įkeliamas blokų indeksas...</translation>
     </message>
     <message>
-        <location line="-82"/>
+        <location line="-85"/>
         <source>Add a node to connect to and attempt to keep the connection open</source>
         <translation>Pridėti mazgą prie sujungti su and attempt to keep the connection open</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+86"/>
         <source>Loading wallet...</source>
         <translation>Užkraunama piniginė...</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-60"/>
         <source>Cannot write default address</source>
         <translation>Negalima parašyti įprasto adreso</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+96"/>
         <source>Rescanning...</source>
         <translation>Peržiūra</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-83"/>
         <source>Done loading</source>
         <translation>Įkėlimas baigtas</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Error</source>
         <translation>Klaida</translation>
     </message>
