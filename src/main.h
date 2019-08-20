@@ -113,7 +113,9 @@ inline bool IsV10Enabled(int nHeight)
 inline bool IsV11Enabled(int nHeight)
 {
     // Returns false before planned intro of bv11.
-    return false;
+    return fTestNet
+            ? false
+            : false;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
