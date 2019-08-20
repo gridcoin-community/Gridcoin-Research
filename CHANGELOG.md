@@ -4,6 +4,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [4.0.5.0] 2019-08-20, leisure
+### Added
+ - Add freedesktop.org desktop file and icon set #1438 (@a123b)
+ - Add warning in help for blockchain scan for importprivkey #1469 (@jamescowens)
+ - Consolidateunspent rpc function #1472 (@jamescowens)
+ - Scraper 2.0 improvements #1481, #1488, #1509, and #1514 (@jamescowens, @cyrossignol)
+   - explorer mode operation
+   - simplified explainmagnitude output
+   - improved convergence reporting, including scraper information in the tooltip when fDebug3 is set
+   - improved statistics and SB contract core caching based on a bClean flag in the cache global
+   - new SB format and packing for bv11
+   - new SB contract hashing (native) for bv11
+   - changes to accomodate new beacon approach
+   - Implement in memory versioning for team file ETags 
+ - Implement local dynamic team requirement removal and whitelist #1502 (@cyrossignol)
+
+### Changed
+ - Quiet logging for getmininginfo and scraper INFO logging level #1460 (@jamescowens)
+ - Spelling corrections #1461, #1462 (@caraka)
+ - Update crypto module #1453 (@denravonska)
+ - Update .travis.yml for Bionic #1475 (@jamescowens)
+ - Create CPID classes and clean up CPID code #1477 (@cyrossignol)
+ - Refactor researcher context and CPID harvesting #1480 (@cyrossignol)
+   - Remove boinckey export RPC method and import handler
+ - Notify when wallet locked in advertisebeacon RPC method #1504 (@cyrossignol)
+ - Notify when wallet locked in beaconstatus RPC method #1506 (@cyrossignol)
+ - Change spacer minimum height hint #1511 (@jamescowens)
+
+### Removed
+ - Remove safe mode #1434 (@denravonska)
+ - Remove bitcoin.moc in Makefile.qt.include #1444 (@RoboticMind)
+ - Clean up legacy Proof-of-Work functions #1497 (@cyrossignol)
+
+### Fixed
+ - Constrain walletpassphrase to 10000000 seconds #1459 (@jamescowens)
+ - Straighten out localization in the scraper. #1471 (@jamescowens)
+ - Quick fix for rainbymagnitude #1473 (@jamescowens)
+ - Correct negation error in scraper tooltip for vScrapersNotPublishing #1484 (@jamescowens)
+ - Fix staked block rejection when active researcher #1485 (@cyrossignol)
+ - Add back informational magnitude to generated blocks #1489 (@cyrossignol)
+ - Add back in the in sync check in ScraperGetNeuralContract #1492 (@jamescowens)
+ - Scraper correct team file processing. #1501 (@jamescowens)
+ - Have importwallet file path default to datadir #1508 (@jamescowens)
+ - Scraper add Beacon Map size check to ensure convergence #1515 (@jamescowens)
+
 ## [4.0.4.0] 2019-05-16, leisure
 ### Fixed
  - Adds back the new user wizard inadvertently removed #1464 (@jamescowens).
