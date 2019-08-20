@@ -1193,13 +1193,12 @@ void StakeMiner(CWallet *pwallet)
             MinerStatus.ReasonNotStaking="";
 
             //New versions
-            StakeBlock.nVersion = 7;
-            if(IsV8Enabled(pindexPrev->nHeight+1))
-                StakeBlock.nVersion = 8;
-            if(IsV9Enabled(pindexPrev->nHeight+1))
-                StakeBlock.nVersion = 9;
-            if(IsV10Enabled(pindexPrev->nHeight + 1))
+            if (IsV11Enabled(pindexPrev->nHeight + 1)) {
+                StakeBlock.nVersion = 11;
+            } else {
                 StakeBlock.nVersion = 10;
+                StakeBlock.m_claim.m_version = 1;
+            }
 
             MinerStatus.Version= StakeBlock.nVersion;
         }
