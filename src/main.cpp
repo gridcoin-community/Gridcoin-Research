@@ -2831,7 +2831,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
-                    StructCPID& st1 = GetLifetimeCPID(pindex->GetCPID());
+                    GetLifetimeCPID(pindex->GetCPID()); // Rescan...
                     GetProofOfStakeReward(nCoinAge, nFees, bb.cpid, true, 2, nTime,
                                           pindex, "connectblock_researcher_doublecheck", OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 

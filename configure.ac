@@ -496,6 +496,19 @@ case $host in
      ;;
 esac
 
+dnl Suppress ABI compatibility warnings for ARM:
+dnl
+dnl   "note: parameter passing for argument of type [...] changed in GCC 7.1"
+dnl
+dnl These notices remind that code compiled with GCC 7.1+ are not ABI compatible
+dnl with environments built with previous GCC versions. We can remove this block
+dnl when the compiler no longer emits these warnings.
+dnl
+case "$host" in arm-*)
+    AC_MSG_WARN([Disabled ARM warnings for GCC 7.1 ABI compatibility.])
+    CXXFLAGS="$CXXFLAGS -Wno-psabi"
+esac
+
 if test "x$enable_debug" = xyes; then
     if test "x$GCC" = xyes; then
         if test x$TARGET_OS = xwindows; then

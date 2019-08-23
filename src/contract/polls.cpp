@@ -106,7 +106,6 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     double cpid_age = GetAdjustedTime() - ReadCache(Section::GLOBAL, "nCPIDTime").timestamp;
     double stake_age = GetAdjustedTime() - ReadCache(Section::GLOBAL, "nGRCTime").timestamp;
 
-    StructCPID& structGRC = GetInitializedStructCPID2(GRCAddress, mvMagnitudes);
     LogPrintf("CPIDAge %f, StakeAge %f, Poll Duration %f", cpid_age, stake_age, poll_duration);
     double dShareType= RoundFromString(GetPollXMLElementByPollTitle(sTitle, "<SHARETYPE>", "</SHARETYPE>"), 0);
 
@@ -168,7 +167,7 @@ bool PollIsActive(const std::string& poll_contract)
 {
     try
     {
-        uint64_t expires = stoll(ExtractXML(poll_contract, "<EXPIRATION>", "</EXPIRATION>"));
+        int64_t expires = stoll(ExtractXML(poll_contract, "<EXPIRATION>", "</EXPIRATION>"));
 
         return expires > GetAdjustedTime();
     }
@@ -293,7 +292,7 @@ std::string GetProvableVotingWeightXML()
     //Retrieve the historical magnitude
     if (IsResearcher(primary_cpid))
     {
-        StructCPID& st1 = GetLifetimeCPID(primary_cpid);
+        GetLifetimeCPID(primary_cpid); // Rescan...
         CBlockIndex* pHistorical = GetHistoricalMagnitude(primary_cpid);
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {

@@ -58,7 +58,7 @@ public:
     /* We could store the parts in mapRelay and have getdata service for free. */
     /** map from part hash to scraper Index, so we can attach incoming Part in Index */
     static std::map<uint256,CPart> mapParts;
-    int cntPartsRcvd =0;
+    size_t cntPartsRcvd =0;
 
 };
 
