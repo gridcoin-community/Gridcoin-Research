@@ -43,7 +43,7 @@ bool BackupConfigFile(const std::string& strDest)
 {
     // Check to see if there is a parent_path in strDest to support custom locations by ui - bug fix
 
-    filesystem::path ConfigSource = GetDataDir() / "gridcoinresearch.conf";
+    filesystem::path ConfigSource = GetConfigFile();
     filesystem::path ConfigTarget = strDest;
     filesystem::create_directories(ConfigTarget.parent_path());
     try
