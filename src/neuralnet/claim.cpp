@@ -80,7 +80,6 @@ Claim::Claim(uint32_t version)
     , m_block_subsidy(0)
     , m_research_subsidy(0)
     , m_magnitude(0)
-    , m_research_age(0)
     , m_magnitude_unit(0)
     , m_average_magnitude(0)
 {
@@ -104,7 +103,6 @@ Claim Claim::Parse(const std::string& claim, int block_version)
         case 27: //c.m_last_por_block_hash = uint256(s[27]);
         case 26: c.m_average_magnitude = RoundFromString(s[26], 2);
         case 25: c.m_magnitude_unit = RoundFromString(s[25], MAG_UNIT_PLACES);
-        case 24: c.m_research_age = RoundFromString(s[24], 6);
         case 24: //c.m_research_age = RoundFromString(s[24], 6);
         case 23: //c.ResearchSubsidy2 = RoundFromString(s[23], subsidy_places);
         case 22: c.m_superblock = Superblock::UnpackLegacy(s[22]);
@@ -254,7 +252,7 @@ std::string Claim::ToString(const int block_version) const
         + delim + m_quorum_hash.ToString()
         + delim + (m_superblock.WellFormed() ? m_superblock.PackLegacy() : "")
         + delim // + RoundToString(mcpid.ResearchSubsidy2,2)
-        + delim + RoundToString(m_research_age, 6)
+        + delim // + RoundToString(m_research_age, 6)
         + delim + RoundToString(m_magnitude_unit, MAG_UNIT_PLACES)
         + delim + RoundToString(m_average_magnitude, 2)
         + delim // + BlockHashToString(m_last_por_block_hash)

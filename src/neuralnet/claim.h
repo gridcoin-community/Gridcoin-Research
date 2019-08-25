@@ -223,15 +223,6 @@ struct Claim
     uint16_t m_magnitude; // MiningCPID::Magnitude
 
     //!
-    //! \brief Duration in seconds between the block that contains this claim
-    //! and a block that contains the previous research reward claim for this
-    //! CPID.
-    //!
-    //! Informational.
-    //!
-    double m_research_age; // MiningCPID::ResearchAge
-
-    //!
     //! \brief The magnitude ratio of the network at the time of the claim.
     //!
     //! Informational.
@@ -426,7 +417,6 @@ struct Claim
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             READWRITE(VarDouble<COIN_PLACES>(m_research_subsidy));
             READWRITE(m_magnitude);
-            READWRITE(VarDouble<6>(m_research_age));
             READWRITE(VarDouble<MAG_UNIT_PLACES>(m_magnitude_unit));
             READWRITE(VarDouble<2>(m_average_magnitude));
 

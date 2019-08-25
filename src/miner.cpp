@@ -963,6 +963,8 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     NN::Claim& claim = blocknew.m_claim;
     claim.m_mining_id = NN::Researcher::Get()->Id();
 
+    double out_unused; // Drop currently unused values
+
     // Note: Since research age must be exact, we need to transmit the block
     // nTime here so it matches AcceptBlock():
     nReward = GetProofOfStakeReward(
@@ -975,7 +977,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         pindexPrev,
         claim.m_research_subsidy,
         claim.m_block_subsidy,
-        claim.m_research_age,
+        out_unused,
         claim.m_magnitude_unit,
         claim.m_average_magnitude);
 
