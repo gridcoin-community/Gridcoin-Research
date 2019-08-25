@@ -80,7 +80,6 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         res.push_back(std::make_pair(_("Current Neural Hash"), claim.m_quorum_hash.ToString()));
         res.push_back(std::make_pair(_("Client Version"), claim.m_client_version));
         res.push_back(std::make_pair(_("Organization"), claim.m_organization));
-        res.push_back(std::make_pair(_("Boinc Public Key"), HexStr(claim.m_public_key.Raw())));
     }
 
     return res;

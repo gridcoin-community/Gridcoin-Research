@@ -97,7 +97,7 @@ Claim Claim::Parse(const std::string& claim, int block_version)
     //
     switch (std::min<size_t>(s.size() - 1, 30)) {
         case 30: c.m_signature = DecodeBase64(s[30].c_str());
-        case 29: c.m_public_key = CPubKey::Parse(s[29]);
+        case 29: //c.m_public_key = CPubKey::Parse(s[29]);
         case 28: c.m_quorum_hash = QuorumHash::Parse(s[28]);
         case 27: //c.m_last_por_block_hash = uint256(s[27]);
         case 26: //c.m_average_magnitude = RoundFromString(s[26], 2);
@@ -182,8 +182,6 @@ bool Claim::Sign(CKey& beacon_private_key)
         return false;
     }
 
-    m_public_key = beacon_private_key.GetPubKey();
-
     return true;
 }
 
@@ -256,6 +254,6 @@ std::string Claim::ToString(const int block_version) const
         + delim // + RoundToString(m_average_magnitude, 2)
         + delim // + BlockHashToString(m_last_por_block_hash)
         + delim // + mcpid.CurrentNeuralHash
-        + delim + m_public_key.ToString()
+        + delim // + m_public_key.ToString()
         + delim + EncodeBase64(m_signature.data(), m_signature.size());
 }

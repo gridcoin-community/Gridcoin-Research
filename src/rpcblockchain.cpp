@@ -158,7 +158,6 @@ UniValue ClaimToJson(const NN::Claim& claim)
     json.pushKV("magnitude", claim.m_magnitude);
     json.pushKV("magnitude_unit", claim.m_magnitude_unit);
 
-    json.pushKV("public_key", HexStr(claim.m_public_key.Raw()));
     json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
 
     json.pushKV("quorum_hash", claim.m_quorum_hash.ToString());

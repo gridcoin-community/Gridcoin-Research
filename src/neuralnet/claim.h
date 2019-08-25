@@ -230,16 +230,6 @@ struct Claim
     double m_magnitude_unit; // MiningCPID::ResearchMagnitudeUnit
 
     //!
-    //! \brief The public key of the beacon associated with the CPID.
-    //!
-    //! Informational. The protocol checks that this key matches the beacon
-    //! public key stored locally for the CPID. This check affords no added
-    //! security, so this value only exists for historical record. We might
-    //! remove it in the future.
-    //!
-    CPubKey m_public_key; // MiningCPID::BoincPublicKey
-
-    //!
     //! \brief Produced by signing the CPID and last block hash with a beacon
     //! public key.
     //!
@@ -412,7 +402,6 @@ struct Claim
             READWRITE(m_magnitude);
             READWRITE(VarDouble<MAG_UNIT_PLACES>(m_magnitude_unit));
 
-            READWRITE(m_public_key);
             READWRITE(m_signature);
         }
 
