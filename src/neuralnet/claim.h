@@ -198,14 +198,6 @@ struct Claim
     uint256 m_last_block_hash; // MiningCPID::lastblockhash
 
     //!
-    //! \brief The hash of the block at which a node submitted a claim as a
-    //! researcher prior to this claim.
-    //!
-    //! Informational.
-    //!
-    uint256 m_last_por_block_hash; // MiningCPID::LastPORBlockHash
-
-    //!
     //! \brief The GRC value of the research rewards claimed by the node.
     //!
     //! Contains a value of zero for investor claims.
@@ -428,7 +420,6 @@ struct Claim
 
         READWRITE(VarDouble<COIN_PLACES>(m_block_subsidy));
         READWRITE(m_last_block_hash);
-        READWRITE(m_last_por_block_hash);
 
         // Serialize research-related fields only for researcher claims:
         //
