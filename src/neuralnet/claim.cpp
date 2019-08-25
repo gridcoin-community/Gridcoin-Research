@@ -78,7 +78,6 @@ Claim::Claim() : Claim(CURRENT_VERSION)
 Claim::Claim(uint32_t version)
     : m_version(version)
     , m_block_subsidy(0)
-    , m_last_payment_time(0)
     , m_research_subsidy(0)
     , m_magnitude(0)
     , m_research_age(0)
@@ -119,7 +118,7 @@ Claim Claim::Parse(const std::string& claim, int block_version)
         case 15: c.m_magnitude = RoundFromString(s[15], 0);
         case 14: //c.cpidv2 = s[14];
         case 13: //c.m_rsa_weight = RoundFromString(s[13], 0);
-        case 12: c.m_last_payment_time = RoundFromString(s[12], 0);
+        case 12: //c.m_last_payment_time = RoundFromString(s[12], 0);
         case 11: c.m_research_subsidy = RoundFromString(s[11], 2);
         case 10: c.m_client_version = std::move(s[10]);
         case  9: //c.NetworkRAC = RoundFromString(s[9], 0);
@@ -243,7 +242,7 @@ std::string Claim::ToString(const int block_version) const
         + delim // + RoundToString(mcpid.NetworkRAC, 0)
         + delim + m_client_version
         + delim + RoundToString(m_research_subsidy, subsidy_places)
-        + delim + std::to_string(m_last_payment_time)
+        + delim // + std::to_string(m_last_payment_time)
         + delim // + std::to_string(m_rsa_weight)
         + delim // + mcpid.cpidv2
         + delim + std::to_string(m_magnitude)

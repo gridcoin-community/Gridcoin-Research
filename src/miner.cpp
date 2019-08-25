@@ -29,7 +29,6 @@ using namespace std;
 unsigned int nMinerSleep;
 double CoinToDouble(double surrogate);
 double CalculatedMagnitude2(std::string cpid, int64_t locktime);
-double GetLastPaymentTimeByCPID(std::string cpid);
 std::string GetLastPORBlockHash(std::string cpid);
 bool HasActiveBeacon(const std::string& cpid);
 bool LessVerbose(int iMax1000);
@@ -983,7 +982,6 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
 
     claim.m_client_version = FormatFullVersion();
     claim.m_organization = GetArgument("org", "");
-    claim.m_last_payment_time = GetLastPaymentTimeByCPID(claim.m_mining_id.ToString());
     claim.m_last_block_hash = pindexPrev->GetBlockHash();
     claim.m_last_por_block_hash = uint256(GetLastPORBlockHash(claim.m_mining_id.ToString()));
 

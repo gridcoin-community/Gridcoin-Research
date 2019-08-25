@@ -186,18 +186,6 @@ struct Claim
     double m_block_subsidy; // MiningCPID::InterestSubsidy
 
     //!
-    //! \brief Previous payment time of the claim prior to this claim.
-    //!
-    //! Informational.
-    //!
-    //! Previous protocol versions used the last payment time to determine
-    //! payment age for reward calculations. An investor's advertised last
-    //! payment time resets when restarting the wallet. Researcher payment
-    //! times are tracked by CPID.
-    //!
-    uint64_t m_last_payment_time; // MiningCPID::LastPaymentTime
-
-    //!
     //! \brief Hash of the block below the block containing this claim.
     //!
     //! Nodes check that this hash matches the hash of block that preceeds the
@@ -439,7 +427,6 @@ struct Claim
         READWRITE(m_organization);
 
         READWRITE(VarDouble<COIN_PLACES>(m_block_subsidy));
-        READWRITE(m_last_payment_time);
         READWRITE(m_last_block_hash);
         READWRITE(m_last_por_block_hash);
 

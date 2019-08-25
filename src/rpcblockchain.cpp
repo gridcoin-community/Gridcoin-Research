@@ -152,7 +152,6 @@ UniValue ClaimToJson(const NN::Claim& claim)
     json.pushKV("organization", claim.m_organization);
 
     json.pushKV("block_subsidy", claim.m_block_subsidy);
-    json.pushKV("last_payment_time", TimestampToHRDate(claim.m_last_payment_time));
     json.pushKV("last_block_hash", claim.m_last_block_hash.ToString());
     json.pushKV("last_por_block_hash", claim.m_last_por_block_hash.ToString());
 
