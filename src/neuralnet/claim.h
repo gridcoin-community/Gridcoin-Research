@@ -230,13 +230,6 @@ struct Claim
     double m_magnitude_unit; // MiningCPID::ResearchMagnitudeUnit
 
     //!
-    //! \brief Average magnitude over the research accrual period.
-    //!
-    //! Informational.
-    //!
-    double m_average_magnitude; // MiningCPID::ResearchAverageMagnitude
-
-    //!
     //! \brief The public key of the beacon associated with the CPID.
     //!
     //! Informational. The protocol checks that this key matches the beacon
@@ -418,7 +411,6 @@ struct Claim
             READWRITE(VarDouble<COIN_PLACES>(m_research_subsidy));
             READWRITE(m_magnitude);
             READWRITE(VarDouble<MAG_UNIT_PLACES>(m_magnitude_unit));
-            READWRITE(VarDouble<2>(m_average_magnitude));
 
             READWRITE(m_public_key);
             READWRITE(m_signature);

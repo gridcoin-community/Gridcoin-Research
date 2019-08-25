@@ -979,7 +979,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         claim.m_block_subsidy,
         out_unused,
         claim.m_magnitude_unit,
-        claim.m_average_magnitude);
+        out_unused);
 
     claim.m_client_version = FormatFullVersion();
     claim.m_organization = GetArgument("org", "");
