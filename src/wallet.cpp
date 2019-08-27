@@ -1341,7 +1341,19 @@ int64_t CWallet::GetNewMint() const
     return nTotal;
 }
 
-bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+// This comparator is needed since std::sort alone cannot sort COutput
+struct smallestcoincomp
+{
+    bool operator() (const COutput a, const COutput b)
+    {
+        const CWalletTx* acoin = a.tx;
+        const CWalletTx* bcoin = b.tx;
+
+        return (acoin->vout[a.i].nValue < bcoin->vout[b.i].nValue);
+    }
+};
+
+bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, vector<COutput> vCoins, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, bool contract) const
 {
     setCoinsRet.clear();
     nValueRet = 0;
@@ -1353,7 +1365,12 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     vector<pair<int64_t, pair<const CWalletTx*,unsigned int> > > vValue;
     int64_t nTotalLower = 0;
 
-    random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+    // For contracts lets sort instead of random shuffle so we use lowest coin inputs first and not affect larger coin inputs that could be staking when possible
+    if (contract)
+        sort(vCoins.begin(), vCoins.end(), smallestcoincomp());
+
+    else
+        random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
 
     for (auto output : vCoins)
     {
@@ -1447,7 +1464,7 @@ bool CWallet::SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, 
     return true;
 }
 
-bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl) const
+bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl, bool contract) const
 {
     vector<COutput> vCoins;
     AvailableCoins(vCoins, true, coinControl, false);
@@ -1463,9 +1480,9 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
         return (nValueRet >= nTargetValue);
     }
 
-    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
-            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
+    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet, contract) ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet, contract)  ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet, contract));
 }
 
 // Select some coins without random shuffle or best subset approximation
@@ -1551,12 +1568,24 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 for (auto const& s : vecSend)
                     wtxNew.vout.push_back(CTxOut(s.second, s.first));
 
+
+                // Determine if transaction is a contract
+                bool contract = false;
+
+                if (!wtxNew.hashBoinc.empty() && !coinControl)
+                {
+                    string contracttype = ExtractXML(wtxNew.hashBoinc, "<MT>", "</MT>");
+
+                    if (contracttype == "beacon" || contracttype == "vote" || contracttype == "poll" || contracttype == "project")
+                        contract = true;
+                }
+
                 int64_t nValueIn = 0;
 
                 // If provided coin set is empty, choose coins to use.
                 if (!setCoins.size())
                 {
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl))
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract))
                         return false;
                 }
                 else
