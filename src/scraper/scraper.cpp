@@ -117,6 +117,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
 bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject, const bool& excludefromcsmanifest);
 ScraperStats GetScraperStatsByConsensusBeaconList();
+ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats);
 bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::filtering_istream& sUncompressedIn,
@@ -128,7 +129,6 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key);
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
 unsigned int ScraperDeleteUnauthorizedCScraperManifests();
-bool ScraperDeleteCScraperManifest(uint256 nManifestHash);
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& projectWhitelist,
                                                 mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
@@ -1059,6 +1059,21 @@ bool ScraperHousekeeping()
         LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
         sSBCoreData = ScraperGetNeuralContract(true, false);
+    }
+
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        unsigned int nPendingDeleted = 0;
+
+        _log(logattribute::INFO, "ScraperHousekeeping", "Size of mapPendingDeletedManifest before delete = "
+             + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
+
+        // Make sure deleted manifests pending permanent deletion are culled.
+        nPendingDeleted = CScraperManifest::DeletePendingDeletedManifests();
+        _log(logattribute::INFO, "ScraperHousekeeping", "Permanently deleted " + std::to_string(nPendingDeleted) + " manifest(s) pending permanent deletion.");
+        _log(logattribute::INFO, "ScraperHousekeeping", "Size of mapPendingDeletedManifest after delete = "
+             + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
     }
 
     if (fDebug3 && !sSBCoreData.empty())
@@ -3054,6 +3069,107 @@ ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConverg
 }
 
 
+
+// This function should only be used as part of the superblock validation in bv11+.
+ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest& manifest)
+{
+    _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
+
+    // Create a dummy converged manifest
+    ConvergedManifest StructDummyConvergedManifest;
+
+    ScraperStats mScraperStats {};
+
+    // Fill out the dummy ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
+    // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
+
+    StructDummyConvergedManifest.ConsensusBlock = manifest.ConsensusBlock;
+    StructDummyConvergedManifest.timestamp = GetAdjustedTime();
+    StructDummyConvergedManifest.bByParts = false;
+
+    int iPartNum = 0;
+    CDataStream ss(SER_NETWORK,1);
+    WriteCompactSize(ss, manifest.vParts.size());
+    uint256 nContentHashCheck;
+
+    for (const auto& iter : manifest.vParts)
+    {
+        std::string sProject;
+
+        if (iPartNum == 0)
+            sProject = "BeaconList";
+        else
+            sProject = manifest.projects[iPartNum-1].project;
+
+        // Copy the parts data into the map keyed by project.
+        StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(sProject, iter->data));
+
+        // Serialize the hash to doublecheck the content hash.
+        ss << iter->hash;
+
+        iPartNum++;
+    }
+    ss << StructDummyConvergedManifest.ConsensusBlock;
+
+    nContentHashCheck = Hash(ss.begin(), ss.end());
+
+    if (nContentHashCheck != manifest.nContentHash)
+    {
+        _log(logattribute::ERR, "GetScraperStatsFromSingleManifest", "Selected Manifest content hash check failed! nContentHashCheck = "
+             + nContentHashCheck.GetHex() + " and nContentHash = " + manifest.nContentHash.GetHex());
+        // Content hash check failed. Return empty mScraperStats
+        return mScraperStats;
+    }
+    else // Content matches.
+    {
+        // The DummyConvergedManifest content hash is NOT the same as the hash above from the CScraper::manifest, because it needs to be in the order of the
+        // map key and on the data, not the order of vParts by the part hash. So, unfortunately, we have to walk through the map again to hash it correctly.
+        CDataStream ss2(SER_NETWORK,1);
+        for (const auto& iter : StructDummyConvergedManifest.ConvergedManifestPartsMap)
+            ss2 << iter.second;
+
+        StructDummyConvergedManifest.nContentHash = Hash(ss2.begin(), ss2.end());
+    }
+
+    // Enumerate the count of active projects from the dummy converged manifest. One of the parts
+    // is the beacon list, is not a project, which is why there is a -1.
+    unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartsMap.size() - 1;
+    _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Number of active projects in converged manifest = " + std::to_string(nActiveProjects));
+
+    double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
+
+    //Get the Consensus Beacon map and initialize mScraperStats.
+    BeaconMap mBeaconMap;
+    LoadBeaconListFromConvergedManifest(StructDummyConvergedManifest, mBeaconMap);
+
+    for (auto entry = StructDummyConvergedManifest.ConvergedManifestPartsMap.begin(); entry != StructDummyConvergedManifest.ConvergedManifestPartsMap.end(); ++entry)
+    {
+        std::string project = entry->first;
+        ScraperStats mProjectScraperStats;
+
+        // Do not process the BeaconList itself as a project stats file.
+        if (project != "BeaconList")
+        {
+            _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
+
+            LoadProjectObjectToStatsByCPID(project, entry->second, dMagnitudePerProject, mBeaconMap, mProjectScraperStats);
+
+            // Insert into overall map.
+            for (auto const& entry2 : mProjectScraperStats)
+            {
+                mScraperStats[entry2.first] = entry2.second;
+            }
+        }
+    }
+
+    ProcessNetworkWideFromProjectStats(mBeaconMap, mScraperStats);
+
+    _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Completed stats processing");
+
+    return mScraperStats;
+}
+
+
 std::string ExplainMagnitude(std::string sCPID)
 {
     // See if converged stats/contract update needed...
@@ -3451,8 +3567,9 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
         else
         {
             _log(logattribute::WARNING, "ScraperDeleteUnauthorizedCScraperManifests", "Deleting unauthorized manifest with hash " + iter->first.GetHex());
-            // Delete from CScraperManifest map (also advances iter to the next valid element).
-            iter = CScraperManifest::DeleteManifest(iter);
+            // Delete from CScraperManifest map (also advances iter to the next valid element). Immediate flag is set, because there should be
+            // no pending delete retention grace for this.
+            iter = CScraperManifest::DeleteManifest(iter, true);
             nDeleted++;
         }
     }
@@ -3614,7 +3731,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         if (bAddManifestSuccessful)
             _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
                  + sCManifestName + ") successful, timestamp "
-                 + DateTimeStrFormat("%x %H:%M:%S", nTime));
+                 + DateTimeStrFormat("%x %H:%M:%S", nTime) + " with " + std::to_string(iPartNum) + " parts.");
         else
             _log(logattribute::ERR, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
                  + sCManifestName + ") FAILED, timestamp "
@@ -4214,7 +4331,7 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
                      + " from scraper source " + iter->first);
                 
                 // Delete from CScraperManifest map
-                ScraperDeleteCScraperManifest(iter_inner->second.first);
+                CScraperManifest::DeleteManifest(iter_inner->second.first);
             }
         }
     }
@@ -4226,13 +4343,32 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
         
         if (GetAdjustedTime() - manifest.nTime > SCRAPER_CMANIFEST_RETENTION_TIME)
         {
-            _log(logattribute::INFO, "Scraper", "Deleting old CScraperManifest with hash " + iter->first.GetHex());
+            _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Deleting old CScraperManifest with hash " + iter->first.GetHex());
             // Delete from CScraperManifest map
             iter = CScraperManifest::DeleteManifest(iter);
         }
         else
             ++iter;
     }
+
+    // Also delete old entries that have exceeded retention time from the ConvergedScraperStatsCache. This follows
+    // SCRAPER_CMANIFEST_RETENTION_TIME as well.
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+        ConvergedScraperStatsCache.DeleteOldConvergenceFromPastConvergencesMap();
+
+        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+    }
+
+    unsigned int nPendingDeleted = 0;
+
+    // Clear old CScraperManifests out of mapPendingDeletedManifest.
+    nPendingDeleted = CScraperManifest::DeletePendingDeletedManifests();
+    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Permanently deleted " + std::to_string(nPendingDeleted) + " manifest(s) pending permanent deletion.");
+    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Size of mapPendingDeletedManifest = "
+         + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
 
     // Reload mMapCSManifestsBinnedByScraper after deletions. This is not particularly efficient, but the map is not
     // that large. (The lock on CScraperManifest::cs_mapManifest is still held from above.)
@@ -4294,16 +4430,6 @@ bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManif
     {
         return false;
     }
-}
-
-
-// A lock should be taken on CScraperManifest::cs_mapManifest before calling this function.
-bool ScraperDeleteCScraperManifest(uint256 nManifestHash)
-{
-    // This deletes a manifest from the map.
-    bool ret = CScraperManifest::DeleteManifest(nManifestHash);
-
-    return ret;
 }
 
 
@@ -4448,6 +4574,8 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                 {
                     LOCK(cs_ConvergedScraperStatsCache);
                     if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+
+                    ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
                     std::string sSBCoreDataPrev = ConvergedScraperStatsCache.sContract;
 
@@ -4613,6 +4741,8 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                     LOCK(cs_ConvergedScraperStatsCache);
                     if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
+                    ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
+
                     NN::Superblock superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
 
                     superblock = NN::Superblock::FromStats(mScraperConvergedStats);
@@ -4775,6 +4905,137 @@ bool ScraperSynchronizeDPOR()
 }
 
 
+// Used for bv11+ (SB version 2+)
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock)
+{
+    NN::QuorumHash nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
+
+    LOCK(cs_ConvergedScraperStatsCache);
+
+    // First check and see if superblock contract hash is the current one in the cache.
+    if (ConvergedScraperStatsCache.nNewFormatSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::CurrentCachedConvergence;
+
+    // Placeholder for manifest hash from superblock...
+    uint32_t nReducedSBContentHash = 11111111; // Waiting on cycy
+
+    // if not validated with current cached contract, then check past ones in the cache.
+    auto found = ConvergedScraperStatsCache.PastConvergences.find(nReducedSBContentHash);
+
+    if (found != ConvergedScraperStatsCache.PastConvergences.end())
+    {
+        if (found->second.first == nNewFormatSuperblockHash) return scraperSBvalidationtype::CachedPastConvergence;
+    }
+
+    // Now for the hard stuff... borrowed from the ScraperConstructConvergedManifest function...
+
+    // Call ScraperDeleteCScraperManifests(). This will return a map of manifests binned by Scraper after the culling.
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
+
+    // Do a map for unique manifest times by content hash, then scraperID and manifest (not content) hash.
+    std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;
+
+    unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
+
+    _log(logattribute::INFO, "ValidateSuperblock", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+
+    for (const auto& iter : mMapCSManifestsBinnedByScraper)
+    {
+        // iter.second is the mCSManifest
+        for (const auto& iter_inner : iter.second)
+        {
+            // Insert into mManifestsBinnedByTime multimap. Iter_inner.first is the manifest time,
+            // iter_inner.second.second is the manifest CONTENT hash.
+            // mManifestsBinnedByTime.insert(std::make_pair(iter_inner.first, iter_inner.second.second));
+
+            // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+            // We need to prevent the insertion of a second entry with the same content from the same scraper. This
+            // could otherwise happen if a scraper is shutdown and restarted, and it publishes a new manifest
+            // before it receives manifests from the other nodes (including its own prior manifests).
+            // ------------------------------------------------  manifest CONTENT hash
+            auto range = mManifestsBinnedbyContent.equal_range(iter_inner.second.second);
+            bool bAlreadyExists = false;
+            for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+            {
+                // ---- ScraperID ------ Candidate scraperID to insert
+                if (iter3->second.first == iter.first)
+                    bAlreadyExists = true;
+            }
+
+            if (!bAlreadyExists)
+            {
+                // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
+                mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
+                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert, timestamp "
+                                  + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
+                                  + ", content hash "+ iter_inner.second.second.GetHex()
+                                  + ", scraper ID " + iter.first
+                                  + ", manifest hash " + iter_inner.second.first.GetHex());
+            }
+        }
+    }
+
+    // Find matching manifests (full hash) using the hint. We use a map here to prevent duplicates on purpose. Note that
+    // we need this, because there is a small possibility that the hint could match MORE THAN ONE content hash, because
+    // the reduced hash is only 32 bits.
+    // content hash - manifest hash
+    std::map<uint256, uint256> mMatchingManifestContentHashes;
+
+    for (const auto& iter : mManifestsBinnedbyContent)
+    {
+        uint32_t nReducedManifestContentHash = iter.first.Get64() >> 32;
+
+        // This has the effect of only storing the first one of the series of matching manifests that match the hint,
+        // because of the insert. Below we will count the others matching to check for a supermajority.
+        if (nReducedManifestContentHash == nReducedSBContentHash) mMatchingManifestContentHashes.insert(std::make_pair(iter.first, iter.second.second));
+    }
+
+    // For each of the matching full content hashes, count the number of manifests by full content hash.
+    // We continue until a group meets the supermajority rule--then there was an uncached past convergence and it is validated.
+    // This scenario is typically due to a node that was started late in the scraper manifest generation cycle, so it
+    // has all of the underlying manifests from the scrapers, but has not calculated and cached all of the convergences
+    // that would be calculated and cached on the node from running a long time with the nScraperSleep interval NN loop.
+    for (const auto& iter : mMatchingManifestContentHashes)
+    {
+        unsigned int nIdenticalContentManifestCount = mManifestsBinnedbyContent.count(iter.first);
+
+        if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
+        {
+
+            CScraperManifest CandidateManifest;
+
+            {
+                LOCK(CScraperManifest::cs_mapManifest);
+
+                auto found = CScraperManifest::mapManifest.find(iter.second);
+
+                if (found != CScraperManifest::mapManifest.end())
+                {
+                    // This is a copy on purpose to minimize lock time.
+                    CandidateManifest = *found->second;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            ScraperStats mScraperstats = GetScraperStatsFromSingleManifest(CandidateManifest);
+
+            NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
+
+            NN::QuorumHash nCandidateSuperblockHash = ScraperGetSuperblockHash(superblock);
+
+            if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ManifestLevelConvergence;
+        }
+    }
+
+    // Placeholder for project level validation.
+
+
+    // If we make it here, there is no validation.
+    return scraperSBvalidationtype::Invalid;
+}
+
 /***********************
 *    RPC Functions     *
 ************************/
@@ -4828,7 +5089,7 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
     LOCK(CScraperManifest::cs_mapManifest);
     if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
-    bool ret = ScraperDeleteCScraperManifest(uint256(params[0].get_str()));
+    bool ret = CScraperManifest::DeleteManifest(uint256(params[0].get_str()), true);
 
     if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
@@ -4871,6 +5132,9 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
                 );
 
     UniValue res(UniValue::VOBJ);
+
+    _log(logattribute::INFO, "testnewsb", "Size of the PastConvergences map = " + std::to_string(ConvergedScraperStatsCache.PastConvergences.size()));
+    res.pushKV("Size of the PastConvergences map", std::to_string(ConvergedScraperStatsCache.PastConvergences.size()));
 
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
@@ -4946,8 +5210,12 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblock);
     std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
 
+    res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.GetHex());
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.GetHex());
     res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
+    _log(logattribute::INFO, "testnewsb", "new_legacy_hash = " + new_legacy_hash.ToString());
     res.pushKV("old_legacy_hash", old_legacy_hash);
+    _log(logattribute::INFO, "testnewsb", "old_legacy_hash = " + old_legacy_hash);
 
     if (new_legacy_hash == old_legacy_hash) {
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash passed.");

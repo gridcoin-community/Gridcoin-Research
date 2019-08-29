@@ -9,6 +9,8 @@
 #include <boost/variant/variant.hpp>
 #include <string>
 
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+
 std::string UnpackBinarySuperblock(std::string block);
 std::string PackBinarySuperblock(std::string sBlock);
 
@@ -721,6 +723,11 @@ struct ConvergedScraperStats
     ScraperStats mScraperConvergedStats;
     ConvergedManifest Convergence;
 
+    // There is a small chance of collision on the key, but given this is really a hint map,
+    // It is okay.
+    // reduced nContentHash ------ SB Hash ---- Converged Manifest object
+    std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>> PastConvergences;
+
     // Legacy superblock contract and hash.
     std::string sContractHash;
     std::string sContract;
@@ -736,6 +743,41 @@ struct ConvergedScraperStats
         if (sContractHash.empty() && sContract.empty()) nVersion = NewFormatSuperblock.m_version;
 
         return nVersion;
+    }
+
+    void AddConvergenceToPastConvergencesMap()
+    {
+        uint32_t nReducedContentHash = Convergence.nContentHash.Get64() >> 32;
+
+        if (Convergence.nContentHash != uint256() && PastConvergences.find(nReducedContentHash) == PastConvergences.end())
+        {
+            PastConvergences[nReducedContentHash] = std::make_pair(nNewFormatSuperblockHash, Convergence);
+        }
+    }
+
+    unsigned int DeleteOldConvergenceFromPastConvergencesMap()
+    {
+        unsigned int nDeleted = 0;
+
+        std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>>::iterator iter;
+        for (iter = PastConvergences.begin(); iter != PastConvergences.end(); )
+        {
+            // If the convergence entry is older than CManifest retention time, then delete the past convergence
+            // entry, because the underlying CManifest will be deleted by the housekeeping loop using the same
+            // aging. The erase advances the iterator in C++11.
+            if (iter->second.second.timestamp < GetAdjustedTime() - SCRAPER_CMANIFEST_RETENTION_TIME)
+            {
+                iter = PastConvergences.erase(iter);
+
+                ++nDeleted;
+            }
+            else
+            {
+                ++iter;
+            }
+        }
+
+        return nDeleted;
     }
 
 };

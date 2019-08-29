@@ -45,9 +45,11 @@ namespace boostio = boost::iostreams;
 // These can get overridden by the GetArgs in init.cpp or ScraperApplyAppCacheEntries.
 // The appcache entries will take precedence.
 
-// The amount of time to wait between scraper loop runs.
+// The amount of time to wait between scraper loop runs. This is in
+// milliseconds.
 unsigned int nScraperSleep = 300000;
-// The amount of time before SB is due to start scraping.
+// The amount of time before SB is due to start scraping. This is in
+// seconds.
 unsigned int nActiveBeforeSB = 14400;
 
 // Explorer mode flag. Only effective if scraper is active.
@@ -122,6 +124,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, b
 std::string ScraperGetNeuralHash();
 NN::QuorumHash ScraperGetSuperblockHash();
 bool ScraperSynchronizeDPOR();
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 

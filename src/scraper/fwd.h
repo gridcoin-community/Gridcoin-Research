@@ -30,6 +30,14 @@ enum class scrapereventtypes
     Sleep
 };
 
+enum class scraperSBvalidationtype
+{
+    Invalid,
+    CurrentCachedConvergence,
+    CachedPastConvergence,
+    ManifestLevelConvergence,
+    ProjectLevelConvergence
+};
 
 
 /*********************

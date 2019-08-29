@@ -18,23 +18,27 @@
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
+CCriticalSection CSplitBlob::cs_mapParts;
 std::map< uint256, std::unique_ptr<CScraperManifest> > CScraperManifest::mapManifest;
+std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>> CScraperManifest::mapPendingDeletedManifest;
 CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+extern unsigned int nScraperSleep;
 extern AppCacheSectionExt mScrapersExt;
 extern std::atomic<int64_t> nSyncTime;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
-    /* Part of larger hashed blob. Currently only used for scraper data sharing.
+  /* Part of larger hashed blob. Currently only used for scraper data sharing.
    * retrive parent object from mapBlobParts
    * notify object or ignore if no object found
    * erase from mapAlreadyAskedFor
-  */
+   */
     auto& ss= vRecv;
     uint256 hash(Hash(ss.begin(), ss.end()));
     mapAlreadyAskedFor.erase(CInv(MSG_PART,hash));
@@ -166,16 +170,13 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     }
     if( MSG_SCRAPERINDEX !=inv.type )
     {
-        /* For any other objects, just say that we do not need it: */
+        // For any other objects, just say that we do not need it:
         return true;
     }
 
-    /* Inv-entory notification about scraper data index
-   * see if we already have it
-   * if yes, relay pfrom to Parts system as a fetch source and return true
-   * else return false
-  */
-
+   // Inventory notification about scraper data index--see if we already have it.
+   // If yes, relay pfrom to Parts system as a fetch source and return true
+   // else return false.
     auto found = mapManifest.find(inv.hash);
     if( found!=mapManifest.end() )
     {
@@ -413,10 +414,17 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
-bool CScraperManifest::DeleteManifest(const uint256& nHash)
+bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmediate)
 {
-    if (mapManifest.erase(nHash))
+    bool fDeleted = false;
+
+    auto iter = mapManifest.find(nHash);
+
+    if(iter != mapManifest.end())
     {
+        if (!fImmediate) mapPendingDeletedManifest[nHash] = std::make_pair(GetAdjustedTime(), std::move(iter->second));
+        mapManifest.erase(nHash);
+
         // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
         // that could have been used in the cached convergence, so the convergence may change.
         {
@@ -425,18 +433,52 @@ bool CScraperManifest::DeleteManifest(const uint256& nHash)
             ConvergedScraperStatsCache.bClean = false;
         }
 
-        return true;
+        fDeleted = true;
     }
-    else
-    {
-        return false;
-    }
+
+    return fDeleted;
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
-std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter)
+std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter,
+                                                                                                const bool& fImmediate)
 {
-    return mapManifest.erase(iter);
+    if (!fImmediate) mapPendingDeletedManifest[iter->first] = std::make_pair(GetAdjustedTime(), std::move(iter->second));
+    iter = mapManifest.erase(iter);
+
+    // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
+    // that could have been used in the cached convergence, so the convergence may change. This is not conditional, because the
+    // iterator must be valid.
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache.bClean = false;
+    }
+    return iter;
+}
+
+// A lock must be taken on cs_mapManifest before calling this function.
+unsigned int CScraperManifest::DeletePendingDeletedManifests()
+{
+    unsigned int nDeleted = 0;
+    int64_t nDeleteThresholdTime = GetAdjustedTime() - nScraperSleep / 1000;
+
+    std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>>::iterator iter;
+    for (iter = mapPendingDeletedManifest.begin(); iter != mapPendingDeletedManifest.end();)
+    {
+        // Delete any entry more than nScraperSleep old.
+        if (iter->second.first < nDeleteThresholdTime)
+        {
+            iter = mapPendingDeletedManifest.erase(iter);
+            ++nDeleted;
+        }
+        else
+        {
+            ++iter;
+        }
+    }
+
+    return nDeleted;
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.

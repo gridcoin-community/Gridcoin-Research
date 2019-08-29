@@ -6388,6 +6388,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "part")
     {
+        LOCK(CSplitBlob::cs_mapParts);
+
         CSplitBlob::RecvPart(pfrom,vRecv);
     }
 

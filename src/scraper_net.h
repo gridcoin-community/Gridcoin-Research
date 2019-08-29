@@ -1,8 +1,8 @@
 /* scraper_net.h */
 
-/* Maybe the parts system will be usefull for other things so let's abstract
+/* Maybe the parts system will be useful for other things so let's abstract
  * that to parent class. Sice it will be all in one file there will not be any
- * polymorfism.
+ * polymorphism.
 */
 
 #include <key.h>
@@ -60,6 +60,8 @@ public:
     static std::map<uint256,CPart> mapParts;
     size_t cntPartsRcvd =0;
 
+    static CCriticalSection cs_mapParts;
+
 };
 
 /** A objects holding info about the scraper data file we have or are downloading. */
@@ -69,8 +71,12 @@ class CScraperManifest
 public: /* static methods */
 
     /** map from index hash to scraper Index, so we can process Inv messages */
-    static std::map< uint256, std::unique_ptr<CScraperManifest> > mapManifest;
+    static std::map<uint256, std::unique_ptr<CScraperManifest>> mapManifest;
 
+    // ------------ hash -------------- nTime ------- pointer to CScraperManifest
+    static std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>> mapPendingDeletedManifest;
+
+    // Protects both mapManifest and MapPendingDeletedManifest
     static CCriticalSection cs_mapManifest;
 
     /** Process a message containing Index of Scraper Data.
@@ -101,11 +107,14 @@ public: /* static methods */
     static bool IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out);
 
     /** Delete Manifest (key version) **/
-    static bool DeleteManifest(const uint256& nHash);
+    static bool DeleteManifest(const uint256& nHash, const bool& fImmediate = false);
 
     /** Delete Manifest (iterator version) **/
     static std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator
-        DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter);
+        DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter, const bool& fImmediate = false);
+
+    /** Delete PendingDeletedManifests **/
+    static unsigned int DeletePendingDeletedManifests();
 
 
 public: /*==== fields ====*/
