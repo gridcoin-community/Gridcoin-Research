@@ -4745,13 +4745,14 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
 
                     NN::Superblock superblock_Prev = ConvergedScraperStatsCache.NewFormatSuperblock;
 
-                    superblock = NN::Superblock::FromStats(mScraperConvergedStats);
-
                     ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
+                    ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
+
+                    superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
+
                     ConvergedScraperStatsCache.nNewFormatSuperblockHash = ScraperGetSuperblockHash(superblock);
                     ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
-                    ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
                     // Mark the cache clean, because it was just updated.
                     ConvergedScraperStatsCache.bClean = true;
