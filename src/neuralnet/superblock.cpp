@@ -313,6 +313,7 @@ std::string PackBinarySuperblock(std::string sBlock)
 
 Superblock::Superblock()
     : m_version(Superblock::CURRENT_VERSION)
+    , m_convergence_hint(0)
     , m_height(0)
     , m_timestamp(0)
 {
@@ -320,9 +321,35 @@ Superblock::Superblock()
 
 Superblock::Superblock(uint32_t version)
     : m_version(version)
+    , m_convergence_hint(0)
     , m_height(0)
     , m_timestamp(0)
 {
+}
+
+Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
+{
+    Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats);
+
+    superblock.m_convergence_hint = stats.Convergence.nContentHash.Get64() >> 32;
+
+    if (!stats.Convergence.bByParts) {
+        return superblock;
+    }
+
+    ProjectIndex& projects = superblock.m_projects;
+
+    // Add hints created from the hashes of converged manifest parts to each
+    // superblock project section to assist receiving nodes with validation:
+    //
+    for (const auto& part_pair : stats.Convergence.ConvergedManifestPartsMap) {
+        const std::string& project_name = part_pair.first;
+        const CSerializeData& part_data = part_pair.second;
+
+        projects.SetHint(project_name, part_data);
+    }
+
+    return superblock;
 }
 
 Superblock Superblock::FromStats(const ScraperStats& stats)
@@ -416,6 +443,11 @@ std::string Superblock::PackLegacy() const
         << "<QUOTES></QUOTES>";
 
     return out.str();
+}
+
+bool Superblock::ConvergedByProject() const
+{
+    return m_projects.m_converged_by_project;
 }
 
 int64_t Superblock::Age() const
@@ -545,6 +577,7 @@ Superblock::ProjectStats::ProjectStats()
     : m_total_credit(0)
     , m_average_rac(0)
     , m_rac(0)
+    , m_convergence_hint(0)
 {
 }
 
@@ -555,6 +588,7 @@ Superblock::ProjectStats::ProjectStats(
     : m_total_credit(total_credit)
     , m_average_rac(average_rac)
     , m_rac(rac)
+    , m_convergence_hint(0)
 {
 }
 
@@ -562,6 +596,7 @@ Superblock::ProjectStats::ProjectStats(uint64_t average_rac, uint64_t rac)
     : m_total_credit(0)
     , m_average_rac(average_rac)
     , m_rac(rac)
+    , m_convergence_hint(0)
 {
 }
 
@@ -569,7 +604,9 @@ Superblock::ProjectStats::ProjectStats(uint64_t average_rac, uint64_t rac)
 // Class: Superblock::ProjectIndex
 // -----------------------------------------------------------------------------
 
-Superblock::ProjectIndex::ProjectIndex() : m_total_rac(0)
+Superblock::ProjectIndex::ProjectIndex()
+    : m_converged_by_project(false)
+    , m_total_rac(0)
 {
 }
 
@@ -630,6 +667,22 @@ void Superblock::ProjectIndex::Add(std::string name, const ProjectStats& stats)
     if (m_projects.emplace(std::move(name), stats).second == true) {
         m_total_rac += stats.m_rac;
     }
+}
+
+void Superblock::ProjectIndex::SetHint(
+    const std::string& name,
+    const CSerializeData& part_data)
+{
+    auto iter = m_projects.find(name);
+
+    if (iter == m_projects.end()) {
+        return;
+    }
+
+    const uint256 part_hash = Hash(part_data.begin(), part_data.end());
+    iter->second.m_convergence_hint = part_hash.Get64() >> 32;
+
+    m_converged_by_project = true;
 }
 
 // -----------------------------------------------------------------------------
