@@ -52,6 +52,8 @@ enum
     // modifiers
     SER_SKIPSIG         = (1 << 16),
     SER_BLOCKHEADERONLY = (1 << 17),
+
+    // Bits 24-31 are reserved for implementation-specific modifiers.
 };
 
 #define IMPLEMENT_SERIALIZE(statements)    \

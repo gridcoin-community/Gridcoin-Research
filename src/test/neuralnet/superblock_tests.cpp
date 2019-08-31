@@ -250,6 +250,25 @@ ScraperStats GetTestScraperStats()
 
     return stats;
 }
+
+ConvergedScraperStats GetTestConvergence(const bool by_parts = false)
+{
+    ConvergedScraperStats convergence;
+
+    convergence.mScraperConvergedStats = GetTestScraperStats();
+
+    convergence.Convergence.bByParts = by_parts;
+    convergence.Convergence.nContentHash
+        = uint256("1111111111111111111111111111111111111111111111111111111111111111");
+
+    // Add some project parts with the same names as the projects in the stats.
+    // The part data doesn't matter, so we just add empty containers.
+    //
+    convergence.Convergence.ConvergedManifestPartsMap.emplace("project_1", CSerializeData());
+    convergence.Convergence.ConvergedManifestPartsMap.emplace("project_2", CSerializeData());
+
+    return convergence;
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -353,6 +372,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
     NN::Superblock superblock;
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_convergence_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
     BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
@@ -371,6 +391,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
     NN::Superblock superblock(1);
 
     BOOST_CHECK(superblock.m_version == 1);
+    BOOST_CHECK(superblock.m_convergence_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
     BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
@@ -387,6 +408,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 {
     NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats());
+
+    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_convergence_hint == 0);
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);
@@ -406,6 +430,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
         BOOST_CHECK(project_1->m_total_credit == 3000);
         BOOST_CHECK(project_1->m_average_rac == 102);
         BOOST_CHECK(project_1->m_rac == 203);
+        BOOST_CHECK(project_1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
@@ -414,6 +439,101 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
         BOOST_CHECK(project_2->m_total_credit == 7000);
         BOOST_CHECK(project_2->m_average_rac == 104);
         BOOST_CHECK(project_2->m_rac == 207);
+        BOOST_CHECK(project_2->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 2 not found in superblock.");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
+{
+    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence());
+
+    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+
+    // This initialization mode must set the convergence hint derived from
+    // the content hash of the convergence:
+    BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+
+    auto& cpids = superblock.m_cpids;
+    BOOST_CHECK(cpids.size() == 2);
+    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
+    BOOST_CHECK(cpids.AverageMagnitude() == 5008);
+    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
+    BOOST_CHECK(cpids.At(0)->second == 4008);
+    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
+    BOOST_CHECK(cpids.At(1)->second == 6008);
+
+    auto& projects = superblock.m_projects;
+    BOOST_CHECK(projects.m_converged_by_project == false);
+    BOOST_CHECK(projects.size() == 2);
+    BOOST_CHECK(projects.TotalRac() == 410);
+    BOOST_CHECK(projects.AverageRac() == 205.0);
+
+    if (const auto project_1 = projects.Try("project_1")) {
+        BOOST_CHECK(project_1->m_total_credit == 3000);
+        BOOST_CHECK(project_1->m_average_rac == 102);
+        BOOST_CHECK(project_1->m_rac == 203);
+        BOOST_CHECK(project_1->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 1 not found in superblock.");
+    }
+
+    if (const auto project_2 = projects.Try("project_2")) {
+        BOOST_CHECK(project_2->m_total_credit == 7000);
+        BOOST_CHECK(project_2->m_average_rac == 104);
+        BOOST_CHECK(project_2->m_rac == 207);
+        BOOST_CHECK(project_2->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 2 not found in superblock.");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnce)
+{
+    NN::Superblock superblock = NN::Superblock::FromConvergence(
+        GetTestConvergence(true)); // Set fallback by project flag
+
+    BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+
+    auto& cpids = superblock.m_cpids;
+    BOOST_CHECK(cpids.size() == 2);
+    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
+    BOOST_CHECK(cpids.AverageMagnitude() == 5008);
+    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
+    BOOST_CHECK(cpids.At(0)->second == 4008);
+    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
+    BOOST_CHECK(cpids.At(1)->second == 6008);
+
+    auto& projects = superblock.m_projects;
+
+    // By project flag must be true in a fallback-to-project convergence:
+    BOOST_CHECK(projects.m_converged_by_project == true);
+    BOOST_CHECK(projects.size() == 2);
+    BOOST_CHECK(projects.TotalRac() == 410);
+    BOOST_CHECK(projects.AverageRac() == 205.0);
+
+    if (const auto project_1 = projects.Try("project_1")) {
+        BOOST_CHECK(project_1->m_total_credit == 3000);
+        BOOST_CHECK(project_1->m_average_rac == 102);
+        BOOST_CHECK(project_1->m_rac == 203);
+
+        // The convergence hint must be set in fallback-to-project convergence.
+        // This is derived from the hash of an empty part data:
+        BOOST_CHECK(project_1->m_convergence_hint == 0xd3591376);
+    } else {
+        BOOST_FAIL("Project 1 not found in superblock.");
+    }
+
+    if (const auto project_2 = projects.Try("project_2")) {
+        BOOST_CHECK(project_2->m_total_credit == 7000);
+        BOOST_CHECK(project_2->m_average_rac == 104);
+        BOOST_CHECK(project_2->m_rac == 207);
+
+        // The convergence hint must be set in fallback-to-project convergence.
+        // This is derived from the hash of an empty part data:
+        BOOST_CHECK(project_2->m_convergence_hint == 0xd3591376);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
@@ -449,6 +569,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
 
     // Legacy string-packed superblocks unpack to version 1:
     BOOST_CHECK(superblock.m_version == 1);
+    BOOST_CHECK(superblock.m_convergence_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.size() == 3);
     BOOST_CHECK(superblock.m_cpids.Zeros() == 5);
@@ -459,6 +580,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
     BOOST_CHECK(superblock.m_cpids.At(2)->first.ToString() == cpid3);
     BOOST_CHECK(superblock.m_cpids.At(2)->second == 200);
 
+    BOOST_CHECK(superblock.m_projects.m_converged_by_project == false);
     BOOST_CHECK(superblock.m_projects.size() == 2);
     BOOST_CHECK(superblock.m_projects.TotalRac() == 1023);
     BOOST_CHECK(superblock.m_projects.AverageRac() == 511.5);
@@ -467,6 +589,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
         BOOST_CHECK(project_1->m_total_credit == 0);
         BOOST_CHECK(project_1->m_average_rac == 123);
         BOOST_CHECK(project_1->m_rac == 456);
+        BOOST_CHECK(project_1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
@@ -475,6 +598,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
         BOOST_CHECK(project_2->m_total_credit == 0);
         BOOST_CHECK(project_2->m_average_rac == 234);
         BOOST_CHECK(project_2->m_rac == 567);
+        BOOST_CHECK(project_2->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
@@ -508,6 +632,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
 
     // Legacy string-packed superblocks unpack to version 1:
     BOOST_CHECK(superblock.m_version == 1);
+    BOOST_CHECK(superblock.m_convergence_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.size() == 3);
     BOOST_CHECK(superblock.m_cpids.Zeros() == 0);
@@ -518,6 +643,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     BOOST_CHECK(superblock.m_cpids.At(2)->first.ToString() == cpid3);
     BOOST_CHECK(superblock.m_cpids.At(2)->second == 200);
 
+    BOOST_CHECK(superblock.m_projects.m_converged_by_project == false);
     BOOST_CHECK(superblock.m_projects.size() == 2);
     BOOST_CHECK(superblock.m_projects.TotalRac() == 1023);
     BOOST_CHECK(superblock.m_projects.AverageRac() == 511.5);
@@ -526,6 +652,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
         BOOST_CHECK(project_1->m_total_credit == 0);
         BOOST_CHECK(project_1->m_average_rac == 123);
         BOOST_CHECK(project_1->m_rac == 456);
+        BOOST_CHECK(project_1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in superblock.");
     }
@@ -534,6 +661,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
         BOOST_CHECK(project_2->m_total_credit == 0);
         BOOST_CHECK(project_2->m_average_rac == 234);
         BOOST_CHECK(project_2->m_rac == 567);
+        BOOST_CHECK(project_2->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
@@ -578,6 +706,18 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
     BOOST_CHECK(Legacy::GetQuorumHash(unpacked) == expected_hash);
 }
 
+BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
+{
+    NN::Superblock superblock;
+
+    BOOST_CHECK(superblock.ConvergedByProject() == false);
+
+    superblock.m_projects.Add("project_name", NN::Superblock::ProjectStats());
+    superblock.m_projects.SetHint("project_name", CSerializeData());
+
+    BOOST_CHECK(superblock.ConvergedByProject() == true);
+}
+
 BOOST_AUTO_TEST_CASE(it_calculates_its_age)
 {
     NN::Superblock superblock;
@@ -592,6 +732,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     std::vector<unsigned char> expected {
         0x02, 0x00, 0x00, 0x00,                         // Version
+        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
         0x02,                                           // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
@@ -600,6 +741,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
         0xfd, 0x78, 0x17,                               // Magnitude
         0x00,                                           // Zero count (VARINT)
+        0x00,                                           // By-project flag
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
@@ -613,7 +755,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x80, 0x4f,                                     // Total RAC (VARINT)
     };
 
-    NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats());
+    NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence());
 
     BOOST_CHECK(superblock.GetSerializeSize(SER_NETWORK, 1) == expected.size());
 
@@ -628,6 +770,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 {
     std::vector<unsigned char> bytes {
         0x02, 0x00, 0x00, 0x00,                         // Version
+        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
         0x02,                                           // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
@@ -636,6 +779,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
         0xfd, 0x78, 0x17,                               // Magnitude
         0x00,                                           // Zero count (VARINT)
+        0x00,                                           // By-project flag
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
@@ -655,6 +799,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     stream >> superblock;
 
     BOOST_CHECK(superblock.m_version == 2);
+    BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
 
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);
@@ -667,6 +812,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(cpids.At(1)->second == 6008);
 
     const auto& projects = superblock.m_projects;
+    BOOST_CHECK(projects.m_converged_by_project == false);
     BOOST_CHECK(projects.size() == 2);
     BOOST_CHECK(projects.TotalRac() == 410);
     BOOST_CHECK(projects.AverageRac() == 205.0);
@@ -675,6 +821,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         BOOST_CHECK(project1->m_total_credit == 3000);
         BOOST_CHECK(project1->m_average_rac == 102);
         BOOST_CHECK(project1->m_rac == 203);
+        BOOST_CHECK(project1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in index.");
     }
@@ -683,6 +830,126 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         BOOST_CHECK(project2->m_total_credit == 7000);
         BOOST_CHECK(project2->m_average_rac == 104);
         BOOST_CHECK(project2->m_rac == 207);
+        BOOST_CHECK(project2->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 2 not found in index.");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
+{
+    // Superblocks generated from fallback-by-project convergences include
+    // convergence hints with a by-project flag set to 1:
+    //
+    std::vector<unsigned char> expected {
+        0x02, 0x00, 0x00, 0x00,                         // Version
+        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
+        0x02,                                           // CPIDs size
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
+        0xfd, 0xa8, 0x0f,                               // Magnitude
+        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, // CPID 2
+        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
+        0xfd, 0x78, 0x17,                               // Magnitude
+        0x00,                                           // Zero count (VARINT)
+        0x01,                                           // By-project flag
+        0x02,                                           // Projects size
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
+        0x5f, 0x31,                                     // ...
+        0x96, 0x38,                                     // Total credit (VARINT)
+        0x66,                                           // Average RAC (VARINT)
+        0x80, 0x4b,                                     // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
+        0x5f, 0x32,                                     // ...
+        0xb5, 0x58,                                     // Total credit (VARINT)
+        0x68,                                           // Average RAC (VARINT)
+        0x80, 0x4f,                                     // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+    };
+
+    NN::Superblock superblock = NN::Superblock::FromConvergence(
+        GetTestConvergence(true)); // Set fallback by project flag
+
+    BOOST_CHECK(superblock.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << superblock;
+    std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output == expected);
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
+{
+    // Superblocks generated from fallback-by-project convergences include
+    // convergence hints with a by-project flag set to 1:
+    //
+    std::vector<unsigned char> bytes {
+        0x02, 0x00, 0x00, 0x00,                         // Version
+        0x11, 0x11, 0x11, 0x11,                         // Convergence hint
+        0x02,                                           // CPIDs size
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
+        0xfd, 0xa8, 0x0f,                               // Magnitude
+        0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x09, 0x08, // CPID 2
+        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, // ...
+        0xfd, 0x78, 0x17,                               // Magnitude
+        0x00,                                           // Zero count (VARINT)
+        0x01,                                           // By-project flag
+        0x02,                                           // Projects size
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
+        0x5f, 0x31,                                     // ...
+        0x96, 0x38,                                     // Total credit (VARINT)
+        0x66,                                           // Average RAC (VARINT)
+        0x80, 0x4b,                                     // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
+        0x5f, 0x32,                                     // ...
+        0xb5, 0x58,                                     // Total credit (VARINT)
+        0x68,                                           // Average RAC (VARINT)
+        0x80, 0x4f,                                     // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+    };
+
+    NN::Superblock superblock;
+
+    CDataStream stream(bytes, SER_NETWORK, 1);
+    stream >> superblock;
+
+    BOOST_CHECK(superblock.m_version == 2);
+    BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+
+    const auto& cpids = superblock.m_cpids;
+    BOOST_CHECK(cpids.size() == 2);
+    BOOST_CHECK(cpids.Zeros() == 0);
+    BOOST_CHECK(cpids.TotalMagnitude() == 10016);
+    BOOST_CHECK(cpids.AverageMagnitude() == 5008.0);
+    BOOST_CHECK(cpids.At(0)->first.ToString() == "00010203040506070809101112131415");
+    BOOST_CHECK(cpids.At(0)->second == 4008);
+    BOOST_CHECK(cpids.At(1)->first.ToString() == "15141312111009080706050403020100");
+    BOOST_CHECK(cpids.At(1)->second == 6008);
+
+    const auto& projects = superblock.m_projects;
+    BOOST_CHECK(projects.m_converged_by_project == true);
+    BOOST_CHECK(projects.size() == 2);
+    BOOST_CHECK(projects.TotalRac() == 410);
+    BOOST_CHECK(projects.AverageRac() == 205.0);
+
+    if (const auto project1 = projects.Try("project_1")) {
+        BOOST_CHECK(project1->m_total_credit == 3000);
+        BOOST_CHECK(project1->m_average_rac == 102);
+        BOOST_CHECK(project1->m_rac == 203);
+        BOOST_CHECK(project1->m_convergence_hint == 0xd3591376);
+    } else {
+        BOOST_FAIL("Project 1 not found in index.");
+    }
+
+    if (const auto project2 = projects.Try("project_2")) {
+        BOOST_CHECK(project2->m_total_credit == 7000);
+        BOOST_CHECK(project2->m_average_rac == 104);
+        BOOST_CHECK(project2->m_rac == 207);
+        BOOST_CHECK(project2->m_convergence_hint == 0xd3591376);
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
@@ -977,6 +1244,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_zero_statistics_object)
     BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 0);
     BOOST_CHECK(stats.m_rac == 0);
+    BOOST_CHECK(stats.m_convergence_hint == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_statistics)
@@ -986,6 +1254,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_statistics)
     BOOST_CHECK(stats.m_total_credit == 123);
     BOOST_CHECK(stats.m_average_rac == 456);
     BOOST_CHECK(stats.m_rac == 789);
+    BOOST_CHECK(stats.m_convergence_hint == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_supplied_legacy_superblock_statistics)
@@ -995,6 +1264,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_supplied_legacy_superblock_statistics)
     BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 123);
     BOOST_CHECK(stats.m_rac == 456);
+    BOOST_CHECK(stats.m_convergence_hint == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
@@ -1032,6 +1302,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(project.m_total_credit == 1);
     BOOST_CHECK(project.m_average_rac == 2);
     BOOST_CHECK(project.m_rac == 3);
+    BOOST_CHECK(project.m_convergence_hint == 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1046,6 +1317,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_index)
 {
     NN::Superblock::ProjectIndex projects;
 
+    BOOST_CHECK(projects.m_converged_by_project == false);
     BOOST_CHECK(projects.size() == 0);
 }
 
@@ -1089,6 +1361,24 @@ BOOST_AUTO_TEST_CASE(it_fetches_the_statistics_of_a_specific_project)
         BOOST_CHECK(project->m_total_credit == 123);
         BOOST_CHECK(project->m_average_rac == 456);
         BOOST_CHECK(project->m_rac == 789);
+        BOOST_CHECK(project->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project not found in index.");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
+{
+    NN::Superblock::ProjectIndex projects;
+
+    projects.Add("project_name", NN::Superblock::ProjectStats());
+    projects.SetHint("project_name", CSerializeData());
+
+    BOOST_CHECK(projects.m_converged_by_project == true);
+
+    if (const auto project = projects.Try("project_name")) {
+        // Hint derived from the hash of an empty part data:
+        BOOST_CHECK(project->m_convergence_hint == 0xd3591376);
     } else {
         BOOST_FAIL("Project not found in index.");
     }
@@ -1223,6 +1513,7 @@ BOOST_AUTO_TEST_CASE(it_is_iterable)
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     const std::vector<unsigned char> expected {
+        0x00,                                           // By-project flag
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
@@ -1253,6 +1544,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 {
     const std::vector<unsigned char> bytes {
+        0x00,                                           // By-project flag
         0x02,                                           // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
         0x5f, 0x31,                                     // ...
@@ -1271,12 +1563,14 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     CDataStream stream(bytes, SER_NETWORK, 1);
     stream >> projects;
 
+    BOOST_CHECK(projects.m_converged_by_project == false);
     BOOST_CHECK(projects.size() == 2);
 
     if (const auto project1 = projects.Try("project_1")) {
         BOOST_CHECK(project1->m_total_credit == 1);
         BOOST_CHECK(project1->m_average_rac == 2);
         BOOST_CHECK(project1->m_rac == 3);
+        BOOST_CHECK(project1->m_convergence_hint == 0);
     } else {
         BOOST_FAIL("Project 1 not found in index.");
     }
@@ -1285,6 +1579,98 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         BOOST_CHECK(project2->m_total_credit == 1);
         BOOST_CHECK(project2->m_average_rac == 2);
         BOOST_CHECK(project2->m_rac == 3);
+        BOOST_CHECK(project2->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 2 not found in index.");
+    }
+
+    BOOST_CHECK(projects.TotalRac() == 6);
+    BOOST_CHECK(projects.AverageRac() == 3);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
+{
+    // A project index generated from fallback-by-project convergences includes
+    // convergence hints with a by-project flag set to 1:
+    //
+    const std::vector<unsigned char> expected {
+        0x01,                                           // By-project flag
+        0x02,                                           // Projects size
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
+        0x5f, 0x31,                                     // ...
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
+        0x5f, 0x32,                                     // ...
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+    };
+
+    NN::Superblock::ProjectIndex projects;
+
+    projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
+    projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
+
+    projects.SetHint("project_1", CSerializeData());
+    projects.SetHint("project_2", CSerializeData());
+
+    BOOST_CHECK(projects.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << projects;
+    std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output == expected);
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
+{
+    // A project index generated from fallback-by-project convergences includes
+    // convergence hints with a by-project flag set to 1:
+    //
+    const std::vector<unsigned char> bytes {
+        0x01,                                           // By-project flag
+        0x02,                                           // Projects size
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_1" key
+        0x5f, 0x31,                                     // ...
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+        0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
+        0x5f, 0x32,                                     // ...
+        0x01,                                           // Total credit (VARINT)
+        0x02,                                           // Average RAC (VARINT)
+        0x03,                                           // Total RAC (VARINT)
+        0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
+    };
+
+    NN::Superblock::ProjectIndex projects;
+
+    CDataStream stream(bytes, SER_NETWORK, 1);
+    stream >> projects;
+
+    BOOST_CHECK(projects.m_converged_by_project == true);
+    BOOST_CHECK(projects.size() == 2);
+
+    if (const auto project1 = projects.Try("project_1")) {
+        BOOST_CHECK(project1->m_total_credit == 1);
+        BOOST_CHECK(project1->m_average_rac == 2);
+        BOOST_CHECK(project1->m_rac == 3);
+        BOOST_CHECK(project1->m_convergence_hint == 0xd3591376);
+    } else {
+        BOOST_FAIL("Project 1 not found in index.");
+    }
+
+    if (const auto project2 = projects.Try("project_2")) {
+        BOOST_CHECK(project2->m_total_credit == 1);
+        BOOST_CHECK(project2->m_average_rac == 2);
+        BOOST_CHECK(project2->m_rac == 3);
+        BOOST_CHECK(project2->m_convergence_hint == 0xd3591376);
     } else {
         BOOST_FAIL("Project 2 not found in index.");
     }
@@ -1377,6 +1763,9 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     projects.Add("project_1", NN::Superblock::ProjectStats(0, 0, 0));
     projects.Add("project_2", NN::Superblock::ProjectStats(0, 0, 0));
 
+    // Note: convergence hints embedded in a superblock are NOT considered
+    // when generating the superblock hash:
+    //
     std::vector<unsigned char> input {
         0x02,                                            // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,  // CPID 1
