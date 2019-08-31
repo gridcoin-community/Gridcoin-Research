@@ -4364,6 +4364,9 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
 
     unsigned int nPendingDeleted = 0;
 
+    _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Size of mapPendingDeletedManifest before delete = "
+         + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
+
     // Clear old CScraperManifests out of mapPendingDeletedManifest.
     nPendingDeleted = CScraperManifest::DeletePendingDeletedManifests();
     _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Permanently deleted " + std::to_string(nPendingDeleted) + " manifest(s) pending permanent deletion.");
