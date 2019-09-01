@@ -33,6 +33,7 @@ enum class scrapereventtypes
 enum class scraperSBvalidationtype
 {
     Invalid,
+    Unknown,
     CurrentCachedConvergence,
     CachedPastConvergence,
     ManifestLevelConvergence,

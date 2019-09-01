@@ -3996,7 +3996,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
     uint256 nManifestHashForConvergedBeaconList = 0;
 
     // We are going to do this for each project in the whitelist.
-    unsigned int iCountSuccesfulConvergedProjects = 0;
+    unsigned int iCountSuccessfulConvergedProjects = 0;
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
     _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
@@ -4139,7 +4139,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                     nManifestHashForConvergedBeaconList = std::get<2>(iter.second);
                 }
 
-                iCountSuccesfulConvergedProjects++;
+                iCountSuccessfulConvergedProjects++;
 
                 // Note this break is VERY important, it prevents considering essentially the same project object that meets convergence multiple times.
                 break;
@@ -4148,7 +4148,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
     }
 
     // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
-    if ((double)iCountSuccesfulConvergedProjects / (double)projectWhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
+    if ((double)iCountSuccessfulConvergedProjects / (double)projectWhitelist.size() >= CONVERGENCE_BY_PROJECT_RATIO)
     {
         // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
         // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
@@ -4181,7 +4181,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
         bConvergenceSuccessful = true;
 
         _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
-             + std::to_string(iCountSuccesfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
+             + std::to_string(iCountSuccessfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
              + " projects at "
              + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
 
@@ -4908,26 +4908,58 @@ bool ScraperSynchronizeDPOR()
     return bStatus;
 }
 
-
-// Used for bv11+ (SB version 2+)
-scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock)
+//!
+//! \brief The superblock validation function used for bv11+ (SB version 2+)
+//!
+//! This function supports four different levels of validation, and invalid.
+//!     Invalid,
+//!     CurrentCachedConvergence,
+//!     CachedPastConvergence,
+//!     ManifestLevelConvergence,
+//!     ProjectLevelConvergence
+//!
+//! This is an enum class with five possible values.
+//!
+//! There are enumerated in increasing order of difficulty and decreasing
+//! frequency. It is expected that the vast majority of time the superblock
+//! should be validated from the current cached convergence or the cached
+//! past convergence. In the case where a node has just started up when the
+//! superblock comes in to be validated, there may be no cache entry that
+//! corresponds to the incoming superblock contract. In that case we have to
+//! fallback to trying to reconstruct the staking node's convergence at either
+//! the manifest or project level from the received manifest and parts
+//! information and see if the superblock formed from that matches the hash.
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache)
 {
+    // Calculate the hash of the superblock to validate.
     NN::QuorumHash nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
 
-    LOCK(cs_ConvergedScraperStatsCache);
+    // manifest hash hint (reduced hash) from superblock...
+    uint32_t nReducedSBContentHash = NewFormatSuperblock.m_convergence_hint;
 
-    // First check and see if superblock contract hash is the current one in the cache.
-    if (ConvergedScraperStatsCache.nNewFormatSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::CurrentCachedConvergence;
-
-    // Placeholder for manifest hash from superblock...
-    uint32_t nReducedSBContentHash = 11111111; // Waiting on cycy
-
-    // if not validated with current cached contract, then check past ones in the cache.
-    auto found = ConvergedScraperStatsCache.PastConvergences.find(nReducedSBContentHash);
-
-    if (found != ConvergedScraperStatsCache.PastConvergences.end())
+    if (bUseCache)
     {
-        if (found->second.first == nNewFormatSuperblockHash) return scraperSBvalidationtype::CachedPastConvergence;
+        // Retrieve current convergence superblock. This will have the effect of updating
+        // the convergence and populating the cache with the latest. If the cache has
+        // already been updated via the housekeeping loop and is clean, this will be trivial.
+        NN::Superblock CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
+
+        // If there is no superblock returned, the node is either out of sync, or has not
+        // received enough manifests and parts to calculate a convergence. Return unknown.
+        if (!CurrentNodeSuperblock.GetSerializeSize(SER_NETWORK, 1)) return scraperSBvalidationtype::Unknown;
+
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        // First check and see if superblock contract hash is the current one in the cache.
+        if (ConvergedScraperStatsCache.nNewFormatSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::CurrentCachedConvergence;
+
+        // if not validated with current cached contract, then check past ones in the cache.
+        auto found = ConvergedScraperStatsCache.PastConvergences.find(nReducedSBContentHash);
+
+        if (found != ConvergedScraperStatsCache.PastConvergences.end())
+        {
+            if (found->second.first == nNewFormatSuperblockHash) return scraperSBvalidationtype::CachedPastConvergence;
+        }
     }
 
     // Now for the hard stuff... borrowed from the ScraperConstructConvergedManifest function...
@@ -4940,101 +4972,350 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
     unsigned int nScraperCount = mMapCSManifestsBinnedByScraper.size();
 
-    _log(logattribute::INFO, "ValidateSuperblock", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
-
-    for (const auto& iter : mMapCSManifestsBinnedByScraper)
+    // If the superblock indicates not converged by project, then reconstruct at the manifest level
+    // else reconstruct at the project level.
+    if (!NewFormatSuperblock.ConvergedByProject())
     {
-        // iter.second is the mCSManifest
-        for (const auto& iter_inner : iter.second)
+        _log(logattribute::INFO, "ValidateSuperblock", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+
+        for (const auto& iter : mMapCSManifestsBinnedByScraper)
         {
-            // Insert into mManifestsBinnedByTime multimap. Iter_inner.first is the manifest time,
-            // iter_inner.second.second is the manifest CONTENT hash.
-            // mManifestsBinnedByTime.insert(std::make_pair(iter_inner.first, iter_inner.second.second));
-
-            // Even though this is a multimap on purpose because we are going to count occurances of the same key,
-            // We need to prevent the insertion of a second entry with the same content from the same scraper. This
-            // could otherwise happen if a scraper is shutdown and restarted, and it publishes a new manifest
-            // before it receives manifests from the other nodes (including its own prior manifests).
-            // ------------------------------------------------  manifest CONTENT hash
-            auto range = mManifestsBinnedbyContent.equal_range(iter_inner.second.second);
-            bool bAlreadyExists = false;
-            for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+            // iter.second is the mCSManifest
+            for (const auto& iter_inner : iter.second)
             {
-                // ---- ScraperID ------ Candidate scraperID to insert
-                if (iter3->second.first == iter.first)
-                    bAlreadyExists = true;
+                // Insert into mManifestsBinnedByTime multimap. Iter_inner.first is the manifest time,
+                // iter_inner.second.second is the manifest CONTENT hash.
+                // mManifestsBinnedByTime.insert(std::make_pair(iter_inner.first, iter_inner.second.second));
+
+                // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+                // We need to prevent the insertion of a second entry with the same content from the same scraper. This
+                // could otherwise happen if a scraper is shutdown and restarted, and it publishes a new manifest
+                // before it receives manifests from the other nodes (including its own prior manifests).
+                // ------------------------------------------------  manifest CONTENT hash
+                auto range = mManifestsBinnedbyContent.equal_range(iter_inner.second.second);
+                bool bAlreadyExists = false;
+                for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+                {
+                    // ---- ScraperID ------ Candidate scraperID to insert
+                    if (iter3->second.first == iter.first)
+                        bAlreadyExists = true;
+                }
+
+                if (!bAlreadyExists)
+                {
+                    // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
+                    mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
+                    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert, timestamp "
+                                      + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
+                                      + ", content hash "+ iter_inner.second.second.GetHex()
+                                      + ", scraper ID " + iter.first
+                                      + ", manifest hash " + iter_inner.second.first.GetHex());
+                }
             }
+        }
 
-            if (!bAlreadyExists)
+        // Find matching manifests (full hash) using the hint. We use a map here to prevent duplicates on purpose. Note that
+        // we need this, because there is a small possibility that the hint could match MORE THAN ONE content hash, because
+        // the reduced hash is only 32 bits.
+        // content hash - manifest hash
+        std::map<uint256, uint256> mMatchingManifestContentHashes;
+
+        for (const auto& iter : mManifestsBinnedbyContent)
+        {
+            uint32_t nReducedManifestContentHash = iter.first.Get64() >> 32;
+
+            // This has the effect of only storing the first one of the series of matching manifests that match the hint,
+            // because of the insert. Below we will count the others matching to check for a supermajority.
+            if (nReducedManifestContentHash == nReducedSBContentHash) mMatchingManifestContentHashes.insert(std::make_pair(iter.first, iter.second.second));
+        }
+
+        // For each of the matching full content hashes, count the number of manifests by full content hash.
+        // We continue until a group meets the supermajority rule--then there was an uncached past convergence and it is validated.
+        // This scenario is typically due to a node that was started late in the scraper manifest generation cycle, so it
+        // has all of the underlying manifests from the scrapers, but has not calculated and cached all of the convergences
+        // that would be calculated and cached on the node from running a long time with the nScraperSleep interval NN loop.
+        for (const auto& iter : mMatchingManifestContentHashes)
+        {
+            unsigned int nIdenticalContentManifestCount = mManifestsBinnedbyContent.count(iter.first);
+
+            if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
             {
-                // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
-                mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert, timestamp "
-                                  + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
-                                  + ", content hash "+ iter_inner.second.second.GetHex()
-                                  + ", scraper ID " + iter.first
-                                  + ", manifest hash " + iter_inner.second.first.GetHex());
+
+                CScraperManifest CandidateManifest;
+
+                {
+                    LOCK(CScraperManifest::cs_mapManifest);
+
+                    auto found = CScraperManifest::mapManifest.find(iter.second);
+
+                    if (found != CScraperManifest::mapManifest.end())
+                    {
+                        // This is a copy on purpose to minimize lock time.
+                        CandidateManifest = *found->second;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+
+                ScraperStats mScraperstats = GetScraperStatsFromSingleManifest(CandidateManifest);
+
+                NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
+
+                NN::QuorumHash nCandidateSuperblockHash = ScraperGetSuperblockHash(superblock);
+
+                if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ManifestLevelConvergence;
             }
         }
     }
-
-    // Find matching manifests (full hash) using the hint. We use a map here to prevent duplicates on purpose. Note that
-    // we need this, because there is a small possibility that the hint could match MORE THAN ONE content hash, because
-    // the reduced hash is only 32 bits.
-    // content hash - manifest hash
-    std::map<uint256, uint256> mMatchingManifestContentHashes;
-
-    for (const auto& iter : mManifestsBinnedbyContent)
+    else
     {
-        uint32_t nReducedManifestContentHash = iter.first.Get64() >> 32;
+        // We are in converged by project validation mode... the harder stuff...
+        // borrowed from the ScraperConstructConvergedManifestByProject function...
 
-        // This has the effect of only storing the first one of the series of matching manifests that match the hint,
-        // because of the insert. Below we will count the others matching to check for a supermajority.
-        if (nReducedManifestContentHash == nReducedSBContentHash) mMatchingManifestContentHashes.insert(std::make_pair(iter.first, iter.second.second));
-    }
+        // Get the whitelist.
+        const NN::WhitelistSnapshot projectWhitelist = NN::GetWhitelist().Snapshot();
 
-    // For each of the matching full content hashes, count the number of manifests by full content hash.
-    // We continue until a group meets the supermajority rule--then there was an uncached past convergence and it is validated.
-    // This scenario is typically due to a node that was started late in the scraper manifest generation cycle, so it
-    // has all of the underlying manifests from the scrapers, but has not calculated and cached all of the convergences
-    // that would be calculated and cached on the node from running a long time with the nScraperSleep interval NN loop.
-    for (const auto& iter : mMatchingManifestContentHashes)
-    {
-        unsigned int nIdenticalContentManifestCount = mManifestsBinnedbyContent.count(iter.first);
+        // Create a dummy converged manifest to use.
+        ConvergedManifest StructDummyConvergedManifest;
 
-        if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
+        CDataStream ss(SER_NETWORK,1);
+        uint256 nConvergedConsensusBlock = 0;
+        int64_t nConvergedConsensusTime = 0;
+        uint256 nManifestHashForConvergedBeaconList = 0;
+
+        // We are going to do this for each project in the whitelist.
+        unsigned int iCountMatchedProjects = 0;
+        unsigned int iCountSuccessfulConvergedProjects = 0;
+
+        _log(logattribute::INFO, "ValidateSuperblock", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
+
+        // Content (Part) Hash - Project
+        std::map<uint256, std::string> mMatchingProjectPartHashes;
+
+
+        // TODO: Should this be based on the list of projects in the SB? (Equivalent to a cached whitelist state.)
+        for (const auto& iWhitelistProject : projectWhitelist)
         {
-
-            CScraperManifest CandidateManifest;
+            // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project Objects (Parts),
+            // the content hash is the object hash. We also need the consensus block here, because we are "composing" the manifest by
+            // parts, so we will need to choose the latest consensus block by manifest time. This will occur naturally below if tracked in
+            // this manner. We will also want the BeaconList from the associated manifest.
+            // ------ manifest time --- object hash - consensus block hash - manifest hash.
+            std::multimap<int64_t, std::tuple<uint256, uint256, uint256>, greater<int64_t>> mProjectObjectsBinnedByTime;
+            // and also by project object (content) hash, then scraperID and project.
+            std::multimap<uint256, std::pair<ScraperID, std::string>> mProjectObjectsBinnedbyContent;
+            //std::multimap<uint256, std::pair<ScraperID, std::string>>::iterator ProjectConvergence;
 
             {
                 LOCK(CScraperManifest::cs_mapManifest);
+                if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
-                auto found = CScraperManifest::mapManifest.find(iter.second);
-
-                if (found != CScraperManifest::mapManifest.end())
+                // For the selected project in the whitelist, walk each scraper.
+                for (const auto& iter : mMapCSManifestsBinnedByScraper)
                 {
-                    // This is a copy on purpose to minimize lock time.
-                    CandidateManifest = *found->second;
+                    // iter.second is the mCSManifest. Walk each manifest in each scraper.
+                    for (const auto& iter_inner : iter.second)
+                    {
+                        // This is the referenced CScraperManifest hash
+                        uint256 nCSManifestHash = iter_inner.second.first;
+
+                        // Select manifest based on provided hash.
+                        auto pair = CScraperManifest::mapManifest.find(nCSManifestHash);
+                        CScraperManifest& manifest = *pair->second;
+
+                        // Find the part number in the manifest that corresponds to the whitelisted project.
+                        // Once we find a part that corresponds to the selected project in the given manifest, then break,
+                        // because there can only be one part in a manifest corresponding to a given project.
+                        int nPart = -1;
+                        int64_t nProjectObjectTime = 0;
+                        uint256 nProjectObjectHash = 0;
+                        for (const auto& vectoriter : manifest.projects)
+                        {
+                            if (vectoriter.project == iWhitelistProject.m_name)
+                            {
+                                nPart = vectoriter.part1;
+                                nProjectObjectTime = vectoriter.LastModified;
+                                break;
+                            }
+                        }
+
+                        // Part -1 means not found, Part 0 is the beacon list, so needs to be greater than zero.
+                        if (nPart > 0)
+                        {
+                            // Get the hash of the part referenced in the manifest.
+                            nProjectObjectHash = manifest.vParts[nPart]->hash;
+
+                            // Insert into mManifestsBinnedByTime multimap.
+                            mProjectObjectsBinnedByTime.insert(std::make_pair(nProjectObjectTime, std::make_tuple(nProjectObjectHash, manifest.ConsensusBlock, *manifest.phash)));
+
+                            // Even though this is a multimap on purpose because we are going to count occurances of the same key,
+                            // We need to prevent the insertion of a second entry with the same content from the same scraper. This is
+                            // even more true here at the part level than at the manifest level, because if both SCRAPER_CMANIFEST_RETAIN_NONCURRENT
+                            // and SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES are true, then there can be many references
+                            // to the same part by different manifests of the same scraper in addition to across scrapers.
+                            auto range = mProjectObjectsBinnedbyContent.equal_range(nProjectObjectHash);
+                            bool bAlreadyExists = false;
+                            for (auto iter3 = range.first; iter3 != range.second; ++iter3)
+                            {
+                                // ---- ScraperID ------ Candidate scraperID to insert
+                                if (iter3->second.first == iter.first)
+                                    bAlreadyExists = true;
+                            }
+
+                            if (!bAlreadyExists)
+                            {
+                                // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
+                                mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.m_name)));
+                                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert "
+                                                  + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
+                            }
+                        }
+                    }
                 }
-                else
+
+                bool bMatched = false;
+
+                // Get an iterator pointing to the project in the project index map and match to the hint.
+                if (const auto SBProjectIter = NewFormatSuperblock.m_projects.Try(iWhitelistProject.m_name))
                 {
-                    continue;
+                    // Pull the convergence hint (reduced content hash) for the project object.
+                    uint32_t nReducedSBProjectObjectContentHash = SBProjectIter->m_convergence_hint;
+
+                    for (const auto& iter : mProjectObjectsBinnedbyContent)
+                    {
+                        uint32_t nReducedProjectObjectContentHash = iter.first.Get64() >> 32;
+
+                        // This has the effect of only storing the first one of the series of matching project parts (from different scrapers) with the same
+                        // full hash that match the hint, because of the insert. Below we will count the others matching to check for a supermajority.
+                        // Note that two different full hashes that match the hint for the same project would be included.
+                        if (nReducedProjectObjectContentHash == nReducedSBProjectObjectContentHash)
+                        {
+                            // ------------------------------------------ full content hash ---- project name
+                            mMatchingProjectPartHashes.insert(std::make_pair(iter.first, iWhitelistProject.m_name));
+                            bMatched = true;
+                        }
+                    }
+                }
+
+                // Keep track of the number of matched projects.
+                if (bMatched) ++iCountMatchedProjects;
+
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            }
+
+            uint256 nLatestProjectPartMatchingHash;
+            int64_t nLatestProjectPartMatchingTime;
+            uint256 nLatestProjectPartMatchingConsensusBlock;
+            uint256 nLatestProjectPartMatchingManifestForBeaconList;
+
+            for (const auto& iter : mMatchingProjectPartHashes)
+            {
+                // We want the most recent (latest) part, constrained to the above map. This is slightly different from.
+                // but similar to the construction of the convergence without constraint.
+                for (const auto& iter_inner : mProjectObjectsBinnedByTime)
+                {
+                    // Only go until the first match (latest), then break.
+                    if (std::get<0>(iter_inner.second) == iter.first)
+                    {
+                        nLatestProjectPartMatchingHash = iter.first;
+                        nLatestProjectPartMatchingTime = iter_inner.first;
+                        nLatestProjectPartMatchingConsensusBlock = get<1>(iter_inner.second);
+                        nLatestProjectPartMatchingManifestForBeaconList = get<2>(iter_inner.second);
+
+                        break;
+                    }
                 }
             }
 
-            ScraperStats mScraperstats = GetScraperStatsFromSingleManifest(CandidateManifest);
+            unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(nLatestProjectPartMatchingHash);
+
+            if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
+            {
+                // Get the actual part ----------------- by object hash.
+                auto iPart = CSplitBlob::mapParts.find(nLatestProjectPartMatchingHash);
+
+                uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
+
+                if (nContentHashCheck != iPart->first)
+                {
+                    _log(logattribute::ERR, "ValidateSuperblock", "Selected Converged Project Object content hash check failed! nContentHashCheck = "
+                         + nContentHashCheck.GetHex() + " and nContentHash = " + iPart->first.GetHex());
+
+                    // Bail.
+                    return scraperSBvalidationtype::Invalid;
+                }
+
+                // Put Project Object (Part) in Dummy StructConvergedManifest keyed by project.
+                StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.m_name, iPart->second.data));
+
+                // If the indirectly referenced manifest has a consensus time that is greater than already recorded, replace with that time, and also
+                // change the consensus block to the referred to consensus block. (Note that this is scoped at even above the individual project level, so
+                // the result after iterating through all projects will be the latest manifest time and consensus block that corresponds to any of the
+                // parts that meet convergence.) We will also get the manifest hash too, so we can retrieve the associated BeaconList that was used.
+                // This version is subject to the constraints of the hint by the above code, but operates similar to a normal convergence construction.
+                if (nLatestProjectPartMatchingTime > nConvergedConsensusTime)
+                {
+                    nConvergedConsensusTime = nLatestProjectPartMatchingTime;
+                    nConvergedConsensusBlock = nLatestProjectPartMatchingConsensusBlock;
+                    nManifestHashForConvergedBeaconList = nLatestProjectPartMatchingManifestForBeaconList;
+                }
+
+                // Keep track of the number of matched projects that go in the convergence.
+                ++iCountSuccessfulConvergedProjects;
+            }
+        }
+
+        // If we have a three way match, then proceed with the construction of local candidate SB
+        // to validate, otherwise there is no validation.
+        if (iCountSuccessfulConvergedProjects == iCountMatchedProjects && iCountMatchedProjects == NewFormatSuperblock.m_projects.size())
+        {
+            // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
+            // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
+
+            // Lets use the BeaconList from the manifest referred to by nManifestHashForConvergedBeaconList. Technically there is no exact answer to
+            // the BeaconList that should be used in the convergence when putting it together at the individual part level, because each project part
+            // could have used a different BeaconList (subject to the consensus ladder. It makes sense to use the "newest" one that is associated
+            // with a manifest that has the newest part associated with a successful part (project) level convergence.
+
+            LOCK(CScraperManifest::cs_mapManifest);
+            if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+
+            // Select manifest based on provided hash.
+            auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
+            CScraperManifest& manifest = *pair->second;
+
+            // The vParts[0] is always the BeaconList.
+            StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]->data));
+
+            StructDummyConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
+
+            // The ConvergedManifest content hash is in the order of the map key and on the data.
+            for (const auto& iter : StructDummyConvergedManifest.ConvergedManifestPartsMap)
+                ss << iter.second;
+
+            StructDummyConvergedManifest.nContentHash = Hash(ss.begin(), ss.end());
+            StructDummyConvergedManifest.timestamp = GetAdjustedTime();
+            StructDummyConvergedManifest.bByParts = true;
+
+            _log(logattribute::INFO, "ValidateSuperblock", "Successful convergence by project: "
+                 + std::to_string(iCountSuccessfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
+                 + " projects at "
+                 + DateTimeStrFormat("%x %H:%M:%S",  StructDummyConvergedManifest.timestamp));
+
+
+            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+
+            ScraperStats mScraperstats = GetScraperStatsByConvergedManifest(StructDummyConvergedManifest);
 
             NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
 
             NN::QuorumHash nCandidateSuperblockHash = ScraperGetSuperblockHash(superblock);
 
-            if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ManifestLevelConvergence;
-        }
+            if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ProjectLevelConvergence;
+        } // If you fall out of this if statement... no validation.
     }
-
-    // Placeholder for project level validation.
-
 
     // If we make it here, there is no validation.
     return scraperSBvalidationtype::Invalid;
@@ -5228,6 +5509,33 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash FAILED.");
         res.pushKV("NewFormatSuperblock legacy hash", "FAILED");
     }
+
+    scraperSBvalidationtype validity = ValidateSuperblock(NewFormatSuperblock, true);
+
+    if (validity != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (using cache) passed - " + GetTextForscraperSBvalidationtype(validity));
+        res.pushKV("NewFormatSuperblock validation", "passed - " + GetTextForscraperSBvalidationtype(validity));
+    }
+    else
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (using cache) failed - " + GetTextForscraperSBvalidationtype(validity));
+        res.pushKV("NewFormatSuperblock validation", "failed - " + GetTextForscraperSBvalidationtype(validity));
+    }
+
+    scraperSBvalidationtype validity2 = ValidateSuperblock(NewFormatSuperblock, false);
+
+    if (validity2 != scraperSBvalidationtype::Invalid && validity2 != scraperSBvalidationtype::Unknown)
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (without using cache) passed - " + GetTextForscraperSBvalidationtype(validity2));
+        res.pushKV("NewFormatSuperblock validation", "passed - " + GetTextForscraperSBvalidationtype(validity2));
+    }
+    else
+    {
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (without using cache) failed - " + GetTextForscraperSBvalidationtype(validity2));
+        res.pushKV("NewFormatSuperblock validation", "failed - " + GetTextForscraperSBvalidationtype(validity2));
+    }
+
 
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
 

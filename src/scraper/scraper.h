@@ -124,14 +124,30 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, b
 std::string ScraperGetNeuralHash();
 NN::QuorumHash ScraperGetSuperblockHash();
 bool ScraperSynchronizeDPOR();
-scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock);
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
+
+static std::vector<std::string> scraperSBvalidationtypestrings = {
+    "Invalid",
+    "Unknown",
+    "CurrentCachedConvergence",
+    "CachedPastConvergence",
+    "ManifestLevelConvergence",
+    "ProjectLevelConvergence"
+};
+
 
 const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 {
     return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
 }
+
+const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType)
+{
+    return scraperSBvalidationtypestrings[static_cast<int>(ScraperSBValidationType)];
+}
+
 
 double MagRound(double dMag)
 {
