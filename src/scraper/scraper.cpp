@@ -4799,9 +4799,9 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                     ConvergedScraperStatsCache.bClean = true;
 
                     // Signal UI of SBContract status
-                    if (superblock.GetSerializeSize(SER_NETWORK, 1))
+                    if (superblock.WellFormed())
                     {
-                        if (superblock_Prev.GetSerializeSize(SER_NETWORK, 1))
+                        if (superblock_Prev.WellFormed())
                         {
                             // If the current is not empty and the previous is not empty and not the same, then there is an updated contract.
                             if (superblock.GetHash() != superblock_Prev.GetHash())
@@ -4812,7 +4812,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                             uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
                     }
                     else
-                        if (superblock_Prev.GetSerializeSize(SER_NETWORK, 1))
+                        if (superblock_Prev.WellFormed())
                             // If the current is empty and the previous was not empty, then the contract has been deleted.
                             uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED, {});
 
@@ -4843,7 +4843,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
             superblock = NN::Superblock::FromStats(mScraperStats);
 
             // Signal the UI there is a contract.
-            if(superblock.GetSerializeSize(SER_NETWORK, 1))
+            if(superblock.WellFormed())
                 uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
 
             _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object generated from single shot");
