@@ -1,3 +1,4 @@
+#include "main.h"
 #include "neuralnet/neuralnet.h"
 #include "scraper.h"
 #include "scraper_net.h"
@@ -20,6 +21,7 @@
 #include <boost/date_time.hpp>
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <boost/date_time/gregorian/greg_date.hpp>
+#include <random>
 
 // These are initialized empty. GetDataDir() cannot be called here. It is too early.
 fs::path pathDataDir = {};
@@ -4543,6 +4545,9 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
     BeaconMap mBeaconMap;
     std::string sSBCoreData;
 
+    // This is here to do new SB testing...
+    NN::Superblock superblock;
+
     // if bConvergenceUpdate is needed, and...
     // If bContractDirectFromStatsUpdate is set to true, this means that this is being called from
     // ScraperSynchronizeDPOR() in fallback mode to force a single shot update of the stats files and
@@ -4589,6 +4594,11 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
                     ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
                     ConvergedScraperStatsCache.sContract = sSBCoreData;
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
+
+                    // This is here to do new SB testing...
+                    superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
+                    ConvergedScraperStatsCache.nNewFormatSuperblockHash = ScraperGetSuperblockHash(superblock);
+                    ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
 
                     // Mark the cache clean, because it was just updated.
                     ConvergedScraperStatsCache.bClean = true;
@@ -4864,7 +4874,7 @@ std::string ScraperGetNeuralHash(std::string sNeuralContract)
 // Note: This is the native hash for SB ver 2+ (bv11+).
 NN::QuorumHash ScraperGetSuperblockHash()
 {
-    NN::QuorumHash nSuperblockContractHash = NN::QuorumHash::Hash(ScraperGetSuperblockContract(false, false));
+    NN::QuorumHash nSuperblockContractHash = ScraperGetSuperblockContract(false, false).GetHash();
 
     return nSuperblockContractHash;
 }
@@ -4872,7 +4882,7 @@ NN::QuorumHash ScraperGetSuperblockHash()
 // Note: This is the native hash for SB ver 2+ (bv11+).
 NN::QuorumHash ScraperGetSuperblockHash(NN::Superblock& superblock)
 {
-    NN::QuorumHash nSuperblockContractHash = NN::QuorumHash::Hash(superblock);
+    NN::QuorumHash nSuperblockContractHash = superblock.GetHash();
 
     return nSuperblockContractHash;
 }
@@ -4911,14 +4921,17 @@ bool ScraperSynchronizeDPOR()
 //!
 //! \brief The superblock validation function used for bv11+ (SB version 2+)
 //!
-//! This function supports four different levels of validation, and invalid.
+//! This function supports four different levels of validation, and invalid
+//! and unknown states.
+//!
 //!     Invalid,
+//!     Unknown,
 //!     CurrentCachedConvergence,
 //!     CachedPastConvergence,
 //!     ManifestLevelConvergence,
 //!     ProjectLevelConvergence
 //!
-//! This is an enum class with five possible values.
+//! This is an enum class with six possible values.
 //!
 //! There are enumerated in increasing order of difficulty and decreasing
 //! frequency. It is expected that the vast majority of time the superblock
@@ -4942,7 +4955,34 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         // Retrieve current convergence superblock. This will have the effect of updating
         // the convergence and populating the cache with the latest. If the cache has
         // already been updated via the housekeeping loop and is clean, this will be trivial.
-        NN::Superblock CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
+
+        NN::Superblock CurrentNodeSuperblock;
+
+        // Note this block version check does NOT belong here, but we need it for pre-v11 testing.
+        CBlockLocator locator;
+        int64_t nHeight;
+
+        {
+            LOCK(cs_main);
+
+            nHeight = locator.GetHeight();
+        }
+
+        if (IsV11Enabled(nHeight))
+        {
+            CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
+        }
+        else
+        {
+            // Don't need the string return (old contract). Instead pick up the cached SB, which if updated would be
+            // the return value for ScraperGetSuperblockContract post bv11.
+            // This is really only for testing pre-bv11.
+            ScraperGetNeuralContract(true, false);
+
+            LOCK(cs_ConvergedScraperStatsCache);
+
+            CurrentNodeSuperblock = ConvergedScraperStatsCache.NewFormatSuperblock;
+        }
 
         // If there is no superblock returned, the node is either out of sync, or has not
         // received enough manifests and parts to calculate a convergence. Return unknown.
@@ -4951,6 +4991,13 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         LOCK(cs_ConvergedScraperStatsCache);
 
         // First check and see if superblock contract hash is the current one in the cache.
+        if (fDebug3)
+        {
+            _log(logattribute::INFO, "ValidateSuperblock", "ConvergedScraperStatsCache.nNewFormatSuperblockHash = "
+                 + ConvergedScraperStatsCache.nNewFormatSuperblockHash.ToString());
+            _log(logattribute::INFO, "ValidateSuperblock", "nNewFormatSuperblockHash = "
+                 + nNewFormatSuperblockHash.ToString());
+        }
         if (ConvergedScraperStatsCache.nNewFormatSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::CurrentCachedConvergence;
 
         // if not validated with current cached contract, then check past ones in the cache.
@@ -4974,6 +5021,9 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
     // If the superblock indicates not converged by project, then reconstruct at the manifest level
     // else reconstruct at the project level.
+
+    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.ConvergedByProject() = " + std::to_string(NewFormatSuperblock.ConvergedByProject()));
+
     if (!NewFormatSuperblock.ConvergedByProject())
     {
         _log(logattribute::INFO, "ValidateSuperblock", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
@@ -5005,11 +5055,11 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 {
                     // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
                     mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert, timestamp "
-                                      + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
-                                      + ", content hash "+ iter_inner.second.second.GetHex()
-                                      + ", scraper ID " + iter.first
-                                      + ", manifest hash " + iter_inner.second.first.GetHex());
+                    //if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert, timestamp "
+                    //                  + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
+                    //                  + ", content hash "+ iter_inner.second.second.GetHex()
+                    //                  + ", scraper ID " + iter.first
+                    //                  + ", manifest hash " + iter_inner.second.first.GetHex());
                 }
             }
         }
@@ -5020,9 +5070,13 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         // content hash - manifest hash
         std::map<uint256, uint256> mMatchingManifestContentHashes;
 
+        if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "nReducedSBContentHash = " + std::to_string(nReducedSBContentHash));
+
         for (const auto& iter : mManifestsBinnedbyContent)
         {
             uint32_t nReducedManifestContentHash = iter.first.Get64() >> 32;
+
+            if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "nReducedManifestContentHash = " + std::to_string(nReducedManifestContentHash));
 
             // This has the effect of only storing the first one of the series of matching manifests that match the hint,
             // because of the insert. Below we will count the others matching to check for a supermajority.
@@ -5063,7 +5117,13 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
                 NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
 
+                // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
+                superblock.m_convergence_hint = CandidateManifest.nContentHash.Get64() >> 32;
+
                 NN::QuorumHash nCandidateSuperblockHash = ScraperGetSuperblockHash(superblock);
+
+                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "Cached past convergence - nCandidateSuperblockHash = " + nCandidateSuperblockHash.ToString());
+                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "Cached past convergence - nNewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
 
                 if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ManifestLevelConvergence;
             }
@@ -5168,8 +5228,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                             {
                                 // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
                                 mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.m_name)));
-                                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert "
-                                                  + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
+                                // if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert "
+                                //                  + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
                             }
                         }
                     }
@@ -5206,7 +5266,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             }
 
             uint256 nLatestProjectPartMatchingHash;
-            int64_t nLatestProjectPartMatchingTime;
+            int64_t nLatestProjectPartMatchingTime = 0;
             uint256 nLatestProjectPartMatchingConsensusBlock;
             uint256 nLatestProjectPartMatchingManifestForBeaconList;
 
@@ -5233,6 +5293,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
             if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
             {
+                LOCK(CScraperManifest::cs_mapParts);
+
                 // Get the actual part ----------------- by object hash.
                 auto iPart = CSplitBlob::mapParts.find(nLatestProjectPartMatchingHash);
 
@@ -5310,6 +5372,25 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             ScraperStats mScraperstats = GetScraperStatsByConvergedManifest(StructDummyConvergedManifest);
 
             NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
+
+            // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
+            superblock.m_convergence_hint = StructDummyConvergedManifest.nContentHash.Get64() >> 32;
+
+            if (StructDummyConvergedManifest.bByParts)
+            {
+                NN::Superblock::ProjectIndex& projects = superblock.m_projects;
+
+                // Add hints created from the hashes of converged manifest parts to each
+                // superblock project section to assist receiving nodes with validation:
+                //
+                for (const auto& part_pair : StructDummyConvergedManifest.ConvergedManifestPartsMap)
+                {
+                    const std::string& project_name = part_pair.first;
+                    const CSerializeData& part_data = part_pair.second;
+
+                    projects.SetHint(project_name, part_data);
+                }
+            }
 
             NN::QuorumHash nCandidateSuperblockHash = ScraperGetSuperblockHash(superblock);
 
@@ -5409,12 +5490,14 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
                 "Test the new Superblock class.\n"
                 );
 
-    LOCK(cs_ConvergedScraperStatsCache);
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
 
-    if (ConvergedScraperStatsCache.sContract.empty())
-        throw std::runtime_error(
-                "Wait until a convergence is formed.\n"
-                );
+        if (ConvergedScraperStatsCache.sContract.empty())
+            throw std::runtime_error(
+                    "Wait until a convergence is formed.\n"
+                    );
+    }
 
     UniValue res(UniValue::VOBJ);
 
@@ -5424,7 +5507,13 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
-    std::string& sSBCoreData = ConvergedScraperStatsCache.sContract;
+    std::string sSBCoreData;
+
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        sSBCoreData = ConvergedScraperStatsCache.sContract;
+    }
 
     std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
     std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
@@ -5452,11 +5541,18 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     CDataStream ss(SER_NETWORK, 1);
     uint64_t nNewFormatSuperblockSerSize;
     uint64_t nNewFormatSuperblock_outSerSize;
-    uint256 nNewFormatSuperblockHash;
-    uint256 nNewFormatSuperblock_outHash;
+    NN::QuorumHash nNewFormatSuperblockHash;
+    NN::QuorumHash nNewFormatSuperblock_outHash;
 
-    NewFormatSuperblock = NN::Superblock::FromStats(ConvergedScraperStatsCache.mScraperConvergedStats);
-    NewFormatSuperblock.m_timestamp = ConvergedScraperStatsCache.nTime;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        NewFormatSuperblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
+        // NewFormatSuperblock = NN::Superblock::FromStats(ConvergedScraperStatsCache.mScraperConvergedStats);
+        NewFormatSuperblock.m_timestamp = ConvergedScraperStatsCache.nTime;
+
+        _log(logattribute::INFO, "testnewsb", "ConvergedScraperStatsCache.Convergence.bByParts = " + std::to_string(ConvergedScraperStatsCache.Convergence.bByParts));
+    }
 
     _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock.m_projects.size()));
     res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock.m_projects.size());
@@ -5466,7 +5562,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock.m_cpids.Zeros());
 
     nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
-    nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
+    //nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
+    nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
     res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
@@ -5475,7 +5572,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     ss >> NewFormatSuperblock_out;
 
     nNewFormatSuperblock_outSerSize = NewFormatSuperblock_out.GetSerializeSize(SER_NETWORK, 1);
-    nNewFormatSuperblock_outHash = SerializeHash(NewFormatSuperblock_out);
+    nNewFormatSuperblock_outHash = NewFormatSuperblock_out.GetHash();
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
     res.pushKV("nNewFormatSuperblock_outSerSize", nNewFormatSuperblock_outSerSize);
@@ -5491,12 +5588,12 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock serialization", "FAILED");
     }
 
-    NewFormatSuperblock = NN::Superblock::UnpackLegacy(sPackedSBCoreData);
-    NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblock);
+    NN::Superblock NewFormatSuperblockFromLegacy = NN::Superblock::UnpackLegacy(sPackedSBCoreData);
+    NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblockFromLegacy);
     std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
 
-    res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.GetHex());
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.GetHex());
+    res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.ToString());
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
     res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
     _log(logattribute::INFO, "testnewsb", "new_legacy_hash = " + new_legacy_hash.ToString());
     res.pushKV("old_legacy_hash", old_legacy_hash);
@@ -5510,34 +5607,110 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock legacy hash", "FAILED");
     }
 
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+    res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+
     scraperSBvalidationtype validity = ValidateSuperblock(NewFormatSuperblock, true);
 
     if (validity != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
     {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (using cache) passed - " + GetTextForscraperSBvalidationtype(validity));
-        res.pushKV("NewFormatSuperblock validation", "passed - " + GetTextForscraperSBvalidationtype(validity));
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against current (using cache) passed - " + GetTextForscraperSBvalidationtype(validity));
+        res.pushKV("NewFormatSuperblock validation against current (using cache)", "passed - " + GetTextForscraperSBvalidationtype(validity));
     }
     else
     {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (using cache) failed - " + GetTextForscraperSBvalidationtype(validity));
-        res.pushKV("NewFormatSuperblock validation", "failed - " + GetTextForscraperSBvalidationtype(validity));
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against current (using cache) failed - " + GetTextForscraperSBvalidationtype(validity));
+        res.pushKV("NewFormatSuperblock validation against current (using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity));
     }
 
     scraperSBvalidationtype validity2 = ValidateSuperblock(NewFormatSuperblock, false);
 
     if (validity2 != scraperSBvalidationtype::Invalid && validity2 != scraperSBvalidationtype::Unknown)
     {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (without using cache) passed - " + GetTextForscraperSBvalidationtype(validity2));
-        res.pushKV("NewFormatSuperblock validation", "passed - " + GetTextForscraperSBvalidationtype(validity2));
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against current (without using cache) passed - " + GetTextForscraperSBvalidationtype(validity2));
+        res.pushKV("NewFormatSuperblock validation against current (without using cache)", "passed - " + GetTextForscraperSBvalidationtype(validity2));
     }
     else
     {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation (without using cache) failed - " + GetTextForscraperSBvalidationtype(validity2));
-        res.pushKV("NewFormatSuperblock validation", "failed - " + GetTextForscraperSBvalidationtype(validity2));
+        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against current (without using cache) failed - " + GetTextForscraperSBvalidationtype(validity2));
+        res.pushKV("NewFormatSuperblock validation against current (without using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity2));
     }
 
+    ConvergedManifest RandomPastConvergedManifest;
+    bool bPastConvergencesEmpty = true;
 
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        auto iPastSB = ConvergedScraperStatsCache.PastConvergences.begin();
+
+        unsigned int PastConvergencesSize = ConvergedScraperStatsCache.PastConvergences.size();
+
+        if (PastConvergencesSize > 1)
+        {
+            std::default_random_engine generator;
+            std::uniform_int_distribution<int> distribution(0, PastConvergencesSize - 1);
+
+            std::advance(iPastSB, distribution(generator));
+
+            RandomPastConvergedManifest = iPastSB->second.second;
+
+            bPastConvergencesEmpty = false;
+        }
+
+    }
+
+    if (!bPastConvergencesEmpty)
+    {
+        ScraperStats RandomPastSBStats = GetScraperStatsByConvergedManifest(RandomPastConvergedManifest);
+
+        NN::Superblock RandomPastSB = NN::Superblock::FromStats(RandomPastSBStats);
+
+        // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
+        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.Get64() >> 32;
+
+        if (RandomPastConvergedManifest.bByParts)
+        {
+            NN::Superblock::ProjectIndex& projects = RandomPastSB.m_projects;
+
+            // Add hints created from the hashes of converged manifest parts to each
+            // superblock project section to assist receiving nodes with validation:
+            //
+            for (const auto& part_pair : RandomPastConvergedManifest.ConvergedManifestPartsMap)
+            {
+                const std::string& project_name = part_pair.first;
+                const CSerializeData& part_data = part_pair.second;
+
+                projects.SetHint(project_name, part_data);
+            }
+        }
+
+        scraperSBvalidationtype validity3 = ValidateSuperblock(RandomPastSB, true);
+
+        if (validity3 != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
+        {
+            _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against random past (using cache) passed - " + GetTextForscraperSBvalidationtype(validity3));
+            res.pushKV("NewFormatSuperblock validation against random past (using cache)", "passed - " + GetTextForscraperSBvalidationtype(validity3));
+        }
+        else
+        {
+            _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against random past (using cache) failed - " + GetTextForscraperSBvalidationtype(validity3));
+            res.pushKV("NewFormatSuperblock validation against random past (using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity3));
+        }
+
+        scraperSBvalidationtype validity4 = ValidateSuperblock(RandomPastSB, false);
+
+        if (validity4 != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
+        {
+            _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against random past (without using cache) passed - " + GetTextForscraperSBvalidationtype(validity4));
+            res.pushKV("NewFormatSuperblock validation against random past (without using cache)", "passed - " + GetTextForscraperSBvalidationtype(validity4));
+        }
+        else
+        {
+            _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against random past (without using cache) failed - " + GetTextForscraperSBvalidationtype(validity4));
+            res.pushKV("NewFormatSuperblock validation against random past (without using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity4));
+        }
+    }
 
     return res;
 }
