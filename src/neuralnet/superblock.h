@@ -944,7 +944,6 @@ struct ConvergedScraperStats
 
     // New superblock object and hash.
     NN::Superblock NewFormatSuperblock;
-    NN::QuorumHash nNewFormatSuperblockHash;
 
     uint32_t GetVersion()
     {
@@ -963,7 +962,7 @@ struct ConvergedScraperStats
         {
             // This is specifically this form of insert to insure that if there is a hint "collision" the referenced
             // SB Hash and Convergence stored will be the LATER one.
-            PastConvergences[nReducedContentHash] = std::make_pair(nNewFormatSuperblockHash, Convergence);
+            PastConvergences[nReducedContentHash] = std::make_pair(NewFormatSuperblock.GetHash(), Convergence);
         }
     }
 

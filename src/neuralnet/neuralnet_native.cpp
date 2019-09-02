@@ -13,7 +13,6 @@ extern std::string ExplainMagnitude(std::string sCPID);
 using namespace NN;
 
 extern Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
-extern QuorumHash ScraperGetSuperblockHash();
 
 bool NeuralNetNative::IsEnabled()
 {
@@ -34,7 +33,7 @@ std::string NeuralNetNative::GetNeuralHash()
 
 QuorumHash NeuralNetNative::GetSuperblockHash()
 {
-    return ScraperGetSuperblockHash();
+    return GetSuperblockContract().GetHash();
 }
 
 std::string NeuralNetNative::GetNeuralContract()
