@@ -1,6 +1,7 @@
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
 
+#include <array>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -667,6 +668,15 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     }
 }
 
+BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock_for_empty_strings)
+{
+    NN::Superblock superblock = NN::Superblock::UnpackLegacy("");
+
+    BOOST_CHECK(superblock.m_version == 1);
+    BOOST_CHECK(superblock.m_cpids.empty());
+    BOOST_CHECK(superblock.m_projects.empty());
+}
+
 BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
 {
     const std::string legacy_contract(
@@ -706,6 +716,34 @@ BOOST_AUTO_TEST_CASE(it_provides_backward_compatibility_for_legacy_contracts)
     BOOST_CHECK(Legacy::GetQuorumHash(unpacked) == expected_hash);
 }
 
+BOOST_AUTO_TEST_CASE(it_determines_whether_it_represents_a_complete_superblock)
+{
+    NN::Superblock valid;
+
+    valid.m_cpids.Add(NN::Cpid(), 123);
+    valid.m_projects.Add("name", NN::Superblock::ProjectStats());
+
+    BOOST_CHECK(valid.WellFormed() == true);
+
+    NN::Superblock invalid = valid;
+
+    invalid.m_version = 0;
+    BOOST_CHECK(invalid.WellFormed() == false);
+
+    invalid.m_version = std::numeric_limits<decltype(invalid.m_version)>::max();
+    BOOST_CHECK(invalid.WellFormed() == false);
+
+    invalid = valid;
+
+    invalid.m_cpids = NN::Superblock::CpidIndex();
+    BOOST_CHECK(invalid.WellFormed() == false);
+
+    invalid = valid;
+
+    invalid.m_projects = NN::Superblock::ProjectIndex();
+    BOOST_CHECK(invalid.WellFormed() == false);
+}
+
 BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
 {
     NN::Superblock superblock;
@@ -726,6 +764,41 @@ BOOST_AUTO_TEST_CASE(it_calculates_its_age)
 
     BOOST_CHECK(superblock.Age() > 0);
     BOOST_CHECK(superblock.Age() < GetAdjustedTime());
+}
+
+BOOST_AUTO_TEST_CASE(it_generates_its_quorum_hash)
+{
+    NN::Superblock superblock;
+
+    BOOST_CHECK(superblock.GetHash() == NN::QuorumHash::Hash(superblock));
+}
+
+BOOST_AUTO_TEST_CASE(it_caches_its_quorum_hash)
+{
+    NN::Superblock superblock;
+
+    // Cache the hash:
+    NN::QuorumHash original_hash = superblock.GetHash();
+
+    // Change the resulting hash:
+    superblock.m_cpids.Add(NN::Cpid(), 123);
+
+    // The cached hash should not change:
+    BOOST_CHECK(superblock.GetHash() == original_hash);
+}
+
+BOOST_AUTO_TEST_CASE(it_regenerates_its_cached_quorum_hash)
+{
+    NN::Superblock superblock;
+
+    // Cache the hash:
+    superblock.GetHash();
+
+    // Change the resulting hash:
+    superblock.m_cpids.Add(NN::Cpid(), 123);
+
+    // Regenrate the hash:
+    BOOST_CHECK(superblock.GetHash(true) == NN::QuorumHash::Hash(superblock));
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
@@ -1995,6 +2068,129 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
 
     // 0x0706050403020100 + 0x1514131211100908 (MD5 halves, little endian)
     BOOST_CHECK(hasher(hash_md5) == 2024957465561532936);
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
+{
+    const NN::QuorumHash hash;
+
+    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 1);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << hash;
+
+    BOOST_CHECK(stream.size() == 1);
+    BOOST_CHECK(stream[0] == 0x00); // QuorumHash::Kind::INVALID
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_sha256)
+{
+    const std::vector<unsigned char> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    const NN::QuorumHash hash(expected);
+
+    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 33);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << hash;
+    const std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output[0] == 0x01); // QuorumHash::Kind::SHA256
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        ++output.begin(), // we already checked the first byte
+        output.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_md5)
+{
+    const std::vector<unsigned char> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    const NN::QuorumHash hash(expected);
+
+    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 17);
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << hash;
+    const std::vector<unsigned char> output(stream.begin(), stream.end());
+
+    BOOST_CHECK(output[0] == 0x02); // QuorumHash::Kind::MD5
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        ++output.begin(), // we already checked the first byte
+        output.end(),
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_invalid)
+{
+    // Initialize quorum hash with a valid value to test invalid:
+    NN::QuorumHash hash(NN::QuorumHash::Md5Sum { }); // Initialize to zeros
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << (unsigned char)0x00; // QuorumHash::Kind::INVALID
+    stream >> hash;
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::INVALID);
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
+{
+    NN::QuorumHash hash;
+
+    const std::array<unsigned char, 32> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << (unsigned char)0x01; // QuorumHash::Kind::SHA256
+    stream << FLATDATA(expected);
+    stream >> hash;
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        hash.Raw(),
+        hash.Raw() + 32,
+        expected.begin(),
+        expected.end());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
+{
+    NN::QuorumHash hash;
+
+    const std::array<unsigned char, 16> expected {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+    };
+
+    CDataStream stream(SER_NETWORK, 1);
+    stream << (unsigned char)0x02; // QuorumHash::Kind::MD5
+    stream << FLATDATA(expected);
+    stream >> hash;
+
+    BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);
+
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        hash.Raw(),
+        hash.Raw() + 16,
+        expected.begin(),
+        expected.end());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -406,6 +406,10 @@ Superblock Superblock::FromStats(const ScraperStats& stats)
 
 Superblock Superblock::UnpackLegacy(const std::string& packed)
 {
+    if (packed.empty()) {
+        return Superblock(1);
+    }
+
     // Legacy-packed superblocks always initialize to version 1:
     Superblock superblock(1);
     LegacySuperblockParser legacy(packed);
@@ -445,6 +449,13 @@ std::string Superblock::PackLegacy() const
     return out.str();
 }
 
+bool Superblock::WellFormed() const
+{
+    return m_version > 0 && m_version <= Superblock::CURRENT_VERSION
+        && !m_cpids.empty()
+        && !m_projects.empty();
+}
+
 bool Superblock::ConvergedByProject() const
 {
     return m_projects.m_converged_by_project;
@@ -453,6 +464,15 @@ bool Superblock::ConvergedByProject() const
 int64_t Superblock::Age() const
 {
     return GetAdjustedTime() - m_timestamp;
+}
+
+QuorumHash Superblock::GetHash(const bool regenerate) const
+{
+    if (!m_hash_cache.Valid() || regenerate) {
+        m_hash_cache = QuorumHash::Hash(*this);
+    }
+
+    return m_hash_cache;
 }
 
 // -----------------------------------------------------------------------------
@@ -839,4 +859,16 @@ const unsigned char* QuorumHash::Raw() const
 std::string QuorumHash::ToString() const
 {
     return boost::apply_visitor(QuorumHashToStringVisitor(), m_hash);
+}
+
+unsigned int QuorumHash::GetSerializeSize(int nType, int nVersion) const
+{
+    switch (Which()) {
+        case Kind::SHA256: return 1 + sizeof(uint256);
+        case Kind::MD5:    return 1 + sizeof(Md5Sum);
+
+        // For variants without any associated data, we serialize the variant
+        // tag only as a single byte:
+        default:           return 1;
+    }
 }
