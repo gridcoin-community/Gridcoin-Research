@@ -4932,7 +4932,7 @@ bool ScraperSynchronizeDPOR()
 scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache)
 {
     // Calculate the hash of the superblock to validate.
-    NN::QuorumHash nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
+    NN::QuorumHash nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
 
     // manifest hash hint (reduced hash) from superblock...
     uint32_t nReducedSBContentHash = NewFormatSuperblock.m_convergence_hint;
@@ -4946,7 +4946,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         // If there is no superblock returned, the node is either out of sync, or has not
         // received enough manifests and parts to calculate a convergence. Return unknown.
-        if (!CurrentNodeSuperblock.GetSerializeSize(SER_NETWORK, 1)) return scraperSBvalidationtype::Unknown;
+        if (!CurrentNodeSuperblock.WellFormed()) return scraperSBvalidationtype::Unknown;
 
         LOCK(cs_ConvergedScraperStatsCache);
 
