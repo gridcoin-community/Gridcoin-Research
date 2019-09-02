@@ -17,7 +17,216 @@ std::string PackBinarySuperblock(std::string sBlock);
 class ConvergedScraperStats; // Forward for Superblock
 
 namespace NN {
-class QuorumHash; // Forward for Superblock
+class Superblock; // Forward for QuorumHash
+
+//!
+//! \brief Hashes and stores the digest of a superblock.
+//!
+class QuorumHash
+{
+public:
+    //!
+    //! \brief Internal representation of the result of a legacy MD5-based
+    //! superblock hash.
+    //!
+    typedef std::array<unsigned char, 16> Md5Sum;
+
+    //!
+    //! \brief Describes the kind of hash contained in a \c QuorumHash object.
+    //!
+    enum class Kind
+    {
+        INVALID, //!< An empty or invalid quorum hash.
+        SHA256,  //!< Hash created for superblocks version 2 and greater.
+        MD5,     //!< Legacy hash created for superblocks before version 2.
+    };
+
+    //!
+    //! \brief A tag type that describes an empty or invalid quorum hash.
+    //!
+    struct Invalid { };
+
+    //!
+    //! \brief Initialize an invalid quorum hash object.
+    //!
+    QuorumHash();
+
+    //!
+    //! \brief Initialize a SHA256 quorum hash object variant.
+    //!
+    //! \param hash Contains the bytes of the superblock digest produced by
+    //! applying a SHA256 hashing algorithm to the significant data.
+    //!
+    QuorumHash(uint256 hash);
+
+    //!
+    //! \brief Initialize an MD5 quorum hash object variant.
+    //!
+    //! \param hash Contains the bytes of the superblock digest produced by the
+    //! legacy MD5-based superblock hashing algorithm ("neural hash").
+    //!
+    QuorumHash(Md5Sum legacy_hash);
+
+    //!
+    //! \brief Initialize the appropriate quorum hash variant from the supplied
+    //! bytes.
+    //!
+    //! Initializes to an invalid hash variant when the bytes do not represent
+    //! a valid quorum hash.
+    //!
+    //! \param bytes 32 bytes for a SHA256 hash or 16 bytes for a legacy MD5
+    //! hash.
+    //!
+    QuorumHash(const std::vector<unsigned char>& bytes);
+
+    //!
+    //! \brief Hash the provided superblock.
+    //!
+    //! \param superblock Superblock object containing the data to hash.
+    //!
+    //! \return The appropriate quorum hash variant digest depending on the
+    //! version number of the superblock.
+    //!
+    static QuorumHash Hash(const Superblock& superblock);
+
+    //!
+    //! \brief Initialize a quorum hash object by parsing the supplied string
+    //! representation of a hash.
+    //!
+    //! \param hex A 64-character hex-encoded string for a SHA256 hash, or a
+    //! 32-character hex-encoded string for a legacy MD5 hash.
+    //!
+    //! \return A quorum hash object that contains the bytes of the hash value
+    //! represented by the string or an invalid quorum hash if the string does
+    //! not contain a well-formed MD5 or SHA256 hash.
+    //!
+    static QuorumHash Parse(const std::string& hex);
+
+    bool operator==(const QuorumHash& other) const;
+    bool operator!=(const QuorumHash& other) const;
+    bool operator==(const uint256& other) const;
+    bool operator!=(const uint256& other) const;
+    bool operator==(const std::string& other) const;
+    bool operator!=(const std::string& other) const;
+
+    //!
+    //! \brief Describe the type of hash contained.
+    //!
+    //! \return A value enumerated on \c QuorumHash::Kind .
+    //!
+    Kind Which() const;
+
+    //!
+    //! \brief Determine whether the object contains a valid superblock hash.
+    //!
+    //! \return \c true if the object contains a SHA256 or legacy MD5 hash.
+    //!
+    bool Valid() const;
+
+    //!
+    //! \brief Get a pointer to the bytes in the hash.
+    //!
+    //! \return A pointer to the beginning of the bytes in the hash, or a
+    //! \c nullptr value if the object contains an invalid hash.
+    //!
+    const unsigned char* Raw() const;
+
+    //!
+    //! \brief Get the string representation of the hash.
+    //!
+    //! \return A 64-character hex-encoded string for a SHA256 hash, or a
+    //! 32-character hex-encoded string for a legacy MD5 hash. Returns an
+    //! empty string for an invalid hash.
+    //!
+    std::string ToString() const;
+
+    //!
+    //! \brief Get the size of the data to serialize.
+    //!
+    //! \param nType    Target protocol type (network, disk, etc.).
+    //! \param nVersion Protocol version.
+    //!
+    //! \return Size of the data in bytes.
+    //!
+    unsigned int GetSerializeSize(int nType, int nVersion) const;
+
+    //!
+    //! \brief Serialize the object to the provided stream.
+    //!
+    //! \param stream   The output stream.
+    //! \param nType    Target protocol type (network, disk, etc.).
+    //! \param nVersion Protocol version.
+    //!
+    template<typename Stream>
+    void Serialize(Stream& stream, int nType, int nVersion) const
+    {
+        unsigned char kind = m_hash.which();
+
+        ::Serialize(stream, kind, nType, nVersion);
+
+        switch (static_cast<Kind>(kind)) {
+            case Kind::INVALID:
+                break; // Suppress warning.
+
+            case Kind::SHA256:
+                boost::get<uint256>(m_hash).Serialize(stream, nType, nVersion);
+                break;
+
+            case Kind::MD5: {
+                const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
+
+                FLATDATA(hash).Serialize(stream, nType, nVersion);
+                break;
+            }
+        }
+    }
+
+    //!
+    //! \brief Deserialize the object from the provided stream.
+    //!
+    //! \param stream   The input stream.
+    //! \param nType    Target protocol type (network, disk, etc.).
+    //! \param nVersion Protocol version.
+    //!
+    template<typename Stream>
+    void Unserialize(Stream& stream, int nType, int nVersion)
+    {
+        unsigned char kind;
+
+        ::Unserialize(stream, kind, nType, nVersion);
+
+        switch (static_cast<Kind>(kind)) {
+            case Kind::SHA256: {
+                uint256 hash;
+                hash.Unserialize(stream, nType, nVersion);
+
+                m_hash = hash;
+                break;
+            }
+
+            case Kind::MD5: {
+                Md5Sum hash;
+                FLATDATA(hash).Unserialize(stream, nType, nVersion);
+
+                m_hash = hash;
+                break;
+            }
+
+            default:
+                m_hash = Invalid();
+                break;
+        }
+    }
+
+private:
+    //!
+    //! \brief Contains the bytes of a SHA256 or MD5 digest.
+    //!
+    //! CONSENSUS: Do not remove or reorder the types in this variant. This
+    //! class relies on the type ordinality to tag serialized values.
+    //!
+    boost::variant<Invalid, uint256, Md5Sum> m_hash;
+}; // QuorumHash
 
 //!
 //! \brief A snapshot of BOINC statistics used to calculate and verify research
@@ -623,220 +832,30 @@ public:
     //!
     //! \brief Get a hash of the significant data in the superblock.
     //!
+    //! \param regenerate If \c true, skip selection of any cached hash value
+    //! and recompute the hash.
+    //!
     //! \return A quorum hash object that contiains a SHA256 hash for version
     //! 2+ superblocks or an MD5 hash for legacy version 1 superblocks.
     //!
-    QuorumHash GetHash() const;
-}; // Superblock
-
-//!
-//! \brief Hashes and stores the digest of a superblock.
-//!
-class QuorumHash
-{
-public:
-    //!
-    //! \brief Internal representation of the result of a legacy MD5-based
-    //! superblock hash.
-    //!
-    typedef std::array<unsigned char, 16> Md5Sum;
-
-    //!
-    //! \brief Describes the kind of hash contained in a \c QuorumHash object.
-    //!
-    enum class Kind
-    {
-        INVALID, //!< An empty or invalid quorum hash.
-        SHA256,  //!< Hash created for superblocks version 2 and greater.
-        MD5,     //!< Legacy hash created for superblocks before version 2.
-    };
-
-    //!
-    //! \brief A tag type that describes an empty or invalid quorum hash.
-    //!
-    struct Invalid { };
-
-    //!
-    //! \brief Initialize an invalid quorum hash object.
-    //!
-    QuorumHash();
-
-    //!
-    //! \brief Initialize a SHA256 quorum hash object variant.
-    //!
-    //! \param hash Contains the bytes of the superblock digest produced by
-    //! applying a SHA256 hashing algorithm to the significant data.
-    //!
-    QuorumHash(uint256 hash);
-
-    //!
-    //! \brief Initialize an MD5 quorum hash object variant.
-    //!
-    //! \param hash Contains the bytes of the superblock digest produced by the
-    //! legacy MD5-based superblock hashing algorithm ("neural hash").
-    //!
-    QuorumHash(Md5Sum legacy_hash);
-
-    //!
-    //! \brief Initialize the appropriate quorum hash variant from the supplied
-    //! bytes.
-    //!
-    //! Initializes to an invalid hash variant when the bytes do not represent
-    //! a valid quorum hash.
-    //!
-    //! \param bytes 32 bytes for a SHA256 hash or 16 bytes for a legacy MD5
-    //! hash.
-    //!
-    QuorumHash(const std::vector<unsigned char>& bytes);
-
-    //!
-    //! \brief Hash the provided superblock.
-    //!
-    //! \param superblock Superblock object containing the data to hash.
-    //!
-    //! \return The appropriate quorum hash variant digest depending on the
-    //! version number of the superblock.
-    //!
-    static QuorumHash Hash(const Superblock& superblock);
-
-    //!
-    //! \brief Initialize a quorum hash object by parsing the supplied string
-    //! representation of a hash.
-    //!
-    //! \param hex A 64-character hex-encoded string for a SHA256 hash, or a
-    //! 32-character hex-encoded string for a legacy MD5 hash.
-    //!
-    //! \return A quorum hash object that contains the bytes of the hash value
-    //! represented by the string or an invalid quorum hash if the string does
-    //! not contain a well-formed MD5 or SHA256 hash.
-    //!
-    static QuorumHash Parse(const std::string& hex);
-
-    bool operator==(const QuorumHash& other) const;
-    bool operator!=(const QuorumHash& other) const;
-    bool operator==(const uint256& other) const;
-    bool operator!=(const uint256& other) const;
-    bool operator==(const std::string& other) const;
-    bool operator!=(const std::string& other) const;
-
-    //!
-    //! \brief Describe the type of hash contained.
-    //!
-    //! \return A value enumerated on \c QuorumHash::Kind .
-    //!
-    Kind Which() const;
-
-    //!
-    //! \brief Determine whether the object contains a valid superblock hash.
-    //!
-    //! \return \c true if the object contains a SHA256 or legacy MD5 hash.
-    //!
-    bool Valid() const;
-
-    //!
-    //! \brief Get a pointer to the bytes in the hash.
-    //!
-    //! \return A pointer to the beginning of the bytes in the hash, or a
-    //! \c nullptr value if the object contains an invalid hash.
-    //!
-    const unsigned char* Raw() const;
-
-    //!
-    //! \brief Get the string representation of the hash.
-    //!
-    //! \return A 64-character hex-encoded string for a SHA256 hash, or a
-    //! 32-character hex-encoded string for a legacy MD5 hash. Returns an
-    //! empty string for an invalid hash.
-    //!
-    std::string ToString() const;
-
-    //!
-    //! \brief Get the size of the data to serialize.
-    //!
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
-    //!
-    //! \return Size of the data in bytes.
-    //!
-    unsigned int GetSerializeSize(int nType, int nVersion) const;
-
-    //!
-    //! \brief Serialize the object to the provided stream.
-    //!
-    //! \param stream   The output stream.
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
-    //!
-    template<typename Stream>
-    void Serialize(Stream& stream, int nType, int nVersion) const
-    {
-        unsigned char kind = m_hash.which();
-
-        ::Serialize(stream, kind, nType, nVersion);
-
-        switch (static_cast<Kind>(kind)) {
-            case Kind::INVALID:
-                break; // Suppress warning.
-
-            case Kind::SHA256:
-                boost::get<uint256>(m_hash).Serialize(stream, nType, nVersion);
-                break;
-
-            case Kind::MD5: {
-                const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
-
-                FLATDATA(hash).Serialize(stream, nType, nVersion);
-                break;
-            }
-        }
-    }
-
-    //!
-    //! \brief Deserialize the object from the provided stream.
-    //!
-    //! \param stream   The input stream.
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
-    //!
-    template<typename Stream>
-    void Unserialize(Stream& stream, int nType, int nVersion)
-    {
-        unsigned char kind;
-
-        ::Unserialize(stream, kind, nType, nVersion);
-
-        switch (static_cast<Kind>(kind)) {
-            case Kind::SHA256: {
-                uint256 hash;
-                hash.Unserialize(stream, nType, nVersion);
-
-                m_hash = hash;
-                break;
-            }
-
-            case Kind::MD5: {
-                Md5Sum hash;
-                FLATDATA(hash).Unserialize(stream, nType, nVersion);
-
-                m_hash = hash;
-                break;
-            }
-
-            default:
-                m_hash = Invalid();
-                break;
-        }
-    }
+    QuorumHash GetHash(const bool regenerate = false) const;
 
 private:
     //!
-    //! \brief Contains the bytes of a SHA256 or MD5 digest.
+    //! \brief The most recently-regenerated quorum hash of the superblock.
     //!
-    //! CONSENSUS: Do not remove or reorder the types in this variant. This
-    //! class relies on the type ordinality to tag serialized values.
+    //! Because of their size, superblocks are expensive to hash. A superblock
+    //! caches its quorum hash when calling the GetHash() method to speed up a
+    //! subsequent hash request. The block acceptance pipeline may need a hash
+    //! value in several places when processing a superblock.
     //!
-    boost::variant<Invalid, uint256, Md5Sum> m_hash;
-}; // QuorumHash
+    //! The cached value is NOT invalidated when modifying a superblock. Call
+    //! the GetHash() method with the argument set to \c true to regenerate a
+    //! cached quorum hash. A received superblock's significant data is never
+    //! modified, so the need to regenerate a cached hash will rarely occur.
+    //!
+    mutable QuorumHash m_hash_cache;
+}; // Superblock
 } // namespace NN
 
 namespace std {

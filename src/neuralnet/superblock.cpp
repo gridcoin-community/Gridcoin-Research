@@ -466,9 +466,13 @@ int64_t Superblock::Age() const
     return GetAdjustedTime() - m_timestamp;
 }
 
-QuorumHash Superblock::GetHash() const
+QuorumHash Superblock::GetHash(const bool regenerate) const
 {
-    return QuorumHash::Hash(*this);
+    if (!m_hash_cache.Valid() || regenerate) {
+        m_hash_cache = QuorumHash::Hash(*this);
+    }
+
+    return m_hash_cache;
 }
 
 // -----------------------------------------------------------------------------

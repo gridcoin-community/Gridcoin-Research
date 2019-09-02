@@ -773,6 +773,34 @@ BOOST_AUTO_TEST_CASE(it_generates_its_quorum_hash)
     BOOST_CHECK(superblock.GetHash() == NN::QuorumHash::Hash(superblock));
 }
 
+BOOST_AUTO_TEST_CASE(it_caches_its_quorum_hash)
+{
+    NN::Superblock superblock;
+
+    // Cache the hash:
+    NN::QuorumHash original_hash = superblock.GetHash();
+
+    // Change the resulting hash:
+    superblock.m_cpids.Add(NN::Cpid(), 123);
+
+    // The cached hash should not change:
+    BOOST_CHECK(superblock.GetHash() == original_hash);
+}
+
+BOOST_AUTO_TEST_CASE(it_regenerates_its_cached_quorum_hash)
+{
+    NN::Superblock superblock;
+
+    // Cache the hash:
+    superblock.GetHash();
+
+    // Change the resulting hash:
+    superblock.m_cpids.Add(NN::Cpid(), 123);
+
+    // Regenrate the hash:
+    BOOST_CHECK(superblock.GetHash(true) == NN::QuorumHash::Hash(superblock));
+}
+
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     std::vector<unsigned char> expected {
