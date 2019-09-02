@@ -619,6 +619,14 @@ public:
     //! \return Superblock age in seconds.
     //!
     int64_t Age() const;
+
+    //!
+    //! \brief Get a hash of the significant data in the superblock.
+    //!
+    //! \return A quorum hash object that contiains a SHA256 hash for version
+    //! 2+ superblocks or an MD5 hash for legacy version 1 superblocks.
+    //!
+    QuorumHash GetHash() const;
 }; // Superblock
 
 //!

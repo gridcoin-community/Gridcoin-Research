@@ -466,6 +466,11 @@ int64_t Superblock::Age() const
     return GetAdjustedTime() - m_timestamp;
 }
 
+QuorumHash Superblock::GetHash() const
+{
+    return QuorumHash::Hash(*this);
+}
+
 // -----------------------------------------------------------------------------
 // Class: Superblock::CpidIndex
 // -----------------------------------------------------------------------------

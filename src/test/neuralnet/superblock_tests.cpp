@@ -766,6 +766,13 @@ BOOST_AUTO_TEST_CASE(it_calculates_its_age)
     BOOST_CHECK(superblock.Age() < GetAdjustedTime());
 }
 
+BOOST_AUTO_TEST_CASE(it_generates_its_quorum_hash)
+{
+    NN::Superblock superblock;
+
+    BOOST_CHECK(superblock.GetHash() == NN::QuorumHash::Hash(superblock));
+}
+
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     std::vector<unsigned char> expected {
