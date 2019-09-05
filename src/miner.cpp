@@ -440,21 +440,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     // Choose coins to use
     set <pair <const CWalletTx*,unsigned int> > CoinsToStake;
 
-    int64_t BalanceToStake = wallet.GetBalance();
-    int64_t nValueIn = 0;
-    //Request all the coins here, check reserve later
-
-    if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, _("No coins"));
-    } else if (!wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn)) {
-        return BreakForNoCoins(MinerStatus, _("Waiting for coins to mature"));
-    }
-
-    BalanceToStake -= nReserveBalance;
-
-    if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, _("Entire balance reserved"));
-    }
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, true))
+        return false;
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
@@ -477,13 +464,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
                 continue;
         }
-
-        // only count coins meeting min age requirement
-        if (CoinBlock.GetBlockTime() + nStakeMinAge > txnew.nTime)
-            continue;
-
-        if (CoinTx.vout[CoinTxN].nValue > BalanceToStake)
-            continue;
 
         {
             int64_t nStakeValue= CoinTx.vout[CoinTxN].nValue;
