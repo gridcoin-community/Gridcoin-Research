@@ -4525,7 +4525,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDi
     // If not in sync then immediately bail with a empty string.
     if (fOutOfSyncByAge) return std::string();
 
-    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds), then simply report back the cache contents.
+    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds) or clean, then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
     // the scraper loop if it is running, but that is ok. The scraper loop updates the time in the cache too.
     bool bConvergenceUpdateNeeded = true;
@@ -4696,10 +4696,10 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
 
     // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
     // and the scraper or neuralnet loop nearly simultaneously. So we use an atomic flag updated by the scraper or neuralnet loop.
-    // If not in sync then immediately bail with a empty string.
+    // If not in sync then immediately bail with an empty superblock.
     if (fOutOfSyncByAge) return empty_superblock;
 
-    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds), then simply report back the cache contents.
+    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds) or clean, then simply report back the cache contents.
     // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
     // the scraper loop if it is running, but that is ok. The scraper loop updates the time in the cache too.
     bool bConvergenceUpdateNeeded = true;
@@ -4722,7 +4722,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
     // if bConvergenceUpdate is needed, and...
     // If bContractDirectFromStatsUpdate is set to true, this means that this is being called from
     // ScraperSynchronizeDPOR() in fallback mode to force a single shot update of the stats files and
-    // direct generation of the contract from the single shot run. This will return immediately with a blank if
+    // direct generation of the contract from the single shot run. This will return immediately with an empty SB if
     // IsScraperAuthorized() evaluates to false, because that means that by network policy, no non-scraper
     // stats downloads are allowed by unauthorized scraper nodes.
     // (If bConvergenceUpdate is not needed, then the scraper is operating by convergence already...
@@ -4874,7 +4874,7 @@ std::string ScraperGetNeuralHash(std::string sNeuralContract)
 // Note: This is the native hash for SB ver 2+ (bv11+).
 NN::QuorumHash ScraperGetSuperblockHash()
 {
-    NN::QuorumHash nSuperblockContractHash = ScraperGetSuperblockContract(false, false).GetHash();
+    NN::QuorumHash nSuperblockContractHash = ScraperGetSuperblockContract(false, false).GetHash(true);
 
     return nSuperblockContractHash;
 }
@@ -4882,7 +4882,7 @@ NN::QuorumHash ScraperGetSuperblockHash()
 // Note: This is the native hash for SB ver 2+ (bv11+).
 NN::QuorumHash ScraperGetSuperblockHash(NN::Superblock& superblock)
 {
-    NN::QuorumHash nSuperblockContractHash = superblock.GetHash();
+    NN::QuorumHash nSuperblockContractHash = superblock.GetHash(true);
 
     return nSuperblockContractHash;
 }
@@ -4950,6 +4950,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
     // manifest hash hint (reduced hash) from superblock...
     uint32_t nReducedSBContentHash = NewFormatSuperblock.m_convergence_hint;
 
+    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
+
     if (bUseCache)
     {
         // Retrieve current convergence superblock. This will have the effect of updating
@@ -4958,17 +4960,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         NN::Superblock CurrentNodeSuperblock;
 
-        // Note this block version check does NOT belong here, but we need it for pre-v11 testing.
-        CBlockLocator locator;
-        int64_t nHeight;
-
-        {
-            LOCK(cs_main);
-
-            nHeight = locator.GetHeight();
-        }
-
-        if (IsV11Enabled(nHeight))
+        if (NewFormatSuperblock.m_version >= 2)
         {
             CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
         }
@@ -5055,11 +5047,6 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 {
                     // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
                     mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                    //if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert, timestamp "
-                    //                  + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
-                    //                  + ", content hash "+ iter_inner.second.second.GetHex()
-                    //                  + ", scraper ID " + iter.first
-                    //                  + ", manifest hash " + iter_inner.second.first.GetHex());
                 }
             }
         }
@@ -5116,6 +5103,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 ScraperStats mScraperstats = GetScraperStatsFromSingleManifest(CandidateManifest);
 
                 NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
+
+                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "superblock.m_version = " + std::to_string(superblock.m_version));
 
                 // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
                 superblock.m_convergence_hint = CandidateManifest.nContentHash.Get64() >> 32;
@@ -5228,8 +5217,6 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                             {
                                 // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
                                 mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.m_name)));
-                                // if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "mManifestsBinnedbyContent insert "
-                                //                  + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
                             }
                         }
                     }
@@ -5543,6 +5530,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     uint64_t nNewFormatSuperblock_outSerSize;
     NN::QuorumHash nNewFormatSuperblockHash;
     NN::QuorumHash nNewFormatSuperblock_outHash;
+    uint256 nNewFormatSuperblockHashDirectFromHashing;
+    uint32_t nNewFormatSuperblockReducedContentHashFromConvergenceHint;
 
     {
         LOCK(cs_ConvergedScraperStatsCache);
@@ -5564,6 +5553,11 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
     //nNewFormatSuperblockHash = SerializeHash(NewFormatSuperblock);
     nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
+
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
+    res.pushKV("NewFormatSuperblock.m_version", (uint64_t) NewFormatSuperblock.m_version);
+
+    nNewFormatSuperblockReducedContentHashFromConvergenceHint = NewFormatSuperblock.m_convergence_hint;
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
     res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
@@ -5594,10 +5588,14 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.ToString());
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
+    res.pushKV("nNewFormatSuperblockHashDirectFromHashing", nNewFormatSuperblockHashDirectFromHashing.ToString());
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockHashDirectFromHashing = " + nNewFormatSuperblockHashDirectFromHashing.ToString());
     res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
     _log(logattribute::INFO, "testnewsb", "new_legacy_hash = " + new_legacy_hash.ToString());
     res.pushKV("old_legacy_hash", old_legacy_hash);
     _log(logattribute::INFO, "testnewsb", "old_legacy_hash = " + old_legacy_hash);
+    res.pushKV("nNewFormatSuperblockReducedContentHashFromConvergenceHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromConvergenceHint);
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromConvergenceHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromConvergenceHint));
 
     if (new_legacy_hash == old_legacy_hash) {
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash passed.");

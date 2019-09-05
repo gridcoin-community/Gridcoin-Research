@@ -947,6 +947,8 @@ struct ConvergedScraperStats
 
         if (Convergence.nContentHash != uint256() && PastConvergences.find(nReducedContentHash) == PastConvergences.end())
         {
+            // This is specifically this form of insert to insure that if there is a hint "collision" the referenced
+            // SB Hash and Convergence stored will be the LATER one.
             PastConvergences[nReducedContentHash] = std::make_pair(nNewFormatSuperblockHash, Convergence);
         }
     }
