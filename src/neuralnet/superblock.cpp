@@ -322,6 +322,7 @@ Superblock::Superblock()
 Superblock::Superblock(uint32_t version)
     : m_version(version)
     , m_convergence_hint(0)
+    , m_manifest_content_hint(0)
     , m_height(0)
     , m_timestamp(0)
 {
@@ -334,6 +335,7 @@ Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
     superblock.m_convergence_hint = stats.Convergence.nContentHash.Get64() >> 32;
 
     if (!stats.Convergence.bByParts) {
+        superblock.m_manifest_content_hint = stats.Convergence.nUnderlyingManifestContentHash.Get64() >> 32;
         return superblock;
     }
 

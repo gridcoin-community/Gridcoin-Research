@@ -3929,6 +3929,9 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
         }
         else // Content matches so we have a confirmed convergence.
         {
+            // Copy the MANIFEST content hash into the ConvergedManifest.
+            StructConvergedManifest.nUnderlyingManifestContentHash = convergence->first;
+
             // The ConvergedManifest content hash is NOT the same as the hash above from the CScraper::manifest, because it needs to be in the order of the
             // map key and on the data, not the order of vParts by the part hash. So, unfortunately, we have to walk through the map again to hash it correctly.
             CDataStream ss2(SER_NETWORK,1);
@@ -4874,7 +4877,7 @@ std::string ScraperGetNeuralHash(std::string sNeuralContract)
 // Note: This is the native hash for SB ver 2+ (bv11+).
 NN::QuorumHash ScraperGetSuperblockHash()
 {
-    NN::QuorumHash nSuperblockContractHash = ScraperGetSuperblockContract(false, false).GetHash(true);
+    NN::QuorumHash nSuperblockContractHash = ScraperGetSuperblockContract(false, false).GetHash();
 
     return nSuperblockContractHash;
 }
@@ -4882,7 +4885,7 @@ NN::QuorumHash ScraperGetSuperblockHash()
 // Note: This is the native hash for SB ver 2+ (bv11+).
 NN::QuorumHash ScraperGetSuperblockHash(NN::Superblock& superblock)
 {
-    NN::QuorumHash nSuperblockContractHash = superblock.GetHash(true);
+    NN::QuorumHash nSuperblockContractHash = superblock.GetHash();
 
     return nSuperblockContractHash;
 }
@@ -4947,8 +4950,12 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
     // Calculate the hash of the superblock to validate.
     NN::QuorumHash nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
 
-    // manifest hash hint (reduced hash) from superblock...
+    // convergence hash hint (reduced hash) from superblock... (used for cached lookup)
     uint32_t nReducedSBContentHash = NewFormatSuperblock.m_convergence_hint;
+
+    // underlying manifest hash hint (reduced hash from superblock... (used for uncached lookup against manifests)
+    uint32_t nUnderlyingManifestReducedContentHash = 0;
+    if (!NewFormatSuperblock.ConvergedByProject()) nUnderlyingManifestReducedContentHash = NewFormatSuperblock.m_manifest_content_hint;
 
     if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
 
@@ -4960,7 +4967,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         NN::Superblock CurrentNodeSuperblock;
 
-        if (NewFormatSuperblock.m_version >= 2)
+        if (false /* NewFormatSuperblock.m_version >= 2 */)
         {
             CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
         }
@@ -5001,7 +5008,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         }
     }
 
-    // Now for the hard stuff... borrowed from the ScraperConstructConvergedManifest function...
+    // Now for the hard stuff... the manifest level uncached case... borrowed from the ScraperConstructConvergedManifest function...
 
     // Call ScraperDeleteCScraperManifests(). This will return a map of manifests binned by Scraper after the culling.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
@@ -5057,7 +5064,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         // content hash - manifest hash
         std::map<uint256, uint256> mMatchingManifestContentHashes;
 
-        if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "nReducedSBContentHash = " + std::to_string(nReducedSBContentHash));
+        if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "nUnderlyingManifestReducedContentHash = " + std::to_string(nUnderlyingManifestReducedContentHash));
 
         for (const auto& iter : mManifestsBinnedbyContent)
         {
@@ -5067,7 +5074,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
             // This has the effect of only storing the first one of the series of matching manifests that match the hint,
             // because of the insert. Below we will count the others matching to check for a supermajority.
-            if (nReducedManifestContentHash == nReducedSBContentHash) mMatchingManifestContentHashes.insert(std::make_pair(iter.first, iter.second.second));
+            if (nReducedManifestContentHash == nUnderlyingManifestReducedContentHash) mMatchingManifestContentHashes.insert(std::make_pair(iter.first, iter.second.second));
         }
 
         // For each of the matching full content hashes, count the number of manifests by full content hash.
@@ -5530,8 +5537,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     uint64_t nNewFormatSuperblock_outSerSize;
     NN::QuorumHash nNewFormatSuperblockHash;
     NN::QuorumHash nNewFormatSuperblock_outHash;
-    uint256 nNewFormatSuperblockHashDirectFromHashing;
     uint32_t nNewFormatSuperblockReducedContentHashFromConvergenceHint;
+    uint32_t nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint;
 
     {
         LOCK(cs_ConvergedScraperStatsCache);
@@ -5558,6 +5565,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     res.pushKV("NewFormatSuperblock.m_version", (uint64_t) NewFormatSuperblock.m_version);
 
     nNewFormatSuperblockReducedContentHashFromConvergenceHint = NewFormatSuperblock.m_convergence_hint;
+    nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = NewFormatSuperblock.m_manifest_content_hint;
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
     res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
@@ -5588,14 +5596,14 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
     res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.ToString());
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
-    res.pushKV("nNewFormatSuperblockHashDirectFromHashing", nNewFormatSuperblockHashDirectFromHashing.ToString());
-    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockHashDirectFromHashing = " + nNewFormatSuperblockHashDirectFromHashing.ToString());
     res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
     _log(logattribute::INFO, "testnewsb", "new_legacy_hash = " + new_legacy_hash.ToString());
     res.pushKV("old_legacy_hash", old_legacy_hash);
     _log(logattribute::INFO, "testnewsb", "old_legacy_hash = " + old_legacy_hash);
     res.pushKV("nNewFormatSuperblockReducedContentHashFromConvergenceHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromConvergenceHint);
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromConvergenceHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromConvergenceHint));
+    res.pushKV("nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint);
+    _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint));
 
     if (new_legacy_hash == old_legacy_hash) {
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash passed.");

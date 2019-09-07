@@ -718,12 +718,14 @@ public:
     uint32_t m_version = CURRENT_VERSION;
 
     //!
-    //! \brief The truncated scraper convergence content hash.
+    //! \brief The truncated scraper convergence content hash and underlying
+    //! manifest content hash (they are computed differently).
     //!
-    //! This value aids receiving nodes with validation for superblocks created
+    //! These values aid receiving nodes with validation for superblocks created
     //! from past convergence data.
     //!
     uint32_t m_convergence_hint;
+    uint32_t m_manifest_content_hint;
 
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magntudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
