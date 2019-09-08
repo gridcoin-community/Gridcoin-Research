@@ -5674,6 +5674,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
         // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
         RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.Get64() >> 32;
+        RandomPastSB.m_manifest_content_hint = RandomPastConvergedManifest.nUnderlyingManifestContentHash.Get64() >> 32;
 
         if (RandomPastConvergedManifest.bByParts)
         {
