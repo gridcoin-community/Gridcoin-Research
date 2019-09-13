@@ -14,6 +14,7 @@
 #include "net.h"
 #include "wallet.h"
 #include "coincontrol.h"
+#include "block.h"
 
 using namespace std;
 using namespace boost;
@@ -766,6 +767,215 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
+// MultiSig Tool
+UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 5)
+        throw runtime_error(
+                "consolidatemsunspent <address> <requre-sigs> <block-start> <block-end> <max-grc> <max-inputs>\n"
+                "\n"
+                "Searches a block range for a multisig address with unspent utxos\n"
+                "and consolidates them into a transaction ready for signing to.\n"
+                "return to the same address\n"
+                "\n"
+                "All parameters required.\n"
+                "<address>       Multi-signature address\n"
+                "<required-sigs> Redquired amount of signatures for transaction\n"
+                "<block-start>   Block number to start search from\n"
+                "<block-end>     Block number to end search on\n"
+                "<max-grc>       Highest uxto value to include in search results in halfords (0 is no limit)\n"
+                "<max-inputs>    Maximum inputs allowed (hard limit on supported multisig types)\n"
+                "                Hard limit for 2 of 3 signatures is 40\n"
+                "                Hard limit for 3 of 4/5 signatures is 26\n"
+                "                Hard limit for 4 of 5 signatures is 20\n");
+
+    UniValue result(UniValue::VOBJ);
+
+    // Parameters
+    std::string sAddress = params[0].get_str();
+    int nReqSigs = params[1].get_int();
+    int nBlockStart = params[2].get_int();
+    int nBlockEnd = params[3].get_int();
+    int64_t nMaxValue = params[4].get_int64();
+    int nMaxInputs = params[5].get_int();
+    std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> umultimapInputs;
+
+    // Parameter Sanity Check
+    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+
+    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+
+    if (nMaxInputs < 1)
+        nMaxInputs = 1;
+
+    else if (nMaxValue < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less then 0");
+
+    if (nReqSigs < 2 || nReqSigs > 4)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Supported multi-signature addresses are: 2 of 3, 3 of 4, 3 of 5, 4 of 5");
+
+    // Hard Limit check
+    else if (nReqSigs == 2 && nMaxInputs > 40)
+        nMaxInputs = 40;
+
+    else if (nReqSigs == 3 && nMaxInputs > 30)
+        nMaxInputs = 30;
+
+    else if (nReqSigs == 4 && nMaxInputs > 20)
+        nMaxInputs = 20;
+
+    CBitcoinAddress Address(sAddress);
+
+    if (!Address.IsValid())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin Address");
+
+    LOCK(cs_main);
+
+    BlockFinder blockfinder;
+
+    CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
+
+    if (!pblkindex)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+    bool fComplete = false;
+
+    while (pblkindex->nHeight < nBlockEnd)
+    {
+        if (fComplete)
+            break;
+
+        pblkindex = pblkindex->pnext;
+
+        CBlock block;
+
+        if (!block.ReadFromDisk(pblkindex, true))
+            throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
+
+        // No Transactions in block outside of block creation
+        if (block.vtx.size() < 3)
+            continue;
+
+        for (unsigned int i = 2; i < block.vtx.size(); i++)
+        {
+            if (fComplete)
+                break;
+
+            // Load Transaction
+            CTransaction tx;
+            CTxDB txdb("r");
+            CTxIndex txindex;
+            uint256 hash;
+
+            hash = block.vtx[i].GetHash();
+
+            // Incase a fail here we can just continue thou it shouldn't happen
+            if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
+                continue;
+
+            // Extract the address from the transaction
+            for (unsigned int j = 0; j < tx.vout.size(); j++)
+            {
+                if (fComplete)
+                    break;
+
+                const CTxOut& txout = tx.vout[j];
+                CTxDestination txaddress;
+
+                // Pass failures here thou we shouldn't have any failures
+                if (!ExtractDestination(txout.scriptPubKey, txaddress))
+                    continue;
+
+                // If we found a match to multisig address do our work
+                if (CBitcoinAddress(txaddress) == Address)
+                {
+                    // Check if this output is alread spent
+                    COutPoint dummy = COutPoint(tx.GetHash(), j);
+
+                    // This is spent so move along
+                    if (!txindex.vSpent[dummy.n].IsNull())
+                        continue;
+
+                    // Check if the value exceeds the max-grc range we requested
+                    if (nMaxValue != 0 && txout.nValue > nMaxValue)
+                        continue;
+
+                    // Add to our input list
+                    umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+
+                    // shouldn't ever surpass this but lets just be safe!
+                    if (umultimapInputs.size() >= nMaxInputs)
+                        fComplete = true;
+                }
+            }
+        }
+    }
+
+    if (umultimapInputs.empty())
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Search resulted in no results");
+
+    // Parse the inputs and make a raw transaction
+    CTransaction rawtx;
+    int64_t nTotal = 0;
+    int64_t nFee = 0;
+    int64_t nMinFee = 0;
+    int64_t nTxFee = 0;
+    int64_t nBytes = 0;
+    int64_t nOutput = 0;
+    int64_t nFeeFactor = 0;
+
+    // Inputs
+    for (const auto& inputs : umultimapInputs)
+    {
+        nTotal += inputs.first;
+
+        CTxIn in(COutPoint(inputs.second.first, inputs.second.second));
+
+        rawtx.vin.push_back(in);
+    }
+
+    // Fee factoring is important as size affects fees needed for the transaction
+    // Setting the type will make the formula work
+    nFeeFactor = (225 * nReqSigs) + 148;
+    // Calculate fees since this a raw transaction. we can use most of jim's method in consolidateunspent.
+    // Size can vary with the signatures being added to the transction inputs. 225 for each signature gives enough
+    // breathing room for the varying sizes per signature plus the 148 for other input data.
+    // Tests of this have shown the fee to be within correct range
+    nBytes = (umultimapInputs.size() * nFeeFactor) + 34 + 10;
+    nMinFee = rawtx.GetMinFee(1, GMF_SEND, nBytes);
+    nFee = nTransactionFee * (1 + nBytes / 1000);
+    nTxFee = std::max(nMinFee, nFee);
+    nOutput = nTotal - nTxFee;
+    std::string sHash = "";
+
+    // Make the output
+    CScript scriptPubKey;
+
+    scriptPubKey.SetDestination(Address.Get());
+
+    CTxOut out(nOutput, scriptPubKey);
+
+    rawtx.vout.push_back(out);
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    ss << rawtx;
+
+    sHash = HexStr(ss.begin(), ss.end());
+
+    result.push_back(std::make_pair("Block Start", nBlockStart));
+    result.push_back(std::make_pair("Block End", nBlockEnd));
+    result.push_back(std::make_pair("Amount of Inputs", (int)umultimapInputs.size()));
+    result.push_back(std::make_pair("Total GRC In", ValueFromAmount(nTotal)));
+    result.push_back(std::make_pair("Fee", nTxFee));
+    result.push_back(std::make_pair("Output Amount", ValueFromAmount(nOutput)));
+    result.push_back(std::make_pair("RawTX", sHash));
+    result.push_back(std::make_pair("ss size", (int)ss.size()));
+
+    return result;
+}
 
 UniValue createrawtransaction(const UniValue& params, bool fHelp)
 {

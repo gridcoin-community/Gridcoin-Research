@@ -107,6 +107,7 @@ extern UniValue backupwallet(const UniValue& params, bool fHelp);
 extern UniValue burn(const UniValue& params, bool fHelp);
 extern UniValue checkwallet(const UniValue& params, bool fHelp);
 extern UniValue createrawtransaction(const UniValue& params, bool fHelp);
+extern UniValue consolidatemsunspent(const UniValue& params, bool fHelp);
 extern UniValue decoderawtransaction(const UniValue& params, bool fHelp);
 extern UniValue decodescript(const UniValue& params, bool fHelp);
 extern UniValue dumpprivkey(const UniValue& params, bool fHelp);

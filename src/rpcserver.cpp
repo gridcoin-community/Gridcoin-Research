@@ -286,6 +286,7 @@ static const CRPCCommand vRPCCommands[] =
     { "burn",                    &burn,                    cat_wallet        },
     { "checkwallet",             &checkwallet,             cat_wallet        },
     { "createrawtransaction",    &createrawtransaction,    cat_wallet        },
+    { "consolidatemsunspent",     &consolidatemsunspent,    cat_wallet   },
     { "decoderawtransaction",    &decoderawtransaction,    cat_wallet        },
     { "decodescript",            &decodescript,            cat_wallet        },
     { "dumpprivkey",             &dumpprivkey,             cat_wallet        },
