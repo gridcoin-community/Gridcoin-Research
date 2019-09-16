@@ -438,8 +438,8 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     txnew.vout.clear();
 
     // Choose coins to use
-    set <pair <const CWalletTx*,unsigned int> > CoinsToStake;
-    std::string sError = "";
+    vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
+    string sError = "";
 
     if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, sError, true))
     {

@@ -1497,7 +1497,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
-    std::set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, std::string& sError, bool fMiner) const
+    std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet, std::string& sError, bool fMiner) const
 {
     int64_t BalanceToConsider = GetBalance();
 
@@ -1536,7 +1536,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     }
 
     // Iterate through the wallet of stakable utxos and return them to miner if we can stake with them
-    setCoinsRet.clear();
+    vCoinsRet.clear();
 
     for(const COutput& output : vCoins)
     {
@@ -1550,9 +1550,13 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
             if (fDebug2 && fMiner)
                 LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)", pcoin->vout[i].GetHash().ToString(), BalanceToConsider / (double)COIN, n / (double)COIN);
 
-            setCoinsRet.insert(make_pair(pcoin, i));
+            vCoinsRet.push_back(make_pair(pcoin, i));
         }
      }
+
+    // Randomize the vector order to keep PoS truely a roll of dice in which utxo has a chance to stake first
+    if (fMiner)
+        std::random_shuffle(vCoinsRet.begin(), vCoinsRet.end(), GetRandInt);
 
     return true;
 }
@@ -1739,13 +1743,13 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     vector<const CWalletTx*> vwtxPrev;
 
-    set<pair<const CWalletTx*,unsigned int> > setCoins;
+    vector<pair<const CWalletTx*,unsigned int> > vCoins;
     std::string sError = "";
 
-    if (!SelectCoinsForStaking(GetAdjustedTime(), setCoins, sError))
+    if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, sError))
         return false;
 
-    if (setCoins.empty())
+    if (vCoins.empty())
         return false;
 
     nWeight = 0;
@@ -1754,7 +1758,7 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     CTxDB txdb("r");
 
     LOCK2(cs_main, cs_wallet);
-    for (auto const& pcoin : setCoins)
+    for (auto const& pcoin : vCoins)
     {
         CTxIndex txindex;
         if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))
