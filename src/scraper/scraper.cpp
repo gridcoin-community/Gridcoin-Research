@@ -3945,7 +3945,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             {
                 if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
                 {
-                    _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
+                    _log(logattribute::WARNING, "ScraperConstructConvergedManifest", "Project "
                          + iProjects.m_name
                          + " was excluded because the converged manifests from the scrapers all excluded the project. \n"
                          + "Falling back to attempt convergence by project to try and recover excluded project.");
@@ -3953,6 +3953,17 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                     bConvergenceSuccessful = false;
                     
                     // Since we are falling back to project level and discarding this convergence, no need to process any more once one missed project is found.
+                    break;
+                }
+
+                if (StructConvergedManifest.ConvergedManifestPartsMap.find("BeaconList") == StructConvergedManifest.ConvergedManifestPartsMap.end())
+                {
+                    _log(logattribute::WARNING, "ScraperConstructConvergedManifest", "BeaconList was not found in the converged manifests from the scrapers. \n"
+                         "Falling back to attempt convergence by project.");
+
+                    bConvergenceSuccessful = false;
+
+                    // Since we are falling back to project level and discarding this convergence, no need to process any more if BeaconList is missing.
                     break;
                 }
             }
@@ -4170,93 +4181,108 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
         auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
         CScraperManifest& manifest = *pair->second;
 
-        // The vParts[0] is always the BeaconList.
-        StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]->data));
-
-        StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
-
-        // The ConvergedManifest content hash is in the order of the map key and on the data.
-        for (const auto& iter : StructConvergedManifest.ConvergedManifestPartsMap)
-            ss << iter.second;
-
-        StructConvergedManifest.nContentHash = Hash(ss.begin(), ss.end());
-        StructConvergedManifest.timestamp = GetAdjustedTime();
-        StructConvergedManifest.bByParts = true;
-
-        bConvergenceSuccessful = true;
-
-        _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
-             + std::to_string(iCountSuccessfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
-             + " projects at "
-             + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
-
-        // Fill out the the excluded projects vector and the included scraper count (by project) map
-        for (const auto& iProjects : projectWhitelist)
+        // Bail if BeaconList is not found or empty.
+        if (pair == CScraperManifest::mapManifest.end() || manifest.vParts[0]->data.size() == 0)
         {
-            if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
-            {
-                // Project in whitelist was not in the map, so it goes in the exclusion vector.
-                StructConvergedManifest.vExcludedProjects.push_back(iProjects.m_name);
-                _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
-                     + iProjects.m_name
-                     + " was excluded because there was no convergence from the scrapers for this project at the project level.");
+            _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "BeaconList was not found in the converged manifests from the scrapers. \n"
+                 "Falling back to attempt convergence by project.");
 
-                continue;
-            }
-
-            unsigned int nScraperConvergenceCount = StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
-            StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name, nScraperConvergenceCount));
-
-            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
-                              + ": " + std::to_string(nScraperConvergenceCount) + " scraper(s) converged");
+            bConvergenceSuccessful = false;
         }
-
-        // Fill out the included and excluded scraper vector for scrapers that did not participate in any project level convergence.
-        for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+        else
         {
-            if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
-            {
-                StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
-                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
-                                  + iScraper.first
-                                  + " was included in one or more project level convergences.");
-            }
-            else
-            {
-                StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
-                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
-                     + iScraper.first
-                     + " was excluded because it was not included in any project level convergence.");
-            }
-        }
+            // The vParts[0] is always the BeaconList.
+            StructConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair("BeaconList", manifest.vParts[0]->data));
 
-        // Retrieve the complete list of scrapers from the AppCache to determine scrapers not publishing at all.
-        AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+            StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
 
-        for (const auto& iScraper : mScrapers)
-        {
-            // Only include scrapers enabled in protocol.
-            if (iScraper.second.value == "true" || iScraper.second.value == "1")
+            // The ConvergedManifest content hash is in the order of the map key and on the data.
+            for (const auto& iter : StructConvergedManifest.ConvergedManifestPartsMap)
+                ss << iter.second;
+
+            StructConvergedManifest.nContentHash = Hash(ss.begin(), ss.end());
+            StructConvergedManifest.timestamp = GetAdjustedTime();
+            StructConvergedManifest.bByParts = true;
+
+            bConvergenceSuccessful = true;
+
+            _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Successful convergence by project: "
+                 + std::to_string(iCountSuccessfulConvergedProjects) + " out of " + std::to_string(projectWhitelist.size())
+                 + " projects at "
+                 + DateTimeStrFormat("%x %H:%M:%S",  StructConvergedManifest.timestamp));
+
+            // Fill out the the excluded projects vector and the included scraper count (by project) map
+            for (const auto& iProjects : projectWhitelist)
             {
-                if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
-                        == std::end(StructConvergedManifest.vExcludedScrapers)
-                    && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
-                        == std::end(StructConvergedManifest.vIncludedScrapers))
+                if (StructConvergedManifest.ConvergedManifestPartsMap.find(iProjects.m_name) == StructConvergedManifest.ConvergedManifestPartsMap.end())
                 {
-                     StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
-                     _log(logattribute::INFO, "ScraperConstructConvergedManifesByProject", "Scraper " + iScraper.first + " authorized but not publishing.");
+                    // Project in whitelist was not in the map, so it goes in the exclusion vector.
+                    StructConvergedManifest.vExcludedProjects.push_back(iProjects.m_name);
+                    _log(logattribute::WARNING, "ScraperConstructConvergedManifestByProject", "Project "
+                         + iProjects.m_name
+                         + " was excluded because there was no convergence from the scrapers for this project at the project level.");
+
+                    continue;
+                }
+
+                unsigned int nScraperConvergenceCount = StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
+                StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name, nScraperConvergenceCount));
+
+                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
+                                  + ": " + std::to_string(nScraperConvergenceCount) + " scraper(s) converged");
+            }
+
+            // Fill out the included and excluded scraper vector for scrapers that did not participate in any project level convergence.
+            for (const auto& iScraper : mMapCSManifestsBinnedByScraper)
+            {
+                if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
+                {
+                    StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
+                    if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                                      + iScraper.first
+                                      + " was included in one or more project level convergences.");
+                }
+                else
+                {
+                    StructConvergedManifest.vExcludedScrapers.push_back(iScraper.first);
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                         + iScraper.first
+                         + " was excluded because it was not included in any project level convergence.");
                 }
             }
-        }
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            // Retrieve the complete list of scrapers from the AppCache to determine scrapers not publishing at all.
+            AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+            for (const auto& iScraper : mScrapers)
+            {
+                // Only include scrapers enabled in protocol.
+                if (iScraper.second.value == "true" || iScraper.second.value == "1")
+                {
+                    if (std::find(std::begin(StructConvergedManifest.vExcludedScrapers), std::end(StructConvergedManifest.vExcludedScrapers), iScraper.first)
+                            == std::end(StructConvergedManifest.vExcludedScrapers)
+                        && std::find(std::begin(StructConvergedManifest.vIncludedScrapers), std::end(StructConvergedManifest.vIncludedScrapers), iScraper.first)
+                            == std::end(StructConvergedManifest.vIncludedScrapers))
+                    {
+                         StructConvergedManifest.vScrapersNotPublishing.push_back(iScraper.first);
+                         _log(logattribute::INFO, "ScraperConstructConvergedManifesByProject", "Scraper " + iScraper.first + " authorized but not publishing.");
+                    }
+                }
+            }
+
+            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+        }
     }
 
     if (!bConvergenceSuccessful)
+    {
+        // Reinitialize StructConvergedManifest.
+        StructConvergedManifest = {};
+
         _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "No convergence on manifests by projects.");
+    }
 
     return bConvergenceSuccessful;
-
 }
 
 
@@ -4394,6 +4420,9 @@ bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManif
 {
     // Find the beacon list.
     auto iter = StructConvergedManifest.ConvergedManifestPartsMap.find("BeaconList");
+
+    // Bail if the beacon list is not found, or the part is zero size (missing referenced part)
+    if (iter == StructConvergedManifest.ConvergedManifestPartsMap.end() || iter->second.size() == 0) return false;
 
     boostio::basic_array_source<char> input_source(&iter->second[0], iter->second.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
