@@ -1497,7 +1497,7 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
 bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
-    std::set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, bool fMiner) const
+    std::set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, std::string& sError, bool fMiner) const
 {
     int64_t BalanceToConsider = GetBalance();
 
@@ -1505,11 +1505,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-        {
-            LOCK(MinerStatus.lock);
-            MinerStatus.Clear();
-            MinerStatus.ReasonNotStaking = _("No coins");
-        }
+            sError = _("No coins");
 
         return false;
     }
@@ -1519,11 +1515,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-        {
-            LOCK(MinerStatus.lock);
-            MinerStatus.Clear();
-            MinerStatus.ReasonNotStaking = _("Entire balance reserved");
-        }
+            sError = _("Entire balance reserved");
 
         return false;
     }
@@ -1538,11 +1530,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (vCoins.empty())
     {
         if (fMiner)
-        {
-            LOCK(MinerStatus.lock);
-            MinerStatus.Clear();
-            MinerStatus.ReasonNotStaking = _("No mature coins");
-        }
+            sError = _("No mature coins");
 
         return false;
     }
@@ -1752,8 +1740,9 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     vector<const CWalletTx*> vwtxPrev;
 
     set<pair<const CWalletTx*,unsigned int> > setCoins;
+    std::string sError = "";
 
-    if (!SelectCoinsForStaking(GetAdjustedTime(), setCoins))
+    if (!SelectCoinsForStaking(GetAdjustedTime(), setCoins, sError))
         return false;
 
     if (setCoins.empty())

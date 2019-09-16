@@ -72,7 +72,7 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool BreakForNoCoins(CMinerStatus& status, const std::string& message)
+bool ReturnMinerError(CMinerStatus& status, const std::string& message)
 {
     LOCK(status.lock);
 
@@ -439,9 +439,14 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
     // Choose coins to use
     set <pair <const CWalletTx*,unsigned int> > CoinsToStake;
+    std::string sError = "";
 
-    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, true))
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, sError, true))
+    {
+        ReturnMinerError(MinerStatus, sError);
+
         return false;
+    }
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
     txnew.nTime/16,blocknew.nBits);
