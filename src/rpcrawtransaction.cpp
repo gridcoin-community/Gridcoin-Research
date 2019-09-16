@@ -1066,6 +1066,8 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     result.push_back(std::make_pair("Block Start", nBlockStart));
     result.push_back(std::make_pair("Block End", nBlockEnd));
+    // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before this End Block
+    result.push_back(std::make_pair("Last Block Checked before target inputs amount", pblkindex->nHeight));
     result.push_back(std::make_pair("Amount of Inputs", nInputs));
     result.push_back(std::make_pair("Total GRC In", ValueFromAmount(nTotal)));
     result.push_back(std::make_pair("Fee", nTxFee));
