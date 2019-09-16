@@ -739,6 +739,7 @@ public:
         if (!(nType & SER_GETHASH)) {
             READWRITE(m_version);
             READWRITE(m_convergence_hint);
+            READWRITE(m_manifest_content_hint);
         }
 
         nVersion = m_version;

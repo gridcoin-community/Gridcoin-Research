@@ -1023,6 +1023,7 @@ std::string PackBinarySuperblock(std::string sBlock)
 Superblock::Superblock()
     : m_version(Superblock::CURRENT_VERSION)
     , m_convergence_hint(0)
+    , m_manifest_content_hint(0)
     , m_height(0)
     , m_timestamp(0)
 {
