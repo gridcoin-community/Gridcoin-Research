@@ -23,6 +23,7 @@
 #include "util.h"
 #include "beacon.h"
 #include "miner.h"
+#include <random>
 
 using namespace std;
 
@@ -1556,7 +1557,11 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
 
     // Randomize the vector order to keep PoS truely a roll of dice in which utxo has a chance to stake first
     if (fMiner)
-        std::random_shuffle(vCoinsRet.begin(), vCoinsRet.end(), GetRandInt);
+    {
+        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
+
+        std::shuffle(vCoinsRet.begin(), vCoinsRet.end(), std::default_random_engine(seed));
+    }
 
     return true;
 }
