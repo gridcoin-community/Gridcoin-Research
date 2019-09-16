@@ -775,25 +775,29 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
                 "consolidatemsunspent <address> <requre-sigs> <block-start> <block-end> <max-grc> <max-inputs>\n"
                 "\n"
                 "Searches a block range for a multisig address with unspent utxos\n"
-                "and consolidates them into a transaction ready for signing to.\n"
-                "return to the same address\n"
+                "and consolidates them into a transaction ready for signing to\n"
+                "return to the same address in an consolidated amount\n"
                 "\n"
                 "All parameters required.\n"
-                "<address>       Multi-signature address\n"
-                "<required-sigs> Redquired amount of signatures for transaction\n"
-                "<block-start>   Block number to start search from\n"
-                "<block-end>     Block number to end search on\n"
-                "<max-grc>       Highest uxto value to include in search results in halfords (0 is no limit)\n"
-                "<max-inputs>    Maximum inputs allowed (hard limit on supported multisig types)\n"
-                "                Hard limit for 2 of 3 signatures is 40\n"
-                "                Hard limit for 3 of 4/5 signatures is 26\n"
-                "                Hard limit for 4 of 5 signatures is 20\n");
+                "<address> --------> Multi-signature address\n"
+                "<multi-sig-type> -> Type of multi-signature address\n"
+                "<multi-sig-type> -> 1 = 2 of 3 (2 signatures required of 3)\n"
+                "<multi-sig-type> -> 2 = 3 of 4 (3 signatures required of 4)\n"
+                "<multi-sig-type> -> 3 = 3 of 5 (3 signatures required of 5)\n"
+                "<multi-sig-type> -> 4 = 4 of 5 (4 signatures required of 5)\n"
+                "<block-start> ----> Block number to start search from\n"
+                "<block-end> ------> Block number to end search on\n"
+                "<max-grc> --------> Highest uxto value to include in search results in halfords (0 is no limit)\n"
+                "<max-inputs> -----> Maximum inputs allowed (hard limit on supported multisig types)\n"
+                "<max-inputs> -----> Hard limit for 2 of 3 signatures is 40\n"
+                "<max-inputs> -----> Hard limit for 3 of 4/5 signatures is 26\n"
+                "<max-inputs> -----> Hard limit for 4 of 5 signatures is 20\n");
 
     UniValue result(UniValue::VOBJ);
 
     // Parameters
     std::string sAddress = params[0].get_str();
-    int nReqSigs = params[1].get_int();
+    int nReqSigsType = params[1].get_int();
     int nBlockStart = params[2].get_int();
     int nBlockEnd = params[3].get_int();
     int64_t nMaxValue = params[4].get_int64();
@@ -813,18 +817,47 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     else if (nMaxValue < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less then 0");
 
-    if (nReqSigs < 2 || nReqSigs > 4)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Supported multi-signature addresses are: 2 of 3, 3 of 4, 3 of 5, 4 of 5");
+    int nReqSigs = 0;
+    int64_t nRedeemScriptSize = 0;
 
-    // Hard Limit check
-    else if (nReqSigs == 2 && nMaxInputs > 40)
-        nMaxInputs = 40;
+    if (nReqSigsType < 1 || nReqSigsType > 4)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address choosen");
 
-    else if (nReqSigs == 3 && nMaxInputs > 30)
-        nMaxInputs = 30;
+    else if (nReqSigsType == 1)
+    {
+        nReqSigs = 2;
+        nRedeemScriptSize = 210;
 
-    else if (nReqSigs == 4 && nMaxInputs > 20)
-        nMaxInputs = 20;
+        if (nMaxInputs > 40)
+            nMaxInputs = 40;
+    }
+
+    else if (nReqSigsType == 2)
+    {
+        nReqSigs = 3;
+        nRedeemScriptSize = 278;
+
+        if (nMaxInputs > 30)
+            nMaxInputs = 30;
+    }
+
+    else if (nReqSigsType == 3)
+    {
+        nReqSigs = 3;
+        nRedeemScriptSize = 346;
+
+        if (nMaxInputs > 30)
+            nMaxInputs = 30;
+    }
+
+    else if (nReqSigsType == 4)
+    {
+        nReqSigs = 4;
+        nRedeemScriptSize = 346;
+
+        if (nMaxInputs > 20)
+            nMaxInputs = 20;
+    }
 
     CBitcoinAddress Address(sAddress);
 
@@ -919,12 +952,6 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     // Parse the inputs and make a raw transaction
     CTransaction rawtx;
     int64_t nTotal = 0;
-    int64_t nFee = 0;
-    int64_t nMinFee = 0;
-    int64_t nTxFee = 0;
-    int64_t nBytes = 0;
-    int64_t nOutput = 0;
-    int64_t nFeeFactor = 0;
 
     // Inputs
     for (const auto& inputs : umultimapInputs)
@@ -936,14 +963,86 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         rawtx.vin.push_back(in);
     }
 
-    // Fee factoring is important as size affects fees needed for the transaction
-    // Setting the type will make the formula work
-    nFeeFactor = (225 * nReqSigs) + 148;
-    // Calculate fees since this a raw transaction. we can use most of jim's method in consolidateunspent.
-    // Size can vary with the signatures being added to the transction inputs. 225 for each signature gives enough
-    // breathing room for the varying sizes per signature plus the 148 for other input data.
-    // Tests of this have shown the fee to be within correct range
-    nBytes = (umultimapInputs.size() * nFeeFactor) + 34 + 10;
+    /*
+     * Fee factoring is important as size affects fees needed for the transaction
+     * Fees are paid on the serialized size of a said transaction.
+     * We don't know the serialized size of this transaction since we don't sign here
+     * We cannot sign here as the signing potentially takes place by multiple wallets.
+     * Serialize size can be equal or more then half of the hex size of completely signed transaction
+     *
+     * What we do know:
+     * Redeemscript sizes (R):
+     * 2 of 3 = 210
+     * 3 of 4 = 278
+     * 3 of 5 = 346
+     * 4 of 5 = 346
+     * Each signature size is between 146 to 148 from testing
+     * S will be amount of signatures required
+     * N will be the number of inputs
+     *
+     * To get estimated hex size for this is as follows:
+     * sighexsize = (R + (S * 148)) * N
+     *
+     * From investigating i've determined that some of the hex's even with signature are predictable which helps refine the byte
+     * calculation for estimation.
+     *
+     * Some parts of the hex transaction always start with 01 followed by padding of 000000
+     * This occurs at beginning of the transaction before vin
+     * This occurs after vin and before the signature
+     * This occurs before vout as well except it contains no padding
+     *
+     * After a signature the hex contains 00ffffffff
+     *
+     * After the transaction the hex is padded with 0000000000
+     *
+     * The first vin is 74 in hex and every one after that is 64 in hex so we will assume they all 10 + (64 * inputs)
+     *
+     * This is very useful information for calculations on the transactions
+     *
+     * So can assume the base transaction will always have the 01000000vindata01000000sigdata00ffffffff01voutdata0000000000
+     * This helps with calculations. We can assume some formulas:
+     *
+     * Total vin size will calculate as follows:
+     * VINHEXSIZE V = (64 * N) + 10
+     *
+     * Total vin signatures size will calculate as follows:
+     * SIGHEXSIZE H = (R + (S * 148)) * N
+     *
+     * Padding for vins will be calulated as follows:
+     * VINP = (8 + 8 + 10) * N (To Shorten we will assume 26 * N)
+     *
+     * Total vout size we will assume is 70 since thats the biggest it appears to be able to be as a base size with max money
+     * VOUTP = 2 + 10 (To Shorten we will assume 12)
+     *
+     * So in esscense the formula for all this will be:
+     *
+     * Potentialhexsize PHS = V + H + VINP + VOUTP
+     *
+     * Potentialbytesuze PBS = PHS / 2
+     *
+     * Note: this will keep the size pretty close to the real size.
+     * This also leaves buffer room incase and this should always be an overestimation of the actual sizes
+     * Sizes vary by the behaviour of the hex/serialization of the hex as well.
+     *
+    */
+
+    int64_t nFee = 0;
+    int64_t nMinFee = 0;
+    int64_t nTxFee = 0;
+    int64_t nBytes = 0;
+    int64_t nOutput = 0;
+    int64_t nEstHexSize = 0;
+    int64_t nVInHexSize = 0;
+    int64_t nSigHexSize = 0;
+    int64_t nVInPadding = 0;
+    int64_t nInputs = umultimapInputs.size();
+
+    nVInHexSize = (64 * nInputs) + 10;
+    nSigHexSize = (nRedeemScriptSize + (nReqSigs * 148)) * nInputs;
+    nVInPadding = 26 * nInputs;
+    nEstHexSize = nVInHexSize + nSigHexSize + nVInPadding + 12;
+
+    nBytes = nEstHexSize / 2;
     nMinFee = rawtx.GetMinFee(1, GMF_SEND, nBytes);
     nFee = nTransactionFee * (1 + nBytes / 1000);
     nTxFee = std::max(nMinFee, nFee);
@@ -967,12 +1066,13 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
     result.push_back(std::make_pair("Block Start", nBlockStart));
     result.push_back(std::make_pair("Block End", nBlockEnd));
-    result.push_back(std::make_pair("Amount of Inputs", (int)umultimapInputs.size()));
+    result.push_back(std::make_pair("Amount of Inputs", nInputs));
     result.push_back(std::make_pair("Total GRC In", ValueFromAmount(nTotal)));
     result.push_back(std::make_pair("Fee", nTxFee));
     result.push_back(std::make_pair("Output Amount", ValueFromAmount(nOutput)));
+    result.push_back(std::make_pair("Estimated signed hex size", nEstHexSize));
+    result.push_back(std::make_pair("Estimated Serialized size", nBytes));
     result.push_back(std::make_pair("RawTX", sHash));
-    result.push_back(std::make_pair("ss size", (int)ss.size()));
 
     return result;
 }
