@@ -5645,7 +5645,11 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
     res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
 
-    scraperSBvalidationtype validity = ValidateSuperblock(NewFormatSuperblock, true);
+    //
+    // ValidateSuperblock() reference function tests (current convergence)
+    //
+
+    scraperSBvalidationtype validity = ::ValidateSuperblock(NewFormatSuperblock, true);
 
     if (validity != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
     {
@@ -5658,7 +5662,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock validation against current (using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity));
     }
 
-    scraperSBvalidationtype validity2 = ValidateSuperblock(NewFormatSuperblock, false);
+    scraperSBvalidationtype validity2 = ::ValidateSuperblock(NewFormatSuperblock, false);
 
     if (validity2 != scraperSBvalidationtype::Invalid && validity2 != scraperSBvalidationtype::Unknown)
     {
@@ -5669,6 +5673,32 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     {
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against current (without using cache) failed - " + GetTextForscraperSBvalidationtype(validity2));
         res.pushKV("NewFormatSuperblock validation against current (without using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity2));
+    }
+
+    //
+    // SuperblockValidator class tests (current convergence)
+    //
+
+    if (NN::ValidateSuperblock(NewFormatSuperblock))
+    {
+        _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (using cache) passed");
+        res.pushKV("NN::ValidateSuperblock validation against current (using cache)", "passed");
+    }
+    else
+    {
+        _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (using cache) failed");
+        res.pushKV("NN::ValidateSuperblock validation against current (using cache)", "failed");
+    }
+
+    if (NN::ValidateSuperblock(NewFormatSuperblock, false))
+    {
+        _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (without using cache) passed");
+        res.pushKV("NN::ValidateSuperblock validation against current (without using cache)", "passed");
+    }
+    else
+    {
+        _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (without using cache) failed");
+        res.pushKV("NN::ValidateSuperblock validation against current (without using cache)", "failed");
     }
 
     ConvergedManifest RandomPastConvergedManifest;
@@ -5721,7 +5751,11 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             }
         }
 
-        scraperSBvalidationtype validity3 = ValidateSuperblock(RandomPastSB, true);
+        //
+        // ValidateSuperblock() reference function tests (past convergence)
+        //
+
+        scraperSBvalidationtype validity3 = ::ValidateSuperblock(RandomPastSB, true);
 
         if (validity3 != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
         {
@@ -5734,7 +5768,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             res.pushKV("NewFormatSuperblock validation against random past (using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity3));
         }
 
-        scraperSBvalidationtype validity4 = ValidateSuperblock(RandomPastSB, false);
+        scraperSBvalidationtype validity4 = ::ValidateSuperblock(RandomPastSB, false);
 
         if (validity4 != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
         {
@@ -5745,6 +5779,32 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         {
             _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock validation against random past (without using cache) failed - " + GetTextForscraperSBvalidationtype(validity4));
             res.pushKV("NewFormatSuperblock validation against random past (without using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity4));
+        }
+
+        //
+        // SuperblockValidator class tests (past convergence)
+        //
+
+        if (NN::ValidateSuperblock(RandomPastSB))
+        {
+            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (using cache) passed");
+            res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "passed");
+        }
+        else
+        {
+            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (using cache) failed");
+            res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "failed");
+        }
+
+        if (NN::ValidateSuperblock(RandomPastSB, false))
+        {
+            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (without using cache) passed");
+            res.pushKV("NN::ValidateSuperblock validation against random past (without using cache)", "passed");
+        }
+        else
+        {
+            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (without using cache) failed");
+            res.pushKV("NN::ValidateSuperblock validation against random past (without using cache)", "failed");
         }
     }
 
