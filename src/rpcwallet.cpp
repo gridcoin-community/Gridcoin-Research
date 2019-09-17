@@ -2218,8 +2218,7 @@ UniValue reservebalance(const UniValue& params, bool fHelp)
                 "\n"
                 "<reserve> is true or false to turn balance reserve on or off.\n"
                 "<amount> is a real and rounded to cent.\n"
-                "Reserved amount secures a balance in wallet that can be spendable at anytime.\n"
-                "However reserve will secure utxo(s) of any size to respect this setting.\n"
+                "Set reserve amount not participating in network protection.\n"
                 "If no parameters provided current setting is printed.\n");
 
     if (params.size() > 0)
