@@ -79,7 +79,7 @@
        <item>
         <widget class="QLabel" name="reserveBalanceInfoLabel">
          <property name="text">
-          <string>Reserved amount does not participate in staking and is therefore spendable at any time.</string>
+          <string>Reserved amount secures a balance in wallet that can be spendable at anytime. However reserve will secure utxo(s) of any size to respect this setting.</string>
          </property>
          <property name="textFormat">
           <enum>Qt::PlainText</enum>
