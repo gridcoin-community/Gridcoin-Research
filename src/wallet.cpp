@@ -1750,14 +1750,13 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     vector<pair<const CWalletTx*,unsigned int> > vCoins;
     std::string sError = "";
+    nWeight = 0;
 
     if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, sError))
         return false;
 
     if (vCoins.empty())
         return false;
-
-    nWeight = 0;
 
     int64_t nCurrentTime = GetAdjustedTime();
     CTxDB txdb("r");
