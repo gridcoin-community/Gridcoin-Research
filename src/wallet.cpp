@@ -1527,7 +1527,6 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins, nSpendTime);
 
-    // Check to see if any coins are available for staking
     if (vCoins.empty())
     {
         if (fMiner)
@@ -1554,6 +1553,15 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
             vCoinsRet.push_back(make_pair(pcoin, i));
         }
      }
+
+    // Check if we have any utxos to send back at this point and if not the reasoning behind this
+    if (vCoinsRet.empty())
+    {
+        if (fMiner)
+            sError = _("No utxos available due to reserve balance");
+
+        return false;
+    }
 
     // Randomize the vector order to keep PoS truely a roll of dice in which utxo has a chance to stake first
     if (fMiner)
@@ -1753,9 +1761,6 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     nWeight = 0;
 
     if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, sError))
-        return false;
-
-    if (vCoins.empty())
         return false;
 
     int64_t nCurrentTime = GetAdjustedTime();
