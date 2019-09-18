@@ -22,6 +22,8 @@
 #include "main.h"
 #include "util.h"
 #include "beacon.h"
+#include "miner.h"
+#include <random>
 
 using namespace std;
 
@@ -1485,49 +1487,88 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
             SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet, contract));
 }
 
-// Select some coins without random shuffle or best subset approximation
-bool CWallet::SelectCoinsForStaking(int64_t nTargetValueIn, unsigned int nSpendTime,
-    std::set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+/* Select coins from wallet for staking
+//
+// All wallet based information to be checked here and sent to miner as requested by this function
+// 1) Check if we have a balance
+// 2) Check if we have a balance after the reserve is applied to consider staking with
+// 3) Check if we have coins eligable to stake
+// 4) Iterate through the wallet of stakable utxos and return them to miner if we can stake with them
+//
+// Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
+*/
+bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
+    std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet, std::string& sError, bool fMiner) const
 {
+    int64_t BalanceToConsider = GetBalance();
+
+    // Check if we have a spendable balance
+    if (BalanceToConsider <= 0)
+    {
+        if (fMiner)
+            sError = _("No coins");
+
+        return false;
+    }
+    // Check if we have a balance after the reserve is applied to consider staking with
+    BalanceToConsider -= nReserveBalance;
+
+    if (BalanceToConsider <= 0)
+    {
+        if (fMiner)
+            sError = _("Entire balance reserved");
+
+        return false;
+    }
+
+    if (fDebug2 && fMiner)
+        LogPrintf("SelectCoinsForStaking: Balance considered for staking %.8f", BalanceToConsider / (double)COIN);
+
     vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins, nSpendTime);
 
-    setCoinsRet.clear();
-    nValueRet = 0;
+    if (vCoins.empty())
+    {
+        if (fMiner)
+            sError = _("No mature coins");
 
-    int64_t nTargetValue = nTargetValueIn;
+        return false;
+    }
 
-    //if (GlobalCPUMiningCPID.cpid != "INVESTOR"  && msMiningErrors7 != "Probing coin age")
-    //{
-    //      nTargetValue = nTargetValueIn/2;
-    //}
+    // Iterate through the wallet of stakable utxos and return them to miner if we can stake with them
+    vCoinsRet.clear();
 
     for(const COutput& output : vCoins)
     {
         const CWalletTx *pcoin = output.tx;
         int i = output.i;
-
-        // Stop if we've chosen enough inputs
-        if (nValueRet >= nTargetValue)
-            break;
-
         int64_t n = pcoin->vout[i].nValue;
 
-        pair<int64_t,pair<const CWalletTx*,unsigned int> > coin = make_pair(n,make_pair(pcoin, i));
+        // If the Spendable balance is more then utxo value it is classified as able to stake
+        if (BalanceToConsider >= n)
+        {
+            if (fDebug2 && fMiner)
+                LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)", pcoin->vout[i].GetHash().ToString(), BalanceToConsider / (double)COIN, n / (double)COIN);
 
-        if (n >= nTargetValue)
-        {
-            // If input value is greater or equal to target then simply insert
-            //    it into the current subset and exit
-            setCoinsRet.insert(coin.second);
-            nValueRet += coin.first;
-            break;
+            vCoinsRet.push_back(make_pair(pcoin, i));
         }
-        else if (n < nTargetValue + CENT)
-        {
-            setCoinsRet.insert(coin.second);
-            nValueRet += coin.first;
-        }
+     }
+
+    // Check if we have any utxos to send back at this point and if not the reasoning behind this
+    if (vCoinsRet.empty())
+    {
+        if (fMiner)
+            sError = _("No utxos available due to reserve balance");
+
+        return false;
+    }
+
+    // Randomize the vector order to keep PoS truely a roll of dice in which utxo has a chance to stake first
+    if (fMiner)
+    {
+        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
+
+        std::shuffle(vCoinsRet.begin(), vCoinsRet.end(), std::default_random_engine(seed));
     }
 
     return true;
@@ -1715,22 +1756,18 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
 
     vector<const CWalletTx*> vwtxPrev;
 
-    set<pair<const CWalletTx*,unsigned int> > setCoins;
-    int64_t nValueIn = 0;
-
-    if (!SelectCoinsForStaking(nBalance - nReserveBalance,  GetAdjustedTime(), setCoins, nValueIn))
-        return false;
-
-    if (setCoins.empty())
-        return false;
-
+    vector<pair<const CWalletTx*,unsigned int> > vCoins;
+    std::string sError = "";
     nWeight = 0;
+
+    if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, sError))
+        return false;
 
     int64_t nCurrentTime = GetAdjustedTime();
     CTxDB txdb("r");
 
     LOCK2(cs_main, cs_wallet);
-    for (auto const& pcoin : setCoins)
+    for (auto const& pcoin : vCoins)
     {
         CTxIndex txindex;
         if (!txdb.ReadTxIndex(pcoin.first->GetHash(), txindex))

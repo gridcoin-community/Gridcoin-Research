@@ -72,7 +72,7 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool BreakForNoCoins(CMinerStatus& status, const std::string& message)
+bool ReturnMinerError(CMinerStatus& status, const std::string& message)
 {
     LOCK(status.lock);
 
@@ -438,22 +438,14 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     txnew.vout.clear();
 
     // Choose coins to use
-    set <pair <const CWalletTx*,unsigned int> > CoinsToStake;
+    vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
+    string sError = "";
 
-    int64_t BalanceToStake = wallet.GetBalance();
-    int64_t nValueIn = 0;
-    //Request all the coins here, check reserve later
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, sError, true))
+    {
+        ReturnMinerError(MinerStatus, sError);
 
-    if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, _("No coins"));
-    } else if (!wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn)) {
-        return BreakForNoCoins(MinerStatus, _("Waiting for coins to mature"));
-    }
-
-    BalanceToStake -= nReserveBalance;
-
-    if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, _("Entire balance reserved"));
+        return false;
     }
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
@@ -477,13 +469,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
                 continue;
         }
-
-        // only count coins meeting min age requirement
-        if (CoinBlock.GetBlockTime() + nStakeMinAge > txnew.nTime)
-            continue;
-
-        if (CoinTx.vout[CoinTxN].nValue > BalanceToStake)
-            continue;
 
         {
             int64_t nStakeValue= CoinTx.vout[CoinTxN].nValue;
