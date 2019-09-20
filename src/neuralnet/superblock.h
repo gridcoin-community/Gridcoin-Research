@@ -739,6 +739,7 @@ public:
         if (!(nType & SER_GETHASH)) {
             READWRITE(m_version);
             READWRITE(m_convergence_hint);
+            READWRITE(m_manifest_content_hint);
         }
 
         nVersion = m_version;
@@ -858,6 +859,18 @@ private:
     //!
     mutable QuorumHash m_hash_cache;
 }; // Superblock
+
+
+//!
+//! \brief Validate the supplied superblock by comparing it to local manifest
+//! data.
+//!
+//! \param superblock The superblock to validate.
+//! \param use_cache  If \c false, skip validation with the scraper cache.
+//!
+//! \return \c True if the local manifest data produces a matching superblock.
+//!
+bool ValidateSuperblock(const Superblock& superblock, const bool use_cache = true);
 } // namespace NN
 
 namespace std {
@@ -932,7 +945,6 @@ struct ConvergedScraperStats
 
     // New superblock object and hash.
     NN::Superblock NewFormatSuperblock;
-    NN::QuorumHash nNewFormatSuperblockHash;
 
     uint32_t GetVersion()
     {
@@ -951,7 +963,7 @@ struct ConvergedScraperStats
         {
             // This is specifically this form of insert to insure that if there is a hint "collision" the referenced
             // SB Hash and Convergence stored will be the LATER one.
-            PastConvergences[nReducedContentHash] = std::make_pair(nNewFormatSuperblockHash, Convergence);
+            PastConvergences[nReducedContentHash] = std::make_pair(NewFormatSuperblock.GetHash(), Convergence);
         }
     }
 

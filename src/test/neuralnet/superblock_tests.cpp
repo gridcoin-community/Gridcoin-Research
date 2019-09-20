@@ -261,6 +261,8 @@ ConvergedScraperStats GetTestConvergence(const bool by_parts = false)
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
         = uint256("1111111111111111111111111111111111111111111111111111111111111111");
+    convergence.Convergence.nUnderlyingManifestContentHash
+        = uint256("2222222222222222222222222222222222222222222222222222222222222222");
 
     // Add some project parts with the same names as the projects in the stats.
     // The part data doesn't matter, so we just add empty containers.
@@ -374,6 +376,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
     BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
@@ -393,6 +396,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 
     BOOST_CHECK(superblock.m_version == 1);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.empty() == true);
     BOOST_CHECK(superblock.m_cpids.TotalMagnitude() == 0);
@@ -412,6 +416,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);
@@ -455,6 +460,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergnce)
     // This initialization mode must set the convergence hint derived from
     // the content hash of the convergence:
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);
@@ -497,6 +503,8 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergnc
 
     BOOST_CHECK(superblock.m_version == NN::Superblock::CURRENT_VERSION);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+    // Manifest content hint not set for fallback convergence:
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x00000000);
 
     auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);
@@ -571,6 +579,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
     // Legacy string-packed superblocks unpack to version 1:
     BOOST_CHECK(superblock.m_version == 1);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.size() == 3);
     BOOST_CHECK(superblock.m_cpids.Zeros() == 5);
@@ -634,6 +643,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_text_contract)
     // Legacy string-packed superblocks unpack to version 1:
     BOOST_CHECK(superblock.m_version == 1);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
     BOOST_CHECK(superblock.m_cpids.size() == 3);
     BOOST_CHECK(superblock.m_cpids.Zeros() == 0);
@@ -806,6 +816,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     std::vector<unsigned char> expected {
         0x02, 0x00, 0x00, 0x00,                         // Version
         0x11, 0x11, 0x11, 0x11,                         // Convergence hint
+        0x22, 0x22, 0x22, 0x22,                         // Manifest content hint
         0x02,                                           // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
@@ -844,6 +855,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     std::vector<unsigned char> bytes {
         0x02, 0x00, 0x00, 0x00,                         // Version
         0x11, 0x11, 0x11, 0x11,                         // Convergence hint
+        0x22, 0x22, 0x22, 0x22,                         // Manifest content hint
         0x02,                                           // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
@@ -873,6 +885,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
 
     BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
 
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);
@@ -917,6 +930,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     std::vector<unsigned char> expected {
         0x02, 0x00, 0x00, 0x00,                         // Version
         0x11, 0x11, 0x11, 0x11,                         // Convergence hint
+        0x00, 0x00, 0x00, 0x00,                         // Manifest content hint
         0x02,                                           // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
@@ -961,6 +975,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
     std::vector<unsigned char> bytes {
         0x02, 0x00, 0x00, 0x00,                         // Version
         0x11, 0x11, 0x11, 0x11,                         // Convergence hint
+        0x22, 0x22, 0x22, 0x22,                         // Manifest content hint
         0x02,                                           // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, // ...
@@ -992,6 +1007,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
 
     BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
 
     const auto& cpids = superblock.m_cpids;
     BOOST_CHECK(cpids.size() == 2);

@@ -122,7 +122,6 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
-NN::QuorumHash ScraperGetSuperblockHash();
 bool ScraperSynchronizeDPOR();
 scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true);
 
