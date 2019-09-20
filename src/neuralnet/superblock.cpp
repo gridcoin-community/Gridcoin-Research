@@ -350,11 +350,46 @@ private: // SuperblockValidator classes
         }
 
     private:
+        //!
+        //! \brief Manifest hashes grouped by scraper to resolve a by-project
+        //! fallback convergence from.
+        //!
         const mmCSManifestsBinnedByScraper m_manifests_by_scraper;
+
+        //!
+        //! \brief The number of scrapers that must agree about a project to
+        //! consider it valid in a superblock.
+        //!
         const size_t m_supermajority;
+
+        //!
+        //! \brief Contains the project resolution context for each of the
+        //! projects hinted in the superblock.
+        //!
+        //! Keyed by project name.
+        //!
         std::map<std::string, ResolvedProject> m_resolved_projects;
+
+        //!
+        //! \brief Contains the scrapers that published manifest data for any
+        //! projects not hinted in the superblock.
+        //!
+        //! Keyed by project name. A scraper supermajority for any project
+        //! disqualifies the superblock (it failed to include the project).
+        //!
         std::map<std::string, std::set<ScraperID>> m_other_projects;
+
+        //!
+        //! \brief Timestamp of the most recent manifest matched to a project
+        //! in the superblock.
+        //!
         int64_t m_latest_manifest_timestamp;
+
+        //!
+        //! \brief Hash of the most recent manifest matched to a project in the
+        //! superblock. The beacon list part of the resolved convergence result
+        //! comes from this manifest.
+        //!
         uint256 m_latest_manifest_hash;
 
         //!
