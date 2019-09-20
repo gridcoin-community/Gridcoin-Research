@@ -1,12 +1,18 @@
+#pragma once
+
 /* scraper_net.h */
 
 /* Maybe the parts system will be useful for other things so let's abstract
- * that to parent class. Sice it will be all in one file there will not be any
+ * that to parent class. Since it will be all in one file there will not be any
  * polymorphism.
 */
 
-#include <key.h>
+#include "net.h"
 #include "sync.h"
+
+#include <key.h>
+#include <univalue.h>
+
 
 /** Abstract class for blobs that are split into parts. */
 class CSplitBlob

@@ -1,9 +1,7 @@
-#include "net.h" // TODO: needed for scraper_net.h
-#include <univalue.h> // TODO: needed for scraper_net.h
-
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
 #include "scraper_net.h"
+#include "sync.h"
 #include "util.h"
 
 #include <boost/variant/apply_visitor.hpp>
