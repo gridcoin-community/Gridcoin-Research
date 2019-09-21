@@ -16,6 +16,7 @@
 #include <memory>
 #include <algorithm>
 #include <tuple>
+#include <random>
 
 using namespace std;
 
@@ -636,6 +637,22 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;
     // Initialize nOutputUsed at 1, because one is already used for the empty coinstake flag output.
     unsigned int nOutputsUsed = 1;
+
+    // If the number of sidestaking allocation entries exceeds nMaxSideStakeOutputs, then shuffle the vSideStakeAlloc
+    // to support sidestaking with more than six entries. This is a super simple solution but has some disadvantages.
+    // If the person made a mistake and has the entries in the config file add up to more than 100%, then those entries
+    // resulting a cumulative total over 100% will always be excluded, not just randomly excluded, because the cumulative
+    // check is done in the order of the entries in the config file. This is not regarded as a big issue, because
+    // all of the entries are supposed to add up to less than or equal to 100%. Also when there are more than
+    // mMaxSideStakeOutput entries, the residual returned to the coinstake will vary when the entries are shuffled,
+    // because the total percentage of the selected entries will be randomized. No attempt to renormalize
+    // the percentages is done.
+    if (vSideStakeAlloc.size() > nMaxSideStakeOutputs)
+    {
+        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
+
+        std::shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), std::default_random_engine(seed));
+    }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes
     // (interest or CBR) and research rewards.
