@@ -24,6 +24,7 @@ std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>> CScrape
 CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 extern unsigned int nScraperSleep;
 extern AppCacheSectionExt mScrapersExt;
 extern std::atomic<int64_t> nSyncTime;
@@ -180,7 +181,9 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     auto found = mapManifest.find(inv.hash);
     if( found!=mapManifest.end() )
     {
-        found->second->UseAsSource(pfrom);
+        // Only record UseAsSource if manifest is current to avoid spurious parts.
+        if (found->second->IsManifestCurrent()) found->second->UseAsSource(pfrom);
+
         return true;
     }
     else
@@ -413,6 +416,13 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
         addPart(ph);
 }
 
+bool CScraperManifest::IsManifestCurrent() const
+{
+    // This checks to see if the manifest is current, i.e. not about to be deleted.
+    return (nTime >= GetAdjustedTime() - SCRAPER_CMANIFEST_RETENTION_TIME + (int64_t) nScraperSleep / 1000);
+}
+
+
 // A lock must be taken on cs_mapManifest before calling this function.
 bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmediate)
 {
@@ -546,7 +556,10 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         manifest.Complete();
     } else {
         /* else request missing parts from the sender */
-        manifest.UseAsSource(pfrom);
+        // Note: As an additional buffer to prevent spurious part receipts, if the manifest timestamp is within nScraperSleep of expiration (i.e.
+        // about to go on the pending delete list, then do not request missing parts, as it is possible that the manifest will be deleted
+        // by the housekeeping loop in between the receipt of the manifest, request for parts, and receipt of parts otherwise.
+        if (manifest.IsManifestCurrent()) manifest.UseAsSource(pfrom);
     }
     return true;
 }

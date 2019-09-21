@@ -170,6 +170,9 @@ public: /* public methods */
     void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
     void SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const;
     void UnserializeCheck(CReaderStream& s, unsigned int& banscore_out);
+
+    bool IsManifestCurrent() const;
+
     UniValue ToJson() const;
 
 };
