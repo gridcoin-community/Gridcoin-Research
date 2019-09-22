@@ -60,9 +60,8 @@ GRIDCOIN_CORE_H = \
 	addrdb.h \
     addrman.h \
 	alert.h \
-	allocators.h \
-    attributes.h \
 	appcache.h \
+    attributes.h \
 	backup.h \
     banman.h \
 	base58.h \
@@ -117,6 +116,10 @@ GRIDCOIN_CORE_H = \
 	scrypt.h \
 	serialize.h \
 	strlcpy.h \
+	support/allocators/secure.h \
+	support/allocators/zeroafterfree.h \
+	support/cleanse.h \
+	support/lockedpool.h \
 	sync.h \
 	tally.h \
 	threadsafety.h \
@@ -125,6 +128,7 @@ GRIDCOIN_CORE_H = \
 	txdb-leveldb.h \
 	ui_interface.h \
 	uint256.h \
+	util/memory.h \
 	util.h \
 	version.h \
 	walletdb.h \
@@ -133,7 +137,6 @@ GRIDCOIN_CORE_H = \
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
 	alert.cpp \
-	allocators.cpp \
 	appcache.cpp \
 	backup.cpp \
     banman.cpp \
@@ -205,6 +208,8 @@ libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
     neuralnet/neuralnet_stub.cpp \
     neuralnet/neuralnet.cpp \
+	support/cleanse.cpp \
+	support/lockedpool.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS

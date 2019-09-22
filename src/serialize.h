@@ -11,6 +11,7 @@
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <ios>
 #include <cassert>
 #include <limits>
 #include <stdint.h>
@@ -19,7 +20,7 @@
 
 #include <boost/type_traits/is_fundamental.hpp>
 
-#include "allocators.h"
+#include "support/allocators/zeroafterfree.h"
 #include "version.h"
 
 class CAutoFile;
