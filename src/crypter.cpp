@@ -29,14 +29,14 @@ bool CCrypter::SetKeyFromPassphrase(const SecureString& strKeyData, const std::v
 
         i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(), &chSalt[0],
                           (unsigned char *)&scryptHash, sizeof scryptHash, nRounds, vchKey.data(), vchIV.data());
-        OPENSSL_cleanse(&scryptHash, sizeof scryptHash);
+        memory_cleanse(&scryptHash, sizeof scryptHash);
     }
 
 
     if (i != (int)WALLET_CRYPTO_KEY_SIZE)
     {
-        OPENSSL_cleanse(vchKey.data(), vchKey.size());
-        OPENSSL_cleanse(vchIV.data(), vchIV.size());
+        memory_cleanse(vchKey.data(), vchKey.size());
+        memory_cleanse(vchIV.data(), vchIV.size());
         return false;
     }
 
