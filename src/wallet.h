@@ -13,6 +13,7 @@
 #include "key.h"
 #include "keystore.h"
 #include "script.h"
+#include "streams.h"
 #include "ui_interface.h"
 #include "walletdb.h"
 

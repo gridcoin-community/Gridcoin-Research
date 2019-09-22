@@ -1,5 +1,6 @@
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
+#include "streams.h"
 
 #include <array>
 #include <boost/algorithm/string/predicate.hpp>

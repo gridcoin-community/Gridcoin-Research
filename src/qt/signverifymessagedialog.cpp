@@ -7,6 +7,7 @@
 #include "init.h"
 #include "main.h"
 #include "optionsmodel.h"
+#include "streams.h"
 #include "walletmodel.h"
 #include "wallet.h"
 

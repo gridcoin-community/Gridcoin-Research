@@ -7,10 +7,11 @@
  * polymorphism.
 */
 
+#include <key.h>
 #include "net.h"
+#include "streams.h"
 #include "sync.h"
 
-#include <key.h>
 #include <univalue.h>
 
 
@@ -27,7 +28,7 @@ public:
         CPart(const uint256& ihash)
             :hash(ihash)
         {}
-        CReaderStream getReader() const { return CReaderStream(&data); }
+        CDataStream getReader() const { return CDataStream(&data); }
         bool present() const {return !this->data.empty();}
     };
 
@@ -141,7 +142,7 @@ public: /*==== fields ====*/
         bool last =0;
 
         void Serialize(CDataStream& s, int nType, int nVersion) const;
-        void Unserialize(CReaderStream& s, int nType, int nVersion);
+        void Unserialize(CDataStream& s, int nType, int nVersion);
         UniValue ToJson() const;
     };
 
@@ -169,10 +170,9 @@ public: /* public methods */
     void Serialize(CDataStream& s, int nType, int nVersion) const;
     void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
     void SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const;
-    void UnserializeCheck(CReaderStream& s, unsigned int& banscore_out);
+    void UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
 
     bool IsManifestCurrent() const;
 
     UniValue ToJson() const;
-
 };

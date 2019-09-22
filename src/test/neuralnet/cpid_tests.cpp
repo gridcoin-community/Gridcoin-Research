@@ -1,4 +1,5 @@
 #include "neuralnet/cpid.h"
+#include "streams.h"
 
 #include <boost/test/unit_test.hpp>
 #include <iostream>

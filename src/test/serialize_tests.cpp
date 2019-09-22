@@ -1,4 +1,5 @@
 #include "serialize.h"
+#include "streams.h"
 #include "util.h"
 
 #include <boost/test/unit_test.hpp>

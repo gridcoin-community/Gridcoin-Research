@@ -226,7 +226,7 @@ void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersio
     ss<< current;
     ss<< last;
 }
-void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVersion)
+void CScraperManifest::dentry::Unserialize(CDataStream& ss, int nType, int nVersion)
 {
     ss>> project;
     ss>> ETag;
@@ -368,7 +368,7 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
 }
 
 
-void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscore_out)
+void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
 {
     const auto pbegin = ss.begin();
 

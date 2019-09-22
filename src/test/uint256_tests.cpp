@@ -2,6 +2,7 @@
 
 #include "uint256.h"
 #include "serialize.h"
+#include "streams.h"
 #include "util.h"
 
 #include <cstdint>

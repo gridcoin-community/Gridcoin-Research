@@ -11,6 +11,7 @@
 #include "alert.h"
 #include "key.h"
 #include "net.h"
+#include "streams.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "uint256.h"

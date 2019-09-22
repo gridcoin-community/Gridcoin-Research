@@ -5,6 +5,7 @@
 
 #include "util.h"
 #include "net.h"
+#include "streams.h"
 #include "alert.h"
 #include "checkpoints.h"
 #include "db.h"

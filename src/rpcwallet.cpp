@@ -12,6 +12,7 @@
 #include "init.h"
 #include "base58.h"
 #include "backup.h"
+#include "streams.h"
 #include "util.h"
 
 #include <univalue.h>
