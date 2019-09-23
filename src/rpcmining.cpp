@@ -99,7 +99,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         for (const auto& alloc : vSideStakeAlloc)
         {
             sidestakingalloc.pushKV("address", alloc.first);
-            sidestakingalloc.pushKV("allocation-pct", alloc.second);
+            sidestakingalloc.pushKV("allocation-pct", alloc.second * 100);
 
             vsidestakingalloc.push_back(sidestakingalloc);
         }
