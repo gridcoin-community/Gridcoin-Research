@@ -45,10 +45,10 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
 
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");
-    asio::io_service io_service;
+    ioContext io_context;
     ssl::context context(ssl::context::sslv23);
     context.set_options(ssl::context::no_sslv2);
-    asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_service, context);
+    asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_context, context);
     SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
     iostreams::stream< SSLIOStreamDevice<asio::ip::tcp> > stream(d);
     if (!d.connect(GetArg("-rpcconnect", "127.0.0.1"), GetArg("-rpcport", ToString(GetDefaultRPCPort()))))
