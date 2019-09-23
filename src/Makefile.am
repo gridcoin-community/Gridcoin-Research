@@ -57,11 +57,14 @@ endif
 .PHONY: FORCE
 # gridcoin core #
 GRIDCOIN_CORE_H = \
-	addrman.h \
+	addrdb.h \
+    addrman.h \
 	alert.h \
 	allocators.h \
+    attributes.h \
 	appcache.h \
 	backup.h \
+    banman.h \
 	base58.h \
 	beacon.h \
 	bignum.h \
@@ -76,6 +79,7 @@ GRIDCOIN_CORE_H = \
 	contract/contract.h \
 	crypter.h \
 	db.h \
+    fs.h \
 	fwd.h \
 	global_objects.hpp \
 	global_objects_noui.hpp \
@@ -100,9 +104,11 @@ GRIDCOIN_CORE_H = \
 	pbkdf2.h \
 	prevector.h \
 	protocol.h \
+    reverselock.h \
 	rpcclient.h \
 	rpcprotocol.h \
 	rpcserver.h \
+    scheduler.h \
 	scraper_net.h \
 	scraper/fwd.h \
     scraper/http.h \
@@ -124,11 +130,13 @@ GRIDCOIN_CORE_H = \
 	walletdb.h \
 	wallet.h
 
-GRIDCOIN_CORE_CPP = addrman.cpp \
+GRIDCOIN_CORE_CPP = addrdb.cpp \
+    addrman.cpp \
 	alert.cpp \
 	allocators.cpp \
 	appcache.cpp \
 	backup.cpp \
+    banman.cpp \
 	beacon.cpp \
 	block.cpp \
 	boinc.cpp \
@@ -137,6 +145,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	contract/contract.cpp \
 	crypter.cpp \
 	db.cpp \
+    fs.cpp \
 	gridcoin.cpp \
 	init.cpp \
 	kernel.cpp \
@@ -172,6 +181,7 @@ GRIDCOIN_CORE_CPP = addrman.cpp \
 	scraper/scraper.cpp \
 	script.cpp \
 	scrypt.cpp \
+    scheduler.cpp \
 	sync.cpp \
 	tally.cpp \
 	txdb-leveldb.cpp \

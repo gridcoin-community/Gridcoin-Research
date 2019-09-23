@@ -8,9 +8,9 @@
 #endif
 
 #include "db.h"
+#include "banman.h"
 #include "net.h"
 #include "init.h"
-#include "addrman.h"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -662,6 +662,34 @@ void CNode::CloseSocketDisconnect()
 }
 
 
+bool CNode::DisconnectNode(const std::string& strNode)
+{
+    LOCK(cs_vNodes);
+    if (CNode* pnode = FindNode(strNode)) {
+        pnode->fDisconnect = true;
+        return true;
+    }
+    return false;
+}
+
+bool CNode::DisconnectNode(const CSubNet& subnet)
+{
+    bool disconnected = false;
+    LOCK(cs_vNodes);
+    for (CNode* pnode : vNodes) {
+        if (subnet.Match(pnode->addr)) {
+            pnode->fDisconnect = true;
+            disconnected = true;
+        }
+    }
+    return disconnected;
+}
+
+bool CNode::DisconnectNode(const CNetAddr& addr)
+{
+    return CNode::DisconnectNode(CSubNet(addr));
+}
+
 void CNode::PushVersion()
 {
     int64_t nTime = GetAdjustedTime();
@@ -685,6 +713,8 @@ void CNode::PushVersion()
 
 }
 
+// Superceded by banman.
+/*
 std::map<CNetAddr, int64_t> CNode::setBanned;
 CCriticalSection CNode::cs_setBanned;
 
@@ -708,6 +738,7 @@ bool CNode::IsBanned(CNetAddr ip)
     }
     return fResult;
 }
+*/
 
 bool CNode::Misbehaving(int howmuch)
 {
@@ -720,17 +751,13 @@ bool CNode::Misbehaving(int howmuch)
     nMisbehavior += howmuch;
     if (nMisbehavior >= GetArg("-banscore", 100))
     {
-        int64_t banTime = GetAdjustedTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
-        if (fDebug10) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
-        {
-            LOCK(cs_setBanned);
-            if (setBanned[addr] < banTime)
-                setBanned[addr] = banTime;
-        }
+        if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+
+        g_banman->Ban(addr, BanReasonNodeMisbehaving, DEFAULT_MISBEHAVING_BANTIME);
         CloseSocketDisconnect();
         return true;
     } else
-        if (fDebug10) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+        if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
     return false;
 }
 
@@ -1103,7 +1130,7 @@ void ThreadSocketHandler2(void* parg)
                     LogPrintf("Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
-            else if (CNode::IsBanned(addr))
+            else if (g_banman->IsBanned(addr))
             {
                 if (fDebug10) LogPrintf("connection from %s dropped (banned)", addr.ToString());
                 closesocket(hSocket);
@@ -1899,7 +1926,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
         return false;
     if (!strDest)
         if (IsLocal(addrConnect) ||
-            FindNode((CNetAddr)addrConnect) || CNode::IsBanned(addrConnect) ||
+            FindNode((CNetAddr)addrConnect) || g_banman->IsBanned(addrConnect) ||
             FindNode(addrConnect.ToStringIPPort().c_str()))
             return false;
     if (strDest && FindNode(strDest))

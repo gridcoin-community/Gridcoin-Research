@@ -4,9 +4,10 @@
 #include "db.h"
 #include "main.h"
 #include "wallet.h"
+#include "banman.h"
 
-CWallet* pwalletMain;
-CClientUIInterface uiInterface;
+extern CWallet* pwalletMain;
+extern CClientUIInterface uiInterface;
 
 extern bool fPrintToConsole;
 extern void noui_connect();
@@ -21,24 +22,18 @@ struct TestingSetup {
         pwalletMain = new CWallet("wallet.dat");
         pwalletMain->LoadWallet(fFirstRun);
         RegisterWallet(pwalletMain);
+        // Ban manager instance should not already be instantiated
+        assert(!g_banman);
+        // Create ban manager instance.
+        g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
     }
     ~TestingSetup()
     {
         delete pwalletMain;
         pwalletMain = NULL;
         bitdb.Flush(true);
+        g_banman.reset();
     }
 };
 
 BOOST_GLOBAL_FIXTURE(TestingSetup);
-
-void Shutdown(void* parg)
-{
-  exit(0);
-}
-
-void StartShutdown()
-{
-  exit(0);
-}
-

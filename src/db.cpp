@@ -491,7 +491,7 @@ void CDBEnv::Flush(bool fShutdown)
 // CAddrDB
 //
 
-
+/*
 CAddrDB::CAddrDB()
 {
     pathAddr = GetDataDir() / "peers.dat";
@@ -588,4 +588,4 @@ bool CAddrDB::Read(CAddrMan& addr)
 
     return true;
 }
-
+*/

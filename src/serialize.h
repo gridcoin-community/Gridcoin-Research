@@ -36,6 +36,23 @@ inline T& REF(const T& val)
     return const_cast<T&>(val);
 }
 
+/**
+ * Used to acquire a non-const pointer "this" to generate bodies
+ * of const serialization operations from a template
+ */
+template<typename T>
+inline T* NCONST_PTR(const T* val)
+{
+    return const_cast<T*>(val);
+}
+
+//! Safely convert odd char pointer types to standard ones.
+inline char* CharCast(char* c) { return c; }
+inline char* CharCast(unsigned char* c) { return (char*)c; }
+inline const char* CharCast(const char* c) { return c; }
+inline const char* CharCast(const unsigned char* c) { return (const char*)c; }
+
+
 /////////////////////////////////////////////////////////////////
 //
 // Templates for serializing to anything that looks like a stream,
@@ -97,6 +114,28 @@ enum
 #define READWRITE(obj)      (nSerSize += ::SerReadWrite(s, (obj), nType, nVersion, ser_action))
 
 
+//! Convert the reference base type to X, without changing constness or reference type.
+template<typename X> X& ReadWriteAsHelper(X& x) { return x; }
+template<typename X> const X& ReadWriteAsHelper(const X& x) { return x; }
+
+#define READWRITEVARIADIC(...) (::SerReadWriteMany(s, ser_action, __VA_ARGS__))
+#define READWRITEAS(type, obj) (::SerReadWriteMany(s, ser_action, ReadWriteAsHelper<type>(obj)))
+
+/**
+ * Implement three methods for serializable objects. These are actually wrappers over
+ * "SerializationOp" template, which implements the body of each class' serialization
+ * code. Adding "ADD_SERIALIZE_METHODS" in the body of the class causes these wrappers to be
+ * added as members.
+ */
+#define ADD_SERIALIZE_METHODS                                         \
+    template<typename Stream>                                         \
+    void Serialize(Stream& s, int, int) const {                       \
+        NCONST_PTR(this)->SerializationOp(s, CSerActionSerialize());  \
+    }                                                                 \
+    template<typename Stream>                                         \
+    void Unserialize(Stream& s, int, int) {                           \
+        SerializationOp(s, CSerActionUnserialize());                  \
+    }
 
 
 
@@ -134,6 +173,8 @@ template<typename Stream> inline void Serialize(Stream& s, signed long long a,  
 template<typename Stream> inline void Serialize(Stream& s, unsigned long long a, int, int=0) { WRITEDATA(s, a); }
 template<typename Stream> inline void Serialize(Stream& s, float a,              int, int=0) { WRITEDATA(s, a); }
 template<typename Stream> inline void Serialize(Stream& s, double a,             int, int=0) { WRITEDATA(s, a); }
+template<typename Stream, int N> inline void Serialize(Stream& s, const char (&a)[N], int , int=0) { s.write(a, N); }
+template<typename Stream, int N> inline void Serialize(Stream& s, const unsigned char (&a)[N], int , int=0) { s.write(CharCast(a), N); }
 
 template<typename Stream> inline void Unserialize(Stream& s, char& a,               int, int=0) { READDATA(s, a); }
 template<typename Stream> inline void Unserialize(Stream& s, signed char& a,        int, int=0) { READDATA(s, a); }
@@ -148,11 +189,12 @@ template<typename Stream> inline void Unserialize(Stream& s, signed long long& a
 template<typename Stream> inline void Unserialize(Stream& s, unsigned long long& a, int, int=0) { READDATA(s, a); }
 template<typename Stream> inline void Unserialize(Stream& s, float& a,              int, int=0) { READDATA(s, a); }
 template<typename Stream> inline void Unserialize(Stream& s, double& a,             int, int=0) { READDATA(s, a); }
+template<typename Stream, int N> inline void Unserialize(Stream& s, char (&a)[N], int, int=0) { s.read(a, N); }
+template<typename Stream, int N> inline void Unserialize(Stream& s, unsigned char (&a)[N], int , int=0) { s.read(CharCast(a), N); }
 
 inline unsigned int GetSerializeSize(bool a, int, int=0)                          { return sizeof(char); }
 template<typename Stream> inline void Serialize(Stream& s, bool a, int, int=0)    { char f=a; WRITEDATA(s, f); }
 template<typename Stream> inline void Unserialize(Stream& s, bool& a, int, int=0) { char f; READDATA(s, f); a=f; }
-
 
 
 
@@ -870,6 +912,41 @@ struct ser_streamplaceholder
 };
 
 
+template<typename Stream>
+void SerializeMany(Stream& s)
+{
+}
+
+template<typename Stream, typename Arg, typename... Args>
+void SerializeMany(Stream& s, const Arg& arg, const Args&... args)
+{
+    ::Serialize(s, arg, 0 /* type, unused */, 0 /* version, unused */);
+    ::SerializeMany(s, args...);
+}
+
+template<typename Stream>
+inline void UnserializeMany(Stream& s)
+{
+}
+
+template<typename Stream, typename Arg, typename... Args>
+inline void UnserializeMany(Stream& s, Arg&& arg, Args&&... args)
+{
+    ::Unserialize(s, arg, 0 /* type, unused */, 0 /* version, unused */);
+    ::UnserializeMany(s, args...);
+}
+
+template<typename Stream, typename... Args>
+inline void SerReadWriteMany(Stream& s, CSerActionSerialize ser_action, const Args&... args)
+{
+    ::SerializeMany(s, args...);
+}
+
+template<typename Stream, typename... Args>
+inline void SerReadWriteMany(Stream& s, CSerActionUnserialize ser_action, Args&&... args)
+{
+    ::UnserializeMany(s, args...);
+}
 
 
 
@@ -1306,7 +1383,7 @@ public:
     operator FILE*()            { return file; }
     FILE* operator->()          { return file; }
     FILE& operator*()           { return *file; }
-    FILE** operator&()          { return &file; }
+    // FILE** operator&()          { return &file; }
     FILE* operator=(FILE* pnew) { return file = pnew; }
     bool operator!()            { return (file == NULL); }
 
@@ -1333,6 +1410,16 @@ public:
     int GetVersion()             { return nVersion; }
     void ReadVersion()           { *this >> nVersion; }
     void WriteVersion()          { *this << nVersion; }
+
+    /** Get wrapped FILE* without transfer of ownership.
+     * @note Ownership of the FILE* will remain with this class. Use this only if the scope of the
+     * CAutoFile outlives use of the passed pointer.
+     */
+    FILE* Get() const           { return file; }
+
+    /** Return true if the wrapped FILE* is nullptr, false otherwise.
+     */
+    bool IsNull() const         { return (file == nullptr); }
 
     CAutoFile& read(char* pch, size_t nSize)
     {
