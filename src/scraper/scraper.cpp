@@ -2032,10 +2032,10 @@ uint256 GetFileHash(const fs::path& inputfile)
 {
     // open input file, and associate with CAutoFile
     FILE *file = fopen(inputfile.string().c_str(), "rb");
-    CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     uint256 nHash = 0;
     
-    if (!filein)
+    if (filein.IsNull())
         return nHash;
 
     // use file size to size memory buffer
@@ -3610,9 +3610,9 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     
     // open input file, and associate with CAutoFile
     FILE *file = fopen(inputfilewpath.string().c_str(), "rb");
-    CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
-    if (!filein)
+    if (filein.IsNull())
     {
         _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
         return false;
@@ -3661,9 +3661,9 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 
         // open input file, and associate with CAutoFile
         FILE *file = fopen(inputfilewpath.string().c_str(), "rb");
-        CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
+        CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
-        if (!filein)
+        if (filein.IsNull())
         {
             _log(logattribute::ERR, "ScraperSendFileManifestContents", "Failed to open file (" + inputfile.string() + ")");
             return false;
@@ -5572,7 +5572,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
     res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock.m_cpids.Zeros());
 
-    nNewFormatSuperblockSerSize = NewFormatSuperblock.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblockSerSize = GetSerializeSize(NewFormatSuperblock, SER_NETWORK, 1);
     nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
 
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
@@ -5587,7 +5587,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     ss << NewFormatSuperblock;
     ss >> NewFormatSuperblock_out;
 
-    nNewFormatSuperblock_outSerSize = NewFormatSuperblock_out.GetSerializeSize(SER_NETWORK, 1);
+    nNewFormatSuperblock_outSerSize = GetSerializeSize(NewFormatSuperblock_out, SER_NETWORK, 1);
     nNewFormatSuperblock_outHash = NewFormatSuperblock_out.GetHash();
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));

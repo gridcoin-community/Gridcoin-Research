@@ -146,10 +146,27 @@ public:
     //!
     std::string ToString() const;
 
-    IMPLEMENT_SERIALIZE
-    (
-        READWRITE(FLATDATA(m_bytes));
-    )
+    //!
+    //! \brief Serialize the object to the provided stream.
+    //!
+    //! \param stream The output stream.
+    //!
+    template<typename Stream>
+    void Serialize(Stream& stream) const
+    {
+        stream.write(CharCast(m_bytes.data()), m_bytes.size());
+    }
+
+    //!
+    //! \brief Deserialize the object from the provided stream.
+    //!
+    //! \param stream The input stream.
+    //!
+    template<typename Stream>
+    void Unserialize(Stream& stream)
+    {
+        stream.read(CharCast(m_bytes.data()), m_bytes.size());
+    }
 
 private:
     //!
@@ -308,47 +325,33 @@ public:
     std::string ToString() const;
 
     //!
-    //! \brief Get the size of the data to serialize.
-    //!
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
-    //!
-    //! \return Size of the data in bytes.
-    //!
-    unsigned int GetSerializeSize(int nType, int nVersion) const;
-
-    //!
     //! \brief Serialize the object to the provided stream.
     //!
-    //! \param stream   The output stream.
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
+    //! \param stream The output stream.
     //!
     template<typename Stream>
-    void Serialize(Stream& stream, int nType, int nVersion) const
+    void Serialize(Stream& stream) const
     {
         unsigned char kind = m_variant.which();
 
-        ::Serialize(stream, kind, nType, nVersion);
+        ::Serialize(stream, kind);
 
         if (static_cast<Kind>(kind) == Kind::CPID) {
-            boost::get<Cpid>(m_variant).Serialize(stream, nType, nVersion);
+            boost::get<Cpid>(m_variant).Serialize(stream);
         }
     }
 
     //!
     //! \brief Deserialize the object from the provided stream.
     //!
-    //! \param stream   The input stream.
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
+    //! \param stream The input stream.
     //!
     template<typename Stream>
-    void Unserialize(Stream& stream, int nType, int nVersion)
+    void Unserialize(Stream& stream)
     {
         unsigned char kind;
 
-        ::Unserialize(stream, kind, nType, nVersion);
+        ::Unserialize(stream, kind);
 
         switch (static_cast<Kind>(kind)) {
             case Kind::INVESTOR:
@@ -357,7 +360,7 @@ public:
             case Kind::CPID:
                 {
                     Cpid cpid;
-                    cpid.Unserialize(stream, nType, nVersion);
+                    cpid.Unserialize(stream);
 
                     m_variant = std::move(cpid);
                 }

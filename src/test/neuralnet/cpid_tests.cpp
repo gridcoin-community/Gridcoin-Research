@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     NN::Cpid cpid(expected);
 
-    BOOST_CHECK(cpid.GetSerializeSize(SER_NETWORK, 1) == 16);
+    BOOST_CHECK(GetSerializeSize(cpid, SER_NETWORK, 1) == 16);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << cpid;
@@ -438,7 +438,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
 {
     NN::MiningId mining_id;
 
-    BOOST_CHECK(mining_id.GetSerializeSize(SER_NETWORK, 1) == 1);
+    BOOST_CHECK(GetSerializeSize(mining_id, SER_NETWORK, 1) == 1);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << mining_id;
@@ -451,7 +451,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
 {
     NN::MiningId mining_id = NN::MiningId::ForInvestor();
 
-    BOOST_CHECK(mining_id.GetSerializeSize(SER_NETWORK, 1) == 1);
+    BOOST_CHECK(GetSerializeSize(mining_id, SER_NETWORK, 1) == 1);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << mining_id;
@@ -469,7 +469,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_cpid)
 
     NN::MiningId mining_id{NN::Cpid(expected)};
 
-    BOOST_CHECK(mining_id.GetSerializeSize(SER_NETWORK, 1) == 17);
+    BOOST_CHECK(GetSerializeSize(mining_id, SER_NETWORK, 1) == 17);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << mining_id;

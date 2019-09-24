@@ -325,6 +325,16 @@ public:
     unsigned int nBlockPos;
     unsigned int nTxPos;
 
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nFile);
+        READWRITE(nBlockPos);
+        READWRITE(nTxPos);
+    }
+
     CDiskTxPos()
     {
         SetNull();
@@ -337,7 +347,6 @@ public:
         nTxPos = nTxPosIn;
     }
 
-    IMPLEMENT_SERIALIZE( READWRITE(FLATDATA(*this)); )
     void SetNull() { nFile = (unsigned int) -1; nBlockPos = 0; nTxPos = 0; }
     bool IsNull() const { return (nFile == (unsigned int) -1); }
 
@@ -392,9 +401,17 @@ public:
     uint256 hash;
     unsigned int n;
 
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(hash);
+        READWRITE(n);
+    }
+
     COutPoint() { SetNull(); }
     COutPoint(uint256 hashIn, unsigned int nIn) { hash = hashIn; n = nIn; }
-    IMPLEMENT_SERIALIZE( READWRITE(FLATDATA(*this)); )
     void SetNull() { hash = 0; n = (unsigned int) -1; }
     bool IsNull() const { return (hash == 0 && n == (unsigned int) -1); }
 
@@ -457,12 +474,15 @@ public:
         nSequence = nSequenceIn;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         READWRITE(prevout);
         READWRITE(scriptSig);
         READWRITE(nSequence);
-    )
+    }
 
     bool IsFinal() const
     {
@@ -530,11 +550,14 @@ public:
         scriptPubKey = scriptPubKeyIn;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         READWRITE(nValue);
         READWRITE(scriptPubKey);
-    )
+    }
 
     void SetNull()
     {
@@ -626,17 +649,19 @@ public:
         SetNull();
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        READWRITE(this->nVersion);
-        nVersion = this->nVersion;
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nVersion);
         READWRITE(nTime);
         READWRITE(vin);
         READWRITE(vout);
         READWRITE(nLockTime);
 
 		READWRITE(hashBoinc);
-    )
+    }
 
     void SetNull()
     {
@@ -753,12 +778,12 @@ public:
 
     bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet=NULL)
     {
-        CAutoFile filein = CAutoFile(OpenBlockFile(pos.nFile, 0, pfileRet ? "rb+" : "rb"), SER_DISK, CLIENT_VERSION);
-        if (!filein)
+        CAutoFile filein(OpenBlockFile(pos.nFile, 0, pfileRet ? "rb+" : "rb"), SER_DISK, CLIENT_VERSION);
+        if (filein.IsNull())
             return error("CTransaction::ReadFromDisk() : OpenBlockFile failed");
 
         // Read transaction
-        if (fseek(filein, pos.nTxPos, SEEK_SET) != 0)
+        if (fseek(filein.Get(), pos.nTxPos, SEEK_SET) != 0)
             return error("CTransaction::ReadFromDisk() : fseek failed");
 
         try {
@@ -771,7 +796,7 @@ public:
         // Return file pointer
         if (pfileRet)
         {
-            if (fseek(filein, pos.nTxPos, SEEK_SET) != 0)
+            if (fseek(filein.Get(), pos.nTxPos, SEEK_SET) != 0)
                 return error("CTransaction::ReadFromDisk() : second fseek failed");
             *pfileRet = filein.release();
         }
@@ -902,16 +927,16 @@ public:
         fMerkleVerified = false;
     }
 
+    ADD_SERIALIZE_METHODS;
 
-    IMPLEMENT_SERIALIZE
-    (
-        nSerSize += SerReadWrite(s, *(CTransaction*)this, nType, nVersion, ser_action);
-        nVersion = this->nVersion;
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITEAS(CTransaction, *this);
         READWRITE(hashBlock);
         READWRITE(vMerkleBranch);
         READWRITE(nIndex);
-    )
-
+    }
 
     int SetMerkleBranch(const CBlock* pblock=NULL);
 
@@ -950,13 +975,19 @@ public:
         vSpent.resize(nOutputs);
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH))
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            int nVersion = s.GetVersion();
             READWRITE(nVersion);
+        }
+
         READWRITE(pos);
         READWRITE(vSpent);
-    )
+    }
 
     void SetNull()
     {
@@ -1035,47 +1066,26 @@ public:
         SetNull();
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-		//Gridcoin
+    ADD_SERIALIZE_METHODS;
 
-	    //
-
-
-        READWRITE(this->nVersion);
-        nVersion = this->nVersion;
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nVersion);
         READWRITE(hashPrevBlock);
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
 
-
-        // ConnectBlock depends on vtx following header to generate CDiskTxPos
-        if (!(nType & (SER_GETHASH|SER_BLOCKHEADERONLY)))
-        {
+        if (!(s.GetType() & (SER_GETHASH|SER_BLOCKHEADERONLY))) {
             READWRITE(vtx);
-
             READWRITE(vchBlockSig);
-
-			/*
-
-			*/
-
-
-
-        }
-        else if (fRead)
-        {
+        } else if (ser_action.ForRead()) {
             const_cast<CBlock*>(this)->vtx.clear();
             const_cast<CBlock*>(this)->vchBlockSig.clear();
         }
-
-
-
-
-
-    )
+    }
 
     void SetNull()
     {
@@ -1203,25 +1213,25 @@ public:
     bool WriteToDisk(unsigned int& nFileRet, unsigned int& nBlockPosRet)
     {
         // Open history file to append
-        CAutoFile fileout = CAutoFile(AppendBlockFile(nFileRet), SER_DISK, CLIENT_VERSION);
-        if (!fileout)
+        CAutoFile fileout(AppendBlockFile(nFileRet), SER_DISK, CLIENT_VERSION);
+        if (fileout.IsNull())
             return error("CBlock::WriteToDisk() : AppendBlockFile failed");
 
         // Write index header
-        unsigned int nSize = fileout.GetSerializeSize(*this);
-        fileout << FLATDATA(pchMessageStart) << nSize;
+        unsigned int nSize = GetSerializeSize(fileout, *this);
+        fileout << pchMessageStart << nSize;
 
         // Write block
-        long fileOutPos = ftell(fileout);
+        long fileOutPos = ftell(fileout.Get());
         if (fileOutPos < 0)
             return error("CBlock::WriteToDisk() : ftell failed");
         nBlockPosRet = fileOutPos;
         fileout << *this;
 
         // Flush stdio buffers and commit to disk before returning
-        fflush(fileout);
+        fflush(fileout.Get());
         if (!IsInitialBlockDownload() || (nBestHeight+1) % 500 == 0)
-            FileCommit(fileout);
+            FileCommit(fileout.Get());
 
         return true;
     }
@@ -1230,12 +1240,12 @@ public:
     {
         SetNull();
 
+        const int ser_flags = SER_DISK | (fReadTransactions ? 0 : SER_BLOCKHEADERONLY);
+
         // Open history file to read
-        CAutoFile filein = CAutoFile(OpenBlockFile(nFile, nBlockPos, "rb"), SER_DISK, CLIENT_VERSION);
-        if (!filein)
+        CAutoFile filein(OpenBlockFile(nFile, nBlockPos, "rb"), ser_flags, CLIENT_VERSION);
+        if (filein.IsNull())
             return error("CBlock::ReadFromDisk() : OpenBlockFile failed");
-        if (!fReadTransactions)
-            filein.nType |= SER_BLOCKHEADERONLY;
 
         // Read block
         try {
@@ -1357,7 +1367,7 @@ public:
         SetNull();
 
         nFile = nFileIn;
-        nBlockPos = nBlockPosIn;        
+        nBlockPos = nBlockPosIn;
         if (block.IsProofOfStake())
         {
             SetProofOfStake();
@@ -1572,10 +1582,14 @@ public:
         hashNext = (pnext ? pnext->GetBlockHash() : 0);
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH))
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
             READWRITE(nVersion);
+        }
 
         READWRITE(hashNext);
         READWRITE(nFile);
@@ -1585,53 +1599,53 @@ public:
         READWRITE(nMoneySupply);
         READWRITE(nFlags);
         READWRITE(nStakeModifier);
-        if (IsProofOfStake())
-        {
+
+        if (IsProofOfStake()) {
             READWRITE(prevoutStake);
             READWRITE(nStakeTime);
-        }
-        else if (fRead)
-        {
+        } else if (ser_action.ForRead()) {
             const_cast<CDiskBlockIndex*>(this)->prevoutStake.SetNull();
             const_cast<CDiskBlockIndex*>(this)->nStakeTime = 0;
         }
+
         READWRITE(hashProof);
 
         // block header
-        READWRITE(this->nVersion);
+        READWRITE(nVersion);
         READWRITE(hashPrev);
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(blockHash);
-		//7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
+
+        //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
         std::string cpid_hex = GetCPID();
         READWRITE(cpid_hex);
-        if(fRead)
+
+        if (ser_action.ForRead()) {
             const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
+        }
 
-		READWRITE(nResearchSubsidy);
-		READWRITE(nInterestSubsidy);
-		READWRITE(nMagnitude);
-	    //9-13-2015 - Indicators
-		if (this->nHeight > nNewIndex2)
-		{
-			READWRITE(nIsSuperBlock);
-			READWRITE(nIsContract);
+        READWRITE(nResearchSubsidy);
+        READWRITE(nInterestSubsidy);
+        READWRITE(nMagnitude);
 
-         std::string dummy;
+        //9-13-2015 - Indicators
+        if (this->nHeight > nNewIndex2) {
+            READWRITE(nIsSuperBlock);
+            READWRITE(nIsContract);
 
-         // Blocks used to contain the GRC address.
-         READWRITE(dummy);
+            std::string dummy;
 
-         // Blocks used to come with a reserved string. Keep (de)serializing
-         // it until it's used.
-         READWRITE(dummy);
-		}
+            // Blocks used to contain the GRC address.
+            READWRITE(dummy);
 
-
-    )
+            // Blocks used to come with a reserved string. Keep (de)serializing
+            // it until it's used.
+            READWRITE(dummy);
+        }
+    }
 
     uint256 GetBlockHash() const
     {
@@ -1703,12 +1717,18 @@ public:
         vHave = vHaveIn;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH))
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            int nVersion = s.GetVersion();
             READWRITE(nVersion);
+        }
+
         READWRITE(vHave);
-    )
+    }
 
     void SetNull()
     {

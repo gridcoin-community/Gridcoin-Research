@@ -141,41 +141,29 @@ public:
     std::string ToString() const;
 
     //!
-    //! \brief Get the size of the data to serialize.
-    //!
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
-    //!
-    //! \return Size of the data in bytes.
-    //!
-    unsigned int GetSerializeSize(int nType, int nVersion) const;
-
-    //!
     //! \brief Serialize the object to the provided stream.
     //!
-    //! \param stream   The output stream.
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
+    //! \param stream The output stream.
     //!
     template<typename Stream>
-    void Serialize(Stream& stream, int nType, int nVersion) const
+    void Serialize(Stream& stream) const
     {
         unsigned char kind = m_hash.which();
 
-        ::Serialize(stream, kind, nType, nVersion);
+        ::Serialize(stream, kind);
 
         switch (static_cast<Kind>(kind)) {
             case Kind::INVALID:
                 break; // Suppress warning.
 
             case Kind::SHA256:
-                boost::get<uint256>(m_hash).Serialize(stream, nType, nVersion);
+                boost::get<uint256>(m_hash).Serialize(stream);
                 break;
 
             case Kind::MD5: {
                 const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
 
-                FLATDATA(hash).Serialize(stream, nType, nVersion);
+                stream.write(CharCast(hash.data()), hash.size());
                 break;
             }
         }
@@ -185,20 +173,18 @@ public:
     //! \brief Deserialize the object from the provided stream.
     //!
     //! \param stream   The input stream.
-    //! \param nType    Target protocol type (network, disk, etc.).
-    //! \param nVersion Protocol version.
     //!
     template<typename Stream>
-    void Unserialize(Stream& stream, int nType, int nVersion)
+    void Unserialize(Stream& stream)
     {
         unsigned char kind;
 
-        ::Unserialize(stream, kind, nType, nVersion);
+        ::Unserialize(stream, kind);
 
         switch (static_cast<Kind>(kind)) {
             case Kind::SHA256: {
                 uint256 hash;
-                hash.Unserialize(stream, nType, nVersion);
+                hash.Unserialize(stream);
 
                 m_hash = hash;
                 break;
@@ -206,7 +192,7 @@ public:
 
             case Kind::MD5: {
                 Md5Sum hash;
-                FLATDATA(hash).Unserialize(stream, nType, nVersion);
+                stream.read(CharCast(hash.data()), hash.size());
 
                 m_hash = hash;
                 break;
@@ -390,20 +376,18 @@ public:
         void Add(const MiningId id, const uint16_t magnitude);
 
         //!
-        //! \brief Get the size of the data to serialize.
+        //! \brief Serialize the object to the provided stream.
         //!
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The output stream.
         //!
-        //! \return Size of the data in bytes.
-        //!
-        unsigned int GetSerializeSize(int nType, int nVersion) const
+        template<typename Stream>
+        void Serialize(Stream& stream) const
         {
-            unsigned int size =  GetSizeOfCompactSize(m_magnitudes.size())
-                + m_magnitudes.size() * sizeof(Cpid)
-                + VARINT(m_zero_magnitude_count).GetSerializeSize();
+            WriteCompactSize(stream, m_magnitudes.size());
 
             for (const auto& cpid_pair : m_magnitudes) {
+                cpid_pair.first.Serialize(stream);
+
                 // Compact size encoding provides better compression for the
                 // magnitude values than VARINT because most CPIDs have mags
                 // less than 253:
@@ -411,28 +395,6 @@ public:
                 // Note: This encoding imposes an upper limit of MAX_SIZE on
                 // the encoded value. Magnitudes fall well within the limit.
                 //
-                size += GetSizeOfCompactSize(cpid_pair.second);
-            }
-
-            return size;
-        }
-
-        //!
-        //! \brief Serialize the object to the provided stream.
-        //!
-        //! \param stream   The output stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
-        //!
-        template<typename Stream>
-        void Serialize(Stream& stream, int nType, int nVersion) const
-        {
-            WriteCompactSize(stream, m_magnitudes.size());
-
-            for (const auto& cpid_pair : m_magnitudes) {
-                cpid_pair.first.Serialize(stream, nType, nVersion);
-
-                // Write magnitude using compact-size encoding:
                 WriteCompactSize(stream, cpid_pair.second);
             }
 
@@ -447,7 +409,7 @@ public:
         //! \param nVersion Protocol version.
         //!
         template<typename Stream>
-        void Unserialize(Stream& stream, int nType, int nVersion)
+        void Unserialize(Stream& stream)
         {
             m_magnitudes.clear();
             m_total_magnitude = 0;
@@ -456,7 +418,7 @@ public:
 
             for (size_t i = 0; i < size; i++) {
                 Cpid cpid;
-                cpid.Unserialize(stream, nType, nVersion);
+                cpid.Unserialize(stream);
 
                 // Read magnitude using compact-size encoding:
                 uint16_t magnitude = ReadCompactSize(stream);
@@ -543,20 +505,20 @@ public:
         //!
         uint32_t m_convergence_hint;
 
-        IMPLEMENT_SERIALIZE
-        (
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
             READWRITE(VARINT(m_total_credit));
             READWRITE(VARINT(m_average_rac));
             READWRITE(VARINT(m_rac));
 
-            // Only serialize and deserialize the convegence hint in fallback-
-            // to-project-level convergences:
-            //
-            if (nType & ProjectIndex::SER_CONVERGED_BY_PROJECT) {
-                READWRITE(m_convergence_hint);
-            }
-        )
-    };
+            // ProjectIndex handles serialization of m_convergence_hint
+            // when creating superblocks from fallback-to-project-level
+            // convergence scenarios.
+        }
+    }; // ProjectStats
 
     //!
     //! \brief An optional type that either contains some project statistics or
@@ -659,31 +621,60 @@ public:
         //!
         void SetHint(const std::string& name, const CSerializeData& part_data);
 
-        IMPLEMENT_SERIALIZE
-        (
-            if (!(nType & SER_GETHASH)) {
-                READWRITE(m_converged_by_project);
+        //!
+        //! \brief Serialize the object to the provided stream.
+        //!
+        //! \param stream The output stream.
+        //!
+        template<typename Stream>
+        void Serialize(Stream& stream) const
+        {
+            if (!(stream.GetType() & SER_GETHASH)) {
+                stream << m_converged_by_project;
+            }
+
+            WriteCompactSize(stream, m_projects.size());
+
+            for (const auto& project_pair : m_projects) {
+                stream << project_pair;
 
                 // Trigger serialization of ProjectStats convergence hints for
                 // superblocks generated by a fallback-to-project convergence:
                 //
                 if (m_converged_by_project) {
-                    nType |= SER_CONVERGED_BY_PROJECT;
+                    stream << project_pair.second.m_convergence_hint;
                 }
             }
+        }
 
-            READWRITE(m_projects);
+        //!
+        //! \brief Deserialize the object from the provided stream.
+        //!
+        //! \param stream The input stream.
+        //!
+        template<typename Stream>
+        void Unserialize(Stream& stream)
+        {
+            m_projects.clear();
+            m_total_rac = 0;
 
-            // Tally up the recent average credit after deserializing.
-            //
-            if (fRead) {
-                REF(m_total_rac) = 0;
+            stream >> m_converged_by_project;
 
-                for (const auto& project_pair : m_projects) {
-                    REF(m_total_rac) += project_pair.second.m_rac;
+            const unsigned int project_count = ReadCompactSize(stream);
+            auto iter = m_projects.begin();
+
+            for (unsigned int i = 0; i < project_count; i++) {
+                std::pair<std::string, ProjectStats> project_pair;
+                stream >> project_pair;
+
+                if (m_converged_by_project) {
+                    stream >> project_pair.second.m_convergence_hint;
                 }
+
+                m_total_rac += project_pair.second.m_rac;
+                iter = m_projects.insert(iter, project_pair);
             }
-        )
+        }
 
     private:
         //!
@@ -734,20 +725,21 @@ public:
     int64_t m_height;    //!< Height of the block that contains the contract.
     int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH)) {
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
             READWRITE(m_version);
             READWRITE(m_convergence_hint);
             READWRITE(m_manifest_content_hint);
         }
 
-        nVersion = m_version;
-
         READWRITE(m_cpids);
         READWRITE(m_projects);
         //READWRITE(m_verified_beacons);
-    )
+    }
 
     //!
     //! \brief Initialize an empty superblock object.

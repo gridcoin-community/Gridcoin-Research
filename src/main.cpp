@@ -821,7 +821,7 @@ bool AddOrphanTx(const CTransaction& tx)
     // 10,000 orphans, each of which is at most 5,000 bytes big is
     // at most 500 megabytes of orphans:
 
-    size_t nSize = tx.GetSerializeSize(SER_NETWORK, CTransaction::CURRENT_VERSION);
+    size_t nSize = GetSerializeSize(tx, SER_NETWORK, CTransaction::CURRENT_VERSION);
 
     if (nSize > 5000)
     {
@@ -987,7 +987,7 @@ bool IsStandardTx(const CTransaction& tx)
     // almost as much to process as they cost the sender in fees, because
     // computing signature hashes is O(ninputs*txsize). Limiting transactions
     // to MAX_STANDARD_TX_SIZE mitigates CPU exhaustion attacks.
-    unsigned int sz = tx.GetSerializeSize(SER_NETWORK, CTransaction::CURRENT_VERSION);
+    unsigned int sz = GetSerializeSize(tx, SER_NETWORK, CTransaction::CURRENT_VERSION);
     if (sz >= MAX_STANDARD_TX_SIZE)
         return false;
 
@@ -5321,12 +5321,12 @@ bool LoadExternalBlockFile(FILE* fileIn)
         try {
             CAutoFile blkdat(fileIn, SER_DISK, CLIENT_VERSION);
             unsigned int nPos = 0;
-            while (nPos != (unsigned int)-1 && blkdat.good() && !fRequestShutdown)
+            while (nPos != (unsigned int)-1 && !fRequestShutdown)
             {
                 unsigned char pchData[65536];
                 do {
-                    fseek(blkdat, nPos, SEEK_SET);
-                    int nRead = fread(pchData, 1, sizeof(pchData), blkdat);
+                    fseek(blkdat.Get(), nPos, SEEK_SET);
+                    int nRead = fread(pchData, 1, sizeof(pchData), blkdat.Get());
                     if (nRead <= 8)
                     {
                         nPos = (unsigned int)-1;
@@ -5347,7 +5347,7 @@ bool LoadExternalBlockFile(FILE* fileIn)
                 } while(!fRequestShutdown);
                 if (nPos == (unsigned int)-1)
                     break;
-                fseek(blkdat, nPos, SEEK_SET);
+                fseek(blkdat.Get(), nPos, SEEK_SET);
                 unsigned int nSize;
                 blkdat >> nSize;
                 if (nSize > 0 && nSize <= MAX_BLOCK_SIZE)

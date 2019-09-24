@@ -1605,15 +1605,3 @@ std::string QuorumHash::ToString() const
 {
     return boost::apply_visitor(QuorumHashToStringVisitor(), m_hash);
 }
-
-unsigned int QuorumHash::GetSerializeSize(int nType, int nVersion) const
-{
-    switch (Which()) {
-        case Kind::SHA256: return 1 + sizeof(uint256);
-        case Kind::MD5:    return 1 + sizeof(Md5Sum);
-
-        // For variants without any associated data, we serialize the variant
-        // tag only as a single byte:
-        default:           return 1;
-    }
-}

@@ -45,13 +45,16 @@ private:
 
 public:
 
-    IMPLEMENT_SERIALIZE(
-        CAddress* pthis = (CAddress*)(this);
-        READWRITE(*pthis);
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITEAS(CAddress, *this);
         READWRITE(source);
         READWRITE(nLastSuccess);
         READWRITE(nAttempts);
-    )
+    }
 
     void Init()
     {
@@ -265,10 +268,10 @@ public:
     // This format is more complex, but significantly smaller (at most 1.5 MiB), and supports
     // changes to the ADDRMAN_ parameters without breaking the on-disk structure.
     //
-    // We don't use IMPLEMENT_SERIALIZE since the serialization and deserialization code has
+    // We don't use ADD_SERIALIZE_METHODS since the serialization and deserialization code has
     // very little in common.
     template<typename Stream>
-    void Serialize(Stream &s, int nType, int nVersionDummy) const
+    void Serialize(Stream &s) const
     {
         LOCK(cs);
 
@@ -312,7 +315,7 @@ public:
     }
 
     template<typename Stream>
-    void Unserialize(Stream& s, int nType, int nVersionDummy)
+    void Unserialize(Stream& s)
     {
         LOCK(cs);
 
@@ -374,11 +377,6 @@ public:
                 }
             }
         }
-    }
-
-    unsigned int GetSerializeSize(int nType, int nVersion) const
-    {
-        return (CSizeComputer(nType, nVersion) << *this).size();
     }
 
     CAddrMan() : vRandom(0), vvTried(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0)), vvNew(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>())
