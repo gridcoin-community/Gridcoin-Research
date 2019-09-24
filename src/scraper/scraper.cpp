@@ -4088,8 +4088,15 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                         {
                             // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
                             mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.m_name)));
-                            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mManifestsBinnedbyContent insert "
-                                              + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
+                            //if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert "
+                            //                 + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
+                            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert, timestamp "
+                                              + DateTimeStrFormat("%x %H:%M:%S", manifest.nTime)
+                                              + ", content hash "+ nProjectObjectHash.GetHex()
+                                              + ", scraper ID " + iter.first
+                                              + ", project " + iWhitelistProject.m_name
+                                              + ", manifest hash " + nCSManifestHash.GetHex());
+
                         }
                     }
                 }
