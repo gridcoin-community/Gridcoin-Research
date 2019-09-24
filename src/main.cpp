@@ -1388,12 +1388,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
-            // If this happens repeatedly, purge peers
-            if (TimerMain("AcceptToMemoryPool", 20))
-            {
-                LogPrint("mempool", "AcceptToMemoryPool::CleaningInboundConnections");
-                CleanInboundConnections(true);
-            }
             if (fDebug || true)
             {
                 return error("AcceptToMemoryPool : Unable to Connect Inputs %s", hash.ToString().c_str());
@@ -2327,10 +2321,6 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
                     if (!fTestNet && pindexBlock->nHeight < nGrandfather)
                     {
                         return fMiner ? false : true;
-                    }
-                    if (TimerMain("ConnectInputs", 20))
-                    {
-                        CleanInboundConnections(false);
                     }
 
                     if (fMiner) return false;
@@ -4126,7 +4116,6 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     LOCK(cs_vNodes);
     for (auto const& pNode : vNodes)
     {
-                pNode->ClearBanned();
                 if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
                 {
                         if (hashStart==uint256(0))
@@ -4173,7 +4162,6 @@ void CleanInboundConnections(bool bClearAll)
         LOCK(cs_vNodes);
         for(CNode* pNode : vNodes)
         {
-                pNode->ClearBanned();
                 if (pNode->nStartingHeight < (nBestHeight-1000) || bClearAll)
                 {
                         pNode->fDisconnect=true;
@@ -6388,6 +6376,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == "part")
     {
+        LOCK(CSplitBlob::cs_mapParts);
+
         CSplitBlob::RecvPart(pfrom,vRecv);
     }
 

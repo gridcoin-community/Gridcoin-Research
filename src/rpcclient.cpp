@@ -184,6 +184,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockbynumber"       , 1 },
     { "getblockhash"           , 0 },
     { "listpollresults"        , 1 },
+    { "setban"                 , 2 },
+    { "setban"                 , 3 },
     { "showblock"              , 0 },
 };
 

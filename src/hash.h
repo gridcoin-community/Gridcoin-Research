@@ -197,7 +197,7 @@ public:
     CHashVerifier<Source>& operator>>(T&& obj)
     {
         // Unserialize from this stream
-        ::Unserialize(*this, obj);
+        ::Unserialize(*this, obj, nType, nVersion);
         return (*this);
     }
 };

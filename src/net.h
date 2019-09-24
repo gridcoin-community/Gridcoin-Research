@@ -594,6 +594,10 @@ public:
     void CancelSubscribe(unsigned int nChannel);
     void CloseSocketDisconnect();
 
+    static bool DisconnectNode(const std::string& strNode);
+    static bool DisconnectNode(const CSubNet& subnet);
+    static bool DisconnectNode(const CNetAddr& addr);
+
     // Denial-of-service detection/prevention
     // The idea is to detect peers that are behaving
     // badly and disconnect/ban them, but do it in a
@@ -608,8 +612,8 @@ public:
     // dangerous, because it can cause a network split
     // between nodes running old code and nodes running
     // new code.
-    static void ClearBanned(); // needed for unit testing
-    static bool IsBanned(CNetAddr ip);
+    // static void ClearBanned(); // needed for unit testing
+    // static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
     void copyStats(CNodeStats &stats);
 

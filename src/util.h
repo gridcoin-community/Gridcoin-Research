@@ -6,10 +6,14 @@
 #ifndef BITCOIN_UTIL_H
 #define BITCOIN_UTIL_H
 
+#include "attributes.h"
+
 #include "uint256.h"
 #include "fwd.h"
 #include "hash.h"
 
+#include <memory>
+#include <utility>
 #include <map>
 #include <vector>
 #include <string>
@@ -26,7 +30,6 @@
 
 #include <compat.h>
 
-#include "fwd.h"
 #include "tinyformat.h"
 
 #ifndef WIN32
@@ -77,6 +80,13 @@ static const int64_t CENT = 1000000;
 #else
 #define MAX_PATH            1024
 #endif
+
+//! Substitute for C++14 std::make_unique.
+template <typename T, typename... Args>
+std::unique_ptr<T> MakeUnique(Args&&... args)
+{
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 
 void MilliSleep(int64_t n);
 
@@ -190,7 +200,7 @@ std::string EncodeBase32(const std::string& str);
 void ParseParameters(int argc, const char*const argv[]);
 bool WildcardMatch(const char* psz, const char* mask);
 bool WildcardMatch(const std::string& str, const std::string& mask);
-void FileCommit(FILE *fileout);
+bool FileCommit(FILE *fileout);
 
 std::string TimestampToHRDate(double dtm);
 
@@ -580,6 +590,85 @@ private:
     boost::thread_group threadGroup;
     std::map<std::string,boost::thread*> threadMap;
 };
+
+
+/**
+ * .. A wrapper that just calls func once
+ */
+template <typename Callable> void TraceThread(const char* name,  Callable func)
+{
+    RenameThread(name);
+    try
+    {
+        LogPrintf("%s thread start\n", name);
+        func();
+        LogPrintf("%s thread exit\n", name);
+    }
+    catch (const boost::thread_interrupted&)
+    {
+        LogPrintf("%s thread interrupt\n", name);
+        throw;
+    }
+    catch (std::exception& e) {
+        PrintExceptionContinue(&e, name);
+        throw;
+    }
+    catch (...) {
+        PrintExceptionContinue(nullptr, name);
+        throw;
+    }
+}
+
+/**
+ * Tests if the given character is a whitespace character. The whitespace characters
+ * are: space, form-feed ('\f'), newline ('\n'), carriage return ('\r'), horizontal
+ * tab ('\t'), and vertical tab ('\v').
+ *
+ * This function is locale independent. Under the C locale this function gives the
+ * same result as std::isspace.
+ *
+ * @param[in] c     character to test
+ * @return          true if the argument is a whitespace character; otherwise false
+ */
+constexpr inline bool IsSpace(char c) noexcept {
+    return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
+}
+
+/**
+ * Convert string to signed 32-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+NODISCARD bool ParseInt32(const std::string& str, int32_t *out);
+
+/**
+ * Convert string to signed 64-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+NODISCARD bool ParseInt64(const std::string& str, int64_t *out);
+
+/**
+ * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+NODISCARD bool ParseUInt32(const std::string& str, uint32_t *out);
+
+/**
+ * Convert decimal string to unsigned 64-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+NODISCARD bool ParseUInt64(const std::string& str, uint64_t *out);
+
+/**
+ * Convert string to double with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid double,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+NODISCARD bool ParseDouble(const std::string& str, double *out);
+
 
 #endif
 

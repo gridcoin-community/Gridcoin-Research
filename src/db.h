@@ -308,6 +308,7 @@ public:
 
 
 /** Access to the (IP) address database (peers.dat) */
+/*
 class CAddrDB
 {
 private:
@@ -317,5 +318,6 @@ public:
     bool Write(const CAddrMan& addr);
     bool Read(CAddrMan& addr);
 };
+*/
 
 #endif // BITCOIN_DB_H

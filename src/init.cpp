@@ -8,11 +8,13 @@
 #include "net.h"
 #include "txdb.h"
 #include "walletdb.h"
+#include "banman.h"
 #include "rpcserver.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "tally.h"
 #include "beacon.h"
+#include "scheduler.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
 
@@ -25,10 +27,13 @@
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
+
 #include "global_objects_noui.hpp"
 
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern boost::thread_group threadGroup;
+
+static boost::thread_group threadGroup;
+static CScheduler scheduler;
 
 void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
@@ -53,6 +58,12 @@ extern unsigned int nActiveBeforeSB;
 extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
+
+// Dump addresses to banlist.dat every 15 minutes (900s)
+static constexpr int DUMP_BANS_INTERVAL = 60 * 15;
+
+std::unique_ptr<BanMan> g_banman;
+
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -100,6 +111,11 @@ void Shutdown(void* parg)
          LogPrintf("gridcoinresearch exiting...");
 
         fShutdown = true;
+
+        // clean up the threads running serviceQueue:
+        threadGroup.interrupt_all();
+        threadGroup.join_all();
+
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
@@ -592,6 +608,15 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     int64_t nStart;
 
+
+    // Start the lightweight task scheduler thread
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // TODO: Do we need this? It would require porting the Bitcoin signal handler.
+    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
+
+
     // ********************************************************* Step 5: verify database integrity
 
     uiInterface.InitMessage(_("Verifying database integrity..."));
@@ -910,6 +935,11 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 10: load peers
 
+    // Ban manager instance should not already be instantiated
+    assert(!g_banman);
+    // Create ban manager instance.
+    g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+
     uiInterface.InitMessage(_("Loading addresses..."));
     if (fDebug10) LogPrintf("Loading addresses...");
     nStart = GetTimeMillis();
@@ -983,6 +1013,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+
+    scheduler.scheduleEvery([]{
+        g_banman->DumpBanlist();
+    }, DUMP_BANS_INTERVAL * 1000);
+
 
     return true;
 }

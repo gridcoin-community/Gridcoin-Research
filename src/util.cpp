@@ -919,6 +919,97 @@ string DecodeBase32(const string& str)
     return string((const char*)&vchRet[0], vchRet.size());
 }
 
+NODISCARD static bool ParsePrechecks(const std::string& str)
+{
+    if (str.empty()) // No empty string allowed
+        return false;
+    if (str.size() >= 1 && (IsSpace(str[0]) || IsSpace(str[str.size()-1]))) // No padding allowed
+        return false;
+    if (str.size() != strlen(str.c_str())) // No embedded NUL characters allowed
+        return false;
+    return true;
+}
+
+bool ParseInt32(const std::string& str, int32_t *out)
+{
+    if (!ParsePrechecks(str))
+        return false;
+    char *endp = nullptr;
+    errno = 0; // strtol will not set errno if valid
+    long int n = strtol(str.c_str(), &endp, 10);
+    if(out) *out = (int32_t)n;
+    // Note that strtol returns a *long int*, so even if strtol doesn't report an over/underflow
+    // we still have to check that the returned value is within the range of an *int32_t*. On 64-bit
+    // platforms the size of these types may be different.
+    return endp && *endp == 0 && !errno &&
+        n >= std::numeric_limits<int32_t>::min() &&
+        n <= std::numeric_limits<int32_t>::max();
+}
+
+bool ParseInt64(const std::string& str, int64_t *out)
+{
+    if (!ParsePrechecks(str))
+        return false;
+    char *endp = nullptr;
+    errno = 0; // strtoll will not set errno if valid
+    long long int n = strtoll(str.c_str(), &endp, 10);
+    if(out) *out = (int64_t)n;
+    // Note that strtoll returns a *long long int*, so even if strtol doesn't report an over/underflow
+    // we still have to check that the returned value is within the range of an *int64_t*.
+    return endp && *endp == 0 && !errno &&
+        n >= std::numeric_limits<int64_t>::min() &&
+        n <= std::numeric_limits<int64_t>::max();
+}
+
+bool ParseUInt32(const std::string& str, uint32_t *out)
+{
+    if (!ParsePrechecks(str))
+        return false;
+    if (str.size() >= 1 && str[0] == '-') // Reject negative values, unfortunately strtoul accepts these by default if they fit in the range
+        return false;
+    char *endp = nullptr;
+    errno = 0; // strtoul will not set errno if valid
+    unsigned long int n = strtoul(str.c_str(), &endp, 10);
+    if(out) *out = (uint32_t)n;
+    // Note that strtoul returns a *unsigned long int*, so even if it doesn't report an over/underflow
+    // we still have to check that the returned value is within the range of an *uint32_t*. On 64-bit
+    // platforms the size of these types may be different.
+    return endp && *endp == 0 && !errno &&
+        n <= std::numeric_limits<uint32_t>::max();
+}
+
+bool ParseUInt64(const std::string& str, uint64_t *out)
+{
+    if (!ParsePrechecks(str))
+        return false;
+    if (str.size() >= 1 && str[0] == '-') // Reject negative values, unfortunately strtoull accepts these by default if they fit in the range
+        return false;
+    char *endp = nullptr;
+    errno = 0; // strtoull will not set errno if valid
+    unsigned long long int n = strtoull(str.c_str(), &endp, 10);
+    if(out) *out = (uint64_t)n;
+    // Note that strtoull returns a *unsigned long long int*, so even if it doesn't report an over/underflow
+    // we still have to check that the returned value is within the range of an *uint64_t*.
+    return endp && *endp == 0 && !errno &&
+        n <= std::numeric_limits<uint64_t>::max();
+}
+
+
+bool ParseDouble(const std::string& str, double *out)
+{
+    if (!ParsePrechecks(str))
+        return false;
+    if (str.size() >= 2 && str[0] == '0' && str[1] == 'x') // No hexadecimal floats allowed
+        return false;
+    std::istringstream text(str);
+    text.imbue(std::locale::classic());
+    double result;
+    text >> result;
+    if(out) *out = result;
+    return text.eof() && !text.fail();
+}
+
+
 
 bool WildcardMatch(const char* psz, const char* mask)
 {
@@ -1221,6 +1312,7 @@ bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest)
 #endif /* WIN32 */
 }
 
+/*
 void FileCommit(FILE *fileout)
 {
     fflush(fileout);                // harmless if redundantly called
@@ -1230,6 +1322,42 @@ void FileCommit(FILE *fileout)
     fsync(fileno(fileout));
 #endif
 }
+*/
+
+// Newer FileCommit overload from Bitcoin.
+bool FileCommit(FILE *file)
+{
+    if (fflush(file) != 0) { // harmless if redundantly called
+        LogPrintf("%s: fflush failed: %d\n", __func__, errno);
+        return false;
+    }
+#ifdef WIN32
+    HANDLE hFile = (HANDLE)_get_osfhandle(_fileno(file));
+    if (FlushFileBuffers(hFile) == 0) {
+        LogPrintf("%s: FlushFileBuffers failed: %d\n", __func__, GetLastError());
+        return false;
+    }
+#else
+    #if defined(__linux__) || defined(__NetBSD__)
+    if (fdatasync(fileno(file)) != 0 && errno != EINVAL) { // Ignore EINVAL for filesystems that don't support sync
+        LogPrintf("%s: fdatasync failed: %d\n", __func__, errno);
+        return false;
+    }
+    #elif defined(MAC_OSX) && defined(F_FULLFSYNC)
+    if (fcntl(fileno(file), F_FULLFSYNC, 0) == -1) { // Manpage says "value other than -1" is returned on success
+        LogPrintf("%s: fcntl F_FULLFSYNC failed: %d\n", __func__, errno);
+        return false;
+    }
+    #else
+    if (fsync(fileno(file)) != 0 && errno != EINVAL) {
+        LogPrintf("%s: fsync failed: %d\n", __func__, errno);
+        return false;
+    }
+    #endif
+#endif
+    return true;
+}
+
 
 void ShrinkDebugFile()
 {

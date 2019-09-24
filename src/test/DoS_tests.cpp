@@ -10,6 +10,7 @@
 #include "wallet.h"
 #include "net.h"
 #include "util.h"
+#include "banman.h"
 
 #include <stdint.h>
 
@@ -30,40 +31,40 @@ BOOST_AUTO_TEST_SUITE(DoS_tests)
 
 BOOST_AUTO_TEST_CASE(DoS_banning)
 {
-    CNode::ClearBanned();
+    g_banman->ClearBanned();
     CAddress addr1(ip(0xa0b0c001));
     CNode dummyNode1(INVALID_SOCKET, addr1, "", true);
     dummyNode1.Misbehaving(100); // Should get banned
-    BOOST_CHECK(CNode::IsBanned(addr1));
-    BOOST_CHECK(!CNode::IsBanned(ip(0xa0b0c001|0x0000ff00))); // Different IP, not banned
+    BOOST_CHECK(g_banman->IsBanned(addr1));
+    BOOST_CHECK(!g_banman->IsBanned(ip(0xa0b0c001|0x0000ff00))); // Different IP, not banned
 
     CAddress addr2(ip(0xa0b0c002));
     CNode dummyNode2(INVALID_SOCKET, addr2, "", true);
     dummyNode2.Misbehaving(50);
-    BOOST_CHECK(!CNode::IsBanned(addr2)); // 2 not banned yet...
-    BOOST_CHECK(CNode::IsBanned(addr1));  // ... but 1 still should be
+    BOOST_CHECK(!g_banman->IsBanned(addr2)); // 2 not banned yet...
+    BOOST_CHECK(g_banman->IsBanned(addr1));  // ... but 1 still should be
     dummyNode2.Misbehaving(50);
-    BOOST_CHECK(CNode::IsBanned(addr2));
+    BOOST_CHECK(g_banman->IsBanned(addr2));
 }
 
 BOOST_AUTO_TEST_CASE(DoS_banscore)
 {
-    CNode::ClearBanned();
+    g_banman->ClearBanned();
     mapArgs["-banscore"] = "111"; // because 11 is my favorite number
     CAddress addr1(ip(0xa0b0c001));
     CNode dummyNode1(INVALID_SOCKET, addr1, "", true);
     dummyNode1.Misbehaving(100);
-    BOOST_CHECK(!CNode::IsBanned(addr1));
+    BOOST_CHECK(!g_banman->IsBanned(addr1));
     dummyNode1.Misbehaving(10);
-    BOOST_CHECK(!CNode::IsBanned(addr1));
+    BOOST_CHECK(!g_banman->IsBanned(addr1));
     dummyNode1.Misbehaving(1);
-    BOOST_CHECK(CNode::IsBanned(addr1));
+    BOOST_CHECK(g_banman->IsBanned(addr1));
     mapArgs.erase("-banscore");
 }
 
 BOOST_AUTO_TEST_CASE(DoS_bantime)
 {
-    CNode::ClearBanned();
+    g_banman->ClearBanned();
     int64_t nStartTime = GetTime();
     SetMockTime(nStartTime); // Overrides future calls to GetTime()
 
@@ -71,13 +72,13 @@ BOOST_AUTO_TEST_CASE(DoS_bantime)
     CNode dummyNode(INVALID_SOCKET, addr, "", true);
 
     dummyNode.Misbehaving(100);
-    BOOST_CHECK(CNode::IsBanned(addr));
+    BOOST_CHECK(g_banman->IsBanned(addr));
 
     SetMockTime(nStartTime+60*60);
-    BOOST_CHECK(CNode::IsBanned(addr));
+    BOOST_CHECK(g_banman->IsBanned(addr));
 
     SetMockTime(nStartTime+60*60*24+1);
-    BOOST_CHECK(!CNode::IsBanned(addr));
+    BOOST_CHECK(!g_banman->IsBanned(addr));
 }
 
 CTransaction RandomOrphan()

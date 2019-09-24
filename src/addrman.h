@@ -500,6 +500,36 @@ public:
             Check();
         }
     }
+
+    void Clear()
+    {
+        LOCK(cs);
+        std::vector<int>().swap(vRandom);
+        RAND_bytes(&nKey[0], 32);
+        vvTried = std::vector<std::vector<int>>(ADDRMAN_TRIED_BUCKET_COUNT, std::vector<int>(0));
+        vvNew = std::vector<std::set<int>>(ADDRMAN_NEW_BUCKET_COUNT, std::set<int>());
+        // Will need for Bitcoin rebase
+        // nKey = insecure_rand.rand256();
+        //for (size_t bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
+        //    for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {
+        //        vvNew[bucket][entry] = -1;
+        //    }
+        //}
+        //for (size_t bucket = 0; bucket < ADDRMAN_TRIED_BUCKET_COUNT; bucket++) {
+        //    for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {
+        //        vvTried[bucket][entry] = -1;
+        //    }
+        //}
+
+        nIdCount = 0;
+        nTried = 0;
+        nNew = 0;
+        // Will need for Bitcoin rebase
+        // nLastGood = 1; //Initially at 1 so that "never" is strictly worse.
+        mapInfo.clear();
+        mapAddr.clear();
+    }
+
 };
 
 #endif
