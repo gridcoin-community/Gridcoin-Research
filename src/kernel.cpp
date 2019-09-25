@@ -6,6 +6,7 @@
 #include "kernel.h"
 #include "txdb.h"
 #include "main.h"
+#include "streams.h"
 #include "util.h"
 
 using namespace std;

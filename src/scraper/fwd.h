@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "support/allocators/zeroafterfree.h"
 #include "util.h"
 
 /*********************

@@ -26,8 +26,8 @@ bool SerializeDB(Stream& stream, const Data& data)
     // Write and commit header, data
     try {
         CHashWriter hasher(SER_DISK, CLIENT_VERSION);
-        stream << FLATDATA(pchMessageStart) << data;
-        hasher << FLATDATA(pchMessageStart) << data;
+        stream << pchMessageStart << data;
+        hasher << pchMessageStart << data;
         stream << hasher.GetHash();
     } catch (const std::exception& e) {
         return error("%s: Serialize or I/O error - %s", __func__, e.what());

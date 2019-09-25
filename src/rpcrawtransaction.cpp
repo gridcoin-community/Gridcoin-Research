@@ -12,6 +12,7 @@
 #include "init.h"
 #include "main.h"
 #include "net.h"
+#include "streams.h"
 #include "wallet.h"
 #include "coincontrol.h"
 

@@ -7,6 +7,7 @@
 #define BITCOIN_LEVELDB_H
 
 #include "main.h"
+#include "streams.h"
 
 #include <string>
 #include <leveldb/db.h>

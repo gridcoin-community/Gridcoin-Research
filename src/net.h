@@ -14,6 +14,7 @@
 #include "netbase.h"
 #include "mruset.h"
 #include "protocol.h"
+#include "streams.h"
 #include "addrman.h"
 
 #ifndef WIN32

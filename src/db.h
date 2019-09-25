@@ -6,6 +6,7 @@
 #define BITCOIN_DB_H
 
 #include "main.h"
+#include "streams.h"
 
 #include <map>
 #include <string>

@@ -7,10 +7,11 @@
  * polymorphism.
 */
 
+#include <key.h>
 #include "net.h"
+#include "streams.h"
 #include "sync.h"
 
-#include <key.h>
 #include <univalue.h>
 
 
@@ -27,7 +28,7 @@ public:
         CPart(const uint256& ihash)
             :hash(ihash)
         {}
-        CReaderStream getReader() const { return CReaderStream(&data); }
+        CDataStream getReader() const { return CDataStream(data.begin(), data.end(), SER_NETWORK, PROTOCOL_VERSION); }
         bool present() const {return !this->data.empty();}
     };
 
@@ -140,8 +141,8 @@ public: /*==== fields ====*/
         bool current =0;
         bool last =0;
 
-        void Serialize(CDataStream& s, int nType, int nVersion) const;
-        void Unserialize(CReaderStream& s, int nType, int nVersion);
+        void Serialize(CDataStream& s) const;
+        void Unserialize(CDataStream& s);
         UniValue ToJson() const;
     };
 
@@ -166,13 +167,12 @@ public: /* public methods */
     void Complete() override;
 
     /** Serialize this object for seding over the network. */
-    void Serialize(CDataStream& s, int nType, int nVersion) const;
-    void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
-    void SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const;
-    void UnserializeCheck(CReaderStream& s, unsigned int& banscore_out);
+    void Serialize(CDataStream& s) const;
+    void SerializeWithoutSignature(CDataStream& s) const;
+    void SerializeForManifestCompare(CDataStream& ss) const;
+    void UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
 
     bool IsManifestCurrent() const;
 
     UniValue ToJson() const;
-
 };

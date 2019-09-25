@@ -1,5 +1,6 @@
 #include "compat/endian.h"
 #include "neuralnet/superblock.h"
+#include "streams.h"
 
 #include <array>
 #include <boost/algorithm/string/predicate.hpp>
@@ -841,7 +842,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence());
 
-    BOOST_CHECK(superblock.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+    BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << superblock;
@@ -958,7 +959,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     NN::Superblock superblock = NN::Superblock::FromConvergence(
         GetTestConvergence(true)); // Set fallback by project flag
 
-    BOOST_CHECK(superblock.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+    BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << superblock;
@@ -1284,7 +1285,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     cpids.Add(NN::Cpid::Parse("00010203040506070809101112131415"), 123);
     cpids.Add(NN::Cpid(), 0);
 
-    BOOST_CHECK(cpids.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+    BOOST_CHECK(GetSerializeSize(cpids, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << cpids;
@@ -1366,7 +1367,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 
     NN::Superblock::ProjectStats project(1, 2, 3);
 
-    BOOST_CHECK(project.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+    BOOST_CHECK(GetSerializeSize(project, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << project;
@@ -1621,7 +1622,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     projects.Add("project_1", NN::Superblock::ProjectStats(1, 2, 3));
     projects.Add("project_2", NN::Superblock::ProjectStats(1, 2, 3));
 
-    BOOST_CHECK(projects.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+    BOOST_CHECK(GetSerializeSize(projects, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << projects;
@@ -1707,7 +1708,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
     projects.SetHint("project_1", CSerializeData());
     projects.SetHint("project_2", CSerializeData());
 
-    BOOST_CHECK(projects.GetSerializeSize(SER_NETWORK, 1) == expected.size());
+    BOOST_CHECK(GetSerializeSize(projects, SER_NETWORK, 1) == expected.size());
 
     CDataStream stream(SER_NETWORK, 1);
     stream << projects;
@@ -2090,7 +2091,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_invalid)
 {
     const NN::QuorumHash hash;
 
-    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 1);
+    BOOST_CHECK(GetSerializeSize(hash, SER_NETWORK, 1) == 1);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << hash;
@@ -2110,7 +2111,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_sha256)
 
     const NN::QuorumHash hash(expected);
 
-    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 33);
+    BOOST_CHECK(GetSerializeSize(hash, SER_NETWORK, 1) == 33);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << hash;
@@ -2134,7 +2135,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_md5)
 
     const NN::QuorumHash hash(expected);
 
-    BOOST_CHECK(hash.GetSerializeSize(SER_NETWORK, 1) == 17);
+    BOOST_CHECK(GetSerializeSize(hash, SER_NETWORK, 1) == 17);
 
     CDataStream stream(SER_NETWORK, 1);
     stream << hash;
@@ -2174,7 +2175,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_sha256)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << (unsigned char)0x01; // QuorumHash::Kind::SHA256
-    stream << FLATDATA(expected);
+    stream.write(CharCast(expected.data()), expected.size());
     stream >> hash;
 
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
@@ -2197,7 +2198,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_md5)
 
     CDataStream stream(SER_NETWORK, 1);
     stream << (unsigned char)0x02; // QuorumHash::Kind::MD5
-    stream << FLATDATA(expected);
+    stream.write(CharCast(expected.data()), expected.size());
     stream >> hash;
 
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::MD5);

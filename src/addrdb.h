@@ -52,10 +52,10 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITEVARIADIC(this->nVersion);
-        READWRITEVARIADIC(nCreateTime);
-        READWRITEVARIADIC(nBanUntil);
-        READWRITEVARIADIC(banReason);
+        READWRITE(this->nVersion);
+        READWRITE(nCreateTime);
+        READWRITE(nBanUntil);
+        READWRITE(banReason);
     }
 
     void SetNull()

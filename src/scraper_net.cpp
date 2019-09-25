@@ -216,7 +216,7 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 }
 
 
-void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersion) const
+void CScraperManifest::dentry::Serialize(CDataStream& ss) const
 { /* TODO: remove this redundant code */
     ss<< project;
     ss<< ETag;
@@ -226,7 +226,7 @@ void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersio
     ss<< current;
     ss<< last;
 }
-void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVersion)
+void CScraperManifest::dentry::Unserialize(CDataStream& ss)
 {
     ss>> project;
     ss>> ETag;
@@ -238,7 +238,7 @@ void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVe
 }
 
 
-void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int nVersion) const
+void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const
 {
     WriteCompactSize(ss, vParts.size());
     for( const CPart* part : vParts )
@@ -253,7 +253,7 @@ void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int
 }
 
 // This is to compare manifest content quickly. We just need the parts and the consensus block.
-void CScraperManifest::SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const
+void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const
 {
     WriteCompactSize(ss, vParts.size());
     for( const CPart* part : vParts )
@@ -262,9 +262,9 @@ void CScraperManifest::SerializeForManifestCompare(CDataStream& ss, int nType, i
 }
 
 
-void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+void CScraperManifest::Serialize(CDataStream& ss) const
 {
-    SerializeWithoutSignature(ss, nType, nVersion);
+    SerializeWithoutSignature(ss);
     ss << signature;
 }
 
@@ -368,7 +368,7 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
 }
 
 
-void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscore_out)
+void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
 {
     const auto pbegin = ss.begin();
 
@@ -571,12 +571,12 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
 
     // serialize the content for comparison purposes and put in manifest.
     CDataStream sscomp(SER_NETWORK,1);
-    m->SerializeForManifestCompare(sscomp, SER_NETWORK, 1);
+    m->SerializeForManifestCompare(sscomp);
     m->nContentHash = Hash(sscomp.begin(), sscomp.end());
 
     /* serialize and hash the object */
     CDataStream ss(SER_NETWORK,1);
-    m->SerializeWithoutSignature(ss, SER_NETWORK, 1);
+    m->SerializeWithoutSignature(ss);
     //ss << *m;
 
     /* sign the serialized manifest and append the signature */

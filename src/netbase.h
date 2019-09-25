@@ -78,10 +78,13 @@ class CNetAddr
         friend bool operator!=(const CNetAddr& a, const CNetAddr& b);
         friend bool operator<(const CNetAddr& a, const CNetAddr& b);
 
-        IMPLEMENT_SERIALIZE
-            (
-             READWRITE(FLATDATA(ip));
-            )
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(ip);
+        }
 
         friend class CSubNet;
 };
@@ -118,10 +121,11 @@ class CSubNet
         ADD_SERIALIZE_METHODS;
 
         template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action) {
-            READWRITEVARIADIC(network);
-            READWRITEVARIADIC(netmask);
-            READWRITEVARIADIC(valid);
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(network);
+            READWRITE(netmask);
+            READWRITE(valid);
         }
 };
 
@@ -158,15 +162,14 @@ class CService : public CNetAddr
         CService(const struct in6_addr& ipv6Addr, unsigned short port);
         CService(const struct sockaddr_in6& addr);
 
-        IMPLEMENT_SERIALIZE
-            (
-             CService* pthis = const_cast<CService*>(this);
-             READWRITE(FLATDATA(ip));
-             unsigned short portN = htons(port);
-             READWRITE(portN);
-             if (fRead)
-                 pthis->port = ntohs(portN);
-            )
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+             READWRITE(ip);
+             READWRITE(WrapBigEndian(port));
+        }
 };
 
 typedef std::pair<CService, int> proxyType;
