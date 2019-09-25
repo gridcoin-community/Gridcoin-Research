@@ -36,7 +36,7 @@ void ThreadRPCServer2(void* parg);
 static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
-static asio::io_service* rpc_io_service = NULL;
+static ioContext* rpc_io_service = NULL;
 static ssl::context* rpc_ssl_context = NULL;
 static boost::thread_group* rpc_worker_group = NULL;
 
@@ -512,7 +512,7 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
                       const bool fUseSSL)
 {
     // Accept connection
-    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(acceptor->get_io_service(), context, fUseSSL);
+    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor), context, fUseSSL);
 
     acceptor->async_accept(
                 conn->sslStream.lowest_layer(),
@@ -595,7 +595,7 @@ void StartRPCThreads()
     const bool fUseSSL = GetBoolArg("-rpcssl");
 
     assert(rpc_io_service == NULL);
-    rpc_io_service = new asio::io_service();
+    rpc_io_service = new ioContext();
     rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
     if (fUseSSL)
@@ -678,7 +678,7 @@ void StartRPCThreads()
     
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
-        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+        rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
 }
 
 void StopRPCThreads()
