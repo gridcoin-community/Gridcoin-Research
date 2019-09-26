@@ -42,6 +42,12 @@ BOOST_AUTO_TEST_CASE(DoS_banning)
     CNode dummyNode2(INVALID_SOCKET, addr2, "", true);
     dummyNode2.Misbehaving(50);
     BOOST_CHECK(!g_banman->IsBanned(addr2)); // 2 not banned yet...
+
+    CNodeStats nodestats;
+    dummyNode2.copyStats(nodestats);
+
+    BOOST_CHECK(nodestats.nMisbehavior == 50); // nMisbehavior should be 50.
+
     BOOST_CHECK(g_banman->IsBanned(addr1));  // ... but 1 still should be
     dummyNode2.Misbehaving(50);
     BOOST_CHECK(g_banman->IsBanned(addr2));

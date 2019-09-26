@@ -753,7 +753,7 @@ bool CNode::Misbehaving(int howmuch)
     {
         if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
 
-        g_banman->Ban(addr, BanReasonNodeMisbehaving, DEFAULT_MISBEHAVING_BANTIME);
+        g_banman->Ban(addr, BanReasonNodeMisbehaving);
         CloseSocketDisconnect();
         return true;
     } else
