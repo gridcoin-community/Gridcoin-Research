@@ -94,6 +94,9 @@ CCriticalSection cs_vOneShots;
 set<CNetAddr> setservAddNodeAddresses;
 CCriticalSection cs_setservAddNodeAddresses;
 
+std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
+CCriticalSection CNode::cs_mapMisbehavior;
+
 static CSemaphore *semOutbound = NULL;
 
 void AddOneShot(string strDest)
@@ -740,6 +743,7 @@ bool CNode::IsBanned(CNetAddr ip)
 }
 */
 
+/*
 bool CNode::Misbehaving(int howmuch)
 {
     if (addr.IsLocal())
@@ -760,24 +764,83 @@ bool CNode::Misbehaving(int howmuch)
         if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
     return false;
 }
+*/
 
-#undef X
-#define X(name) stats.name = name
+
+bool CNode::Misbehaving(int howmuch)
+{
+    if (addr.IsLocal())
+    {
+        LogPrintf("Warning: Local node %s misbehaving (delta: %d)!", addrName, howmuch);
+        return false;
+    }
+
+    {
+        int nMisbehavior = 0;
+
+        LOCK(cs_mapMisbehavior);
+
+        nMisbehavior = GetMisbehavior() + howmuch;
+
+        mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+
+        if (nMisbehavior >= GetArg("-banscore", 100))
+        {
+            if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+
+            g_banman->Ban(addr, BanReasonNodeMisbehaving);
+            CloseSocketDisconnect();
+            return true;
+        } else
+            if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+        return false;
+    }
+}
+
+
+int CNode::GetMisbehavior() const
+{
+    int nMisbehavior = 0;
+
+    LOCK(cs_mapMisbehavior);
+
+    const auto& iMisbehavior = mapMisbehavior.find(addr);
+
+    if (iMisbehavior != mapMisbehavior.end())
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
+                    / (double) GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Make sure nMisbehavior doesn't go below zero.
+        nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+
+        // Delete entry if nMisbehavior is zero.
+        if (!nMisbehavior) mapMisbehavior.erase(iMisbehavior);
+    }
+
+    return nMisbehavior;
+}
+
 void CNode::copyStats(CNodeStats &stats)
 {
-    X(nServices);
-    X(nLastSend);
-    X(nLastRecv);
-    X(nTimeConnected);
-    X(addrName);
-    X(nVersion);
-    X(strSubVer);
-    X(fInbound);
-    X(nStartingHeight);
-    X(nMisbehavior);
-    X(sGRCAddress);
-    X(nTrust);
-
+    stats.nServices = nServices;
+    stats.nLastSend = nLastSend;
+    stats.nLastRecv = nLastRecv;
+    stats.nTimeConnected = nTimeConnected;
+    stats.addrName = addrName;
+    stats.nVersion = nVersion;
+    stats.strSubVer = strSubVer;
+    stats.fInbound = fInbound;
+    stats.nStartingHeight = nStartingHeight;
+    stats.sGRCAddress = sGRCAddress;
+    stats.nTrust = nTrust;
+    stats.nMisbehavior = GetMisbehavior();
 
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.

@@ -49,6 +49,8 @@ public:
     bool Unban(const CSubNet& sub_net);
     void GetBanned(banmap_t& banmap);
     void DumpBanlist();
+    unsigned int ZeroMisbehavior(CNetAddr net_addr);
+    unsigned int ZeroMisbehavior(CSubNet sub_net);
 
 private:
     void SetBanned(const banmap_t& banmap);

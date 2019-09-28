@@ -243,10 +243,11 @@ public:
 protected:
 
     // Denial-of-service detection/prevention
-    // Key is IP address, value is banned-until-time
-    static std::map<CNetAddr, int64_t> setBanned;
-    static CCriticalSection cs_setBanned;
-    int nMisbehavior;
+    // ---------- address:port -- misbehavior - time
+    static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior;
+    static CCriticalSection cs_mapMisbehavior;
+    // See protected GetMisbehavior() below.
+    // int nMisbehavior;
 
 public:
 	std::map<uint256, CRequestTracker> mapRequests;
@@ -306,7 +307,6 @@ public:
         hashLastGetBlocksEnd = 0;
         nStartingHeight = -1;
         fGetAddr = false;
-        nMisbehavior = 0;
 		//Orphan Attack
 		nLastOrphan=0;
 		nOrphanCount=0;
@@ -616,6 +616,7 @@ public:
     // static void ClearBanned(); // needed for unit testing
     // static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
+    int GetMisbehavior() const;
     void copyStats(CNodeStats &stats);
 
 	// Network stats
@@ -624,6 +625,8 @@ public:
 
     static uint64_t GetTotalBytesRecv();
     static uint64_t GetTotalBytesSent();
+
+    friend class BanMan;
 
 };
 
