@@ -49,8 +49,6 @@ public:
     bool Unban(const CSubNet& sub_net);
     void GetBanned(banmap_t& banmap);
     void DumpBanlist();
-    unsigned int ZeroMisbehavior(CNetAddr net_addr);
-    unsigned int ZeroMisbehavior(CSubNet sub_net);
 
 private:
     void SetBanned(const banmap_t& banmap);
@@ -59,6 +57,8 @@ private:
     void SetBannedSetDirty(bool dirty = true);
     //!clean unused entries (if bantime has expired)
     void SweepBanned();
+    unsigned int ZeroMisbehavior(CNetAddr net_addr);
+    unsigned int ZeroMisbehavior(CSubNet sub_net);
 
     CCriticalSection m_cs_banned;
     banmap_t m_banned GUARDED_BY(m_cs_banned);

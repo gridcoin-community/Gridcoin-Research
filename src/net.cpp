@@ -78,6 +78,9 @@ ThreadHandler* netThreads = new ThreadHandler;
 static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
+// Initialization of static class variable.
+std::atomic<NodeId> CNode::nLastNodeId {0};
+
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
 vector<std::string> vAddedNodes;
@@ -561,8 +564,6 @@ void AddressCurrentlyConnected(const CService& addr)
     addrman.Connected(addr);
 }
 
-
-
 std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
 std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
@@ -646,6 +647,11 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     {
         return NULL;
     }
+}
+
+NodeId CNode::GetNewNodeId()
+{
+    return nLastNodeId.fetch_add(1, std::memory_order_relaxed);
 }
 
 void CNode::CloseSocketDisconnect()
@@ -829,6 +835,7 @@ int CNode::GetMisbehavior() const
 
 void CNode::copyStats(CNodeStats &stats)
 {
+    stats.id = id;
     stats.nServices = nServices;
     stats.nLastSend = nLastSend;
     stats.nLastRecv = nLastRecv;

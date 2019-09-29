@@ -34,6 +34,8 @@ static const int PING_INTERVAL = 2 * 60;
 static const int TIMEOUT_INTERVAL = 20 * 60;
 extern int MAX_OUTBOUND_CONNECTIONS;
 
+typedef int64_t NodeId;
+
 inline unsigned int ReceiveFloodSize() { return 1000*GetArg("-maxreceivebuffer", 5*1000); }
 inline unsigned int SendBufferSize() { return 1000*GetArg("-maxsendbuffer", 1*1000); }
 
@@ -127,6 +129,7 @@ extern CCriticalSection cs_vAddedNodes;
 class CNodeStats
 {
 public:
+    NodeId id;
     uint64_t nServices;
     int64_t nLastSend;
     int64_t nLastRecv;
@@ -282,6 +285,7 @@ public:
 
     CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
     {
+
         nServices = 0;
         hSocket = hSocketIn;
         nRecvVersion = INIT_PROTO_VERSION;
@@ -340,6 +344,13 @@ private:
     CNode(const CNode&);
     void operator=(const CNode&);
 
+    NodeId GetNewNodeId();
+
+    const NodeId id = GetNewNodeId();
+    // In newer Bitcoin, this is in the connection manager class.
+    // For us, we will put it here for the time being.
+    static std::atomic<NodeId> nLastNodeId;
+
     // Network usage totals
     static std::atomic<uint64_t> nTotalBytesRecv;
     static std::atomic<uint64_t> nTotalBytesSent;
@@ -347,6 +358,9 @@ private:
 
 public:
 
+    NodeId GetId() const {
+        return id;
+    }
 
     int GetRefCount()
     {

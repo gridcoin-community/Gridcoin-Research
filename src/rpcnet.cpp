@@ -429,6 +429,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
     for (auto const& stats : vstats) {
         UniValue obj(UniValue::VOBJ);
 
+        obj.pushKV("id", stats.id);
         obj.pushKV("addr", stats.addrName);
 
           if (!(stats.addrLocal.empty()))
