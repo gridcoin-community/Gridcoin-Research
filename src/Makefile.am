@@ -187,6 +187,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	script.cpp \
 	scrypt.cpp \
     scheduler.cpp \
+	support/cleanse.cpp \
+	support/lockedpool.cpp \
 	sync.cpp \
 	tally.cpp \
 	txdb-leveldb.cpp \
@@ -210,8 +212,6 @@ libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
     neuralnet/neuralnet_stub.cpp \
     neuralnet/neuralnet.cpp \
-	support/cleanse.cpp \
-	support/lockedpool.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS
