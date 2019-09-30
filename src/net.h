@@ -131,9 +131,13 @@ class CNodeStats
 public:
     NodeId id;
     uint64_t nServices;
+    CAddress addr;
     int64_t nLastSend;
     int64_t nLastRecv;
+    uint64_t nSendBytes;
+    uint64_t nRecvBytes;
     int64_t nTimeConnected;
+    int64_t nTimeOffset;
     std::string addrName;
     int nVersion;
     std::string strSubVer;
@@ -141,6 +145,7 @@ public:
     int nStartingHeight;
     int nMisbehavior;
     double dPingTime;
+    double dMinPing;
     double dPingWait;
 	std::string addrLocal;
 	int nTrust;
@@ -203,16 +208,19 @@ public:
     CDataStream ssSend;
     size_t nSendSize; // total size of all vSendMsg entries
     size_t nSendOffset; // offset inside the first vSendMsg already sent
+    std::atomic<uint64_t> nSendBytes {0};
     std::deque<CSerializeData> vSendMsg;
     CCriticalSection cs_vSend;
 
     std::deque<CNetMessage> vRecvMsg;
     CCriticalSection cs_vRecvMsg;
+    std::atomic<uint64_t> nRecvBytes {0};
     int nRecvVersion;
 
     int64_t nLastSend;
     int64_t nLastRecv;
     int64_t nTimeConnected;
+    std::atomic<int64_t> nTimeOffset{0};
     CAddress addr;
     std::string addrName;
     CService addrLocal;
@@ -279,7 +287,10 @@ public:
     // Time (in usec) the last ping was sent, or 0 if no ping was ever sent.
     int64_t nPingUsecStart;
     // Last measured round-trip time.
-    int64_t nPingUsecTime;
+    std::atomic<int64_t> nPingUsecTime{0};
+    // Best measured round-trip time.
+    std::atomic<int64_t> nMinPingUsecTime{std::numeric_limits<int64_t>::max()};
+
     // Whether a ping is requested.
     bool fPingQueued;
 
@@ -322,7 +333,6 @@ public:
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
         nPingUsecStart = 0;
-        nPingUsecTime = 0;
         fPingQueued = false;
 
         // Be shy and don't send version until we hear
@@ -612,6 +622,7 @@ public:
     static bool DisconnectNode(const std::string& strNode);
     static bool DisconnectNode(const CSubNet& subnet);
     static bool DisconnectNode(const CNetAddr& addr);
+    static bool DisconnectNode(NodeId id);
 
     // Denial-of-service detection/prevention
     // The idea is to detect peers that are behaving
@@ -632,6 +643,8 @@ public:
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
     int GetMisbehavior() const;
     void copyStats(CNodeStats &stats);
+
+    static void CopyNodeStats(std::vector<CNodeStats>& vstats);
 
 	// Network stats
     static void RecordBytesRecv(uint64_t bytes);

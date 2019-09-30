@@ -79,7 +79,7 @@ static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
 // Initialization of static class variable.
-std::atomic<NodeId> CNode::nLastNodeId {0};
+std::atomic<NodeId> CNode::nLastNodeId {-1};
 
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
@@ -699,6 +699,18 @@ bool CNode::DisconnectNode(const CNetAddr& addr)
     return CNode::DisconnectNode(CSubNet(addr));
 }
 
+bool CNode::DisconnectNode(NodeId id)
+{
+    LOCK(cs_vNodes);
+    for(CNode* pnode : vNodes) {
+        if (id == pnode->GetId()) {
+            pnode->fDisconnect = true;
+            return true;
+        }
+    }
+    return false;
+}
+
 void CNode::PushVersion()
 {
     int64_t nTime = GetAdjustedTime();
@@ -721,57 +733,6 @@ void CNode::PushVersion()
 
 
 }
-
-// Superceded by banman.
-/*
-std::map<CNetAddr, int64_t> CNode::setBanned;
-CCriticalSection CNode::cs_setBanned;
-
-void CNode::ClearBanned()
-{
-    setBanned.clear();
-}
-
-bool CNode::IsBanned(CNetAddr ip)
-{
-    bool fResult = false;
-    {
-        LOCK(cs_setBanned);
-        std::map<CNetAddr, int64_t>::iterator i = setBanned.find(ip);
-        if (i != setBanned.end())
-        {
-            int64_t t = (*i).second;
-            if (GetAdjustedTime() < t)
-                fResult = true;
-        }
-    }
-    return fResult;
-}
-*/
-
-/*
-bool CNode::Misbehaving(int howmuch)
-{
-    if (addr.IsLocal())
-    {
-        LogPrintf("Warning: Local node %s misbehaving (delta: %d)!", addrName, howmuch);
-        return false;
-    }
-
-    nMisbehavior += howmuch;
-    if (nMisbehavior >= GetArg("-banscore", 100))
-    {
-        if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
-
-        g_banman->Ban(addr, BanReasonNodeMisbehaving);
-        CloseSocketDisconnect();
-        return true;
-    } else
-        if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
-    return false;
-}
-*/
-
 
 bool CNode::Misbehaving(int howmuch)
 {
@@ -837,9 +798,11 @@ void CNode::copyStats(CNodeStats &stats)
 {
     stats.id = id;
     stats.nServices = nServices;
+    stats.addr = addr;
     stats.nLastSend = nLastSend;
     stats.nLastRecv = nLastRecv;
     stats.nTimeConnected = nTimeConnected;
+    stats.nTimeOffset = nTimeOffset;
     stats.addrName = addrName;
     stats.nVersion = nVersion;
     stats.strSubVer = strSubVer;
@@ -848,6 +811,10 @@ void CNode::copyStats(CNodeStats &stats)
     stats.sGRCAddress = sGRCAddress;
     stats.nTrust = nTrust;
     stats.nMisbehavior = GetMisbehavior();
+
+    // No lock for these two... using atomics.
+    stats.nSendBytes = nSendBytes;
+    stats.nRecvBytes = nRecvBytes;
 
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.
@@ -862,15 +829,32 @@ void CNode::copyStats(CNodeStats &stats)
 
     // Raw ping time is in microseconds, but show it to user as whole seconds (Bitcoin users should be well used to small numbers with many decimal places by now :)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
+    stats.dMinPing  = (((double)nMinPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
     stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
 
 }
-#undef X
+
+
+void CNode::CopyNodeStats(std::vector<CNodeStats>& vstats)
+{
+    vstats.clear();
+
+    LOCK(cs_vNodes);
+    vstats.reserve(vNodes.size());
+    for (auto const& pnode : vNodes) {
+        CNodeStats stats;
+        pnode->copyStats(stats);
+        vstats.push_back(stats);
+    }
+}
+
 
 // requires LOCK(cs_vRecvMsg)
 bool CNode::ReceiveMsgBytes(const char *pch, unsigned int nBytes)
 {
+    nRecvBytes += nBytes;
+
     while (nBytes > 0) {
 
         // get current incomplete message, or create a new one
@@ -961,6 +945,7 @@ void SocketSendData(CNode *pnode)
         int nBytes = send(pnode->hSocket, &data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
             pnode->nLastSend = GetAdjustedTime();
+            pnode->nSendBytes += nBytes;
             pnode->nSendOffset += nBytes;
             pnode->RecordBytesSent(nBytes);
             if (pnode->nSendOffset == data.size()) {
@@ -1302,7 +1287,7 @@ void ThreadSocketHandler2(void* parg)
             //
             // Allow newbies to connect easily
             int64_t nTime = GetAdjustedTime();
-            if (nTime - pnode->nTimeConnected > 24)
+            if (nTime - pnode->nTimeConnected > 45)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {

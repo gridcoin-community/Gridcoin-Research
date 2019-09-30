@@ -1422,6 +1422,11 @@ int64_t GetTime()
     return time(NULL);
 }
 
+int64_t GetSystemTimeInSeconds()
+{
+    return GetTimeMicros()/1000000;
+}
+
 void SetMockTime(int64_t nMockTimeIn)
 {
     nMockTime = nMockTimeIn;

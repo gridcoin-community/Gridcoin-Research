@@ -394,6 +394,8 @@ UniValue ping(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+// Moved to CNode static.
+/*
 static void CopyNodeStats(std::vector<CNodeStats>& vstats)
 {
     vstats.clear();
@@ -406,6 +408,7 @@ static void CopyNodeStats(std::vector<CNodeStats>& vstats)
         vstats.push_back(stats);
     }
 }
+*/
 
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
@@ -421,7 +424,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
     {
         LOCK(cs_vNodes);
 
-        CopyNodeStats(vstats);
+        CNode::CopyNodeStats(vstats);
     }
 
     GatherNeuralHashes();
@@ -438,8 +441,13 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         obj.pushKV("services", strprintf("%08" PRIx64, stats.nServices));
         obj.pushKV("lastsend", stats.nLastSend);
         obj.pushKV("lastrecv", stats.nLastRecv);
+        obj.pushKV("bytessent", stats.nSendBytes);
+        obj.pushKV("bytesrecv", stats.nRecvBytes);
         obj.pushKV("conntime", stats.nTimeConnected);
+        obj.pushKV("timeoffset", stats.nTimeOffset);
         obj.pushKV("pingtime", stats.dPingTime);
+        if (stats.dMinPing < static_cast<double>(std::numeric_limits<int64_t>::max())/1e6)
+            obj.pushKV("minping", stats.dMinPing);
         if (stats.dPingWait > 0.0)
             obj.pushKV("pingwait", stats.dPingWait);
         obj.pushKV("version", stats.nVersion);
