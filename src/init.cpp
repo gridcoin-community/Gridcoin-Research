@@ -207,6 +207,7 @@ std::string HelpMessage()
         "  -dbcache=<n>           " + _("Set database cache size in megabytes (default: 25)") + "\n" +
         "  -dblogsize=<n>         " + _("Set database disk log size in megabytes (default: 100)") + "\n" +
         "  -timeout=<n>           " + _("Specify connection timeout in milliseconds (default: 5000)") + "\n" +
+        "  -peertimeout=<n>       " + _("Specify p2p connection timeout in seconds. This option determines the amount of time a peer may be inactive before the connection to it is dropped. (minimum: 1, default: 45)") + "\n"
         "  -proxy=<ip:port>       " + _("Connect through socks proxy") + "\n" +
         "  -socks=<n>             " + _("Select the version of socks proxy to use (4-5, default: 5)") + "\n" +
         "  -tor=<ip:port>         " + _("Use proxy to reach tor hidden services (default: same as -proxy)") + "\n"
@@ -511,9 +512,19 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (mapArgs.count("-timeout"))
     {
-        int nNewTimeout = GetArg("-timeout", 4000);
+        int nNewTimeout = GetArg("-timeout", 5000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
             nConnectTimeout = nNewTimeout;
+    }
+
+    if (mapArgs.count("-peertimeout"))
+    {
+        int nNewPeerTimeout = GetArg("-timeout", 45);
+
+        if (nNewPeerTimeout <= 0)
+            InitError(strprintf(_("Invalid amount for -peertimeout=<amount>: '%s'"), mapArgs["-peertimeout"]));
+
+        PEER_TIMEOUT = nNewPeerTimeout;
     }
 
     if (mapArgs.count("-paytxfee"))

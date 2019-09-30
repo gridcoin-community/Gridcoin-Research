@@ -39,6 +39,7 @@ extern std::string GetCommandNonce(std::string command);
 
 extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
+int PEER_TIMEOUT = 45;
 
 void ThreadMessageHandler2(void* parg);
 void ThreadSocketHandler2(void* parg);
@@ -1230,46 +1231,56 @@ void ThreadSocketHandler2(void* parg)
             //
             // Inactivity checking
             //
-            // Allow newbies to connect easily
-            int64_t nTime = GetAdjustedTime();
-            if (nTime - pnode->nTimeConnected > 24)
-            {
-                if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
-                {
-                    if (fDebug10) LogPrintf("Socket no message in first 24 seconds, IP %s, %d %d", NodeAddress(pnode), pnode->nLastRecv != 0, pnode->nLastSend != 0);
-                    pnode->Misbehaving(1);
-                    pnode->fDisconnect = true;
-                }
-            }
-
+            // Consider this for future removal as this really is not beneficial nor harmful.
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     if (fDebug10)
                         LogPrintf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ", NodeAddress(pnode), vNodes.size());
+
                     pnode->fDisconnect = true;
+
+                    continue;
             }
 
-            if (nTime - pnode->nTimeConnected > 24)
+            int64_t nTime = GetAdjustedTime();
+
+            if (nTime - pnode->nTimeConnected > PEER_TIMEOUT)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug10) LogPrintf("socket no message in first 24 seconds, %d %d", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug10)
+                        LogPrintf("socket no message in first %d seconds, %d %d", PEER_TIMEOUT, pnode->nLastRecv != 0, pnode->nLastSend != 0);
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
+
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
                 {
                     LogPrintf("socket sending timeout: %" PRId64 "s", nTime - pnode->nLastSend);
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
+
                 else if (nTime - pnode->nLastRecv > (pnode->nVersion > BIP0031_VERSION ? TIMEOUT_INTERVAL : 90*60))
                 {
                     LogPrintf("socket receive timeout: %" PRId64 "s", nTime - pnode->nLastRecv);
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
+
                 else if (pnode->nPingNonceSent && pnode->nPingUsecStart + TIMEOUT_INTERVAL * 1000000 < GetTimeMicros())
                 {
                     LogPrintf("ping timeout: %fs", 0.000001 * (GetTimeMicros() - pnode->nPingUsecStart));
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
             }
         }
