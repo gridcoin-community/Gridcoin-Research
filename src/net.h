@@ -33,6 +33,7 @@ static const int PING_INTERVAL = 2 * 60;
 /** Time after which to disconnect, after waiting for a ping response (or inactivity). */
 static const int TIMEOUT_INTERVAL = 20 * 60;
 extern int MAX_OUTBOUND_CONNECTIONS;
+extern int PEER_TIMEOUT;
 
 typedef int64_t NodeId;
 
