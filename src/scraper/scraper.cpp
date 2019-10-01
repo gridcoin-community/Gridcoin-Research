@@ -3723,7 +3723,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 
     // "Sign" and "send".
 
-    LOCK(CScraperManifest::cs_mapManifest);
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
     bool bAddManifestSuccessful = CScraperManifest::addManifest(std::move(manifest), Key);
 

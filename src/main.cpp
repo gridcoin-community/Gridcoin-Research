@@ -5947,6 +5947,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     }
                 }
                 else if(!pushed && MSG_PART == inv.type ) {
+                    LOCK(CSplitBlob::cs_mapParts);
+
                     CSplitBlob::SendPartTo(pfrom, inv.hash);
                 }
                 else if(!pushed && MSG_SCRAPERINDEX == inv.type )
