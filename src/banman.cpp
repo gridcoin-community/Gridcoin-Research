@@ -6,9 +6,9 @@
 #include "banman.h"
 
 #include "netbase.h"
+#include "net.h"
 #include "ui_interface.h"
 #include "util.h"
-
 
 BanMan::BanMan(fs::path ban_file, CClientUIInterface* client_interface, int64_t default_ban_time)
     : m_client_interface(client_interface), m_ban_db(std::move(ban_file)), m_default_ban_time(default_ban_time)
@@ -59,6 +59,14 @@ void BanMan::ClearBanned()
 {
     {
         LOCK(m_cs_banned);
+
+        for (const auto& banentry : m_banned)
+        {
+            CSubNet sub_net = banentry.first;
+
+            ZeroMisbehavior(sub_net);
+        }
+
         m_banned.clear();
         m_is_dirty = true;
     }
@@ -160,6 +168,8 @@ bool BanMan::Unban(const CSubNet& sub_net)
         LOCK(m_cs_banned);
         if (m_banned.erase(sub_net) == 0) return false;
         m_is_dirty = true;
+
+        ZeroMisbehavior(sub_net);
     }
     if (m_client_interface) m_client_interface->BannedListChanged();
     DumpBanlist(); //store banlist to disk immediately
@@ -193,6 +203,9 @@ void BanMan::SweepBanned()
             CBanEntry ban_entry = (*it).second;
             if (now > ban_entry.nBanUntil) {
                 m_banned.erase(it++);
+
+                ZeroMisbehavior(sub_net);
+
                 m_is_dirty = true;
                 notify_ui = true;
                 LogPrint("network", "%s: Removed banned node ip/subnet from banlist.dat: %s\n", __func__, sub_net.ToString());
@@ -216,4 +229,36 @@ void BanMan::SetBannedSetDirty(bool dirty)
 {
     LOCK(m_cs_banned); //reuse m_banned lock for the m_is_dirty flag
     m_is_dirty = dirty;
+}
+
+unsigned int BanMan::ZeroMisbehavior(CNetAddr net_addr)
+{
+    CSubNet sub_net(net_addr);
+    return ZeroMisbehavior(sub_net);
+}
+
+unsigned int BanMan::ZeroMisbehavior(CSubNet sub_net)
+{
+    unsigned int nZeroed = 0;
+
+    LOCK(CNode::cs_mapMisbehavior);
+
+    std::map<CAddress, std::pair<int, int64_t>>::iterator iMisbehavior;
+    for (iMisbehavior = CNode::mapMisbehavior.begin(); iMisbehavior != CNode::mapMisbehavior.end();)
+    {
+        CAddress addr = iMisbehavior->first;
+
+        if (sub_net.Match(addr))
+        {
+            iMisbehavior = CNode::mapMisbehavior.erase(iMisbehavior);
+
+            ++nZeroed;
+        }
+        else
+        {
+            ++iMisbehavior;
+        }
+    }
+
+    return nZeroed;
 }

@@ -1,4 +1,6 @@
 #include "clientmodel.h"
+#include "qt/bantablemodel.h"
+#include "qt/peertablemodel.h"
 #include "guiconstants.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
@@ -10,6 +12,7 @@
 #include "util.h"
 
 #include <QDateTime>
+#include <QDebug>
 #include <QTimer>
 
 static const int64_t nClientStartupTime = GetTime();
@@ -18,11 +21,12 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
-    QObject(parent), optionsModel(optionsModel),
-    cachedNumBlocks(0), cachedNumBlocksOfPeers(0), pollTimer(0)
+    QObject(parent), optionsModel(optionsModel), peerTableModel(nullptr),
+    banTableModel(nullptr), cachedNumBlocks(0), cachedNumBlocksOfPeers(0), pollTimer(0)
 {
     numBlocksAtStartup = -1;
-
+    peerTableModel = new PeerTableModel(this);
+    banTableModel = new BanTableModel(this);
     pollTimer = new QTimer(this);
     pollTimer->setInterval(MODEL_UPDATE_DELAY);
     pollTimer->start();
@@ -166,6 +170,16 @@ OptionsModel *ClientModel::getOptionsModel()
     return optionsModel;
 }
 
+PeerTableModel *ClientModel::getPeerTableModel()
+{
+    return peerTableModel;
+}
+
+BanTableModel *ClientModel::getBanTableModel()
+{
+    return banTableModel;
+}
+
 QString ClientModel::formatFullVersion() const
 {
     return QString::fromStdString(FormatFullVersion());
@@ -207,6 +221,10 @@ QString ClientModel::getDifficulty() const
 
 }
 
+void ClientModel::updateBanlist()
+{
+    banTableModel->refresh();
+}
 
 
 // Handlers for core signals
@@ -232,6 +250,13 @@ static void NotifyAlertChanged(ClientModel *clientmodel, const uint256 &hash, Ch
                               Q_ARG(int, status));
 }
 
+static void BannedListChanged(ClientModel *clientmodel)
+{
+    qDebug() << QString("%1: Requesting update for peer banlist").arg(__func__);
+    QMetaObject::invokeMethod(clientmodel, "updateBanlist", Qt::QueuedConnection);
+}
+
+
 static void NotifyScraperEvent(ClientModel *clientmodel, const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message)
 {
     QMetaObject::invokeMethod(clientmodel, "updateScraper", Qt::QueuedConnection,
@@ -244,6 +269,7 @@ void ClientModel::subscribeToCoreSignals()
 {
     // Connect signals to client
     uiInterface.NotifyBlocksChanged.connect(boost::bind(NotifyBlocksChanged, this));
+    uiInterface.BannedListChanged.connect(boost::bind(BannedListChanged, this));
     uiInterface.NotifyNumConnectionsChanged.connect(boost::bind(NotifyNumConnectionsChanged, this, _1));
     uiInterface.NotifyAlertChanged.connect(boost::bind(NotifyAlertChanged, this, _1, _2));
     uiInterface.NotifyScraperEvent.connect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));
@@ -253,6 +279,7 @@ void ClientModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
     uiInterface.NotifyBlocksChanged.disconnect(boost::bind(NotifyBlocksChanged, this));
+    uiInterface.BannedListChanged.disconnect(boost::bind(BannedListChanged, this));
     uiInterface.NotifyNumConnectionsChanged.disconnect(boost::bind(NotifyNumConnectionsChanged, this, _1));
     uiInterface.NotifyAlertChanged.disconnect(boost::bind(NotifyAlertChanged, this, _1, _2));
     uiInterface.NotifyScraperEvent.disconnect(boost::bind(NotifyScraperEvent, this, _1, _2, _3));

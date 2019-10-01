@@ -33,6 +33,9 @@ static const int PING_INTERVAL = 2 * 60;
 /** Time after which to disconnect, after waiting for a ping response (or inactivity). */
 static const int TIMEOUT_INTERVAL = 20 * 60;
 extern int MAX_OUTBOUND_CONNECTIONS;
+extern int PEER_TIMEOUT;
+
+typedef int64_t NodeId;
 
 inline unsigned int ReceiveFloodSize() { return 1000*GetArg("-maxreceivebuffer", 5*1000); }
 inline unsigned int SendBufferSize() { return 1000*GetArg("-maxsendbuffer", 1*1000); }
@@ -127,10 +130,15 @@ extern CCriticalSection cs_vAddedNodes;
 class CNodeStats
 {
 public:
+    NodeId id;
     uint64_t nServices;
+    CAddress addr;
     int64_t nLastSend;
     int64_t nLastRecv;
+    uint64_t nSendBytes;
+    uint64_t nRecvBytes;
     int64_t nTimeConnected;
+    int64_t nTimeOffset;
     std::string addrName;
     int nVersion;
     std::string strSubVer;
@@ -138,6 +146,7 @@ public:
     int nStartingHeight;
     int nMisbehavior;
     double dPingTime;
+    double dMinPing;
     double dPingWait;
 	std::string addrLocal;
 	int nTrust;
@@ -200,16 +209,19 @@ public:
     CDataStream ssSend;
     size_t nSendSize; // total size of all vSendMsg entries
     size_t nSendOffset; // offset inside the first vSendMsg already sent
+    std::atomic<uint64_t> nSendBytes {0};
     std::deque<CSerializeData> vSendMsg;
     CCriticalSection cs_vSend;
 
     std::deque<CNetMessage> vRecvMsg;
     CCriticalSection cs_vRecvMsg;
+    std::atomic<uint64_t> nRecvBytes {0};
     int nRecvVersion;
 
     int64_t nLastSend;
     int64_t nLastRecv;
     int64_t nTimeConnected;
+    std::atomic<int64_t> nTimeOffset{0};
     CAddress addr;
     std::string addrName;
     CService addrLocal;
@@ -243,10 +255,11 @@ public:
 protected:
 
     // Denial-of-service detection/prevention
-    // Key is IP address, value is banned-until-time
-    static std::map<CNetAddr, int64_t> setBanned;
-    static CCriticalSection cs_setBanned;
-    int nMisbehavior;
+    // ---------- address:port -- misbehavior - time
+    static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior;
+    static CCriticalSection cs_mapMisbehavior;
+    // See protected GetMisbehavior() below.
+    // int nMisbehavior;
 
 public:
 	std::map<uint256, CRequestTracker> mapRequests;
@@ -275,12 +288,16 @@ public:
     // Time (in usec) the last ping was sent, or 0 if no ping was ever sent.
     int64_t nPingUsecStart;
     // Last measured round-trip time.
-    int64_t nPingUsecTime;
+    std::atomic<int64_t> nPingUsecTime{0};
+    // Best measured round-trip time.
+    std::atomic<int64_t> nMinPingUsecTime{std::numeric_limits<int64_t>::max()};
+
     // Whether a ping is requested.
     bool fPingQueued;
 
     CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
     {
+
         nServices = 0;
         hSocket = hSocketIn;
         nRecvVersion = INIT_PROTO_VERSION;
@@ -306,7 +323,6 @@ public:
         hashLastGetBlocksEnd = 0;
         nStartingHeight = -1;
         fGetAddr = false;
-        nMisbehavior = 0;
 		//Orphan Attack
 		nLastOrphan=0;
 		nOrphanCount=0;
@@ -318,7 +334,6 @@ public:
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
         nPingUsecStart = 0;
-        nPingUsecTime = 0;
         fPingQueued = false;
 
         // Be shy and don't send version until we hear
@@ -340,6 +355,13 @@ private:
     CNode(const CNode&);
     void operator=(const CNode&);
 
+    NodeId GetNewNodeId();
+
+    const NodeId id = GetNewNodeId();
+    // In newer Bitcoin, this is in the connection manager class.
+    // For us, we will put it here for the time being.
+    static std::atomic<NodeId> nLastNodeId;
+
     // Network usage totals
     static std::atomic<uint64_t> nTotalBytesRecv;
     static std::atomic<uint64_t> nTotalBytesSent;
@@ -347,6 +369,9 @@ private:
 
 public:
 
+    NodeId GetId() const {
+        return id;
+    }
 
     int GetRefCount()
     {
@@ -598,6 +623,7 @@ public:
     static bool DisconnectNode(const std::string& strNode);
     static bool DisconnectNode(const CSubNet& subnet);
     static bool DisconnectNode(const CNetAddr& addr);
+    static bool DisconnectNode(NodeId id);
 
     // Denial-of-service detection/prevention
     // The idea is to detect peers that are behaving
@@ -616,7 +642,10 @@ public:
     // static void ClearBanned(); // needed for unit testing
     // static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
+    int GetMisbehavior() const;
     void copyStats(CNodeStats &stats);
+
+    static void CopyNodeStats(std::vector<CNodeStats>& vstats);
 
 	// Network stats
     static void RecordBytesRecv(uint64_t bytes);
@@ -624,6 +653,8 @@ public:
 
     static uint64_t GetTotalBytesRecv();
     static uint64_t GetTotalBytesSent();
+
+    friend class BanMan;
 
 };
 

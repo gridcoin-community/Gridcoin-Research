@@ -23,6 +23,21 @@ namespace GUIUtil
     QString dateTimeStr(const QDateTime &datetime);
     QString dateTimeStr(qint64 nTime);
 
+    // Format Ping Time
+    QString formatPingTime(double dPingTime);
+
+    // Format Node Time Offset
+   QString formatTimeOffset(int64_t nTimeOffset);
+
+    // Format Bytes
+    QString formatBytes(uint64_t bytes);
+
+    //Format Duration
+    QString formatDurationStr(int secs);
+
+    // Format Services
+    QString formatServicesStr(quint64 mask);
+
     // Render Bitcoin addresses in monospace font
     QFont bitcoinAddressFont();
 
@@ -46,6 +61,8 @@ namespace GUIUtil
        @see  TransactionView::copyLabel, TransactionView::copyAmount, TransactionView::copyAddress
      */
     void copyEntryData(QAbstractItemView *view, int column, int role=Qt::EditRole);
+
+    QList<QModelIndex> getEntryData(QAbstractItemView *view, int column);
 
     /** Get save filename, mimics QFileDialog::getSaveFileName, except that it appends a default suffix
         when no suffix is provided by the user.

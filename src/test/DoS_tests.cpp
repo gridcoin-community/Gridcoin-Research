@@ -49,14 +49,19 @@ BOOST_AUTO_TEST_CASE(DoS_banning)
 
 BOOST_AUTO_TEST_CASE(DoS_banscore)
 {
+    CNodeStats nodestats;
     g_banman->ClearBanned();
     mapArgs["-banscore"] = "111"; // because 11 is my favorite number
     CAddress addr1(ip(0xa0b0c001));
     CNode dummyNode1(INVALID_SOCKET, addr1, "", true);
     dummyNode1.Misbehaving(100);
     BOOST_CHECK(!g_banman->IsBanned(addr1));
+    dummyNode1.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 100); // nMisbehavior should be 100.
     dummyNode1.Misbehaving(10);
     BOOST_CHECK(!g_banman->IsBanned(addr1));
+    dummyNode1.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 110); // nMisbehavior should be 110.
     dummyNode1.Misbehaving(1);
     BOOST_CHECK(g_banman->IsBanned(addr1));
     mapArgs.erase("-banscore");
@@ -64,6 +69,7 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
 
 BOOST_AUTO_TEST_CASE(DoS_bantime)
 {
+    CNodeStats nodestats;
     g_banman->ClearBanned();
     int64_t nStartTime = GetTime();
     SetMockTime(nStartTime); // Overrides future calls to GetTime()
@@ -79,6 +85,38 @@ BOOST_AUTO_TEST_CASE(DoS_bantime)
 
     SetMockTime(nStartTime+60*60*24+1);
     BOOST_CHECK(!g_banman->IsBanned(addr));
+    dummyNode.copyStats(nodestats);
+    BOOST_CHECK(!nodestats.nMisbehavior); // nMisbehavior should be back to zero.
+}
+
+BOOST_AUTO_TEST_CASE(DoS_misbehavior_decay)
+{
+    CNodeStats nodestats;
+    g_banman->ClearBanned();
+    int64_t nStartTime = GetTime();
+    SetMockTime(nStartTime); // Overrides future calls to GetTime()
+
+    CAddress addr(ip(0xa0b0c001));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.Misbehaving(50);
+    dummyNode.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 50); // nMisbehavior should be 50.
+
+    SetMockTime(nStartTime + 431); // Advance time 431 seconds.
+    dummyNode.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 50); // nMisbehavior should still be 50.
+
+    SetMockTime(nStartTime + 432); // Advance time 431 seconds.
+    dummyNode.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 49); // nMisbehavior should still be 49.
+
+    SetMockTime(nStartTime + 6*60*60); // Advance time 6 hours.
+    dummyNode.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 25); // nMisbehavior should be 25.
+
+    SetMockTime(nStartTime + 12*60*60); // Advance time 12 hours.
+    dummyNode.copyStats(nodestats);
+    BOOST_CHECK(nodestats.nMisbehavior == 0); // nMisbehavior should be 0.
 }
 
 CTransaction RandomOrphan()

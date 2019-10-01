@@ -5655,6 +5655,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Moved the below from AddTimeData to here to follow bitcoin's approach.
         int64_t nOffsetSample = nTime - GetTime();
+        pfrom->nTimeOffset = nOffsetSample;
         if (GetBoolArg("-synctime", true))
             AddTimeData(pfrom->addr, nOffsetSample);
 
@@ -6272,6 +6273,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     if (pingUsecTime > 0) {
                         // Successful ping time measurement, replace previous
                         pfrom->nPingUsecTime = pingUsecTime;
+                        pfrom->nMinPingUsecTime = std::min(pfrom->nMinPingUsecTime.load(), pingUsecTime);
                     } else {
                         // This should never happen
                         sProblem = "Timing mishap";
