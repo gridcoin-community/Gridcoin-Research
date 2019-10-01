@@ -15,6 +15,7 @@
 #include "streams.h"
 #include "wallet.h"
 #include "coincontrol.h"
+#include "block.h"
 
 using namespace std;
 using namespace boost;
@@ -767,6 +768,317 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
+// MultiSig Tool
+UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 5)
+        throw runtime_error(
+                "consolidatemsunspent <address> <requre-sigs> <block-start> <block-end> <max-grc> <max-inputs>\n"
+                "\n"
+                "Searches a block range for a multisig address with unspent utxos\n"
+                "and consolidates them into a transaction ready for signing to\n"
+                "return to the same address in an consolidated amount\n"
+                "\n"
+                "All parameters required.\n"
+                "<address> --------> Multi-signature address\n"
+                "<multi-sig-type> -> Type of multi-signature address\n"
+                "<multi-sig-type> -> 1 = 2 of 3 (2 signatures required of 3)\n"
+                "<multi-sig-type> -> 2 = 3 of 4 (3 signatures required of 4)\n"
+                "<multi-sig-type> -> 3 = 3 of 5 (3 signatures required of 5)\n"
+                "<multi-sig-type> -> 4 = 4 of 5 (4 signatures required of 5)\n"
+                "<block-start> ----> Block number to start search from\n"
+                "<block-end> ------> Block number to end search on\n"
+                "<max-grc> --------> Highest uxto value to include in search results in halfords (0 is no limit)\n"
+                "<max-inputs> -----> Maximum inputs allowed (hard limit on supported multisig types)\n"
+                "<max-inputs> -----> Hard limit for 2 of 3 signatures is 40\n"
+                "<max-inputs> -----> Hard limit for 3 of 4/5 signatures is 26\n"
+                "<max-inputs> -----> Hard limit for 4 of 5 signatures is 20\n");
+
+    UniValue result(UniValue::VOBJ);
+
+    // Parameters
+    std::string sAddress = params[0].get_str();
+    int nReqSigsType = params[1].get_int();
+    int nBlockStart = params[2].get_int();
+    int nBlockEnd = params[3].get_int();
+    int64_t nMaxValue = params[4].get_int64();
+    int nMaxInputs = params[5].get_int();
+    std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> umultimapInputs;
+
+    // Parameter Sanity Check
+    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+
+    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+
+    if (nMaxInputs < 1)
+        nMaxInputs = 1;
+
+    else if (nMaxValue < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less then 0");
+
+    int nReqSigs = 0;
+    int64_t nRedeemScriptSize = 0;
+
+    if (nReqSigsType < 1 || nReqSigsType > 4)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid type of multi-signature address choosen");
+
+    else if (nReqSigsType == 1)
+    {
+        nReqSigs = 2;
+        nRedeemScriptSize = 210;
+
+        if (nMaxInputs > 40)
+            nMaxInputs = 40;
+    }
+
+    else if (nReqSigsType == 2)
+    {
+        nReqSigs = 3;
+        nRedeemScriptSize = 278;
+
+        if (nMaxInputs > 30)
+            nMaxInputs = 30;
+    }
+
+    else if (nReqSigsType == 3)
+    {
+        nReqSigs = 3;
+        nRedeemScriptSize = 346;
+
+        if (nMaxInputs > 30)
+            nMaxInputs = 30;
+    }
+
+    else if (nReqSigsType == 4)
+    {
+        nReqSigs = 4;
+        nRedeemScriptSize = 346;
+
+        if (nMaxInputs > 20)
+            nMaxInputs = 20;
+    }
+
+    CBitcoinAddress Address(sAddress);
+
+    if (!Address.IsValid())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin Address");
+
+    LOCK(cs_main);
+
+    BlockFinder blockfinder;
+
+    CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
+
+    if (!pblkindex)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+    bool fComplete = false;
+
+    while (pblkindex->nHeight < nBlockEnd)
+    {
+        if (fComplete)
+            break;
+
+        pblkindex = pblkindex->pnext;
+
+        CBlock block;
+
+        if (!block.ReadFromDisk(pblkindex, true))
+            throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
+
+        // No Transactions in block outside of block creation
+        if (block.vtx.size() < 3)
+            continue;
+
+        for (unsigned int i = 2; i < block.vtx.size(); i++)
+        {
+            if (fComplete)
+                break;
+
+            // Load Transaction
+            CTransaction tx;
+            CTxDB txdb("r");
+            CTxIndex txindex;
+            uint256 hash;
+
+            hash = block.vtx[i].GetHash();
+
+            // Incase a fail here we can just continue thou it shouldn't happen
+            if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
+                continue;
+
+            // Extract the address from the transaction
+            for (unsigned int j = 0; j < tx.vout.size(); j++)
+            {
+                if (fComplete)
+                    break;
+
+                const CTxOut& txout = tx.vout[j];
+                CTxDestination txaddress;
+
+                // Pass failures here thou we shouldn't have any failures
+                if (!ExtractDestination(txout.scriptPubKey, txaddress))
+                    continue;
+
+                // If we found a match to multisig address do our work
+                if (CBitcoinAddress(txaddress) == Address)
+                {
+                    // Check if this output is alread spent
+                    COutPoint dummy = COutPoint(tx.GetHash(), j);
+
+                    // This is spent so move along
+                    if (!txindex.vSpent[dummy.n].IsNull())
+                        continue;
+
+                    // Check if the value exceeds the max-grc range we requested
+                    if (nMaxValue != 0 && txout.nValue > nMaxValue)
+                        continue;
+
+                    // Add to our input list
+                    umultimapInputs.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+
+                    // shouldn't ever surpass this but lets just be safe!
+                    if (umultimapInputs.size() >= nMaxInputs)
+                        fComplete = true;
+                }
+            }
+        }
+    }
+
+    if (umultimapInputs.empty())
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Search resulted in no results");
+
+    // Parse the inputs and make a raw transaction
+    CTransaction rawtx;
+    int64_t nTotal = 0;
+
+    // Inputs
+    for (const auto& inputs : umultimapInputs)
+    {
+        nTotal += inputs.first;
+
+        CTxIn in(COutPoint(inputs.second.first, inputs.second.second));
+
+        rawtx.vin.push_back(in);
+    }
+
+    /*
+     * Fee factoring is important as size affects fees needed for the transaction
+     * Fees are paid on the serialized size of a said transaction.
+     * We don't know the serialized size of this transaction since we don't sign here
+     * We cannot sign here as the signing potentially takes place by multiple wallets.
+     * Serialize size can be equal or more then half of the hex size of completely signed transaction
+     *
+     * What we do know:
+     * Redeemscript sizes (R):
+     * 2 of 3 = 210
+     * 3 of 4 = 278
+     * 3 of 5 = 346
+     * 4 of 5 = 346
+     * Each signature size is between 146 to 148 from testing
+     * S will be amount of signatures required
+     * N will be the number of inputs
+     *
+     * To get estimated hex size for this is as follows:
+     * sighexsize = (R + (S * 148)) * N
+     *
+     * From investigating i've determined that some of the hex's even with signature are predictable which helps refine the byte
+     * calculation for estimation.
+     *
+     * Some parts of the hex transaction always start with 01 followed by padding of 000000
+     * This occurs at beginning of the transaction before vin
+     * This occurs after vin and before the signature
+     * This occurs before vout as well except it contains no padding
+     *
+     * After a signature the hex contains 00ffffffff
+     *
+     * After the transaction the hex is padded with 0000000000
+     *
+     * The first vin is 74 in hex and every one after that is 64 in hex so we will assume they all 10 + (64 * inputs)
+     *
+     * This is very useful information for calculations on the transactions
+     *
+     * So can assume the base transaction will always have the 01000000vindata01000000sigdata00ffffffff01voutdata0000000000
+     * This helps with calculations. We can assume some formulas:
+     *
+     * Total vin size will calculate as follows:
+     * VINHEXSIZE V = (64 * N) + 10
+     *
+     * Total vin signatures size will calculate as follows:
+     * SIGHEXSIZE H = (R + (S * 148)) * N
+     *
+     * Padding for vins will be calulated as follows:
+     * VINP = (8 + 8 + 10) * N (To Shorten we will assume 26 * N)
+     *
+     * Total vout size we will assume is 70 since thats the biggest it appears to be able to be as a base size with max money
+     * VOUTP = 2 + 10 (To Shorten we will assume 12)
+     *
+     * So in esscense the formula for all this will be:
+     *
+     * Potentialhexsize PHS = V + H + VINP + VOUTP
+     *
+     * Potentialbytesuze PBS = PHS / 2
+     *
+     * Note: this will keep the size pretty close to the real size.
+     * This also leaves buffer room incase and this should always be an overestimation of the actual sizes
+     * Sizes vary by the behaviour of the hex/serialization of the hex as well.
+     *
+    */
+
+    int64_t nFee = 0;
+    int64_t nMinFee = 0;
+    int64_t nTxFee = 0;
+    int64_t nBytes = 0;
+    int64_t nOutput = 0;
+    int64_t nEstHexSize = 0;
+    int64_t nVInHexSize = 0;
+    int64_t nSigHexSize = 0;
+    int64_t nVInPadding = 0;
+    int64_t nInputs = umultimapInputs.size();
+
+    nVInHexSize = (64 * nInputs) + 10;
+    nSigHexSize = (nRedeemScriptSize + (nReqSigs * 148)) * nInputs;
+    nVInPadding = 26 * nInputs;
+    nEstHexSize = nVInHexSize + nSigHexSize + nVInPadding + 12;
+
+    nBytes = nEstHexSize / 2;
+    nMinFee = rawtx.GetMinFee(1, GMF_SEND, nBytes);
+    nFee = nTransactionFee * (1 + nBytes / 1000);
+    nTxFee = std::max(nMinFee, nFee);
+    nOutput = nTotal - nTxFee;
+    std::string sHash = "";
+
+    // Make the output
+    CScript scriptPubKey;
+
+    scriptPubKey.SetDestination(Address.Get());
+
+    CTxOut out(nOutput, scriptPubKey);
+
+    rawtx.vout.push_back(out);
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    ss << rawtx;
+
+    sHash = HexStr(ss.begin(), ss.end());
+
+    result.push_back(std::make_pair("Block Start", nBlockStart));
+    result.push_back(std::make_pair("Block End", nBlockEnd));
+    // Let rpc caller know this was the last block we were in especially if the target amount of inputs was met before this End Block
+    result.push_back(std::make_pair("Last Block Checked before target inputs amount", pblkindex->nHeight));
+    result.push_back(std::make_pair("Amount of Inputs", nInputs));
+    result.push_back(std::make_pair("Total GRC In", ValueFromAmount(nTotal)));
+    result.push_back(std::make_pair("Fee", nTxFee));
+    result.push_back(std::make_pair("Output Amount", ValueFromAmount(nOutput)));
+    result.push_back(std::make_pair("Estimated signed hex size", nEstHexSize));
+    result.push_back(std::make_pair("Estimated Serialized size", nBytes));
+    result.push_back(std::make_pair("RawTX", sHash));
+
+    return result;
+}
 
 UniValue createrawtransaction(const UniValue& params, bool fHelp)
 {
