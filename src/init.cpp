@@ -519,7 +519,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (mapArgs.count("-peertimeout"))
     {
-        int nNewPeerTimeout = GetArg("-timeout", 45);
+        int nNewPeerTimeout = GetArg("-peertimeout", 45);
 
         if (nNewPeerTimeout <= 0)
             InitError(strprintf(_("Invalid amount for -peertimeout=<amount>: '%s'"), mapArgs["-peertimeout"]));
