@@ -1588,7 +1588,7 @@ Dieses Label wird rot, wenn die Priorität kleiner ist als Mittel.
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Coin &amp;control Funktionen anzeigen (nur für Experten!)</translation>
     </message>
     <message>

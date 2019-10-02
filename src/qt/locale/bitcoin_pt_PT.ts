@@ -1500,7 +1500,7 @@ Isto significa que uma taxa de pelo menos %2 é necesária.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Mostrar moeda &amp;funcionalidades de controlo (para especialistas apenas!)</translation>
     </message>
     <message>

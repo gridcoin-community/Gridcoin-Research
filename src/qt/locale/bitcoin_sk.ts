@@ -1510,7 +1510,7 @@ To znamená, že je potrebný poplatok aspoň %2.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation type="unfinished">Zobraziť nástroje na správu mincí (len pre odborníkov!)</translation>
     </message>
     <message>

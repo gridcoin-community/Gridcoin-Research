@@ -1567,7 +1567,7 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Wys muntstuk &amp;control funksies (kenners net!)</translation>
     </message>
     <message>
