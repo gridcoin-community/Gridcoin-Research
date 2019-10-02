@@ -1511,7 +1511,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Afiseaza &amp;caracteristiclei de control ale monedei(numai experti!)</translation>
     </message>
     <message>

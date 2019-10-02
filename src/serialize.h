@@ -1046,7 +1046,7 @@ size_t GetSerializeSize(const S& s, const T& t)
 template <typename... T>
 size_t GetSerializeSizeMany(int nVersion, const T&... t)
 {
-    CSizeComputer sc(nVersion);
+    CSizeComputer sc(0, nVersion);
     SerializeMany(sc, t...);
     return sc.size();
 }

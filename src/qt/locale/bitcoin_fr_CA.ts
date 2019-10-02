@@ -1567,7 +1567,7 @@ Les montants inférieurs à  0.546 fois les frais minimum de relais apparaissent
     </message>
     <message>
         <location line="+3"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Afficher les options de monnaie &amp; contrôle (mode expert)</translation>
     </message>
     <message>

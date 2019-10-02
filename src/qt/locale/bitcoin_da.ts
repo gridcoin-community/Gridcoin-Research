@@ -1587,7 +1587,7 @@ Det betyder, at et gebyr på mindst %2 er påkrævet.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Vis mønt &amp; kontrol funktioner (kun for eksperter!)</translation>
     </message>
     <message>

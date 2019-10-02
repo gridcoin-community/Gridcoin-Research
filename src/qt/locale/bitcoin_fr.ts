@@ -1502,7 +1502,7 @@ Cela implique que des frais à hauteur d&apos;au moins %2 seront nécessaires.</
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Afficher les options de &amp;contrôle de monnaie (mode expert!)</translation>
     </message>
     <message>
