@@ -1502,7 +1502,7 @@ Questa etichetta diventa rossa se la priorità è minore di &quot;media&quot;.
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Visualizza le funzioni di Coin &amp;Control (solo per esperti!)</translation>
     </message>
     <message>

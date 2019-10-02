@@ -1515,7 +1515,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Wyświetl op&amp;cje kontroli monet (tylko dla zaawansowanych!)</translation>
     </message>
     <message>

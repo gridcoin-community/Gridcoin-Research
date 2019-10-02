@@ -1513,7 +1513,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Отображение &amp;функций управления для средств (только для экспертов!)</translation>
     </message>
     <message>

@@ -1505,7 +1505,7 @@ Esto significa que se requiere una cuota de al menos %2.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Mostrar moneda y coin &amp;control (expertos solamente!)</translation>
     </message>
     <message>

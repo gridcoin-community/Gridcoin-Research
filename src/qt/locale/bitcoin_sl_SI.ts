@@ -1520,7 +1520,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot &quot;srednja&quot;.
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Prikaži lastnosti &amp;kontrole kovancev (samo za strokovnjake!)</translation>
     </message>
     <message>

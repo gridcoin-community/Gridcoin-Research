@@ -1583,7 +1583,7 @@ En aquest cas es requereix una comisió d&apos;almenys 2%.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Display coin &amp;control features (experts only!)</source>
+        <source>Display coin &amp;control features (advanced users only!)</source>
         <translation>Mostrar controls i característiques de la moneda (només per a experts!)</translation>
     </message>
     <message>
