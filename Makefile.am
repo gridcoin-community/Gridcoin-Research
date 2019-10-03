@@ -30,6 +30,7 @@ OSX_PLIST=$(top_builddir)/share/qt/Info.plist #not installed
 OSX_QT_TRANSLATIONS = da,de,es,hu,ru,uk,zh_CN,zh_TW
 
 DIST_DOCS = $(wildcard $(top_srcdir)/doc/*.md) $(wildcard $(top_srcdir)/doc/release-notes/*.md)
+man1_MANS = $(wildcard $(top_srcdir)/doc/*.1)
 DIST_DESKTOPFILE = $(top_srcdir)/contrib/gridcoinresearch.desktop
 DIST_ICONS = $(subst $(top_srcdir)/,,$(wildcard $(top_srcdir)/share/icons/*/*/*/*))
 
