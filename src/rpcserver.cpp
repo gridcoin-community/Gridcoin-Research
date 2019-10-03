@@ -302,6 +302,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet        },
     { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet        },
     { "gettransaction",          &gettransaction,          cat_wallet        },
+    { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet        },
     { "getwalletinfo",           &getwalletinfo,           cat_wallet        },
     { "importprivkey",           &importprivkey,           cat_wallet        },
     { "importwallet",            &importwallet,            cat_wallet        },

@@ -745,6 +745,19 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 }
 
 
+
+UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error("getunconfirmedbalance: returns unconfirmed balance in wallet\n");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
+}
+
+
+
 UniValue movecmd(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 3 || params.size() > 5)
