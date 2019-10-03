@@ -1096,7 +1096,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 "<block-end> ------> Block number to end search on\n"
                 "\n"
                 "Optional:\n"
-                "[export] ---------> Exports to a file in backup-dir in format of multisigaddress-datetime.type\n"
+                "[export] ---------> Exports to a file in backup-dir/rpc in format of multisigaddress-datetime.type\n"
                 "[type] -----------> Export to a file with file type (xml or txt -- Required if export true)");
 
     // Parameters
@@ -1287,7 +1287,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             std::string backupdir = GetArg("-backupdir", "");
 
             if (backupdir.empty())
-                exportpath = GetDataDir() / "walletbackups" / exportfile;
+                exportpath = GetDataDir() / "walletbackups/rpc" / exportfile;
 
             else
                 exportpath = backupdir + "/" + exportfile;
