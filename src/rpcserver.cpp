@@ -321,6 +321,7 @@ static const CRPCCommand vRPCCommands[] =
     { "repairwallet",            &repairwallet,            cat_wallet        },
     { "resendtx",                &resendtx,                cat_wallet        },
     { "reservebalance",          &reservebalance,          cat_wallet        },
+    { "scanforunspent",          &scanforunspent,          cat_wallet        },
     { "sendfrom",                &sendfrom,                cat_wallet        },
     { "sendmany",                &sendmany,                cat_wallet        },
     { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
