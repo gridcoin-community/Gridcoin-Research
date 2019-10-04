@@ -1097,7 +1097,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
                 "\n"
                 "Optional:\n"
                 "[export] ---------> Exports to a file in backup-dir/rpc in format of multisigaddress-datetime.type\n"
-                "[type] -----------> Export to a file with file type (xml or txt -- Required if export true)");
+                "[type] -----------> Export to a file with file type (xml, txt or json -- Required if export true)");
 
     // Parameters
     bool fExport = false;
@@ -1116,6 +1116,9 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
         else if (params[4].get_str() == "txt")
             nType = 1;
+
+        else if (params[4].get_str() == "json")
+            nType = 2;
 
         else
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid export type");
@@ -1220,8 +1223,9 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             if (nType == 0)
                 exportoutput << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<id>\n";
 
-            else
+            else if (nType == 1)
                 exportoutput << "TXID / VOUT / Value\n";
+
         }
 
         int nCount = 0;
@@ -1247,14 +1251,14 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             {
                 if (nType == 0)
                 {
-                    exportoutput << spacing << "<tx" << nCount << ">\n";
+                    exportoutput << spacing << "<tx id=\"" << nCount << "\">\n";
                     exportoutput << spacing << spacing << "<txid>" << data.second.first.ToString() << "</txid>\n";
                     exportoutput << spacing << spacing << "<vout>" << data.second.second << "</vout>\n";
                     exportoutput << spacing << spacing << "<value>" << std::fixed << setprecision(8) << data.first / (double)COIN << "</value>\n";
-                    exportoutput << spacing << "</tx" << nCount << ">\n";
+                    exportoutput << spacing << "</tx>\n";
                 }
 
-                else
+                else if (nType == 1)
                     exportoutput << data.second.first.ToString() << " / " << data.second.second << " / " << std::fixed << setprecision(8) << data.first / (double)COIN << "\n";
             }
         }
@@ -1305,9 +1309,15 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
             else
             {
-                const std::string& out = exportoutput.str();
+                if (nType == 0 || nType == 1)
+                {
+                    const std::string& out = exportoutput.str();
 
-                dataout << out;
+                    dataout << out;
+                }
+
+                else
+                    dataout << txres.write(2);
 
                 dataout.close();
             }
