@@ -5267,6 +5267,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                         unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(std::get<0>(iter.second));
                         if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
                         {
+                            LOCK(CSplitBlob::cs_mapParts);
+
                             // Get the actual part ----------------- by object hash.
                             auto iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
 
