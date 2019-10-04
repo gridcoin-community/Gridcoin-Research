@@ -5973,10 +5973,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             // but it is an out parameter of IsManifestAuthorized.
                             unsigned int banscore_out = 0;
 
-                            // Also don't send a manifest that is older than the manifest retention period.
-                            int64_t nTimeCutoff = GetAdjustedTime() - SCRAPER_CMANIFEST_RETENTION_TIME;
-
-                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out) && manifest.nTime >= nTimeCutoff)
+                            // Also don't send a manifest that is not current.
+                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out) && manifest.IsManifestCurrent())
                             {
                                 CScraperManifest::SendManifestTo(pfrom, inv.hash);
                             }
