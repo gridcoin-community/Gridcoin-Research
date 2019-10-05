@@ -768,7 +768,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
-// MultiSig Tool
+// MultiSig Tools
 UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 5)
@@ -1076,6 +1076,259 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     result.push_back(std::make_pair("Estimated signed hex size", nEstHexSize));
     result.push_back(std::make_pair("Estimated Serialized size", nBytes));
     result.push_back(std::make_pair("RawTX", sHash));
+
+    return result;
+}
+
+UniValue scanforunspent(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 3 || params.size() > 5 || params.size() == 4)
+        throw runtime_error(
+                "scanforunspent <address> <block-start> <block-end> [bool:export] [export-type]\n"
+                "\n"
+                "Searches a block range for a specified address with unspent utxos\n"
+                "and displays them in a json response with the option of exporting\n"
+                "to file\n"
+                "\n"
+                "Parameters required:\n"
+                "<address> --------> Multi-signature address\n"
+                "<block-start> ----> Block number to start search from\n"
+                "<block-end> ------> Block number to end search on\n"
+                "\n"
+                "Optional:\n"
+                "[export] ---------> Exports to a file in backup-dir/rpc in format of multisigaddress-datetime.type\n"
+                "[type] -----------> Export to a file with file type (xml, txt or json -- Required if export true)");
+
+    // Parameters
+    bool fExport = false;
+
+    std::string sAddress = params[0].get_str();
+    int nBlockStart = params[1].get_int();
+    int nBlockEnd = params[2].get_int();
+    int nType = 0;
+
+    if (params.size() > 3)
+    {
+        fExport = params[3].get_bool();
+
+        if (params[4].get_str() == "xml")
+            nType = 0;
+
+        else if (params[4].get_str() == "txt")
+            nType = 1;
+
+        else if (params[4].get_str() == "json")
+            nType = 2;
+
+        else
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid export type");
+    }
+
+    // Parameter Sanity Check
+    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+
+    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+
+    CBitcoinAddress Address(sAddress);
+
+    if (!Address.IsValid())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin Address");
+
+    std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> uMultisig;
+
+    {
+        LOCK(cs_main);
+
+        BlockFinder blockfinder;
+
+        CBlockIndex* pblkindex = blockfinder.FindByHeight((nBlockStart - 1));
+
+        if (!pblkindex)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+        while (pblkindex->nHeight < nBlockEnd)
+        {
+            pblkindex = pblkindex->pnext;
+
+            CBlock block;
+
+            if (!block.ReadFromDisk(pblkindex, true))
+                throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
+
+            // No Transactions in block outside of block creation
+            if (block.vtx.size() < 3)
+                continue;
+
+            for (unsigned int i = 2; i < block.vtx.size(); i++)
+            {
+                // Load Transaction
+                CTransaction tx;
+                CTxDB txdb("r");
+                CTxIndex txindex;
+                uint256 hash;
+
+                hash = block.vtx[i].GetHash();
+
+                // Incase a fail here we can just continue thou it shouldn't happen
+                if (!tx.ReadFromDisk(txdb, COutPoint(hash, 0), txindex))
+                    continue;
+
+                // Extract the address from the transaction
+                for (unsigned int j = 0; j < tx.vout.size(); j++)
+                {
+                    const CTxOut& txout = tx.vout[j];
+                    CTxDestination txaddress;
+
+                    // Pass failures here thou we shouldn't have any failures
+                    if (!ExtractDestination(txout.scriptPubKey, txaddress))
+                        continue;
+
+                    // If we found a match to multisig address do our work
+                    if (CBitcoinAddress(txaddress) == Address)
+                    {
+                        // Check if this output is alread spent
+                        COutPoint dummy = COutPoint(tx.GetHash(), j);
+
+                        // This is spent so move along
+                        if (!txindex.vSpent[dummy.n].IsNull())
+                            continue;
+
+                        // Add to multimap
+                        uMultisig.insert(std::make_pair(txout.nValue, std::make_pair(tx.GetHash(), j)));
+                    }
+                }
+            }
+        }
+    }
+
+    UniValue result(UniValue::VARR);
+    UniValue res(UniValue::VOBJ);
+    UniValue txres(UniValue::VARR);
+
+    res.pushKV("Block Start", nBlockStart);
+    res.pushKV("Block End", nBlockEnd);
+    // Check the end results
+    if (uMultisig.empty())
+        res.pushKV("Result", "No utxos found in specified range");
+
+    else
+    {
+        std::stringstream exportoutput;
+        std::string spacing = "  ";
+
+        if (fExport)
+        {
+            if (nType == 0)
+                exportoutput << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<id>\n";
+
+            else if (nType == 1)
+                exportoutput << "TXID / VOUT / Value\n";
+
+        }
+
+        int nCount = 0;
+        int64_t nValue = 0;
+
+        // Process the map
+        for (const auto& data : uMultisig)
+        {
+            nCount++;
+
+            nValue += data.first;
+
+            UniValue txdata(UniValue::VOBJ);
+
+            txdata.pushKV("txid", data.second.first.ToString());
+            txdata.pushKV("vout", (int)data.second.second);
+            txdata.pushKV("value", ValueFromAmount(data.first));
+
+            txres.push_back(txdata);
+            // Parse into type file here
+
+            if (fExport)
+            {
+                if (nType == 0)
+                {
+                    exportoutput << spacing << "<tx id=\"" << nCount << "\">\n";
+                    exportoutput << spacing << spacing << "<txid>" << data.second.first.ToString() << "</txid>\n";
+                    exportoutput << spacing << spacing << "<vout>" << data.second.second << "</vout>\n";
+                    exportoutput << spacing << spacing << "<value>" << std::fixed << setprecision(8) << data.first / (double)COIN << "</value>\n";
+                    exportoutput << spacing << "</tx>\n";
+                }
+
+                else if (nType == 1)
+                    exportoutput << data.second.first.ToString() << " / " << data.second.second << " / " << std::fixed << setprecision(8) << data.first / (double)COIN << "\n";
+            }
+        }
+
+        res.pushKV("Block Start", nBlockStart);
+        res.pushKV("Block End", nBlockEnd);
+        res.pushKV("Total UTXO Count", nCount);
+        res.pushKV("Total Value", ValueFromAmount(nValue));
+
+        if (fExport)
+        {
+            // Complete xml file if its xml
+            if (nType == 0)
+                exportoutput << "</id>\n";
+
+            std::ofstream dataout;
+
+            // We will place this in wallet backups as a safer location then in main data directory
+            boost::filesystem::path exportpath;
+
+            time_t biTime;
+            struct tm * blTime;
+            time (&biTime);
+            blTime = localtime(&biTime);
+            char boTime[200];
+            strftime(boTime, sizeof(boTime), "%Y-%m-%dT%H-%M-%S", blTime);
+
+            std::string exportfile = params[0].get_str() + "-" + std::string(boTime) + "." + params[4].get_str();
+
+            std::string backupdir = GetArg("-backupdir", "");
+
+            if (backupdir.empty())
+                exportpath = GetDataDir() / "walletbackups/rpc" / exportfile;
+
+            else
+                exportpath = backupdir + "/" + exportfile;
+
+            boost::filesystem::create_directory(exportpath.parent_path());
+
+            dataout.open(exportpath.string().c_str());
+
+            if (!dataout)
+            {
+                res.pushKV("Export failed", "Failed to open stream for export file");
+
+                fExport = false;
+            }
+
+            else
+            {
+                if (nType == 0 || nType == 1)
+                {
+                    const std::string& out = exportoutput.str();
+
+                    dataout << out;
+                }
+
+                else
+                    dataout << txres.write(2);
+
+                dataout.close();
+            }
+
+        }
+    }
+
+    if (!txres.empty())
+        result.push_back(txres);
+
+    result.push_back(res);
 
     return result;
 }

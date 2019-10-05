@@ -142,6 +142,7 @@ extern UniValue rainbymagnitude(const UniValue& params, bool fHelp);
 extern UniValue repairwallet(const UniValue& params, bool fHelp);
 extern UniValue resendtx(const UniValue& params, bool fHelp);
 extern UniValue reservebalance(const UniValue& params, bool fHelp);
+extern UniValue scanforunspent(const UniValue& params, bool fHelp);
 extern UniValue sendfrom(const UniValue& params, bool fHelp);
 extern UniValue sendmany(const UniValue& params, bool fHelp);
 extern UniValue sendrawtransaction(const UniValue& params, bool fHelp);
