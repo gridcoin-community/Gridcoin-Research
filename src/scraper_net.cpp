@@ -80,6 +80,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     }
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 void CSplitBlob::addPart(const uint256& ihash)
 {
     assert( ihash != Hash(vParts.end(),vParts.end()) );
@@ -94,6 +95,7 @@ void CSplitBlob::addPart(const uint256& ihash)
     part.refs.emplace(this, n);
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 int CSplitBlob::addPartData(CDataStream&& vData)
 {
     uint256 hash(Hash(vData.begin(), vData.end()));
@@ -120,8 +122,11 @@ int CSplitBlob::addPartData(CDataStream&& vData)
     return n;
 }
 
+// Takes a lock on cs_mapParts.
 CSplitBlob::~CSplitBlob()
 {
+    LOCK(cs_mapParts);
+
     for(unsigned n= 0; n<vParts.size(); ++n)
     {
         CPart& part= *vParts[n];
@@ -131,6 +136,7 @@ CSplitBlob::~CSplitBlob()
     }
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 void CSplitBlob::UseAsSource(CNode* pfrom)
 {
     if(pfrom)
@@ -146,6 +152,7 @@ void CSplitBlob::UseAsSource(CNode* pfrom)
     }
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
 {
     auto ipart= mapParts.find(hash);
@@ -182,7 +189,11 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     if( found!=mapManifest.end() )
     {
         // Only record UseAsSource if manifest is current to avoid spurious parts.
-        if (found->second->IsManifestCurrent()) found->second->UseAsSource(pfrom);
+        {
+            LOCK(cs_mapParts);
+
+            if (found->second->IsManifestCurrent()) found->second->UseAsSource(pfrom);
+        }
 
         return true;
     }
@@ -237,7 +248,7 @@ void CScraperManifest::dentry::Unserialize(CDataStream& ss)
     ss>> last;
 }
 
-
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
 void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const
 {
     WriteCompactSize(ss, vParts.size());
@@ -253,6 +264,7 @@ void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const
 }
 
 // This is to compare manifest content quickly. We just need the parts and the consensus block.
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
 void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const
 {
     WriteCompactSize(ss, vParts.size());
@@ -261,7 +273,7 @@ void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const
     ss<< ConsensusBlock;
 }
 
-
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
 void CScraperManifest::Serialize(CDataStream& ss) const
 {
     SerializeWithoutSignature(ss);
@@ -367,7 +379,7 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
     }
 }
 
-
+// A lock must be taken on cs_mapManifest before calling this function.
 void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
 {
     const auto pbegin = ss.begin();
@@ -412,8 +424,13 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
         throw error("CScraperManifest: Invalid manifest key");
     if(!mkey.Verify(hash, signature))
         throw error("CScraperManifest: Invalid manifest signature");
-    for( const uint256& ph : vph )
+
+    {
+        LOCK(cs_mapParts);
+
+        for( const uint256& ph : vph )
         addPart(ph);
+    }
 }
 
 bool CScraperManifest::IsManifestCurrent() const
@@ -517,7 +534,6 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     CScraperManifest& manifest = *it.first->second;
     manifest.phash= &it.first->first;
     try {
-        //void Unserialize(Stream& s, int nType, int nVersion)
         manifest.UnserializeCheck(vRecv, banscore);
     } catch(bool& e) {
         mapManifest.erase(hash);
@@ -549,8 +565,10 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         ConvergedScraperStatsCache.bClean = false;
     }
 
+    LOCK(cs_mapParts);
+
     LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
-    if( manifest.isComplete() )
+    if(manifest.isComplete())
     {
         /* If we already got all the parts in memory, signal completion */
         manifest.Complete();
@@ -564,20 +582,20 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     return true;
 }
 
-// A lock needs to be taken on cs_mapManifest before calling this function.
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
 bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
     m->pubkey= keySign.GetPubKey();
 
-    // serialize the content for comparison purposes and put in manifest.
     CDataStream sscomp(SER_NETWORK,1);
+    CDataStream ss(SER_NETWORK,1);
+
+    // serialize the content for comparison purposes and put in manifest.
     m->SerializeForManifestCompare(sscomp);
     m->nContentHash = Hash(sscomp.begin(), sscomp.end());
 
     /* serialize and hash the object */
-    CDataStream ss(SER_NETWORK,1);
     m->SerializeWithoutSignature(ss);
-    //ss << *m;
 
     /* sign the serialized manifest and append the signature */
     uint256 hash(Hash(ss.begin(),ss.end()));
@@ -622,6 +640,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     return true;
 }
 
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
 void CScraperManifest::Complete()
 {
     /* Notify peers that we have a new manifest */
@@ -738,6 +757,9 @@ UniValue getmpart(const UniValue& params, bool fHelp)
                 "getmpart <hash>\n"
                 "Show content of CPart object.\n"
                 );
+
+    LOCK(CSplitBlob::cs_mapParts);
+
     auto ipart= CSplitBlob::mapParts.find(uint256(params[0].get_str()));
     if(ipart == CSplitBlob::mapParts.end())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");

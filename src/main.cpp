@@ -5946,10 +5946,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         pfrom->PushMessage("tx", ss);
                     }
                 }
-                else if(!pushed && MSG_PART == inv.type ) {
+                else if(!pushed && inv.type == MSG_PART) {
+                    LOCK(CSplitBlob::cs_mapParts);
+
                     CSplitBlob::SendPartTo(pfrom, inv.hash);
                 }
-                else if(!pushed && MSG_SCRAPERINDEX == inv.type )
+                else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
                 {
                     LOCK(CScraperManifest::cs_mapManifest);
 
@@ -5971,8 +5973,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             // but it is an out parameter of IsManifestAuthorized.
                             unsigned int banscore_out = 0;
 
-                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out))
+                            // Also don't send a manifest that is not current.
+                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out) && manifest.IsManifestCurrent())
+                            {
                                 CScraperManifest::SendManifestTo(pfrom, inv.hash);
+                            }
                         }
                     }
                 }

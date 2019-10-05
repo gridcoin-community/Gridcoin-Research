@@ -3723,7 +3723,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 
     // "Sign" and "send".
 
-    LOCK(CScraperManifest::cs_mapManifest);
+    LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
     bool bAddManifestSuccessful = CScraperManifest::addManifest(std::move(manifest), Key);
 
@@ -5014,7 +5014,10 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         }
         if (ConvergedScraperStatsCache.NewFormatSuperblock.GetHash() == nNewFormatSuperblockHash) return scraperSBvalidationtype::CurrentCachedConvergence;
 
-        // if not validated with current cached contract, then check past ones in the cache.
+        // if not validated with current cached contract, then check past ones in the cache. Note that it is
+        // ok that due to a possible key collision for the uint32_t truncated hash hint, only the latest full hash that
+        // matches the hint would be stored. Any others will be picked up from the uncached case below. This would
+        // be extremely rare.
         auto found = ConvergedScraperStatsCache.PastConvergences.find(nReducedSBContentHash);
 
         if (found != ConvergedScraperStatsCache.PastConvergences.end())
@@ -5157,14 +5160,9 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         uint256 nManifestHashForConvergedBeaconList = 0;
 
         // We are going to do this for each project in the whitelist.
-        unsigned int iCountMatchedProjects = 0;
         unsigned int iCountSuccessfulConvergedProjects = 0;
 
         _log(logattribute::INFO, "ValidateSuperblock", "Number of Scrapers with manifests = " + std::to_string(nScraperCount));
-
-        // Content (Part) Hash - Project
-        std::map<uint256, std::string> mMatchingProjectPartHashes;
-
 
         // TODO: Should this be based on the list of projects in the SB? (Equivalent to a cached whitelist state.)
         for (const auto& iWhitelistProject : projectWhitelist)
@@ -5177,7 +5175,6 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             std::multimap<int64_t, std::tuple<uint256, uint256, uint256>, greater<int64_t>> mProjectObjectsBinnedByTime;
             // and also by project object (content) hash, then scraperID and project.
             std::multimap<uint256, std::pair<ScraperID, std::string>> mProjectObjectsBinnedbyContent;
-            //std::multimap<uint256, std::pair<ScraperID, std::string>>::iterator ProjectConvergence;
 
             {
                 LOCK(CScraperManifest::cs_mapManifest);
@@ -5243,104 +5240,75 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                         }
                     }
                 }
+                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            } // Critical section scope for cs_mapManifest.
 
-                bool bMatched = false;
 
-                // Get an iterator pointing to the project in the project index map and match to the hint.
+            // Walk the time map (backwards in time because the sort order is descending), and select the first
+            // Project Part (Object) content hash that meets the convergence rule.
+            for (const auto& iter : mProjectObjectsBinnedByTime)
+            {
+                // Here we only consider those objects from manifests that have a time that is equal to or before the superblock to be validated,
+                // and which matches the project (part) hint.
+                uint32_t nReducedProjectObjectContentHash = std::get<0>(iter.second).Get64() >> 32;
+
                 if (const auto SBProjectIter = NewFormatSuperblock.m_projects.Try(iWhitelistProject.m_name))
                 {
                     // Pull the convergence hint (reduced content hash) for the project object.
                     uint32_t nReducedSBProjectObjectContentHash = SBProjectIter->m_convergence_hint;
 
-                    for (const auto& iter : mProjectObjectsBinnedbyContent)
+                    if (iter.first <= NewFormatSuperblock.m_timestamp && nReducedProjectObjectContentHash == nReducedSBProjectObjectContentHash)
+                        //if (manifest.nTime <= NewFormatSuperblock.m_timestamp && nReducedProjectObjectContentHash == nReducedSBProjectObjectContentHash)
                     {
-                        uint32_t nReducedProjectObjectContentHash = iter.first.Get64() >> 32;
-
-                        // This has the effect of only storing the first one of the series of matching project parts (from different scrapers) with the same
-                        // full hash that match the hint, because of the insert. Below we will count the others matching to check for a supermajority.
-                        // Note that two different full hashes that match the hint for the same project would be included.
-                        if (nReducedProjectObjectContentHash == nReducedSBProjectObjectContentHash)
+                        // Notice the below is NOT using the time. We switch to the content only. The time is only used to make sure
+                        // we test the convergence of the project objects in time order, but once a content hash is selected based on the time,
+                        // only the content hash is used to count occurrences in the multimap, because the times for the same
+                        // project object (part hash) will be different across different manifests and different scrapers.
+                        unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(std::get<0>(iter.second));
+                        if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
                         {
-                            // ------------------------------------------ full content hash ---- project name
-                            mMatchingProjectPartHashes.insert(std::make_pair(iter.first, iWhitelistProject.m_name));
-                            bMatched = true;
-                        }
-                    }
-                }
+                            LOCK(CSplitBlob::cs_mapParts);
 
-                // Keep track of the number of matched projects.
-                if (bMatched) ++iCountMatchedProjects;
+                            // Get the actual part ----------------- by object hash.
+                            auto iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
 
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
-            }
+                            uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
 
-            uint256 nLatestProjectPartMatchingHash;
-            int64_t nLatestProjectPartMatchingTime = 0;
-            uint256 nLatestProjectPartMatchingConsensusBlock;
-            uint256 nLatestProjectPartMatchingManifestForBeaconList;
+                            if (nContentHashCheck != iPart->first)
+                            {
+                                _log(logattribute::ERR, "ScraperConstructConvergedManifestByProject", "Selected Converged Project Object content hash check failed! nContentHashCheck = "
+                                     + nContentHashCheck.GetHex() + " and nContentHash = " + iPart->first.GetHex());
+                                break;
+                            }
 
-            for (const auto& iter : mMatchingProjectPartHashes)
-            {
-                // We want the most recent (latest) part, constrained to the above map. This is slightly different from.
-                // but similar to the construction of the convergence without constraint.
-                for (const auto& iter_inner : mProjectObjectsBinnedByTime)
-                {
-                    // Only go until the first match (latest), then break.
-                    if (std::get<0>(iter_inner.second) == iter.first)
-                    {
-                        nLatestProjectPartMatchingHash = iter.first;
-                        nLatestProjectPartMatchingTime = iter_inner.first;
-                        nLatestProjectPartMatchingConsensusBlock = get<1>(iter_inner.second);
-                        nLatestProjectPartMatchingManifestForBeaconList = get<2>(iter_inner.second);
+                            // Put Project Object (Part) in StructConvergedManifest keyed by project.
+                            StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.m_name, iPart->second.data));
 
-                        break;
-                    }
-                }
-            }
+                            // If the indirectly referenced manifest has a consensus time that is greater than already recorded, replace with that time, and also
+                            // change the consensus block to the referred to consensus block. (Note that this is scoped at even above the individual project level, so
+                            // the result after iterating through all projects will be the latest manifest time and consensus block that corresponds to any of the
+                            // parts that meet convergence.) We will also get the manifest hash too, so we can retrieve the associated BeaconList that was used.
+                            if (iter.first > nConvergedConsensusTime)
+                            {
+                                nConvergedConsensusTime = iter.first;
+                                nConvergedConsensusBlock = std::get<1>(iter.second);
+                                nManifestHashForConvergedBeaconList = std::get<2>(iter.second);
+                            }
 
-            unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(nLatestProjectPartMatchingHash);
+                            iCountSuccessfulConvergedProjects++;
 
-            if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount))
-            {
-                LOCK(CScraperManifest::cs_mapParts);
+                            // Note this break is VERY important, it prevents considering essentially the same project object that meets convergence multiple times.
+                            break;
+                        } // Test for supermajority (per project).
+                    } // Test for timestamp <= superblock timestamp and hint matches.
+                } // Test whether project exists in whitelist and provide iterator.
+            } // For loop over mProjectObjectsBinnedByTime.
+        } // For loop over projectWhitelist.
 
-                // Get the actual part ----------------- by object hash.
-                auto iPart = CSplitBlob::mapParts.find(nLatestProjectPartMatchingHash);
 
-                uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
-
-                if (nContentHashCheck != iPart->first)
-                {
-                    _log(logattribute::ERR, "ValidateSuperblock", "Selected Converged Project Object content hash check failed! nContentHashCheck = "
-                         + nContentHashCheck.GetHex() + " and nContentHash = " + iPart->first.GetHex());
-
-                    // Bail.
-                    return scraperSBvalidationtype::Invalid;
-                }
-
-                // Put Project Object (Part) in Dummy StructConvergedManifest keyed by project.
-                StructDummyConvergedManifest.ConvergedManifestPartsMap.insert(std::make_pair(iWhitelistProject.m_name, iPart->second.data));
-
-                // If the indirectly referenced manifest has a consensus time that is greater than already recorded, replace with that time, and also
-                // change the consensus block to the referred to consensus block. (Note that this is scoped at even above the individual project level, so
-                // the result after iterating through all projects will be the latest manifest time and consensus block that corresponds to any of the
-                // parts that meet convergence.) We will also get the manifest hash too, so we can retrieve the associated BeaconList that was used.
-                // This version is subject to the constraints of the hint by the above code, but operates similar to a normal convergence construction.
-                if (nLatestProjectPartMatchingTime > nConvergedConsensusTime)
-                {
-                    nConvergedConsensusTime = nLatestProjectPartMatchingTime;
-                    nConvergedConsensusBlock = nLatestProjectPartMatchingConsensusBlock;
-                    nManifestHashForConvergedBeaconList = nLatestProjectPartMatchingManifestForBeaconList;
-                }
-
-                // Keep track of the number of matched projects that go in the convergence.
-                ++iCountSuccessfulConvergedProjects;
-            }
-        }
-
-        // If we have a three way match, then proceed with the construction of local candidate SB
+        // If we have a matched project count match, then proceed with the construction of local candidate SB
         // to validate, otherwise there is no validation.
-        if (iCountSuccessfulConvergedProjects == iCountMatchedProjects && iCountMatchedProjects == NewFormatSuperblock.m_projects.size())
+        if (iCountSuccessfulConvergedProjects == NewFormatSuperblock.m_projects.size())
         {
             // Fill out the the rest of the ConvergedManifest structure. Note this assumes one-to-one part to project statistics BLOB. Needs to
             // be fixed for more than one part per BLOB. This is easy in this case, because it is all from/referring to one manifest.
@@ -5367,7 +5335,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 ss << iter.second;
 
             StructDummyConvergedManifest.nContentHash = Hash(ss.begin(), ss.end());
-            StructDummyConvergedManifest.timestamp = GetAdjustedTime();
+            StructDummyConvergedManifest.timestamp = nConvergedConsensusTime;
             StructDummyConvergedManifest.bByParts = true;
 
             _log(logattribute::INFO, "ValidateSuperblock", "Successful convergence by project: "
@@ -5376,7 +5344,6 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                  + DateTimeStrFormat("%x %H:%M:%S",  StructDummyConvergedManifest.timestamp));
 
 
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
             ScraperStats mScraperstats = GetScraperStatsByConvergedManifest(StructDummyConvergedManifest);
 
@@ -5402,6 +5369,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             }
 
             NN::QuorumHash nCandidateSuperblockHash = superblock.GetHash();
+
+            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
             if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ProjectLevelConvergence;
         } // If you fall out of this if statement... no validation.
@@ -5698,11 +5667,31 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
         if (PastConvergencesSize > 1)
         {
-            std::default_random_engine generator;
-            std::uniform_int_distribution<int> distribution(0, PastConvergencesSize - 1);
 
-            std::advance(iPastSB, distribution(generator));
+            /*
+            std::default_random_engine generator(static_cast<unsigned int>(GetAdjustedTime()));
+            std::uniform_int_distribution<unsigned int> distribution(0, PastConvergencesSize - 1);
 
+            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock random past distribution limits: " + std::to_string(distribution.a())
+                 + " , " + std::to_string(distribution.b()));
+
+            unsigned int i = distribution(generator);
+            */
+
+            int i = GetRandInt(PastConvergencesSize - 1);
+
+            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock random past RandomPastConvergedManifest index " + std::to_string(i) + " selected.");
+            res.pushKV("NN::ValidateSuperblock random past RandomPastConvergedManifest index selected", i);
+
+            std::advance(iPastSB, i);
+
+            RandomPastConvergedManifest = iPastSB->second.second;
+
+            bPastConvergencesEmpty = false;
+        }
+        else if (PastConvergencesSize == 1)
+        {
+            //Use the first and only element.
             RandomPastConvergedManifest = iPastSB->second.second;
 
             bPastConvergencesEmpty = false;
@@ -5718,7 +5707,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
         // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
         RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.Get64() >> 32;
-        RandomPastSB.m_manifest_content_hint = RandomPastConvergedManifest.nUnderlyingManifestContentHash.Get64() >> 32;
+        RandomPastSB.m_timestamp = RandomPastConvergedManifest.timestamp;
 
         if (RandomPastConvergedManifest.bByParts)
         {
@@ -5732,8 +5721,12 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
                 const std::string& project_name = part_pair.first;
                 const CSerializeData& part_data = part_pair.second;
 
-                projects.SetHint(project_name, part_data);
+                projects.SetHint(project_name, part_data); // This also sets m_converged_by_project to true.
             }
+        }
+        else
+        {
+            RandomPastSB.m_manifest_content_hint = RandomPastConvergedManifest.nUnderlyingManifestContentHash.Get64() >> 32;
         }
 
         //

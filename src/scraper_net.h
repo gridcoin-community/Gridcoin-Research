@@ -67,7 +67,7 @@ public:
     static std::map<uint256,CPart> mapParts;
     size_t cntPartsRcvd =0;
 
-    static CCriticalSection cs_mapParts;
+    static CCriticalSection cs_mapParts; // also protects vParts.
 
 };
 
