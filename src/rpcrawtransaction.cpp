@@ -1138,8 +1138,8 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
     std::unordered_multimap<int64_t, std::pair<uint256, unsigned int>> uMultisig;
 
-    LOCK(cs_main);
     {
+        LOCK(cs_main);
 
         BlockFinder blockfinder;
 
