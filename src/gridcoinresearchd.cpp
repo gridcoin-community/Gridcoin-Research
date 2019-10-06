@@ -55,7 +55,7 @@ bool AppInit(int argc, char* argv[])
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
 
-        if (mapArgs.count("-?") || mapArgs.count("--help"))
+        if (mapArgs.count("-?") || mapArgs.count("-help"))
         {
             // First part of help message is specific to bitcoind / RPC client
             std::string strUsage = _("Gridcoin version") + " " + FormatFullVersion() + "\n\n" +
@@ -71,7 +71,7 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
-        if (mapArgs.count("-version") || mapArgs.count("--version"))
+        if (mapArgs.count("-version"))
         {
             fprintf(stdout, "%s", VersionMessage().c_str());
 
