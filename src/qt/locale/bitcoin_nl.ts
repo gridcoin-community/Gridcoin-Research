@@ -3629,7 +3629,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Opties:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>This help message</source>
         <translation>Dit helpbericht</translation>
     </message>
@@ -3664,12 +3664,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Specificeer de time-outtijd in milliseconden (standaard: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation>Verbind door socks proxy</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Selecteer de versie van socks proxy (4-5, default: 5)</translation>
     </message>
@@ -3679,7 +3679,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Gebruik proxy tor verborgen diensten (standaard: zelfde als -proxy)</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished">Luister voor verbindingen op &lt;poort&gt; (standaard: 15714 of testnet: 25714) {32749 ?} {32748)?}</translation>
     </message>
@@ -3699,12 +3699,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Verbind naar een node om adressen van anderen op te halen, en verbreek vervolgens de verbinding</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Specificeer uw eigen publieke adres</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-42"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Verbind alleen naar nodes in netwerk &lt;net&gt; (IPv4, IPv6 of Tor)</translation>
     </message>
@@ -3734,12 +3734,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Synchroniseer tijd met andere connecties. Uitschakelen als de tijd op uw systeem nauwkeurig is bijv. synchroniseren met NTP (standaard: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Drempel om verbinding te verbreken naar zich misdragende peers (standaard: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Aantal seconden dat zich misdragende peers niet opnieuw mogen verbinden (standaard: 86400)</translation>
     </message>
@@ -4066,6 +4066,11 @@ Dit betekend dat een fee van %2 is vereist.</translation>
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4150,7 +4155,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Gebruik UPnP om de luisterende poort te mappen (standaard: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Vergoeding per KB toe te voegen aan de transacties die u verzendt</translation>
     </message>
@@ -4165,12 +4170,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Aanvaard opdrachtregel- en JSON-RPC-opdrachten</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+182"/>
         <source>Use the test network</source>
         <translation>Gebruik het testnetwerk</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Geef extra debugging informatie weer. Impliceert alle andere debug * opties</translation>
     </message>
@@ -4185,12 +4190,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Voeg een tijdstempel toe aan debug output</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation>Stuur trace/debug info naar de debugger</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Wacht op JSON-RPC-connecties op &lt;poort&gt; (standaard: 15715 of testnet: 25715) </translation>
     </message>
@@ -4200,7 +4205,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Sta JSON-RPC verbindingen van opgegeven IP-adres toe</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Verstuur commando&apos;s naar proces dat op &lt;ip&gt; draait (standaard: 127.0.0.1)</translation>
     </message>
@@ -4210,7 +4215,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Vereist een bevestiging voor verandering (standaard: 0)</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Dwing transactie scripts gebruik van canonieke PUSH operatoren (standaard: 1)</translation>
     </message>
@@ -4220,7 +4225,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Voer opdracht uit zodra een relevante waarschuwing wordt ontvangen (%s in cmd wordt vervangen door bericht)</translation>
     </message>
     <message>
-        <location line="+209"/>
+        <location line="+210"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4245,7 +4250,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Doorzoek de blokketen op ontbrekende portemonnee-transacties</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Poog de geheime sleutels uit een corrupt wallet.dat bestand terug te halen</translation>
     </message>
@@ -4330,7 +4335,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Stel minimum blokgrootte in in bytes (standaard: 0)</translation>
     </message>
@@ -4340,12 +4345,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Stel maximale block grootte in bytes in (standaard: 250000)</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Stel maximale grootte van high-priority/low-fee transacties in bytes (standaard: 27000)</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL-opties: (zie de Bitcoin wiki voor SSL-instructies)</translation>
     </message>
@@ -4365,7 +4370,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Geheime sleutel voor server (standaard: server.pem)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Ongeldig bedrag voor -paytxfee=&lt;bedrag&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4385,22 +4390,22 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Portemonnee %s bevindt zich buiten de datamap %s.</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Kan een slot op data directory %s niet verkrijgen. Gridcoin wordt waarschijnlijk al uitgevoerd.</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>Database integriteit wordt geverifieërd</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Fout bij het ??initialiseren van de database omgeving %s! Om te herstellen, BACKUP die directory, verwijder dan alles van behalve het wallet.dat.</translation>
     </message>
@@ -4410,7 +4415,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Waarschuwing: wallet.dat is corrupt, data is veiliggesteld! Originele wallet.dat is opgeslagen als wallet.{tijdstip}.bak in %s; als uw balans of transacties incorrect zijn dient u een backup terug te zetten.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+197"/>
         <source>Vote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4435,7 +4440,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Onbekende -socks proxyversie aangegeven: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Ongeldig-tor adres: &apos;%s&apos;</translation>
     </message>
@@ -4475,12 +4480,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Fout bij laden van wallet.dat: Portemonnee vereist een nieuwere versie van Gridcoin</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Portemonnee moet herschreven worden: herstart Gridcoin om te voltooien</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>Fout bij laden wallet.dat</translation>
     </message>
@@ -4505,12 +4510,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Niet mogelijk om %s op deze computer. Gridcoin is waarschijnlijk al geopened.</translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Niet in staat om aan %s te binden op deze computer (bind gaf error %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Fout: Portemonnee is op slot, niet mogelijk een transactie te creëren.</translation>
     </message>
@@ -4530,12 +4535,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Fout: Creëren van transactie mislukt.</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation>Versturen...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Fout: De transactie was geweigerd, Dit kan gebeuren als sommige munten in je portemonnee al gebruikt zijn, door het gebruik van een kopie van wallet.dat en de munten in de kopie zijn niet gemarkeerd als gebruikt.</translation>
     </message>
@@ -4550,7 +4555,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Waarschuwing: Controleer of de datum en tijd van de computer juist zijn! Als uw klok verkeerd is Gridcoin zal niet goed werken.</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>Waarschuwing: Hardeschijf raakt vol!</translation>
     </message>
@@ -4560,7 +4565,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Draai in de achtergrond als daemon en aanvaard opdrachten</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Voer opdracht uit zodra een portemonneetransactie verandert (%s in cmd wordt vervangen door TxID)</translation>
     </message>
@@ -4575,7 +4580,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Mislukt om op welke poort dan ook te luisteren. Gebruik -listen=0 as u dit wilt.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Specificeer het portemonnee bestand (vanuit de gegevensmap)</translation>
     </message>
@@ -4595,7 +4600,7 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Gebruikersnaam voor JSON-RPC-verbindingen</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Wachtwoord voor JSON-RPC-verbindingen</translation>
     </message>
@@ -4610,12 +4615,12 @@ Dit betekend dat een fee van %2 is vereist.</translation>
         <translation>Sta DNS-naslag toe voor -addnode, -seednode en -connect</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>To use the %s option</source>
         <translation>Om de %s optie te gebruiken</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4654,7 +4659,7 @@ Als het bestand niet bestaat, maak het dan aan, met een alleen-lezen permissie.<
         <translation>Gridcoin versie</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+112"/>
         <source>Usage:</source>
         <translation>Gebruik:</translation>
     </message>
@@ -4664,7 +4669,7 @@ Als het bestand niet bestaat, maak het dan aan, met een alleen-lezen permissie.<
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>Lijst van commando&apos;s</translation>
     </message>
@@ -4689,12 +4694,12 @@ Als het bestand niet bestaat, maak het dan aan, met een alleen-lezen permissie.<
         <translation>Ongeldig -proxy adres: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Onbekend netwerk gespecificeerd in -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-100"/>
         <source>Insufficient funds</source>
         <translation>Ontoereikend saldo</translation>
     </message>
@@ -4724,12 +4729,12 @@ Als het bestand niet bestaat, maak het dan aan, met een alleen-lezen permissie.<
         <translation>Kan standaardadres niet schrijven</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Blokketen aan het herscannen...</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-90"/>
         <source>Done loading</source>
         <translation>Klaar met laden</translation>
     </message>

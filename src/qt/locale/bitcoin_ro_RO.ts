@@ -3642,7 +3642,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Opţiuni:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>This help message</source>
         <translation>Acest mesaj de ajutor</translation>
     </message>
@@ -3672,12 +3672,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Specific? intervalul maxim de conectare în milisecunde (implicit: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation>Conecteaz?-te printr-un proxy socks</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Selectati versiunea de proxy socks(4-5, implicit: 5)</translation>
     </message>
@@ -3687,7 +3687,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Utilizati proxy pentru a ajunge la serviciile tor (implicit: la fel ca proxy)</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished">Ascult? pentru conect?ri pe &lt;port&gt; (implicit:  15714 sau testnet: 25714)  {32749 ?} {32748)?}</translation>
     </message>
@@ -3707,12 +3707,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Se conectează la un nod pentru a obţine adresele partenerilor, şi apoi se deconectează</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Specificaţi adresa dvs. publică</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-42"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Efectueaz? conexiuni doar c?tre nodurile din re?eaua &lt;net&gt; (IPv4, IPv6 sau Tor)</translation>
     </message>
@@ -3742,12 +3742,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Sincronizeaz? timp cu alte noduri. Dezactiveaz? daca timpul de pe sistemul dumneavoastr? este precis ex: sincronizare cu NTP (implicit: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Prag pentru deconectarea partenerilor care nu func?ioneaz? corect (implicit: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Num?rul de secunde pentru a preveni reconectarea partenerilor care nu func?ioneaz? corect (implicit: 86400)</translation>
     </message>
@@ -4074,6 +4074,11 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4158,7 +4163,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Foloseste UPnP pentru a vedea porturile (initial: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Comision pe kB de adaugat la tranzactiile pe care le trimiti</translation>
     </message>
@@ -4173,7 +4178,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Acceptă comenzi din linia de comandă şi comenzi JSON-RPC</translation>
     </message>
     <message>
-        <location line="+134"/>
+        <location line="+135"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Rulează în fundal ca un demon şi acceptă comenzi</translation>
     </message>
@@ -4193,7 +4198,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Utilizeaz? re?eaua de test</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Extra informatii despre depanare. Implica toate optiunile -debug*</translation>
     </message>
@@ -4208,12 +4213,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Ataseaza output depanare cu log de timp</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation>Trimite informa?iile trace/debug la consol?</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Ascult? pentru conexiuni JSON-RPC pe &lt;port&gt; (implicit:15715 sau testnet: 25715)</translation>
     </message>
@@ -4223,7 +4228,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Permite conexiuni JSON-RPC de la adresa IP specificat?</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Trimite comenzi la nodul care ruleaz? la &lt;ip&gt; (implicit: 127.0.0.1)</translation>
     </message>
@@ -4233,7 +4238,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Necesita confirmari pentru schimbare (implicit: 0)</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Enforseaza tranzactiile script sa foloseasca operatori canonici PUSH(implicit: 1)</translation>
     </message>
@@ -4243,7 +4248,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Execut? o comand? când o alerta relevantâ este primitâ(%s in cmd este înlocuit de mesaj)</translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+226"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Actualizeaz? portofelul la ultimul format</translation>
     </message>
@@ -4258,7 +4263,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Rescaneaz? lan?ul de bloc pentru tranzac?iile portofel lips?</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Încearc? recuperarea cheilor private dintr-un wallet.dat corupt</translation>
     </message>
@@ -4343,7 +4348,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Seteaz? m?rimea minim? a blocului în bai?i (implicit: 0)</translation>
     </message>
@@ -4353,12 +4358,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Seteaz? m?rimea maxima a blocului în bytes (implicit: 250000)</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Setati valoarea maxima a prioritate mare/taxa scazuta in bytes(implicit: 27000)</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>Optiuni SSl (vezi Bitcoin wiki pentru intructiunile de instalare)</translation>
     </message>
@@ -4378,7 +4383,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Cheia privat? a serverului (implicit: server.pem)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Suma nevalid? pentru -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4398,22 +4403,22 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Portofelul %s este in afara directorului %s</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Nu se poate obtine un lock pe directorul de date &amp;s. Blackoin probabil ruleaza deja.</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>Se verifica integritatea bazei de date...</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Eroare la ini?ializarea mediu de baze de date %s! Pentru a recupera, SALVATI ACEL DIRECTORr, apoi scoate?i totul din el, cu excep?ia wallet.dat.</translation>
     </message>
@@ -4423,7 +4428,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Atentie: fisierul wallet.dat este corupt, date salvate! Fisierul original wallet.dat a fost salvat ca wallet.{timestamp}.bak in %s; daca balansul sau tranzactiile sunt incorecte ar trebui sa restaurati dintr-o copie de siguranta. </translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+197"/>
         <source>Vote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4448,7 +4453,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>S-a cerut o versiune necunoscut? de proxy -socks: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Adresa -tor invalida: &apos;%s&apos;</translation>
     </message>
@@ -4488,12 +4493,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Eroare la înc?rcarea wallet.dat: Portofelul necesita o versiune mai noua de Gridcoin</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>A fost nevoie de rescrierea portofelului: restarta?i Gridcoin pentru a finaliza</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>Eroare la înc?rcarea wallet.dat</translation>
     </message>
@@ -4518,12 +4523,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Imposibil de conectat %s pe acest computer. Cel mai probabil Gridcoin ruleaza</translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Nu se poate folosi %s pe acest calculator (eroarea returnat? este %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Eroare: portofel blocat, tranzactia nu s-a creat</translation>
     </message>
@@ -4543,12 +4548,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Eroare: crearea tranzac?iei a e?uat.</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation>Se trimite...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Eroare: tranzac?ia a fost respins?. Acest lucru s-ar putea întâmpla în cazul în care unele dintre monedele din portofel au fost deja cheltuite, cum si cum a?i utilizat o copie a wallet.dat ?i monedele au fost cheltuite în copie dar nu au fost marcate ca ?i cheltuite aici.</translation>
     </message>
@@ -4563,12 +4568,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Atentie: Va rugam verificati ca timpul si data calculatorului sunt corete. Daca timpul este gresit Gridcoin nu va functiona corect.</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>Avertisment: spa?iul pe disc este sc?zut!</translation>
     </message>
     <message>
-        <location line="-235"/>
+        <location line="-236"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Execută comanda cînd o tranzacţie a portofelului se schimbă (%s în cmd este înlocuit de TxID)</translation>
     </message>
@@ -4583,7 +4588,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Nu s-a reuşit ascultarea pe orice port. Folosiţi -listen=0 dacă vreţi asta.</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+94"/>
         <source>Specify configuration file (default: gridcoinresearch.conf)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4608,7 +4613,7 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Utilizator pentru conexiunile JSON-RPC</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Parola pentru conexiunile JSON-RPC</translation>
     </message>
@@ -4623,12 +4628,12 @@ Acest lucru înseamn? c? o tax? de cel pu?in %2 este necesar?</translation>
         <translation>Permite căutări DNS pentru -addnode, -seednode şi -connect</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>To use the %s option</source>
         <translation>Pentru a folosi op?iunea %s</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4667,7 +4672,7 @@ Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprie
         <translation>Versiune Gridcoin</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+112"/>
         <source>Usage:</source>
         <translation>Uz:</translation>
     </message>
@@ -4677,7 +4682,7 @@ Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprie
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>List? de comenzi</translation>
     </message>
@@ -4702,12 +4707,12 @@ Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprie
         <translation>Adresa -proxy nevalidă: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Reţeaua specificată în -onlynet este necunoscută: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-100"/>
         <source>Insufficient funds</source>
         <translation>Fonduri insuficiente</translation>
     </message>
@@ -4737,12 +4742,12 @@ Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprie
         <translation>Nu se poate scrie adresa implicită</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Rescanare...</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-90"/>
         <source>Done loading</source>
         <translation>Încărcare terminată</translation>
     </message>

@@ -3646,7 +3646,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Inställningar:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>This help message</source>
         <translation>Det här hjälp medelandet</translation>
     </message>
@@ -3681,12 +3681,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Ange timeout för uppkoppling i millisekunder (förvalt: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation>Koppla genom en socks proxy</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Välj version av socks proxy (4-5, förval 5)</translation>
     </message>
@@ -3696,7 +3696,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Använd proxy för att nå Tor gömda servicer (standard: samma som -proxy)</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished">Lyssna efter anslutningar på &lt;port&gt; (standard: 15714 eller testnät: 25714) {32749 ?} {32748)?}</translation>
     </message>
@@ -3716,12 +3716,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Anslut till en nod för att hämta klientadresser, och koppla från</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Ange din egen publika adress</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-42"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Anslut enbart till noder i nätverket &lt;net&gt; (IPv4, IPv6 eller Tor)</translation>
     </message>
@@ -3751,12 +3751,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Synkronisera tiden med andra noder. Avaktivera om klockan i ditt sytem är exakt som t.ex. synkroniserad med NTP (förval: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Tröskelvärde för att koppla ifrån klienter som missköter sig (förvalt: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Antal sekunder att hindra klienter som missköter sig från att ansluta (förvalt: 86400)</translation>
     </message>
@@ -4083,6 +4083,11 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4167,7 +4172,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Använd UPnP för att mappa den lyssnande porten (förvalt: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Avgift per KB som adderas till transaktionen du sänder</translation>
     </message>
@@ -4182,12 +4187,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Tillåt kommandon från kommandotolken och JSON-RPC-kommandon</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+182"/>
         <source>Use the test network</source>
         <translation>Använd testnätverket</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Skriv ut extra debug information. Betyder alla andra -debug* alternativ </translation>
     </message>
@@ -4202,12 +4207,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Tidstämpla debug utskriften</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation>Skicka trace/debug till debuggern</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Lyssna efter JSON-RPC anslutningar på &lt;port&gt; (standard: 15715 eller testnät: 25715)</translation>
     </message>
@@ -4217,7 +4222,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Tillåt JSON-RPC-anslutningar från specifika IP-adresser</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Skicka kommandon till klient på &lt;ip&gt; (förvalt: 127.0.0.1)</translation>
     </message>
@@ -4227,7 +4232,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kräv bekräftelse för ändring (förval: 0)</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Tvinga transaktionsskript att använda kanoniska PUSH operatörer (standard: 1)</translation>
     </message>
@@ -4237,7 +4242,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kör kommando när en relevant alert är mottagen (%s i cmd är ersatt av meddelandet)</translation>
     </message>
     <message>
-        <location line="+209"/>
+        <location line="+210"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4262,7 +4267,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Sök i blockkedjan efter saknade plånboks transaktioner</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Försök att rädda de privata nycklarna från en korrupt wallet.dat</translation>
     </message>
@@ -4347,7 +4352,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Sätt minsta blockstorlek i byte (förvalt: 0)</translation>
     </message>
@@ -4357,12 +4362,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Sätt största blockstorlek i bytes (förvalt: 250000)</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Ställ in max storlek för hög prioritet/lågavgifts transaktioner i bytes (förval: 27000)</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL-inställningar: (se Bitcoin-wikin för SSL-setup instruktioner)</translation>
     </message>
@@ -4382,7 +4387,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Serverns privata nyckel (förvalt: server.pem)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Ogiltigt belopp för -paytxfee=&lt;belopp&gt;:&apos;%s&apos;</translation>
     </message>
@@ -4402,22 +4407,22 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Plånbok %s ligger utanför datamappen %s.</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Kan inte låsa datan i mappen %s. Gridcoin är kanske redan startad.</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>Verifierar integriteten i databasen...</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Ett fel uppstod vid initialiseringen av databasen %s! För att återställa, SÄKERHETSKOPIERA MAPPEN, radera sedan allt från mappen förutom wallet.dat.</translation>
     </message>
@@ -4427,7 +4432,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Varning: wallet.dat korrupt, datan har räddats! Den ursprungliga wallet.dat har sparas som wallet.{timestamp}.bak i %s; om ditt saldo eller transaktioner är felaktiga ska du återställa från en säkerhetskopia.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+197"/>
         <source>Vote</source>
         <translation type="unfinished">Rösta</translation>
     </message>
@@ -4452,7 +4457,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Okänd -socks proxy version begärd: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Fel -tor adress: &apos;%s&apos;</translation>
     </message>
@@ -4492,12 +4497,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kunde inte ladda wallet.dat: En nyare version av Gridcoin krävs</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Plånboken måste skrivas om: Starta om Gridcoin för att slutföra</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>Fel vid inläsning av plånboksfilen wallet.dat</translation>
     </message>
@@ -4522,12 +4527,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kan inte binda till %s på denna dator. Gridcoin är sannolikt redan startad.</translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Det går inte att binda till %s på den här datorn (bind returnerade felmeddelande %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Fel: Plånboken låst, kan inte utföra transaktion</translation>
     </message>
@@ -4547,12 +4552,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Fel: Skapandet av transaktion misslyckades</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation>Skickar...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Fel: Transaktionen nekades. Detta kan hända om vissa av mynten i din plånbok redan är använda, t.ex om du använder en kopia av wallet.dat och mynten redan var använda i kopia men inte markerade som använda här.</translation>
     </message>
@@ -4567,7 +4572,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Varning: Kolla att din dators tid och datum är rätt. Gridcoin kan inte fungera ordentligt om tiden i datorn är fel.</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>Varning: Lågt skivutrymme</translation>
     </message>
@@ -4577,7 +4582,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kör i bakgrunden som tjänst och acceptera kommandon</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Exekvera kommando när en plånbokstransaktion ändras (%s i cmd är ersatt av TxID)</translation>
     </message>
@@ -4592,7 +4597,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Misslyckades att lyssna på någon port. Använd -listen=0 om du vill detta.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Ange plånboksfil (inom datakatalogen)</translation>
     </message>
@@ -4612,7 +4617,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Användarnamn för JSON-RPC-anslutningar</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Lösenord för JSON-RPC-anslutningar</translation>
     </message>
@@ -4627,12 +4632,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Tillåt DNS-sökningar för -addnode, -seednode och -connect</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>To use the %s option</source>
         <translation>Att använda %s alternativet</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4671,7 +4676,7 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Gridcoin version</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+112"/>
         <source>Usage:</source>
         <translation>Användning:</translation>
     </message>
@@ -4681,7 +4686,7 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>Lista kommandon</translation>
     </message>
@@ -4706,12 +4711,12 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Ogiltig -proxy adress: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Okänt nätverk som anges i -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-100"/>
         <source>Insufficient funds</source>
         <translation>Otillräckligt med bitcoins</translation>
     </message>
@@ -4741,12 +4746,12 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Kan inte skriva standardadress</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Söker igen...</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-90"/>
         <source>Done loading</source>
         <translation>Klar med laddning</translation>
     </message>

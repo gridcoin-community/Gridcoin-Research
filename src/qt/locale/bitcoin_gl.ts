@@ -3611,32 +3611,32 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Opcións:</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>Specify data directory</source>
         <translation>Especificar directorio de datos</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
         <translation>Conectar a nodo para recuperar direccións de pares, e desconectar</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Especificar a túa propia dirección pública</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-159"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Aceptar liña de comandos e comandos JSON-RPC</translation>
     </message>
     <message>
-        <location line="+134"/>
+        <location line="+135"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Executar no fondo como un demo e aceptar comandos</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Executar comando cando unha transacción do moedeiro cambia (%s no comando é substituído por TxID)</translation>
     </message>
@@ -3651,7 +3651,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Fallou escoitar en calquera porto. Emprega -listen=0 se queres esto.</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+94"/>
         <source>Specify configuration file (default: gridcoinresearch.conf)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3676,7 +3676,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Nome de usuario para conexións JSON-RPC</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Contrasinal para conexións JSON-RPC</translation>
     </message>
@@ -3701,12 +3701,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Dirección -proxy inválida: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Rede descoñecida especificada en -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-100"/>
         <source>Insufficient funds</source>
         <translation>Fondos insuficientes</translation>
     </message>
@@ -3736,12 +3736,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Non se pode escribir a dirección por defecto</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Rescaneando...</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-90"/>
         <source>Done loading</source>
         <translation>Carga completa</translation>
     </message>
@@ -3751,12 +3751,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Erro</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+114"/>
         <source>To use the %s option</source>
         <translation>Empregar a opción %s</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4107,6 +4107,11 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4191,7 +4196,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>Listar comandos</translation>
     </message>
@@ -4206,7 +4211,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished">Gridcoin</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>This help message</source>
         <translation>Esta mensaxe de axuda</translation>
     </message>
@@ -4231,12 +4236,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Especificar tempo límite da conexión en milisegundos (por defecto: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4246,7 +4251,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4291,12 +4296,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Umbral para desconectar pares con mal comportamento (por defecto: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Número de segundos para manter sen reconectar aos pares con mal comportamento (por defecto: 86400)</translation>
     </message>
@@ -4311,7 +4316,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Máximo buffer por-conexión para enviar, &lt;n&gt;*1000 bytes (por defecto: 1000)</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+60"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4331,7 +4336,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Usar UPnP para mapear o porto de escoita (por defecto: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4341,12 +4346,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+189"/>
+        <location line="+190"/>
         <source>Use the test network</source>
         <translation>Empregar a rede de proba</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4361,12 +4366,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4376,7 +4381,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Permitir conexións JSON-RPC dende direccións IP especificadas</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Enviar comandos a nodo executando na &lt;ip&gt; (por defecto: 127.0.0.1)</translation>
     </message>
@@ -4386,7 +4391,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4396,7 +4401,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+226"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Actualizar moedeiro ao formato máis recente</translation>
     </message>
@@ -4411,7 +4416,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Rescanear transaccións ausentes na cadea de bloques</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Tentar recuperar claves privadas dende un wallet.dat corrupto</translation>
     </message>
@@ -4496,7 +4501,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Fixar tamaño mínimo de bloque en bytes (por defecto: 0)</translation>
     </message>
@@ -4506,12 +4511,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>Opcións SSL: (ver ?a Wiki Bitcoin as instrucción de configuración de SSL)</translation>
     </message>
@@ -4531,7 +4536,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Clave privada do servidor (por defecto: server.perm)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Cantidade inválida para -paytxfee=&lt;cantidade&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4551,22 +4556,22 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4576,7 +4581,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Precaución: wallet.dat corrupto, datos salvagardados! O wallet.dat orixinal foi gardado como wallet.{timestamp}.bak en %s; se o teu balance ou transaccións son incorrectas deberías restauralas dende unha copia de seguridade.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+197"/>
         <source>Vote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4601,7 +4606,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Versión solicitada de proxy -socks descoñecida: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4641,12 +4646,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>Erro cargando wallet.dat</translation>
     </message>
@@ -4671,12 +4676,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Imposible enlazar con %s neste ordenador (enlace devolveu erro %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation type="unfinished"></translation>
     </message>
@@ -4696,12 +4701,12 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4716,7 +4721,7 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation type="unfinished"></translation>
     </message>

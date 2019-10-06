@@ -3694,12 +3694,12 @@ Dit beteken dat &apos;n fooi van ten minste %2 word benodig.</translation>
         <translation>Fout</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+114"/>
         <source>To use the %s option</source>
         <translation>Die %s-opsie gebruik</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4060,6 +4060,11 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
     </message>
     <message>
         <location line="+2"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4144,7 +4149,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>Lys bevele</translation>
     </message>
@@ -4159,7 +4164,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Gridcoin</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>This help message</source>
         <translation>Hierdie help boodskap</translation>
     </message>
@@ -4194,12 +4199,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Spesifiseer verbinding afsnytyd in millisekondes (verstek: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation>Koppel deur sokkies volmag</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Kies die weergawe van sokkies volmag om te gebruik (4-5, verstek: 5)</translation>
     </message>
@@ -4209,7 +4214,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Gebruik volmag te bereik sionele verborge dienste (verstek: dieselfde as - volmag)</translation>
     </message>
     <message>
-        <location line="-171"/>
+        <location line="-172"/>
         <source>Allow DNS lookups for -addnode, -seednode and -connect</source>
         <translation>Laat DNS lookups vir -addnode, -seednode and -connect</translation>
     </message>
@@ -4240,12 +4245,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Koppel aan &apos;n nodus herwin eweknie adresse, en ontkoppel</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Spesifiseer jou eie openbare adres</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-42"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Slegs verbind nodusse in netwerk &lt;net&gt;(IPv4, IPv6 of belegger)</translation>
     </message>
@@ -4275,12 +4280,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Sinchro tyd met ander nodusse. Deaktiveer as tyd op jou stelsel is presiese bv. sinkroniseer met NTP (verstek: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Drempel vir ontkoppel peers eweknieë (verstek: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Aantal sekondes te hou hom wangedra eweknieë uit herkoppel (verstek: 86400)</translation>
     </message>
@@ -4295,7 +4300,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Maksimum per-verbinding stuur buffer, &lt;n&gt;* 1000 grepe (verstek: 1000)</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
         <translation>Gebruik UPnP te karteer die luistervaardigheid poort (verstek: 1 wanneer luister)</translation>
     </message>
@@ -4305,7 +4310,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Gebruik UPnP te karteer die luistervaardigheid poort (verstek: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Fooi per kg te voeg tot transaksies jy stuur</translation>
     </message>
@@ -4320,7 +4325,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Aanvaar bevelreël en JSON-RPC bevele</translation>
     </message>
     <message>
-        <location line="+134"/>
+        <location line="+135"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>Loop in die agtergrond as &apos;n daemon en aanvaar bevele</translation>
     </message>
@@ -4330,7 +4335,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Gebruik die toets netwerk</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Uitset ekstra ontfouting-inligting. Impliseer alle ander - vir foutopspoor * opsies</translation>
     </message>
@@ -4345,7 +4350,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Prepend vir foutopspoor uitsette met timestamp</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+27"/>
         <source>Shrink debug.log file on client startup (default: 1 when no -debug)</source>
         <translation>Debug.log lêer op kliënt begin krimp (verstek: 1 wanneer nie - ontfout)</translation>
     </message>
@@ -4365,7 +4370,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Gebruikersnaam vir JSON-RPC verbindings</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Wagwoord vir JSON-RPC verbindings</translation>
     </message>
@@ -4380,12 +4385,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Laat INTO-RPC verbindings van gespesifiseerde IP adres</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Bevele aan nodus wat op &lt;ip&gt;loop stuur (verstek: 127.0.0.1)</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-183"/>
         <source>Execute command when the best block changes (%s in cmd is replaced by block hash)</source>
         <translation>Uitvoer opdrag wanneer die beste blokkeer veranderinge (%s in cmd is vervang deur blok huts)</translation>
     </message>
@@ -4395,12 +4400,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Uitvoer opdrag wanneer &apos;n Beursie transaksie veranderinge (%s in cmd is vervang deur TxID)</translation>
     </message>
     <message>
-        <location line="+177"/>
+        <location line="+178"/>
         <source>Require a confirmations for change (default: 0)</source>
         <translation>Vereis &apos;n confirmations vir verandering (verstek: 0)</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Transaksie skripte gebruik kanonieke STOOT operateurs dwing (verstek: 1)</translation>
     </message>
@@ -4410,7 +4415,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Uitvoer opdrag wanneer &apos;n relevante ontvanklike ontvang word nie (%s in cmd is vervang deur boodskap)</translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+226"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Gradeer Beursie te nuutste formaat</translation>
     </message>
@@ -4425,7 +4430,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Rescan die blok ketting vir vermiste Beursie transaksies</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Poging om private keys van &apos;n korrupte wallet.dat verhaal</translation>
     </message>
@@ -4450,7 +4455,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Blok skepping opsies:</translation>
     </message>
     <message>
-        <location line="+129"/>
+        <location line="+130"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Stel minimum blok grootte in grepe (verstek: 0)</translation>
     </message>
@@ -4460,12 +4465,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Stel maksimum blok grootte in grepe (verstek: 250000)</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Stel maksimum grootte van hoë-prioriteit/lae-fooi transaksies in grepe (verstek: 27000)</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL opsies: (sien die Bitcoin Wiki vir SSL omstellingsinstruksies)</translation>
     </message>
@@ -4485,7 +4490,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Bediener private sleutel (verstek: server.pem)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Ongeldige bedrag vir - paytxfee = &lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4505,22 +4510,22 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Beursie %s gesetel buite data gids %s.</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Kan verkry &apos;n slot op data gids %s. Gridcoin is waarskynlik reeds te laat loop.</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>Verifieer tans databasis integriteit...</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Fout met die inisialisering van databasis omgewing %s! Om te herwin, RUGSTEUN dat gids, dan verwyder alles uit dit behalwe vir wallet.dat.</translation>
     </message>
@@ -4550,7 +4555,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+37"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4595,7 +4600,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Onbekende netwerk gespesifiseer in - onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-97"/>
+        <location line="-98"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
         <translation>Ongeldige - proxy adres: &apos;%s&apos;</translation>
     </message>
@@ -4645,12 +4650,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Kon nie wallet.dat: Beursie vereis nuwer weergawe van Gridcoin</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Beursie moes word week oorgeskryf: herlaai Gridcoin voltooi</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>Fout laai wallet.dat</translation>
     </message>
@@ -4665,12 +4670,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Verstek adres kan skryf</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Rescanning...</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-63"/>
         <source>Importing blockchain data file.</source>
         <translation>Blockchain data lêer invoer.</translation>
     </message>
@@ -4690,12 +4695,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Kon nie bind aan %s op hierdie rekenaar nie. Gridcoin is waarskynlik reeds te laat loop.</translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Kon nie %s op hierdie rekenaar bind (penarie bevind teruggekeer fout %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Fout: Beursie gesluit, nie skep transaksie</translation>
     </message>
@@ -4715,12 +4720,12 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Fout: Transaksie skepping het misluk</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation>Stuur...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation></translation>
     </message>
@@ -4735,7 +4740,7 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Waarskuwing: Maak asseblief seker dat jou rekenaar se datum en tyd is korrek! As jou horlosie is verkeerd sal Gridcoin nie behoorlik werk nie.</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>Waarskuwing: Skyfspasie laag is!</translation>
     </message>
