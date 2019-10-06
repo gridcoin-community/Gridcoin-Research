@@ -78,6 +78,13 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
+        if (mapArgs.count("-version") || mapArgs.count("--version"))
+        {
+            fprintf(stdout, "%s", VersionMessage().c_str());
+
+            return false;
+        }
+
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)
             if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
