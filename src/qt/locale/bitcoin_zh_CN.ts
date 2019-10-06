@@ -3628,35 +3628,35 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 </translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>Specify data directory</source>
         <translation>指定数据目录
 </translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect to a node to retrieve peer addresses, and disconnect</source>
         <translation>连接一个节点并获取对端地址，然后断开连接</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>指定您的公共地址</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-159"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>接受命令行和 JSON-RPC 命令
 </translation>
     </message>
     <message>
-        <location line="+134"/>
+        <location line="+135"/>
         <source>Run in the background as a daemon and accept commands</source>
         <translation>在后台作为守护进程运行并接受指令
 </translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>当钱包转账变化时执行命令 (命令行中的 %s 会被替换成TxID)</translation>
     </message>
@@ -3671,7 +3671,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>监听任意端口失败。 若您希望如此，使用 -listen=0.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>指定钱包文件（数据目录内）</translation>
     </message>
@@ -3691,7 +3691,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>JSON-RPC 连接用户名</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>JSON-RPC 连接密码
 </translation>
@@ -3707,7 +3707,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>使用 -addnode, -seednode 和 -connect选项时允许DNS查找</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+151"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3722,7 +3722,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>使用 %s 选项</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -3757,22 +3757,22 @@ rpcpassword=%s
         <translation>无效的代理地址: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>被指定的是未知网络 -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-199"/>
+        <location line="-200"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>无法在本机绑定 %s 端口。比特币客户端软件可能已经在运行。</translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>无法绑定本机端口 %s  (返回错误消息 %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>错误：钱包已锁定，不能创建交易</translation>
     </message>
@@ -3792,12 +3792,12 @@ rpcpassword=%s
         <translation>错误：交易创建失败 </translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation>发送中...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>交易被拒绝。您钱包中的钱币可能已经被花费，例如当您使用wallet.dat文件的副本，钱币在该副本中被花费但未在这里标记为已花费时。</translation>
     </message>
@@ -3908,7 +3908,7 @@ rpcpassword=&lt;password&gt;
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>Set the number of threads to service RPC calls (default: 4)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3978,7 +3978,7 @@ rpcpassword=&lt;password&gt;
         <translation>向-server或gridcoind发送指令</translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>命令列表
 </translation>
@@ -3995,7 +3995,7 @@ rpcpassword=&lt;password&gt;
         <translation>格雷德币</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>This help message</source>
         <translation>该帮助信息
 </translation>
@@ -4021,12 +4021,12 @@ rpcpassword=&lt;password&gt;
         <translation>指定连接超时毫秒数 (默认: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation>通过 socks 代理连接</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>选择SOCKS服务器的使用版本(4-5, 默认： 5)</translation>
     </message>
@@ -4036,7 +4036,7 @@ rpcpassword=&lt;password&gt;
         <translation>使用代理到达隐藏服务器 (默认: 与-proxy相同)</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation>使用&lt;port&gt;端口监听连接 (默认: 15714 或测试网络: 25714) {32749 ?} {32748)?}</translation>
     </message>
@@ -4086,12 +4086,12 @@ rpcpassword=&lt;password&gt;
         <translation>与其他节点同步时间。无效化之，若您的系统时间是准确的，例如与NTP同步(默认: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>断开 非礼节点的阀值 (默认: 100) </translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>限制 非礼节点 若干秒内不能连接 (默认: 86400)  (??: 86400)</translation>
     </message>
@@ -4106,7 +4106,7 @@ rpcpassword=&lt;password&gt;
         <translation>每个连接的最大发送缓存，&lt;n&gt;*1000 字节 (默认: 1000)</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
         <translation>使用UPnP暴露本机监听端口（默认：1 当正在监听)</translation>
     </message>
@@ -4116,7 +4116,7 @@ rpcpassword=&lt;password&gt;
         <translation>使用UPnP暴露本机监听端口（默认：0）</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>每发送1KB交易所需的费用</translation>
     </message>
@@ -4126,13 +4126,13 @@ rpcpassword=&lt;password&gt;
         <translation>当生成交易时，忽略价值小于此的输入 (默认：0.01)</translation>
     </message>
     <message>
-        <location line="+189"/>
+        <location line="+190"/>
         <source>Use the test network</source>
         <translation>使用测试网络
 </translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>输出调试信息。蕴含任何其他-debug*选项</translation>
     </message>
@@ -4147,12 +4147,12 @@ rpcpassword=&lt;password&gt;
         <translation>输出调试信息时，前面加上时间戳</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation>跟踪/调试信息发送到调试器</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>使用 &lt;port&gt;端口监听 JSON-RPC 连接 (默认: 15715 ; testnet: 25715) </translation>
     </message>
@@ -4162,7 +4162,7 @@ rpcpassword=&lt;password&gt;
         <translation>允许来自指定IP地址的 JSON-RPC 连接</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>向IP地址为 &lt;ip&gt; 的节点发送指令 (缺省: 127.0.0.1)</translation>
     </message>
@@ -4172,7 +4172,7 @@ rpcpassword=&lt;password&gt;
         <translation>改变时要求一个确认 (默认：0)</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>强制要求转账脚本使用PUSH运算(默认：1)</translation>
     </message>
@@ -4182,7 +4182,7 @@ rpcpassword=&lt;password&gt;
         <translation>当收到相关警报时执行指令 (命令行中的 %s 会被替换成消息)</translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+226"/>
         <source>Upgrade wallet to latest format</source>
         <translation>升级钱包到最新版</translation>
     </message>
@@ -4198,7 +4198,7 @@ rpcpassword=&lt;password&gt;
         <translation>重新扫描数据链以查找遗漏的交易</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>尝试从一个损坏的wallet.dat文件中恢复私钥</translation>
     </message>
@@ -4530,6 +4530,11 @@ rpcpassword=&lt;password&gt;
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4559,12 +4564,12 @@ rpcpassword=&lt;password&gt;
         <translation></translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>以比特为单位设置高优先级/低费用的转账的最大大小 (默认: 27000)</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>SSL选项：(见Bitcoin Wiki中SSL安装的讲解)</translation>
     </message>
@@ -4586,7 +4591,7 @@ rpcpassword=&lt;password&gt;
 </translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>非法金额 -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4606,22 +4611,22 @@ rpcpassword=&lt;password&gt;
         <translation>初始化完整性检查失败。格雷德币正在停止运行。</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>钱包%s位于数据目录%s之外。</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>无法给数据目录 %s 加锁。格雷德币进程可能已在运行。</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>检查数据库完整性...</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>初始化数据库环境 %s 时出错！为恢复，备份该目录，然后删除除wallet.dat之外的全部文件</translation>
     </message>
@@ -4631,7 +4636,7 @@ rpcpassword=&lt;password&gt;
         <translation>警告：wallet.dat损坏，数据已抢救! 原始的wallet.dat文件已在%s中保存为wallet.{timestamp}.bak.若您的余额或转账记录有误，您应该从备份中恢复。</translation>
     </message>
     <message>
-        <location line="+201"/>
+        <location line="+202"/>
         <source>Weight</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4646,7 +4651,7 @@ rpcpassword=&lt;password&gt;
         <translation>被指定的是未知socks代理版本: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>无效的 -tor 地址: &apos;%s&apos;</translation>
     </message>
@@ -4691,7 +4696,7 @@ rpcpassword=&lt;password&gt;
         <translation>wallet.dat钱包文件加载错误：请升级到最新格雷德币客户端</translation>
     </message>
     <message>
-        <location line="+133"/>
+        <location line="+134"/>
         <source>Vote</source>
         <translation type="unfinished">投票</translation>
     </message>
@@ -4706,7 +4711,7 @@ rpcpassword=&lt;password&gt;
         <translation>钱包文件需要重写：请退出并重新启动格雷德币客户端</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>wallet.dat钱包文件加载错误</translation>
     </message>
@@ -4721,12 +4726,12 @@ rpcpassword=&lt;password&gt;
         <translation>无法写入缺省地址</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>正在重新扫描...</translation>
     </message>
     <message>
-        <location line="-62"/>
+        <location line="-63"/>
         <source>Importing blockchain data file.</source>
         <translation>导入区块链数据文件。</translation>
     </message>
@@ -4751,12 +4756,12 @@ rpcpassword=&lt;password&gt;
         <translation>警告：请确定您当前计算机的日期和时间是正确的！格雷德币将无法在错误的时间下正常工作。</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>警告：磁盘剩余空间低!</translation>
     </message>
     <message>
-        <location line="-135"/>
+        <location line="-136"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
