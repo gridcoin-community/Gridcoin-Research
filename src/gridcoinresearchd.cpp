@@ -54,13 +54,6 @@ bool AppInit(int argc, char* argv[])
         //
         // If Qt is used, parameters/bitcoin.conf are parsed in qt/bitcoin.cpp's main()
         ParseParameters(argc, argv);
-        LogPrintf("AppInit");
-        if (!boost::filesystem::is_directory(GetDataDir(false)))
-        {
-            fprintf(stderr, "Error: Specified directory does not exist\n");
-            Shutdown(NULL);
-        }
-        ReadConfigFile(mapArgs, mapMultiArgs);
 
         if (mapArgs.count("-?") || mapArgs.count("--help"))
         {
@@ -84,6 +77,16 @@ bool AppInit(int argc, char* argv[])
 
             return false;
         }
+
+        LogPrintf("AppInit");
+
+        if (!boost::filesystem::is_directory(GetDataDir(false)))
+        {
+            fprintf(stderr, "Error: Specified directory does not exist\n");
+            Shutdown(NULL);
+        }
+
+        ReadConfigFile(mapArgs, mapMultiArgs);
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)
