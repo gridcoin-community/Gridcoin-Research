@@ -123,7 +123,7 @@
         </layout>
        </item>
        <item>
-        <widget class="QCheckBox" name="bitcoinAtStartup">
+        <widget class="QCheckBox" name="gridcoinAtStartup">
          <property name="toolTip">
           <string>Automatically start Gridcoin after logging in to the system.</string>
          </property>

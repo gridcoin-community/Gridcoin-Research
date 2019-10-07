@@ -103,7 +103,7 @@ Copyright &amp;copy; 2013-YYYY The Gridcoin developers</string>
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="label_2">
+      <widget class="QLabel" name="licenseLabel">
        <property name="cursor">
         <cursorShape>IBeamCursor</cursorShape>
        </property>
