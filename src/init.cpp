@@ -200,6 +200,7 @@ std::string HelpMessage()
     //gridcoinresearch ports: testnet ? 32748 : 32749;
     string strUsage = _("Options:") + "\n" +
         "  -?                     " + _("This help message") + "\n" +
+        "  -version               " + _("Print version and exit") + "\n" +
         "  -conf=<file>           " + _("Specify configuration file (default: gridcoinresearch.conf)") + "\n" +
         "  -pid=<file>            " + _("Specify pid file (default: gridcoind.pid)") + "\n" +
         "  -datadir=<dir>         " + _("Specify data directory") + "\n" +
@@ -288,6 +289,15 @@ std::string HelpMessage()
         "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n";
 
     return strUsage;
+}
+
+std::string VersionMessage()
+{
+    // Note: this prints the version of the binary. It does not necessarily
+    // match the version of the running wallet when using the CLI to invoke
+    // RPC functions on a remote server.
+    //
+    return "Gridcoin Core " + FormatFullVersion() + "\n";
 }
 
 /** Sanity checks

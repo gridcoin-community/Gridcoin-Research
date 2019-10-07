@@ -8,9 +8,13 @@ Comment=Earn Gridcoins by participating in the BOINC distributed computing netwo
 Comment[de]=Gridcoins für Teilnahme am verteilten Rechnennetzwerk BOINC verdienen
 Categories=Office;Finance;P2P;Network;Qt;
 Keywords=crypto;cryptocurrency;cryptocoin;bitcoin;altcoin;boinc;
-Exec=gridcoinresearch %u
+Exec=gridcoinresearch
 Terminal=false
 Type=Application
 Icon=gridcoinresearch
-MimeType=x-scheme-handler/gridcoin;
-StartupWMClass=Gridcoin-Qt
+StartupWMClass=gridcoinresearch
+Actions=Testnet;
+
+[Desktop Action Testnet]
+Name=Testnet
+Exec=sh -c "gridcoinresearch -testnet"

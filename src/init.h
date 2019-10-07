@@ -19,7 +19,7 @@ bool AppInit2(ThreadHandlerPtr threads);
 void ThreadAppInit2(ThreadHandlerPtr th);
 
 std::string HelpMessage();
+std::string VersionMessage();
 std::string LogSomething();
-
 
 #endif

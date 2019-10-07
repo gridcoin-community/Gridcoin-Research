@@ -3628,7 +3628,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Seçenekler:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>This help message</source>
         <translation>Bu yardım mesajı</translation>
     </message>
@@ -3663,12 +3663,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bağlantı zaman aşım süresini milisaniye olarak belirt (varsayılan: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Kullanılacak socks vekil sunucusunun versiyonunu seç (4-5, varsayılan: 5)</translation>
     </message>
@@ -3678,7 +3678,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Tor gizli servisine erişim için vekil sunucu kullan (varsayılan: -proxy ile aynı)</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation type="unfinished">&lt;port&gt; üzerinde bağlantıları dinle (varsayılan: 15714 veya testnet: 25714) {32749 ?} {32748)?}</translation>
     </message>
@@ -3698,12 +3698,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Eş adresleri elde etmek için bir düğüme bağlan ve ardından bağlantıyı kes</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Kendi genel adresinizi tanımlayın</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-42"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Sadece &lt;net&gt; şebekesindeki ağ noktalarına bağlan (IPv4, IPv6 ya da Tor)</translation>
     </message>
@@ -3733,12 +3733,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Diğer ağ noktalarıyla saati senkronize et. Sisteminizdeki saat doğru ise devre dışı bırakın, örn: NTC ile senkronize etme (varsayılan: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Aksaklık gösteren eşlerle baılantıyı kesme sınırı (varsayılan: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Aksaklık gösteren eşlerle yeni bağlantıları engelleme süresi, saniye olarak (varsayılan: 86400)</translation>
     </message>
@@ -4065,6 +4065,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4149,7 +4154,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Dinlenecek portu haritalamak için UPnP kullan (varsayılan: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4164,12 +4169,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Komut satırı ve JSON-RPC komutlarını kabul et</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+182"/>
         <source>Use the test network</source>
         <translation>Deneme şebekesini kullan</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Ekstra hata ayıklama bilgisini çıktı al. Diğer tüm -debug* seçeneklerini kapsar</translation>
     </message>
@@ -4184,12 +4189,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Tarih bilgisini, hata ayıklama çıktısının başına ekle</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation>Hata ayıklayıcıya hata ayıklama bilgisi gönder</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>&lt;port&gt; üzerinde JSON-RPC bağlantılarını dinle (varsayılan: 15715 veya testnet: 25715)</translation>
     </message>
@@ -4199,7 +4204,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Belirtilen IP adresinden JSON-RPC bağlantılarını kabul et</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Şu &lt;ip&gt; adresinde (varsayılan: 127.0.0.1) çalışan ağ noktasına komut yolla</translation>
     </message>
@@ -4209,7 +4214,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4219,7 +4224,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+209"/>
+        <location line="+210"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4244,7 +4249,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Blok zincirini eksik cüzdan işlemleri için tekrar yapılandır</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Bozuk bir wallet.dat dosyasından özel anahtarları geri kazanmayı dene</translation>
     </message>
@@ -4329,7 +4334,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Bayt olarak asgari blok boyutunu tanımla (varsayılan: 0)</translation>
     </message>
@@ -4339,12 +4344,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bayt olarak maksimum blok boyutunu belirle (varsayılan: 250000)</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Bayt olarak yüksek öncelikli/düşük ücretli işlemlerin maksimum boyutunu belirle (varsayılan: 27000)</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation> SSL seçenekleri: (SSL kurulum bilgisi için Bitcoin vikisine bakınız)</translation>
     </message>
@@ -4364,7 +4369,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Sunucu özel anahtarı (varsay?lan: server.pem)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>-paytxfee=&lt;meblağ&gt; için geçersiz meblağ: &apos;%s&apos;</translation>
     </message>
@@ -4384,22 +4389,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Başlatma kontrolü başarışız oldu. Gridcoin kapanıyor.</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>Veritabanı bütünlüğü doğrulanıyor...</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Veritabanı ortamı %s başlatılırken hata oluştu! Kurtarmak için, İLGİLİ KLASÖRÜ YEDEKLEYİN, ardından wallet.dat dışındaki herşeyi silin.</translation>
     </message>
@@ -4409,7 +4414,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Uyarı: wallet.dat bozuk, veriler geri kazanıldı! Özgün wallet.dat, wallet.{zamandamgası}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da işlemleriniz yanlışsa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+197"/>
         <source>Vote</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4434,7 +4439,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Bilinmeyen bir -socks vekil sürümü talep edildi: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Geçersiz -tor adresi: &apos;%s&apos;</translation>
     </message>
@@ -4474,12 +4479,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>HATA: wallet.dat yüklenemedi, wallet.dat daha yeni bir Gridcoin istemcisine ihtiyaç duyuyor.</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Cüzdanın tekrardan oluşturulması gerekiyor: Gridcoin istemcisini yeniden başlatın</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>wallet.dat dosyasının yüklenmesinde hata oluştu</translation>
     </message>
@@ -4504,12 +4509,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Bu bilgisayarda %s unsuruna bağlanılamadı. (bind şu hatayı iletti: %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Hata: Cüzdan kilitli, işlem yapılamıyor.</translation>
     </message>
@@ -4529,12 +4534,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Hata: İşlem yaratma başarısız oldu</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation type="unfinished">Gönderiyor...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Hata: İşlem reddedildi. Bu; cüzdanınızdaki bazı coinler, önceden harcanmışsa, örneğin wallet.dat dosyasının bir kopyasını kullandıysanız ve bu kopyadaki coinler harcanmış ise ve burada harcanmış olarak işaretlenmediğinden olabilir.</translation>
     </message>
@@ -4549,7 +4554,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Uyarı: Lütfen bilgisayarınızın tarih ve saatinin doğruluğunu kontrol ediniz! Saatiniz yanlış ise, Gridcoin düzgün çalışmayacaktır.</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>Uyarı: Disk alanınız düşük!</translation>
     </message>
@@ -4559,7 +4564,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Arka planda daemon (servis) olarak çalış ve komutları kabul et</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Bir cüzdan işlemi değiştiğinde komutu çalıştır (komuttaki %s işlem kimliği ile değiştirilecektir)</translation>
     </message>
@@ -4574,7 +4579,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Herhangi bir portun dinlenmesi başarısız oldu. Bunu istiyorsanız -listen=0 seçeneğini kullanınız.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Cüzdan dosyası belirtiniz (veri klasörünün içinde)</translation>
     </message>
@@ -4594,7 +4599,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>JSON-RPC bağlantıları için kullanıcı ismi</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>JSON-RPC bağlantıları için parola</translation>
     </message>
@@ -4609,12 +4614,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>-addnode, -seednode ve -connect için DNS aramalarına izin ver</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>To use the %s option</source>
         <translation>%s seçeneğini kullanmak için</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4653,7 +4658,7 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
         <translation>Gridcoin Versiyonu</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+112"/>
         <source>Usage:</source>
         <translation>Kullanım:</translation>
     </message>
@@ -4663,7 +4668,7 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
         <translation>Server&apos;a veya Hata Ayıklama Konsoluna Komut Gönder</translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>Komutları Listele</translation>
     </message>
@@ -4688,12 +4693,12 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
         <translation>Geçersiz -proxy adresi: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>-onlynet için bilinmeyen bir ağ belirtildi: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-100"/>
         <source>Insufficient funds</source>
         <translation>Yetersiz Bakiye</translation>
     </message>
@@ -4723,12 +4728,12 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
         <translation>Varsayılan adres yazılamadı</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Yeniden taranıyor...</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-90"/>
         <source>Done loading</source>
         <translation>Yükleme Tamamlandı</translation>
     </message>

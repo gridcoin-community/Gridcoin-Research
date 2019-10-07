@@ -3662,7 +3662,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Opcje:</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>This help message</source>
         <translation>Ta wiadomość pomocy</translation>
     </message>
@@ -3697,12 +3697,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Wskaż czas oczekiwania bezczynności połączenia w milisekundach (domyślnie: 5000)</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-121"/>
         <source>Connect through socks proxy</source>
         <translation>Połącz przez socks proxy</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Select the version of socks proxy to use (4-5, default: 5)</source>
         <translation>Wybierz którą wersję socks proxy użyć (4-5, domyślnie: 5)</translation>
     </message>
@@ -3712,7 +3712,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Użyj proxy do połączenia z usługą TOR (domyślnie: takie samo jak proxy)</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-94"/>
         <source>Listen for connections on &lt;port&gt; (default: 32749 or testnet: 32748)</source>
         <translation>Nasłuchuj połaczeń na &lt;porcie&gt; (domyślnie: 32749 lub testnet: 32748)</translation>
     </message>
@@ -3732,12 +3732,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Podłącz się do węzła aby otrzymać adresy peerów i rozłącz</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+124"/>
         <source>Specify your own public address</source>
         <translation>Podaj swój publiczny adres</translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-42"/>
         <source>Only connect to nodes in network &lt;net&gt; (IPv4, IPv6 or Tor)</source>
         <translation>Połącz z węzłami tylko w sieci &lt;net&gt; (IPv4, IPv6 lub Tor)</translation>
     </message>
@@ -3767,12 +3767,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Czas synchronizacji z innymi gałęziami. Wyłącz jeśli czas na twoim systemie jest dokładny n.p. synchronizuje się przez NTP (domyślnie: 1)</translation>
     </message>
     <message>
-        <location line="+193"/>
+        <location line="+194"/>
         <source>Threshold for disconnecting misbehaving peers (default: 100)</source>
         <translation>Próg po którym nast?pi rozłączenie nietrzymających się zasad peerów (domyślnie: 100)</translation>
     </message>
     <message>
-        <location line="-203"/>
+        <location line="-204"/>
         <source>Number of seconds to keep misbehaving peers from reconnecting (default: 86400)</source>
         <translation>Czas w sekundach, przez jaki nietrzymający się zasad peerzy nie będą mogli ponownie się podłączyć (domyślnie: 86400)</translation>
     </message>
@@ -3787,7 +3787,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Maksymalny bufor wysyłu na połączenie, &lt;n&gt;*1000 bajtów (domyślnie: 1000)</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+80"/>
         <source>Use UPnP to map the listening port (default: 1 when listening)</source>
         <translation>Używaj UPnP do mapowania portu nasłuchu (domy?lnie: 1 gdy nas?uchuje)</translation>
     </message>
@@ -3797,7 +3797,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Używaj UPnP do mapowania portu nasłuchu (domy?lnie: 0)</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-118"/>
         <source>Fee per KB to add to transactions you send</source>
         <translation>Opłata za KB dodana do transakcji którą wysyłasz</translation>
     </message>
@@ -3853,7 +3853,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+154"/>
+        <location line="+155"/>
         <source>Staking Only - Investor Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3873,7 +3873,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Użyj sieci testowej</translation>
     </message>
     <message>
-        <location line="-60"/>
+        <location line="-61"/>
         <source>Output extra debugging information. Implies all other -debug* options</source>
         <translation>Wyświetl dodatkowe informacje debugowania. Zawiera wszystkie inne opcje -debug*</translation>
     </message>
@@ -3888,12 +3888,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Poprzedzaj informacje debuggera znacznikiem czasu</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Send trace/debug info to debugger</source>
         <translation>Wyślij wyśledzone/zdebugowane informacje do debuggera</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: 15715 or testnet: 25715)</source>
         <translation>Nasłuchuj połączeń JSON-RPC na &lt;porcie&gt; (domyślnie: 15715 lub testnet: 25715)</translation>
     </message>
@@ -3903,7 +3903,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Przyjmuj połączenia JSON-RPC ze wskazanego adresu IP</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+129"/>
         <source>Send commands to node running on &lt;ip&gt; (default: 127.0.0.1)</source>
         <translation>Wysyłaj polecenia do węzła działającego na &lt;ip&gt; (domyślnie: 127.0.0.1)</translation>
     </message>
@@ -3913,7 +3913,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Wymagaj potwierdzenia dla zmian</translation>
     </message>
     <message>
-        <location line="-192"/>
+        <location line="-193"/>
         <source>Enforce transaction scripts to use canonical PUSH operators (default: 1)</source>
         <translation>Wymuś by skrypty transakcyjne używały konanicznych operatorów PUSH</translation>
     </message>
@@ -3923,12 +3923,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Uruchom komendę przy odebraniu odpowiedniego alarmu (%s w cmd jest zastąpione wiadomością)</translation>
     </message>
     <message>
-        <location line="+225"/>
+        <location line="+226"/>
         <source>Upgrade wallet to latest format</source>
         <translation>Zaktualizuj portfel do najnowszego formatu</translation>
     </message>
     <message>
-        <location line="-168"/>
+        <location line="-169"/>
         <source>Address</source>
         <translation type="unfinished">Adres</translation>
     </message>
@@ -4194,6 +4194,11 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
     </message>
     <message>
         <location line="+8"/>
+        <source>Print version and exit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4263,12 +4268,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-174"/>
+        <location line="-175"/>
         <source>Accept command line and JSON-RPC commands</source>
         <translation>Akceptuj linię poleceń oraz polecenia JSON-RPC</translation>
     </message>
     <message>
-        <location line="+146"/>
+        <location line="+147"/>
         <source>Set key pool size to &lt;n&gt; (default: 100)</source>
         <translation>Ustaw rozmiar puli kluczy na &lt;n&gt; (domyślnie: 100)</translation>
     </message>
@@ -4278,7 +4283,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Przeskanuj blok łańcuchów żeby znaleźć zaginione transakcje portfela</translation>
     </message>
     <message>
-        <location line="-118"/>
+        <location line="-119"/>
         <source>Attempt to recover private keys from a corrupt wallet.dat</source>
         <translation>Próbuj odzyskać klucze prywatne z uszkodzonego wallet.dat</translation>
     </message>
@@ -4363,7 +4368,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Set minimum block size in bytes (default: 0)</source>
         <translation>Ustaw minimalny rozmiar bloku w bajtach (domyślnie: 0)</translation>
     </message>
@@ -4373,12 +4378,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Ustaw maksymalny rozmiar bloku w bajtach (domyślnie: 250000)</translation>
     </message>
     <message>
-        <location line="-183"/>
+        <location line="-184"/>
         <source>Set maximum size of high-priority/low-fee transactions in bytes (default: 27000)</source>
         <translation>Ustaw maksymalny rozmiar transakcji wysokiego-priorytetu/niskiej-opłaty w bajtach</translation>
     </message>
     <message>
-        <location line="+171"/>
+        <location line="+172"/>
         <source>SSL options: (see the Bitcoin Wiki for SSL setup instructions)</source>
         <translation>Opcje SSL: (odwiedź Bitcoin Wiki w celu uzyskania instrukcji)</translation>
     </message>
@@ -4398,7 +4403,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Klucz prywatny serwera (domyślnie: server.pem)</translation>
     </message>
     <message>
-        <location line="-64"/>
+        <location line="-65"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Nieprawidłowa kwota dla -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
@@ -4418,22 +4423,22 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Inicjalizacja poprawności działa nie udała się. Aplikacja gridcoin wyłączy się.</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+113"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Portfel %s znajduje się poza folderem z danymi %s.</translation>
     </message>
     <message>
-        <location line="-253"/>
+        <location line="-254"/>
         <source>Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.</source>
         <translation>Nie można uzyskać blokady na folderze %s.  Aplikacja Gridcoin jest już prawdopodobnie uruchomiona.</translation>
     </message>
     <message>
-        <location line="+251"/>
+        <location line="+252"/>
         <source>Verifying database integrity...</source>
         <translation>Sprawdzanie integralności bazy danych...</translation>
     </message>
     <message>
-        <location line="-243"/>
+        <location line="-244"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation>Bład inicjalizacji bazy danych %s! Aby odzyskać, ZRÓB KOPIĘ ZAPASOWĄ FOLDERU, dopiero usuń z niego wszystko POMIJAJĄC wallet.dat.</translation>
     </message>
@@ -4443,7 +4448,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Ostrzeżenie: Odtworzono dane z uszkodzonego pliku wallet.dat! Oryginalny wallet.dat został zapisany jako wallet.{timestamp}.bak w %s; jeżli twoje saldo lub transakcje są niepoprawne powinieneś odtworzyć kopię zapasową.</translation>
     </message>
     <message>
-        <location line="+196"/>
+        <location line="+197"/>
         <source>Vote</source>
         <translation type="unfinished">Głos</translation>
     </message>
@@ -4468,7 +4473,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Nieznana wersja proxy w -socks: %i</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-95"/>
         <source>Invalid -tor address: &apos;%s&apos;</source>
         <translation>Nieprawidłowy adres -tor: &apos;%s&apos;</translation>
     </message>
@@ -4508,12 +4513,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Błąd ładowania wallet.dat: Portfel wymaga nowej wersji aplikacji Gridcoin</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+137"/>
         <source>Wallet needed to be rewritten: restart Gridcoin to complete</source>
         <translation>Portfel potrzebuje być zapisany: uruchom ponownie aplikację Gridcoin aby zakończyć</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-139"/>
         <source>Error loading wallet.dat</source>
         <translation>Błąd ładowania wallet.dat</translation>
     </message>
@@ -4538,12 +4543,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Nie można przywiązać %s na tym komputerze. Aplikacja Gridcoin jest już prawdopodobnie uruchomiona.</translation>
     </message>
     <message>
-        <location line="+195"/>
+        <location line="+196"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Nie można przywiązać %s na tym komputerze (bind returned error %d, %s)</translation>
     </message>
     <message>
-        <location line="-114"/>
+        <location line="-115"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation>Błąd: Portfel zablokowany, nie mozna utworzyć transakcji  </translation>
     </message>
@@ -4563,12 +4568,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Bład: Utworzenie transakcji nie powiodło się  </translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+88"/>
         <source>Sending...</source>
         <translation>Wysyłanie...</translation>
     </message>
     <message>
-        <location line="-198"/>
+        <location line="-199"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Błąd: Transakcja odrzucona.  Może się tak zdarzyć jeśli niektóre z monet w twoich portfelu zostały już wydane, czyli jeśli użyłeś kopii zapasowej wallet.dat i monety zostały wydany w kopii ale nie zostały oznaczone jako wydane tutaj.</translation>
     </message>
@@ -4583,7 +4588,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Ostrzeżenie: Proszę sprawdzić czy data i czas twojego komputera są prawidłowe! Jeśli twój zegar jest źle ustawiony, aplikacja Gridcoin nie będzie prawidłowo pracować.</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+207"/>
         <source>Warning: Disk space is low!</source>
         <translation>Ostrzeżenie: Mało miejsca na dysku!</translation>
     </message>
@@ -4593,7 +4598,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Uruchom w tle jako daemon i przyjmuj polecenia</translation>
     </message>
     <message>
-        <location line="-181"/>
+        <location line="-182"/>
         <source>Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)</source>
         <translation>Wykonaj polecenie, kiedy transakcja portfela ulegnie zmianie (%s w poleceniu zostanie zastąpione przez TxID)</translation>
     </message>
@@ -4608,7 +4613,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Próba nasłuchiwania na jakimkolwiek porcie nie powiodła się. Użyj -listen=0 jeśli tego chcesz.</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Specify wallet file (within data directory)</source>
         <translation>Określ plik portfela (w obrębie folderu danych)</translation>
     </message>
@@ -4628,7 +4633,7 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Nazwa użytkownika dla połączeń JSON-RPC</translation>
     </message>
     <message>
-        <location line="-58"/>
+        <location line="-59"/>
         <source>Password for JSON-RPC connections</source>
         <translation>Hasło do połączeń JSON-RPC</translation>
     </message>
@@ -4643,12 +4648,12 @@ Wartości poniżej 0.546*minimalna wartość przekazu. są traktowane jako &quot
         <translation>Zezwól -addnode, -seednode i -connect na łączenie się z serwerem DNS</translation>
     </message>
     <message>
-        <location line="+157"/>
+        <location line="+158"/>
         <source>To use the %s option</source>
         <translation>Aby użyć opcji %s</translation>
     </message>
     <message>
-        <location line="-258"/>
+        <location line="-259"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -4697,7 +4702,7 @@ Jeżeli plik nie istnieje, utwórz go z uprawnieniami właćciciela-tylko-do-odc
         <translation>Wersja Gridcoin</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+112"/>
         <source>Usage:</source>
         <translation>Użycie:</translation>
     </message>
@@ -4707,7 +4712,7 @@ Jeżeli plik nie istnieje, utwórz go z uprawnieniami właćciciela-tylko-do-odc
         <translation>Wyślij komendę do -server lub gridcoin</translation>
     </message>
     <message>
-        <location line="-51"/>
+        <location line="-52"/>
         <source>List commands</source>
         <translation>Lista poleceń</translation>
     </message>
@@ -4732,12 +4737,12 @@ Jeżeli plik nie istnieje, utwórz go z uprawnieniami właćciciela-tylko-do-odc
         <translation>Nieprawidłowy adres -proxy: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+97"/>
+        <location line="+98"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Nieznana sieć w -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-100"/>
         <source>Insufficient funds</source>
         <translation>Niewystarczające środki</translation>
     </message>
@@ -4767,12 +4772,12 @@ Jeżeli plik nie istnieje, utwórz go z uprawnieniami właćciciela-tylko-do-odc
         <translation>Nie można zapisać domyślnego adresu</translation>
     </message>
     <message>
-        <location line="+102"/>
+        <location line="+103"/>
         <source>Rescanning...</source>
         <translation>Ponowne skanowanie...</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-90"/>
         <source>Done loading</source>
         <translation>Wczytywanie zakończone</translation>
     </message>
