@@ -207,112 +207,112 @@ void DiagnosticsDialog::on_testBtn_clicked()
     int result = 0;
 
     //boin path
-    ui->boincPathResultLbl->setText("Testing...");
+    ui->boincPathResultLabel->setText("Testing...");
     this->repaint();
 
     if (VerifyBoincPath())
-        ui->boincPathResultLbl->setText("Passed");
+        ui->boincPathResultLabel->setText("Passed");
 
     else
-        ui->boincPathResultLbl->setText("Failed");
+        ui->boincPathResultLabel->setText("Failed");
 
     //find cpid
 #ifndef WIN32
-    ui->findCPIDResultLbl->setText("N/A");
+    ui->findCPIDResultLabel->setText("N/A");
 #else
-    ui->findCPIDResultLbl->setText("Testing...");
+    ui->findCPIDResultLabel->setText("Testing...");
     this->repaint();
 
     if (FindCPID())
-        ui->findCPIDResultLbl->setText(QString::fromStdString("Passed CPID: " + GetArgument("PrimaryCPID", "")));
+        ui->findCPIDResultLabel->setText(QString::fromStdString("Passed CPID: " + GetArgument("PrimaryCPID", "")));
 
     else
-        ui->findCPIDResultLbl->setText("Failed (Is PrimaryCPID in gridcoinresearch.conf?)");
+        ui->findCPIDResultLabel->setText("Failed (Is PrimaryCPID in gridcoinresearch.conf?)");
 #endif
     //cpid valid
-    ui->verifyCPIDValidResultLbl->setText("Testing...");
+    ui->verifyCPIDValidResultLabel->setText("Testing...");
     this->repaint();
 
     if (VerifyIsCPIDValid())
-        ui->verifyCPIDValidResultLbl->setText("Passed");
+        ui->verifyCPIDValidResultLabel->setText("Passed");
 
     else
-        ui->verifyCPIDValidResultLbl->setText("Failed (BOINC CPID does not match CPID)");
+        ui->verifyCPIDValidResultLabel->setText("Failed (BOINC CPID does not match CPID)");
 
     //cpid has rac
-    ui->verifyCPIDHasRACResultLbl->setText("Testing...");
+    ui->verifyCPIDHasRACResultLabel->setText("Testing...");
     this->repaint();
 
     if (VerifyCPIDHasRAC())
-        ui->verifyCPIDHasRACResultLbl->setText(QString::fromStdString("Passed"));
+        ui->verifyCPIDHasRACResultLabel->setText(QString::fromStdString("Passed"));
 
     else
-        ui->verifyCPIDHasRACResultLbl->setText("Failed");
+        ui->verifyCPIDHasRACResultLabel->setText("Failed");
 
     //cpid is in nn
-    ui->verifyCPIDIsInNNResultLbl->setText("Testing...");
+    ui->verifyCPIDIsInNNResultLabel->setText("Testing...");
     this->repaint();
 
     if (VerifyCPIDIsInNeuralNetwork())
-        ui->verifyCPIDIsInNNResultLbl->setText("Passed");
+        ui->verifyCPIDIsInNNResultLabel->setText("Passed");
 
     else
-        ui->verifyCPIDIsInNNResultLbl->setText("Failed");
+        ui->verifyCPIDIsInNNResultLabel->setText("Failed");
 
     //wallet synced
-    ui->verifyWalletIsSyncedResultLbl->setText("Testing...");
+    ui->verifyWalletIsSyncedResultLabel->setText("Testing...");
     this->repaint();
 
     if (VerifyWalletIsSynced())
-        ui->verifyWalletIsSyncedResultLbl->setText("Passed");
+        ui->verifyWalletIsSyncedResultLabel->setText("Passed");
 
     else
-        ui->verifyWalletIsSyncedResultLbl->setText("Failed");
+        ui->verifyWalletIsSyncedResultLabel->setText("Failed");
 
     //clock
-    ui->verifyClkResultLbl->setText("Testing...");
+    ui->verifyClkResultLabel->setText("Testing...");
     this->repaint();
 
     VerifyClock();
 
     //seed nodes
-    ui->verifySeedNodesResultLbl->setText("Testing...");
+    ui->verifySeedNodesResultLabel->setText("Testing...");
     this->repaint();
 
     result = VerifyCountSeedNodes();
 
     if (result >= 1 && result < 3)
-        ui->verifySeedNodesResultLbl->setText("Warning: Count=" + QString::number(result) + " (Pass=3+)");
+        ui->verifySeedNodesResultLabel->setText("Warning: Count=" + QString::number(result) + " (Pass=3+)");
 
     else if(result >= 3)
-        ui->verifySeedNodesResultLbl->setText("Passed: Count=" + QString::number(result));
+        ui->verifySeedNodesResultLabel->setText("Passed: Count=" + QString::number(result));
 
     else
-        ui->verifySeedNodesResultLbl->setText("Failed: Count=" + QString::number(result));
+        ui->verifySeedNodesResultLabel->setText("Failed: Count=" + QString::number(result));
 
     //connection count
-    ui->verifyConnectionsResultLbl->setText("Testing...");
+    ui->verifyConnectionsResultLabel->setText("Testing...");
     this->repaint();
 
     result = VerifyCountConnections();
 
     if (result <= 7 && result >= 1)
-        ui->verifyConnectionsResultLbl->setText("Warning: Count=" + QString::number(result) + " (Pass=8+)");
+        ui->verifyConnectionsResultLabel->setText("Warning: Count=" + QString::number(result) + " (Pass=8+)");
 
     else if (result >=8)
-        ui->verifyConnectionsResultLbl->setText("Passed: Count=" + QString::number(result));
+        ui->verifyConnectionsResultLabel->setText("Passed: Count=" + QString::number(result));
 
     else
-        ui->verifyConnectionsResultLbl->setText("Failed: Count=" + QString::number(result));
+        ui->verifyConnectionsResultLabel->setText("Failed: Count=" + QString::number(result));
 
     //tcp port
-    ui->verifyTCPPortResultLbl->setText("Testing...");
+    ui->verifyTCPPortResultLabel->setText("Testing...");
     this->repaint();
 
     VerifyTCPPort();
 
     //client version
-    ui->checkClientVersionResultLbl->setText("Testing...");
+    ui->checkClientVersionResultLabel->setText("Testing...");
     networkManager->get(QNetworkRequest(QUrl("https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest")));
 
     return;
@@ -334,7 +334,7 @@ void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
 
 void DiagnosticsDialog::clkSocketError(QAbstractSocket::SocketError error)
 {
-    ui->verifyClkResultLbl->setText("Failed to make connection to NTP server");
+    ui->verifyClkResultLabel->setText("Failed to make connection to NTP server");
 
     udpSocket->close();
 
@@ -363,10 +363,10 @@ void DiagnosticsDialog::clkFinished()
                 boost::posix_time::time_duration timeDiff = networkTime - localTime;
 
                 if (timeDiff.minutes() < 3)
-                    ui->verifyClkResultLbl->setText("Passed");
+                    ui->verifyClkResultLabel->setText("Passed");
 
                 else
-                    ui->verifyClkResultLbl->setText("Failed (Sync local time with network)");
+                    ui->verifyClkResultLabel->setText("Failed (Sync local time with network)");
 
                 this->repaint();
             }
@@ -387,7 +387,7 @@ void DiagnosticsDialog::TCPFinished()
 
 void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket)
 {
-    ui->verifyTCPPortResultLbl->setText("Failed (Port 32749 may be blocked by your firewall)");
+    ui->verifyTCPPortResultLabel->setText("Failed (Port 32749 may be blocked by your firewall)");
     this->repaint();
 
     return;
@@ -398,7 +398,7 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply)
     if (reply->error())
     {
         // Incase ssl dlls are not present or corrupted; avoid crash
-        ui->checkClientVersionResultLbl->setText("Failed (" + reply->errorString() + ")");
+        ui->checkClientVersionResultLabel->setText("Failed (" + reply->errorString() + ")");
 
         return;
     }
@@ -445,19 +445,19 @@ void DiagnosticsDialog::getGithubVersionFinished(QNetworkReply *reply)
             iCurrent = std::stoi(currentVersionList.at(i), nullptr, 10);
 
             if (iNew > iCurrent) {
-                ui->checkClientVersionResultLbl->setText("Failed (An update is available, please update to " + QString::fromStdString(newVersionString) + ")");
+                ui->checkClientVersionResultLabel->setText("Failed (An update is available, please update to " + QString::fromStdString(newVersionString) + ")");
 
                 return;
             }
 
             else
-                ui->checkClientVersionResultLbl->setText("Up to date");
+                ui->checkClientVersionResultLabel->setText("Up to date");
         }
     }
 
     catch (std::exception& ex)
     {
-        ui->checkClientVersionResultLbl->setText("Failed: std exception occurred -> " + QString::fromUtf8(ex.what()));
+        ui->checkClientVersionResultLabel->setText("Failed: std exception occurred -> " + QString::fromUtf8(ex.what()));
     }
 
     return;
