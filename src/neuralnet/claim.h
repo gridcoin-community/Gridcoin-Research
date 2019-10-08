@@ -195,6 +195,8 @@ struct Claim
     //! The significance of the last block is embedded into the claim signature
     //! for researchers so we can consider this field informational.
     //!
+    //! TODO: Remove this field after the switch to block version 11.
+    //!
     uint256 m_last_block_hash; // MiningCPID::lastblockhash
 
     //!
@@ -326,32 +328,30 @@ struct Claim
     //!
     //! \brief Sign an instance that claims research rewards.
     //!
-    //! \param beacon_private_key The private key of the beacon to sign the
-    //! claim with.
+    //! \param private_key     The private key of the beacon to sign the claim
+    //! with.
+    //! \param last_block_hash Hash of the block that preceeds the block that
+    //! contains the claim.
     //!
     //! \return \c false if the claim does not contain a valid CPID or if the
     //! signing fails.
     //!
-    bool Sign(CKey& beacon_private_key);
+    bool Sign(CKey& private_key, const uint256& last_block_hash);
 
     //!
     //! \brief Validate the authenticity of a research reward claim by verifying
     //! the digital signature.
     //!
-    //! \param beacon_public_key The public key of the beacon that signed the
+    //! \param public_key      The public key of the beacon that signed the
     //! claim.
+    //! \param last_block_hash Hash of the block that preceeds the block that
+    //! contains the claim.
     //!
     //! \return \c true if the signature check passes using the supplied key.
     //!
-    bool VerifySignature(CKey& beacon_public_key) const;
-
-    //!
-    //! \brief Get the hash of a subset of the data in the object used as input
-    //! to sign or verify a research reward claim.
-    //!
-    //! \return Hash of the CPID and last block hash contained in the claim.
-    //!
-    uint256 GetVerificationHash() const;
+    bool VerifySignature(
+        const CPubKey& public_key,
+        const uint256& last_block_hash) const;
 
     //!
     //! \brief Compute a hash of the claim data.
@@ -393,7 +393,6 @@ struct Claim
         READWRITE(m_organization);
 
         READWRITE(VarDouble<COIN_PLACES>(m_block_subsidy));
-        READWRITE(m_last_block_hash);
 
         // Serialize research-related fields only for researcher claims:
         //
@@ -423,9 +422,11 @@ typedef boost::optional<Claim> ClaimOption;
 //! \brief Check the authenticity of a research reward claim by verifying the
 //! signature against a matching beacon public key.
 //!
-//! \brief claim Contains the claim data to verify.
+//! \brief claim           Contains the claim data to verify.
+//! \param last_block_hash Hash of the block that preceeds the block that
+//! contains the claim.
 //!
 //! \return \c true if the signature check passes.
 //!
-bool VerifyClaim(const Claim& claim);
+bool VerifyClaim(const Claim& claim, const uint256& last_block_hash);
 }

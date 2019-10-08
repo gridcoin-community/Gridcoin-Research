@@ -2778,12 +2778,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                      dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), cpid));
             }
 
-            if (claim.m_last_block_hash != pindex->pprev->GetBlockHash())
-            {
-                std::string sNarr = "ConnectBlock[ResearchAge] : Historical DPOR Replay attack : lastblockhash != actual last block hash.";
-                LogPrintf("******  %s ***** ",sNarr);
-            }
-
             if (IsResearchAgeEnabled(pindex->nHeight)
                 && (BlockNeedsChecked(nTime) || nVersion>=9))
             {
@@ -2802,24 +2796,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 // 2018 02 04 - Brod - Move cpid check here for better effect
                 /* Only signature check is sufficient here, but kiss and
                             call the function. The height is of previous block. */
-                if (pindex->nHeight > nGrandfather && !NN::VerifyClaim(claim))
+                if (pindex->nHeight > nGrandfather && !NN::VerifyClaim(claim, pindex->pprev->GetBlockHash()))
                 {
                     if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
                         return DoS(20, error(
                                        "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, LBH %s, Bad Hashboinc [%s]",
                                        cpid,
-                                       claim.m_last_block_hash.ToString(),
+                                       pindex->pprev->GetBlockHash().ToString(),
                                        vtx[0].hashBoinc.c_str()));
                     else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
-                }
-
-                // Mitigate DPOR Relay attack
-                // claim.m_last_block_hash should be equal to previous index lastblockhash, in order to check block signature correctly and prevent re-use of lastblockhash
-                if (claim.m_last_block_hash != pindex->pprev->GetBlockHash())
-                {
-                    std::string sNarr = "ConnectBlock[ResearchAge] : DPOR Replay attack : lastblockhash != actual last block hash.";
-                    LogPrintf("******  %s ***** ", sNarr);
-                    if (fTestNet || (pindex->nHeight > 975000)) return DoS(20, error(" %s ",sNarr.c_str()));
                 }
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
@@ -3624,13 +3609,12 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     if (!fLoadingIndex && IsResearcher(cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
     {
         // Full "v3" signature check is performed in ConnectBlock
-        if (claim.m_last_block_hash == 0 || claim.m_signature.size() < 16)
+        if (claim.m_signature.size() < 16)
         {
             return DoS(20, error(
-                "Bad CPID or Block Signature : height %i, CPID %s, LBH %s, Bad Hashboinc [%s]",
-                 height1, 
+                "Bad CPID or Block Signature : height %i, CPID %s, Bad Hashboinc [%s]",
+                 height1,
                  cpid,
-                 claim.m_last_block_hash.ToString(),
                  vtx[0].hashBoinc.c_str()));
         }
     }

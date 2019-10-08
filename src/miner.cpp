@@ -84,12 +84,13 @@ bool ReturnMinerError(CMinerStatus& status, const std::string& message)
 //!
 //! \brief Sign the research reward claim context in the provided block.
 //!
-//! \param claim An initialized claim to sign for a newly-minted block.
+//! \param claim           An initialized claim to sign for a newly-minted block.
+//! \param last_block_hash Hash of the previous block to sign into the claim.
 //!
 //! \return \c true if the miner holds active beacon keys used to successfully
 //! sign the claim in the block.
 //!
-bool SignClaim(NN::Claim& claim)
+bool SignClaim(NN::Claim& claim, const uint256& last_block_hash)
 {
     const NN::CpidOption cpid = claim.m_mining_id.TryCpid();
 
@@ -109,7 +110,7 @@ bool SignClaim(NN::Claim& claim)
         return error("SignStakeBlock: Failed to sign claim -> No beacon key.");
     }
 
-    if (!claim.Sign(beacon_key)) {
+    if (!claim.Sign(beacon_key, last_block_hash)) {
         return error(
             "SignStakeBlock: Failed to sign claim -> "
             "Unable to sign message, check beacon private key.");
@@ -119,7 +120,7 @@ bool SignClaim(NN::Claim& claim)
         LogPrintf(
             "Signing claim for cpid %s and blockhash %s with sig %s",
             cpid_str,
-            claim.m_last_block_hash.ToString(),
+            last_block_hash.ToString(),
             HexStr(claim.m_signature));
     }
 
@@ -859,11 +860,25 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 
 bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInputs, CWallet *pwallet)
 {
-    SignClaim(block.m_claim);
+    SignClaim(block.m_claim, block.hashPrevBlock);
 
+    // Append the claim context to the block before signing the transactions:
+    //
     if (block.nVersion <= 10) {
+        // Nodes that do not yet support block version 11 will parse the claim
+        // from the coinbase hashBoinc field. Set the previous block hash that
+        // old nodes check for research reward claims if necessary:
+        //
+        if (block.m_claim.HasResearchReward()) {
+            block.m_claim.m_last_block_hash = block.hashPrevBlock;
+        }
+
         block.vtx[0].hashBoinc = block.m_claim.ToString(block.nVersion);
     } else {
+        // After the mandatory switch to block version 11, the claim context is
+        // serialized directly in the block, but we need to add the hash of the
+        // claim to a transaction to protect the integrity of the data within:
+        //
         block.vtx[0].hashBoinc = block.m_claim.GetHash().ToString();
     }
 
@@ -983,7 +998,6 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
 
     claim.m_client_version = FormatFullVersion();
     claim.m_organization = GetArgument("org", "");
-    claim.m_last_block_hash = pindexPrev->GetBlockHash();
 
     if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
         claim.m_magnitude = CalculatedMagnitude2(cpid->ToString(), blocknew.nTime);

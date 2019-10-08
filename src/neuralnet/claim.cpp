@@ -15,7 +15,7 @@ namespace {
 //! \return Hex-encoded bytes in the hash, or "0" for a blank hash to conserve
 //! space.
 //!
-std::string BlockHashToString(uint256 block_hash)
+std::string BlockHashToString(const uint256& block_hash)
 {
     if (block_hash == 0) {
         return "0";
@@ -23,13 +23,45 @@ std::string BlockHashToString(uint256 block_hash)
 
     return block_hash.ToString();
 }
+
+//!
+//! \brief Get the hash of a subset of the data in the claim object used as
+//! input to sign or verify a research reward claim.
+//!
+//! \param claim           Claim to generate a hash for.
+//! \param last_block_hash Hash of the block that preceeds the block that
+//! contains the claim.
+//!
+//! \return Hash of the CPID and last block hash contained in the claim.
+//!
+uint256 GetClaimHash(const Claim& claim, const uint256& last_block_hash)
+{
+    const CpidOption cpid = claim.m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return uint256(0);
+    }
+
+    if (claim.m_version > 1) {
+        return Hash(
+            cpid->Raw().begin(),
+            cpid->Raw().end(),
+            last_block_hash.begin(),
+            last_block_hash.end());
+    }
+
+    const std::string cpid_hex = cpid->ToString();
+    const std::string hash_hex = BlockHashToString(last_block_hash);
+
+    return Hash(cpid_hex.begin(), cpid_hex.end(), hash_hex.begin(), hash_hex.end());
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
 // Functions
 // -----------------------------------------------------------------------------
 
-bool NN::VerifyClaim(const Claim& claim)
+bool NN::VerifyClaim(const Claim& claim, const uint256& last_block_hash)
 {
     if (!claim.m_mining_id.Valid()) {
         return error("VerifyClaim(): Invalid mining ID.");
@@ -45,18 +77,12 @@ bool NN::VerifyClaim(const Claim& claim)
     const std::string cpid_str = cpid->ToString();
     const std::string beacon_key = GetBeaconPublicKey(cpid_str, false);
 
-    CKey key;
-
-    if (key.SetPubKey(ParseHex(beacon_key)) && claim.VerifySignature(key)) {
+    if (claim.VerifySignature(ParseHex(beacon_key), last_block_hash)) {
         return true;
     }
 
     for (const auto& beacon_alt_key : GetAlternativeBeaconKeys(cpid_str)) {
-        if (!key.SetPubKey(ParseHex(beacon_alt_key))) {
-            continue;
-        }
-
-        if (claim.VerifySignature(key)) {
+        if (claim.VerifySignature(ParseHex(beacon_alt_key), last_block_hash)) {
             LogPrintf("WARNING: VerifyClaim(): Good signature with alternative key.");
             return true;
         }
@@ -78,6 +104,7 @@ Claim::Claim() : Claim(CURRENT_VERSION)
 Claim::Claim(uint32_t version)
     : m_version(version)
     , m_block_subsidy(0)
+    , m_last_block_hash(0)
     , m_research_subsidy(0)
     , m_magnitude(0)
     , m_magnitude_unit(0)
@@ -110,7 +137,7 @@ Claim Claim::Parse(const std::string& claim, int block_version)
         case 20: //c.OrganizationKey = s[20];
         case 19: c.m_organization = std::move(s[19]);
         case 18: c.m_block_subsidy = RoundFromString(s[18], subsidy_places);
-        case 17: c.m_last_block_hash = uint256(s[17]);
+        case 17: //c.m_last_block_hash = uint256(s[17]);
         case 16: c.m_quorum_address = s[16];
         case 15: c.m_magnitude = RoundFromString(s[15], 0);
         case 14: //c.cpidv2 = s[14];
@@ -146,7 +173,6 @@ bool Claim::WellFormed() const
                 && m_client_version.size() <= 30
                 && m_organization.size() <= 50
                 && m_block_subsidy > 0
-                && m_last_block_hash > 0
                 && (m_mining_id.Which() == MiningId::Kind::INVESTOR
                     || (m_research_subsidy > 0 && m_signature.size() > 0))
                 && (!m_quorum_hash.Valid() || m_quorum_address.size() > 0)
@@ -169,7 +195,7 @@ double Claim::TotalSubsidy() const
     return m_block_subsidy + m_research_subsidy;
 }
 
-bool Claim::Sign(CKey& beacon_private_key)
+bool Claim::Sign(CKey& private_key, const uint256& last_block_hash)
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
@@ -177,7 +203,7 @@ bool Claim::Sign(CKey& beacon_private_key)
         return false;
     }
 
-    if (!beacon_private_key.Sign(GetVerificationHash(), m_signature)) {
+    if (!private_key.Sign(GetClaimHash(*this, last_block_hash), m_signature)) {
         m_signature.clear();
         return false;
     }
@@ -185,31 +211,17 @@ bool Claim::Sign(CKey& beacon_private_key)
     return true;
 }
 
-bool Claim::VerifySignature(CKey& beacon_public_key) const
+bool Claim::VerifySignature(
+    const CPubKey& public_key,
+    const uint256& last_block_hash) const
 {
-    return beacon_public_key.Verify(GetVerificationHash(), m_signature);
-}
+    CKey key;
 
-uint256 Claim::GetVerificationHash() const
-{
-    const CpidOption cpid = m_mining_id.TryCpid();
-
-    if (!cpid) {
-        return uint256(0);
+    if (!key.SetPubKey(public_key)) {
+        return false;
     }
 
-    if (m_version > 1) {
-        return Hash(
-            cpid->Raw().begin(),
-            cpid->Raw().end(),
-            m_last_block_hash.begin(),
-            m_last_block_hash.end());
-    }
-
-    const std::string cpid_hex = cpid->ToString();
-    const std::string hash_hex = BlockHashToString(m_last_block_hash);
-
-    return Hash(cpid_hex.begin(), cpid_hex.end(), hash_hex.begin(), hash_hex.end());
+    return key.Verify(GetClaimHash(*this, last_block_hash), m_signature);
 }
 
 uint256 Claim::GetHash() const
