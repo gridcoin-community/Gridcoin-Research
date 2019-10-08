@@ -978,6 +978,22 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     NN::Claim& claim = blocknew.m_claim;
     claim.m_mining_id = NN::Researcher::Get()->Id();
 
+    // If a researcher's beacon expired, generate the block as an investor. We
+    // cannot sign a research claim without the beacon key, so this avoids the
+    // issue that prevents a researcher from staking blocks if the beacon does
+    // not exist (it expired or it has yet to be advertised).
+    //
+    CKey dummy_key;
+    if (claim.m_mining_id.Which() == NN::MiningId::Kind::CPID
+        && !GetStoredBeaconPrivateKey(claim.m_mining_id.ToString(), dummy_key))
+    {
+        LogPrintf(
+            "CreateGridcoinReward: CPID eligible but no active beacon key "
+            "found. Staking as investor.");
+
+        claim.m_mining_id = NN::MiningId::ForInvestor();
+    }
+
     double out_unused; // Drop currently unused values
 
     // Note: Since research age must be exact, we need to transmit the block
