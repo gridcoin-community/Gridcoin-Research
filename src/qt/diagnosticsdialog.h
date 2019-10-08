@@ -42,7 +42,7 @@ private:
     std::string syncData;
 
 private slots:
-    void on_testBtn_clicked();
+    void on_testButton_clicked();
     void clkFinished();
     void clkStateChanged(QAbstractSocket::SocketState state);
     void clkSocketError(QAbstractSocket::SocketError error);

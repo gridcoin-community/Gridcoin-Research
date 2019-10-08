@@ -270,7 +270,7 @@ void DiagnosticsDialog::on_testButton_clicked()
         ui->verifyWalletIsSyncedResultLabel->setText("Failed");
 
     //clock
-    ui->verifyClkResultLabel->setText("Testing...");
+    ui->verifyClockResultLabel->setText("Testing...");
     this->repaint();
 
     VerifyClock();
@@ -334,7 +334,7 @@ void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
 
 void DiagnosticsDialog::clkSocketError(QAbstractSocket::SocketError error)
 {
-    ui->verifyClkResultLabel->setText("Failed to make connection to NTP server");
+    ui->verifyClockResultLabel->setText("Failed to make connection to NTP server");
 
     udpSocket->close();
 
@@ -363,10 +363,10 @@ void DiagnosticsDialog::clkFinished()
                 boost::posix_time::time_duration timeDiff = networkTime - localTime;
 
                 if (timeDiff.minutes() < 3)
-                    ui->verifyClkResultLabel->setText("Passed");
+                    ui->verifyClockResultLabel->setText("Passed");
 
                 else
-                    ui->verifyClkResultLabel->setText("Failed (Sync local time with network)");
+                    ui->verifyClockResultLabel->setText("Failed (Sync local time with network)");
 
                 this->repaint();
             }
