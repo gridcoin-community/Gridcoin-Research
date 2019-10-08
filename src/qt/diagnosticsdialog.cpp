@@ -202,7 +202,7 @@ void DiagnosticsDialog::VerifyTCPPort()
     tcpSocket->connectToHost("portquiz.net", GetListenPort());
 }
 
-void DiagnosticsDialog::on_testBtn_clicked()
+void DiagnosticsDialog::on_testButton_clicked()
 {
     int result = 0;
 
@@ -379,7 +379,7 @@ void DiagnosticsDialog::clkFinished()
 void DiagnosticsDialog::TCPFinished()
 {
     tcpSocket->close();
-    ui->verifyTCPPortResultLbl->setText("Passed");
+    ui->verifyTCPPortResultLabel->setText("Passed");
     this->repaint();
 
     return;
