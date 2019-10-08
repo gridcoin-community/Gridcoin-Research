@@ -44,7 +44,7 @@
     </layout>
    </item>
    <item row="3" column="0">
-    <widget class="QLabel" name="label_2">
+    <widget class="QLabel" name="payToLabel">
      <property name="text">
       <string>Pay &amp;To:</string>
      </property>
@@ -121,7 +121,7 @@
     </layout>
    </item>
    <item row="5" column="0">
-    <widget class="QLabel" name="lbl14">
+    <widget class="QLabel" name="messageLabel">
      <property name="text">
       <string>Message:</string>
      </property>
@@ -137,7 +137,7 @@
     <widget class="BitcoinAmountField" name="payAmount"/>
    </item>
    <item row="4" column="0">
-    <widget class="QLabel" name="label_4">
+    <widget class="QLabel" name="labelLabel">
      <property name="text">
       <string>&amp;Label:</string>
      </property>

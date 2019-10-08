@@ -50,7 +50,7 @@
       <number>8</number>
      </property>
      <item row="5" column="0">
-      <widget class="QLabel" name="label_7">
+      <widget class="QLabel" name="verifyCPIDIsInNNLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -69,7 +69,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QLabel" name="verifyCPIDValidResultLbl">
+      <widget class="QLabel" name="verifyCPIDValidResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -91,7 +91,7 @@
       </widget>
      </item>
      <item row="1" column="1">
-      <widget class="QLabel" name="boincPathResultLbl">
+      <widget class="QLabel" name="boincPathResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -113,21 +113,21 @@
       </widget>
      </item>
      <item row="1" column="0">
-      <widget class="QLabel" name="label_2">
+      <widget class="QLabel" name="boincPathLabel">
        <property name="text">
         <string>Verify BOINC path</string>
        </property>
       </widget>
      </item>
      <item row="4" column="0">
-      <widget class="QLabel" name="label_6">
+      <widget class="QLabel" name="verifyCPIDHasRACLabel">
        <property name="text">
         <string>Verify CPID has RAC</string>
        </property>
       </widget>
      </item>
      <item row="6" column="1">
-      <widget class="QLabel" name="verifyWalletIsSyncedResultLbl">
+      <widget class="QLabel" name="verifyWalletIsSyncedResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -149,21 +149,21 @@
       </widget>
      </item>
      <item row="6" column="0">
-      <widget class="QLabel" name="label_8">
+      <widget class="QLabel" name="verifyWalletIsSyncedLabel">
        <property name="text">
         <string>Verify wallet is synced</string>
        </property>
       </widget>
      </item>
      <item row="3" column="0">
-      <widget class="QLabel" name="label_5">
+      <widget class="QLabel" name="verifyCPIDValidLabel">
        <property name="text">
         <string>Verify CPID is valid</string>
        </property>
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QLabel" name="findCPIDResultLbl">
+      <widget class="QLabel" name="findCPIDResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -185,7 +185,7 @@
       </widget>
      </item>
      <item row="4" column="1">
-      <widget class="QLabel" name="verifyCPIDHasRACResultLbl">
+      <widget class="QLabel" name="verifyCPIDHasRACResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -207,14 +207,14 @@
       </widget>
      </item>
      <item row="2" column="0">
-      <widget class="QLabel" name="label_4">
+      <widget class="QLabel" name="findCPIDLabel">
        <property name="text">
         <string>Find PrimaryCPID (Windows Only)</string>
        </property>
       </widget>
      </item>
      <item row="0" column="0">
-      <widget class="QLabel" name="TestHeaderLbl">
+      <widget class="QLabel" name="diagnosticsLabel">
        <property name="font">
         <font>
          <pointsize>14</pointsize>
@@ -226,7 +226,7 @@
       </widget>
      </item>
      <item row="5" column="1">
-      <widget class="QLabel" name="verifyCPIDIsInNNResultLbl">
+      <widget class="QLabel" name="verifyCPIDIsInNNResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -248,14 +248,14 @@
       </widget>
      </item>
      <item row="7" column="0">
-      <widget class="QLabel" name="label_9">
+      <widget class="QLabel" name="verifyClockLabel">
        <property name="text">
         <string>Verify clock</string>
        </property>
       </widget>
      </item>
      <item row="7" column="1">
-      <widget class="QLabel" name="verifyClkResultLbl">
+      <widget class="QLabel" name="verifyClockResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -277,14 +277,14 @@
       </widget>
      </item>
      <item row="8" column="0">
-      <widget class="QLabel" name="label_10">
+      <widget class="QLabel" name="verifySeedNodesLabel">
        <property name="text">
         <string>Verify connections to seeds</string>
        </property>
       </widget>
      </item>
      <item row="8" column="1">
-      <widget class="QLabel" name="verifySeedNodesResultLbl">
+      <widget class="QLabel" name="verifySeedNodesResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -306,14 +306,14 @@
       </widget>
      </item>
      <item row="9" column="0">
-      <widget class="QLabel" name="label_12">
+      <widget class="QLabel" name="verifyConnectionsLabel">
        <property name="text">
         <string>Verify connections to network</string>
        </property>
       </widget>
      </item>
      <item row="9" column="1">
-      <widget class="QLabel" name="verifyConnectionsResultLbl">
+      <widget class="QLabel" name="verifyConnectionsResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -335,14 +335,14 @@
       </widget>
      </item>
      <item row="10" column="0">
-      <widget class="QLabel" name="label_11">
+      <widget class="QLabel" name="verifyTCPPortLabel">
        <property name="text">
         <string>Verify TCP port 32749</string>
        </property>
       </widget>
      </item>
      <item row="10" column="1">
-      <widget class="QLabel" name="verifyTCPPortResultLbl">
+      <widget class="QLabel" name="verifyTCPPortResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -364,14 +364,14 @@
       </widget>
      </item>
      <item row="11" column="0">
-      <widget class="QLabel" name="label">
+      <widget class="QLabel" name="checkClientVersionLabel">
        <property name="text">
         <string>Check client version</string>
        </property>
       </widget>
      </item>
      <item row="11" column="1">
-      <widget class="QLabel" name="checkClientVersionResultLbl">
+      <widget class="QLabel" name="checkClientVersionResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -406,7 +406,7 @@
       <number>0</number>
      </property>
      <item>
-      <widget class="QPushButton" name="cancelBtn">
+      <widget class="QPushButton" name="cancelButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -422,7 +422,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="testBtn">
+      <widget class="QPushButton" name="testButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -441,7 +441,7 @@
  <resources/>
  <connections>
   <connection>
-   <sender>cancelBtn</sender>
+   <sender>cancelButton</sender>
    <signal>clicked()</signal>
    <receiver>DiagnosticsDialog</receiver>
    <slot>close()</slot>

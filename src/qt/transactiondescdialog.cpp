@@ -16,7 +16,7 @@ TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, QWidget *pa
     QString desc = idx.data(TransactionTableModel::LongDescriptionRole).toString();
     ui->detailText->setHtml(desc);
     //If smart contract is populated
-    ui->btnExecute->setVisible(Contains(msHashBoinc,"<CODE>"));
+    ui->executeButton->setVisible(Contains(msHashBoinc,"<CODE>"));
 }
 
 TransactionDescDialog::~TransactionDescDialog()

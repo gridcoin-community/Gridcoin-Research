@@ -49,7 +49,7 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="btnExecute">
+      <widget class="QPushButton" name="executeButton">
        <property name="enabled">
         <bool>true</bool>
        </property>
@@ -59,7 +59,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="pushButton">
+      <widget class="QPushButton" name="closeButton">
        <property name="text">
         <string>C&amp;lose</string>
        </property>
@@ -72,7 +72,7 @@
  <resources/>
  <connections>
   <connection>
-   <sender>pushButton</sender>
+   <sender>closeButton</sender>
    <signal>clicked()</signal>
    <receiver>TransactionDescDialog</receiver>
    <slot>reject()</slot>
