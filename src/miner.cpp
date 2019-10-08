@@ -996,8 +996,8 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         claim.m_magnitude_unit,
         out_unused);
 
-    claim.m_client_version = FormatFullVersion();
-    claim.m_organization = GetArgument("org", "");
+    claim.m_client_version = FormatFullVersion().substr(0, NN::Claim::MAX_VERSION_SIZE);
+    claim.m_organization = GetArgument("org", "").substr(0, NN::Claim::MAX_ORGANIZATION_SIZE);
 
     if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
         claim.m_magnitude = CalculatedMagnitude2(cpid->ToString(), blocknew.nTime);

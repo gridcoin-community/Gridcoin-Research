@@ -170,8 +170,8 @@ bool Claim::WellFormed() const
         && (m_version == 1
             || (m_mining_id.Valid()
                 && !m_client_version.empty()
-                && m_client_version.size() <= 30
-                && m_organization.size() <= 50
+                && m_client_version.size() <= MAX_VERSION_SIZE
+                && m_organization.size() <= MAX_ORGANIZATION_SIZE
                 && m_block_subsidy > 0
                 && (m_mining_id.Which() == MiningId::Kind::INVESTOR
                     || (m_research_subsidy > 0 && m_signature.size() > 0))

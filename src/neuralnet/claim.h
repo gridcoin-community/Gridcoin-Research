@@ -118,6 +118,16 @@ struct Claim
     static constexpr uint32_t CURRENT_VERSION = 2;
 
     //!
+    //! \brief The maximum length of a serialized client version in a claim.
+    //!
+    static constexpr size_t MAX_VERSION_SIZE = 30;
+
+    //!
+    //! \brief The maximum length of a serialized organization value in a claim.
+    //!
+    static constexpr size_t MAX_ORGANIZATION_SIZE = 50;
+
+    //!
     //! \brief Number of places after the decimal point of serialized magnitude
     //! unit values.
     //!
