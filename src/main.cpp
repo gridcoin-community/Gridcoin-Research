@@ -3579,12 +3579,26 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 
     //Research Age
     const NN::Claim& claim = GetClaim();
-    const std::string cpid = claim.m_mining_id.ToString();
+
+    // Version 11+ blocks store the claim context in the block itself instead
+    // of the hashBoinc field of the first transaction. The hash of the claim
+    // is placed in the coinbase transaction instead to verify its integrity:
+    //
+    if (nVersion >= 11) {
+        if (!claim.WellFormed()) {
+            return DoS(100, error("CheckBlock[] : malformed claim"));
+        }
+
+        if (claim.GetHash() != uint256(vtx[0].hashBoinc)) {
+            return DoS(100, error("CheckBlock[] : claim hash mismatch"));
+        }
+    }
 
     if(nVersion<9)
     {
         //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-        if (IsResearcher(cpid) && IsProofOfStake() && height1 > nGrandfather && IsResearchAgeEnabled(height1) && BlockNeedsChecked(nTime) && !fLoadingIndex)
+        //Orphan Flood Attack
+        if (height1 > nGrandfather)
         {
             double blockVersion = BlockVersion(claim.m_client_version);
             double cvn = ClientVersionNew();
@@ -3593,20 +3607,9 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             if (blockVersion < 3588 && height1 > 860500 && !fTestNet)
                 return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade ");
         }
-
-        //Orphan Flood Attack
-        if (height1 > nGrandfather)
-        {
-            double bv = BlockVersion(claim.m_client_version);
-            double cvn = ClientVersionNew();
-            if (fDebug10) LogPrintf("BV %f, CV %f   ",bv,cvn);
-            // Enforce Beacon Age
-            if (bv < 3588 && height1 > 860500 && !fTestNet)
-                return error("CheckBlock[]:  Old client spamming new blocks after mandatory upgrade ");
-        }
     }
 
-    if (!fLoadingIndex && IsResearcher(cpid) && height1 > nGrandfather && BlockNeedsChecked(nTime))
+    if (!fLoadingIndex && claim.HasResearchReward() && height1 > nGrandfather && BlockNeedsChecked(nTime))
     {
         // Full "v3" signature check is performed in ConnectBlock
         if (claim.m_signature.size() < 16)
@@ -3614,8 +3617,8 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(20, error(
                 "Bad CPID or Block Signature : height %i, CPID %s, Bad Hashboinc [%s]",
                  height1,
-                 cpid,
-                 vtx[0].hashBoinc.c_str()));
+                 claim.m_mining_id.ToString(),
+                 vtx[0].hashBoinc));
         }
     }
 
@@ -3680,7 +3683,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     if (fCheckMerkleRoot && hashMerkleRoot != BuildMerkleTree())
         return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
 
-    //if (fDebug3) LogPrintf(".EOCB.");
     return true;
 }
 
