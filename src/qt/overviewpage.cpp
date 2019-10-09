@@ -194,7 +194,7 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     // for the non-mining users
     bool showImmature = immatureBalance != 0;
     ui->immatureLabel->setVisible(showImmature);
-    ui->immatureLabelText->setVisible(showImmature);
+    ui->immatureTextLabel->setVisible(showImmature);
 	OverviewPage::UpdateBoincUtilization();
 
 }

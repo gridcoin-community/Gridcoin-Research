@@ -440,7 +440,7 @@ void SendCoinsDialog::coinControlChangeChecked(int state)
     }
 
     ui->coinControlChangeEdit->setEnabled((state == Qt::Checked));
-    ui->coinControlChangeLabelLabel->setEnabled((state == Qt::Checked));
+    ui->coinControlChangeLabel->setEnabled((state == Qt::Checked));
 }
 
 // Coin Control: custom change address changed
@@ -451,30 +451,30 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
         CoinControlDialog::coinControl->destChange = CBitcoinAddress(text.toStdString()).Get();
 
         // label for the change address
-        ui->coinControlChangeLabelLabel->setStyleSheet("QLabel{color:black;}");
+        ui->coinControlChangeLabel->setStyleSheet("QLabel{color:black;}");
         if (text.isEmpty())
-            ui->coinControlChangeLabelLabel->setText("");
+            ui->coinControlChangeLabel->setText("");
         else if (!CBitcoinAddress(text.toStdString()).IsValid())
         {
-            ui->coinControlChangeLabelLabel->setStyleSheet("QLabel{color:red;}");
-            ui->coinControlChangeLabelLabel->setText(tr("WARNING: Invalid Gridcoin address"));
+            ui->coinControlChangeLabel->setStyleSheet("QLabel{color:red;}");
+            ui->coinControlChangeLabel->setText(tr("WARNING: Invalid Gridcoin address"));
         }
         else
         {
             QString associatedLabel = model->getAddressTableModel()->labelForAddress(text);
             if (!associatedLabel.isEmpty())
-                ui->coinControlChangeLabelLabel->setText(associatedLabel);
+                ui->coinControlChangeLabel->setText(associatedLabel);
             else
             {
                 CPubKey pubkey;
                 CKeyID keyid;
                 CBitcoinAddress(text.toStdString()).GetKeyID(keyid);
                 if (model->getPubKey(keyid, pubkey))
-                    ui->coinControlChangeLabelLabel->setText(tr("(no label)"));
+                    ui->coinControlChangeLabel->setText(tr("(no label)"));
                 else
                 {
-                    ui->coinControlChangeLabelLabel->setStyleSheet("QLabel{color:red;}");
-                    ui->coinControlChangeLabelLabel->setText(tr("WARNING: unknown change address"));
+                    ui->coinControlChangeLabel->setStyleSheet("QLabel{color:red;}");
+                    ui->coinControlChangeLabel->setText(tr("WARNING: unknown change address"));
                 }
             }
         }
