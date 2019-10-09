@@ -22,7 +22,7 @@ QRCodeDialog::QRCodeDialog(const QString &addr, const QString &label, bool enabl
     setWindowTitle(QString("%1").arg(address));
 
     ui->requestPaymentCheckBox->setVisible(enableReq);
-    ui->labelAmount->setVisible(enableReq);
+    ui->amountTextLabel->setVisible(enableReq);
     ui->lnReqAmount->setVisible(enableReq);
 
     ui->labelEdit->setText(label);
