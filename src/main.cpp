@@ -7003,12 +7003,12 @@ void IncrementNeuralNetworkSupermajority(const std::string& NeuralHash, const st
             bool validaddresstovote = address.IsValid();
             if (!validaddresstovote)
             {
-                LogPrintf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s", NeuralHash, GRCAddress);
+                if (fDebug) LogPrintf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s", NeuralHash, GRCAddress);
                 return;
             }
             if (!IsNeuralNodeParticipant(GRCAddress, pblockindex->nTime))
             {
-                LogPrintf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s", NeuralHash, GRCAddress);
+                if (fDebug) LogPrintf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s", NeuralHash, GRCAddress);
                 return;
             }
         }
