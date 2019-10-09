@@ -382,7 +382,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_5">
          <item>
-          <widget class="QLabel" name="StyleLabel">
+          <widget class="QLabel" name="styleLabel">
            <property name="text">
             <string>Style:</string>
            </property>

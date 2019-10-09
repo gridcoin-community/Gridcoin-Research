@@ -450,7 +450,7 @@
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout_2">
            <item>
-            <widget class="QSlider" name="sldGraphRange">
+            <widget class="QSlider" name="graphRangeSlider">
              <property name="minimum">
               <number>1</number>
              </property>
@@ -469,7 +469,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QLabel" name="lblGraphRange">
+            <widget class="QLabel" name="graphRangeLabel">
              <property name="minimumSize">
               <size>
                <width>100</width>
@@ -482,7 +482,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="btnClearTrafficGraph">
+            <widget class="QPushButton" name="clearTrafficGraphButton">
              <property name="text">
               <string>&amp;Reset</string>
              </property>
@@ -559,14 +559,14 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_17">
+               <widget class="QLabel" name="bytesInTextLabel">
                 <property name="text">
                  <string>In:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="lblBytesIn">
+               <widget class="QLabel" name="bytesInLabel">
                 <property name="minimumSize">
                  <size>
                   <width>50</width>
@@ -639,14 +639,14 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_18">
+               <widget class="QLabel" name="bytesOutTextLabel">
                 <property name="text">
                  <string>Out:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="lblBytesOut">
+               <widget class="QLabel" name="bytesOutLabel">
                 <property name="minimumSize">
                  <size>
                   <width>50</width>
@@ -1171,7 +1171,7 @@
                 </widget>
                </item>
                <item row="14" column="0">
-                <widget class="QLabel" name="peerPingTime_2">
+                <widget class="QLabel" name="peerPingTimeLabel">
                  <property name="text">
                   <string>Ping Time</string>
                  </property>
@@ -1266,7 +1266,7 @@
                 </widget>
                </item>
                <item row="18" column="0">
-                <spacer name="verticalSpacer_3">
+                <spacer name="verticalSpacer_5">
                  <property name="orientation">
                   <enum>Qt::Vertical</enum>
                  </property>
