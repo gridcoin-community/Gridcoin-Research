@@ -4960,7 +4960,7 @@ bool ScraperSynchronizeDPOR()
 //! fallback to trying to reconstruct the staking node's convergence at either
 //! the manifest or project level from the received manifest and parts
 //! information and see if the superblock formed from that matches the hash.
-scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache)
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache, unsigned int nReducedCacheBits)
 {
     // Calculate the hash of the superblock to validate.
     NN::QuorumHash nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
@@ -4968,9 +4968,19 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
     // convergence hash hint (reduced hash) from superblock... (used for cached lookup)
     uint32_t nReducedSBContentHash = NewFormatSuperblock.m_convergence_hint;
 
+    // For testing purposes we allow additional bit shifting (specified via the default argument for the number of bits to retain
+    // in the reduced size hint hashes). The default of nReducedCacheBits is 32, which results in 0 additional bit shift.
+    // This clamps the nAdditionalBitShift to [0, 30] which corresponds to an nReducedCacheBits input range of 32 (default)
+    // to 2 (minimum bits allowed).
+
+    // This is going to affect UNCACHED validation ONLY, because that is the only place where we need to worry about hint collisions.
+    unsigned int nAdditionalBitShift = std::min((unsigned int) 30, std::max((unsigned int) 0, (unsigned int) (32 - nReducedCacheBits)));
+
+    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "nAdditionalBitShift = " + std::to_string(nAdditionalBitShift));
+
     // underlying manifest hash hint (reduced hash from superblock... (used for uncached lookup against manifests)
     uint32_t nUnderlyingManifestReducedContentHash = 0;
-    if (!NewFormatSuperblock.ConvergedByProject()) nUnderlyingManifestReducedContentHash = NewFormatSuperblock.m_manifest_content_hint;
+    if (!NewFormatSuperblock.ConvergedByProject()) nUnderlyingManifestReducedContentHash = NewFormatSuperblock.m_manifest_content_hint >> nAdditionalBitShift;
 
     if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
 
@@ -5086,7 +5096,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         for (const auto& iter : mManifestsBinnedbyContent)
         {
-            uint32_t nReducedManifestContentHash = iter.first.Get64() >> 32;
+            uint32_t nReducedManifestContentHash = iter.first.Get64() >> (32 + nAdditionalBitShift);
 
             if (fDebug10) _log(logattribute::INFO, "ValidateSuperblock", "nReducedManifestContentHash = " + std::to_string(nReducedManifestContentHash));
 
@@ -5159,10 +5169,10 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         };
 
-        // ----------- project ------ proj obj content hash - ReferencedConvergenceInfo
+        // ------- project - proj obj content hash - ReferencedConvergenceInfo
         std::map<std::string, std::map<uint256, ReferencedConvergenceInfo>> mCandidatePartsByProject;
 
-        // ----------- project ------------ placeholder value - number of reference parts
+        // ------- project ------ placeholder value - number of reference parts
         std::map<std::string, std::pair<unsigned int, unsigned int>> mProjectCandidatePartIndexHelper;
 
         unsigned int iCountSuccessfulConvergedProjects = 0;
@@ -5260,14 +5270,26 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
             for (const auto& iter : mProjectObjectsBinnedbyContent)
             {
-                uint32_t nReducedProjectObjectContentHash = iter.first.Get64() >> 32;
+                uint32_t nReducedProjectObjectContentHash_prebitshift = iter.first.Get64() >> 32;
+                uint32_t nReducedProjectObjectContentHash = iter.first.Get64() >> (32 + nAdditionalBitShift);
+
                 unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(iter.first);
 
                 // Only process if there is a valid entry in the superblock.
                 if (const auto SBProjectIter = NewFormatSuperblock.m_projects.Try(iWhitelistProject.m_name))
                 {
+                    if (fDebug10) _log(logattribute::INFO,
+                                      "ValidateSuperblock",
+                                      "by project uncached:\n"
+                                      "nReducedProjectObjectContentHash_prebitshift = " + std::to_string(nReducedProjectObjectContentHash_prebitshift) + "\n"
+                                      + "           SBProjectIter->m_convergence_hint = " + std::to_string(SBProjectIter->m_convergence_hint) + "\n"
+                                      + "            nReducedProjectObjectContentHash = " + std::to_string(nReducedProjectObjectContentHash) + "\n"
+                                      + "     SBProjectIter->m_convergence_hint >> " + std::to_string(nAdditionalBitShift)
+                                      + " = " + std::to_string(SBProjectIter->m_convergence_hint >> nAdditionalBitShift) + "\n"
+                                      );
+
                     // Only process if the (reduced content hash) for the project object matches the hint.
-                    if (nReducedProjectObjectContentHash == SBProjectIter->m_convergence_hint)
+                    if (nReducedProjectObjectContentHash == SBProjectIter->m_convergence_hint >> nAdditionalBitShift)
                     {
                         // Only process if there are actually parts.
                         if (nIdenticalContentManifestCount >= NumScrapersForSupermajority(nScraperCount)
@@ -5307,8 +5329,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                                 }
 
                                 // This form of insert will override the previous insert with the same part hash, which is what we want.
-                                // ------------- project name --------- part hash
-                                mCandidatePartsByProject[iWhitelistProject.m_name][iPart->first] = ConvergenceInfoRefByPart;
+                                // ------------------------- project name -------- part hash
+                                mCandidatePartsByProject[iWhitelistProject.m_name][iter.first] = ConvergenceInfoRefByPart;
 
                                 fAtLeastOnePartInsertedForProject = true;
 
@@ -5324,7 +5346,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             {
                 // Initialize candidate part index helper
                 // Note that "cumulative placevalue" is set to zero here and will be updated later.
-                mProjectCandidatePartIndexHelper[iWhitelistProject.m_name] = std::make_pair(0, mCandidatePartsByProject.count(iWhitelistProject.m_name));
+                mProjectCandidatePartIndexHelper[iWhitelistProject.m_name] =
+                        std::make_pair(0, (mCandidatePartsByProject.find(iWhitelistProject.m_name)->second).size());
 
                 // Increment successful part counter.
                 ++iCountSuccessfulConvergedProjects;
@@ -5340,24 +5363,54 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         // to validate, otherwise there is no validation.
         if (iCountSuccessfulConvergedProjects != NewFormatSuperblock.m_projects.size()) return scraperSBvalidationtype::Invalid;
 
-        // Compute number of permutations and cumulative placevalue. For instance, if there were 4 projects, and the number of candidate parts
-        // for each of the projects were 2, 3, 2, and 2, then the total number of permutations would be 2 * 3 * 2 * 1 = 12, and the cumulative
-        // placevalue would be -------- 12, 4, 2, and 1. Notice we will use a reverse iterator to fill in the placevalue as we compute the total
-        // number of permutations. This is ridiculous of course because 99.99999% of the time it is going to be
-        // 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 or at most something like 1 1 1 1 1 1 1 1 2 1 1 1 1 1 1 1 1 1 1, which will resolve to two permutations,
-        // but I am doing the full algorithm to be thorough.
+        /*
+
+        Compute number of permutations and cumulative placevalue. For instance, if there were 4 projects, and
+        the number of candidate parts for each of the projects were 2, 3, 2, and 2, then the total number of
+        permutations would be 2 * 3 * 2 * 1 = 12, and the cumulative placevalue would be
+        -------------------- 12,  4,  2,  1. Notice we will use a reverse iterator to fill in the placevalue
+        as we compute the total number of permutations. This is ridiculous of course because 99.99999% of the
+        time it is going to be 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 (one permutation) or at most something like
+        1 1 1 1 1 1 1 1 2 1 1 1 1 1 1 1 1 1 1, which will resolve to two permutations, but I am doing the full algorithm
+        to be thorough.
+
+        A further explanation...
+
+        The easiest way to understand this algorithm is to compare it to a binary number....
+        Each place has two possibilities, so the total possibilities are 2^n where you have n places.
+        I.e if you had 4 places (think four projects) each with 2 candidate parts, you would have 0000 to 1111.
+        This is permutation index 0 to 7 for a total of eight permutations. If the outer loop is the
+        permutation index, you derive the place values by multiplying the combinations for the places
+        up to but not including the place for the four digit binary number ... the place values are 8, 4, 2, 1.
+
+        So, if you are at index 5 this is, starting at the most significant digit,
+        5/8 = 0 remainder 5.
+        5/4 = 1 remainder 1.
+        1/2 = 0 remainder 1.
+        1/1 = 1 remainder 0.
+        (This of course is 0101 binary for 5.)
+
+        If the number of candidate parts varies for each project (which it will in this problem), the place
+        is a different base for each place, and then you track the number of possibilities in each place with
+        the helper as I described in the comments. This allows the outer loop to simply run consecutively through
+        the permutation index from 0 to n-1 permutations, and then for each permutation index value the repeated
+        division in the inner loop  “decodes” the index into the selected part for each placeholder (project).
+        Since you calculated the permutation index max n by muliplyjng all of the possibilities together for each
+        place you know you have covered them all. I think it is a pretty elegant approach to the problem with iteration.
+
+        */
         unsigned int nPermutations = 1;
         {
             std::map<std::string, std::pair<unsigned int, unsigned int>>::reverse_iterator iProject;
             for (iProject = mProjectCandidatePartIndexHelper.rbegin(); iProject != mProjectCandidatePartIndexHelper.rend(); ++iProject)
             {
-                nPermutations = nPermutations * iProject->second.second;
-
                 // pull the pair for the project which is currently (0, # of candidate parts) up to now.
                 auto pair = iProject->second;
 
                 // update ----------------------- project entry with -------- placeholder value - # of candidate parts
                 mProjectCandidatePartIndexHelper[iProject->first] = std::make_pair(nPermutations, pair.second);
+
+                nPermutations = nPermutations * iProject->second.second;
             }
         }
 
@@ -5385,10 +5438,12 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 // Calculate quotient
                 unsigned int iPartIndex = remainder / divisor;
 
-                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "uncached by project: iPartIndex = " + std::to_string(iPartIndex));
+                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "uncached by project: "
+                                  + std::to_string(remainder) + "/" + std::to_string(divisor) + +" = iPartIndex = " + std::to_string(iPartIndex)
+                                  + " index max = " + std::to_string(((mCandidatePartsByProject.find(iProject.first))->second).size() - 1));
 
                 // Calculate remainder for next "place" (iteration)
-                remainder = iPermutationIndex - iPartIndex * divisor;
+                remainder -= iPartIndex * divisor;
 
                 // Get an iterator to the first candidate part for the project.
                 auto iCandidatePart = (mCandidatePartsByProject.find(iProject.first))->second.begin();
@@ -5401,6 +5456,12 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
                     // Get the actual part ----------------- by object hash.
                     auto iPart = CSplitBlob::mapParts.find(iCandidatePart->first);
+
+                    if (iPart == CSplitBlob::mapParts.end())
+                    {
+                        _log(logattribute::ERR, "ValidateSuperblock", "Selected Converged Project Object (part) not found in parts map.");
+                        continue;
+                    }
 
                     uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
 
@@ -5570,11 +5631,16 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
 
 UniValue testnewsb(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0 )
+    if (fHelp || params.size() > 1 )
         throw std::runtime_error(
-                "testnewsb\n"
-                "Test the new Superblock class.\n"
+                "testnewsb [hint bits]\n"
+                "Test the new Superblock class. Optional parameter of the number of bits for the reduced hash hint for uncached test.\n"
+                "This is limited to a range of 4 to 32, with 32 as the default (which is the normal hint bits).\n"
                 );
+
+    unsigned int nReducedCacheBits = 32;
+
+    if (params.size() == 1) nReducedCacheBits = params[0].get_int();
 
     {
         LOCK(cs_ConvergedScraperStatsCache);
@@ -5711,6 +5777,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     // ValidateSuperblock() reference function tests (current convergence)
     //
 
+    // nReducedCacheBits is only used for non-cached tests.
     scraperSBvalidationtype validity = ::ValidateSuperblock(NewFormatSuperblock, true);
 
     if (validity != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
@@ -5724,7 +5791,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock validation against current (using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity));
     }
 
-    scraperSBvalidationtype validity2 = ::ValidateSuperblock(NewFormatSuperblock, false);
+    // nReducedCacheBits is only used here for non-cached tests.
+    scraperSBvalidationtype validity2 = ::ValidateSuperblock(NewFormatSuperblock, false, nReducedCacheBits);
 
     if (validity2 != scraperSBvalidationtype::Invalid && validity2 != scraperSBvalidationtype::Unknown)
     {

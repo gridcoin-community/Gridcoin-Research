@@ -123,7 +123,7 @@ std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bCo
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
 bool ScraperSynchronizeDPOR();
-scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true);
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true, unsigned int nReducedCacheBits = 32);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
 
