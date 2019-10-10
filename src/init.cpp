@@ -59,8 +59,8 @@ extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
 
-// Dump addresses to banlist.dat every 15 minutes (900s)
-static constexpr int DUMP_BANS_INTERVAL = 60 * 15;
+// Dump addresses to banlist.dat every 5 minutes (300 s)
+static constexpr int DUMP_BANS_INTERVAL = 300;
 
 std::unique_ptr<BanMan> g_banman;
 
