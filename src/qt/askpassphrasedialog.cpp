@@ -18,22 +18,22 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget *parent) :
     fCapsLock(false)
 {
     ui->setupUi(this);
-    ui->passEdit1->setMaxLength(MAX_PASSPHRASE_SIZE);
-    ui->passEdit2->setMaxLength(MAX_PASSPHRASE_SIZE);
-    ui->passEdit3->setMaxLength(MAX_PASSPHRASE_SIZE);
+    ui->oldPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);
+    ui->newPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);
+    ui->repeatNewPassphraseEdit->setMaxLength(MAX_PASSPHRASE_SIZE);
 
     // Setup Caps Lock detection.
-    ui->passEdit1->installEventFilter(this);
-    ui->passEdit2->installEventFilter(this);
-    ui->passEdit3->installEventFilter(this);
+    ui->oldPassphraseEdit->installEventFilter(this);
+    ui->newPassphraseEdit->installEventFilter(this);
+    ui->repeatNewPassphraseEdit->installEventFilter(this);
 
     ui->stakingCheckBox->setChecked(fWalletUnlockStakingOnly);
 
     switch(mode)
     {
         case Encrypt: // Ask passphrase x2
-            ui->passLabel1->hide();
-            ui->passEdit1->hide();
+            ui->oldPassphraseLabel->hide();
+            ui->oldPassphraseEdit->hide();
             ui->warningLabel->setText(tr("Enter the new passphrase to the wallet.<br/>Please use a passphrase of <b>ten or more random characters</b>, or <b>eight or more words</b>."));
             setWindowTitle(tr("Encrypt wallet"));
             break;
@@ -43,18 +43,18 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget *parent) :
             // fallthru
         case Unlock: // Ask passphrase
             ui->warningLabel->setText(tr("This operation needs your wallet passphrase to unlock the wallet."));
-            ui->passLabel2->hide();
-            ui->passEdit2->hide();
-            ui->passLabel3->hide();
-            ui->passEdit3->hide();
+            ui->newPassphraseLabel->hide();
+            ui->newPassphraseEdit->hide();
+            ui->repeatNewPassphraseLabel->hide();
+            ui->repeatNewPassphraseEdit->hide();
             setWindowTitle(tr("Unlock wallet"));
             break;
         case Decrypt:   // Ask passphrase
             ui->warningLabel->setText(tr("This operation needs your wallet passphrase to decrypt the wallet."));
-            ui->passLabel2->hide();
-            ui->passEdit2->hide();
-            ui->passLabel3->hide();
-            ui->passEdit3->hide();
+            ui->newPassphraseLabel->hide();
+            ui->newPassphraseEdit->hide();
+            ui->repeatNewPassphraseLabel->hide();
+            ui->repeatNewPassphraseEdit->hide();
             setWindowTitle(tr("Decrypt wallet"));
             break;
         case ChangePass: // Ask old passphrase + new passphrase x2
@@ -64,9 +64,9 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget *parent) :
     }
 
     textChanged();
-    connect(ui->passEdit1, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
-    connect(ui->passEdit2, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
-    connect(ui->passEdit3, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
+    connect(ui->oldPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
+    connect(ui->newPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
+    connect(ui->repeatNewPassphraseEdit, SIGNAL(textChanged(QString)), this, SLOT(textChanged()));
 }
 
 AskPassphraseDialog::~AskPassphraseDialog()
@@ -90,9 +90,9 @@ void AskPassphraseDialog::accept()
     newpass2.reserve(MAX_PASSPHRASE_SIZE);
     // TODO: get rid of this .c_str() by implementing SecureString::operator=(std::string)
     // Alternately, find a way to make this input mlock()'d to begin with.
-    oldpass.assign(ui->passEdit1->text().toStdString().c_str());
-    newpass1.assign(ui->passEdit2->text().toStdString().c_str());
-    newpass2.assign(ui->passEdit3->text().toStdString().c_str());
+    oldpass.assign(ui->oldPassphraseEdit->text().toStdString().c_str());
+    newpass1.assign(ui->newPassphraseEdit->text().toStdString().c_str());
+    newpass2.assign(ui->repeatNewPassphraseEdit->text().toStdString().c_str());
 
     secureClearPassFields();
 
@@ -200,15 +200,15 @@ void AskPassphraseDialog::textChanged()
     switch(mode)
     {
     case Encrypt: // New passphrase x2
-        acceptable = !ui->passEdit2->text().isEmpty() && !ui->passEdit3->text().isEmpty();
+        acceptable = !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
     case UnlockStaking:
     case Unlock: // Old passphrase x1
     case Decrypt:
-        acceptable = !ui->passEdit1->text().isEmpty();
+        acceptable = !ui->oldPassphraseEdit->text().isEmpty();
         break;
     case ChangePass: // Old passphrase x1, new passphrase x2
-        acceptable = !ui->passEdit1->text().isEmpty() && !ui->passEdit2->text().isEmpty() && !ui->passEdit3->text().isEmpty();
+        acceptable = !ui->oldPassphraseEdit->text().isEmpty() && !ui->newPassphraseEdit->text().isEmpty() && !ui->repeatNewPassphraseEdit->text().isEmpty();
         break;
     }
     ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(acceptable);
@@ -260,11 +260,11 @@ bool AskPassphraseDialog::eventFilter(QObject *object, QEvent *event)
 void AskPassphraseDialog::secureClearPassFields()
 {
     // Attempt to overwrite text so that they do not linger around in memory
-    ui->passEdit1->setText(QString(" ").repeated(ui->passEdit1->text().size()));
-    ui->passEdit2->setText(QString(" ").repeated(ui->passEdit2->text().size()));
-    ui->passEdit3->setText(QString(" ").repeated(ui->passEdit3->text().size()));
+    ui->oldPassphraseEdit->setText(QString(" ").repeated(ui->oldPassphraseEdit->text().size()));
+    ui->newPassphraseEdit->setText(QString(" ").repeated(ui->newPassphraseEdit->text().size()));
+    ui->repeatNewPassphraseEdit->setText(QString(" ").repeated(ui->repeatNewPassphraseEdit->text().size()));
 
-    ui->passEdit1->clear();
-    ui->passEdit2->clear();
-    ui->passEdit3->clear();
+    ui->oldPassphraseEdit->clear();
+    ui->newPassphraseEdit->clear();
+    ui->repeatNewPassphraseEdit->clear();
 }

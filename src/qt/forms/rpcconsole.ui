@@ -39,7 +39,7 @@
         <number>12</number>
        </property>
        <item row="42" column="0">
-        <widget class="QLabel" name="label_8">
+        <widget class="QLabel" name="isTestNetLabel">
          <property name="text">
           <string>On testnet</string>
          </property>
@@ -55,7 +55,7 @@
        <item row="37" column="2">
         <widget class="QLabel" name="porDiff">
          <property name="text">
-          <string>1</string>
+          <string>N/A</string>
          </property>
         </widget>
        </item>
@@ -79,7 +79,7 @@
         </widget>
        </item>
        <item row="3" column="0">
-        <widget class="QLabel" name="label_14">
+        <widget class="QLabel" name="openSSLVersionLabel">
          <property name="text">
           <string>OpenSSL version</string>
          </property>
@@ -96,14 +96,14 @@
         </widget>
        </item>
        <item row="50" column="0">
-        <widget class="QLabel" name="labelCLOptions">
+        <widget class="QLabel" name="showCLOptionsLabel">
          <property name="text">
           <string>Command-line options</string>
          </property>
         </widget>
        </item>
        <item row="41" column="0">
-        <widget class="QLabel" name="label_7">
+        <widget class="QLabel" name="numberOfConnectionsLabel">
          <property name="autoFillBackground">
           <bool>false</bool>
          </property>
@@ -113,7 +113,7 @@
         </widget>
        </item>
        <item row="8" column="0">
-        <widget class="QLabel" name="label_12">
+        <widget class="QLabel" name="buildDateLabel">
          <property name="text">
           <string>Build date</string>
          </property>
@@ -165,7 +165,7 @@
         </widget>
        </item>
        <item row="2" column="0">
-        <widget class="QLabel" name="label_6">
+        <widget class="QLabel" name="clientVersionLabel">
          <property name="text">
           <string>Client version</string>
          </property>
@@ -217,7 +217,7 @@
         </spacer>
        </item>
        <item row="0" column="0">
-        <widget class="QLabel" name="label_9">
+        <widget class="QLabel" name="gridcoinCoreLabel">
          <property name="text">
           <string>Gridcoin Core:</string>
          </property>
@@ -256,14 +256,14 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="label_5">
+        <widget class="QLabel" name="clientNameLabel">
          <property name="text">
           <string>Client name</string>
          </property>
         </widget>
        </item>
        <item row="7" column="0">
-        <widget class="QLabel" name="label_19">
+        <widget class="QLabel" name="qtVersionLabel">
          <property name="text">
           <string>Qt version</string>
          </property>
@@ -286,42 +286,42 @@
         </widget>
        </item>
        <item row="48" column="0">
-        <widget class="QLabel" name="labelDebugLogfile">
+        <widget class="QLabel" name="openDebugLogfileLabel">
          <property name="text">
           <string>Debug log file</string>
          </property>
         </widget>
        </item>
        <item row="44" column="0">
-        <widget class="QLabel" name="label_3">
+        <widget class="QLabel" name="numberOfBlocksLabel">
          <property name="text">
           <string>Current number of blocks</string>
          </property>
         </widget>
        </item>
        <item row="37" column="0">
-        <widget class="QLabel" name="label_16">
+        <widget class="QLabel" name="porDiffLabel">
          <property name="text">
           <string>Proof Of Research Difficulty</string>
          </property>
         </widget>
        </item>
        <item row="46" column="0">
-        <widget class="QLabel" name="label_2">
+        <widget class="QLabel" name="lastBlockTimeLabel">
          <property name="text">
           <string>Last block time</string>
          </property>
         </widget>
        </item>
        <item row="39" column="0">
-        <widget class="QLabel" name="label_11">
+        <widget class="QLabel" name="networkLabel">
          <property name="text">
           <string>Network:</string>
          </property>
         </widget>
        </item>
        <item row="9" column="0">
-        <widget class="QLabel" name="label_13">
+        <widget class="QLabel" name="startupTimeLabel">
          <property name="text">
           <string>Startup time</string>
          </property>
@@ -344,14 +344,14 @@
         </widget>
        </item>
        <item row="4" column="0">
-        <widget class="QLabel" name="label_20">
+        <widget class="QLabel" name="boostVersionLabel">
          <property name="text">
           <string>Boost version</string>
          </property>
         </widget>
        </item>
        <item row="43" column="0">
-        <widget class="QLabel" name="label_10">
+        <widget class="QLabel" name="blockchainLabel">
          <property name="text">
           <string>Block chain</string>
          </property>
@@ -387,7 +387,7 @@
         </widget>
        </item>
        <item row="45" column="0">
-        <widget class="QLabel" name="label_4">
+        <widget class="QLabel" name="totalBlocksLabel">
          <property name="text">
           <string>Estimated total blocks</string>
          </property>
@@ -450,7 +450,7 @@
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout_2">
            <item>
-            <widget class="QSlider" name="sldGraphRange">
+            <widget class="QSlider" name="graphRangeSlider">
              <property name="minimum">
               <number>1</number>
              </property>
@@ -469,7 +469,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QLabel" name="lblGraphRange">
+            <widget class="QLabel" name="graphRangeLabel">
              <property name="minimumSize">
               <size>
                <width>100</width>
@@ -482,7 +482,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="btnClearTrafficGraph">
+            <widget class="QPushButton" name="clearTrafficGraphButton">
              <property name="text">
               <string>&amp;Clear</string>
              </property>
@@ -503,7 +503,7 @@
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_4">
               <item>
-               <widget class="Line" name="line">
+               <widget class="Line" name="greenLine">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -559,14 +559,14 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_17">
+               <widget class="QLabel" name="bytesInTextLabel">
                 <property name="text">
                  <string>In:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="lblBytesIn">
+               <widget class="QLabel" name="bytesInLabel">
                 <property name="minimumSize">
                  <size>
                   <width>50</width>
@@ -583,7 +583,7 @@
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_5">
               <item>
-               <widget class="Line" name="line_2">
+               <widget class="Line" name="redLine">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -639,14 +639,14 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_18">
+               <widget class="QLabel" name="bytesOutTextLabel">
                 <property name="text">
                  <string>Out:</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="lblBytesOut">
+               <widget class="QLabel" name="bytesOutLabel">
                 <property name="minimumSize">
                  <size>
                   <width>50</width>
@@ -849,7 +849,7 @@
               </property>
               <layout class="QGridLayout" name="gridLayout_2" columnstretch="0,1">
                <item row="0" column="0">
-                <widget class="QLabel" name="label_30">
+                <widget class="QLabel" name="peerWhitelistedLabel">
                  <property name="text">
                   <string>Whitelisted</string>
                  </property>
@@ -872,7 +872,7 @@
                 </widget>
                </item>
                <item row="1" column="0">
-                <widget class="QLabel" name="label_23">
+                <widget class="QLabel" name="peerDirectionLabel">
                  <property name="text">
                   <string>Direction</string>
                  </property>
@@ -895,7 +895,7 @@
                 </widget>
                </item>
                <item row="2" column="0">
-                <widget class="QLabel" name="label_21">
+                <widget class="QLabel" name="peerVersionLabel">
                  <property name="text">
                   <string>Version</string>
                  </property>
@@ -918,7 +918,7 @@
                 </widget>
                </item>
                <item row="3" column="0">
-                <widget class="QLabel" name="label_28">
+                <widget class="QLabel" name="peerSubversionLabel">
                  <property name="text">
                   <string>User Agent</string>
                  </property>
@@ -941,7 +941,7 @@
                 </widget>
                </item>
                <item row="4" column="0">
-                <widget class="QLabel" name="label_31">
+                <widget class="QLabel" name="peerServicesLabel">
                  <property name="text">
                   <string>Services</string>
                  </property>
@@ -964,7 +964,7 @@
                 </widget>
                </item>
                <item row="5" column="0">
-                <widget class="QLabel" name="label_29">
+                <widget class="QLabel" name="peerHeightLabel">
                  <property name="text">
                   <string>Starting Block</string>
                  </property>
@@ -987,7 +987,7 @@
                 </widget>
                </item>
                <item row="6" column="0">
-                <widget class="QLabel" name="label_27">
+                <widget class="QLabel" name="peerSyncHeightLabel">
                  <property name="text">
                   <string>Synced Headers</string>
                  </property>
@@ -1010,7 +1010,7 @@
                 </widget>
                </item>
                <item row="7" column="0">
-                <widget class="QLabel" name="label_25">
+                <widget class="QLabel" name="peerCommonHeightLabel">
                  <property name="text">
                   <string>Synced Blocks</string>
                  </property>
@@ -1033,7 +1033,7 @@
                 </widget>
                </item>
                <item row="8" column="0">
-                <widget class="QLabel" name="label_24">
+                <widget class="QLabel" name="peerBanScoreLabel">
                  <property name="text">
                   <string>Ban Score</string>
                  </property>
@@ -1056,7 +1056,7 @@
                 </widget>
                </item>
                <item row="9" column="0">
-                <widget class="QLabel" name="label_22">
+                <widget class="QLabel" name="peerConnTimeLavel">
                  <property name="text">
                   <string>Connection Time</string>
                  </property>
@@ -1079,7 +1079,7 @@
                 </widget>
                </item>
                <item row="10" column="0">
-                <widget class="QLabel" name="label_15">
+                <widget class="QLabel" name="lastSendLabel">
                  <property name="text">
                   <string>Last Send</string>
                  </property>
@@ -1102,7 +1102,7 @@
                 </widget>
                </item>
                <item row="11" column="0">
-                <widget class="QLabel" name="label_32">
+                <widget class="QLabel" name="peerLastRecvLabel">
                  <property name="text">
                   <string>Last Receive</string>
                  </property>
@@ -1125,7 +1125,7 @@
                 </widget>
                </item>
                <item row="12" column="0">
-                <widget class="QLabel" name="label_33">
+                <widget class="QLabel" name="peerBytesSentLabel">
                  <property name="text">
                   <string>Sent</string>
                  </property>
@@ -1148,7 +1148,7 @@
                 </widget>
                </item>
                <item row="13" column="0">
-                <widget class="QLabel" name="label_34">
+                <widget class="QLabel" name="peerBytesRecvLabel">
                  <property name="text">
                   <string>Received</string>
                  </property>
@@ -1171,7 +1171,7 @@
                 </widget>
                </item>
                <item row="14" column="0">
-                <widget class="QLabel" name="label_26">
+                <widget class="QLabel" name="peerPingTimeLabel">
                  <property name="text">
                   <string>Ping Time</string>
                  </property>
@@ -1243,7 +1243,7 @@
                 </widget>
                </item>
                <item row="17" column="0">
-                <widget class="QLabel" name="label_timeoffset">
+                <widget class="QLabel" name="timeoffsetLabel">
                  <property name="text">
                   <string>Time Offset</string>
                  </property>
@@ -1266,7 +1266,7 @@
                 </widget>
                </item>
                <item row="18" column="0">
-                <spacer name="verticalSpacer_3">
+                <spacer name="verticalSpacer_5">
                  <property name="orientation">
                   <enum>Qt::Vertical</enum>
                  </property>
@@ -1371,29 +1371,29 @@
       <attribute name="title">
        <string>&amp;Scraper</string>
       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_6">
-        <property name="spacing">
+      <layout class="QVBoxLayout" name="verticalLayout_6">
+       <property name="spacing">
         <number>3</number>
-        </property>
-        <item>
-         <widget class="QPlainTextEdit" name="scraper_log">
-          <property name="font">
-           <font>
-            <pointsize>9</pointsize>
-           </font>
-          </property>
-          <property name="autoFillBackground">
-           <bool>true</bool>
-          </property>
-          <property name="textInteractionFlags">
-           <set>Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
-          </property>
-          <property name="maximumBlockCount">
-           <number>10000</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       </property>
+       <item>
+        <widget class="QPlainTextEdit" name="scraper_log">
+         <property name="font">
+          <font>
+           <pointsize>9</pointsize>
+          </font>
+         </property>
+         <property name="autoFillBackground">
+          <bool>true</bool>
+         </property>
+         <property name="textInteractionFlags">
+          <set>Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
+         </property>
+         <property name="maximumBlockCount">
+          <number>10000</number>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>

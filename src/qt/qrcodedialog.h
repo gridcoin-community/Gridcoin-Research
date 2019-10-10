@@ -21,10 +21,10 @@ public:
 
 private slots:
     void on_lnReqAmount_textChanged();
-    void on_lnLabel_textChanged();
-    void on_lnMessage_textChanged();
-    void on_btnSaveAs_clicked();
-    void on_chkReqPayment_toggled(bool fChecked);
+    void on_labelEdit_textChanged();
+    void on_messageEdit_textChanged();
+    void on_saveAsButton_clicked();
+    void on_requestPaymentCheckBox_toggled(bool fChecked);
 
     void updateDisplayUnit();
 

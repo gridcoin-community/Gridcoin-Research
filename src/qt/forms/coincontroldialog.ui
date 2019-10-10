@@ -23,7 +23,7 @@
       <number>10</number>
      </property>
      <item>
-      <layout class="QFormLayout" name="formLayoutCoinControl1">
+      <layout class="QFormLayout" name="formLayoutCoinControlQuantity">
        <property name="horizontalSpacing">
         <number>10</number>
        </property>
@@ -37,14 +37,14 @@
         <number>6</number>
        </property>
        <item row="0" column="0">
-        <widget class="QLabel" name="labelCoinControlQuantityText">
+        <widget class="QLabel" name="coinControlQuantityTextLabel">
          <property name="text">
           <string>Quantity:</string>
          </property>
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLabel" name="labelCoinControlQuantity">
+        <widget class="QLabel" name="coinControlQuantityLabel">
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -60,14 +60,14 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="labelCoinControlBytesText">
+        <widget class="QLabel" name="coinControlBytesTextLabel">
          <property name="text">
           <string>Bytes:</string>
          </property>
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLabel" name="labelCoinControlBytes">
+        <widget class="QLabel" name="coinControlBytesLabel">
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -85,7 +85,7 @@
       </layout>
      </item>
      <item>
-      <layout class="QFormLayout" name="formLayoutCoinControl2">
+      <layout class="QFormLayout" name="formLayoutCoinControlAmount">
        <property name="horizontalSpacing">
         <number>10</number>
        </property>
@@ -99,14 +99,14 @@
         <number>6</number>
        </property>
        <item row="0" column="0">
-        <widget class="QLabel" name="labelCoinControlAmountText">
+        <widget class="QLabel" name="coinControlAmountTextLabel">
          <property name="text">
           <string>Amount:</string>
          </property>
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLabel" name="labelCoinControlAmount">
+        <widget class="QLabel" name="coinControlAmountLabel">
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -122,14 +122,14 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="labelCoinControlPriorityText">
+        <widget class="QLabel" name="coinControlPriorityTextLabel">
          <property name="text">
           <string>Priority:</string>
          </property>
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLabel" name="labelCoinControlPriority">
+        <widget class="QLabel" name="coinControlPriorityLabel">
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -147,7 +147,7 @@
       </layout>
      </item>
      <item>
-      <layout class="QFormLayout" name="formLayoutCoinControl3">
+      <layout class="QFormLayout" name="formLayoutCoinControlFee">
        <property name="horizontalSpacing">
         <number>10</number>
        </property>
@@ -161,14 +161,14 @@
         <number>6</number>
        </property>
        <item row="0" column="0">
-        <widget class="QLabel" name="labelCoinControlFeeText">
+        <widget class="QLabel" name="coinControlFeeTextLabel">
          <property name="text">
           <string>Fee:</string>
          </property>
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLabel" name="labelCoinControlFee">
+        <widget class="QLabel" name="coinControlFeeLabel">
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -184,7 +184,7 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="labelCoinControlLowOutputText">
+        <widget class="QLabel" name="coinControlLowOutputTextLabel">
          <property name="enabled">
           <bool>false</bool>
          </property>
@@ -194,7 +194,7 @@
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLabel" name="labelCoinControlLowOutput">
+        <widget class="QLabel" name="coinControlLowOutputLabel">
          <property name="enabled">
           <bool>false</bool>
          </property>
@@ -215,7 +215,7 @@
       </layout>
      </item>
      <item>
-      <layout class="QFormLayout" name="formLayoutCoinControl4">
+      <layout class="QFormLayout" name="formLayoutCoinControlChange">
        <property name="horizontalSpacing">
         <number>10</number>
        </property>
@@ -229,14 +229,14 @@
         <number>6</number>
        </property>
        <item row="0" column="0">
-        <widget class="QLabel" name="labelCoinControlAfterFeeText">
+        <widget class="QLabel" name="coinControlAfterFeeTextLabel">
          <property name="text">
           <string>After Fee:</string>
          </property>
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLabel" name="labelCoinControlAfterFee">
+        <widget class="QLabel" name="coinControlAfterFeeLabel">
          <property name="cursor">
           <cursorShape>IBeamCursor</cursorShape>
          </property>
@@ -252,7 +252,7 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="labelCoinControlChangeText">
+        <widget class="QLabel" name="coinControlChangeTextLabel">
          <property name="enabled">
           <bool>false</bool>
          </property>
@@ -262,7 +262,7 @@
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLabel" name="labelCoinControlChange">
+        <widget class="QLabel" name="coinControlChangeLabel">
          <property name="enabled">
           <bool>false</bool>
          </property>
@@ -312,7 +312,7 @@
         <number>14</number>
        </property>
        <item>
-        <widget class="QPushButton" name="pushButtonSelectAll">
+        <widget class="QPushButton" name="selectAllPushButton">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -325,7 +325,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QRadioButton" name="radioTreeMode">
+        <widget class="QRadioButton" name="treeModeRadioButton">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -341,7 +341,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QRadioButton" name="radioListMode">
+        <widget class="QRadioButton" name="listModeRadioButton">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
            <horstretch>0</horstretch>

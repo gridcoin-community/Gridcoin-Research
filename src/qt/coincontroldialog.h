@@ -80,8 +80,8 @@ private slots:
     void clipboardPriority();
     void clipboardLowOutput();
     void clipboardChange();
-    void radioTreeMode(bool);
-    void radioListMode(bool);
+    void treeModeRadioButton(bool);
+    void listModeRadioButton(bool);
     void viewItemChanged(QTreeWidgetItem*, int);
     void headerSectionClicked(int);
     void buttonBoxClicked(QAbstractButton*);

@@ -42,42 +42,42 @@
       <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
      </property>
      <item row="0" column="0">
-      <widget class="QLabel" name="passLabel1">
+      <widget class="QLabel" name="oldPassphraseLabel">
        <property name="text">
         <string>Enter passphrase</string>
        </property>
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QLineEdit" name="passEdit1">
+      <widget class="QLineEdit" name="oldPassphraseEdit">
        <property name="echoMode">
         <enum>QLineEdit::Password</enum>
        </property>
       </widget>
      </item>
      <item row="1" column="0">
-      <widget class="QLabel" name="passLabel2">
+      <widget class="QLabel" name="newPassphraseLabel">
        <property name="text">
         <string>New passphrase</string>
        </property>
       </widget>
      </item>
      <item row="1" column="1">
-      <widget class="QLineEdit" name="passEdit2">
+      <widget class="QLineEdit" name="newPassphraseEdit">
        <property name="echoMode">
         <enum>QLineEdit::Password</enum>
        </property>
       </widget>
      </item>
      <item row="2" column="0">
-      <widget class="QLabel" name="passLabel3">
+      <widget class="QLabel" name="repeatNewPassphraseLabel">
        <property name="text">
         <string>Repeat new passphrase</string>
        </property>
       </widget>
      </item>
      <item row="2" column="1">
-      <widget class="QLineEdit" name="passEdit3">
+      <widget class="QLineEdit" name="repeatNewPassphraseEdit">
        <property name="echoMode">
         <enum>QLineEdit::Password</enum>
        </property>

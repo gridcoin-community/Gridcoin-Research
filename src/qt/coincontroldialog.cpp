@@ -78,18 +78,18 @@ CoinControlDialog::CoinControlDialog(QWidget *parent) :
     connect(clipboardLowOutputAction, SIGNAL(triggered()), this, SLOT(clipboardLowOutput()));
     connect(clipboardChangeAction, SIGNAL(triggered()), this, SLOT(clipboardChange()));
 
-    ui->labelCoinControlQuantity->addAction(clipboardQuantityAction);
-    ui->labelCoinControlAmount->addAction(clipboardAmountAction);
-    ui->labelCoinControlFee->addAction(clipboardFeeAction);
-    ui->labelCoinControlAfterFee->addAction(clipboardAfterFeeAction);
-    ui->labelCoinControlBytes->addAction(clipboardBytesAction);
-    ui->labelCoinControlPriority->addAction(clipboardPriorityAction);
-    ui->labelCoinControlLowOutput->addAction(clipboardLowOutputAction);
-    ui->labelCoinControlChange->addAction(clipboardChangeAction);
+    ui->coinControlQuantityLabel->addAction(clipboardQuantityAction);
+    ui->coinControlAmountLabel->addAction(clipboardAmountAction);
+    ui->coinControlFeeLabel->addAction(clipboardFeeAction);
+    ui->coinControlAfterFeeLabel->addAction(clipboardAfterFeeAction);
+    ui->coinControlBytesLabel->addAction(clipboardBytesAction);
+    ui->coinControlPriorityLabel->addAction(clipboardPriorityAction);
+    ui->coinControlLowOutputLabel->addAction(clipboardLowOutputAction);
+    ui->coinControlChangeLabel->addAction(clipboardChangeAction);
 
     // toggle tree/list mode
-    connect(ui->radioTreeMode, SIGNAL(toggled(bool)), this, SLOT(radioTreeMode(bool)));
-    connect(ui->radioListMode, SIGNAL(toggled(bool)), this, SLOT(radioListMode(bool)));
+    connect(ui->treeModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(treeModeRadioButton(bool)));
+    connect(ui->listModeRadioButton, SIGNAL(toggled(bool)), this, SLOT(listModeRadioButton(bool)));
 
     // click on checkbox
     connect(ui->treeWidget, SIGNAL(itemChanged( QTreeWidgetItem*, int)), this, SLOT(viewItemChanged( QTreeWidgetItem*, int)));
@@ -102,7 +102,7 @@ CoinControlDialog::CoinControlDialog(QWidget *parent) :
     connect(ui->buttonBox, SIGNAL(clicked( QAbstractButton*)), this, SLOT(buttonBoxClicked(QAbstractButton*)));
 
     // (un)select all
-    connect(ui->pushButtonSelectAll, SIGNAL(clicked()), this, SLOT(buttonSelectAllClicked()));
+    connect(ui->selectAllPushButton, SIGNAL(clicked()), this, SLOT(buttonSelectAllClicked()));
 
     ui->treeWidget->setColumnWidth(COLUMN_CHECKBOX, 84);
     ui->treeWidget->setColumnWidth(COLUMN_AMOUNT, 100);
@@ -217,7 +217,7 @@ void CoinControlDialog::copyAmount()
 // context menu action: copy label
 void CoinControlDialog::copyLabel()
 {
-    if (ui->radioTreeMode->isChecked() && contextMenuItem->text(COLUMN_LABEL).length() == 0 && contextMenuItem->parent())
+    if (ui->treeModeRadioButton->isChecked() && contextMenuItem->text(COLUMN_LABEL).length() == 0 && contextMenuItem->parent())
         QApplication::clipboard()->setText(contextMenuItem->parent()->text(COLUMN_LABEL));
     else
         QApplication::clipboard()->setText(contextMenuItem->text(COLUMN_LABEL));
@@ -226,7 +226,7 @@ void CoinControlDialog::copyLabel()
 // context menu action: copy address
 void CoinControlDialog::copyAddress()
 {
-    if (ui->radioTreeMode->isChecked() && contextMenuItem->text(COLUMN_ADDRESS).length() == 0 && contextMenuItem->parent())
+    if (ui->treeModeRadioButton->isChecked() && contextMenuItem->text(COLUMN_ADDRESS).length() == 0 && contextMenuItem->parent())
         QApplication::clipboard()->setText(contextMenuItem->parent()->text(COLUMN_ADDRESS));
     else
         QApplication::clipboard()->setText(contextMenuItem->text(COLUMN_ADDRESS));
@@ -264,49 +264,49 @@ void CoinControlDialog::copyTransactionHash()
 // copy label "Quantity" to clipboard
 void CoinControlDialog::clipboardQuantity()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlQuantity->text());
+    QApplication::clipboard()->setText(ui->coinControlQuantityLabel->text());
 }
 
 // copy label "Amount" to clipboard
 void CoinControlDialog::clipboardAmount()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlAmount->text().left(ui->labelCoinControlAmount->text().indexOf(" ")));
+    QApplication::clipboard()->setText(ui->coinControlAmountLabel->text().left(ui->coinControlAmountLabel->text().indexOf(" ")));
 }
 
 // copy label "Fee" to clipboard
 void CoinControlDialog::clipboardFee()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlFee->text().left(ui->labelCoinControlFee->text().indexOf(" ")));
+    QApplication::clipboard()->setText(ui->coinControlFeeLabel->text().left(ui->coinControlFeeLabel->text().indexOf(" ")));
 }
 
 // copy label "After fee" to clipboard
 void CoinControlDialog::clipboardAfterFee()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlAfterFee->text().left(ui->labelCoinControlAfterFee->text().indexOf(" ")));
+    QApplication::clipboard()->setText(ui->coinControlAfterFeeLabel->text().left(ui->coinControlAfterFeeLabel->text().indexOf(" ")));
 }
 
 // copy label "Bytes" to clipboard
 void CoinControlDialog::clipboardBytes()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlBytes->text());
+    QApplication::clipboard()->setText(ui->coinControlBytesLabel->text());
 }
 
 // copy label "Priority" to clipboard
 void CoinControlDialog::clipboardPriority()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlPriority->text());
+    QApplication::clipboard()->setText(ui->coinControlPriorityLabel->text());
 }
 
 // copy label "Low output" to clipboard
 void CoinControlDialog::clipboardLowOutput()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlLowOutput->text());
+    QApplication::clipboard()->setText(ui->coinControlLowOutputLabel->text());
 }
 
 // copy label "Change" to clipboard
 void CoinControlDialog::clipboardChange()
 {
-    QApplication::clipboard()->setText(ui->labelCoinControlChange->text().left(ui->labelCoinControlChange->text().indexOf(" ")));
+    QApplication::clipboard()->setText(ui->coinControlChangeLabel->text().left(ui->coinControlChangeLabel->text().indexOf(" ")));
 }
 
 // treeview: sort
@@ -346,14 +346,14 @@ void CoinControlDialog::headerSectionClicked(int logicalIndex)
 }
 
 // toggle tree mode
-void CoinControlDialog::radioTreeMode(bool checked)
+void CoinControlDialog::treeModeRadioButton(bool checked)
 {
     if (checked && model)
         updateView();
 }
 
 // toggle list mode
-void CoinControlDialog::radioListMode(bool checked)
+void CoinControlDialog::listModeRadioButton(bool checked)
 {
     if (checked && model)
         updateView();
@@ -526,20 +526,20 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
     if (model && model->getOptionsModel())
         nDisplayUnit = model->getOptionsModel()->getDisplayUnit();
 
-    QLabel *l1 = dialog->findChild<QLabel *>("labelCoinControlQuantity");
-    QLabel *l2 = dialog->findChild<QLabel *>("labelCoinControlAmount");
-    QLabel *l3 = dialog->findChild<QLabel *>("labelCoinControlFee");
-    QLabel *l4 = dialog->findChild<QLabel *>("labelCoinControlAfterFee");
-    QLabel *l5 = dialog->findChild<QLabel *>("labelCoinControlBytes");
-    QLabel *l6 = dialog->findChild<QLabel *>("labelCoinControlPriority");
-    QLabel *l7 = dialog->findChild<QLabel *>("labelCoinControlLowOutput");
-    QLabel *l8 = dialog->findChild<QLabel *>("labelCoinControlChange");
+    QLabel *l1 = dialog->findChild<QLabel *>("coinControlQuantityLabel");
+    QLabel *l2 = dialog->findChild<QLabel *>("coinControlAmountLabel");
+    QLabel *l3 = dialog->findChild<QLabel *>("coinControlFeeLabel");
+    QLabel *l4 = dialog->findChild<QLabel *>("coinControlAfterFeeLabel");
+    QLabel *l5 = dialog->findChild<QLabel *>("coinControlBytesLabel");
+    QLabel *l6 = dialog->findChild<QLabel *>("coinControlPriorityLabel");
+    QLabel *l7 = dialog->findChild<QLabel *>("coinControlLowOutputLabel");
+    QLabel *l8 = dialog->findChild<QLabel *>("coinControlChangeLabel");
 
     // enable/disable "low output" and "change"
-    dialog->findChild<QLabel *>("labelCoinControlLowOutputText")->setEnabled(nPayAmount > 0);
-    dialog->findChild<QLabel *>("labelCoinControlLowOutput")    ->setEnabled(nPayAmount > 0);
-    dialog->findChild<QLabel *>("labelCoinControlChangeText")   ->setEnabled(nPayAmount > 0);
-    dialog->findChild<QLabel *>("labelCoinControlChange")       ->setEnabled(nPayAmount > 0);
+    dialog->findChild<QLabel *>("coinControlLowOutputLabelText")->setEnabled(nPayAmount > 0);
+    dialog->findChild<QLabel *>("coinControlLowOutputLabel")    ->setEnabled(nPayAmount > 0);
+    dialog->findChild<QLabel *>("coinControlChangeLabelText")   ->setEnabled(nPayAmount > 0);
+    dialog->findChild<QLabel *>("coinControlChangeLabel")       ->setEnabled(nPayAmount > 0);
 
     // stats
     l1->setText(QString::number(nQuantity));                                 // Quantity
@@ -562,20 +562,20 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
     l6->setToolTip(tr("Transactions with higher priority get more likely into a block.\n\nThis label turns red, if the priority is smaller than \"medium\".\n\n This means a fee of at least %1 per kb is required.").arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)));
     l7->setToolTip(tr("This label turns red, if any recipient receives an amount smaller than %1.\n\n This means a fee of at least %2 is required. \n\n Amounts below 0.546 times the minimum relay fee are shown as DUST.").arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)).arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)));
     l8->setToolTip(tr("This label turns red, if the change is smaller than %1.\n\n This means a fee of at least %2 is required.").arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)).arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)));
-    dialog->findChild<QLabel *>("labelCoinControlBytesText")    ->setToolTip(l5->toolTip());
-    dialog->findChild<QLabel *>("labelCoinControlPriorityText") ->setToolTip(l6->toolTip());
-    dialog->findChild<QLabel *>("labelCoinControlLowOutputText")->setToolTip(l7->toolTip());
-    dialog->findChild<QLabel *>("labelCoinControlChangeText")   ->setToolTip(l8->toolTip());
+    dialog->findChild<QLabel *>("coinControlBytesLabelText")    ->setToolTip(l5->toolTip());
+    dialog->findChild<QLabel *>("coinControlPriorityLabelText") ->setToolTip(l6->toolTip());
+    dialog->findChild<QLabel *>("coinControlLowOutputLabelText")->setToolTip(l7->toolTip());
+    dialog->findChild<QLabel *>("coinControlChangeLabelText")   ->setToolTip(l8->toolTip());
 
     // Insufficient funds
-    QLabel *label = dialog->findChild<QLabel *>("labelCoinControlInsuffFunds");
+    QLabel *label = dialog->findChild<QLabel *>("coinControlInsuffFundsLabel");
     if (label)
         label->setVisible(nChange < 0);
 }
 
 void CoinControlDialog::updateView()
 {
-    bool treeMode = ui->radioTreeMode->isChecked();
+    bool treeMode = ui->treeModeRadioButton->isChecked();
 
     ui->treeWidget->clear();
     ui->treeWidget->setEnabled(false); // performance, otherwise updateLabels would be called for every checked checkbox

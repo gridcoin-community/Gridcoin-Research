@@ -50,14 +50,14 @@ private slots:
     /** display messagebox with program parameters (same as bitcoin-qt --help) */
     void on_showCLOptionsButton_clicked();
     /** change the time range of the network traffic graph */
-    void on_sldGraphRange_valueChanged(int value);
+    void on_graphRangeSlider_valueChanged(int value);
     /** update traffic statistics */
     void updateTrafficStats(quint64 totalBytesIn, quint64 totalBytesOut);
     void resizeEvent(QResizeEvent *event);
     void showEvent(QShowEvent *event);
     void hideEvent(QHideEvent *event);
     /** clear traffic graph */
-    void on_btnClearTrafficGraph_clicked();
+    void on_clearTrafficGraphButton_clicked();
     /** Show custom context menu on Peers tab */
     void showPeersTableContextMenu(const QPoint& point);
     /** Show custom context menu on Bans tab */

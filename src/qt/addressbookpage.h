@@ -61,11 +61,11 @@ private slots:
     void on_deleteButton_clicked();
     void on_newAddressButton_clicked();
     /** Copy address of currently selected address entry to clipboard */
-    void on_copyToClipboard_clicked();
-    void on_signMessage_clicked();
-    void on_verifyMessage_clicked();
+    void on_copyToClipboardButton_clicked();
+    void on_signMessageButton_clicked();
+    void on_verifyMessageButton_clicked();
     void selectionChanged();
-    void on_showQRCode_clicked();
+    void on_showQRCodeButton_clicked();
     /** Spawn contextual menu (right mouse menu) for address book entry */
     void contextualMenu(const QPoint &point);
 

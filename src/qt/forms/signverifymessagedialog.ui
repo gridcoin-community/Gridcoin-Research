@@ -46,7 +46,7 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QValidatedLineEdit" name="addressIn_SM">
+          <widget class="QValidatedLineEdit" name="addressInEdit_SM">
            <property name="toolTip">
             <string>The address to sign the message with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</string>
            </property>
@@ -101,7 +101,7 @@
         </layout>
        </item>
        <item>
-        <widget class="QPlainTextEdit" name="messageIn_SM">
+        <widget class="QPlainTextEdit" name="messageInEdit_SM">
          <property name="toolTip">
           <string>Enter the message you want to sign here</string>
          </property>
@@ -113,7 +113,7 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QLineEdit" name="signatureOut_SM">
+          <widget class="QLineEdit" name="signatureOutEdit_SM">
            <property name="readOnly">
             <bool>true</bool>
            </property>
@@ -244,7 +244,7 @@
           <number>0</number>
          </property>
          <item>
-          <widget class="QValidatedLineEdit" name="addressIn_VM">
+          <widget class="QValidatedLineEdit" name="addressInEdit_VM">
            <property name="toolTip">
             <string>The address the message was signed with (e.g. Sjz75uKHzUQJnSdzvpiigEGxseKkDhQToX)</string>
            </property>
@@ -279,10 +279,10 @@
         </layout>
        </item>
        <item>
-        <widget class="QPlainTextEdit" name="messageIn_VM"/>
+        <widget class="QPlainTextEdit" name="messageInEdit_VM"/>
        </item>
        <item>
-        <widget class="QValidatedLineEdit" name="signatureIn_VM">
+        <widget class="QValidatedLineEdit" name="signatureInEdit_VM">
          <property name="placeholderText">
           <string>Enter Gridcoin signature</string>
          </property>
