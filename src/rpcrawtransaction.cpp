@@ -889,11 +889,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         if (!block.ReadFromDisk(pblkindex, true))
             throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
-        // No Transactions in block outside of block creation
-        if (block.vtx.size() < 3)
-            continue;
-
-        for (unsigned int i = 2; i < block.vtx.size(); i++)
+        for (unsigned int i = 1; i < block.vtx.size(); i++)
         {
             if (fComplete)
                 break;
@@ -1158,11 +1154,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             if (!block.ReadFromDisk(pblkindex, true))
                 throw JSONRPCError(RPC_PARSE_ERROR, "Unable to read block from disk!");
 
-            // No Transactions in block outside of block creation
-            if (block.vtx.size() < 3)
-                continue;
-
-            for (unsigned int i = 2; i < block.vtx.size(); i++)
+            for (unsigned int i = 1; i < block.vtx.size(); i++)
             {
                 // Load Transaction
                 CTransaction tx;
