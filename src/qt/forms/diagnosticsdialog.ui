@@ -406,7 +406,7 @@
       <number>0</number>
      </property>
      <item>
-      <widget class="QPushButton" name="cancelButton">
+      <widget class="QPushButton" name="closeButton">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -441,7 +441,7 @@
  <resources/>
  <connections>
   <connection>
-   <sender>cancelButton</sender>
+   <sender>closeButton</sender>
    <signal>clicked()</signal>
    <receiver>DiagnosticsDialog</receiver>
    <slot>close()</slot>

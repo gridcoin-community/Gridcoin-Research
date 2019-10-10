@@ -18,7 +18,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_3">
    <item>
-    <widget class="QLabel" name="lblQRCode">
+    <widget class="QLabel" name="qrCodeLabel">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
        <horstretch>0</horstretch>
@@ -43,7 +43,7 @@
     </widget>
    </item>
    <item>
-    <widget class="QPlainTextEdit" name="outUri">
+    <widget class="QPlainTextEdit" name="outUriEdit">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
        <horstretch>0</horstretch>
@@ -68,7 +68,7 @@
     <widget class="QWidget" name="widget" native="true">
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
-       <widget class="QCheckBox" name="chkReqPayment">
+       <widget class="QCheckBox" name="requestPaymentCheckBox">
         <property name="enabled">
          <bool>true</bool>
         </property>
@@ -83,7 +83,7 @@
          <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
         </property>
         <item row="1" column="0">
-         <widget class="QLabel" name="labelLabel">
+         <widget class="QLabel" name="labelTextLabel">
           <property name="text">
            <string>Label:</string>
           </property>
@@ -102,7 +102,7 @@
          <widget class="QLineEdit" name="labelEdit"/>
         </item>
         <item row="2" column="0">
-         <widget class="QLabel" name="labelMessage">
+         <widget class="QLabel" name="messageTextLabel">
           <property name="text">
            <string>Message:</string>
           </property>
@@ -121,7 +121,7 @@
          <widget class="QLineEdit" name="messageEdit"/>
         </item>
         <item row="0" column="0">
-         <widget class="QLabel" name="labelAmount">
+         <widget class="QLabel" name="amountTextLabel">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
             <horstretch>0</horstretch>
@@ -173,7 +173,7 @@
          </spacer>
         </item>
         <item>
-         <widget class="QPushButton" name="buttonSaveAs">
+         <widget class="QPushButton" name="saveAsButton">
           <property name="text">
            <string>&amp;Save As...</string>
           </property>
@@ -196,7 +196,7 @@
  <resources/>
  <connections>
   <connection>
-   <sender>chkReqPayment</sender>
+   <sender>requestPaymentCheckBox</sender>
    <signal>clicked(bool)</signal>
    <receiver>lnReqAmount</receiver>
    <slot>setEnabled(bool)</slot>

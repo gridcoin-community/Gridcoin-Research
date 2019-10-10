@@ -66,7 +66,7 @@
              <number>7</number>
             </property>
             <item>
-             <widget class="QLabel" name="labelOverviewWallet">
+             <widget class="QLabel" name="overviewWalletLabel">
               <property name="text">
                <string>Wallet</string>
               </property>
@@ -76,7 +76,7 @@
              </widget>
             </item>
             <item>
-             <widget class="QLabel" name="labelWalletStatus">
+             <widget class="QLabel" name="walletStatusLabel">
               <property name="toolTip">
                <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</string>
               </property>
@@ -89,7 +89,7 @@
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer_2">
+             <spacer name="horizontalSpacer">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -115,14 +115,14 @@
              <number>12</number>
             </property>
             <item row="0" column="0">
-             <widget class="QLabel" name="labelAvailable">
+             <widget class="QLabel" name="availableLabel">
               <property name="text">
                <string>Available:</string>
               </property>
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QLabel" name="labelBalance">
+             <widget class="QLabel" name="balanceLabel">
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -138,14 +138,14 @@
              </widget>
             </item>
             <item row="1" column="0">
-             <widget class="QLabel" name="label_10">
+             <widget class="QLabel" name="stakeTextLabel">
               <property name="text">
                <string>Stake</string>
               </property>
              </widget>
             </item>
             <item row="1" column="1">
-             <widget class="QLabel" name="labelStake">
+             <widget class="QLabel" name="stakeLabel">
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -161,14 +161,14 @@
              </widget>
             </item>
             <item row="2" column="0">
-             <widget class="QLabel" name="label_3">
+             <widget class="QLabel" name="unconfirmedTextLabel">
               <property name="text">
                <string>Unconfirmed</string>
               </property>
              </widget>
             </item>
             <item row="2" column="1">
-             <widget class="QLabel" name="labelUnconfirmed">
+             <widget class="QLabel" name="unconfirmedLabel">
               <property name="cursor">
                <cursorShape>IBeamCursor</cursorShape>
               </property>
@@ -184,14 +184,14 @@
              </widget>
             </item>
             <item row="3" column="0">
-             <widget class="QLabel" name="labelImmatureText">
+             <widget class="QLabel" name="immatureTextLabel">
               <property name="text">
                <string>Immature:</string>
               </property>
              </widget>
             </item>
             <item row="3" column="1">
-             <widget class="QLabel" name="labelImmature">
+             <widget class="QLabel" name="immatureLabel">
               <property name="toolTip">
                <string>Total mined coins that have not yet matured.</string>
               </property>
@@ -204,7 +204,7 @@
              </widget>
             </item>
             <item row="4" column="0" colspan="2">
-             <widget class="Line" name="line">
+             <widget class="Line" name="balanceDividerLine">
               <property name="sizePolicy">
                <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
                 <horstretch>0</horstretch>
@@ -223,19 +223,19 @@
              </widget>
             </item>
             <item row="5" column="0">
-             <widget class="QLabel" name="labelTotalBalance">
+             <widget class="QLabel" name="totalBalanceLabel">
               <property name="text">
                <string>Total:</string>
               </property>
              </widget>
             </item>
             <item row="5" column="1">
-             <widget class="QLabel" name="labelTotal">
+             <widget class="QLabel" name="totalLabel">
               <property name="toolTip">
                <string>Your current total balance</string>
               </property>
               <property name="text">
-               <string notr="true">0</string>
+               <string notr="true">0 GRC</string>
               </property>
               <property name="textInteractionFlags">
                <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByKeyboard|Qt::TextSelectableByMouse</set>
@@ -261,7 +261,7 @@
            </spacer>
           </item>
           <item>
-           <widget class="Line" name="line_2">
+           <widget class="Line" name="dividerLine">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
@@ -279,14 +279,14 @@
              <number>12</number>
             </property>
             <item row="0" column="0">
-             <widget class="QLabel" name="label_2">
+             <widget class="QLabel" name="blocksTextLabel">
               <property name="text">
                <string>Blocks:</string>
               </property>
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QLabel" name="labelBlocks">
+             <widget class="QLabel" name="blocksLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -296,14 +296,14 @@
              </widget>
             </item>
             <item row="1" column="0">
-             <widget class="QLabel" name="label_8">
+             <widget class="QLabel" name="difficultyTextLabel">
               <property name="text">
                <string>Difficulty:</string>
               </property>
              </widget>
             </item>
             <item row="1" column="1">
-             <widget class="QLabel" name="labelDifficulty">
+             <widget class="QLabel" name="difficultyLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -313,14 +313,14 @@
              </widget>
             </item>
             <item row="2" column="0">
-             <widget class="QLabel" name="label_11">
+             <widget class="QLabel" name="netWeightTextLabel">
               <property name="text">
                <string>Net Weight:</string>
               </property>
              </widget>
             </item>
             <item row="2" column="1">
-             <widget class="QLabel" name="labelNetWeight">
+             <widget class="QLabel" name="netWeightLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -330,35 +330,35 @@
              </widget>
             </item>
             <item row="3" column="0">
-             <widget class="QLabel" name="label_7">
+             <widget class="QLabel" name="coinWeightTextLabel">
               <property name="text">
                <string>Coin Weight:</string>
               </property>
              </widget>
             </item>
             <item row="4" column="0">
-             <widget class="QLabel" name="label_13">
+             <widget class="QLabel" name="magnitudeTextLabel">
               <property name="text">
                <string>Magnitude:</string>
               </property>
              </widget>
             </item>
             <item row="5" column="0">
-             <widget class="QLabel" name="label_15">
+             <widget class="QLabel" name="cpidTextLabel">
               <property name="text">
                <string>CPID:</string>
               </property>
              </widget>
             </item>
             <item row="6" column="0">
-             <widget class="QLabel" name="label_16">
+             <widget class="QLabel" name="statusTextLabel">
               <property name="text">
                <string>Status:</string>
               </property>
              </widget>
             </item>
             <item row="3" column="1">
-             <widget class="QLabel" name="labelCoinWeight">
+             <widget class="QLabel" name="coinWeightLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -368,7 +368,7 @@
              </widget>
             </item>
             <item row="4" column="1">
-             <widget class="QLabel" name="labelMagnitude">
+             <widget class="QLabel" name="magnitudeLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -378,7 +378,7 @@
              </widget>
             </item>
             <item row="5" column="1">
-             <widget class="QLabel" name="labelCpid">
+             <widget class="QLabel" name="cpidLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -388,7 +388,7 @@
              </widget>
             </item>
             <item row="6" column="1">
-             <widget class="QLabel" name="labelStatus">
+             <widget class="QLabel" name="statusLabel">
               <property name="text">
                <string notr="true"/>
               </property>
@@ -403,7 +403,7 @@
         </widget>
        </item>
        <item>
-        <spacer name="verticalSpacer_3">
+        <spacer name="verticalSpacer_2">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
          </property>
@@ -446,7 +446,7 @@
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_3">
             <item>
-             <widget class="QLabel" name="labelRecentTrans">
+             <widget class="QLabel" name="recentTransLabel">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                 <horstretch>0</horstretch>
@@ -465,7 +465,7 @@
              </widget>
             </item>
             <item>
-             <widget class="QLabel" name="labelTransactionsStatus">
+             <widget class="QLabel" name="transactionsStatusLabel">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                 <horstretch>0</horstretch>
@@ -490,7 +490,7 @@
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer_4">
+             <spacer name="horizontalSpacer_2">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -554,14 +554,14 @@
       <number>12</number>
      </property>
      <item row="0" column="0">
-      <widget class="QLabel" name="label_9">
+      <widget class="QLabel" name="pollTextLabel">
        <property name="text">
         <string>Current Poll:</string>
        </property>
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="ClickLabel" name="labelPoll">
+      <widget class="ClickLabel" name="pollLabel">
        <property name="text">
         <string notr="true"/>
        </property>
@@ -571,14 +571,14 @@
       </widget>
      </item>
      <item row="1" column="0">
-      <widget class="QLabel" name="label_17">
+      <widget class="QLabel" name="errorsTextLabel">
        <property name="text">
         <string>Error Messages:</string>
        </property>
       </widget>
      </item>
      <item row="1" column="1">
-      <widget class="QLabel" name="labelErrors">
+      <widget class="QLabel" name="errorsLabel">
        <property name="text">
         <string/>
        </property>
