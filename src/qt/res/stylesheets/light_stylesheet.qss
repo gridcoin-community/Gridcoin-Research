@@ -504,7 +504,7 @@ QToolBar#toolbar3 QLabel{
 
 /* options dialog */
 
-#statusLabel{
+#OptionsDialog #statusLabel{
     font-weight:bold;
 }
 
