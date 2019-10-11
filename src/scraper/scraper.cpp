@@ -5214,14 +5214,12 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                         // Once we find a part that corresponds to the selected project in the given manifest, then break,
                         // because there can only be one part in a manifest corresponding to a given project.
                         int nPart = -1;
-                        // int64_t nProjectObjectTime = 0;
                         uint256 nProjectObjectHash = 0;
                         for (const auto& vectoriter : manifest.projects)
                         {
                             if (vectoriter.project == iWhitelistProject.m_name)
                             {
                                 nPart = vectoriter.part1;
-                                // nProjectObjectTime = vectoriter.LastModified;
                                 break;
                             }
                         }
@@ -5367,7 +5365,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         Compute number of permutations and cumulative placevalue. For instance, if there were 4 projects, and
         the number of candidate parts for each of the projects were 2, 3, 2, and 2, then the total number of
-        permutations would be 2 * 3 * 2 * 1 = 12, and the cumulative placevalue would be
+        permutations would be 2 * 3 * 2 * 2 = 24, and the cumulative placevalue would be
         -------------------- 12,  4,  2,  1. Notice we will use a reverse iterator to fill in the placevalue
         as we compute the total number of permutations. This is ridiculous of course because 99.99999% of the
         time it is going to be 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 (one permutation) or at most something like
@@ -5843,17 +5841,6 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
         if (PastConvergencesSize > 1)
         {
-
-            /*
-            std::default_random_engine generator(static_cast<unsigned int>(GetAdjustedTime()));
-            std::uniform_int_distribution<unsigned int> distribution(0, PastConvergencesSize - 1);
-
-            _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock random past distribution limits: " + std::to_string(distribution.a())
-                 + " , " + std::to_string(distribution.b()));
-
-            unsigned int i = distribution(generator);
-            */
-
             int i = GetRandInt(PastConvergencesSize - 1);
 
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock random past RandomPastConvergedManifest index " + std::to_string(i) + " selected.");
