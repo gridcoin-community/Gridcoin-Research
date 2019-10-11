@@ -81,76 +81,76 @@ QToolBar#toolbar3 QLabel{
 
 /* overview page */
 
-#labelOverviewWallet{
+#overviewWalletLabel{
     font-size:16pt;
     font-weight:bold;
 }
 
-#labelAvailable{
+#availableLabel{
     font-weight:bold;
 }
 
-#labelImmatureText{
+#immatureTextLabel{
     font-weight:bold;
 }
 
-#labelTotalBalance{
+#totalBalanceLabel{
     font-weight:bold;
 }
 
-#labelRecentTrans{
+#recentTransLabel{
     font-size:16pt;
     font-weight:bold;
 }
 
-#labelWalletStatus{
+#walletStatusLabel{
     color: red;
 }
 
-#labelTransactionsStatus{
+#transactionsStatusLabel{
     color: red;
 }
 
 /* coincontrol dialog*/
 
-#labelCoinControlFeatures{
+#coinControlFeaturesLabel{
     font-weight:bold;
 }
 
-#labelCoinControlInsuffFunds{
+#coinControlInsuffFundsLabel{
     color:red;
     font-weight:bold;
 }
 
-#labelCoinControlBytesText{
+#coinControlBytesTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlQuantityText{
+#coinControlQuantityTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlAmountText{
+#coinControlAmountTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlPriorityText{
+#coinControlPriorityTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlFeeText{
+#coinControlFeeTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlLowOutputText{
+#coinControlLowOutputTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlAfterFeeText{
+#coinControlAfterFeeTextLabel{
     font-weight:bold;
 }
 
-#labelCoinControlChangeText{
+#coinControlChangeTextLabel{
     font-weight:bold;
 }
 
