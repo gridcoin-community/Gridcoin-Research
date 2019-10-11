@@ -536,9 +536,9 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
     QLabel *l8 = dialog->findChild<QLabel *>("coinControlChangeLabel");
 
     // enable/disable "low output" and "change"
-    dialog->findChild<QLabel *>("coinControlLowOutputLabelText")->setEnabled(nPayAmount > 0);
+    dialog->findChild<QLabel *>("coinControlLowOutputTextLabel")->setEnabled(nPayAmount > 0);
     dialog->findChild<QLabel *>("coinControlLowOutputLabel")    ->setEnabled(nPayAmount > 0);
-    dialog->findChild<QLabel *>("coinControlChangeLabelText")   ->setEnabled(nPayAmount > 0);
+    dialog->findChild<QLabel *>("coinControlChangeTextLabel")   ->setEnabled(nPayAmount > 0);
     dialog->findChild<QLabel *>("coinControlChangeLabel")       ->setEnabled(nPayAmount > 0);
 
     // stats
@@ -562,10 +562,10 @@ void CoinControlDialog::updateLabels(WalletModel *model, QDialog* dialog)
     l6->setToolTip(tr("Transactions with higher priority get more likely into a block.\n\nThis label turns red, if the priority is smaller than \"medium\".\n\n This means a fee of at least %1 per kb is required.").arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)));
     l7->setToolTip(tr("This label turns red, if any recipient receives an amount smaller than %1.\n\n This means a fee of at least %2 is required. \n\n Amounts below 0.546 times the minimum relay fee are shown as DUST.").arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)).arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)));
     l8->setToolTip(tr("This label turns red, if the change is smaller than %1.\n\n This means a fee of at least %2 is required.").arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)).arg(BitcoinUnits::formatWithUnit(nDisplayUnit, CENT)));
-    dialog->findChild<QLabel *>("coinControlBytesLabelText")    ->setToolTip(l5->toolTip());
-    dialog->findChild<QLabel *>("coinControlPriorityLabelText") ->setToolTip(l6->toolTip());
-    dialog->findChild<QLabel *>("coinControlLowOutputLabelText")->setToolTip(l7->toolTip());
-    dialog->findChild<QLabel *>("coinControlChangeLabelText")   ->setToolTip(l8->toolTip());
+    dialog->findChild<QLabel *>("coinControlBytesTextLabel")    ->setToolTip(l5->toolTip());
+    dialog->findChild<QLabel *>("coinControlPriorityTextLabel") ->setToolTip(l6->toolTip());
+    dialog->findChild<QLabel *>("coinControlLowOutputTextLabel")->setToolTip(l7->toolTip());
+    dialog->findChild<QLabel *>("coinControlChangeTextLabel")   ->setToolTip(l8->toolTip());
 
     // Insufficient funds
     QLabel *label = dialog->findChild<QLabel *>("coinControlInsuffFundsLabel");
