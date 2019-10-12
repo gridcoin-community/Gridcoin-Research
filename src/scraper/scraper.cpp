@@ -5818,7 +5818,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NN::ValidateSuperblock validation against current (using cache)", "failed");
     }
 
-    if (NN::ValidateSuperblock(NewFormatSuperblock, false))
+    if (NN::ValidateSuperblock(NewFormatSuperblock, false, nReducedCacheBits))
     {
         _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (without using cache) passed");
         res.pushKV("NN::ValidateSuperblock validation against current (without using cache)", "passed");
@@ -5937,7 +5937,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "failed");
         }
 
-        if (NN::ValidateSuperblock(RandomPastSB, false))
+        if (NN::ValidateSuperblock(RandomPastSB, false, nReducedCacheBits))
         {
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (without using cache) passed");
             res.pushKV("NN::ValidateSuperblock validation against random past (without using cache)", "passed");
