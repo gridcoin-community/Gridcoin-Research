@@ -308,9 +308,14 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->peerWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
         ui->peerWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
         ui->peerWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Address, ADDRESS_COLUMN_WIDTH);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH);
-        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, PING_COLUMN_WIDTH);
+
+        // Scale column widths by the logical DPI over 96.0 to deal with hires displays.
+        ui->peerWidget->setColumnWidth(PeerTableModel::NetNodeId, NETNODEID_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::Address, ADDRESS_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::Ping, PING_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::Sent, SENT_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::Received, RECEIVED_COLUMN_WIDTH * logicalDpiX() / 96);
+        ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH * logicalDpiX() / 96);
         ui->peerWidget->horizontalHeader()->setStretchLastSection(true);
 
         // create peer table context menu actions
