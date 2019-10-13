@@ -35,93 +35,112 @@ bool GuessType(const std::string& fname, FileType* type) {
 // Notified when log reader encounters corruption.
 class CorruptionReporter : public log::Reader::Reporter {
  public:
+  WritableFile* dst_;
   virtual void Corruption(size_t bytes, const Status& status) {
-    printf("corruption: %d bytes; %s\n",
-            static_cast<int>(bytes),
-            status.ToString().c_str());
+    std::string r = "corruption: ";
+    AppendNumberTo(&r, bytes);
+    r += " bytes; ";
+    r += status.ToString();
+    r.push_back('\n');
+    dst_->Append(r);
   }
 };
 
 // Print contents of a log file. (*func)() is called on every record.
-bool PrintLogContents(Env* env, const std::string& fname,
-                      void (*func)(Slice)) {
+Status PrintLogContents(Env* env, const std::string& fname,
+                        void (*func)(uint64_t, Slice, WritableFile*),
+                        WritableFile* dst) {
   SequentialFile* file;
   Status s = env->NewSequentialFile(fname, &file);
   if (!s.ok()) {
-    fprintf(stderr, "%s\n", s.ToString().c_str());
-    return false;
+    return s;
   }
   CorruptionReporter reporter;
+  reporter.dst_ = dst;
   log::Reader reader(file, &reporter, true, 0);
   Slice record;
   std::string scratch;
   while (reader.ReadRecord(&record, &scratch)) {
-    printf("--- offset %llu; ",
-           static_cast<unsigned long long>(reader.LastRecordOffset()));
-    (*func)(record);
+    (*func)(reader.LastRecordOffset(), record, dst);
   }
   delete file;
-  return true;
+  return Status::OK();
 }
 
 // Called on every item found in a WriteBatch.
 class WriteBatchItemPrinter : public WriteBatch::Handler {
  public:
-  uint64_t offset_;
-  uint64_t sequence_;
-
+  WritableFile* dst_;
   virtual void Put(const Slice& key, const Slice& value) {
-    printf("  put '%s' '%s'\n",
-           EscapeString(key).c_str(),
-           EscapeString(value).c_str());
+    std::string r = "  put '";
+    AppendEscapedStringTo(&r, key);
+    r += "' '";
+    AppendEscapedStringTo(&r, value);
+    r += "'\n";
+    dst_->Append(r);
   }
   virtual void Delete(const Slice& key) {
-    printf("  del '%s'\n",
-           EscapeString(key).c_str());
+    std::string r = "  del '";
+    AppendEscapedStringTo(&r, key);
+    r += "'\n";
+    dst_->Append(r);
   }
 };
 
 
 // Called on every log record (each one of which is a WriteBatch)
 // found in a kLogFile.
-static void WriteBatchPrinter(Slice record) {
+static void WriteBatchPrinter(uint64_t pos, Slice record, WritableFile* dst) {
+  std::string r = "--- offset ";
+  AppendNumberTo(&r, pos);
+  r += "; ";
   if (record.size() < 12) {
-    printf("log record length %d is too small\n",
-           static_cast<int>(record.size()));
+    r += "log record length ";
+    AppendNumberTo(&r, record.size());
+    r += " is too small\n";
+    dst->Append(r);
     return;
   }
   WriteBatch batch;
   WriteBatchInternal::SetContents(&batch, record);
-  printf("sequence %llu\n",
-         static_cast<unsigned long long>(WriteBatchInternal::Sequence(&batch)));
+  r += "sequence ";
+  AppendNumberTo(&r, WriteBatchInternal::Sequence(&batch));
+  r.push_back('\n');
+  dst->Append(r);
   WriteBatchItemPrinter batch_item_printer;
+  batch_item_printer.dst_ = dst;
   Status s = batch.Iterate(&batch_item_printer);
   if (!s.ok()) {
-    printf("  error: %s\n", s.ToString().c_str());
+    dst->Append("  error: " + s.ToString() + "\n");
   }
 }
 
-bool DumpLog(Env* env, const std::string& fname) {
-  return PrintLogContents(env, fname, WriteBatchPrinter);
+Status DumpLog(Env* env, const std::string& fname, WritableFile* dst) {
+  return PrintLogContents(env, fname, WriteBatchPrinter, dst);
 }
 
 // Called on every log record (each one of which is a WriteBatch)
 // found in a kDescriptorFile.
-static void VersionEditPrinter(Slice record) {
+static void VersionEditPrinter(uint64_t pos, Slice record, WritableFile* dst) {
+  std::string r = "--- offset ";
+  AppendNumberTo(&r, pos);
+  r += "; ";
   VersionEdit edit;
   Status s = edit.DecodeFrom(record);
   if (!s.ok()) {
-    printf("%s\n", s.ToString().c_str());
-    return;
+    r += s.ToString();
+    r.push_back('\n');
+  } else {
+    r += edit.DebugString();
   }
-  printf("%s", edit.DebugString().c_str());
+  dst->Append(r);
 }
 
-bool DumpDescriptor(Env* env, const std::string& fname) {
-  return PrintLogContents(env, fname, VersionEditPrinter);
+Status DumpDescriptor(Env* env, const std::string& fname, WritableFile* dst) {
+  return PrintLogContents(env, fname, VersionEditPrinter, dst);
 }
 
-bool DumpTable(Env* env, const std::string& fname) {
+Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
   uint64_t file_size;
   RandomAccessFile* file = NULL;
   Table* table = NULL;
@@ -137,102 +156,70 @@ bool DumpTable(Env* env, const std::string& fname) {
     s = Table::Open(Options(), file, file_size, &table);
   }
   if (!s.ok()) {
-    fprintf(stderr, "%s\n", s.ToString().c_str());
     delete table;
     delete file;
-    return false;
+    return s;
   }
 
   ReadOptions ro;
   ro.fill_cache = false;
   Iterator* iter = table->NewIterator(ro);
+  std::string r;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+    r.clear();
     ParsedInternalKey key;
     if (!ParseInternalKey(iter->key(), &key)) {
-      printf("badkey '%s' => '%s'\n",
-             EscapeString(iter->key()).c_str(),
-             EscapeString(iter->value()).c_str());
+      r = "badkey '";
+      AppendEscapedStringTo(&r, iter->key());
+      r += "' => '";
+      AppendEscapedStringTo(&r, iter->value());
+      r += "'\n";
+      dst->Append(r);
     } else {
-      char kbuf[20];
-      const char* type;
+      r = "'";
+      AppendEscapedStringTo(&r, key.user_key);
+      r += "' @ ";
+      AppendNumberTo(&r, key.sequence);
+      r += " : ";
       if (key.type == kTypeDeletion) {
-        type = "del";
+        r += "del";
       } else if (key.type == kTypeValue) {
-        type = "val";
+        r += "val";
       } else {
-        snprintf(kbuf, sizeof(kbuf), "%d", static_cast<int>(key.type));
-        type = kbuf;
+        AppendNumberTo(&r, key.type);
       }
-      printf("'%s' @ %8llu : %s => '%s'\n",
-             EscapeString(key.user_key).c_str(),
-             static_cast<unsigned long long>(key.sequence),
-             type,
-             EscapeString(iter->value()).c_str());
+      r += " => '";
+      AppendEscapedStringTo(&r, iter->value());
+      r += "'\n";
+      dst->Append(r);
     }
   }
   s = iter->status();
   if (!s.ok()) {
-    printf("iterator error: %s\n", s.ToString().c_str());
+    dst->Append("iterator error: " + s.ToString() + "\n");
   }
 
   delete iter;
   delete table;
   delete file;
-  return true;
+  return Status::OK();
 }
 
-bool DumpFile(Env* env, const std::string& fname) {
+}  // namespace
+
+Status DumpFile(Env* env, const std::string& fname, WritableFile* dst) {
   FileType ftype;
   if (!GuessType(fname, &ftype)) {
-    fprintf(stderr, "%s: unknown file type\n", fname.c_str());
-    return false;
+    return Status::InvalidArgument(fname + ": unknown file type");
   }
   switch (ftype) {
-    case kLogFile:         return DumpLog(env, fname);
-    case kDescriptorFile:  return DumpDescriptor(env, fname);
-    case kTableFile:       return DumpTable(env, fname);
-
-    default: {
-      fprintf(stderr, "%s: not a dump-able file type\n", fname.c_str());
+    case kLogFile:         return DumpLog(env, fname, dst);
+    case kDescriptorFile:  return DumpDescriptor(env, fname, dst);
+    case kTableFile:       return DumpTable(env, fname, dst);
+    default:
       break;
-    }
   }
-  return false;
+  return Status::InvalidArgument(fname + ": not a dump-able file type");
 }
 
-bool HandleDumpCommand(Env* env, char** files, int num) {
-  bool ok = true;
-  for (int i = 0; i < num; i++) {
-    ok &= DumpFile(env, files[i]);
-  }
-  return ok;
-}
-
-}
 }  // namespace leveldb
-
-static void Usage() {
-  fprintf(
-      stderr,
-      "Usage: leveldbutil command...\n"
-      "   dump files...         -- dump contents of specified files\n"
-      );
-}
-
-int main(int argc, char** argv) {
-  leveldb::Env* env = leveldb::Env::Default();
-  bool ok = true;
-  if (argc < 2) {
-    Usage();
-    ok = false;
-  } else {
-    std::string command = argv[1];
-    if (command == "dump") {
-      ok = leveldb::HandleDumpCommand(env, argv+2, argc-2);
-    } else {
-      Usage();
-      ok = false;
-    }
-  }
-  return (ok ? 0 : 1);
-}
