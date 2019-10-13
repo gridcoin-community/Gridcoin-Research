@@ -15,7 +15,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLabel" name="labelExplanation">
+    <widget class="QLabel" name="explanationLabel">
      <property name="text">
       <string>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</string>
      </property>
@@ -72,7 +72,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="copyToClipboard">
+      <widget class="QPushButton" name="copyToClipboardButton">
        <property name="toolTip">
         <string>Copy the currently selected address to the system clipboard</string>
        </property>
@@ -86,7 +86,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="showQRCode">
+      <widget class="QPushButton" name="showQRCodeButton">
        <property name="text">
         <string>Show &amp;QR Code</string>
        </property>
@@ -97,7 +97,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="signMessage">
+      <widget class="QPushButton" name="signMessageButton">
        <property name="toolTip">
         <string>Sign a message to prove you own a Gridcoin address</string>
        </property>
@@ -111,7 +111,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="verifyMessage">
+      <widget class="QPushButton" name="verifyMessageButton">
        <property name="toolTip">
         <string>Verify a message to ensure it was signed with a specified Gridcoin address</string>
        </property>
@@ -152,7 +152,7 @@
       </spacer>
      </item>
      <item>
-      <widget class="QDialogButtonBox" name="buttonBox">
+      <widget class="QDialogButtonBox" name="okayButtonBox">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
          <horstretch>0</horstretch>
