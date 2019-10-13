@@ -1079,8 +1079,11 @@ bool ScraperHousekeeping()
 
     if (fDebug3 && !sSBCoreData.empty())
     {
-        UniValue dummy_params(UniValue::VARR);
-        testnewsb(dummy_params, false);
+        UniValue input_params(UniValue::VARR);
+
+        // Set hint bits to 3 to force collisions for testing.
+        input_params.push_back(3);
+        testnewsb(input_params, false);
     }
 
     // Show this node's contract hash in the log.
@@ -5771,6 +5774,10 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
     res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
 
+    // Log the number of bits used to force key collisions.
+    _log(logattribute::INFO, "testnewsb", "nReducedCacheBits = " + std::to_string(nReducedCacheBits));
+    res.pushKV("nReducedCacheBits", std::to_string(nReducedCacheBits));
+
     //
     // ValidateSuperblock() reference function tests (current convergence)
     //
@@ -5909,7 +5916,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             res.pushKV("NewFormatSuperblock validation against random past (using cache)", "failed - " + GetTextForscraperSBvalidationtype(validity3));
         }
 
-        scraperSBvalidationtype validity4 = ::ValidateSuperblock(RandomPastSB, false);
+        scraperSBvalidationtype validity4 = ::ValidateSuperblock(RandomPastSB, false, nReducedCacheBits);
 
         if (validity4 != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
         {
