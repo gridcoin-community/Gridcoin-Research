@@ -1,4 +1,5 @@
 #include "compat/endian.h"
+#include "hash.h"
 #include "neuralnet/superblock.h"
 #include "scraper_net.h"
 #include "sync.h"
@@ -24,6 +25,226 @@ extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 namespace {
+//!
+//! \brief Loads a provided set of scraper statistics into a superblock.
+//!
+//! \tparam T A superblock-like object. For example, a ScraperStatsQuorumHasher
+//! object that hashes the input instead of storing the data.
+//!
+template<typename T>
+class ScraperStatsSuperblockBuilder
+{
+    // The loop below depends on the relative value of these enum types:
+    static_assert(statsobjecttype::NetworkWide < statsobjecttype::byCPID,
+        "Unexpected enumeration order of scraper stats map object types.");
+    static_assert(statsobjecttype::byCPID < statsobjecttype::byCPIDbyProject,
+        "Unexpected enumeration order of scraper stats map object types.");
+    static_assert(statsobjecttype::byProject < statsobjecttype::byCPIDbyProject,
+        "Unexpected enumeration order of scraper stats map object types.");
+
+public:
+    //!
+    //! \brief Initialize a instance that wraps the provided superblock.
+    //!
+    //! \param superblock A superblock-like object to load with scraper stats.
+    //!
+    ScraperStatsSuperblockBuilder(T& superblock) : m_superblock(superblock)
+    {
+    }
+
+    //!
+    //! \brief Load the provided scraper statistics into the wrapped superblock.
+    //!
+    //! \param stats A complete set of scraper statistics to build a superblock
+    //! from.
+    //!
+    void BuildFromStats(const ScraperStats& stats)
+    {
+        for (const auto& entry : stats) {
+            // A CPID, project name, or project name/CPID pair that identifies
+            // the current statistics record:
+            const std::string& object_id = entry.first.objectID;
+
+            switch (entry.first.objecttype) {
+                // This map starts with a single, network-wide statistics entry.
+                // Skip it because superblock objects will recalculate the stats
+                // as needed after deserialization.
+                //
+                case statsobjecttype::NetworkWide:
+                    continue;
+
+                case statsobjecttype::byCPID:
+                    m_superblock.m_cpids.Add(
+                        Cpid::Parse(object_id),
+                        std::round(entry.second.statsvalue.dMag));
+
+                    break;
+
+                case statsobjecttype::byProject:
+                    m_superblock.m_projects.Add(
+                        object_id,
+                        Superblock::ProjectStats(
+                            std::round(entry.second.statsvalue.dTC),
+                            std::round(entry.second.statsvalue.dAvgRAC),
+                            std::round(entry.second.statsvalue.dRAC))
+                    );
+
+                    break;
+
+                // The scraper statistics map orders the entries by "objecttype"
+                // starting with "byCPID" and "byProject". After importing these
+                // sections into the superblock, we can exit this loop.
+                //
+                default:
+                    return;
+            }
+        }
+    }
+private:
+    T& m_superblock; //!< Superblock-like object to fill with supplied stats.
+};
+
+//!
+//! \brief Hashes scraper statistics to produce a quorum hash in the same manner
+//! as the hash would be calculated for a superblock.
+//!
+//! Because of the size of superblock objects, the overhead of allocating and
+//! filling superblocks from scraper convergences just to generate the quorum
+//! hash for validation can be significant as superblocks grow larger. We can
+//! compute a matching superblock hash directly from scraper statistics. This
+//! class generates quorum hashes from scraper statistics that will match the
+//! hashes of corresponding superblock objects.
+//!
+class ScraperStatsQuorumHasher
+{
+public:
+    //!
+    //! \brief Initialize a hasher with the provided scraper statistics.
+    //!
+    //! \param stats The scraper statistics to generate a hash from.
+    //!
+    ScraperStatsQuorumHasher(const ScraperStats& stats) : m_stats(stats)
+    {
+    }
+
+    //!
+    //! \brief Generate a quorum hash of the provided scraper statistics.
+    //!
+    //! \param stats The scraper statistics to generate a hash from.
+    //!
+    //! \return A hash that matches the hash of a corresponding superblock.
+    //!
+    static QuorumHash Hash(const ScraperStats& stats)
+    {
+        return ScraperStatsQuorumHasher(stats).GetHash();
+    }
+
+    //!
+    //! \brief Generate a quorum hash of the wrapped scraper statistics.
+    //!
+    //! \return A hash that matches the hash of a corresponding superblock.
+    //!
+    QuorumHash GetHash() const
+    {
+        SuperblockMock mock;
+        ScraperStatsSuperblockBuilder<SuperblockMock> builder(mock);
+
+        builder.BuildFromStats(m_stats);
+
+        return mock.m_proxy.GetHash();
+    }
+
+private:
+    //!
+    //! \brief Provides a compatible interface for calls to NN::Superblock that
+    //! directly hashes the data passed.
+    //!
+    struct SuperblockMock
+    {
+        //!
+        //! \brief Provides a compatible interface for calls to NN::Superblock
+        //! containers that directly hashes the data passed.
+        //!
+        struct HasherProxy
+        {
+            CHashWriter m_hasher;            //!< Hashes the supplied data.
+            uint32_t m_zero_magnitude_count; //!< Tracks zero-magnitude CPIDs.
+            bool m_zero_magnitude_hashed;    //!< Tracks when to hash the zeros.
+
+            //!
+            //! \brief Initialize a proxy object that hashes supplied superblock
+            //! data to produce a quorum hash.
+            //!
+            HasherProxy()
+                : m_hasher(CHashWriter(SER_GETHASH, PROTOCOL_VERSION))
+                , m_zero_magnitude_count(0)
+                , m_zero_magnitude_hashed(false)
+            {
+            }
+
+            //!
+            //! \brief Hash a CPID/magnitude pair as it would exist in the
+            //! Superblock::CpidIndex container.
+            //!
+            //! \param cpid      The CPID value to hash.
+            //! \param magnitude The magnitude value to hash.
+            //!
+            void Add(Cpid cpid, uint16_t magnitude)
+            {
+                if (magnitude > 0) {
+                    m_hasher << cpid;
+                    WriteCompactSize(m_hasher, magnitude);
+                } else {
+                    m_zero_magnitude_count++;
+                }
+            }
+
+            //!
+            //! \brief Hash a project statistics entry as it would exist in the
+            //! Superblock::ProjectIndex container.
+            //!
+            //! \param name  Name of the project to hash.
+            //! \param stats Project statistics object to hash.
+            //!
+            void Add(const std::string& name, Superblock::ProjectStats stats)
+            {
+                // After ScraperStatsSuperblockBuilder adds every CPID/magnitude
+                // pair to a superblock, it then starts to add projects. We need
+                // to serialize the zero-magnitude CPID count before we hash the
+                // first project:
+                //
+                if (!m_zero_magnitude_hashed) {
+                    m_hasher << VARINT(m_zero_magnitude_count);
+                    m_zero_magnitude_hashed = true;
+                }
+
+                m_hasher << name << stats;
+            }
+
+            //!
+            //! \brief Get the final hash of the provided superblock data.
+            //!
+            //! \return Quorum hash of the data supplied to the proxy.
+            //!
+            QuorumHash GetHash()
+            {
+                return QuorumHash(m_hasher.GetHash());
+            }
+        };
+
+        HasherProxy m_proxy;     //!< Hashes data passed passed to its methods.
+        HasherProxy& m_cpids;    //!< Proxies calls for Superblock::CpidIndex.
+        HasherProxy& m_projects; //!< Proxies calls for Superblock::ProjectIndex.
+
+        //!
+        //! \brief Initialize a mock superblock object.
+        //!
+        SuperblockMock() : m_cpids(m_proxy), m_projects(m_proxy) { }
+    };
+
+    const ScraperStats& m_stats; //!< The stats to hash like a Superblock.
+};
+
 //!
 //! \brief Validates received superblocks against the local scraper manifest
 //! data to prevent superblock statistics spoofing attacks.
@@ -275,7 +496,7 @@ private: // SuperblockValidator classes
         {
             const ScraperStats stats = GetScraperStatsByConvergedManifest(m_convergence);
 
-            return Superblock::FromStats(stats).GetHash();
+            return QuorumHash::Hash(stats);
         }
 
     private:
@@ -807,7 +1028,7 @@ private: // SuperblockValidator methods
     {
         const ScraperStats stats = GetScraperStatsFromSingleManifest(manifest);
 
-        return Superblock::FromStats(stats).GetHash() == m_quorum_hash;
+        return QuorumHash::Hash(stats) == m_quorum_hash;
     }
 
     //!
@@ -1293,52 +1514,10 @@ Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
 
 Superblock Superblock::FromStats(const ScraperStats& stats)
 {
-    // The loop below depends on the relative value of these enum types:
-    static_assert(statsobjecttype::NetworkWide < statsobjecttype::byCPID,
-        "Unexpected enumeration order of scraper stats map object types.");
-    static_assert(statsobjecttype::byCPID < statsobjecttype::byCPIDbyProject,
-        "Unexpected enumeration order of scraper stats map object types.");
-    static_assert(statsobjecttype::byProject < statsobjecttype::byCPIDbyProject,
-        "Unexpected enumeration order of scraper stats map object types.");
-
     Superblock superblock;
+    ScraperStatsSuperblockBuilder<Superblock> builder(superblock);
 
-    for (const auto& entry : stats) {
-        // A CPID, project name, or project name/CPID pair that identifies the
-        // current statistics record:
-        const std::string& object_id = entry.first.objectID;
-
-        switch (entry.first.objecttype) {
-            case statsobjecttype::NetworkWide:
-                // This map starts with a single, network-wide statistics entry.
-                // Skip it because superblock objects will recalculate the stats
-                // as needed after deserialization.
-                //
-                continue;
-
-            case statsobjecttype::byCPID:
-                superblock.m_cpids.Add(
-                    Cpid::Parse(object_id),
-                    std::round(entry.second.statsvalue.dMag));
-
-                break;
-
-            case statsobjecttype::byProject:
-                superblock.m_projects.Add(object_id, ProjectStats(
-                    std::round(entry.second.statsvalue.dTC),
-                    std::round(entry.second.statsvalue.dAvgRAC),
-                    std::round(entry.second.statsvalue.dRAC)));
-
-                break;
-
-            default:
-                // The scraper statistics map orders the entries by "objecttype"
-                // starting with "byCPID" and "byProject". After importing these
-                // sections into the superblock, we can exit this loop.
-                //
-                return superblock;
-        }
-    }
+    builder.BuildFromStats(stats);
 
     return superblock;
 }
@@ -1696,6 +1875,13 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     MD5((const unsigned char*)input.data(), input.size(), output.data());
 
     return QuorumHash(output);
+}
+
+QuorumHash QuorumHash::Hash(const ScraperStats& stats)
+{
+    ScraperStatsQuorumHasher hasher(stats);
+
+    return hasher.GetHash();
 }
 
 QuorumHash QuorumHash::Parse(const std::string& hex)

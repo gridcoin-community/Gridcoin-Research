@@ -89,6 +89,8 @@ public:
     //!
     static QuorumHash Hash(const Superblock& superblock);
 
+    static QuorumHash Hash(const ScraperStats& stats);
+
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
     //! representation of a hash.
@@ -383,7 +385,9 @@ public:
         template<typename Stream>
         void Serialize(Stream& stream) const
         {
-            WriteCompactSize(stream, m_magnitudes.size());
+            if (!(stream.GetType() & SER_GETHASH)) {
+                WriteCompactSize(stream, m_magnitudes.size());
+            }
 
             for (const auto& cpid_pair : m_magnitudes) {
                 cpid_pair.first.Serialize(stream);
@@ -631,9 +635,8 @@ public:
         {
             if (!(stream.GetType() & SER_GETHASH)) {
                 stream << m_converged_by_project;
+                WriteCompactSize(stream, m_projects.size());
             }
-
-            WriteCompactSize(stream, m_projects.size());
 
             for (const auto& project_pair : m_projects) {
                 stream << project_pair;
