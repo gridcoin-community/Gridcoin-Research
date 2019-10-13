@@ -115,7 +115,7 @@ CCriticalSection cs_mScrapersExt;
 *********************/
 
 uint256 GetFileHash(const fs::path& inputfile);
-ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
+ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 std::string ExplainMagnitude(std::string sCPID);
 bool IsScraperAuthorized();
 bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);

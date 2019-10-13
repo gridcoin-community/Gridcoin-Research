@@ -108,7 +108,7 @@ bool ScraperDirectoryAndConfigSanity();
 bool StoreBeaconList(const fs::path& file);
 bool StoreTeamIDList(const fs::path& file);
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap);
-bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
+bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap);
 bool LoadTeamIDList(const fs::path& file);
 std::vector<std::string> split(const std::string& s, const std::string& delim);
 uint256 GetmScraperFileManifestHash();
@@ -3025,7 +3025,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 }
 
 
-ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest)
+ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest)
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
 
@@ -4422,7 +4422,7 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
 
 
 // ---------------------------------------------- In ---------------------------------------- Out
-bool LoadBeaconListFromConvergedManifest(ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap)
+bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConvergedManifest, BeaconMap& mBeaconMap)
 {
     // Find the beacon list.
     auto iter = StructConvergedManifest.ConvergedManifestPartsMap.find("BeaconList");
@@ -5818,7 +5818,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NN::ValidateSuperblock validation against current (using cache)", "failed");
     }
 
-    if (NN::ValidateSuperblock(NewFormatSuperblock, false))
+    if (NN::ValidateSuperblock(NewFormatSuperblock, false, nReducedCacheBits))
     {
         _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (without using cache) passed");
         res.pushKV("NN::ValidateSuperblock validation against current (without using cache)", "passed");
@@ -5937,7 +5937,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "failed");
         }
 
-        if (NN::ValidateSuperblock(RandomPastSB, false))
+        if (NN::ValidateSuperblock(RandomPastSB, false, nReducedCacheBits))
         {
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (without using cache) passed");
             res.pushKV("NN::ValidateSuperblock validation against random past (without using cache)", "passed");
