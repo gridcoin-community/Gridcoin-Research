@@ -89,6 +89,8 @@ public:
     //!
     static QuorumHash Hash(const Superblock& superblock);
 
+    static QuorumHash Hash(const ScraperStats& stats);
+
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
     //! representation of a hash.

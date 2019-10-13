@@ -1886,6 +1886,14 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     BOOST_CHECK(hash.ToString() == expected.ToString());
 }
 
+BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
+{
+    NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats());
+    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(GetTestScraperStats());
+
+    BOOST_CHECK(quorum_hash == superblock.GetHash());
+}
+
 BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
 {
     const std::vector<unsigned char> expected {
