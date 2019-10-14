@@ -227,26 +227,6 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_claim_is_well_formed)
     BOOST_CHECK(claim.WellFormed() == true);
 }
 
-BOOST_AUTO_TEST_CASE(it_validates_client_version_string_length)
-{
-    NN::Claim claim = GetInvestorClaim();
-
-    // 31 characters (max valid: 30)
-    claim.m_client_version.resize(31, 'x');
-
-    BOOST_CHECK(claim.WellFormed() == false);
-}
-
-BOOST_AUTO_TEST_CASE(it_validates_organization_string_length)
-{
-    NN::Claim claim = GetInvestorClaim();
-
-    // 51 characters (max valid: 50)
-    claim.m_organization.resize(51, 'x');
-
-    BOOST_CHECK(claim.WellFormed() == false);
-}
-
 BOOST_AUTO_TEST_CASE(it_determines_whether_it_is_a_research_reward_claim)
 {
     NN::Claim claim = GetResearcherClaim();
