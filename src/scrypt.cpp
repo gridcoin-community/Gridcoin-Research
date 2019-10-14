@@ -39,8 +39,8 @@
 
 #define SCRYPT_BUFFER_SIZE (131072 + 63)
 
-#if defined (OPTIMIZED_SALSA) && ( defined (__x86_64__) || defined (__i386__) || defined(__arm__) )
-extern "C" void scrypt_core(unsigned int *X, unsigned int *V);
+#if defined (USE_ASM) && ( defined (__x86_64__) || defined (__i386__) || defined(__arm__) )
+extern "C" void scrypt_core(unsigned int *X, unsigned int *V, int N);
 #else
 // Generic scrypt_core implementation
 
@@ -112,16 +112,16 @@ static inline void xor_salsa8(unsigned int B[16], const unsigned int Bx[16])
     B[15] += x15;
 }
 
-static inline void scrypt_core(unsigned int *X, unsigned int *V)
+static inline void scrypt_core(unsigned int *X, unsigned int *V, int N)
 {
     unsigned int i, j, k;
 
-    for (i = 0; i < 1024; i++) {
+    for (i = 0; i < N; i++) {
         memcpy(&V[i * 32], X, 128);
         xor_salsa8(&X[0], &X[16]);
         xor_salsa8(&X[16], &X[0]);
     }
-    for (i = 0; i < 1024; i++) {
+    for (i = 0; i < N; i++) {
         j = 32 * (X[16] & 1023);
         for (k = 0; k < 32; k++)
             X[k] ^= V[j + k];
@@ -145,7 +145,7 @@ uint256 scrypt_nosalt(const void* input, size_t inputlen, void *scratchpad)
     V = (unsigned int *)(((uintptr_t)(scratchpad) + 63) & ~ (uintptr_t)(63));
 
     PBKDF2_SHA256((const uint8_t*)input, inputlen, (const uint8_t*)input, inputlen, 1, (uint8_t *)X, 128);
-    scrypt_core(X, V);
+    scrypt_core(X, V, 1024);
     PBKDF2_SHA256((const uint8_t*)input, inputlen, (uint8_t *)X, 128, 1, (uint8_t*)&result, 32);
 
     return result;
@@ -159,7 +159,7 @@ uint256 scrypt(const void* data, size_t datalen, const void* salt, size_t saltle
     V = (unsigned int *)(((uintptr_t)(scratchpad) + 63) & ~ (uintptr_t)(63));
 
     PBKDF2_SHA256((const uint8_t*)data, datalen, (const uint8_t*)salt, saltlen, 1, (uint8_t *)X, 128);
-    scrypt_core(X, V);
+    scrypt_core(X, V, 1024);
     PBKDF2_SHA256((const uint8_t*)data, datalen, (uint8_t *)X, 128, 1, (uint8_t*)&result, 32);
 
     return result;
