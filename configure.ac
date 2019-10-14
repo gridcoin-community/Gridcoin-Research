@@ -43,6 +43,7 @@ else
   CXXFLAGS_overridden=no
 fi
 AC_PROG_CXX
+AM_PROG_AS
 
 dnl By default, libtool for mingw refuses to link static libs into a dll for
 dnl fear of mixing pic/non-pic objects, and import/export complications. Since
@@ -179,6 +180,41 @@ if test "x$use_asm" = xyes; then
   AC_DEFINE(USE_ASM, 1, [Define this symbol to build in assembly routines])
 fi
 
+BUILD_TARGET=`$CC -dumpmachine 2>&1`
+case $BUILD_TARGET in
+  x86_64-*-*|amd64-*-*)
+    have_x86_64=true
+    ;;
+esac
+
+if test x$enable_assembly != xno -a x$have_x86_64 = xtrue
+then
+  AC_MSG_CHECKING(whether we can compile AVX code)
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vmovdqa %ymm0, %ymm1");])],
+    AC_DEFINE(ENABLE_AVX, 1, [Define to 1 if AVX assembly is available.])
+    AC_MSG_RESULT(yes)
+    AC_MSG_CHECKING(whether we can compile XOP code)
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vprotd \$7, %xmm0, %xmm1");])],
+      AC_DEFINE(ENABLE_XOP, 1, [Define to 1 if XOP assembly is available.])
+      AC_MSG_RESULT(yes)
+    ,
+      AC_MSG_RESULT(no)
+      AC_MSG_WARN([The assembler does not support the XOP instruction set.])
+    )
+    AC_MSG_CHECKING(whether we can compile AVX2 code)
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[asm ("vpaddd %ymm0, %ymm1, %ymm2");])],
+      AC_DEFINE(enable_avx2=yes; ENABLE_AVX2, 1, [Define to 1 if AVX2 assembly is available.])
+      AC_MSG_RESULT(yes)
+    ,
+      AC_MSG_RESULT(no)
+      AC_MSG_WARN([The assembler does not support the AVX2 instruction set.])
+    )
+  ,
+    AC_MSG_RESULT(no)
+    AC_MSG_WARN([The assembler does not support the AVX instruction set.])
+  )
+fi
+
 # Enable debug
 AC_ARG_ENABLE([debug],
     [AS_HELP_STRING([--enable-debug],
@@ -286,25 +322,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
     return _mm_extract_epi32(l, 3);
   ]])],
  [ AC_MSG_RESULT(yes); enable_sse41=yes; AC_DEFINE(ENABLE_SSE41, 1, [Define this symbol to build code that uses SSE4.1 intrinsics]) ],
- [ AC_MSG_RESULT(no)]
-)
-CXXFLAGS="$TEMP_CXXFLAGS"
-
-TEMP_CXXFLAGS="$CXXFLAGS"
-CXXFLAGS="$CXXFLAGS $AVX2_CXXFLAGS"
-AC_MSG_CHECKING(for AVX2 intrinsics)
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-    #include <stdint.h>
-    #if defined(_MSC_VER)
-    #include <immintrin.h>
-    #elif defined(__GNUC__) && defined(__AVX2__)
-    #include <x86intrin.h>
-    #endif
-  ]],[[
-    __m256i l = _mm256_set1_epi32(0);
-    return _mm256_extract_epi32(l, 7);
-  ]])],
- [ AC_MSG_RESULT(yes); enable_avx2=yes; AC_DEFINE(ENABLE_AVX2, 1, [Define this symbol to build code that uses AVX2 intrinsics]) ],
  [ AC_MSG_RESULT(no)]
 )
 CXXFLAGS="$TEMP_CXXFLAGS"
@@ -1141,7 +1158,6 @@ if test x$build_bitcoin_utils$build_bitcoin_libs$build_gridcoinresearchd$bitcoin
   AC_MSG_ERROR([No targets! Please specify at least one of: --with-utils --with-libs --with-daemon --with-gui --enable-bench or --enable-tests])
 fi
 
-
 AM_CONDITIONAL([TARGET_DARWIN], [test x$TARGET_OS = xdarwin])
 AM_CONDITIONAL([BUILD_DARWIN], [test x$BUILD_OS = xdarwin])
 AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
@@ -1159,6 +1175,9 @@ AM_CONDITIONAL([ENABLE_SSE41],[test x$enable_sse41 = xyes])
 AM_CONDITIONAL([ENABLE_AVX2],[test x$enable_avx2 = xyes])
 AM_CONDITIONAL([ENABLE_SHANI],[test x$enable_shani = xyes])
 AM_CONDITIONAL([USE_ASM],[test x$use_asm = xyes])
+AM_CONDITIONAL([ARCH_x86], [test x$have_x86 = xtrue])
+AM_CONDITIONAL([ARCH_x86_64], [test x$have_x86_64 = xtrue])
+AM_CONDITIONAL([ARCH_ARM], [test x$have_arm = xtrue])
 
 AC_DEFINE(CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MAJOR, [Major version])
 AC_DEFINE(CLIENT_VERSION_MINOR, _CLIENT_VERSION_MINOR, [Minor version])
@@ -1285,4 +1304,6 @@ echo "  CPPFLAGS      = $CPPFLAGS"
 echo "  CXX           = $CXX"
 echo "  CXXFLAGS      = $CXXFLAGS"
 echo "  LDFLAGS       = $LDFLAGS"
+echo "  AS            = $CCAS"
+echo "  ASFLAGS       = $CCASFLAGS"
 echo 
