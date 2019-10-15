@@ -12,7 +12,6 @@
 using namespace std;
 
 StructCPID GetStructCPID();
-extern double GetLastPaymentTimeByCPID(std::string cpid);
 
 namespace {
 //!
@@ -258,39 +257,6 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     nStakeModifier = nStakeModifierNew;
     fGeneratedStakeModifier = true;
     return true;
-}
-
-double GetLastPaymentTimeByCPID(std::string cpid)
-{
-    double lpt = 0;
-    if (mvMagnitudes.size() > 0)
-    {
-            StructCPID UntrustedHost = GetStructCPID();
-            UntrustedHost = mvMagnitudes[cpid]; //Contains Consensus Magnitude
-            if (UntrustedHost.initialized)
-            {
-                        double mag_accuracy = UntrustedHost.Accuracy;
-                        if (mag_accuracy > 0)
-                        {
-                                lpt = UntrustedHost.LastPaymentTime;
-                        }
-            }
-            else
-            {
-                if (IsResearcher(cpid))
-                {
-                        lpt = 0;
-                }
-            }
-    }
-    else
-    {
-        if (IsResearcher(cpid))
-        {
-                lpt=0;
-        }
-    }
-    return lpt;
 }
 
 // Get stake modifier checksum
