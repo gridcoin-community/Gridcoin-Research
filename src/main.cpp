@@ -3413,11 +3413,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         boost::thread t(runCommand, strCmd); // thread runs free
     }
 
-    // Perform Gridcoin services now that w have a new head.
-    // Remove V9 checks after the V9 switch.
-    // TODO: ???
-    if(IsV9Enabled(nBestHeight))
-        GridcoinServices();
+    GridcoinServices();
 
     return true;
 }
@@ -3951,16 +3947,12 @@ bool NeedASuperblock()
 
 void GridcoinServices()
 {
-
     //Dont do this on headless - SeP
-    if(fQtActive)
+    if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
     {
-       if ((nBestHeight % 125) == 0)
-       {
-            GetGlobalStatus();
-            bForceUpdate=true;
-            uiInterface.NotifyBlocksChanged();
-       }
+        GetGlobalStatus();
+        bForceUpdate=true;
+        uiInterface.NotifyBlocksChanged();
     }
 
     // Services thread activity
@@ -4303,10 +4295,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.erase(hashPrev);
 
     }
-
-    // Compatiblity while V8 is in use. Can be removed after the V9 switch.
-    if(IsV9Enabled(pindexBest->nHeight) == false)
-        GridcoinServices();
 
     return true;
 }
