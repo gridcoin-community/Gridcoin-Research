@@ -140,7 +140,6 @@ void CMinerStatus::Clear()
 {
     WeightSum= ValueSum= WeightMin= WeightMax= 0;
     Version= 0;
-    CoinAgeSum= 0;
     KernelDiffSum = 0;
     nLastCoinStakeSearchInterval = 0;
 }
@@ -457,7 +456,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
 
 
 bool CreateCoinStake( CBlock &blocknew, CKey &key,
-    vector<const CWalletTx*> &StakeInputs, uint64_t &CoinAge,
+    vector<const CWalletTx*> &StakeInputs,
     CWallet &wallet, CBlockIndex* pindexPrev )
 {
     int64_t CoinWeight;
@@ -467,7 +466,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     double StakeValueSum = 0;
     int64_t StakeWeightMin=MAX_MONEY;
     int64_t StakeWeightMax=0;
-    uint64_t StakeCoinAgeSum=0;
     double StakeDiffSum = 0;
     double StakeDiffMax = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
@@ -510,16 +508,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                 continue;
         }
 
-        {
-            int64_t nStakeValue= CoinTx.vout[CoinTxN].nValue;
-            StakeValueSum += nStakeValue /(double)COIN;
-            //crazy formula...
-            // todo: clean this
-            // todo reuse calculated value for interst
-            CBigNum bn = CBigNum(nStakeValue) * (blocknew.nTime-CoinTx.nTime) / CENT;
-            bn = bn * CENT / COIN / (24 * 60 * 60);
-            StakeCoinAgeSum += bn.getuint64();
-        }
+        StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double)COIN;
 
         uint64_t StakeModifier = 0;
         if(!FindStakeModifierRev(StakeModifier,pindexPrev))
@@ -596,8 +585,7 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
 
             txnew.vin.push_back(CTxIn(CoinTx.GetHash(), CoinTxN));
             StakeInputs.push_back(pcoin.first);
-            if (!txnew.GetCoinAge(txdb, CoinAge))
-                return error("CreateCoinStake: failed to calculate coin age");
+
             int64_t nCredit = CoinTx.vout[CoinTxN].nValue;
 
             txnew.vout.push_back(CTxOut(0, CScript())); // First Must be empty
@@ -618,7 +606,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     MinerStatus.ValueSum = StakeValueSum;
     MinerStatus.WeightMin=StakeWeightMin;
     MinerStatus.WeightMax=StakeWeightMax;
-    MinerStatus.CoinAgeSum=StakeCoinAgeSum;
     MinerStatus.KernelDiffMax = std::max(MinerStatus.KernelDiffMax,StakeDiffMax);
     MinerStatus.KernelDiffSum = StakeDiffSum;
     MinerStatus.nLastCoinStakeSearchInterval= txnew.nTime;
@@ -985,7 +972,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
 }
 
-bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pindexPrev, int64_t &nReward)
+bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward)
 {
     // Remove fees from coinbase:
     int64_t nFees = blocknew.vtx[0].vout[0].nValue;
@@ -1013,7 +1000,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     // Note: Since research age must be exact, we need to transmit the block
     // nTime here so it matches AcceptBlock():
     nReward = GetProofOfStakeReward(
-        nCoinAge,
+        0,      // coin age - unused since CBR (block version 10)
         nFees,
         claim.m_mining_id,
         pindexPrev->nTime,
@@ -1275,8 +1262,8 @@ void StakeMiner(CWallet *pwallet)
         // * Try to create a CoinStake transaction
         CKey BlockKey;
         vector<const CWalletTx*> StakeInputs;
-        uint64_t StakeCoinAge;
-        if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, StakeCoinAge, *pwallet, pindexPrev ) )
+
+        if( !CreateCoinStake( StakeBlock, BlockKey, StakeInputs, *pwallet, pindexPrev ) )
             continue;
         StakeBlock.nTime= StakeTX.nTime;
 
@@ -1288,7 +1275,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * add gridcoin reward to coinstake, fill-in nReward
         int64_t nReward = 0;
-        if(!CreateGridcoinReward(StakeBlock, StakeCoinAge, pindexPrev, nReward)) {
+        if(!CreateGridcoinReward(StakeBlock, pindexPrev, nReward)) {
             continue;
         }
 
