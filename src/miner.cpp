@@ -1012,6 +1012,21 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         claim.m_magnitude_unit,
         out_unused);
 
+    // If no pending research subsidy value exists, build an investor claim.
+    // This avoids polluting the block index with non-research reward blocks
+    // that contain CPIDs which increases the effort needed to load research
+    // age context at start-up:
+    //
+    if (claim.m_mining_id.Which() == NN::MiningId::Kind::CPID
+        && claim.m_research_subsidy <= 0)
+    {
+        LogPrintf(
+            "CreateGridcoinReward: No positive research reward pending at "
+            "time of stake. Staking as investor.");
+
+        claim.m_mining_id = NN::MiningId::ForInvestor();
+    }
+
     claim.m_client_version = FormatFullVersion().substr(0, NN::Claim::MAX_VERSION_SIZE);
     claim.m_organization = GetArgument("org", "").substr(0, NN::Claim::MAX_ORGANIZATION_SIZE);
 
