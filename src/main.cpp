@@ -3955,7 +3955,13 @@ void GridcoinServices()
         uiInterface.NotifyBlocksChanged();
     }
 
-    // Services thread activity
+    // Research reward checks are disabled before nGrandfather. There is no
+    // reason to update quorum state for grandfathered blocks since nothing
+    // checks that data until after nGrandfather:
+    //
+    if (pindexBest->nHeight < nGrandfather) {
+        return;
+    }
 
     if(IsV9Enabled_Tally(nBestHeight))
     {
@@ -4005,8 +4011,9 @@ void GridcoinServices()
     }
 
     //Dont perform the following functions if out of sync
-    if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
+    if (OutOfSyncByAge()) {
         return;
+    }
 
     //Backup the wallet once per 900 blocks or as specified in config:
     int nWBI = GetArg("-walletbackupinterval", 900);
