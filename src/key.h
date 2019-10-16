@@ -48,7 +48,7 @@ public:
 class CKeyID : public uint160
 {
 public:
-    CKeyID() : uint160(0) { }
+    CKeyID() : uint160() { }
     CKeyID(const uint160 &in) : uint160(in) { }
 };
 
@@ -56,7 +56,7 @@ public:
 class CScriptID : public uint160
 {
 public:
-    CScriptID() : uint160(0) { }
+    CScriptID() : uint160() { }
     CScriptID(const uint160 &in) : uint160(in) { }
 };
 

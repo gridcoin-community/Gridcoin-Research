@@ -318,9 +318,9 @@ public:
         nRefCount = 0;
         nSendSize = 0;
         nSendOffset = 0;
-        hashContinue = 0;
+        hashContinue.SetNull();
         pindexLastGetBlocksBegin = 0;
-        hashLastGetBlocksEnd = 0;
+        hashLastGetBlocksEnd.SetNull();
         nStartingHeight = -1;
         fGetAddr = false;
 		//Orphan Attack
@@ -330,7 +330,7 @@ public:
 		NeuralHash = "";
 		sGRCAddress = "";
 		nTrust = 0;
-        hashCheckpointKnown = 0;
+        hashCheckpointKnown.SetNull();
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
         nPingUsecStart = 0;

@@ -296,8 +296,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
     else
     {
         LOCK(cs_main);
-        std::string strHash = params[1].get_str();
-        uint256 hash(strHash);
+        uint256 hash = uint256S(params[1].get_str());
 
         if (mapBlockIndex.count(hash) == 0)
         {

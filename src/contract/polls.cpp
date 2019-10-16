@@ -390,8 +390,8 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
     {
         // Prove the contents of the XML as a 3rd party
         CTransaction tx2;
-        uint256 hashBlock = 0;
-        uint256 uTXID(ExtractXML(vXML[x],"<TXID>","</TXID>"));
+        uint256 hashBlock;
+        uint256 uTXID = uint256S(ExtractXML(vXML[x],"<TXID>","</TXID>"));
         std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
         std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
         std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
@@ -399,7 +399,7 @@ double ReturnVerifiedVotingBalance(std::string sXML, bool bCreatedAfterSecurityU
         std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
         int32_t iPos = RoundFromString(sPos,0);
         std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
-        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
+        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && !uTXID.IsNull())
         {
             if (GetTransaction(uTXID, tx2, hashBlock))
             {
@@ -449,7 +449,7 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
     std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
     if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
     {
-        CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
+        CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256S(sXmlBlockHash)];
         if (pblockindexMagnitude)
         {
             bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);

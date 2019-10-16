@@ -1725,7 +1725,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
     isminefilter filter = MINE_SPENDABLE;
     if (params.size() > 0)
     {
-        uint256 blockId = 0;
+        uint256 blockId;
 
         blockId.SetHex(params[0].get_str());
         BlockMap::iterator it = mapBlockIndex.find(blockId);
@@ -1765,7 +1765,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
         for (block = pindexBest;
              block && block->nHeight > target_height;
              block = block->pprev)  { }
-    uint256 lastblock = block ? block->GetBlockHash() : 0;
+    uint256 lastblock = block ? block->GetBlockHash() : uint256();
 
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("transactions", transactions);
@@ -1803,7 +1803,7 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     {
         const CWalletTx& wtx = pwalletMain->mapWallet[hash];
 
-        TxToJSON(wtx, 0, entry);
+        TxToJSON(wtx, uint256(), entry);
 
         int64_t nCredit = wtx.GetCredit();
         int64_t nDebit = wtx.GetDebit();
@@ -1823,11 +1823,11 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     else
     {
         CTransaction tx;
-        uint256 hashBlock = 0;
+        uint256 hashBlock;
         if (GetTransaction(hash, tx, hashBlock))
         {
-            TxToJSON(tx, 0, entry);
-            if (hashBlock == 0)
+            TxToJSON(tx, uint256(), entry);
+            if (hashBlock.IsNull())
                 entry.pushKV("confirmations", 0);
             else
             {
