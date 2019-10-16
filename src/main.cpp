@@ -76,7 +76,6 @@ extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
 extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 
-extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
 std::string GetCommandNonce(std::string command);
 
@@ -4433,18 +4432,6 @@ std::string RetrieveMd5(std::string s1)
         return "";
     }
 }
-
-double GetOwedAmount(std::string cpid)
-{
-    if (mvMagnitudes.size() > 1)
-    {
-        StructCPID& m = GetInitializedStructCPID2(cpid,mvMagnitudes);
-        if (m.initialized) return m.owed;
-        return 0;
-    }
-    return 0;
-}
-
 
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime,
     double& total_owed, double block_magnitude)
