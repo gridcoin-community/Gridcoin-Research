@@ -2979,15 +2979,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     /* fix up after disconnecting, prepare for new blocks */
     if(cnt_dis>0)
     {
-        // Block was disconnected - User is Re-eligibile for staking
-        const std::string primary_cpid = NN::GetPrimaryCpid();
-        StructCPID& sMag = GetInitializedStructCPID2(primary_cpid, mvMagnitudes);
-        if (sMag.initialized)
-        {
-            sMag.LastPaymentTime = 0;
-            mvMagnitudes[primary_cpid] = sMag;
-        }
-
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
             AcceptToMemoryPool(mempool, tx, NULL);
@@ -4477,21 +4468,12 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
             stMag.TotalMagnitude += pIndex->nMagnitude;
         }
 
-        if (pIndex->nTime > stMag.LastPaymentTime)
-            stMag.LastPaymentTime = pIndex->nTime;
         if (pIndex->nTime < stMag.EarliestPaymentTime)
             stMag.EarliestPaymentTime = pIndex->nTime;
         if (pIndex->nTime < stMag.LowLockTime)
             stMag.LowLockTime = pIndex->nTime;
-        if (pIndex->nTime > stMag.HighLockTime)
-            stMag.HighLockTime = pIndex->nTime;
 
         stMag.payments += pIndex->nResearchSubsidy;
-        stMag.interestPayments += pIndex->nInterestSubsidy;
-        double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag, cpid, pIndex->nTime, total_owed, pIndex->nMagnitude);
-
-        stMag.totalowed = total_owed;
     }
     catch (const std::bad_alloc& ba)
     {
@@ -4596,7 +4578,6 @@ void AddRARewardBlock(const CBlockIndex* pindex)
         }
 
         if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
-        if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
 
         // Add block hash to CPID hash set.
         stCPID.rewardBlocks.emplace(pindex);
@@ -4667,8 +4648,6 @@ StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::str
         cpid.cpid = name;
         cpid.initialized=true;
         cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
-        cpid.HighLockTime = 0;
-        cpid.LastPaymentTime = 0;
         cpid.EarliestPaymentTime = 99999999999;
         cpid.Accuracy = 0;
     }
@@ -6281,19 +6260,13 @@ StructCPID GetStructCPID()
     StructCPID c;
     c.initialized=false;
     c.Magnitude=0;
-    c.owed=0;
     c.payments=0;
     c.TotalMagnitude=0;
     c.LowLockTime=0;
-    c.HighLockTime=0;
     c.Accuracy=0;
-    c.totalowed=0;
-    c.LastPaymentTime=0;
     c.EarliestPaymentTime=0;
-    c.PaymentTimespan=0;
     c.ResearchSubsidy = 0;
     c.InterestSubsidy = 0;
-    c.interestPayments = 0;
     c.payments = 0;
     c.LastBlock = 0;
     c.NetworkMagnitude=0;
@@ -6934,7 +6907,6 @@ void ZeroOutResearcherTotals(StructCPID& stCPID)
                 stCPID.ResearchSubsidy = 0;
                 stCPID.Accuracy = 0;
                 stCPID.LowLockTime = std::numeric_limits<unsigned int>::max();
-                stCPID.HighLockTime = 0;
                 stCPID.TotalMagnitude = 0;
     }
 }

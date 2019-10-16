@@ -605,18 +605,12 @@ bool TallyMagnitudesInSuperblock()
                     stCPID.Magnitude = magnitude;
                     stCPID.cpid = cpid;
                     mvDPORCopy[cpid]=stCPID;
+
                     StructCPID& stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
                     stMagg.cpid = cpid;
                     stMagg.Magnitude = stCPID.Magnitude;
-                    //Adjust total owed - in case they are a newbie:
-                    if (true)
-                    {
-                        double total_owed = 0;
-                        stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
-                        stMagg.totalowed = total_owed;
-                    }
-
                     mvMagnitudesCopy[cpid] = stMagg;
+
                     TotalNetworkMagnitude += stMagg.Magnitude;
                     TotalNetworkEntries++;
 
