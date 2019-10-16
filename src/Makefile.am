@@ -61,6 +61,7 @@ GRIDCOIN_CORE_H = \
     addrman.h \
 	alert.h \
 	appcache.h \
+	arith_uint256.h \
     attributes.h \
 	backup.h \
     banman.h \
@@ -143,6 +144,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
 	alert.cpp \
 	appcache.cpp \
+	arith_uint256.cpp \
 	backup.cpp \
     banman.cpp \
 	beacon.cpp \
@@ -199,6 +201,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	sync.cpp \
 	tally.cpp \
 	txdb-leveldb.cpp \
+	uint256.cpp \
 	util/strencodings.cpp \
 	util.cpp \
 	version.cpp \
