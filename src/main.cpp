@@ -3413,11 +3413,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         boost::thread t(runCommand, strCmd); // thread runs free
     }
 
-    // Perform Gridcoin services now that w have a new head.
-    // Remove V9 checks after the V9 switch.
-    // TODO: ???
-    if(IsV9Enabled(nBestHeight))
-        GridcoinServices();
+    GridcoinServices();
 
     return true;
 }
@@ -3812,10 +3808,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     //Grandfather
     if (nHeight > nGrandfather)
     {
-        // Check that the block chain matches the known block chain up to a checkpoint
-        if (!Checkpoints::CheckHardened(nHeight, hash))
-            return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
-
         // Enforce rule that the coinbase starts with serialized block height
         CScript expect = CScript() << nHeight;
         if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
@@ -3955,19 +3947,21 @@ bool NeedASuperblock()
 
 void GridcoinServices()
 {
-
     //Dont do this on headless - SeP
-    if(fQtActive)
+    if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
     {
-       if ((nBestHeight % 125) == 0)
-       {
-            GetGlobalStatus();
-            bForceUpdate=true;
-            uiInterface.NotifyBlocksChanged();
-       }
+        GetGlobalStatus();
+        bForceUpdate=true;
+        uiInterface.NotifyBlocksChanged();
     }
 
-    // Services thread activity
+    // Research reward checks are disabled before nGrandfather. There is no
+    // reason to update quorum state for grandfathered blocks since nothing
+    // checks that data until after nGrandfather:
+    //
+    if (pindexBest->nHeight < nGrandfather) {
+        return;
+    }
 
     if(IsV9Enabled_Tally(nBestHeight))
     {
@@ -4017,8 +4011,9 @@ void GridcoinServices()
     }
 
     //Dont perform the following functions if out of sync
-    if (pindexBest->nHeight < nGrandfather || OutOfSyncByAge())
+    if (OutOfSyncByAge()) {
         return;
+    }
 
     //Backup the wallet once per 900 blocks or as specified in config:
     int nWBI = GetArg("-walletbackupinterval", 900);
@@ -4307,10 +4302,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
         mapOrphanBlocksByPrev.erase(hashPrev);
 
     }
-
-    // Compatiblity while V8 is in use. Can be removed after the V9 switch.
-    if(IsV9Enabled(pindexBest->nHeight) == false)
-        GridcoinServices();
 
     return true;
 }
