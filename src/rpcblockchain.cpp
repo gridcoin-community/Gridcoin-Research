@@ -2382,7 +2382,13 @@ UniValue MagnitudeReport(std::string cpid)
                         entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
                         entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
                         entry.pushKV("Research Payments (14 days)",structMag.payments);
-                        entry.pushKV("Owed",(structMag.owed <= 0) ? 0 : structMag.owed);
+                        {
+                            int64_t nTime = GetAdjustedTime();
+                            double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+                            double dAccrualAge, AvgMagnitude;
+                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, "", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+                            entry.pushKV("Owed", nBoinc / (double)COIN);
+                        }
                         entry.pushKV("Daily Paid",structMag.payments/14);
                         // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                         double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
