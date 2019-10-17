@@ -143,7 +143,6 @@ bool LogAcceptCategory(const char* category);
 /* Send a string to the log output */
 void LogPrintStr(const std::string &str);
 
-#define strprintf tfm::format
 #define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
 
 /* When we switch to C++11, this can be switched to variadic templates instead
