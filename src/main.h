@@ -9,6 +9,7 @@
 #include "util.h"
 #include "net.h"
 #include "neuralnet/claim.h"
+#include "neuralnet/cpid.h"
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
@@ -1369,14 +1370,14 @@ public:
 
     int64_t nMint;
     int64_t nMoneySupply;
-	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
-    uint128 cpid;
-	double nResearchSubsidy;
-	double nInterestSubsidy;
-	double nMagnitude;
-	// Indicators (9-13-2015)
-	unsigned int nIsSuperBlock;
-	unsigned int nIsContract;
+    // Gridcoin (7-11-2015) Add new Accrual Fields to block index
+    NN::Cpid cpid;
+    double nResearchSubsidy;
+    double nInterestSubsidy;
+    double nMagnitude;
+    // Indicators (9-13-2015)
+    unsigned int nIsSuperBlock;
+    unsigned int nIsContract;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum
@@ -1561,27 +1562,39 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
-    void SetCPID(const std::string& cpid_hex)
+    void SetMiningId(NN::MiningId mining_id)
     {
-        // Clear current CPID state.
-        cpid = 0;
         nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
-        if(cpid_hex.empty())
+
+        if (const auto cpid_option = mining_id.TryCpid()) {
+            cpid = *cpid_option;
+            return;
+        }
+
+        cpid = NN::Cpid();
+
+        if (mining_id.Which() == NN::MiningId::Kind::INVALID) {
             nFlags |= EMPTY_CPID;
-        else if(cpid_hex == "INVESTOR")
+        } else {
             nFlags |= INVESTOR_CPID;
-        else
-            cpid.SetHex(cpid_hex);
+        }
     }
 
-    std::string GetCPID() const
+    void SetCPID(NN::Cpid new_cpid)
     {
-        if(nFlags & EMPTY_CPID)
-            return "";
-        else if(nFlags & INVESTOR_CPID)
-            return "INVESTOR";
+        nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
+
+        cpid = new_cpid;
+    }
+
+    NN::MiningId GetMiningId() const
+    {
+        if (nFlags & EMPTY_CPID)
+            return NN::MiningId();
+        else if (nFlags & INVESTOR_CPID)
+            return NN::MiningId::ForInvestor();
         else
-            return cpid.GetHex();
+            return NN::MiningId(cpid);
     }
 
 
@@ -1667,11 +1680,11 @@ public:
         READWRITE(blockHash);
 
         //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
-        std::string cpid_hex = GetCPID();
+        std::string cpid_hex = GetMiningId().ToString();
         READWRITE(cpid_hex);
 
         if (ser_action.ForRead()) {
-            const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
+            const_cast<CDiskBlockIndex*>(this)->SetMiningId(NN::MiningId::Parse(cpid_hex));
         }
 
         READWRITE(nResearchSubsidy);

@@ -42,17 +42,17 @@ void RepairZeroCpidIndex(CBlockIndex* const pindex)
         return;
     }
 
-    const std::string mining_id = claim->m_mining_id.ToString();
-
-    if (mining_id != pindex->GetCPID())
+    if (claim->m_mining_id != pindex->GetMiningId())
     {
         if(fDebug)
             LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                      pindex->GetCPID(), mining_id,
-                      pindex->GetBlockHash().GetHex(), pindex->nHeight );
+                pindex->GetMiningId().ToString(),
+                claim->m_mining_id.ToString(),
+                pindex->GetBlockHash().GetHex(),
+                pindex->nHeight);
 
         /* Repair the cpid field */
-        pindex->SetCPID(mining_id);
+        pindex->SetMiningId(claim->m_mining_id);
 
 #if 0
         if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
@@ -662,7 +662,7 @@ bool CTxDB::LoadBlockIndex()
         if(!IsResearchAgeEnabled(pindex->nHeight))
             continue;
 
-        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
+        if( pindex->IsUserCPID() && pindex->cpid.IsZero() )
         {
             RepairZeroCpidIndex(pindex);
         }

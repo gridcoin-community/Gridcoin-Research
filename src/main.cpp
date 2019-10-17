@@ -20,7 +20,6 @@
 #include "rpcclient.h"
 #include "beacon.h"
 #include "miner.h"
-#include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
@@ -2738,11 +2737,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     // Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
     if(IsResearchAgeEnabled(pindex->nHeight))
     {
-        pindex->SetCPID(cpid);
+        pindex->SetMiningId(claim.m_mining_id);
         pindex->nMagnitude = claim.m_magnitude;
         pindex->nResearchSubsidy = claim.m_research_subsidy;
         pindex->nInterestSubsidy = claim.m_block_subsidy;
         pindex->nIsSuperBlock = claim.ContainsSuperblock() ? 1 : 0;
+
         // Must scan transactions after CoinStake to know if this is a contract.
         int iPos = 0;
         pindex->nIsContract = 0;
@@ -2814,7 +2814,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
-                    GetLifetimeCPID(pindex->GetCPID()); // Rescan...
+                    GetLifetimeCPID(pindex->GetMiningId().ToString()); // Rescan...
                     GetProofOfStakeReward(nCoinAge, nFees, cpid, true, 2, nTime,
                                           pindex, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
@@ -3089,9 +3089,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(pindexBest->IsUserCPID())
         {
             // remeber the cpid to re-read later
-            vRereadCPIDs.insert(pindexBest->GetCPID());
+            vRereadCPIDs.insert(pindexBest->GetMiningId().ToString());
             // The user has no longer staked this block.
-            RemoveCPIDBlockHash(pindexBest->GetCPID(), pindexBest);
+            RemoveCPIDBlockHash(pindexBest->GetMiningId().ToString(), pindexBest);
         }
 
         // New best block
@@ -3331,7 +3331,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         if(pindex->IsUserCPID()) // is this needed?
-            GetLifetimeCPID(pindex->cpid.GetHex());
+            GetLifetimeCPID(pindex->GetMiningId().ToString());
     }
 
     if (fDebug && (cnt_dis>0 || cnt_con>1))
@@ -4643,7 +4643,7 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
     try
     {
-        const std::string& cpid = pIndex->GetCPID();
+        const std::string& cpid = pIndex->GetMiningId().ToString();
         StructCPID& stMag = GetInitializedStructCPID2(cpid, mvMagnitudesCopy);
         stMag.InterestSubsidy += pIndex->nInterestSubsidy;
         stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
@@ -4725,7 +4725,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-                            myCPID = pblockindex->GetCPID();
+                            myCPID = pblockindex->GetMiningId().ToString();
                         }
                         if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
                         {
@@ -4759,7 +4759,7 @@ void AddRARewardBlock(const CBlockIndex* pindex)
     // this is from LoadBlockIndex
     if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
     {
-        const std::string& cpid = pindex->GetCPID();
+        const std::string& cpid = pindex->GetMiningId().ToString();
 
         StructCPID& stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
 
@@ -4807,7 +4807,7 @@ void RescanLifetimeCPID(StructCPID& stCPID)
         // Ensure that the block is valid
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
-           pblockindex->GetCPID() != stCPID.cpid)
+           pblockindex->GetMiningId().ToString() != stCPID.cpid)
             throw error("RescanLifetimeCPID: Invalid block %s in vRewardBlocs of %s", pblockindex? pblockindex->GetBlockHash().GetHex() :"null", stCPID.cpid );
 
         const uint256& uHash = pblockindex->GetBlockHash();

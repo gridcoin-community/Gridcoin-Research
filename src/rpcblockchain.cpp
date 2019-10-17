@@ -1224,7 +1224,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
     UniValue c(UniValue::VOBJ);
     UniValue res(UniValue::VOBJ);
 
-    std::string cpid = NN::GetPrimaryCpid();
+    const NN::MiningId mining_id = NN::Researcher::Get()->Id();
     std::string Narr = ToString(GetAdjustedTime());
 
     c.pushKV("Lifetime Payments Report", Narr);
@@ -1244,11 +1244,11 @@ UniValue lifetime(const UniValue& params, bool fHelp)
         if (pindex == pindexBest)
             break;
 
-        if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
+        if (pindex->GetMiningId() == mining_id && (pindex->nResearchSubsidy > 0))
             res.pushKV(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2));
     }
     //8-14-2015
-    StructCPID& stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
+    StructCPID& stCPID = GetInitializedStructCPID2(mining_id.ToString(), mvResearchAge);
 
     res.pushKV("RA Magnitude Sum", stCPID.TotalMagnitude);
     res.pushKV("RA Accuracy", stCPID.Accuracy);

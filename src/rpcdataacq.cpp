@@ -402,7 +402,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
             UniValue result2(UniValue::VOBJ);
             result2.pushKV("neuralhash", claim.m_quorum_hash.ToString());
             result2.pushKV("weight", weight );
-            result2.pushKV("cpid", cur->GetCPID() );
+            result2.pushKV("cpid", cur->GetMiningId().ToString() );
             result2.pushKV("organization", claim.m_organization);
             result2.pushKV("cversion", claim.m_client_version);
             if(mode>=2)
@@ -674,7 +674,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 
             if(detail>=2 && detail<20)
             {
-                line+="<|>"+cur->GetCPID()
+                line+="<|>"+cur->GetMiningId().ToString()
                     + "<|>"+RoundToString(cur->nResearchSubsidy,4)
                     + "<|>"+RoundToString(cur->nInterestSubsidy,4);
             }
@@ -687,7 +687,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             result2.pushKV("issuperblock", (bool)cur->nIsSuperBlock );
             result2.pushKV("iscontract", (bool)cur->nIsContract );
             result2.pushKV("ismodifier", (bool)cur->GeneratedStakeModifier() );
-            result2.pushKV("cpid", cur->GetCPID() );
+            result2.pushKV("cpid", cur->GetMiningId().ToString() );
             result2.pushKV("research", cur->nResearchSubsidy );
             result2.pushKV("interest", cur->nInterestSubsidy );
             result2.pushKV("magnitude", cur->nMagnitude );
