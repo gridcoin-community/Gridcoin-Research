@@ -133,6 +133,7 @@ GRIDCOIN_CORE_H = \
 	uint256.h \
 	util/memory.h \
 	util/reverse_iterator.h \
+	util/strencodings.h \
 	util.h \
 	version.h \
 	walletdb.h \
@@ -198,6 +199,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	sync.cpp \
 	tally.cpp \
 	txdb-leveldb.cpp \
+	util/strencodings.cpp \
 	util.cpp \
 	version.cpp \
 	wallet.cpp \
