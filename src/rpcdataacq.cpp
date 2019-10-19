@@ -475,7 +475,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     int64_t blockcount = 0;
     unsigned long points = 0;
     double samples = 0; /* this is double for easy division */
-    std::ofstream Output;
+    fsbridge::ofstream Output;
     boost::filesystem::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
     boost::filesystem::create_directories(o_path.parent_path());
     Output.open (o_path.string().c_str());

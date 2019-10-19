@@ -15,6 +15,7 @@ define $(package)_set_vars
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cxxflags_arm_linux = $(GCCFLAGS)
   $(package)_cflags_arm_linux = $(GCCFLAGS)
+  $(package)_cppflags_mingw32=-DUNICODE -D_UNICODE
 endef
 
 define $(package)_preprocess_cmds

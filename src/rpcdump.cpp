@@ -194,7 +194,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
     if (PathForImport.parent_path().empty())
         PathForImport = DefaultPathDataDir / PathForImport;
 
-    ifstream file;
+    fsbridge::ifstream file;
     file.open(PathForImport.string().c_str());
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
@@ -327,7 +327,7 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
     if (PathForDump.parent_path().empty())
         PathForDump = DefaultPathDataDir / PathForDump;
 
-    ofstream file;
+    fsbridge::ofstream file;
     file.open(PathForDump.string().c_str());
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
