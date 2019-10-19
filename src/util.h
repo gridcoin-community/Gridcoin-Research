@@ -81,6 +81,8 @@ static const int64_t CENT = 1000000;
 #define MAX_PATH            1024
 #endif
 
+void SetupEnvironment();
+
 //! Substitute for C++14 std::make_unique.
 template <typename T, typename... Args>
 std::unique_ptr<T> MakeUnique(Args&&... args)
@@ -671,6 +673,23 @@ NODISCARD bool ParseUInt64(const std::string& str, uint64_t *out);
  */
 NODISCARD bool ParseDouble(const std::string& str, double *out);
 
+
+namespace util {
+#ifdef WIN32
+class WinCmdLineArgs
+{
+public:
+    WinCmdLineArgs();
+    ~WinCmdLineArgs();
+    std::pair<int, char**> get();
+
+private:
+    int argc;
+    char** argv;
+    std::vector<std::string> args;
+};
+#endif
+} // namespace util
 
 #endif
 

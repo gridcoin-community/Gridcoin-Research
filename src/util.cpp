@@ -55,13 +55,17 @@ namespace boost {
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <codecvt>
 #include <io.h> /* for _commit */
+#include <shellapi.h>
 #include "shlobj.h"
 #elif defined(__linux__)
 # include <sys/prctl.h>
 #endif
 
 using namespace std;
+
+namespace fs = boost::filesystem;
 
 ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
@@ -90,7 +94,32 @@ std::string GetNeuralVersion();
 
 bool fDevbuildCripple;
 
-//int64_t IsNeural();
+void SetupEnvironment()
+{
+    // On most POSIX systems (e.g. Linux, but not BSD) the environment's locale
+    // may be invalid, in which case the "C.UTF-8" locale is used as fallback.
+#if !defined(WIN32) && !defined(MAC_OSX) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
+    try {
+        std::locale(""); // Raises a runtime error if current locale is invalid
+    } catch (const std::runtime_error&) {
+        setenv("LC_ALL", "C.UTF-8", 1);
+    }
+#elif defined(WIN32)
+    // Set the default input/output charset is utf-8
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+    // The path locale is lazy initialized and to avoid deinitialization errors
+    // in multithreading environments, it is set explicitly by the main thread.
+    // A dummy locale is used to extract the internal default locale, used by
+    // fs::path, which is then used to explicitly imbue the path.
+    std::locale loc = fs::path::imbue(std::locale::classic());
+#ifndef WIN32
+    fs::path::imbue(loc);
+#else
+    fs::path::imbue(std::locale(loc, new std::codecvt_utf8_utf16<wchar_t>()));
+#endif
+}
 
 void MilliSleep(int64_t n)
 {
@@ -241,7 +270,7 @@ void LogPrintStr(const std::string &str)
 
         if (!fileout)
         {
-            boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
+            fs::path pathDebug = GetDataDir() / "debug.log";
             fileout = fopen(pathDebug.string().c_str(), "a");
             if (fileout) setbuf(fileout, NULL); // unbuffered
         }
@@ -260,7 +289,7 @@ void LogPrintStr(const std::string &str)
             // reopen the log file, if requested
             if (fReopenDebugLog) {
                 fReopenDebugLog = false;
-                boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
+                fs::path pathDebug = GetDataDir() / "debug.log";
                 if (freopen(pathDebug.string().c_str(),"a",fileout) != NULL)
                     setbuf(fileout, NULL); // unbuffered
             }
@@ -1086,9 +1115,8 @@ void PrintExceptionContinue(std::exception* pex, const char* pszThread)
 
 
 
-boost::filesystem::path GetDefaultDataDir()
+fs::path GetDefaultDataDir()
 {
-    namespace fs = boost::filesystem;
     // Windows < Vista: C:\Documents and Settings\Username\Application Data\gridcoinresearch
     // Windows >= Vista: C:\Users\Username\AppData\Roaming\gridcoinresearch
     // Mac: ~/Library/Application Support/gridcoinresearch
@@ -1143,10 +1171,8 @@ boost::filesystem::path GetDefaultDataDir()
 #endif
 }
 
-const boost::filesystem::path &GetDataDir(bool fNetSpecific)
+const fs::path &GetDataDir(bool fNetSpecific)
 {
-    namespace fs = boost::filesystem;
-
     static fs::path pathCached[2];
     static CCriticalSection csPathCached;
     static bool cachedPath[2] = {false, false};
@@ -1188,15 +1214,15 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 
 
 
-boost::filesystem::path GetProgramDir()
+fs::path GetProgramDir()
 {
-    boost::filesystem::path path;
+    fs::path path;
 
     if (mapArgs.count("-programdir"))
     {
-        path = boost::filesystem::system_complete(mapArgs["-programdir"]);
+        path = fs::system_complete(mapArgs["-programdir"]);
 
-        if (!boost::filesystem::is_directory(path))
+        if (!fs::is_directory(path))
         {
             path = "";
             LogPrintf("Invalid path stated in gridcoinresearch.conf");
@@ -1218,9 +1244,9 @@ boost::filesystem::path GetProgramDir()
 
     for (int i = 0; i < 3; ++i)
     {
-        if (boost::filesystem::exists((boost::filesystem::current_path() / list[i]).c_str()))
+        if (fs::exists((fs::current_path() / list[i]).c_str()))
         {
-            return boost::filesystem::current_path();
+            return fs::current_path();
         }
     }
 
@@ -1232,9 +1258,9 @@ boost::filesystem::path GetProgramDir()
 
 
 
-boost::filesystem::path GetConfigFile()
+fs::path GetConfigFile()
 {
-    boost::filesystem::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
+    fs::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
     if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
     return pathConfigFile;
 }
@@ -1243,7 +1269,7 @@ boost::filesystem::path GetConfigFile()
 
 bool IsConfigFileEmpty()
 {
-    boost::filesystem::ifstream streamConfig(GetConfigFile());
+    fs::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
     {
         return true;
@@ -1259,7 +1285,7 @@ bool IsConfigFileEmpty()
 void ReadConfigFile(ArgsMap& mapSettingsRet,
                     ArgsMultiMap& mapMultiSettingsRet)
 {
-    boost::filesystem::ifstream streamConfig(GetConfigFile());
+    fs::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
         return; // No bitcoin.conf file is OK
 
@@ -1280,15 +1306,15 @@ void ReadConfigFile(ArgsMap& mapSettingsRet,
     }
 }
 
-boost::filesystem::path GetPidFile()
+fs::path GetPidFile()
 {
-    boost::filesystem::path pathPidFile(GetArg("-pid", "gridcoinresearch.pid"));
+    fs::path pathPidFile(GetArg("-pid", "gridcoinresearch.pid"));
     if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
     return pathPidFile;
 }
 
 #ifndef WIN32
-void CreatePidFile(const boost::filesystem::path &path, pid_t pid)
+void CreatePidFile(const fs::path &path, pid_t pid)
 {
     FILE* file = fopen(path.string().c_str(), "w");
     if (file)
@@ -1299,7 +1325,7 @@ void CreatePidFile(const boost::filesystem::path &path, pid_t pid)
 }
 #endif
 
-bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest)
+bool RenameOver(fs::path src, fs::path dest)
 {
 #ifdef WIN32
     return MoveFileExA(src.string().c_str(), dest.string().c_str(),
@@ -1360,9 +1386,9 @@ bool FileCommit(FILE *file)
 void ShrinkDebugFile()
 {
     // Scroll debug.log if it's getting too big
-    boost::filesystem::path pathLog = GetDataDir() / "debug.log";
+    fs::path pathLog = GetDataDir() / "debug.log";
     FILE* file = fopen(pathLog.string().c_str(), "r");
-    if (file && boost::filesystem::file_size(pathLog) > 1000000)
+    if (file && fs::file_size(pathLog) > 1000000)
     {
         // Restart the file with some of the end
         char pch[200000];
@@ -1381,7 +1407,7 @@ void ShrinkDebugFile()
 
 std::string GetFileContents(std::string filepath)
 {
-    if (!boost::filesystem::exists(filepath)) {
+    if (!fs::exists(filepath)) {
         LogPrintf("GetFileContents: file does not exist %s", filepath);
         return "-1";
     }
@@ -1626,10 +1652,8 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
 }
 
 #ifdef WIN32
-boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
+fs::path GetSpecialFolderPath(int nFolder, bool fCreate)
 {
-    namespace fs = boost::filesystem;
-
     char pszPath[MAX_PATH] = "";
 
     if(SHGetSpecialFolderPathA(NULL, pszPath, nFolder, fCreate))
@@ -1782,3 +1806,30 @@ std::string TimestampToHRDate(double dtm)
     std::string sDt = DateTimeStrFormat("%m-%d-%Y %H:%M:%S",dtm);
     return sDt;
 }
+
+namespace util {
+#ifdef WIN32
+WinCmdLineArgs::WinCmdLineArgs()
+{
+    wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf8_cvt;
+    argv = new char*[argc];
+    args.resize(argc);
+    for (int i = 0; i < argc; i++) {
+        args[i] = utf8_cvt.to_bytes(wargv[i]);
+        argv[i] = &*args[i].begin();
+    }
+    LocalFree(wargv);
+}
+
+WinCmdLineArgs::~WinCmdLineArgs()
+{
+    delete[] argv;
+}
+
+std::pair<int, char**> WinCmdLineArgs::get()
+{
+    return std::make_pair(argc, argv);
+}
+#endif
+} // namespace util
