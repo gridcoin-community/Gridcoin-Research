@@ -91,7 +91,7 @@ bool CDBEnv::Open(boost::filesystem::path pathEnv_)
     dbenv.set_lk_max_locks(537000);
 
     dbenv.set_lk_max_objects(10000);
-    dbenv.set_errfile(fopen(pathErrorFile.string().c_str(), "a")); /// debug
+    dbenv.set_errfile(fsbridge::fopen(pathErrorFile, "a")); /// debug
     dbenv.set_flags(DB_AUTO_COMMIT, 1);
     dbenv.set_flags(DB_TXN_WRITE_NOSYNC, 1);
 #ifdef DB_LOG_AUTO_REMOVE
@@ -513,7 +513,7 @@ bool CAddrDB::Write(const CAddrMan& addr)
 
     // open temp output file, and associate with CAutoFile
     boost::filesystem::path pathTmp = GetDataDir() / tmpfn;
-    FILE *file = fopen(pathTmp.string().c_str(), "wb");
+    FILE *file = fsbridge::fopen(pathTmp.string().c_str(), "wb");
     CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull())
         return error("CAddrman::Write() : open failed");
@@ -538,7 +538,7 @@ bool CAddrDB::Write(const CAddrMan& addr)
 bool CAddrDB::Read(CAddrMan& addr)
 {
     // open input file, and associate with CAutoFile
-    FILE *file = fopen(pathAddr.string().c_str(), "rb");
+    FILE *file = fsbridge::fopen(pathAddr.string().c_str(), "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     if (filein.IsNull())
         return error("CAddrman::Read() : open failed");

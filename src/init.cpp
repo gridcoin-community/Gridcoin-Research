@@ -21,7 +21,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
-#include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
@@ -42,6 +41,7 @@ bool IsConfigFileEmpty();
 
 #ifndef WIN32
 #include <signal.h>
+#include <sys/stat.h>
 #endif
 
 using namespace std;
@@ -563,20 +563,21 @@ bool AppInit2(ThreadHandlerPtr threads)
     std::string sha256_algo = SHA256AutoDetect();
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);                                                                                      
 
-    std::string strDataDir = GetDataDir().string();
-    std::string strWalletFileName = GetArg("-wallet", "wallet.dat");
+    fs::path datadir = GetDataDir();
+    fs::path walletFileName = GetArg("-wallet", "wallet.dat");
 
-    // strWalletFileName must be a plain filename without a directory
-    if (strWalletFileName != boost::filesystem::basename(strWalletFileName) + boost::filesystem::extension(strWalletFileName))
-        return InitError(strprintf(_("Wallet %s resides outside data directory %s."), strWalletFileName, strDataDir));
+    // WalletFileName must be a plain filename without a directory
+    if (walletFileName != walletFileName.filename())
+        return InitError(strprintf(_("Wallet %s resides outside data directory %s."), walletFileName.string(), datadir.string()));
 
     // Make sure only a single Bitcoin process is using the data directory.
-    boost::filesystem::path pathLockFile = GetDataDir() / ".lock";
-    FILE* file = fopen(pathLockFile.string().c_str(), "a"); // empty lock file; created if it doesn't exist.
-    if (file) fclose(file);
-    static boost::interprocess::file_lock lock(pathLockFile.string().c_str());
-    if (!lock.try_lock())
-        return InitError(strprintf(_("Cannot obtain a lock on data directory %s.  Gridcoin is probably already running."), strDataDir));
+    if (!DirIsWritable(datadir)) {
+        return InitError(strprintf(_("Cannot write to data directory '%s'; check permissions."), datadir.string()));
+    }
+    if (!LockDirectory(datadir, ".lock", false)) {
+        return InitError(strprintf(_("Cannot obtain a lock on data directory %s. %s is probably already running."), datadir.string(), PACKAGE_NAME));
+    }
+
 
 #if !defined(WIN32) 
     if (fDaemon)
@@ -611,7 +612,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!fLogTimestamps)
         LogPrintf("Startup time: %s", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
     LogPrintf("Default data directory %s", GetDefaultDataDir().string());
-    LogPrintf("Used data directory %s", strDataDir);
+    LogPrintf("Used data directory %s", datadir.string());
     std::ostringstream strErrors;
 
     fDevbuildCripple = false;
@@ -646,26 +647,26 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
          string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
-                                 " everything from it except for wallet.dat."), strDataDir);
+                                 " everything from it except for wallet.dat."), datadir.string());
         return InitError(msg);
     }
 
     if (GetBoolArg("-salvagewallet"))
     {
         // Recover readable keypairs:
-        if (!CWalletDB::Recover(bitdb, strWalletFileName, true))
+        if (!CWalletDB::Recover(bitdb, walletFileName.string(), true))
             return false;
     }
 
-    if (filesystem::exists(GetDataDir() / strWalletFileName))
+    if (filesystem::exists(GetDataDir() / walletFileName))
     {
-        CDBEnv::VerifyResult r = bitdb.Verify(strWalletFileName, CWalletDB::Recover);
+        CDBEnv::VerifyResult r = bitdb.Verify(walletFileName.string(), CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
         {
             string msg = strprintf(_("Warning: wallet.dat corrupt, data salvaged!"
                                      " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
-                                     " restore from a backup."), strDataDir);
+                                     " restore from a backup."), datadir.string());
             uiInterface.ThreadSafeMessageBox(msg, _("Gridcoin"),
                 CClientUIInterface::OK | CClientUIInterface::ICON_EXCLAMATION | CClientUIInterface::MODAL);
         }
@@ -787,7 +788,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
-                                 " everything from it except for wallet.dat."), strDataDir);
+                                 " everything from it except for wallet.dat."), datadir.string());
         return InitError(msg);
     }
 
@@ -850,7 +851,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Loading wallet...");
     nStart = GetTimeMillis();
     bool fFirstRun = true;
-    pwalletMain = new CWallet(strWalletFileName);
+    pwalletMain = new CWallet(walletFileName.string());
     DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
     if (nLoadWalletRet != DB_LOAD_OK)
     {
@@ -913,7 +914,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         pindexRescan = pindexGenesisBlock;
     else
     {
-        CWalletDB walletdb(strWalletFileName);
+        CWalletDB walletdb(walletFileName.string());
         CBlockLocator locator;
         if (walletdb.ReadBestBlock(locator))
             pindexRescan = locator.GetBlockIndex();
@@ -935,7 +936,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         for (auto const& strFile : mapMultiArgs["-loadblock"])
         {
-            FILE *file = fopen(strFile.c_str(), "rb");
+            FILE *file = fsbridge::fopen(strFile.c_str(), "rb");
             if (file)
                 LoadExternalBlockFile(file);
         }
@@ -946,7 +947,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (filesystem::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
-        FILE *file = fopen(pathBootstrap.string().c_str(), "rb");
+        FILE *file = fsbridge::fopen(pathBootstrap.string().c_str(), "rb");
         if (file) {
             filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);

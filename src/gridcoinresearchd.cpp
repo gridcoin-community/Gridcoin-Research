@@ -44,6 +44,13 @@
 //
 bool AppInit(int argc, char* argv[])
 {
+#ifdef WIN32
+    util::WinCmdLineArgs winArgs;
+    std::tie(argc, argv) = winArgs.get();
+#endif
+
+    SetupEnvironment();
+
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
 

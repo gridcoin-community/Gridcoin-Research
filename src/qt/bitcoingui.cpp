@@ -843,7 +843,7 @@ bool CreateNewConfigFile(std::string boinc_email)
 {
     std::string filename = "gridcoinresearch.conf";
     boost::filesystem::path path = GetDataDir() / filename;
-    std::ofstream myConfig;
+    fsbridge::ofstream myConfig;
     myConfig.open (path.string().c_str());
     std::string row = "email=" + boinc_email + "\r\n";
     myConfig << row;

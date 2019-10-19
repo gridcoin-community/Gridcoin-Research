@@ -1267,7 +1267,7 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             if (nType == 0)
                 exportoutput << "</id>\n";
 
-            std::ofstream dataout;
+            fsbridge::ofstream dataout;
 
             // We will place this in wallet backups as a safer location then in main data directory
             boost::filesystem::path exportpath;

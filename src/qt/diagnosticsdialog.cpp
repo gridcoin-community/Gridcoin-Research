@@ -62,7 +62,7 @@ bool DiagnosticsDialog::VerifyIsCPIDValid()
     if (clientStatePath.empty())
         return false;
 
-    std::ifstream clientStateStream;
+    fsbridge::ifstream clientStateStream;
     std::string clientState;
 
     clientStateStream.open(clientStatePath.string());
@@ -120,7 +120,7 @@ bool DiagnosticsDialog::VerifyCPIDHasRAC()
     if (clientStatePath.empty())
         return false;
 
-    std::ifstream clientStateStream;
+    fsbridge::ifstream clientStateStream;
     std::string clientState;
     std::vector<std::string> racStrings;
 
