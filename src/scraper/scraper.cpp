@@ -170,7 +170,7 @@ private:
 
     static boost::gregorian::date PrevArchiveCheckDate;
 
-    fs::ofstream logfile;
+    fsbridge::ofstream logfile;
 
 public:
 
@@ -285,7 +285,7 @@ public:
                 PrevArchiveCheckDate = ArchiveCheckDate;
             }
 
-            std::ifstream infile(pfile_temp.string(), std::ios_base::in | std::ios_base::binary);
+            fsbridge::ifstream infile(pfile_temp, std::ios_base::in | std::ios_base::binary);
 
             if (!infile)
             {
@@ -293,7 +293,7 @@ public:
                 return false;
             }
 
-            std::ofstream outgzfile(pfile_out.string(), std::ios_base::out | std::ios_base::binary);
+            fsbridge::ofstream outgzfile(pfile_out, std::ios_base::out | std::ios_base::binary);
 
             if (!outgzfile)
             {
@@ -492,7 +492,7 @@ class userpass
 {
 private:
 
-    fs::ifstream userpassfile;
+    fsbridge::ifstream userpassfile;
 
 public:
 
@@ -550,7 +550,7 @@ class authdata
 {
 private:
 
-    fs::ofstream oauthdata;
+    fsbridge::ofstream oauthdata;
     stringbuilder outdata;
 
 public:
@@ -1600,7 +1600,7 @@ bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, co
     if (file.string().empty())
         return false;
 
-    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
+    fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -1864,7 +1864,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     if (file.string().empty())
         return false;
 
-    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
+    fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -1888,7 +1888,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     // Put path in.
     gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
 
-    std::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
+    fsbridge::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
     boostio::filtering_ostream out;
     out.push(boostio::gzip_compressor());
     out.push(outgzfile);
@@ -2031,7 +2031,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 uint256 GetFileHash(const fs::path& inputfile)
 {
     // open input file, and associate with CAutoFile
-    FILE *file = fopen(inputfile.string().c_str(), "rb");
+    FILE *file = fsbridge::fopen(inputfile.string().c_str(), "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     uint256 nHash = 0;
     
@@ -2101,7 +2101,7 @@ uint256 GetmScraperFileManifestHash()
 
 bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 {
-    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
+    fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -2146,7 +2146,7 @@ bool LoadBeaconList(const fs::path& file, BeaconMap& mBeaconMap)
 
 bool LoadTeamIDList(const fs::path& file)
 {
-    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
+    fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -2263,7 +2263,7 @@ bool StoreBeaconList(const fs::path& file)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
+    fsbridge::ofstream outgzfile(file, std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2308,7 +2308,7 @@ bool StoreTeamIDList(const fs::path& file)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
+    fsbridge::ofstream outgzfile(file, std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2531,7 +2531,7 @@ void AlignScraperFileManifestEntries(const fs::path& file, const std::string& fi
 
 bool LoadScraperFileManifest(const fs::path& file)
 {
-    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
+    fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -2622,7 +2622,7 @@ bool StoreScraperFileManifest(const fs::path& file)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
+    fsbridge::ofstream outgzfile(file, std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2682,7 +2682,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
     if (fs::exists(file))
         fs::remove(file);
 
-    std::ofstream outgzfile(file.string(), std::ios_base::out | std::ios_base::binary);
+    fsbridge::ofstream outgzfile(file, std::ios_base::out | std::ios_base::binary);
 
     if (!outgzfile)
     {
@@ -2760,7 +2760,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 
 bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& file, const double& projectmag, const BeaconMap& mBeaconMap, ScraperStats& mScraperStats)
 {
-    std::ifstream ingzfile(file.string(), std::ios_base::in | std::ios_base::binary);
+    fsbridge::ifstream ingzfile(file, std::ios_base::in | std::ios_base::binary);
 
     if (!ingzfile)
     {
@@ -3347,7 +3347,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 
         outputfilewpath = savepath / outputfile;
 
-        std::ofstream outfile(outputfilewpath.string(), std::ios_base::out | std::ios_base::binary);
+        fsbridge::ofstream outfile(outputfilewpath, std::ios_base::out | std::ios_base::binary);
 
         if (!outfile)
         {
@@ -3609,7 +3609,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     fs::path inputfilewpath = pathScraper / inputfile;
     
     // open input file, and associate with CAutoFile
-    FILE *file = fopen(inputfilewpath.string().c_str(), "rb");
+    FILE *file = fsbridge::fopen(inputfilewpath.string().c_str(), "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
     if (filein.IsNull())
@@ -3660,7 +3660,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         fs::path inputfilewpath = pathScraper / inputfile;
 
         // open input file, and associate with CAutoFile
-        FILE *file = fopen(inputfilewpath.string().c_str(), "rb");
+        FILE *file = fsbridge::fopen(inputfilewpath.string().c_str(), "rb");
         CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
         if (filein.IsNull())

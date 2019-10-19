@@ -3,7 +3,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "fs.h"
 #include "netbase.h" // for AddTimeData
 #include "sync.h"
 #include "strlcpy.h"
@@ -277,7 +276,7 @@ void LogPrintStr(const std::string &str)
         if (!fileout)
         {
             fs::path pathDebug = GetDataDir() / "debug.log";
-            fileout = fopen(pathDebug.string().c_str(), "a");
+            fileout = fsbridge::fopen(pathDebug.string().c_str(), "a");
             if (fileout) setbuf(fileout, NULL); // unbuffered
         }
         if (fileout)
@@ -1275,7 +1274,7 @@ fs::path GetConfigFile()
 
 bool IsConfigFileEmpty()
 {
-    fs::ifstream streamConfig(GetConfigFile());
+    fsbridge::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
     {
         return true;
@@ -1291,7 +1290,7 @@ bool IsConfigFileEmpty()
 void ReadConfigFile(ArgsMap& mapSettingsRet,
                     ArgsMultiMap& mapMultiSettingsRet)
 {
-    fs::ifstream streamConfig(GetConfigFile());
+    fsbridge::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
         return; // No bitcoin.conf file is OK
 
@@ -1322,7 +1321,7 @@ fs::path GetPidFile()
 #ifndef WIN32
 void CreatePidFile(const fs::path &path, pid_t pid)
 {
-    FILE* file = fopen(path.string().c_str(), "w");
+    FILE* file = fsbridge::fopen(path.string().c_str(), "w");
     if (file)
     {
         fprintf(file, "%d\n", pid);
@@ -1393,7 +1392,7 @@ void ShrinkDebugFile()
 {
     // Scroll debug.log if it's getting too big
     fs::path pathLog = GetDataDir() / "debug.log";
-    FILE* file = fopen(pathLog.string().c_str(), "r");
+    FILE* file = fsbridge::fopen(pathLog.string().c_str(), "r");
     if (file && fs::file_size(pathLog) > 1000000)
     {
         // Restart the file with some of the end
@@ -1402,7 +1401,7 @@ void ShrinkDebugFile()
         int nBytes = fread(pch, 1, sizeof(pch), file);
         fclose(file);
 
-        file = fopen(pathLog.string().c_str(), "w");
+        file = fsbridge::fopen(pathLog.string().c_str(), "w");
         if (file)
         {
             fwrite(pch, 1, nBytes, file);
@@ -1455,7 +1454,7 @@ std::string GetFileContents(std::string filepath)
         return "-1";
     }
 
-    std::ifstream in(filepath, std::ios::in | std::ios::binary);
+    fsbridge::ifstream in(filepath, std::ios::in | std::ios::binary);
 
     if (in.fail()) {
         LogPrintf("GetFileContents: error opening file %s", filepath);

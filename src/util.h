@@ -9,6 +9,7 @@
 #include "attributes.h"
 
 #include "uint256.h"
+#include "fs.h"
 #include "fwd.h"
 #include "hash.h"
 
@@ -206,23 +207,23 @@ bool FileCommit(FILE *fileout);
 
 std::string TimestampToHRDate(double dtm);
 
-bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
-boost::filesystem::path GetDefaultDataDir();
-boost::filesystem::path GetProgramDir();
+bool RenameOver(fs::path src, fs::path dest);
+fs::path GetDefaultDataDir();
+fs::path GetProgramDir();
 
-const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
-boost::filesystem::path GetConfigFile();
-boost::filesystem::path GetPidFile();
+const fs::path &GetDataDir(bool fNetSpecific = true);
+fs::path GetConfigFile();
+fs::path GetPidFile();
 #ifndef WIN32
-void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
+void CreatePidFile(const fs::path &path, pid_t pid);
 #endif
 void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 #ifdef WIN32
-boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
+fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 void ShrinkDebugFile();
-bool DirIsWritable(const boost::filesystem::path& directory);
-bool LockDirectory(const boost::filesystem::path& directory, const std::string lockfile_name, bool probe_only=false);
+bool DirIsWritable(const fs::path& directory);
+bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
 
 //!
 //! \brief Read the contents of the specified file into memory.
