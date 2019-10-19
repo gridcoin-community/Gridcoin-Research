@@ -221,6 +221,8 @@ void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
 void ShrinkDebugFile();
+bool DirIsWritable(const boost::filesystem::path& directory);
+bool LockDirectory(const boost::filesystem::path& directory, const std::string lockfile_name, bool probe_only=false);
 
 //!
 //! \brief Read the contents of the specified file into memory.

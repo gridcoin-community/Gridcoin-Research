@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "fs.h"
 #include "netbase.h" // for AddTimeData
 #include "sync.h"
 #include "strlcpy.h"
@@ -27,8 +28,6 @@ namespace boost {
 
 #include <boost/program_options/detail/config_file.hpp>
 #include <boost/program_options/parsers.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <boost/thread.hpp>
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
@@ -65,8 +64,6 @@ namespace boost {
 
 using namespace std;
 
-namespace fs = boost::filesystem;
-
 ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
 
@@ -93,6 +90,15 @@ bool fReopenDebugLog = false;
 std::string GetNeuralVersion();
 
 bool fDevbuildCripple;
+
+/** A map that contains all the currently held directory locks. After
+ * successful locking, these will be held here until the global destructor
+ * cleans them up and thus automatically unlocks them, or ReleaseDirectoryLocks
+ * is called.
+ */
+static std::map<std::string, std::unique_ptr<fsbridge::FileLock>> dir_locks;
+/** Mutex to protect dir_locks. */
+static std::mutex cs_dir_locks;
 
 void SetupEnvironment()
 {
@@ -1261,7 +1267,7 @@ fs::path GetProgramDir()
 fs::path GetConfigFile()
 {
     fs::path pathConfigFile(GetArg("-conf", "gridcoinresearch.conf"));
-    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
+    if (!pathConfigFile.is_absolute()) pathConfigFile = GetDataDir(false) / pathConfigFile;
     return pathConfigFile;
 }
 
@@ -1309,7 +1315,7 @@ void ReadConfigFile(ArgsMap& mapSettingsRet,
 fs::path GetPidFile()
 {
     fs::path pathPidFile(GetArg("-pid", "gridcoinresearch.pid"));
-    if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
+    if (!pathPidFile.is_absolute()) pathPidFile = GetDataDir() / pathPidFile;
     return pathPidFile;
 }
 
@@ -1403,6 +1409,43 @@ void ShrinkDebugFile()
             fclose(file);
         }
     }
+}
+
+bool DirIsWritable(const fs::path& directory)
+{
+    fs::path tmpFile = directory / fs::unique_path();
+
+    FILE* file = fsbridge::fopen(tmpFile, "a");
+    if (!file) return false;
+
+    fclose(file);
+    remove(tmpFile);
+
+    return true;
+}
+
+bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only)
+{
+    std::lock_guard<std::mutex> ulock(cs_dir_locks);
+    fs::path pathLockFile = directory / lockfile_name;
+
+    // If a lock for this directory already exists in the map, don't try to re-lock it
+    if (dir_locks.count(pathLockFile.string())) {
+        return true;
+    }
+
+    // Create empty lock file if it doesn't exist.
+    FILE* file = fsbridge::fopen(pathLockFile, "a");
+    if (file) fclose(file);
+    auto lock = MakeUnique<fsbridge::FileLock>(pathLockFile);
+    if (!lock->TryLock()) {
+        return error("Error while attempting to lock directory %s: %s", directory.string(), lock->GetReason());
+    }
+    if (!probe_only) {
+        // Lock successful and we're not just probing, put it into the map
+        dir_locks.emplace(pathLockFile.string(), std::move(lock));
+    }
+    return true;
 }
 
 std::string GetFileContents(std::string filepath)
