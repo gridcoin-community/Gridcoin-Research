@@ -1964,6 +1964,17 @@ BOOST_AUTO_TEST_CASE(it_parses_an_invalid_quorum_hash_to_an_invalid_variant)
     BOOST_CHECK(hash.Valid() == false);
 }
 
+BOOST_AUTO_TEST_CASE(it_parses_an_empty_superblock_hash_to_an_invalid_variant)
+{
+    // This is the hash of an empty legacy superblock contract. A bug in
+    // previous versions caused nodes to vote for empty superblocks when
+    // staking a block. It should parse to an invalid quorum hash value:
+    //
+    NN::QuorumHash hash = NN::QuorumHash::Parse("d41d8cd98f00b204e9800998ecf8427e");
+
+    BOOST_CHECK(hash.Valid() == false);
+}
+
 BOOST_AUTO_TEST_CASE(it_hashes_cpid_magnitudes_from_a_legacy_superblock)
 {
     // Version 1 superblocks hash with the legacy MD5-based algorithm:

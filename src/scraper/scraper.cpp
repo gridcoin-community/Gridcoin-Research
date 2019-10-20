@@ -23,6 +23,8 @@
 #include <boost/date_time/gregorian/greg_date.hpp>
 #include <random>
 
+namespace NN { std::string GetPrimaryCpid(); }
+
 // These are initialized empty. GetDataDir() cannot be called here. It is too early.
 fs::path pathDataDir = {};
 fs::path pathScraper = {};
@@ -3256,10 +3258,9 @@ std::string ExplainMagnitude(std::string sCPID)
 
     // "Signature"
     // The magic version number of 430 from .NET is there for compatibility with the old NN protocol.
-    // TODO: Should we take a lock on cs_main to read GlobalCPUMiningCPID?
     out.append("NN Host Version: 430, ");
     out.append("NeuralHash: " + ConvergedScraperStatsCache.sContractHash + ", ");
-    out.append("SignatureCPID: " + GlobalCPUMiningCPID.cpid + ", ");
+    out.append("SignatureCPID: " + NN::GetPrimaryCpid() + ", ");
     out.append("Time: " + DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()) + "<ROW>");
 
     //Totals

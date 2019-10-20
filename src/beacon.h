@@ -8,6 +8,7 @@
 #include "util.h"
 #include <string>
 #include <map>
+#include <set>
 
 // This is modelled after AppCacheEntry/Section but named separately.
 struct BeaconEntry
@@ -69,6 +70,7 @@ int64_t BeaconAgeAdvertiseThreshold();
 
 void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
+std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid);
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR);
 bool HasActiveBeacon(const std::string& cpid);
 

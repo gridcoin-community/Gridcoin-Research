@@ -91,6 +91,7 @@ GRIDCOIN_CORE_H = \
 	main.h \
 	miner.h \
 	mruset.h \
+	neuralnet/claim.h \
 	neuralnet/cpid.h \
 	neuralnet/neuralnet.h \
    neuralnet/neuralnet_native.h \
@@ -159,10 +160,11 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	keystore.cpp \
 	main.cpp \
 	miner.cpp \
+	neuralnet/claim.cpp \
+	neuralnet/cpid.cpp \
    neuralnet/neuralnet.cpp \
    neuralnet/neuralnet_native.cpp \
    neuralnet/neuralnet_stub.cpp \
-	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
 	neuralnet/researcher.cpp \
 	neuralnet/superblock.cpp \

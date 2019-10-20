@@ -239,6 +239,15 @@ public:
     static constexpr uint32_t CURRENT_VERSION = 2;
 
     //!
+    //! \brief The maximum allowed size of a serialized superblock in bytes.
+    //!
+    //! The bulk of the superblock data is comprised of pairs of CPIDs to
+    //! magnitude values. A value of 4 MB provides space for roughly 200k
+    //! CPIDs that accumulated a non-zero magnitude.
+    //!
+    static constexpr size_t MAX_SIZE = 4 * 1000 * 1000;
+
+    //!
     //! \brief Contains the CPID statistics aggregated for all projects.
     //!
     //! To conserve space in a serialized superblock, other sections refer to

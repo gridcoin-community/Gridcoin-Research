@@ -1886,11 +1886,21 @@ QuorumHash QuorumHash::Hash(const ScraperStats& stats)
 
 QuorumHash QuorumHash::Parse(const std::string& hex)
 {
-    if (hex.size() != sizeof(uint256) * 2 && hex.size() != sizeof(Md5Sum) * 2) {
-        return QuorumHash();
+    if (hex.size() == sizeof(uint256) * 2) {
+        return QuorumHash(ParseHex(hex));
     }
 
-    return QuorumHash(ParseHex(hex));
+    if (hex.size() == sizeof(Md5Sum) * 2) {
+        // This is the hash of an empty legacy superblock contract. A bug in
+        // previous versions caused nodes to vote for empty superblocks when
+        // staking a block. We can ignore any quorum hashes with this value:
+        //
+        if (hex != "d41d8cd98f00b204e9800998ecf8427e") {
+            return QuorumHash(ParseHex(hex));
+        }
+    }
+
+    return QuorumHash();
 }
 
 bool QuorumHash::operator==(const QuorumHash& other) const

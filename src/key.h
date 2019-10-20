@@ -68,7 +68,7 @@ private:
 
 public:
     CPubKey() { }
-    CPubKey(const std::vector<unsigned char> &vchPubKeyIn) : vchPubKey(vchPubKeyIn) { }
+    CPubKey(std::vector<unsigned char> vchPubKeyIn) : vchPubKey(std::move(vchPubKeyIn)) { }
     friend bool operator==(const CPubKey &a, const CPubKey &b) { return a.vchPubKey == b.vchPubKey; }
     friend bool operator!=(const CPubKey &a, const CPubKey &b) { return a.vchPubKey != b.vchPubKey; }
     friend bool operator<(const CPubKey &a, const CPubKey &b) { return a.vchPubKey < b.vchPubKey; }
@@ -79,6 +79,15 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
         READWRITE(vchPubKey);
+    }
+
+    static CPubKey Parse(const std::string& input)
+    {
+        if (input.empty()) {
+            return CPubKey();
+        }
+
+        return CPubKey(ParseHex(input));
     }
 
     CKeyID GetID() const {
@@ -99,6 +108,11 @@ public:
 
     std::vector<unsigned char> Raw() const {
         return vchPubKey;
+    }
+
+    std::string ToString() const
+    {
+        return HexStr(vchPubKey);
     }
 };
 

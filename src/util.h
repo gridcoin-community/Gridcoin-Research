@@ -46,6 +46,7 @@
 #include <inttypes.h>
 
 static const int64_t COIN = 100000000;
+static const int64_t COIN_PLACES = 8;
 static const int64_t CENT = 1000000;
 
 #define BEGIN(a)            ((char*)&(a))

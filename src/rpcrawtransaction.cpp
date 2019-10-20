@@ -55,35 +55,31 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         }
     }
 
-    //Deserialize
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);
+    const NN::Claim& claim = block.GetClaim();
 
     res.push_back(std::make_pair(_("Height"), ToString(pindex->nHeight)));
     res.push_back(std::make_pair(_("Block Version"), ToString(block.nVersion)));
     res.push_back(std::make_pair(_("Difficulty"), RoundToString(GetBlockDifficulty(block.nBits),8)));
-    res.push_back(std::make_pair(_("CPID"), bb.cpid));
-    res.push_back(std::make_pair(_("Interest"), RoundToString(bb.InterestSubsidy,8)));
+    res.push_back(std::make_pair(_("CPID"), claim.m_mining_id.ToString()));
+    res.push_back(std::make_pair(_("Interest"), RoundToString(claim.m_block_subsidy, 8)));
 
-    if (bb.ResearchAverageMagnitude > 0)
+    if (claim.m_magnitude > 0)
     {
-        res.push_back(std::make_pair(_("Boinc Reward"), RoundToString(bb.ResearchSubsidy,8)));
-        res.push_back(std::make_pair(_("Magnitude"), RoundToString(bb.Magnitude,8)));
-        res.push_back(std::make_pair(_("Average Magnitude"), RoundToString(bb.ResearchAverageMagnitude, 8)));
-        res.push_back(std::make_pair(_("Research Age"), RoundToString(bb.ResearchAge, 8)));
+        res.push_back(std::make_pair(_("Boinc Reward"), RoundToString(claim.m_research_subsidy, 8)));
+        res.push_back(std::make_pair(_("Magnitude"), RoundToString(claim.m_magnitude, 8)));
     }
 
-    res.push_back(std::make_pair(_("Is Superblock"), (bb.superblock.length() >= 20 ? "Yes" : "No")));
+    res.push_back(std::make_pair(_("Is Superblock"), (claim.ContainsSuperblock() ? "Yes" : "No")));
 
     if(fDebug)
     {
-        if (bb.superblock.length() >= 20)
-            res.push_back(std::make_pair(_("Neural Contract Binary Size"), ToString(bb.superblock.length())));
+        if (claim.ContainsSuperblock())
+            res.push_back(std::make_pair(_("Neural Contract Binary Size"), ToString(GetSerializeSize(claim.m_superblock, 1, 1))));
 
-        res.push_back(std::make_pair(_("Neural Hash"), bb.NeuralHash));
-        res.push_back(std::make_pair(_("Current Neural Hash"), bb.CurrentNeuralHash));
-        res.push_back(std::make_pair(_("Client Version"), bb.clientversion));
-        res.push_back(std::make_pair(_("Organization"), bb.Organization));
-        res.push_back(std::make_pair(_("Boinc Public Key"), bb.BoincPublicKey));
+        res.push_back(std::make_pair(_("Neural Hash"), claim.m_quorum_hash.ToString()));
+        res.push_back(std::make_pair(_("Current Neural Hash"), claim.m_quorum_hash.ToString()));
+        res.push_back(std::make_pair(_("Client Version"), claim.m_client_version));
+        res.push_back(std::make_pair(_("Organization"), claim.m_organization));
     }
 
     return res;
@@ -256,39 +252,10 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                     if (pblockindex && pblockindex->nIsSuperBlock)
                     {
                         block.ReadFromDisk(pblockindex);
+                        const NN::Superblock& superblock = block.GetSuperblock();
 
-                        std::string sHashBoinc = block.vtx[0].hashBoinc;
-
-                        MiningCPID vbb = DeserializeBoincBlock(sHashBoinc, block.nVersion);
-
-                        std::string sUnpackedSuperblock = UnpackBinarySuperblock(vbb.superblock);
-                        std::string sMagnitudeContract = ExtractXML(sUnpackedSuperblock, "<MAGNITUDES>", "</MAGNITUDES>");
-
-                        // Since Superblockavg function gives avg for mags yes but total cpids we cannot use this function
-                        // We need the rows_above_zero for Total Network Magnitude calculation with Money Supply Factor.
-                        std::vector<std::string> vMagnitudeContract = split(sMagnitudeContract, ";");
-                        int nRowsWithMag = 0;
-                        double dTotalMag = 0;
-
-                        for (auto const& sMag : vMagnitudeContract)
-                        {
-                            const std::vector<std::string>& vFields = split(sMag, ",");
-
-                            if (vFields.size() < 2)
-                                continue;
-
-                            const std::string& sCPID = vFields[0];
-                            double dMAG = std::stoi(vFields[1].c_str());
-
-                            if (sCPID.length() > 10)
-                            {
-                                nRowsWithMag++;
-                                dTotalMag += dMAG;
-                            }
-                        }
-
-                        double dOutAverage = dTotalMag / ((double)nRowsWithMag + .01);
-                        double dTotalNetworkMagnitude = (double)nRowsWithMag * dOutAverage;
+                        double dOutAverage = superblock.m_cpids.AverageMagnitude();
+                        double dTotalNetworkMagnitude = (double)superblock.m_cpids.size() * dOutAverage;
                         double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
                         double dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
 

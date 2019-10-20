@@ -11,6 +11,8 @@
 #include "txdb.h"
 #include "beacon.h"
 #include "appcache.h"
+#include "neuralnet/claim.h"
+#include "neuralnet/superblock.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>
@@ -137,19 +139,19 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         transactioncount+=txcountinblock;
         emptyblockscount+=(txcountinblock==0);
         c_blockversion[block.nVersion]++;
-        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
-        c_cpid[bb.cpid]++;
-        c_org[bb.Organization]++;
-        c_version[bb.clientversion]++;
-        researchtotal+=bb.ResearchSubsidy;
-        interesttotal+=bb.InterestSubsidy;
-        researchcount+=(bb.ResearchSubsidy>0.001);
+        const NN::Claim claim = block.GetClaim();
+        c_cpid[claim.m_mining_id.ToString()]++;
+        c_org[claim.m_organization]++;
+        c_version[claim.m_client_version]++;
+        researchtotal += claim.m_research_subsidy;
+        interesttotal += claim.m_block_subsidy;
+        researchcount += (claim.m_research_subsidy > 0.001);
         minttotal+=cur->nMint;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk=std::min(size_min_blk,sizeblock);
         size_max_blk=std::max(size_max_blk,sizeblock);
         size_sum_blk+=sizeblock;
-        super_count += (bb.superblock.length()>20);
+        super_count += (claim.ContainsSuperblock());
     }
 
     {
@@ -324,20 +326,24 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if(!block.ReadFromDisk(pStart->nFile,pStart->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
-        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+        const NN::Claim claim = block.GetClaim();
+        const NN::Superblock& sb = claim.m_superblock;
+
         info.pushKV("block_hash",pStart->GetBlockHash().GetHex());
         info.pushKV("height",pStart->nHeight);
-        info.pushKV("neuralhash", bb.NeuralHash );
-        std::string superblock = UnpackBinarySuperblock(bb.superblock);
-        std::string neural_hash = GetQuorumHash(superblock);
-        info.pushKV("contract_size", (int64_t)superblock.size() );
-        info.pushKV("packed_size", (int64_t)bb.superblock.size() );
-        info.pushKV("contract_hash", neural_hash );
+        info.pushKV("neuralhash", claim.m_quorum_hash.ToString());
+
+        if (sb.m_version == 1) {
+            info.pushKV("packed_size", (int64_t)sb.PackLegacy().size());
+        } else {
+            info.pushKV("packed_size", (int64_t)GetSerializeSize(sb, 1, 1));
+        }
+
+        info.pushKV("contract_hash", NN::QuorumHash::Hash(sb).ToString());
         result1.pushKV("info", info );
     }
 
     UniValue votes(UniValue::VOBJ);
-    std::map<std::string,double> tally;
 
     long blockcount=0;
     long maxblocks= 200;
@@ -360,9 +366,9 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
             throw runtime_error("failed to read block");
         //assert(block.vtx.size() > 0);
-        MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+        const NN::Claim& claim = block.GetClaim();
 
-        if(bb.NeuralHash.empty())
+        if(!claim.m_quorum_hash.Valid())
             continue;
 
         uint64_t stakeout = 0;
@@ -379,30 +385,27 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         if (distance < 40) multiplier = 400;
         double weight = (1.0/distance)*multiplier;
 
-        /* Tally votes */
-        tally[bb.NeuralHash] += weight;
-
         if(mode==0)
         {
             std::string line
-            =     bb.NeuralHash
+            =     claim.m_quorum_hash.ToString()
             + "|"+RoundToString(weight/10.0,5)
-            + "|"+bb.Organization
-            + "|"+bb.clientversion
+            + "|"+claim.m_organization
+            + "|"+claim.m_client_version
             + "|"+RoundToString(diff,3)
             + "|"+RoundToString(delta,0)
-            + "|"+bb.cpid
+            + "|"+claim.m_mining_id.ToString()
             ;
             votes.pushKV(ToString(cur->nHeight), line );
         }
         else
         {
             UniValue result2(UniValue::VOBJ);
-            result2.pushKV("neuralhash", bb.NeuralHash );
+            result2.pushKV("neuralhash", claim.m_quorum_hash.ToString());
             result2.pushKV("weight", weight );
             result2.pushKV("cpid", cur->GetCPID() );
-            result2.pushKV("organization", bb.Organization );
-            result2.pushKV("cversion", bb.clientversion );
+            result2.pushKV("organization", claim.m_organization);
+            result2.pushKV("cversion", claim.m_client_version);
             if(mode>=2)
             {
                 result2.pushKV("difficulty", diff );
@@ -518,19 +521,18 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         min_size=std::min(min_size,i_size);
         max_size=std::max(max_size,i_size);
 
-        const MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
-        cnt_neuralvote += (bb.NeuralHash.size()>0);
-        if( bb.CurrentNeuralHash.size()>0
-            && bb.CurrentNeuralHash != "d41d8cd98f00b204e9800998ecf8427e"
-            && bb.CurrentNeuralHash != "TOTAL_VOTES" )
+        const NN::Claim& claim = block.GetClaim();
+        cnt_neuralvote += (claim.m_quorum_hash.Valid());
+        if (claim.m_quorum_hash.Valid()
+            && claim.m_quorum_hash != "d41d8cd98f00b204e9800998ecf8427e")
         {
             cnt_neuralcurr += 1;
         }
 
-        const double i_research = bb.ResearchSubsidy;
+        const double i_research = claim.m_research_subsidy;
         sum_research= sum_research + i_research;
         max_research=std::max(max_research,i_research);
-        const double i_interest = bb.InterestSubsidy;
+        const double i_interest = claim.m_block_subsidy;
         sum_interest= sum_interest + i_interest;
         max_interest=std::max(max_interest,i_interest);
 
@@ -698,28 +700,28 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(!block.ReadFromDisk(cur->nFile,cur->nBlockPos,true))
                 throw runtime_error("failed to read block");
             //assert(block.vtx.size() > 0);
-            MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc, block.nVersion);
+            const NN::Claim& claim = block.GetClaim();
 
             if(detail<100)
             {
                 if(detail>=20)
                 {
-                    line+="<|>"+bb.Organization
-                        + "<|>"+bb.clientversion
+                    line+="<|>"+claim.m_organization
+                        + "<|>"+claim.m_client_version
                         + "<|>"+ToString(block.vtx.size()-2);
                 }
                 if(detail==21)
                 {
-                    line+="<|>"+bb.cpid
-                        + "<|>"+(bb.NeuralHash.empty()? "--" : bb.NeuralHash);
+                    line+="<|>"+claim.m_mining_id.ToString()
+                        + "<|>"+(claim.m_quorum_hash.Valid() ? claim.m_quorum_hash.ToString() : "--");
                 }
             }
             else
             {
-                result2.pushKV("organization", bb.Organization );
-                result2.pushKV("cversion", bb.clientversion );
-                result2.pushKV("neuralhash", bb.NeuralHash );
-                result2.pushKV("superblocksize", bb.NeuralHash );
+                result2.pushKV("organization", claim.m_organization);
+                result2.pushKV("cversion", claim.m_client_version);
+                result2.pushKV("neuralhash", claim.m_quorum_hash.ToString());
+                result2.pushKV("superblocksize", claim.m_quorum_hash.ToString());
                 result2.pushKV("vtxsz", (int64_t)block.vtx.size() );
             }
         }

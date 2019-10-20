@@ -7,6 +7,7 @@
 
 #include "util.h"
 #include "net.h"
+#include "neuralnet/claim.h"
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
@@ -113,7 +114,9 @@ inline bool IsV10Enabled(int nHeight)
 inline bool IsV11Enabled(int nHeight)
 {
     // Returns false before planned intro of bv11.
-    return false;
+    return fTestNet
+            ? false
+            : false;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
@@ -147,7 +150,6 @@ extern std::map<std::string, StructCPID> mvDPORCopy;
 
 
 extern std::map<std::string, StructCPID> mvResearchAge;
-extern std::map<std::string, MiningCPID> mvBlockIndex;
 
 struct BlockHasher
 {
@@ -266,13 +268,11 @@ bool CheckProofOfResearch(
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
-int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, std::string operation, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
-	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast, std::string operation,
+	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
 	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
 
-MiningCPID DeserializeBoincBlock(std::string block, int BlockVersion);
-std::string SerializeBoincBlock(MiningCPID mcpid, int BlockVersion);
 bool OutOfSyncByAge();
 bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
@@ -290,7 +290,7 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
 void AddRARewardBlock(const CBlockIndex* pIndex);
-MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
+NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
@@ -1047,8 +1047,8 @@ public:
     // ppcoin: block signature - signed by one of the coin base txout[N]'s owner
     std::vector<unsigned char> vchBlockSig;
 
-
-
+    // Gridcoin Research Reward Context
+    NN::Claim m_claim;
 
     // memory only
     mutable std::vector<uint256> vMerkleTree;
@@ -1056,10 +1056,6 @@ public:
     // Denial-of-service detection:
     mutable int nDoS;
     bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
-
-	//Gridcoin - 7/27/2014
-	/////////////////////////////////////////
-
 
     CBlock()
     {
@@ -1078,9 +1074,26 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
 
+        // ConnectBlock depends on vtx following header to generate CDiskTxPos
         if (!(s.GetType() & (SER_GETHASH|SER_BLOCKHEADERONLY))) {
             READWRITE(vtx);
             READWRITE(vchBlockSig);
+
+            // Before block version 11, the Gridcoin reward claim context is
+            // stored in the first transaction of the block. Versions 11 and
+            // above place a claim in the block to facilitate the submission
+            // of superblocks with a greater quantity of participant data.
+            //
+            // Because version 11+ blocks store a claim directly in a member
+            // field, the claim must be included as input to a block hash to
+            // protect its integrity. Previous versions hashed a claim along
+            // with the transactions. Block versions 11 and above must store
+            // the hash of the claim within the hashBoinc field of the first
+            // transaction and validation shall check that the hash matches.
+            //
+            if (nVersion >= 11) {
+                READWRITE(m_claim);
+            }
         } else if (ser_action.ForRead()) {
             const_cast<CBlock*>(this)->vtx.clear();
             const_cast<CBlock*>(this)->vchBlockSig.clear();
@@ -1099,6 +1112,7 @@ public:
         vchBlockSig.clear();
 	    vMerkleTree.clear();
         nDoS = 0;
+        m_claim = NN::Claim();
     }
 
     bool IsNull() const
@@ -1117,6 +1131,38 @@ public:
     uint256 GetPoWHash() const
     {
         return scrypt_blockhash(CVOIDBEGIN(nVersion));
+    }
+
+    const NN::Claim& GetClaim() const
+    {
+        if (nVersion >= 11 || m_claim.m_mining_id.Valid() || vtx.empty()) {
+            return m_claim;
+        }
+
+        // Before block version 11, the Gridcoin reward claim context is
+        // stored in the first transaction of the block. We'll store the
+        // parsed representation here to speed up subsequent access:
+        //
+        REF(m_claim) = NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+
+        return m_claim;
+    }
+
+    NN::Claim PullClaim()
+    {
+        if (nVersion >= 11 || m_claim.m_mining_id.Valid() || vtx.empty()) {
+            return std::move(m_claim);
+        }
+
+        // Before block version 11, the Gridcoin reward claim context is
+        // stored in the first transaction of the block.
+        //
+        return NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+    }
+
+    const NN::Superblock& GetSuperblock() const
+    {
+        return GetClaim().m_superblock;
     }
 
     int64_t GetBlockTime() const

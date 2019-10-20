@@ -179,6 +179,7 @@ enum
     // modifiers
     SER_SKIPSIG         = (1 << 16),
     SER_BLOCKHEADERONLY = (1 << 17),
+    SER_SKIPSUPERBLOCK  = (1 << 18),
 };
 
 //! Convert the reference base type to X, without changing constness or reference type.
