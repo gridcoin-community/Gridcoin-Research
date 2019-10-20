@@ -24,7 +24,43 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
-void AddCPIDBlockHash(const std::string& cpid, const uint256& blockhash);
+
+namespace {
+//!
+//! \brief Set the correct CPID from the block claim when the block index
+//! contains a zero CPID.
+//!
+//! There were reports of 0000 cpid in index where INVESTOR should have been.
+//!
+//! \param pindex Index of the block to repair.
+//!
+void RepairZeroCpidIndex(CBlockIndex* const pindex)
+{
+    const NN::ClaimOption claim = GetClaimByIndex(pindex);
+
+    if (!claim) {
+        return;
+    }
+
+    const std::string mining_id = claim->m_mining_id.ToString();
+
+    if (mining_id != pindex->GetCPID())
+    {
+        if(fDebug)
+            LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                      pindex->GetCPID(), mining_id,
+                      pindex->GetBlockHash().GetHex(), pindex->nHeight );
+
+        /* Repair the cpid field */
+        pindex->SetCPID(mining_id);
+
+#if 0
+        if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+            error("LoadBlockIndex: writing CDiskBlockIndex failed");
+#endif
+    }
+}
+} // anonymous namespace
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -626,23 +662,7 @@ bool CTxDB::LoadBlockIndex()
 
         if( pindex->IsUserCPID() && pindex->cpid == uint128() )
         {
-            /* There were reports of 0000 cpid in index where INVESTOR should have been. Check */
-            auto bb = GetBoincBlockByIndex(pindex);
-            if( bb.cpid != pindex->GetCPID() )
-            {
-                if(fDebug)
-                    LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                              pindex->GetCPID(), bb.cpid,
-                              pindex->GetBlockHash().GetHex(), pindex->nHeight );
-
-                /* Repair the cpid field */
-                pindex->SetCPID(bb.cpid);
-
-#if 0
-                if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
-                    error("LoadBlockIndex: writing CDiskBlockIndex failed");
-#endif
-            }
+            RepairZeroCpidIndex(pindex);
         }
 
         AddRARewardBlock(pindex);

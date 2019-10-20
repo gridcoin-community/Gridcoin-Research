@@ -40,38 +40,11 @@ struct StructCPID
     std::set<const CBlockIndex*> rewardBlocks;
 };
 
-struct MiningCPID
-{
-    bool initialized;
-    double Magnitude;
-    double LastPaymentTime;
-    double ResearchSubsidy;
-    double ResearchAge;
-    double ResearchMagnitudeUnit;
-    double ResearchAverageMagnitude;
-    double InterestSubsidy;
-
-    std::string cpid;
-    std::string clientversion;
-    std::string GRCAddress;
-    std::string lastblockhash;
-    std::string Organization;
-    std::string NeuralHash;
-    std::string superblock;
-    std::string LastPORBlockHash;
-    std::string CurrentNeuralHash;
-    std::string BoincPublicKey;
-    std::string BoincSignature;
-};
-
 //Network Averages
 extern std::map<std::string, StructCPID> mvNetwork;
 extern std::map<std::string, StructCPID> mvNetworkCopy;
 extern std::map<std::string, StructCPID> mvMagnitudes;
 extern std::map<std::string, StructCPID> mvMagnitudesCopy;
-
-//Global CPU Mining CPID:
-extern MiningCPID GlobalCPUMiningCPID;
 
 // Timers
 extern std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded

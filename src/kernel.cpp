@@ -12,7 +12,6 @@
 using namespace std;
 
 StructCPID GetStructCPID();
-extern double GetLastPaymentTimeByCPID(std::string cpid);
 
 namespace {
 //!
@@ -260,39 +259,6 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     return true;
 }
 
-double GetLastPaymentTimeByCPID(std::string cpid)
-{
-    double lpt = 0;
-    if (mvMagnitudes.size() > 0)
-    {
-            StructCPID UntrustedHost = GetStructCPID();
-            UntrustedHost = mvMagnitudes[cpid]; //Contains Consensus Magnitude
-            if (UntrustedHost.initialized)
-            {
-                        double mag_accuracy = UntrustedHost.Accuracy;
-                        if (mag_accuracy > 0)
-                        {
-                                lpt = UntrustedHost.LastPaymentTime;
-                        }
-            }
-            else
-            {
-                if (IsResearcher(cpid))
-                {
-                        lpt = 0;
-                }
-            }
-    }
-    else
-    {
-        if (IsResearcher(cpid))
-        {
-                lpt=0;
-        }
-    }
-    return lpt;
-}
-
 // Get stake modifier checksum
 unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
 {
@@ -392,10 +358,11 @@ bool CalculateLegacyV3HashProof(
 // after the coins mature!
 
 CBigNum CalculateStakeHashV8(
-    const CBlock &CoinBlock, const CTransaction &CoinTx,
-    unsigned CoinTxN, unsigned nTimeTx,
-    uint64_t StakeModifier,
-    const MiningCPID &BoincData)
+    const CBlock &CoinBlock,
+    const CTransaction &CoinTx,
+    unsigned CoinTxN,
+    unsigned nTimeTx,
+    uint64_t StakeModifier)
 {
     CDataStream ss(SER_GETHASH, 0);
     ss << StakeModifier;
@@ -407,9 +374,7 @@ CBigNum CalculateStakeHashV8(
     return hashProofOfStake;
 }
 
-int64_t CalculateStakeWeightV8(
-    const CTransaction &CoinTx, unsigned CoinTxN,
-    const MiningCPID &BoincData)
+int64_t CalculateStakeWeightV8(const CTransaction &CoinTx, unsigned CoinTxN)
 {
     int64_t nValueIn = CoinTx.vout[CoinTxN].nValue;
     nValueIn /= 1250000;
@@ -489,16 +454,13 @@ bool CheckProofOfStakeV8(
     if (blockPrev.nTime + nStakeMinAge > tx.nTime) // Min age requirement
         return error("CheckProofOfStakeV8: min age violation");
 
-    MiningCPID boincblock = DeserializeBoincBlock(Block.vtx[0].hashBoinc,Block.nVersion);
-
-    //
     uint64_t StakeModifier = 0;
     if(!FindStakeModifierRev(StakeModifier,pindexPrev))
         return error("CheckProofOfStakeV8: unable to find stake modifier");
 
     //Stake refactoring TomasBrod
-    int64_t Weight= CalculateStakeWeightV8(txPrev,txin.prevout.n,boincblock);
-    CBigNum bnHashProof= CalculateStakeHashV8(blockPrev,txPrev,txin.prevout.n,tx.nTime,StakeModifier,boincblock);
+    int64_t Weight = CalculateStakeWeightV8(txPrev, txin.prevout.n);
+    CBigNum bnHashProof = CalculateStakeHashV8(blockPrev, txPrev, txin.prevout.n, tx.nTime, StakeModifier);
 
     // Base target
     CBigNum bnTarget;

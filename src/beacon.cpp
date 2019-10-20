@@ -108,6 +108,29 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
     return sBeaconPublicKey;
 }
 
+std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
+{
+    int64_t iMaxSeconds = 60 * 24 * 30 * 6 * 60;
+    std::set<std::string> result;
+
+    for(const auto& item : ReadCacheSection(Section::BEACONALT))
+    {
+        const std::string& key = item.first;
+        const std::string& value = item.second.value;
+        if(!std::equal(cpid.begin(), cpid.end(), key.begin()))
+            continue;
+
+        const int64_t iAge = pindexBest != NULL
+            ? pindexBest->nTime - item.second.timestamp
+            : 0;
+        if (iAge > iMaxSeconds)
+            continue;
+
+        result.emplace(value);
+    }
+    return result;
+}
+
 int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
 {
     if (!IsResearcher(cpid)) {

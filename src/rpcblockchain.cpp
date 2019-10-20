@@ -45,7 +45,6 @@ extern UniValue MagnitudeReport(std::string cpid);
 bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-MiningCPID GetBoincBlockByIndex(CBlockIndex* pblockindex);
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
 double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
@@ -82,7 +81,6 @@ double GetTotalBalance();
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 double LederstrumpfMagnitude2(double mag,int64_t locktime);
-bool IsCPIDValidv2(MiningCPID& mc, int height);
 
 BlockFinder RPCBlockFinder;
 
@@ -143,19 +141,75 @@ double GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
+namespace {
+UniValue ClaimToJson(const NN::Claim& claim)
+{
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)claim.m_version);
+    json.pushKV("mining_id", claim.m_mining_id.ToString());
+    json.pushKV("client_version", claim.m_client_version);
+    json.pushKV("organization", claim.m_organization);
+
+    json.pushKV("block_subsidy", claim.m_block_subsidy);
+
+    json.pushKV("research_subsidy", claim.m_research_subsidy);
+    json.pushKV("magnitude", claim.m_magnitude);
+    json.pushKV("magnitude_unit", claim.m_magnitude_unit);
+
+    json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
+
+    json.pushKV("quorum_hash", claim.m_quorum_hash.ToString());
+    json.pushKV("quorum_address", claim.m_quorum_address);
+
+    return json;
+}
+
+UniValue SuperblockToJson(const NN::Superblock& superblock)
+{
+    UniValue magnitudes(UniValue::VOBJ);
+
+    for (const auto& cpid_pair : superblock.m_cpids) {
+        magnitudes.pushKV(cpid_pair.first.ToString(), cpid_pair.second);
+    }
+
+    UniValue projects(UniValue::VOBJ);
+
+    for (const auto& project_pair : superblock.m_projects) {
+        UniValue project(UniValue::VOBJ);
+
+        project.pushKV("average_rac", project_pair.second.m_average_rac);
+        project.pushKV("rac", project_pair.second.m_rac);
+        project.pushKV("total_credit", project_pair.second.m_total_credit);
+
+        projects.pushKV(project_pair.first, project);
+    }
+
+    UniValue json(UniValue::VOBJ);
+
+    json.pushKV("version", (int)superblock.m_version);
+    json.pushKV("magnitudes", std::move(magnitudes));
+    json.pushKV("projects", std::move(projects));
+
+    return json;
+}
+} // anonymous namespace
+
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     UniValue result(UniValue::VOBJ);
+
     result.pushKV("hash", block.GetHash().GetHex());
+
     CMerkleTx txGen(block.vtx[0]);
     txGen.SetMerkleBranch(&block);
+
     result.pushKV("confirmations", txGen.GetDepthInMainChain());
     result.pushKV("size", (int)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION));
     result.pushKV("height", blockindex->nHeight);
     result.pushKV("version", block.nVersion);
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
-    double mint = CoinToDouble(blockindex->nMint);
-    result.pushKV("mint", mint);
+    result.pushKV("mint", CoinToDouble(blockindex->nMint));
     result.pushKV("MoneySupply", blockindex->nMoneySupply);
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
@@ -163,22 +217,30 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("blocktrust", leftTrim(blockindex->GetBlockTrust().GetHex(), '0'));
     result.pushKV("chaintrust", leftTrim(blockindex->nChainTrust.GetHex(), '0'));
+
     if (blockindex->pprev)
         result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
     if (blockindex->pnext)
         result.pushKV("nextblockhash", blockindex->pnext->GetBlockHash().GetHex());
-    MiningCPID bb = DeserializeBoincBlock(block.vtx[0].hashBoinc,block.nVersion);    
-    bool IsPoR = false;
-    IsPoR = (bb.Magnitude > 0 && IsResearcher(bb.cpid) && blockindex->IsProofOfStake());
+
+    const NN::Claim& claim = block.GetClaim();
+
     std::string PoRNarr = "";
-    if (IsPoR) PoRNarr = "proof-of-research";
-    result.pushKV("flags",
-        strprintf("%s%s", blockindex->IsProofOfStake()? "proof-of-stake" : "proof-of-work", blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr);
+    if (blockindex->IsProofOfStake() && claim.HasResearchReward()) {
+        PoRNarr = "proof-of-research";
+    }
+
+    result.pushKV("flags", strprintf("%s%s",
+        blockindex->IsProofOfStake() ? "proof-of-stake" : "proof-of-work",
+        blockindex->GeneratedStakeModifier()? " stake-modifier": "") + " " + PoRNarr);
+
     result.pushKV("proofhash", blockindex->hashProof.GetHex());
     result.pushKV("entropybit", (int)blockindex->GetStakeEntropyBit());
     result.pushKV("modifier", strprintf("%016" PRIx64, blockindex->nStakeModifier));
     result.pushKV("modifierchecksum", strprintf("%08x", blockindex->nStakeModifierChecksum));
+
     UniValue txinfo(UniValue::VARR);
+
     for (auto const& tx : block.vtx)
     {
         if (fPrintTransactionDetail)
@@ -195,51 +257,21 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     }
 
     result.pushKV("tx", txinfo);
+
     if (block.IsProofOfStake())
         result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
-    result.pushKV("CPID", bb.cpid);
 
-    result.pushKV("Magnitude", bb.Magnitude);
+    result.pushKV("claim", ClaimToJson(block.GetClaim()));
+
     if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
-    result.pushKV("LastPaymentTime",TimestampToHRDate(bb.LastPaymentTime));
 
-    result.pushKV("ResearchSubsidy",bb.ResearchSubsidy);
-    result.pushKV("ResearchAge",bb.ResearchAge);
-    result.pushKV("ResearchMagnitudeUnit",bb.ResearchMagnitudeUnit);
-    result.pushKV("ResearchAverageMagnitude",bb.ResearchAverageMagnitude);
-    result.pushKV("LastPORBlockHash",bb.LastPORBlockHash);
-    result.pushKV("Interest",bb.InterestSubsidy);
-    result.pushKV("GRCAddress",bb.GRCAddress);
-    if (!bb.BoincPublicKey.empty())
-    {
-        result.pushKV("BoincPublicKey",bb.BoincPublicKey);
-        result.pushKV("BoincSignature",bb.BoincSignature);
-        bool fValidSig = VerifyCPIDSignature(bb.cpid, bb.lastblockhash, bb.BoincSignature);
-        result.pushKV("SignatureValid",fValidSig);
+    if (fPrintTransactionDetail && blockindex->nIsSuperBlock == 1) {
+        result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
     }
-    result.pushKV("ClientVersion",bb.clientversion);
 
-    bool IsCPIDValid2 = IsCPIDValidv2(bb,blockindex->nHeight);
-    result.pushKV("CPIDValid",IsCPIDValid2);
-
-    result.pushKV("NeuralHash",bb.NeuralHash);
-    if (bb.superblock.length() > 20)
-    {
-        //12-20-2015 Support for Binary Superblocks
-        std::string superblock=UnpackBinarySuperblock(bb.superblock);
-        std::string neural_hash = GetQuorumHash(superblock);
-        result.pushKV("SuperblockHash", neural_hash);
-        result.pushKV("SuperblockUnpackedLength", (int)superblock.length());
-        result.pushKV("SuperblockLength", (int)bb.superblock.length());
-        bool bIsBinary = Contains(bb.superblock,"<BINARY>");
-        result.pushKV("IsBinary",bIsBinary);
-        if(fPrintTransactionDetail)
-        {
-            result.pushKV("SuperblockContents", superblock);
-        }
-    }
     result.pushKV("IsSuperBlock", (int)blockindex->nIsSuperBlock);
     result.pushKV("IsContract", (int)blockindex->nIsContract);
+
     return result;
 }
 
@@ -643,14 +675,16 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
     sOutPrivKey = "BUG! deprecated field used";
     LOCK(cs_main);
     {
-        if (!IsResearcher(GlobalCPUMiningCPID.cpid))
+        const std::string primary_cpid = NN::GetPrimaryCpid();
+
+        if (!IsResearcher(primary_cpid))
         {
             sError = "INVESTORS_CANNOT_SEND_BEACONS";
             return false;
         }
 
         //If beacon is already in the chain, exit early
-        if (!GetBeaconPublicKey(GlobalCPUMiningCPID.cpid,true).empty())
+        if (!GetBeaconPublicKey(primary_cpid, true).empty())
         {
             // Ensure they can re-send the beacon if > 5 months old : GetBeaconPublicKey returns an empty string when > 5 months: OK.
             // Note that we allow the client to re-advertise the beacon in 5 months, so that they have a seamless and uninterrupted keypair in use (prevents a hacker from hijacking a keypair that is in use)
@@ -676,7 +710,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         }
 
         CKey keyBeacon;
-        if(!GenerateBeaconKeys(GlobalCPUMiningCPID.cpid, keyBeacon))
+        if(!GenerateBeaconKeys(primary_cpid, keyBeacon))
         {
             sError = "GEN_KEY_FAIL";
             return false;
@@ -688,11 +722,11 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
         std::string GRCAddress = DefaultWalletAddress();
         // Public Signing Key is stored in Beacon
         std::string contract = "UNUSED;" + hashRand.GetHex() + ";" + GRCAddress + ";" + sOutPubKey;
-        LogPrintf("Creating beacon for cpid %s, %s",GlobalCPUMiningCPID.cpid, contract);
+        LogPrintf("Creating beacon for cpid %s, %s",primary_cpid, contract);
         std::string sBase = EncodeBase64(contract);
         std::string sAction = "add";
         std::string sType = "beacon";
-        std::string sName = GlobalCPUMiningCPID.cpid;
+        std::string sName = primary_cpid;
         try
         {
             // Backup config with old keys like a normal backup
@@ -941,7 +975,8 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
      * nothing to import. This saves a migrating users from copy-pasting
      * the key string to importprivkey command.
      */
-    bool importResult= ImportBeaconKeysFromConfig(GlobalCPUMiningCPID.cpid, pwalletMain);
+    const std::string primary_cpid = NN::GetPrimaryCpid();
+    bool importResult= ImportBeaconKeysFromConfig(primary_cpid, pwalletMain);
     res.pushKV("ConfigKeyImported", importResult);
 
     std::string sOutPubKey = "";
@@ -951,7 +986,7 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
     bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
 
     res.pushKV("Result", fResult ? "SUCCESS" : "FAIL");
-    res.pushKV("CPID",GlobalCPUMiningCPID.cpid.c_str());
+    res.pushKV("CPID",primary_cpid.c_str());
     res.pushKV("Message",sMessage.c_str());
 
     if (!sError.empty())
@@ -1130,7 +1165,8 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
     // First try local node before bothering network...
 
-    std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(GlobalCPUMiningCPID.cpid);
+    const std::string primary_cpid = NN::GetPrimaryCpid();
+    std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(primary_cpid);
 
     if (sNeuralResponse.length() < 25)
     {
@@ -1143,7 +1179,7 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
                 msNeuralResponse = "";
 
-                AsyncNeuralRequest("explainmag", GlobalCPUMiningCPID.cpid, 10);
+                AsyncNeuralRequest("explainmag", primary_cpid, 10);
             }
         }
 
@@ -1334,8 +1370,8 @@ UniValue staketime(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    std::string cpid = GlobalCPUMiningCPID.cpid;
-    std::string GRCAddress = DefaultWalletAddress();
+    const std::string cpid = NN::GetPrimaryCpid();
+    const std::string GRCAddress = DefaultWalletAddress();
     GetEarliestStakeTime(GRCAddress, cpid);
 
     res.pushKV("GRCTime", ReadCache(Section::GLOBAL, "nGRCTime").timestamp);
@@ -2315,28 +2351,25 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         if (!pblockindex->IsInMainChain()) continue;
         if (IsSuperBlock(pblockindex))
         {
-            MiningCPID bb = GetBoincBlockByIndex(pblockindex);
-            if (bb.superblock.length() > 20)
+            const NN::ClaimOption claim = GetClaimByIndex(pblockindex);
+
+            if (claim && claim->ContainsSuperblock())
             {
-                double out_beacon_count = 0;
-                double out_participant_count = 0;
-                double out_avg = 0;
-                // Binary Support 12-20-2015
-                std::string superblock = UnpackBinarySuperblock(bb.superblock);
-                GetSuperblockAvgMag(superblock,out_beacon_count,out_participant_count,out_avg,true,pblockindex->nHeight);
+                const NN::Superblock& superblock = claim->m_superblock;
 
                 UniValue c(UniValue::VOBJ);
                 c.pushKV("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex());
                 c.pushKV("Date",TimestampToHRDate(pblockindex->nTime));
-                c.pushKV("Average Mag",out_avg);
-                c.pushKV("Wallet Version",bb.clientversion);
-                double mag = GetSuperblockMagnitudeByCPID(superblock, cpid);
-                if (!cpid.empty())
+                c.pushKV("Average Mag", superblock.m_cpids.AverageMagnitude());
+                c.pushKV("Wallet Version", claim->m_client_version);
+
+                if (const NN::CpidOption cpid_parsed = NN::MiningId::Parse(cpid).TryCpid())
                 {
-                    c.pushKV("Magnitude",mag);
+                    c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed));
                 }
+
                 if (displaycontract)
-                    c.pushKV("Contract Contents: ", superblock);
+                    c.pushKV("Contract Contents", SuperblockToJson(superblock));
 
                 results.push_back(c);
             }
@@ -2386,7 +2419,7 @@ UniValue MagnitudeReport(std::string cpid)
                             int64_t nTime = GetAdjustedTime();
                             double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
                             double dAccrualAge, AvgMagnitude;
-                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, "", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
                             entry.pushKV("Owed", nBoinc / (double)COIN);
                         }
                         entry.pushKV("Daily Paid",structMag.payments/14);

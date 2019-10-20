@@ -40,6 +40,7 @@ GRIDCOIN_TESTS =\
   test/mruset_tests.cpp \
   test/multisig_tests.cpp \
   test/netbase_tests.cpp \
+  test/neuralnet/claim_tests.cpp \
   test/neuralnet/cpid_tests.cpp \
   test/neuralnet/project_tests.cpp \
   test/neuralnet/researcher_tests.cpp \

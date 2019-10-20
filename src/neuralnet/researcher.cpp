@@ -17,7 +17,6 @@ using namespace NN;
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 // Used to build the legacy global mining context after reloading projects:
-MiningCPID GetMiningCPID();
 extern std::string msMiningErrors;
 
 namespace {
@@ -284,28 +283,14 @@ void DetectSplitCpid(const MiningProjectMap& projects)
 }
 
 //!
-//! \brief Set up the legacy global mining context variables after reloading
-//! researcher context.
+//! \brief Set the global BOINC researcher context.
 //!
-//! \param researcher Contains the context to export.
+//! \param context Contains the CPID and local projects loaded from BOINC.
 //!
-void SetLegacyResearcherContext(const Researcher& researcher)
+void StoreResearcher(Researcher context)
 {
-    MiningCPID mc = GetMiningCPID();
-
-    mc.initialized = true;
-    mc.cpid = researcher.Id().ToString();
-    mc.Magnitude = 0;
-    mc.clientversion = "";
-    mc.LastPaymentTime = 0;
-    mc.lastblockhash = "0";
-    // Reuse for debugging
-    mc.Organization = GetArg("-org", "");
-
-    GlobalCPUMiningCPID = std::move(mc);
-
     // TODO: this belongs in presentation layer code:
-    switch (researcher.Status()) {
+    switch (context.Status()) {
         case ResearcherStatus::ACTIVE:
             msMiningErrors = _("Eligible for Research Rewards");
             break;
@@ -316,16 +301,6 @@ void SetLegacyResearcherContext(const Researcher& researcher)
             msMiningErrors = _("Staking Only - Investor Mode");
             break;
     }
-}
-
-//!
-//! \brief Set the global BOINC researcher context.
-//!
-//! \param context Contains the CPID and local projects loaded from BOINC.
-//!
-void StoreResearcher(Researcher context)
-{
-    SetLegacyResearcherContext(context);
 
     std::atomic_store(
         &researcher,

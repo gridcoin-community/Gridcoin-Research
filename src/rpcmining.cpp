@@ -127,7 +127,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         {
             double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
             double dAccrualAge,AvgMagnitude;
-            int64_t nBoinc = ComputeResearchAccrual(nTime, primary_cpid, "getmininginfo", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+            int64_t nBoinc = ComputeResearchAccrual(nTime, primary_cpid, pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
             obj.pushKV("Magnitude Unit",dMagnitudeUnit);
             obj.pushKV("BoincRewardPending",nBoinc/(double)COIN);
         }
