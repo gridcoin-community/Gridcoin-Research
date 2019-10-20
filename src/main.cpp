@@ -594,7 +594,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
-        GlobalStatusStruct.cpid = NN::Researcher::Get()->Id().ToString();
+        GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
         try
         {
             GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
