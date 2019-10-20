@@ -2419,7 +2419,7 @@ UniValue MagnitudeReport(std::string cpid)
                             int64_t nTime = GetAdjustedTime();
                             double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
                             double dAccrualAge, AvgMagnitude;
-                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, "", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
                             entry.pushKV("Owed", nBoinc / (double)COIN);
                         }
                         entry.pushKV("Daily Paid",structMag.payments/14);
