@@ -177,7 +177,6 @@ bool bForceUpdate = false;
 bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
-extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern void GetGlobalStatus();
 bool PollIsActive(const std::string& poll_contract);
 
@@ -6269,25 +6268,6 @@ bool ProcessMessages(CNode* pfrom)
         pfrom->vRecvMsg.erase(pfrom->vRecvMsg.begin(), it);
 
     return fOk;
-}
-
-double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
-{
-    //2-1-2015 - Halford - The MagCap is 2000
-    double MagCap = 2000;
-    double out_mag = Magnitude;
-    if (Magnitude >= MagCap*.90 && Magnitude <= MagCap*1.0) out_mag = MagCap*.90;
-    if (Magnitude >= MagCap*1.0 && Magnitude <= MagCap*1.1) out_mag = MagCap*.91;
-    if (Magnitude >= MagCap*1.1 && Magnitude <= MagCap*1.2) out_mag = MagCap*.92;
-    if (Magnitude >= MagCap*1.2 && Magnitude <= MagCap*1.3) out_mag = MagCap*.93;
-    if (Magnitude >= MagCap*1.3 && Magnitude <= MagCap*1.4) out_mag = MagCap*.94;
-    if (Magnitude >= MagCap*1.4 && Magnitude <= MagCap*1.5) out_mag = MagCap*.95;
-    if (Magnitude >= MagCap*1.5 && Magnitude <= MagCap*1.6) out_mag = MagCap*.96;
-    if (Magnitude >= MagCap*1.6 && Magnitude <= MagCap*1.7) out_mag = MagCap*.97;
-    if (Magnitude >= MagCap*1.7 && Magnitude <= MagCap*1.8) out_mag = MagCap*.98;
-    if (Magnitude >= MagCap*1.8 && Magnitude <= MagCap*1.9) out_mag = MagCap*.99;
-    if (Magnitude >= MagCap*1.9)                            out_mag = MagCap*1.0;
-    return out_mag;
 }
 
 std::string GetLastPORBlockHash(std::string cpid)

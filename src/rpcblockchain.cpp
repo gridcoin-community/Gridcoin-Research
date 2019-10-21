@@ -79,7 +79,6 @@ double GetTotalBalance();
 
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 BlockFinder RPCBlockFinder;
 
