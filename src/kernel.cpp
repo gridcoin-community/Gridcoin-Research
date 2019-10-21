@@ -206,7 +206,36 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
         pindex = pindex->pprev;
     }
     int nHeightFirstCandidate = pindex ? (pindex->nHeight + 1) : 0;
-    std::sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end());
+
+    // Shuffle before sort
+    for(int i = vSortedByTimestamp.size() - 1; i > 1; --i)
+    std::swap(vSortedByTimestamp[i], vSortedByTimestamp[GetRand(i)]);
+
+    // Upgrading to Bitcoin's latest uint256 type changes the backing storage
+    // from an array of 32-bit integers to a byte array. Since the comparison
+    // operator implementations changed as well, the less-than comparison for
+    // sorting the vector of candidates can produce different block orderings
+    // for the historical stake modifier than the original order from before.
+    //
+    // To ensure that we reproduce the same stake modifier values out of this
+    // candidate set, we adopt Peercoin's strategy for sorting the collection
+    // that behaves like the old uint256 implementation:
+    //
+    sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end(), [] (const pair<int64_t, uint256> &a, const pair<int64_t, uint256> &b)
+    {
+        if (a.first != b.first)
+            return a.first < b.first;
+        // Timestamp equals - compare block hashes
+        const uint32_t *pa = a.second.GetDataPtr();
+        const uint32_t *pb = b.second.GetDataPtr();
+        int cnt = 256 / 32;
+        do {
+            --cnt;
+            if (pa[cnt] != pb[cnt])
+                return pa[cnt] < pb[cnt];
+        } while(cnt);
+            return false; // Elements are equal
+    });
 
     // Select 64 blocks from candidate blocks to generate stake modifier
     uint64_t nStakeModifierNew = 0;

@@ -51,6 +51,11 @@ public:
     void SetHex(const std::string& str);
     std::string ToString() const;
 
+    const uint32_t *GetDataPtr() const
+    {
+        return (const uint32_t *)data;
+    }
+
     unsigned char* begin()
     {
         return &data[0];
