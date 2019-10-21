@@ -2800,34 +2800,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     }
                 }
         }
-
-        if(nVersion<9)
-        {
-            //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
-            // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
-            if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && pindex->nHeight > nGrandfather)
-            {
-                if (claim.ContainsSuperblock())
-                {
-                    std::string superblock = UnpackBinarySuperblock(claim.m_superblock.PackLegacy());
-                    if (VerifySuperblock(superblock, pindex))
-                    {
-                        LoadSuperblock(superblock,pindex->nTime,pindex->nHeight);
-                        if (fDebug)
-                            LogPrintf("ConnectBlock(): Superblock Loaded %d", pindex->nHeight);
-
-                        TallyResearchAverages(pindexBest);
-                    }
-                    else
-                    {
-                        if (fDebug3) LogPrintf("ConnectBlock(): Superblock Not Loaded %d", pindex->nHeight);
-                    }
-                }
-            }
-            /*
-                -- Normal Superblocks are loaded during Tally
-            */
-        }
     }
 
     //  End of Network Consensus
