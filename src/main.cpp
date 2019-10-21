@@ -2816,14 +2816,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         LoadAdminMessages(false,errors1);
     }
 
-    // Slow down Retallying when in RA mode so we minimize disruption of the network
-    // TODO: Remove this if we can sync to v9 without it.
-    if ( (pindex->nHeight % 60 == 0) && BlockNeedsChecked(pindex->nTime))
-    {
-        if(!IsV9Enabled_Tally(pindexBest->nHeight))
-            TallyResearchAverages(pindexBest);
-    }
-
     if (!OutOfSyncByAge())
     {
         fColdBoot = false;
