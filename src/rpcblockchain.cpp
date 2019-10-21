@@ -2385,7 +2385,6 @@ UniValue MagnitudeReport(std::string cpid)
     std::string Narr = ToString(GetAdjustedTime());
     c.pushKV("RSA Report",Narr);
     results.push_back(c);
-    double total_owed = 0;
     double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
     if (!pindexBest) return results;
 
