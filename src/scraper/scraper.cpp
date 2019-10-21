@@ -131,7 +131,7 @@ bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats);
 bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
 bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key);
 mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
-mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
+mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 unsigned int ScraperDeleteUnauthorizedCScraperManifests();
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& projectWhitelist,
@@ -815,7 +815,7 @@ void Scraper(bool bSingleShot)
 
                     // The only things we do here while quiescent
                     ScraperDirectoryAndConfigSanity();
-                    ScraperDeleteCScraperManifests();
+                    ScraperCullAndBinCScraperManifests();
 
                     // End LOCK(cs_Scraper)
                     if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
@@ -3758,7 +3758,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
     // Call ScraperDeleteCScraperManifests() to ensure we have culled old manifests. This will
     // return a map of manifests binned by Scraper after the culling.
-    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperCullAndBinCScraperManifests();
     
     // Do a map for unique manifest times ordered by descending time then content hash.
     std::multimap<int64_t, uint256, greater<int64_t>> mManifestsBinnedByTime;
@@ -4337,7 +4337,7 @@ mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper()
 }
 
 
-mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
+mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
 {
     // Apply the SCRAPER_CMANIFEST_RETAIN_NONCURRENT bool and if false delete any existing
     // CScraperManifests other than the current one for each scraper.
@@ -4348,9 +4348,12 @@ mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests()
     if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     // First check for unauthorized manifests just in case a scraper has been deauthorized.
-    unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
-    if (nDeleted)
-        _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
+    // This is only done if in sync.
+    if (!fOutOfSyncByAge)
+    {
+        unsigned int nDeleted = ScraperDeleteUnauthorizedCScraperManifests();
+        if (nDeleted) _log(logattribute::WARNING, "ScraperDeleteCScraperManifests", "Deleted " + std::to_string(nDeleted) + " unauthorized manifests.");
+    }
 
     // Bin by scraper and order by manifest time within scraper bin.
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
@@ -5047,7 +5050,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
     // Now for the hard stuff... the manifest level uncached case... borrowed from the ScraperConstructConvergedManifest function...
 
     // Call ScraperDeleteCScraperManifests(). This will return a map of manifests binned by Scraper after the culling.
-    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperDeleteCScraperManifests();
+    mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperCullAndBinCScraperManifests();
 
     // Do a map for unique manifest times by content hash, then scraperID and manifest (not content) hash.
     std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;

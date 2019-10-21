@@ -18,7 +18,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos);
 ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
-mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
+mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 
 extern CCriticalSection cs_ConvergedScraperStatsCache;
@@ -944,7 +944,7 @@ private: // SuperblockValidator methods
     //!
     bool TryByManifest() const
     {
-        const mmCSManifestsBinnedByScraper manifests_by_scraper = ScraperDeleteCScraperManifests();
+        const mmCSManifestsBinnedByScraper manifests_by_scraper = ScraperCullAndBinCScraperManifests();
         const size_t supermajority = NumScrapersForSupermajority(manifests_by_scraper.size());
 
         std::map<uint256, size_t> content_hash_tally;
@@ -1062,7 +1062,7 @@ private: // SuperblockValidator methods
             return false;
         }
 
-        ProjectResolver resolver(std::move(candidates), ScraperDeleteCScraperManifests());
+        ProjectResolver resolver(std::move(candidates), ScraperCullAndBinCScraperManifests());
         ProjectCombiner combiner = resolver.ResolveProjectParts();
 
         if (fDebug) {
