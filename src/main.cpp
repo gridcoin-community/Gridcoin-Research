@@ -74,8 +74,6 @@ extern void IncrementNeuralNetworkSupermajority(const NN::QuorumHash& NeuralHash
 
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
-extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-
 bool TallyMagnitudesInSuperblock();
 std::string GetCommandNonce(std::string command);
 
@@ -4430,45 +4428,6 @@ std::string RetrieveMd5(std::string s1)
     {
         LogPrintf("MD5 INVALID!");
         return "";
-    }
-}
-
-double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime,
-    double& total_owed, double block_magnitude)
-{
-    // Gridcoin Payment Magnitude Unit in RSA Owed calculation ensures rewards are capped at MaxBlockSubsidy*BLOCKS_PER_DAY
-    // Payment date range is stored in HighLockTime-LowLockTime
-    // If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
-    // (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
-    try
-    {
-        double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/38400;
-        if (payment_timespan < 2) payment_timespan =  2;
-        if (payment_timespan > 10) payment_timespan = 14;
-        mag.PaymentTimespan = Round(payment_timespan,0);
-        double research_magnitude = 0;
-        // Get neural network magnitude:
-        StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
-        research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
-        double owed_standard = payment_timespan * std::min(research_magnitude*GetMagnitudeMultiplier(locktime),
-            GetMaximumBoincSubsidy(locktime)*5.0);
-        double owed_network_cap = payment_timespan * GRCMagnitudeUnit(locktime) * research_magnitude;
-        double owed = std::min(owed_standard, owed_network_cap);
-        double paid = mag.payments;
-        double outstanding = std::min(owed-paid, GetMaximumBoincSubsidy(locktime) * 5.0);
-        total_owed = owed;
-        //if (outstanding < 0) outstanding=0;
-        return outstanding;
-    }
-    catch (std::exception &e)
-    {
-            LogPrintf("Error while Getting outstanding amount owed.");
-            return 0;
-    }
-    catch(...)
-    {
-            LogPrintf("Error while Getting outstanding amount owed.");
-            return 0;
     }
 }
 

@@ -47,7 +47,6 @@ extern std::string ExtractValue(std::string data, std::string delimiter, int pos
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
-double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
