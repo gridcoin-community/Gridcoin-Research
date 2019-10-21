@@ -261,9 +261,9 @@ ConvergedScraperStats GetTestConvergence(const bool by_parts = false)
 
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
-        = uint256("1111111111111111111111111111111111111111111111111111111111111111");
+        = uint256S("1111111111111111111111111111111111111111111111111111111111111111");
     convergence.Convergence.nUnderlyingManifestContentHash
-        = uint256("2222222222222222222222222222222222222222222222222222222222222222");
+        = uint256S("2222222222222222222222222222222222222222222222222222222222222222");
 
     // Add some project parts with the same names as the projects in the stats.
     // The part data doesn't matter, so we just add empty containers.
@@ -1787,7 +1787,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_hash)
 
 BOOST_AUTO_TEST_CASE(it_initializes_with_a_sha256_hash)
 {
-    NN::QuorumHash hash(uint256(0));
+    NN::QuorumHash hash(uint256{});
 
     BOOST_CHECK(hash.Valid() == true);
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
@@ -2032,7 +2032,7 @@ BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
     uint256 expected = Hash(input.begin(), input.end());
 
     BOOST_CHECK(hash == expected);
-    BOOST_CHECK(hash != uint256(0));
+    BOOST_CHECK(hash != uint256());
     BOOST_CHECK(NN::QuorumHash() != expected);
 }
 
@@ -2065,7 +2065,7 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
 
     BOOST_CHECK(hash.ToString() == "");
 
-    hash = NN::QuorumHash(uint256(0));
+    hash = NN::QuorumHash(uint256());
 
     BOOST_CHECK(hash.ToString()
         == "0000000000000000000000000000000000000000000000000000000000000000");

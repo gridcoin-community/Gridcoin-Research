@@ -738,7 +738,7 @@ void Scraper(bool bSingleShot)
     else
         _log(logattribute::INFO, "Scraper", "Running in single shot mode.");
 
-    uint256 nmScraperFileManifestHash = 0;
+    uint256 nmScraperFileManifestHash;
 
     // The scraper thread loop...
     while (!fShutdown)
@@ -2042,7 +2042,7 @@ uint256 GetFileHash(const fs::path& inputfile)
     // open input file, and associate with CAutoFile
     FILE *file = fsbridge::fopen(inputfile.string().c_str(), "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
-    uint256 nHash = 0;
+    uint256 nHash;
     
     if (filein.IsNull())
         return nHash;
@@ -4014,9 +4014,9 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
     bool bConvergenceSuccessful = false;
 
     CDataStream ss(SER_NETWORK,1);
-    uint256 nConvergedConsensusBlock = 0;
+    uint256 nConvergedConsensusBlock;
     int64_t nConvergedConsensusTime = 0;
-    uint256 nManifestHashForConvergedBeaconList = 0;
+    uint256 nManifestHashForConvergedBeaconList;
 
     // We are going to do this for each project in the whitelist.
     unsigned int iCountSuccessfulConvergedProjects = 0;
@@ -4058,7 +4058,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                     // because there can only be one part in a manifest corresponding to a given project.
                     int nPart = -1;
                     int64_t nProjectObjectTime = 0;
-                    uint256 nProjectObjectHash = 0;
+                    uint256 nProjectObjectHash;
                     for (const auto& vectoriter : manifest.projects)
                     {
                         if (vectoriter.project == iWhitelistProject.m_name)
@@ -5107,7 +5107,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         for (const auto& iter : mManifestsBinnedbyContent)
         {
-            uint32_t nReducedManifestContentHash = iter.first.Get64() >> (32 + nAdditionalBitShift);
+            uint32_t nReducedManifestContentHash = iter.first.GetUint64() >> (32 + nAdditionalBitShift);
 
             if (fDebug10) _log(logattribute::INFO, "ValidateSuperblock", "nReducedManifestContentHash = " + std::to_string(nReducedManifestContentHash));
 
@@ -5153,7 +5153,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "superblock.m_version = " + std::to_string(superblock.m_version));
 
                 // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
-                superblock.m_convergence_hint = CandidateManifest.nContentHash.Get64() >> 32;
+                superblock.m_convergence_hint = CandidateManifest.nContentHash.GetUint64() >> 32;
 
                 NN::QuorumHash nCandidateSuperblockHash = superblock.GetHash();
 
@@ -5174,10 +5174,9 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
         struct ReferencedConvergenceInfo
         {
-            uint256 nConvergedConsensusBlock = 0;
+            uint256 nConvergedConsensusBlock;
             int64_t nConvergedConsensusTime = 0;
-            uint256 nManifestHashForConvergedBeaconList = 0;
-
+            uint256 nManifestHashForConvergedBeaconList;
         };
 
         // ------- project - proj obj content hash - ReferencedConvergenceInfo
@@ -5197,7 +5196,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             std::multimap<uint256, std::tuple<ScraperID, std::string, ReferencedConvergenceInfo>> mProjectObjectsBinnedbyContent;
 
             int64_t nConvergedConsensusTime = 0;
-            uint256 nContentHashPrev = 0;
+            uint256 nContentHashPrev;
 
             // We initialize this for each project in the whitelist.
             bool fAtLeastOnePartInsertedForProject = false;
@@ -5225,7 +5224,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                         // Once we find a part that corresponds to the selected project in the given manifest, then break,
                         // because there can only be one part in a manifest corresponding to a given project.
                         int nPart = -1;
-                        uint256 nProjectObjectHash = 0;
+                        uint256 nProjectObjectHash;
                         for (const auto& vectoriter : manifest.projects)
                         {
                             if (vectoriter.project == iWhitelistProject.m_name)
@@ -5279,8 +5278,8 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
             for (const auto& iter : mProjectObjectsBinnedbyContent)
             {
-                uint32_t nReducedProjectObjectContentHash_prebitshift = iter.first.Get64() >> 32;
-                uint32_t nReducedProjectObjectContentHash = iter.first.Get64() >> (32 + nAdditionalBitShift);
+                uint32_t nReducedProjectObjectContentHash_prebitshift = iter.first.GetUint64() >> 32;
+                uint32_t nReducedProjectObjectContentHash = iter.first.GetUint64() >> (32 + nAdditionalBitShift);
 
                 unsigned int nIdenticalContentManifestCount = mProjectObjectsBinnedbyContent.count(iter.first);
 
@@ -5530,7 +5529,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
 
             // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
-            superblock.m_convergence_hint = StructDummyConvergedManifest.nContentHash.Get64() >> 32;
+            superblock.m_convergence_hint = StructDummyConvergedManifest.nContentHash.GetUint64() >> 32;
 
             if (StructDummyConvergedManifest.bByParts)
             {
@@ -5594,7 +5593,7 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
                 "Send a CScraperManifest object with the ScraperFileManifest.\n"
                 );
 
-    bool ret = ScraperSaveCScraperManifestToFiles(uint256(params[0].get_str()));
+    bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
     return UniValue(ret);
 }
@@ -5611,7 +5610,7 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
     LOCK(CScraperManifest::cs_mapManifest);
     if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
-    bool ret = CScraperManifest::DeleteManifest(uint256(params[0].get_str()), true);
+    bool ret = CScraperManifest::DeleteManifest(uint256S(params[0].get_str()), true);
 
     if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
@@ -5884,7 +5883,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         NN::Superblock RandomPastSB = NN::Superblock::FromStats(RandomPastSBStats);
 
         // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
-        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.Get64() >> 32;
+        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64() >> 32;
         RandomPastSB.m_timestamp = RandomPastConvergedManifest.timestamp;
 
         if (RandomPastConvergedManifest.bByParts)
@@ -5904,7 +5903,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         }
         else
         {
-            RandomPastSB.m_manifest_content_hint = RandomPastConvergedManifest.nUnderlyingManifestContentHash.Get64() >> 32;
+            RandomPastSB.m_manifest_content_hint = RandomPastConvergedManifest.nUnderlyingManifestContentHash.GetUint64() >> 32;
         }
 
         //

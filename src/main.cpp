@@ -20,7 +20,6 @@
 #include "rpcclient.h"
 #include "beacon.h"
 #include "miner.h"
-#include "neuralnet/cpid.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
@@ -120,10 +119,10 @@ extern int64_t GetCoinYearReward(int64_t nTime);
 BlockMap mapBlockIndex;
 set<pair<COutPoint, unsigned int> > setStakeSeen;
 
-CBigNum bnProofOfWorkLimit(~uint256(0) >> 20); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
-CBigNum bnProofOfStakeLimit(~uint256(0) >> 20);
-CBigNum bnProofOfStakeLimitV2(~uint256(0) >> 20);
-CBigNum bnProofOfWorkLimitTestNet(~uint256(0) >> 16);
+CBigNum bnProofOfWorkLimit(ArithToUint256(~arith_uint256() >> 20)); // "standard" scrypt target limit for proof of work, results with 0,000244140625 proof-of-work difficulty
+CBigNum bnProofOfStakeLimit(ArithToUint256(~arith_uint256() >> 20));
+CBigNum bnProofOfStakeLimitV2(ArithToUint256(~arith_uint256() >> 20));
+CBigNum bnProofOfWorkLimitTestNet(ArithToUint256(~arith_uint256() >> 16));
 
 //Gridcoin Minimum Stake Age (16 Hours)
 unsigned int nStakeMinAge = 16 * 60 * 60; // 16 hours
@@ -135,9 +134,9 @@ int nCoinbaseMaturity = 100;
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 
-uint256 nBestChainTrust = 0;
-uint256 nBestInvalidTrust = 0;
-uint256 hashBestChain = 0;
+arith_uint256 nBestChainTrust = 0;
+arith_uint256 nBestInvalidTrust = 0;
+uint256 hashBestChain;
 CBlockIndex* pindexBest = NULL;
 int64_t nTimeBestReceived = 0;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
@@ -1490,7 +1489,7 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
 {
-    if (hashBlock == 0 || nIndex == -1)
+    if (hashBlock.IsNull() || nIndex == -1)
         return 0;
     AssertLockHeld(cs_main);
 
@@ -1946,7 +1945,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
         return error("CheckProofOfWork() : nBits below minimum work");
 
     // Check proof of work matches claimed amount
-    if (hash > bnTarget.getuint256())
+    if (UintToArith256(hash) > UintToArith256(bnTarget.getuint256()))
         return error("CheckProofOfWork() : hash doesn't match nBits");
 
     return true;
@@ -2055,21 +2054,26 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
     if (pindexNew->nChainTrust > nBestInvalidTrust)
     {
         nBestInvalidTrust = pindexNew->nChainTrust;
-        CTxDB().WriteBestInvalidTrust(CBigNum(nBestInvalidTrust));
+        CTxDB().WriteBestInvalidTrust(CBigNum(ArithToUint256(nBestInvalidTrust)));
         uiInterface.NotifyBlocksChanged();
     }
 
-    uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
-    uint256 nBestBlockTrust = pindexBest->nHeight != 0 ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust) : pindexBest->nChainTrust;
+    arith_uint256 nBestInvalidBlockTrust = pindexNew->nChainTrust - pindexNew->pprev->nChainTrust;
+    arith_uint256 nBestBlockTrust = pindexBest->nHeight != 0
+        ? (pindexBest->nChainTrust - pindexBest->pprev->nChainTrust)
+        : pindexBest->nChainTrust;
 
     LogPrintf("InvalidChainFound: invalid block=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
-      pindexNew->GetBlockHash().ToString().substr(0,20), pindexNew->nHeight,
-      CBigNum(pindexNew->nChainTrust).ToString(), nBestInvalidBlockTrust.Get64(),
+      pindexNew->GetBlockHash().ToString().substr(0,20),
+      pindexNew->nHeight,
+      CBigNum(ArithToUint256(pindexNew->nChainTrust)).ToString(),
+      nBestInvalidBlockTrust.GetLow64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexNew->GetBlockTime()));
     LogPrintf("InvalidChainFound:  current best=%s  height=%d  trust=%s  blocktrust=%" PRId64 "  date=%s",
-      hashBestChain.ToString().substr(0,20), nBestHeight,
-      CBigNum(pindexBest->nChainTrust).ToString(),
-      nBestBlockTrust.Get64(),
+      hashBestChain.ToString().substr(0,20),
+      nBestHeight,
+      CBigNum(ArithToUint256(pindexBest->nChainTrust)).ToString(),
+      nBestBlockTrust.GetLow64(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 }
 
@@ -2428,7 +2432,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     if (pindex->pprev)
     {
         CDiskBlockIndex blockindexPrev(pindex->pprev);
-        blockindexPrev.hashNext = 0;
+        blockindexPrev.hashNext.SetNull();
         if (!txdb.WriteBlockIndex(blockindexPrev))
             return error("DisconnectBlock() : WriteBlockIndex failed");
     }
@@ -2733,11 +2737,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     // Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
     if(IsResearchAgeEnabled(pindex->nHeight))
     {
-        pindex->SetCPID(cpid);
+        pindex->SetMiningId(claim.m_mining_id);
         pindex->nMagnitude = claim.m_magnitude;
         pindex->nResearchSubsidy = claim.m_research_subsidy;
         pindex->nInterestSubsidy = claim.m_block_subsidy;
         pindex->nIsSuperBlock = claim.ContainsSuperblock() ? 1 : 0;
+
         // Must scan transactions after CoinStake to know if this is a contract.
         int iPos = 0;
         pindex->nIsContract = 0;
@@ -2809,7 +2814,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
-                    GetLifetimeCPID(pindex->GetCPID()); // Rescan...
+                    GetLifetimeCPID(pindex->GetMiningId().ToString()); // Rescan...
                     GetProofOfStakeReward(nCoinAge, nFees, cpid, true, 2, nTime,
                                           pindex, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
 
@@ -3048,7 +3053,7 @@ bool ForceReorganizeToHash(uint256 NewHash)
         return error("ForceReorganizeToHash: Fatal Error while setting best chain.");
     }
 
-    AskForOutstandingBlocks(uint256(0));
+    AskForOutstandingBlocks(uint256());
     LogPrintf("ForceReorganizeToHash: success! height %d hash %s", pindexBest->nHeight,pindexBest->GetBlockHash().GetHex());
     return true;
 }
@@ -3084,9 +3089,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(pindexBest->IsUserCPID())
         {
             // remeber the cpid to re-read later
-            vRereadCPIDs.insert(pindexBest->GetCPID());
+            vRereadCPIDs.insert(pindexBest->GetMiningId().ToString());
             // The user has no longer staked this block.
-            RemoveCPIDBlockHash(pindexBest->GetCPID(), pindexBest);
+            RemoveCPIDBlockHash(pindexBest->GetMiningId().ToString(), pindexBest);
         }
 
         // New best block
@@ -3240,7 +3245,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         uint256 hash = block.GetHash();
-        uint256 nBestBlockTrust;
+        arith_uint256 nBestBlockTrust;
 
         if (fDebug) LogPrintf("ReorganizeChain: connect %s",hash.ToString());
 
@@ -3326,7 +3331,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
 
         if(pindex->IsUserCPID()) // is this needed?
-            GetLifetimeCPID(pindex->cpid.GetHex());
+            GetLifetimeCPID(pindex->GetMiningId().ToString());
     }
 
     if (fDebug && (cnt_dis>0 || cnt_con>1))
@@ -3358,10 +3363,6 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
 
     /* Fix up after block connecting */
 
-
-    //std::set<uint128> connected_cpids;
-
-
     // Update best block in wallet (so we can detect restored wallets)
     bool fIsInitialDownload = IsInitialBlockDownload();
     if (!fIsInitialDownload)
@@ -3387,7 +3388,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
     {
         LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
                hashBestChain.ToString(), nBestHeight,
-               CBigNum(nBestChainTrust).ToString(),
+               CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
                DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
     }
     else
@@ -3548,7 +3549,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const u
 bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
 {
     // Allow the genesis block to pass.
-    if(hashPrevBlock == uint256() &&
+    if(hashPrevBlock.IsNull() &&
        GetHash() == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
         return true;
 
@@ -3594,7 +3595,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
             return DoS(100, error("CheckBlock[] : malformed claim"));
         }
 
-        if (claim.GetHash() != uint256(vtx[0].hashBoinc)) {
+        if (claim.GetHash() != uint256S(vtx[0].hashBoinc)) {
             return DoS(100, error("CheckBlock[] : claim hash mismatch"));
         }
     }
@@ -3841,14 +3842,14 @@ bool CBlock::AcceptBlock(bool generated_by_me)
 }
 
 
-uint256 CBlockIndex::GetBlockTrust() const
+arith_uint256 CBlockIndex::GetBlockTrust() const
 {
     CBigNum bnTarget;
     bnTarget.SetCompact(nBits);
     if (bnTarget <= 0) return 0;
     int64_t block_mag = 0;
     uint256 chaintrust = (((CBigNum(1)<<256) / (bnTarget+1)) - (block_mag)).getuint256();
-    return chaintrust;
+    return UintToArith256(chaintrust);
 }
 
 bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent)
@@ -4112,16 +4113,16 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     {
                 if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)) && (pNode->nVersion < NOBLKS_VERSION_START || pNode->nVersion >= NOBLKS_VERSION_END) )
                 {
-                        if (hashStart==uint256(0))
+                        if (hashStart==uint256())
                         {
-                            pNode->PushGetBlocks(pindexBest, uint256(0), true);
+                            pNode->PushGetBlocks(pindexBest, uint256(), true);
                         }
                         else
                         {
                             CBlockIndex* pblockindex = mapBlockIndex[hashStart];
                             if (pblockindex)
                             {
-                                pNode->PushGetBlocks(pblockindex, uint256(0), true);
+                                pNode->PushGetBlocks(pblockindex, uint256(), true);
                             }
                             else
                             {
@@ -4233,7 +4234,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
 
                 LogPrintf("Clearing mapAlreadyAskedFor.");
                 mapAlreadyAskedFor.clear();
-                AskForOutstandingBlocks(uint256(0));
+                AskForOutstandingBlocks(uint256());
             }
         }
         else
@@ -4463,7 +4464,7 @@ bool LoadBlockIndex(bool fAllowNew)
         txNew.vout[0].SetEmpty();
         CBlock block;
         block.vtx.push_back(txNew);
-        block.hashPrevBlock = 0;
+        block.hashPrevBlock.SetNull();
         block.hashMerkleRoot = block.BuildMerkleTree();
         block.nVersion = 1;
         //R&D - Testers Wanted Thread:
@@ -4478,11 +4479,11 @@ bool LoadBlockIndex(bool fAllowNew)
             LogPrintf("Searching for genesis block...");
             // This will figure out a valid hash and Nonce if you're
             // creating a different genesis block: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000xFFF
-            uint256 hashTarget = CBigNum().SetCompact(block.nBits).getuint256();
-            uint256 thash;
+            arith_uint256 hashTarget = arith_uint256().SetCompact(block.nBits);
+            arith_uint256 thash;
             while (true)
             {
-                thash = block.GetHash();
+                thash = UintToArith256(block.GetHash());
                 if (thash <= hashTarget)
                     break;
                 if ((block.nNonce & 0xFFF) == 0)
@@ -4507,7 +4508,7 @@ bool LoadBlockIndex(bool fAllowNew)
         //// debug print
 
         //GENESIS3: Official Merkle Root
-        uint256 merkle_root = uint256("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
+        uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         assert(block.CheckBlock("LoadBlockIndex",1,10*COIN));
@@ -4642,7 +4643,7 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
 
     try
     {
-        const std::string& cpid = pIndex->GetCPID();
+        const std::string& cpid = pIndex->GetMiningId().ToString();
         StructCPID& stMag = GetInitializedStructCPID2(cpid, mvMagnitudesCopy);
         stMag.InterestSubsidy += pIndex->nInterestSubsidy;
         stMag.ResearchSubsidy += pIndex->nResearchSubsidy;
@@ -4724,7 +4725,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
                         }
                         else
                         {
-                            myCPID = pblockindex->GetCPID();
+                            myCPID = pblockindex->GetMiningId().ToString();
                         }
                         if (cpid == myCPID && nCPIDTime==0 && IsResearcher(myCPID))
                         {
@@ -4758,7 +4759,7 @@ void AddRARewardBlock(const CBlockIndex* pindex)
     // this is from LoadBlockIndex
     if (pindex->nResearchSubsidy > 0 && pindex->IsUserCPID())
     {
-        const std::string& cpid = pindex->GetCPID();
+        const std::string& cpid = pindex->GetMiningId().ToString();
 
         StructCPID& stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
 
@@ -4806,7 +4807,7 @@ void RescanLifetimeCPID(StructCPID& stCPID)
         // Ensure that the block is valid
         if(pblockindex == NULL ||
            pblockindex->IsInMainChain() == false ||
-           pblockindex->GetCPID() != stCPID.cpid)
+           pblockindex->GetMiningId().ToString() != stCPID.cpid)
             throw error("RescanLifetimeCPID: Invalid block %s in vRewardBlocs of %s", pblockindex? pblockindex->GetBlockHash().GetHex() :"null", stCPID.cpid );
 
         const uint256& uHash = pblockindex->GetBlockHash();
@@ -5456,7 +5457,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if ((!IsLockTimeWithinMinutes(nLastAskedForBlocks, 5, GetAdjustedTime()) && WalletOutOfSync()) || (WalletOutOfSync() && fTestNet))
         {
             if(fDebug) LogPrintf("Bootup");
-            AskForOutstandingBlocks(uint256(0));
+            AskForOutstandingBlocks(uint256());
         }
     }
 
@@ -5636,7 +5637,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
              (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
             nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256(0), true);
+            pfrom->PushGetBlocks(pindexBest, uint256(), true);
             if (fDebug3) LogPrintf("Asked For blocks.");
         }
 
@@ -5712,12 +5713,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     LOCK(cs_vNodes);
                     // Use deterministic randomness to send to the same nodes for 24 hours
                     // at a time so the setAddrKnowns of the chosen nodes prevent repeats
-                    static uint256 hashSalt;
+                    static arith_uint256 hashSalt;
                     if (hashSalt == 0)
-                        hashSalt = GetRandHash();
+                        hashSalt = UintToArith256(GetRandHash());
                     uint64_t hashAddr = addr.GetHash();
-                    uint256 hashRand = hashSalt ^ (hashAddr<<32) ^ (( GetAdjustedTime() +hashAddr)/(24*60*60));
-                    hashRand = Hash(BEGIN(hashRand), END(hashRand));
+                    uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr<<32) ^ (( GetAdjustedTime() +hashAddr)/(24*60*60)));
+                    hashRand = Hash(hashRand.begin(), hashRand.end());
                     multimap<uint256, CNode*> mapMix;
                     for (auto const& pnode : vNodes)
                     {
@@ -5725,8 +5726,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             continue;
                         unsigned int nPointer;
                         memcpy(&nPointer, &pnode, sizeof(nPointer));
-                        uint256 hashKey = hashRand ^ nPointer;
-                        hashKey = Hash(BEGIN(hashKey), END(hashKey));
+                        uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
+                        hashKey = Hash(hashKey.begin(), hashKey.end());
                         mapMix.insert(make_pair(hashKey, pnode));
                     }
                     int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
@@ -5795,7 +5796,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
                 // this situation and push another getblocks to continue.
-                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(0), true);
+                pfrom->PushGetBlocks(mapBlockIndex[inv.hash], uint256(), true);
                 if (fDebug10)
                     LogPrintf("force getblock request: %s", inv.ToString());
             }
@@ -5852,7 +5853,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         vector<CInv> vInv;
                         vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
                         pfrom->PushMessage("inv", vInv);
-                        pfrom->hashContinue = 0;
+                        pfrom->hashContinue.SetNull();
                     }
                 }
             }
@@ -6624,12 +6625,12 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             if (inv.type == MSG_TX && !fSendTrickle)
             {
                 // 1/4 of tx invs blast to all immediately
-                static uint256 hashSalt;
+                static arith_uint256 hashSalt;
                 if (hashSalt == 0)
-                    hashSalt = GetRandHash();
-                uint256 hashRand = inv.hash ^ hashSalt;
-                hashRand = Hash(BEGIN(hashRand), END(hashRand));
-                bool fTrickleWait = ((hashRand & 3) != 0);
+                    hashSalt = UintToArith256(GetRandHash());
+                uint256 hashRand = ArithToUint256(UintToArith256(inv.hash) ^ hashSalt);
+                hashRand = Hash(hashRand.begin(), hashRand.end());
+                bool fTrickleWait = ((UintToArith256(hashRand) & 3) != 0);
 
                 // always trickle our own transactions
                 if (!fTrickleWait)
@@ -7100,7 +7101,7 @@ CBlockIndex* GetHistoricalMagnitude(std::string cpid)
     StructCPID& stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
     if (!stCPID.BlockHash.empty())
     {
-        uint256 hash(stCPID.BlockHash);
+        uint256 hash = uint256S(stCPID.BlockHash);
 
         auto mapItem = mapBlockIndex.find(hash);
         if (mapItem == mapBlockIndex.end())
@@ -7266,17 +7267,17 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
     if (IsResearchAgeEnabled(pindexBest->nHeight))
     {
         uRef = fTestNet
-               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-               : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+               ? uint256S("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
     else
     {
         uRef = fTestNet
-               ? uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-               : uint256("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+               ? uint256S("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+               : uint256S("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
     }
 
-    uint256 uADH = uint256("0x" + address_day_hash);
+    uint256 uADH = uint256S("0x" + address_day_hash);
     return (uADH < uRef);
 }
 
@@ -7286,8 +7287,8 @@ bool StrLessThanReferenceHash(std::string rh)
     int address_day = GetDayOfYear(GetAdjustedTime());
     std::string address_tohash = rh + "_" + ToString(address_day);
     std::string address_day_hash = RetrieveMd5(address_tohash);
-    uint256 uRef = fTestNet ? uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b") : uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-    uint256 uADH = uint256("0x" + address_day_hash);
+    uint256 uRef = fTestNet ? uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b") : uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
+    uint256 uADH = uint256S("0x" + address_day_hash);
     return (uADH < uRef);
 }
 

@@ -455,7 +455,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             wtx.nOrderPos = IncOrderPosNext();
 
             wtx.nTimeSmart = wtx.nTimeReceived;
-            if (wtxIn.hashBlock != 0)
+            if (!wtxIn.hashBlock.IsNull())
             {
                 auto mapItem = mapBlockIndex.find(wtxIn.hashBlock);
                 if (mapItem != mapBlockIndex.end())
@@ -508,7 +508,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         if (!fInsertedNew)
         {
             // Merge
-            if (wtxIn.hashBlock != 0 && wtxIn.hashBlock != wtx.hashBlock)
+            if (!wtxIn.hashBlock.IsNull() && wtxIn.hashBlock != wtx.hashBlock)
             {
                 wtx.hashBlock = wtxIn.hashBlock;
                 fUpdated = true;
@@ -552,7 +552,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             }
         }
         // since AddToWallet is called directly for self-originating transactions, check for consumption of own coins
-        WalletUpdateSpent(wtx, (wtxIn.hashBlock != 0));
+        WalletUpdateSpent(wtx, (!wtxIn.hashBlock.IsNull()));
 
         // Notify UI of new or updated transaction
         NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
@@ -673,7 +673,7 @@ int CWalletTx::GetRequestCount() const
         if (IsCoinBase() || IsCoinStake())
         {
             // Generated block
-            if (hashBlock != 0)
+            if (!hashBlock.IsNull())
             {
                 map<uint256, int>::const_iterator mi = pwallet->mapRequestCount.find(hashBlock);
                 if (mi != pwallet->mapRequestCount.end())
@@ -689,7 +689,7 @@ int CWalletTx::GetRequestCount() const
                 nRequests = (*mi).second;
 
                 // How about the block it's in?
-                if (nRequests == 0 && hashBlock != 0)
+                if (nRequests == 0 && !hashBlock.IsNull())
                 {
                     map<uint256, int>::const_iterator mi = pwallet->mapRequestCount.find(hashBlock);
                     if (mi != pwallet->mapRequestCount.end())

@@ -956,7 +956,7 @@ private: // SuperblockValidator methods
                 const uint256& manifest_hash = hashes.second.first;
                 const uint256& content_hash = hashes.second.second;
 
-                if (content_hash.Get64() >> 32 == m_superblock.m_manifest_content_hint) {
+                if (content_hash.GetUint64() >> 32 == m_superblock.m_manifest_content_hint) {
                     if (!content_hash_tally.emplace(content_hash, 1).second) {
                         content_hash_tally[content_hash]++;
                     }
@@ -1114,8 +1114,8 @@ private: // SuperblockValidator methods
         LOCK(CSplitBlob::cs_mapParts);
 
         for (const auto& part_pair : CSplitBlob::mapParts) {
-            uint32_t hint = part_pair.first.Get64() >> m_hint_shift;
-            auto hint_range = hints.equal_range(hint);
+            const uint32_t hint = part_pair.first.GetUint64() >> m_hint_shift;
+            const auto hint_range = hints.equal_range(hint);
 
             for (auto i = hint_range.first; i != hint_range.second; ++i) {
                 candidates[i->second].emplace(
@@ -1490,10 +1490,12 @@ Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
 {
     Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats);
 
-    superblock.m_convergence_hint = stats.Convergence.nContentHash.Get64() >> 32;
+    superblock.m_convergence_hint = stats.Convergence.nContentHash.GetUint64() >> 32;
 
     if (!stats.Convergence.bByParts) {
-        superblock.m_manifest_content_hint = stats.Convergence.nUnderlyingManifestContentHash.Get64() >> 32;
+        superblock.m_manifest_content_hint
+            = stats.Convergence.nUnderlyingManifestContentHash.GetUint64() >> 32;
+
         return superblock;
     }
 
@@ -1818,7 +1820,7 @@ void Superblock::ProjectIndex::SetHint(
     }
 
     const uint256 part_hash = Hash(part_data.begin(), part_data.end());
-    iter->second.m_convergence_hint = part_hash.Get64() >> 32;
+    iter->second.m_convergence_hint = part_hash.GetUint64() >> 32;
 
     m_converged_by_project = true;
 }
@@ -1949,7 +1951,7 @@ bool QuorumHash::operator==(const std::string& other) const
 
         case Kind::SHA256:
             return other.size() == sizeof(uint256) * 2
-                && boost::get<uint256>(m_hash) == uint256(other);
+                && boost::get<uint256>(m_hash) == uint256S(other);
 
         case Kind::MD5:
             return other.size() == sizeof(Md5Sum) * 2

@@ -293,7 +293,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
     std::string sHashBlock = wtx.hashBlock.ToString();
 
-    if (wtx.hashBlock == 0)
+    if (wtx.hashBlock.IsNull())
         strHTML += "<b>" + tr("Block Hash") + ":</b> Not yet in chain<br>";
 
     else

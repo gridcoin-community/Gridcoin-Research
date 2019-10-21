@@ -5,9 +5,11 @@
 #ifndef BITCOIN_MAIN_H
 #define BITCOIN_MAIN_H
 
+#include "arith_uint256.h"
 #include "util.h"
 #include "net.h"
 #include "neuralnet/claim.h"
+#include "neuralnet/cpid.h"
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
@@ -68,10 +70,10 @@ static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //Genesis - MainNet - Production Genesis: as of 10-20-2014:
-static const uint256 hashGenesisBlock("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
+static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
 
 //TestNet Genesis:
-static const uint256 hashGenesisBlockTestNet("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
+static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight)
 {
@@ -153,7 +155,7 @@ extern std::map<std::string, StructCPID> mvResearchAge;
 
 struct BlockHasher
 {
-    size_t operator()(const uint256& hash) const { return hash.Get64(); }
+    size_t operator()(const uint256& hash) const { return hash.GetUint64(); }
 };
 
 typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
@@ -168,8 +170,8 @@ extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern int nBestHeight;
-extern uint256 nBestChainTrust;
-extern uint256 nBestInvalidTrust;
+extern arith_uint256 nBestChainTrust;
+extern arith_uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
 extern const std::string strMessageMagic;
@@ -412,8 +414,8 @@ public:
 
     COutPoint() { SetNull(); }
     COutPoint(uint256 hashIn, unsigned int nIn) { hash = hashIn; n = nIn; }
-    void SetNull() { hash = 0; n = (unsigned int) -1; }
-    bool IsNull() const { return (hash == 0 && n == (unsigned int) -1); }
+    void SetNull() { hash.SetNull(); n = (unsigned int) -1; }
+    bool IsNull() const { return (hash.IsNull() && n == (unsigned int) -1); }
 
     friend bool operator<(const COutPoint& a, const COutPoint& b)
     {
@@ -922,7 +924,7 @@ public:
 
     void Init()
     {
-        hashBlock = 0;
+        hashBlock.SetNull();
         nIndex = -1;
         fMerkleVerified = false;
     }
@@ -1103,8 +1105,8 @@ public:
     void SetNull()
     {
         nVersion = CBlock::CURRENT_VERSION;
-        hashPrevBlock = 0;
-        hashMerkleRoot = 0;
+        hashPrevBlock.SetNull();
+        hashMerkleRoot.SetNull();
         nTime = 0;
         nBits = 0;
         nNonce = 0;
@@ -1174,7 +1176,7 @@ public:
     unsigned int GetStakeEntropyBit() const
     {
         // Take last bit of block hash as entropy bit
-        unsigned int nEntropyBit = ((GetHash().Get64()) & 1llu);
+        unsigned int nEntropyBit = ((GetHash().GetUint64()) & 1llu);
         if (fDebug && GetBoolArg("-printstakemodifier"))
             LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash().ToString(), nEntropyBit);
         return nEntropyBit;
@@ -1221,7 +1223,7 @@ public:
             }
             j += nSize;
         }
-        return (vMerkleTree.empty() ? 0 : vMerkleTree.back());
+        return (vMerkleTree.empty() ? uint256() : vMerkleTree.back());
     }
 
     std::vector<uint256> GetMerkleBranch(int nIndex) const
@@ -1243,7 +1245,7 @@ public:
     static uint256 CheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMerkleBranch, int nIndex)
     {
         if (nIndex == -1)
-            return 0;
+            return uint256();
         for (auto const& otherside : vMerkleBranch)
         {
             if (nIndex & 1)
@@ -1363,19 +1365,19 @@ public:
     CBlockIndex* pnext;
     unsigned int nFile;
     unsigned int nBlockPos;
-    uint256 nChainTrust; // ppcoin: trust score of block chain
+    arith_uint256 nChainTrust; // ppcoin: trust score of block chain
     int nHeight;
 
     int64_t nMint;
     int64_t nMoneySupply;
-	// Gridcoin (7-11-2015) Add new Accrual Fields to block index
-    uint128 cpid;
-	double nResearchSubsidy;
-	double nInterestSubsidy;
-	double nMagnitude;
-	// Indicators (9-13-2015)
-	unsigned int nIsSuperBlock;
-	unsigned int nIsContract;
+    // Gridcoin (7-11-2015) Add new Accrual Fields to block index
+    NN::Cpid cpid;
+    double nResearchSubsidy;
+    double nInterestSubsidy;
+    double nMagnitude;
+    // Indicators (9-13-2015)
+    unsigned int nIsSuperBlock;
+    unsigned int nIsContract;
 
     unsigned int nFlags;  // ppcoin: block index flags
     enum
@@ -1447,12 +1449,12 @@ public:
         nFlags = EMPTY_CPID;
         nStakeModifier = 0;
         nStakeModifierChecksum = 0;
-        hashProof = 0;
+        hashProof.SetNull();
         prevoutStake.SetNull();
         nStakeTime = 0;
 
         nVersion       = 0;
-        hashMerkleRoot = 0;
+        hashMerkleRoot.SetNull();
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
@@ -1487,7 +1489,7 @@ public:
         return (int64_t)nTime;
     }
 
-    uint256 GetBlockTrust() const;
+    arith_uint256 GetBlockTrust() const;
 
     bool IsInMainChain() const
     {
@@ -1560,27 +1562,39 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
-    void SetCPID(const std::string& cpid_hex)
+    void SetMiningId(NN::MiningId mining_id)
     {
-        // Clear current CPID state.
-        cpid = 0;
         nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
-        if(cpid_hex.empty())
+
+        if (const auto cpid_option = mining_id.TryCpid()) {
+            cpid = *cpid_option;
+            return;
+        }
+
+        cpid = NN::Cpid();
+
+        if (mining_id.Which() == NN::MiningId::Kind::INVALID) {
             nFlags |= EMPTY_CPID;
-        else if(cpid_hex == "INVESTOR")
+        } else {
             nFlags |= INVESTOR_CPID;
-        else
-            cpid.SetHex(cpid_hex);
+        }
     }
 
-    std::string GetCPID() const
+    void SetCPID(NN::Cpid new_cpid)
     {
-        if(nFlags & EMPTY_CPID)
-            return "";
-        else if(nFlags & INVESTOR_CPID)
-            return "INVESTOR";
+        nFlags &= ~(EMPTY_CPID | INVESTOR_CPID);
+
+        cpid = new_cpid;
+    }
+
+    NN::MiningId GetMiningId() const
+    {
+        if (nFlags & EMPTY_CPID)
+            return NN::MiningId();
+        else if (nFlags & INVESTOR_CPID)
+            return NN::MiningId::ForInvestor();
         else
-            return cpid.GetHex();
+            return NN::MiningId(cpid);
     }
 
 
@@ -1617,15 +1631,15 @@ public:
 
     CDiskBlockIndex()
     {
-        hashPrev = 0;
-        hashNext = 0;
-        blockHash = 0;
+        hashPrev.SetNull();
+        hashNext.SetNull();
+        blockHash.SetNull();
     }
 
     explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex)
     {
-        hashPrev = (pprev ? pprev->GetBlockHash() : 0);
-        hashNext = (pnext ? pnext->GetBlockHash() : 0);
+        hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
+        hashNext = (pnext ? pnext->GetBlockHash() : uint256());
     }
 
     ADD_SERIALIZE_METHODS;
@@ -1666,11 +1680,11 @@ public:
         READWRITE(blockHash);
 
         //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
-        std::string cpid_hex = GetCPID();
+        std::string cpid_hex = GetMiningId().ToString();
         READWRITE(cpid_hex);
 
         if (ser_action.ForRead()) {
-            const_cast<CDiskBlockIndex*>(this)->SetCPID(cpid_hex);
+            const_cast<CDiskBlockIndex*>(this)->SetMiningId(NN::MiningId::Parse(cpid_hex));
         }
 
         READWRITE(nResearchSubsidy);
@@ -1695,7 +1709,7 @@ public:
 
     uint256 GetBlockHash() const
     {
-        if (fUseFastIndex && (nTime < GetAdjustedTime() - 24 * 60 * 60) && blockHash != 0)
+        if (fUseFastIndex && (nTime < GetAdjustedTime() - 24 * 60 * 60) && !blockHash.IsNull())
             return blockHash;
 
         CBlock block;
