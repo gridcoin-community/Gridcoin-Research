@@ -1,8 +1,10 @@
 #include "compat/endian.h"
+#include "hash.h"
 #include "neuralnet/superblock.h"
 #include "scraper_net.h"
 #include "sync.h"
 #include "util.h"
+#include "util/reverse_iterator.h"
 
 #include <boost/variant/apply_visitor.hpp>
 #include <openssl/md5.h>
@@ -13,7 +15,7 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 std::string ExtractValue(std::string data, std::string delimiter, int pos);
 
 // TODO: use a header
-ScraperStats GetScraperStatsByConvergedManifest(ConvergedManifest& StructConvergedManifest);
+ScraperStats GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 ScraperStats GetScraperStatsFromSingleManifest(CScraperManifest &manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperDeleteCScraperManifests();
@@ -23,6 +25,226 @@ extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 namespace {
+//!
+//! \brief Loads a provided set of scraper statistics into a superblock.
+//!
+//! \tparam T A superblock-like object. For example, a ScraperStatsQuorumHasher
+//! object that hashes the input instead of storing the data.
+//!
+template<typename T>
+class ScraperStatsSuperblockBuilder
+{
+    // The loop below depends on the relative value of these enum types:
+    static_assert(statsobjecttype::NetworkWide < statsobjecttype::byCPID,
+        "Unexpected enumeration order of scraper stats map object types.");
+    static_assert(statsobjecttype::byCPID < statsobjecttype::byCPIDbyProject,
+        "Unexpected enumeration order of scraper stats map object types.");
+    static_assert(statsobjecttype::byProject < statsobjecttype::byCPIDbyProject,
+        "Unexpected enumeration order of scraper stats map object types.");
+
+public:
+    //!
+    //! \brief Initialize a instance that wraps the provided superblock.
+    //!
+    //! \param superblock A superblock-like object to load with scraper stats.
+    //!
+    ScraperStatsSuperblockBuilder(T& superblock) : m_superblock(superblock)
+    {
+    }
+
+    //!
+    //! \brief Load the provided scraper statistics into the wrapped superblock.
+    //!
+    //! \param stats A complete set of scraper statistics to build a superblock
+    //! from.
+    //!
+    void BuildFromStats(const ScraperStats& stats)
+    {
+        for (const auto& entry : stats) {
+            // A CPID, project name, or project name/CPID pair that identifies
+            // the current statistics record:
+            const std::string& object_id = entry.first.objectID;
+
+            switch (entry.first.objecttype) {
+                // This map starts with a single, network-wide statistics entry.
+                // Skip it because superblock objects will recalculate the stats
+                // as needed after deserialization.
+                //
+                case statsobjecttype::NetworkWide:
+                    continue;
+
+                case statsobjecttype::byCPID:
+                    m_superblock.m_cpids.Add(
+                        Cpid::Parse(object_id),
+                        std::round(entry.second.statsvalue.dMag));
+
+                    break;
+
+                case statsobjecttype::byProject:
+                    m_superblock.m_projects.Add(
+                        object_id,
+                        Superblock::ProjectStats(
+                            std::round(entry.second.statsvalue.dTC),
+                            std::round(entry.second.statsvalue.dAvgRAC),
+                            std::round(entry.second.statsvalue.dRAC))
+                    );
+
+                    break;
+
+                // The scraper statistics map orders the entries by "objecttype"
+                // starting with "byCPID" and "byProject". After importing these
+                // sections into the superblock, we can exit this loop.
+                //
+                default:
+                    return;
+            }
+        }
+    }
+private:
+    T& m_superblock; //!< Superblock-like object to fill with supplied stats.
+};
+
+//!
+//! \brief Hashes scraper statistics to produce a quorum hash in the same manner
+//! as the hash would be calculated for a superblock.
+//!
+//! Because of the size of superblock objects, the overhead of allocating and
+//! filling superblocks from scraper convergences just to generate the quorum
+//! hash for validation can be significant as superblocks grow larger. We can
+//! compute a matching superblock hash directly from scraper statistics. This
+//! class generates quorum hashes from scraper statistics that will match the
+//! hashes of corresponding superblock objects.
+//!
+class ScraperStatsQuorumHasher
+{
+public:
+    //!
+    //! \brief Initialize a hasher with the provided scraper statistics.
+    //!
+    //! \param stats The scraper statistics to generate a hash from.
+    //!
+    ScraperStatsQuorumHasher(const ScraperStats& stats) : m_stats(stats)
+    {
+    }
+
+    //!
+    //! \brief Generate a quorum hash of the provided scraper statistics.
+    //!
+    //! \param stats The scraper statistics to generate a hash from.
+    //!
+    //! \return A hash that matches the hash of a corresponding superblock.
+    //!
+    static QuorumHash Hash(const ScraperStats& stats)
+    {
+        return ScraperStatsQuorumHasher(stats).GetHash();
+    }
+
+    //!
+    //! \brief Generate a quorum hash of the wrapped scraper statistics.
+    //!
+    //! \return A hash that matches the hash of a corresponding superblock.
+    //!
+    QuorumHash GetHash() const
+    {
+        SuperblockMock mock;
+        ScraperStatsSuperblockBuilder<SuperblockMock> builder(mock);
+
+        builder.BuildFromStats(m_stats);
+
+        return mock.m_proxy.GetHash();
+    }
+
+private:
+    //!
+    //! \brief Provides a compatible interface for calls to NN::Superblock that
+    //! directly hashes the data passed.
+    //!
+    struct SuperblockMock
+    {
+        //!
+        //! \brief Provides a compatible interface for calls to NN::Superblock
+        //! containers that directly hashes the data passed.
+        //!
+        struct HasherProxy
+        {
+            CHashWriter m_hasher;            //!< Hashes the supplied data.
+            uint32_t m_zero_magnitude_count; //!< Tracks zero-magnitude CPIDs.
+            bool m_zero_magnitude_hashed;    //!< Tracks when to hash the zeros.
+
+            //!
+            //! \brief Initialize a proxy object that hashes supplied superblock
+            //! data to produce a quorum hash.
+            //!
+            HasherProxy()
+                : m_hasher(CHashWriter(SER_GETHASH, PROTOCOL_VERSION))
+                , m_zero_magnitude_count(0)
+                , m_zero_magnitude_hashed(false)
+            {
+            }
+
+            //!
+            //! \brief Hash a CPID/magnitude pair as it would exist in the
+            //! Superblock::CpidIndex container.
+            //!
+            //! \param cpid      The CPID value to hash.
+            //! \param magnitude The magnitude value to hash.
+            //!
+            void Add(Cpid cpid, uint16_t magnitude)
+            {
+                if (magnitude > 0) {
+                    m_hasher << cpid;
+                    WriteCompactSize(m_hasher, magnitude);
+                } else {
+                    m_zero_magnitude_count++;
+                }
+            }
+
+            //!
+            //! \brief Hash a project statistics entry as it would exist in the
+            //! Superblock::ProjectIndex container.
+            //!
+            //! \param name  Name of the project to hash.
+            //! \param stats Project statistics object to hash.
+            //!
+            void Add(const std::string& name, Superblock::ProjectStats stats)
+            {
+                // After ScraperStatsSuperblockBuilder adds every CPID/magnitude
+                // pair to a superblock, it then starts to add projects. We need
+                // to serialize the zero-magnitude CPID count before we hash the
+                // first project:
+                //
+                if (!m_zero_magnitude_hashed) {
+                    m_hasher << VARINT(m_zero_magnitude_count);
+                    m_zero_magnitude_hashed = true;
+                }
+
+                m_hasher << name << stats;
+            }
+
+            //!
+            //! \brief Get the final hash of the provided superblock data.
+            //!
+            //! \return Quorum hash of the data supplied to the proxy.
+            //!
+            QuorumHash GetHash()
+            {
+                return QuorumHash(m_hasher.GetHash());
+            }
+        };
+
+        HasherProxy m_proxy;     //!< Hashes data passed passed to its methods.
+        HasherProxy& m_cpids;    //!< Proxies calls for Superblock::CpidIndex.
+        HasherProxy& m_projects; //!< Proxies calls for Superblock::ProjectIndex.
+
+        //!
+        //! \brief Initialize a mock superblock object.
+        //!
+        SuperblockMock() : m_cpids(m_proxy), m_projects(m_proxy) { }
+    };
+
+    const ScraperStats& m_stats; //!< The stats to hash like a Superblock.
+};
+
 //!
 //! \brief Validates received superblocks against the local scraper manifest
 //! data to prevent superblock statistics spoofing attacks.
@@ -53,9 +275,10 @@ public:
     //!
     //! \param superblock The superblock data to validate.
     //!
-    SuperblockValidator(const Superblock& superblock)
+    SuperblockValidator(const Superblock& superblock, size_t hint_bits = 32)
         : m_superblock(superblock)
         , m_quorum_hash(superblock.GetHash())
+        , m_hint_shift(32 + std::max<size_t>(0, std::min<size_t>(32, 32 - hint_bits)))
     {
     }
 
@@ -111,6 +334,35 @@ public:
 private: // SuperblockValidator classes
 
     //!
+    //! \brief Maps candidate project part hashes to a set of scrapers.
+    //!
+    //! Each set must hold at least the mininum number of scraper IDs for a
+    //! supermajority for a project part to be considered for convergence.
+    //!
+    typedef std::map<uint256, std::set<ScraperID>> CandidatePartHashMap;
+
+    //!
+    //! \brief Represents a locally-available manifest project part resolved
+    //! from a hint in a superblock.
+    //!
+    struct ResolvedPart
+    {
+        uint256 m_part_hash;            //!< Hash of the resolved part.
+        uint256 m_source_manifest_hash; //!< Manifest that contains this part.
+        int64_t m_source_manifest_time; //!< For selecting the beacon list.
+
+        ResolvedPart(
+            uint256 part_hash,
+            uint256 source_manifest_hash,
+            int64_t source_manifest_time)
+            : m_part_hash(part_hash)
+            , m_source_manifest_hash(source_manifest_hash)
+            , m_source_manifest_time(source_manifest_time)
+        {
+        }
+    };
+
+    //!
     //! \brief Maintains the context of a whitelisted project for validating
     //! fallback-to-project convergence scenarios.
     //!
@@ -123,46 +375,46 @@ private: // SuperblockValidator classes
         //! The \c ProjectResolver will attempt to match these hashes to a part
         //! contained in a manifest for each scraper to find a supermajority.
         //!
-        std::set<uint256> m_candidate_hashes;
-
-        //!
-        //! \brief The set of scrapers that produced the matching manifest part
-        //! for the project.
-        //!
-        //! This set must hold at least the mininum number of scraper IDs for a
+        //! Each set must hold at least the mininum number of scraper IDs for a
         //! supermajority for each project or the superblock validation fails.
         //!
-        std::set<ScraperID> m_scrapers;
+        CandidatePartHashMap m_candidate_hashes;
 
         //!
         //! \brief The manifest part hashes found in a manifest published by a
         //! scraper used to retrieve the part for the project to construct the
         //! convergence for comparison to the superblock.
         //!
-        //! Keyed by timestamp.
-        //!
         //! After successfully matching each of the convergence hints in the
-        //! superblock to a manifest project, the \c ProjectResolver selects
-        //! the most recent part of each \c ResolvedProject to construct the
-        //! final convergence.
+        //! superblock to a manifest project, the \c ProjectCombiner selects
+        //! a combination of the resolved parts from each \c ResolvedProject
+        //! to construct convergences until one matches the superblock.
         //!
-        std::map<int64_t, uint256> m_resolved_parts;
+        std::vector<ResolvedPart> m_resolved_parts;
+
+        //!
+        //! \brief Divisor set by the \c ProjectCombiner for iteraton over each
+        //! convergence combination.
+        //!
+        size_t m_combiner_mask;
 
         //!
         //! \brief Initialize a new project context object.
         //!
-        ResolvedProject()
+        ResolvedProject() : m_combiner_mask(0)
         {
         }
 
         //!
-        //! \brief Initialize a new project context object.
+        //! \brief Initialize a new project context object with the provided
+        //! manifest part hashes.
         //!
         //! \param candidate hashes The manifest part hashes procured from the
         //! convergence hints in the superblock.
         //!
-        ResolvedProject(std::set<uint256> candidate_hashes)
+        ResolvedProject(CandidatePartHashMap candidate_hashes)
             : m_candidate_hashes(std::move(candidate_hashes))
+            , m_combiner_mask(0)
         {
         }
 
@@ -177,38 +429,302 @@ private: // SuperblockValidator classes
         //!
         bool Expects(const uint256& part_hash) const
         {
-            return m_candidate_hashes.count(part_hash);
+            return m_candidate_hashes.count(part_hash) > 0;
         }
 
         //!
-        //! \brief Get the most recent part resolved from a manifest for this
-        //! project.
+        //! \brief Associate a scraper for the specified part.
         //!
-        //! \return The hash of the part for this project used to construct a
-        //! convergence for the validated superblock.
+        //! \param part_hash     Hash of the project part to tally.
+        //! \param scraper_id    The scraper that published the specified part.
+        //! \param supermajority Number of scrapers that must agree on a part.
         //!
-        uint256 MostRecentPartHash() const
+        //! \return \c true if the part is associated with a supermajority of
+        //! scrapers.
+        //!
+        bool Tally(const uint256& part_hash, ScraperID scraper_id, size_t supermajority)
         {
-            return m_resolved_parts.rbegin()->second;
+            auto& scrapers = m_candidate_hashes.at(part_hash);
+
+            scrapers.emplace(std::move(scraper_id));
+
+            return scrapers.size() >= supermajority;
         }
 
         //!
         //! \brief Commit the part hash to this project and record the timestamp
         //! of the manifest.
         //!
-        //! \param part_hash Hash of the candidate part to commit.
-        //! \param time      Timestamp of the manifest that contains the part.
+        //! \param part Hashes of the candidate part and source manifest.
         //!
-        void LinkPart(const uint256& part_hash, const int64_t time)
+        void LinkPart(ResolvedPart part)
         {
-            m_resolved_parts.emplace(time, part_hash);
+            m_candidate_hashes.erase(part.m_part_hash);
+
+            m_resolved_parts.emplace_back(part);
         }
     };
 
     //!
-    //! \brief Reconstructs by-project convergence from local manifest data
-    //! based on project convergence hints from the superblock to produce a
-    //! new superblock used for comparison.
+    //! \brief Generates a superblock hash from the contained convergence of
+    //! manifest parts for comparison to the validated superblock.
+    //!
+    class ConvergenceCandidate
+    {
+    public:
+        //!
+        //! \brief Add the provided manifest part to the convergence.
+        //!
+        //! \param project_name      Identifies the project to add.
+        //! \param project_part_data Serialized project stats of the part.
+        //!
+        void AddPart(std::string project_name, CSerializeData project_part_data)
+        {
+            m_convergence.ConvergedManifestPartsMap.emplace(
+                std::move(project_name),
+                std::move(project_part_data));
+        }
+
+        //!
+        //! \brief Calculate a superblock hash from the supplied manifest data
+        //! that matches the set of resolved project parts.
+        //!
+        //! \return A superblock hash generated from the convergence to compare
+        //! to the superblock under validation.
+        //!
+        QuorumHash ComputeQuorumHash() const
+        {
+            const ScraperStats stats = GetScraperStatsByConvergedManifest(m_convergence);
+
+            return QuorumHash::Hash(stats);
+        }
+
+    private:
+        ConvergedManifest m_convergence; //!< Used to compute a superblock hash
+    };
+
+    //!
+    //! \brief Constructs by-project convergences from the supplied set of the
+    //! project parts resolved from the superblock.
+    //!
+    //! Nodes validate superblocks in by-project fallback convergence cases by
+    //! matching manifest project parts to the convengence hints embedded in a
+    //! superblock project section. These hints are truncated SHA256 hashes so
+    //! a hint can qualify more than one manifest part for consideration while
+    //! reconstructing a convergence for validation.
+    //!
+    //! This class behaves like a cursor through each combination of the parts
+    //! it is initialized with. For each call to \c GetNextConvergence(), this
+    //! class generates a convergence using a new combination of project parts
+    //! until it exhausts every combination or until the client code matches a
+    //! superblock with one of the results.
+    //!
+    //! We have built here a catapult that fires a huge boulder to kill a tiny
+    //! bird--the chance of a project part hash collision resolved by the hint
+    //! in the superblock is incredibly small, but this provision prevents the
+    //! validation of a superblock from failing if a collision ever occurs.
+    //!
+    class ProjectCombiner
+    {
+    public:
+        //!
+        //! \brief Initialize a project combiner with the provided collection
+        //! of resolved projects.
+        //!
+        //! \param projects Contains matching manifest parts hashes for each
+        //! project hinted in the superblock.
+        //!
+        ProjectCombiner(std::map<std::string, ResolvedProject> projects)
+            : m_projects(std::move(projects))
+            , m_total_combinations(1)
+            , m_current_combination(0)
+        {
+            for (auto& project_pair : reverse_iterate(m_projects)) {
+                project_pair.second.m_combiner_mask = m_total_combinations;
+                m_total_combinations *= project_pair.second.m_resolved_parts.size();
+            }
+        }
+
+        //!
+        //! \brief Initialze a project combiner that produces no results.
+        //!
+        ProjectCombiner()
+            : m_total_combinations(0)
+            , m_current_combination(0)
+        {
+        }
+
+        //!
+        //! \brief Get the total number of possible project part combinations
+        //! that the object can create convergences from.
+        //!
+        //! \return
+        //!
+        size_t TotalCombinations() const
+        {
+            return m_total_combinations;
+        }
+
+        //!
+        //! \brief Generate the next convergence in sequence from the resolved
+        //! project parts.
+        //!
+        //! Jim Owens enlightens us with a stimulating description of his algorithm:
+        //!
+        //! Compute number of permutations and cumulative placevalue. For instance, if there were 4 projects, and
+        //! the number of candidate parts for each of the projects were 2, 3, 2, and 2, then the total number of
+        //! permutations would be 2 * 3 * 2 * 2 = 24, and the cumulative placevalue would be
+        //! -------------------- 12,  4,  2,  1. Notice we will use a reverse iterator to fill in the placevalue
+        //! as we compute the total number of permutations. This is ridiculous of course because 99.99999% of the
+        //! time it is going to be 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 (one permutation) or at most something like
+        //! 1 1 1 1 1 1 1 1 2 1 1 1 1 1 1 1 1 1 1, which will resolve to two permutations, but I am doing the full algorithm
+        //! to be thorough.
+        //!
+        //! A further explanation...
+        //!
+        //! The easiest way to understand this algorithm is to compare it to a binary number....
+        //! Each place has two possibilities, so the total possibilities are 2^n where you have n places.
+        //! I.e if you had 4 places (think four projects) each with 2 candidate parts, you would have 0000 to 1111.
+        //! This is permutation index 0 to 7 for a total of eight permutations. If the outer loop is the
+        //! permutation index, you derive the place values by multiplying the combinations for the places
+        //! up to but not including the place for the four digit binary number ... the place values are 8, 4, 2, 1.
+        //!
+        //! So, if you are at index 5 this is, starting at the most significant digit,
+        //! 5/8 = 0 remainder 5.
+        //! 5/4 = 1 remainder 1.
+        //! 1/2 = 0 remainder 1.
+        //! 1/1 = 1 remainder 0.
+        //! (This of course is 0101 binary for 5.)
+        //!
+        //! If the number of candidate parts varies for each project (which it will in this problem), the place
+        //! is a different base for each place, and then you track the number of possibilities in each place with
+        //! the helper as I described in the comments. This allows the outer loop to simply run consecutively through
+        //! the permutation index from 0 to n-1 permutations, and then for each permutation index value the repeated
+        //! division in the inner loop  “decodes” the index into the selected part for each placeholder (project).
+        //! Since you calculated the permutation index max n by muliplyjng all of the possibilities together for each
+        //! place you know you have covered them all. I think it is a pretty elegant approach to the problem with iteration.
+        //!
+        //! \return A convergence to generate a superblock hash from if a new
+        //! combination is possible.
+        //!
+        boost::optional<ConvergenceCandidate> GetNextConvergence()
+        {
+            if (m_current_combination == m_total_combinations) {
+                return boost::none;
+            }
+
+            ConvergenceCandidate convergence;
+            size_t remainder = m_current_combination;
+            uint256 latest_manifest;
+            int64_t latest_manifest_time = 0;
+
+            for (const auto& project_pair : m_projects) {
+                const ResolvedProject& project = project_pair.second;
+                const size_t part_index = remainder / project.m_combiner_mask;
+
+                if (fDebug) {
+                    LogPrintf(
+                        "ValidateSuperblock(): uncached by project: "
+                        "%" PRIszu "/%" PRIszu " = part_index = %" PRIszu " index max = %" PRIszu,
+                        remainder,
+                        project.m_combiner_mask,
+                        part_index,
+                        project.m_resolved_parts.size() - 1);
+                }
+
+                const auto& resolved_part = project.m_resolved_parts[part_index];
+
+                convergence.AddPart(
+                    project_pair.first, // project name
+                    GetResolvedPartData(resolved_part.m_part_hash));
+
+                remainder -= part_index * project.m_combiner_mask;
+
+                // Find the most recent manifest that provided one of the parts
+                // to fetch the beacon list from:
+                //
+                if (resolved_part.m_source_manifest_time > latest_manifest_time) {
+                    latest_manifest = resolved_part.m_source_manifest_hash;
+                    latest_manifest_time = resolved_part.m_source_manifest_time;
+                }
+            }
+
+            convergence.AddPart("BeaconList", GetBeaconPartData(latest_manifest));
+
+            ++m_current_combination;
+
+            return boost::make_optional(std::move(convergence));
+        }
+
+    private:
+        //!
+        //! \brief The collection of manifest project parts grouped by project
+        //! to create convergence combinations from.
+        //!
+        std::map<std::string, ResolvedProject> m_projects;
+
+        size_t m_total_combinations;  //!< Number of project part combinations.
+        size_t m_current_combination; //!< Number of the combination to try.
+
+        //!
+        //! \brief Fetch the project part data for the specified part hash.
+        //!
+        //! \param part_hash Identifies the project part to fetch.
+        //!
+        //! \return Serialized binary data of the part to add to a convergence.
+        //!
+        static CSerializeData GetResolvedPartData(const uint256& part_hash)
+        {
+            LOCK(CSplitBlob::cs_mapParts);
+
+            const auto iter = CSplitBlob::mapParts.find(part_hash);
+
+            // If the resolved part disappeared, we cannot proceed, but
+            // the most recent project part should always exist:
+            if (iter == CSplitBlob::mapParts.end()) {
+                LogPrintf("ValidateSuperblock(): project part disappeared.");
+                return CSerializeData();
+            }
+
+            return iter->second.data;
+        }
+
+        //!
+        //! \brief Fetch the beacon list part data from the specified manifest.
+        //!
+        //! \param manifest_hash Identifies the manifest to fetch the part from.
+        //!
+        //! \return Serialized binary data of the beacon list part to add to a
+        //! convergence.
+        //!
+        static CSerializeData GetBeaconPartData(const uint256& manifest_hash)
+        {
+            LOCK(CScraperManifest::cs_mapManifest);
+
+            const auto iter = CScraperManifest::mapManifest.find(manifest_hash);
+
+            // If the manifest for the beacon list disappeared, we cannot
+            // proceed, but the most recent manifest should always exist:
+            if (iter == CScraperManifest::mapManifest.end()) {
+                LogPrintf("ValidateSuperblock(): beacon list manifest disappeared.");
+                return CSerializeData();
+            }
+
+            // If the manifest for the beacon list is now empty, we cannot
+            // proceed, but ProjectResolver should always select manifests
+            // with a beacon list part:
+            if (iter->second->vParts.empty()) {
+                LogPrintf("ValidateSuperblock(): beacon list part missing.");
+                return CSerializeData();
+            }
+
+            return iter->second->vParts[0]->data;
+        }
+    }; // ProjectCombiner
+
+    //!
+    //! \brief Prepares a set of manifest parts for each project hinted in the
+    //! superblock to find a supermajority for every project.
     //!
     class ProjectResolver
     {
@@ -221,11 +737,10 @@ private: // SuperblockValidator classes
         //! \param manifests_by_scraper Manifest hashes grouped by scraper.
         //!
         ProjectResolver(
-            std::map<std::string, std::set<uint256>> candidate_parts,
+            std::map<std::string, CandidatePartHashMap> candidate_parts,
             mmCSManifestsBinnedByScraper manifests_by_scraper)
             : m_manifests_by_scraper(std::move(manifests_by_scraper))
             , m_supermajority(NumScrapersForSupermajority(m_manifests_by_scraper.size()))
-            , m_latest_manifest_timestamp(0)
         {
             for (auto&& project_part_pair : candidate_parts) {
                 m_resolved_projects.emplace(
@@ -242,7 +757,7 @@ private: // SuperblockValidator classes
         //! of the projects in the superblock, or when the superblock contains
         //! only some of the converged projects.
         //!
-        bool ResolveProjectParts()
+        ProjectCombiner ResolveProjectParts()
         {
             // Collect the manifest parts that match the hints in the superblock
             // and record missing projects, if any:
@@ -268,7 +783,7 @@ private: // SuperblockValidator classes
                         "failed. Converged project %s missing from superblock.",
                         project_pair.first);
 
-                    return false;
+                    return ProjectCombiner();
                 }
             }
 
@@ -282,71 +797,11 @@ private: // SuperblockValidator classes
                         "failed. No manifest parts matched project %s.",
                         project_pair.first);
 
-                    return false;
-                }
-
-                if (project_pair.second.m_scrapers.size() < m_supermajority) {
-                    LogPrintf(
-                        "ValidateSuperblock(): fallback by-project resolution "
-                        "failed. No supermajority exists for project %s.",
-                        project_pair.first);
-
-                    return false;
+                    return ProjectCombiner();
                 }
             }
 
-            return true;
-        }
-
-        //!
-        //! \brief Construct a superblock from the local manifest data that
-        //! matches the most recent set of resolved project parts.
-        //!
-        //! \return A new superblock instance to compare to the superblock
-        //! under validation.
-        //!
-        Superblock BuildSuperblock() const
-        {
-            ConvergedManifest convergence;
-
-            {
-                LOCK(CScraperManifest::cs_mapManifest);
-
-                const auto iter = CScraperManifest::mapManifest.find(m_latest_manifest_hash);
-
-                // If the manifest for the beacon list disappeared, we cannot
-                // proceed, but the most recent manifest should always exist:
-                if (iter == CScraperManifest::mapManifest.end()) {
-                    LogPrintf("ValidateSuperblock(): beacon list manifest disappeared.");
-                    return Superblock();
-                }
-
-                convergence.ConvergedManifestPartsMap.emplace(
-                    "BeaconList",
-                    iter->second->vParts[0]->data);
-            }
-
-            {
-                LOCK(CSplitBlob::cs_mapParts);
-
-                for (const auto& project_pair : m_resolved_projects) {
-                    const auto iter = CSplitBlob::mapParts.find(
-                        project_pair.second.MostRecentPartHash());
-
-                    // If the resolved part disappeared, we cannot proceed, but
-                    // the most recent project part should always exist:
-                    if (iter == CSplitBlob::mapParts.end()) {
-                        LogPrintf("ValidateSuperblock(): project part disappeared.");
-                        return Superblock();
-                    }
-
-                    convergence.ConvergedManifestPartsMap.emplace(
-                        project_pair.first, // project name
-                        iter->second.data); // serialized part data
-                }
-            }
-
-            return Superblock::FromStats(GetScraperStatsByConvergedManifest(convergence));
+            return ProjectCombiner(std::move(m_resolved_projects));
         }
 
     private:
@@ -380,19 +835,6 @@ private: // SuperblockValidator classes
         std::map<std::string, std::set<ScraperID>> m_other_projects;
 
         //!
-        //! \brief Timestamp of the most recent manifest matched to a project
-        //! in the superblock.
-        //!
-        int64_t m_latest_manifest_timestamp;
-
-        //!
-        //! \brief Hash of the most recent manifest matched to a project in the
-        //! superblock. The beacon list part of the resolved convergence result
-        //! comes from this manifest.
-        //!
-        uint256 m_latest_manifest_hash;
-
-        //!
         //! \brief Record the supplied scraper ID for the specified project to
         //! track supermajority status.
         //!
@@ -403,34 +845,12 @@ private: // SuperblockValidator classes
         TallyProject(const std::string& project, const ScraperID& scraper_id)
         {
             if (m_resolved_projects.count(project)) {
-                ResolvedProject& resolved = m_resolved_projects.at(project);
-
-                resolved.m_scrapers.emplace(scraper_id);
-
-                return resolved;
+                return m_resolved_projects.at(project);
             }
 
             m_other_projects[project].emplace(scraper_id);
 
             return boost::none;
-        }
-
-        //!
-        //! \brief Store the hash and timestamp of the specified manifest if
-        //! the timestamp is more recent than the last seen manifest.
-        //!
-        //! After resolving each project part, the most recent matching manifest
-        //! will provide the manifest part for the convergence beacon list.
-        //!
-        //! \param hash The manifest hash to store.
-        //! \param time Timestamp of the
-        //!
-        void RecordLatestManifest(const uint256& hash, const int64_t time)
-        {
-            if (time > m_latest_manifest_timestamp) {
-                m_latest_manifest_timestamp = time;
-                m_latest_manifest_hash = hash;
-            }
         }
 
         //!
@@ -458,15 +878,22 @@ private: // SuperblockValidator classes
                 // If this project does not exist in the superblock, skip the
                 // attempt to associate its parts:
                 //
-                if (!project_option) {
+                if (!project_option
+                    || entry.part1 < 1
+                    || entry.part1 >= (int)manifest.vParts.size())
+                {
                     continue;
                 }
 
-                for (const auto& part : manifest.vParts) {
-                    if (project_option->Expects(part->hash)) {
-                        project_option->LinkPart(part->hash, entry.LastModified);
-                        RecordLatestManifest(manifest_hash, entry.LastModified);
-                    }
+                const uint256& part_hash = manifest.vParts[entry.part1]->hash;
+
+                if (project_option->Expects(part_hash)
+                    && project_option->Tally(part_hash, scraper_id, m_supermajority))
+                {
+                    project_option->LinkPart(ResolvedPart(
+                        manifest.vParts[entry.part1]->hash,
+                        manifest_hash,
+                        entry.LastModified));
                 }
             }
         }
@@ -476,6 +903,7 @@ private: // SuperblockValidator fields
 
     const Superblock& m_superblock; //!< Points to the superblock to validate.
     const QuorumHash m_quorum_hash; //!< Hash of the superblock to validate.
+    const size_t m_hint_shift;      //!< For testing by-project combinations.
 
 private: // SuperblockValidator methods
 
@@ -600,7 +1028,7 @@ private: // SuperblockValidator methods
     {
         const ScraperStats stats = GetScraperStatsFromSingleManifest(manifest);
 
-        return Superblock::FromStats(stats).GetHash() == m_quorum_hash;
+        return QuorumHash::Hash(stats) == m_quorum_hash;
     }
 
     //!
@@ -623,8 +1051,8 @@ private: // SuperblockValidator methods
     //!
     bool TryProjectFallback() const
     {
-        const std::map<uint32_t, std::string> hints = CollectPartHints();
-        std::map<std::string, std::set<uint256>> candidates = CollectCandidateParts(hints);
+        const std::multimap<uint32_t, std::string> hints = CollectPartHints();
+        std::map<std::string, CandidatePartHashMap> candidates = CollectCandidateParts(hints);
 
         if (candidates.size() != hints.size()) {
             LogPrintf(
@@ -635,12 +1063,21 @@ private: // SuperblockValidator methods
         }
 
         ProjectResolver resolver(std::move(candidates), ScraperDeleteCScraperManifests());
+        ProjectCombiner combiner = resolver.ResolveProjectParts();
 
-        if (!resolver.ResolveProjectParts()) {
-            return false;
+        if (fDebug) {
+            LogPrintf(
+                "ValidateSuperblock(): by-project possible combinations: %" PRIszu,
+                combiner.TotalCombinations());
         }
 
-        return resolver.BuildSuperblock().GetHash() == m_quorum_hash;
+        while (const auto combination_option = combiner.GetNextConvergence()) {
+            if (combination_option->ComputeQuorumHash() == m_quorum_hash) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     //!
@@ -649,13 +1086,14 @@ private: // SuperblockValidator methods
     //!
     //! \return A map of manifest project part hints to project names.
     //!
-    std::map<uint32_t, std::string> CollectPartHints() const
+    std::multimap<uint32_t, std::string> CollectPartHints() const
     {
-        std::map<uint32_t, std::string> hints;
+        std::multimap<uint32_t, std::string> hints;
+        size_t hint_shift = m_hint_shift - 32;
 
         for (const auto& project_pair : m_superblock.m_projects) {
             hints.emplace(
-                project_pair.second.m_convergence_hint,
+                project_pair.second.m_convergence_hint >> hint_shift,
                 project_pair.first); // Project name
         }
 
@@ -668,51 +1106,25 @@ private: // SuperblockValidator methods
     //!
     //! \return A map of project names to manifest project part hashes.
     //!
-    std::map<std::string, std::set<uint256>>
-    CollectCandidateParts(const std::map<uint32_t, std::string>& hints) const
+    std::map<std::string, CandidatePartHashMap>
+    CollectCandidateParts(const std::multimap<uint32_t, std::string>& hints) const
     {
-        struct Candidate
-        {
-            std::string m_project_name;
-            std::set<uint256> m_part_hashes;
-        };
+        std::map<std::string, CandidatePartHashMap> candidates;
 
-        std::map<uint32_t, Candidate> candidates;
+        LOCK(CSplitBlob::cs_mapParts);
 
-        {
-            LOCK(CSplitBlob::cs_mapParts);
+        for (const auto& part_pair : CSplitBlob::mapParts) {
+            uint32_t hint = part_pair.first.Get64() >> m_hint_shift;
+            auto hint_range = hints.equal_range(hint);
 
-            for (const auto& part_pair : CSplitBlob::mapParts) {
-                uint32_t hint = part_pair.second.hash.Get64() >> 32;
-
-                const auto hint_iter = hints.find(hint);
-
-                if (hint_iter != hints.end()) {
-                    auto iter_pair = candidates.emplace(hint, Candidate());
-                    Candidate& candidate = iter_pair.first->second;
-
-                    // Set the project name if we just inserted a new candidate:
-                    if (iter_pair.second) {
-                        candidate.m_project_name = hint_iter->second;
-                    }
-
-                    candidate.m_part_hashes.emplace(part_pair.second.hash);
-                }
+            for (auto i = hint_range.first; i != hint_range.second; ++i) {
+                candidates[i->second].emplace(
+                    part_pair.second.hash,
+                    std::initializer_list<ScraperID> { });
             }
         }
 
-        // Pivot the candidate part hashes that match the hints into a map keyed
-        // by project names:
-        //
-        std::map<std::string, std::set<uint256>> candidates_by_project;
-
-        for (auto&& candidate_pair : candidates) {
-            candidates_by_project.emplace(
-                std::move(candidate_pair.second.m_project_name),
-                std::move(candidate_pair.second.m_part_hashes));
-        }
-
-        return candidates_by_project;
+        return candidates;
     }
 }; // SuperblockValidator
 
@@ -936,11 +1348,14 @@ static_assert(offsetof(struct BinaryResearcher, magnitude) ==
 // Functions
 // -----------------------------------------------------------------------------
 
-bool NN::ValidateSuperblock(const Superblock& superblock, const bool use_cache)
+bool NN::ValidateSuperblock(
+    const Superblock& superblock,
+    const bool use_cache,
+    const size_t hint_bits)
 {
     using Result = SuperblockValidator::Result;
 
-    const Result result = SuperblockValidator(superblock).Validate(use_cache);
+    const Result result = SuperblockValidator(superblock, hint_bits).Validate(use_cache);
     std::string message;
 
     switch (result) {
@@ -1099,52 +1514,10 @@ Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
 
 Superblock Superblock::FromStats(const ScraperStats& stats)
 {
-    // The loop below depends on the relative value of these enum types:
-    static_assert(statsobjecttype::NetworkWide < statsobjecttype::byCPID,
-        "Unexpected enumeration order of scraper stats map object types.");
-    static_assert(statsobjecttype::byCPID < statsobjecttype::byCPIDbyProject,
-        "Unexpected enumeration order of scraper stats map object types.");
-    static_assert(statsobjecttype::byProject < statsobjecttype::byCPIDbyProject,
-        "Unexpected enumeration order of scraper stats map object types.");
-
     Superblock superblock;
+    ScraperStatsSuperblockBuilder<Superblock> builder(superblock);
 
-    for (const auto& entry : stats) {
-        // A CPID, project name, or project name/CPID pair that identifies the
-        // current statistics record:
-        const std::string& object_id = entry.first.objectID;
-
-        switch (entry.first.objecttype) {
-            case statsobjecttype::NetworkWide:
-                // This map starts with a single, network-wide statistics entry.
-                // Skip it because superblock objects will recalculate the stats
-                // as needed after deserialization.
-                //
-                continue;
-
-            case statsobjecttype::byCPID:
-                superblock.m_cpids.Add(
-                    Cpid::Parse(object_id),
-                    std::round(entry.second.statsvalue.dMag));
-
-                break;
-
-            case statsobjecttype::byProject:
-                superblock.m_projects.Add(object_id, ProjectStats(
-                    std::round(entry.second.statsvalue.dTC),
-                    std::round(entry.second.statsvalue.dAvgRAC),
-                    std::round(entry.second.statsvalue.dRAC)));
-
-                break;
-
-            default:
-                // The scraper statistics map orders the entries by "objecttype"
-                // starting with "byCPID" and "byProject". After importing these
-                // sections into the superblock, we can exit this loop.
-                //
-                return superblock;
-        }
-    }
+    builder.BuildFromStats(stats);
 
     return superblock;
 }
@@ -1502,6 +1875,13 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     MD5((const unsigned char*)input.data(), input.size(), output.data());
 
     return QuorumHash(output);
+}
+
+QuorumHash QuorumHash::Hash(const ScraperStats& stats)
+{
+    ScraperStatsQuorumHasher hasher(stats);
+
+    return hasher.GetHash();
 }
 
 QuorumHash QuorumHash::Parse(const std::string& hex)

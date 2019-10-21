@@ -132,6 +132,7 @@ GRIDCOIN_CORE_H = \
 	ui_interface.h \
 	uint256.h \
 	util/memory.h \
+	util/reverse_iterator.h \
 	util.h \
 	version.h \
 	walletdb.h \

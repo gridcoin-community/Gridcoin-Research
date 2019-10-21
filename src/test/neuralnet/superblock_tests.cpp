@@ -1854,10 +1854,10 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     projects.Add("project_2", NN::Superblock::ProjectStats(0, 0, 0));
 
     // Note: convergence hints embedded in a superblock are NOT considered
-    // when generating the superblock hash:
+    // when generating the superblock hash, and the container sizes aren't
+    // either:
     //
     std::vector<unsigned char> input {
-        0x02,                                            // CPIDs size
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,  // CPID 1
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,  // ...
         0x01,                                            // Magnitude
@@ -1865,7 +1865,6 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
         0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00,  // ...
         0x01,                                            // Magnitude
         0x00,                                            // Zero-mag count
-        0x02,                                            // Projects size
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74,  // "project_1" key
         0x5f, 0x31,                                      // ...
         0x00,                                            // Total credit
@@ -1884,8 +1883,15 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     BOOST_CHECK(hash.Valid() == true);
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
     BOOST_CHECK(hash == expected);
-    BOOST_CHECK(hash.ToString()
-        == "99b20dca6d76a3ab1b704925535ec08a9d46fbf95ca3036396b628e23db00156");
+    BOOST_CHECK(hash.ToString() == expected.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
+{
+    NN::Superblock superblock = NN::Superblock::FromStats(GetTestScraperStats());
+    NN::QuorumHash quorum_hash = NN::QuorumHash::Hash(GetTestScraperStats());
+
+    BOOST_CHECK(quorum_hash == superblock.GetHash());
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
@@ -2016,11 +2022,10 @@ BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
 {
     NN::Superblock superblock;
 
-    // Hashed byte content of an empty superblock:
+    // Hashed byte content of an empty superblock. Note that container sizes
+    // are not considered in the hash:
     std::vector<unsigned char> input {
-        0x00, // CPIDs size
         0x00, // Zero-mag CPID count
-        0x00, // Projects size
     };
 
     NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
@@ -2036,7 +2041,7 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
     NN::Superblock superblock;
     NN::QuorumHash hash = NN::QuorumHash::Hash(superblock);
 
-    BOOST_CHECK(hash == "27736f6456ba3805750faebf98bff6a5d0919230ede9bb70c29f0127f637e478");
+    BOOST_CHECK(hash == "9a538906e6466ebd2617d321f71bc94e56056ce213d366773699e28158e00614");
     BOOST_CHECK(hash != "invalid");
     BOOST_CHECK(hash != "");
 
@@ -2050,7 +2055,7 @@ BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
     hash = NN::QuorumHash(); // Invalid
 
     BOOST_CHECK(hash == "");
-    BOOST_CHECK(hash != "27736f6456ba3805750faebf98bff6a5d0919230ede9bb70c29f0127f637e478");
+    BOOST_CHECK(hash != "9a538906e6466ebd2617d321f71bc94e56056ce213d366773699e28158e00614");
     BOOST_CHECK(hash != Legacy::GetQuorumHash("<MAGNITUDES></MAGNITUDES>"));
 }
 

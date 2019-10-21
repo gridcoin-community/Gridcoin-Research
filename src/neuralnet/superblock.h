@@ -89,6 +89,8 @@ public:
     //!
     static QuorumHash Hash(const Superblock& superblock);
 
+    static QuorumHash Hash(const ScraperStats& stats);
+
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
     //! representation of a hash.
@@ -392,7 +394,9 @@ public:
         template<typename Stream>
         void Serialize(Stream& stream) const
         {
-            WriteCompactSize(stream, m_magnitudes.size());
+            if (!(stream.GetType() & SER_GETHASH)) {
+                WriteCompactSize(stream, m_magnitudes.size());
+            }
 
             for (const auto& cpid_pair : m_magnitudes) {
                 cpid_pair.first.Serialize(stream);
@@ -640,9 +644,8 @@ public:
         {
             if (!(stream.GetType() & SER_GETHASH)) {
                 stream << m_converged_by_project;
+                WriteCompactSize(stream, m_projects.size());
             }
-
-            WriteCompactSize(stream, m_projects.size());
 
             for (const auto& project_pair : m_projects) {
                 stream << project_pair;
@@ -868,10 +871,14 @@ private:
 //!
 //! \param superblock The superblock to validate.
 //! \param use_cache  If \c false, skip validation with the scraper cache.
+//! \param hint_bits  For testing by-project fallback validation.
 //!
 //! \return \c True if the local manifest data produces a matching superblock.
 //!
-bool ValidateSuperblock(const Superblock& superblock, const bool use_cache = true);
+bool ValidateSuperblock(
+    const Superblock& superblock,
+    const bool use_cache = true,
+    const size_t hint_bits = 32);
 } // namespace NN
 
 namespace std {
