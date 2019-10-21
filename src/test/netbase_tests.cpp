@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "netbase.h"
+#include "util/strencodings.h"
 
 using namespace std;
 

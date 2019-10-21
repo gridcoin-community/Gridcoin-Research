@@ -42,17 +42,17 @@ void RepairZeroCpidIndex(CBlockIndex* const pindex)
         return;
     }
 
-    const std::string mining_id = claim->m_mining_id.ToString();
-
-    if (mining_id != pindex->GetCPID())
+    if (claim->m_mining_id != pindex->GetMiningId())
     {
         if(fDebug)
             LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                      pindex->GetCPID(), mining_id,
-                      pindex->GetBlockHash().GetHex(), pindex->nHeight );
+                pindex->GetMiningId().ToString(),
+                claim->m_mining_id.ToString(),
+                pindex->GetBlockHash().GetHex(),
+                pindex->nHeight);
 
         /* Repair the cpid field */
-        pindex->SetCPID(mining_id);
+        pindex->SetMiningId(claim->m_mining_id);
 
 #if 0
         if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
@@ -328,7 +328,7 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
 
 static CBlockIndex *InsertBlockIndex(const uint256& hash)
 {
-    if (hash == 0)
+    if (hash.IsNull())
         return NULL;
 
     // Return existing
@@ -365,7 +365,7 @@ bool CTxDB::LoadBlockIndex()
     leveldb::Iterator *iterator = pdb->NewIterator(leveldb::ReadOptions());
     // Seek to start key.
     CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
-    ssStartKey << make_pair(string("blockindex"), uint256(0));
+    ssStartKey << make_pair(string("blockindex"), uint256());
     iterator->Seek(ssStartKey.str());
 
     int nLoaded = 0;
@@ -487,13 +487,15 @@ bool CTxDB::LoadBlockIndex()
     nBestChainTrust = pindexBest->nChainTrust;
 
     LogPrintf("LoadBlockIndex(): hashBestChain=%s  height=%d  trust=%s  date=%s",
-      hashBestChain.ToString().substr(0,20), nBestHeight, CBigNum(nBestChainTrust).ToString(),
+      hashBestChain.ToString().substr(0,20),
+      nBestHeight,
+      CBigNum(ArithToUint256(nBestChainTrust)).ToString(),
       DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
 
     // Load bnBestInvalidTrust, OK if it doesn't exist
     CBigNum bnBestInvalidTrust;
     ReadBestInvalidTrust(bnBestInvalidTrust);
-    nBestInvalidTrust = bnBestInvalidTrust.getuint256();
+    nBestInvalidTrust = UintToArith256(bnBestInvalidTrust.getuint256());
     nLoaded = 0;
     // Verify blocks in the best chain
     int nCheckLevel = GetArg("-checklevel", 1);
@@ -660,7 +662,7 @@ bool CTxDB::LoadBlockIndex()
         if(!IsResearchAgeEnabled(pindex->nHeight))
             continue;
 
-        if( pindex->IsUserCPID() && pindex->cpid == uint128() )
+        if( pindex->IsUserCPID() && pindex->cpid.IsZero() )
         {
             RepairZeroCpidIndex(pindex);
         }

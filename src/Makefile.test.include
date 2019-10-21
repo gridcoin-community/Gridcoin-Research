@@ -52,7 +52,6 @@ GRIDCOIN_TESTS =\
   test/sigopcount_tests.cpp \
   test/test_gridcoin.cpp \
   test/transaction_tests.cpp \
-  test/uint160_tests.cpp \
   test/uint256_tests.cpp \
   test/util_tests.cpp \
   test/wallet_tests.cpp

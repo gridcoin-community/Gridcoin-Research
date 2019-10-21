@@ -965,7 +965,7 @@ struct ConvergedScraperStats
 
     void AddConvergenceToPastConvergencesMap()
     {
-        uint32_t nReducedContentHash = Convergence.nContentHash.Get64() >> 32;
+        uint32_t nReducedContentHash = Convergence.nContentHash.GetUint64() >> 32;
 
         if (Convergence.nContentHash != uint256() && PastConvergences.find(nReducedContentHash) == PastConvergences.end())
         {

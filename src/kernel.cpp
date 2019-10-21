@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "arith_uint256.h"
 #include "kernel.h"
 #include "txdb.h"
 #include "main.h"
@@ -111,7 +112,7 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
     int64_t nSelectionIntervalStop, uint64_t nStakeModifierPrev, const CBlockIndex** pindexSelected)
 {
     bool fSelected = false;
-    uint256 hashBest = 0;
+    arith_uint256 hashBest = 0;
     *pindexSelected = (const CBlockIndex*) 0;
     for (auto const& item : vSortedByTimestamp)
     {
@@ -127,7 +128,7 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
         // previous proof-of-stake modifier
         CDataStream ss(SER_GETHASH, 0);
         ss << pindex->hashProof << nStakeModifierPrev;
-        uint256 hashSelection = Hash(ss.begin(), ss.end());
+        arith_uint256 hashSelection = UintToArith256(Hash(ss.begin(), ss.end()));
         // the selection hash is divided by 2**32 so that proof-of-stake block
         // is always favored over proof-of-work block. this is to preserve
         // the energy efficiency property
@@ -184,7 +185,7 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
     if (nModifierTime / nModifierInterval >= pindexPrev->GetBlockTime() / nModifierInterval)
         return true;
 
-    const uint256 ModifGlitch_hash("439b96fd59c3d585a6b93ee63b6e1d78361d7eb9b299657dee6a2c5400ccba29");
+    const uint256 ModifGlitch_hash = uint256S("439b96fd59c3d585a6b93ee63b6e1d78361d7eb9b299657dee6a2c5400ccba29");
     const uint64_t ModifGlitch_correct=0xdf209a3032807577;
     if(pindexPrev->GetBlockHash()==ModifGlitch_hash)
     {
@@ -205,7 +206,36 @@ bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeMod
         pindex = pindex->pprev;
     }
     int nHeightFirstCandidate = pindex ? (pindex->nHeight + 1) : 0;
-    std::sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end());
+
+    // Shuffle before sort
+    for(int i = vSortedByTimestamp.size() - 1; i > 1; --i)
+    std::swap(vSortedByTimestamp[i], vSortedByTimestamp[GetRand(i)]);
+
+    // Upgrading to Bitcoin's latest uint256 type changes the backing storage
+    // from an array of 32-bit integers to a byte array. Since the comparison
+    // operator implementations changed as well, the less-than comparison for
+    // sorting the vector of candidates can produce different block orderings
+    // for the historical stake modifier than the original order from before.
+    //
+    // To ensure that we reproduce the same stake modifier values out of this
+    // candidate set, we adopt Peercoin's strategy for sorting the collection
+    // that behaves like the old uint256 implementation:
+    //
+    sort(vSortedByTimestamp.begin(), vSortedByTimestamp.end(), [] (const pair<int64_t, uint256> &a, const pair<int64_t, uint256> &b)
+    {
+        if (a.first != b.first)
+            return a.first < b.first;
+        // Timestamp equals - compare block hashes
+        const uint32_t *pa = a.second.GetDataPtr();
+        const uint32_t *pb = b.second.GetDataPtr();
+        int cnt = 256 / 32;
+        do {
+            --cnt;
+            if (pa[cnt] != pb[cnt])
+                return pa[cnt] < pb[cnt];
+        } while(cnt);
+            return false; // Elements are equal
+    });
 
     // Select 64 blocks from candidate blocks to generate stake modifier
     uint64_t nStakeModifierNew = 0;
@@ -267,10 +297,10 @@ unsigned int GetStakeModifierChecksum(const CBlockIndex* pindex)
     CDataStream ss(SER_GETHASH, 0);
     if (pindex->pprev)
         ss << pindex->pprev->nStakeModifierChecksum;
-    ss << pindex->nFlags << (pindex->IsProofOfStake() ? pindex->hashProof : 0) << pindex->nStakeModifier;
-    uint256 hashChecksum = Hash(ss.begin(), ss.end());
+    ss << pindex->nFlags << (pindex->IsProofOfStake() ? pindex->hashProof : uint256()) << pindex->nStakeModifier;
+    arith_uint256 hashChecksum = UintToArith256(Hash(ss.begin(), ss.end()));
     hashChecksum >>= (256 - 32);
-    return hashChecksum.Get64();
+    return hashChecksum.GetLow64();
 }
 
 // Check stake modifier hard checkpoints

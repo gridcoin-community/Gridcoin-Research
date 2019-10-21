@@ -425,7 +425,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     }
     entry.pushKV("vout", vout);
 
-    if (hashBlock != 0)
+    if (!hashBlock.IsNull())
     {
         entry.pushKV("blockhash", hashBlock.GetHex());
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
@@ -468,7 +468,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     CTransaction tx;
-    uint256 hashBlock = 0;
+    uint256 hashBlock;
     if (!GetTransaction(hash, tx, hashBlock))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "No information available about transaction");
 
@@ -1352,7 +1352,7 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
         if (nOutput < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout must be positive");
 
-        CTxIn in(COutPoint(uint256(txid), nOutput));
+        CTxIn in(COutPoint(uint256S(txid), nOutput));
         rawTx.vin.push_back(in);
     }
 
@@ -1415,7 +1415,7 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp)
     }
 
     UniValue result(UniValue::VOBJ);
-    TxToJSON(tx, 0, result);
+    TxToJSON(tx, uint256(), result);
 
     return result;
 }
@@ -1668,10 +1668,10 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     // See if the transaction is already in a block
     // or in the memory pool:
     CTransaction existingTx;
-    uint256 hashBlock = 0;
+    uint256 hashBlock;
     if (GetTransaction(hashTx, existingTx, hashBlock))
     {
-        if (hashBlock != 0)
+        if (!hashBlock.IsNull())
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("transaction already in block ")+hashBlock.GetHex());
         // Not in block, but already in the memory pool; will drop
         // through to re-relay it.

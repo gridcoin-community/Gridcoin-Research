@@ -760,7 +760,7 @@ UniValue getmpart(const UniValue& params, bool fHelp)
 
     LOCK(CSplitBlob::cs_mapParts);
 
-    auto ipart= CSplitBlob::mapParts.find(uint256(params[0].get_str()));
+    auto ipart= CSplitBlob::mapParts.find(uint256S(params[0].get_str()));
     if(ipart == CSplitBlob::mapParts.end())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");
     return UniValue(HexStr(ipart->second.data.begin(),ipart->second.data.end()));

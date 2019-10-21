@@ -17,7 +17,7 @@ namespace {
 //!
 std::string BlockHashToString(const uint256& block_hash)
 {
-    if (block_hash == 0) {
+    if (block_hash.IsNull()) {
         return "0";
     }
 
@@ -39,7 +39,7 @@ uint256 GetClaimHash(const Claim& claim, const uint256& last_block_hash)
     const CpidOption cpid = claim.m_mining_id.TryCpid();
 
     if (!cpid) {
-        return uint256(0);
+        return uint256();
     }
 
     if (claim.m_version > 1) {
@@ -104,7 +104,6 @@ Claim::Claim() : Claim(CURRENT_VERSION)
 Claim::Claim(uint32_t version)
     : m_version(version)
     , m_block_subsidy(0)
-    , m_last_block_hash(0)
     , m_research_subsidy(0)
     , m_magnitude(0)
     , m_magnitude_unit(0)

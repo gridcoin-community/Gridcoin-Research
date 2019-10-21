@@ -141,7 +141,7 @@ uint256 scrypt_nosalt(const void* input, size_t inputlen, void *scratchpad)
 {
     unsigned int *V;
     unsigned int X[32];
-    uint256 result = 0;
+    uint256 result;
     V = (unsigned int *)(((uintptr_t)(scratchpad) + 63) & ~ (uintptr_t)(63));
 
     PBKDF2_SHA256((const uint8_t*)input, inputlen, (const uint8_t*)input, inputlen, 1, (uint8_t *)X, 128);
@@ -155,7 +155,7 @@ uint256 scrypt(const void* data, size_t datalen, const void* salt, size_t saltle
 {
     unsigned int *V;
     unsigned int X[32];
-    uint256 result = 0;
+    uint256 result;
     V = (unsigned int *)(((uintptr_t)(scratchpad) + 63) & ~ (uintptr_t)(63));
 
     PBKDF2_SHA256((const uint8_t*)data, datalen, (const uint8_t*)salt, saltlen, 1, (uint8_t *)X, 128);

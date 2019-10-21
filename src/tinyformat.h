@@ -1009,4 +1009,7 @@ TINYFORMAT_WRAP_FORMAT_N(16, returnType, funcName, funcDeclSuffix, bodyPrefix, s
 
 } // namespace tinyformat
 
+/** Format arguments and return the string or write to given std::ostream (see tinyformat::format doc for details) */
+#define strprintf tfm::format
+
 #endif // TINYFORMAT_H_INCLUDED

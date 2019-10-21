@@ -248,7 +248,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
             UniValue entry(UniValue::VOBJ);
 
             entry.pushKV("txid", tx.GetHash().GetHex());
-            TxToJSON(tx, 0, entry);
+            TxToJSON(tx, uint256(), entry);
 
             txinfo.push_back(entry);
         }
@@ -419,7 +419,7 @@ UniValue getblock(const UniValue& params, bool fHelp)
                 "Returns details of a block with given block-hash\n");
 
     std::string strHash = params[0].get_str();
-    uint256 hash(strHash);
+    uint256 hash = uint256S(strHash);
 
     if (mapBlockIndex.count(hash) == 0)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
@@ -1224,7 +1224,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
     UniValue c(UniValue::VOBJ);
     UniValue res(UniValue::VOBJ);
 
-    std::string cpid = NN::GetPrimaryCpid();
+    const NN::MiningId mining_id = NN::Researcher::Get()->Id();
     std::string Narr = ToString(GetAdjustedTime());
 
     c.pushKV("Lifetime Payments Report", Narr);
@@ -1244,11 +1244,11 @@ UniValue lifetime(const UniValue& params, bool fHelp)
         if (pindex == pindexBest)
             break;
 
-        if (pindex->GetCPID() == cpid && (pindex->nResearchSubsidy > 0))
+        if (pindex->GetMiningId() == mining_id && (pindex->nResearchSubsidy > 0))
             res.pushKV(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2));
     }
     //8-14-2015
-    StructCPID& stCPID = GetInitializedStructCPID2(cpid, mvResearchAge);
+    StructCPID& stCPID = GetInitializedStructCPID2(mining_id.ToString(), mvResearchAge);
 
     res.pushKV("RA Magnitude Sum", stCPID.TotalMagnitude);
     res.pushKV("RA Accuracy", stCPID.Accuracy);
@@ -2030,8 +2030,7 @@ UniValue sendblock(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::string sHash = params[0].get_str();
-    uint256 hash = uint256(sHash);
+    uint256 hash = uint256S(params[0].get_str());
     bool fResult = AskForOutstandingBlocks(hash);
 
     res.pushKV("Requesting", hash.ToString());
@@ -2239,7 +2238,7 @@ UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    bool fResult = AskForOutstandingBlocks(uint256(0));
+    bool fResult = AskForOutstandingBlocks(uint256());
 
     res.pushKV("Sent.", fResult);
 
@@ -2552,7 +2551,7 @@ UniValue GetJsonUnspentReport()
             // Prove the magnitude from a 3rd party standpoint:
             if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
             {
-                CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256(sXmlBlockHash)];
+                CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256S(sXmlBlockHash)];
                 if (pblockindexMagnitude)
                 {
                     bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
@@ -2644,8 +2643,8 @@ UniValue GetJsonUnspentReport()
     {
         // Prove the contents of the XML as a 3rd party
         CTransaction tx2;
-        uint256 hashBlock = 0;
-        uint256 uTXID(ExtractXML(vXML[x],"<TXID>","</TXID>"));
+        uint256 hashBlock;
+        uint256 uTXID = uint256S(ExtractXML(vXML[x],"<TXID>","</TXID>"));
         std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
         std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
         std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
@@ -2655,7 +2654,7 @@ UniValue GetJsonUnspentReport()
         int32_t iPos = RoundFromString(sPos,0);
         std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
 
-        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && uTXID > 0)
+        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && !uTXID.IsNull())
         {
 
             if (GetTransaction(uTXID, tx2, hashBlock))
