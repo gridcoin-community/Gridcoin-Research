@@ -47,7 +47,6 @@ extern std::string ExtractValue(std::string data, std::string delimiter, int pos
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 extern double GetSuperblockMagnitudeByCPID(std::string data, std::string cpid);
 std::string GetQuorumHash(const std::string& data);
-double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 int64_t GetMaximumBoincSubsidy(int64_t nTime);
 double GRCMagnitudeUnit(int64_t locktime);
@@ -80,7 +79,6 @@ double GetTotalBalance();
 
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-double LederstrumpfMagnitude2(double mag,int64_t locktime);
 
 BlockFinder RPCBlockFinder;
 
@@ -607,18 +605,12 @@ bool TallyMagnitudesInSuperblock()
                     stCPID.Magnitude = magnitude;
                     stCPID.cpid = cpid;
                     mvDPORCopy[cpid]=stCPID;
+
                     StructCPID& stMagg = GetInitializedStructCPID2(cpid,mvMagnitudesCopy);
                     stMagg.cpid = cpid;
                     stMagg.Magnitude = stCPID.Magnitude;
-                    //Adjust total owed - in case they are a newbie:
-                    if (true)
-                    {
-                        double total_owed = 0;
-                        stMagg.owed = GetOutstandingAmountOwed(stMagg,cpid,(double)GetAdjustedTime(),total_owed,stCPID.Magnitude);
-                        stMagg.totalowed = total_owed;
-                    }
-
                     mvMagnitudesCopy[cpid] = stMagg;
+
                     TotalNetworkMagnitude += stMagg.Magnitude;
                     TotalNetworkEntries++;
 
@@ -2385,7 +2377,6 @@ UniValue MagnitudeReport(std::string cpid)
     std::string Narr = ToString(GetAdjustedTime());
     c.pushKV("RSA Report",Narr);
     results.push_back(c);
-    double total_owed = 0;
     double magnitude_unit = GRCMagnitudeUnit(GetAdjustedTime());
     if (!pindexBest) return results;
 
@@ -2405,62 +2396,40 @@ UniValue MagnitudeReport(std::string cpid)
                 if (cpid.empty() || (Contains(structMag.cpid,cpid)))
                 {
                     UniValue entry(UniValue::VOBJ);
-
-                    if (IsResearchAgeEnabled(pindexBest->nHeight))
+                    StructCPID& stCPID = GetLifetimeCPID(structMag.cpid); // Rescan...
+                    double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
+                    entry.pushKV("CPID",structMag.cpid);
+                    entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
+                    entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
+                    entry.pushKV("Research Payments (14 days)",structMag.payments);
                     {
-                        StructCPID& stCPID = GetLifetimeCPID(structMag.cpid); // Rescan...
-                        double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
-                        entry.pushKV("CPID",structMag.cpid);
-                        entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
-                        entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
-                        entry.pushKV("Research Payments (14 days)",structMag.payments);
-                        {
-                            int64_t nTime = GetAdjustedTime();
-                            double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
-                            double dAccrualAge, AvgMagnitude;
-                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-                            entry.pushKV("Owed", nBoinc / (double)COIN);
-                        }
-                        entry.pushKV("Daily Paid",structMag.payments/14);
-                        // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
-                        double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
-                        entry.pushKV("Expected Earnings (14 days)", dExpected14);
-                        entry.pushKV("Expected Earnings (Daily)", dExpected14/14);
-
-                        // Fulfillment %
-                        double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
-                        entry.pushKV("Fulfillment %", fulfilled);
-
-                        entry.pushKV("CPID Lifetime Interest Paid", stCPID.InterestSubsidy);
-                        entry.pushKV("CPID Lifetime Research Paid", stCPID.ResearchSubsidy);
-                        entry.pushKV("CPID Lifetime Magnitude Sum", stCPID.TotalMagnitude);
-                        entry.pushKV("CPID Lifetime Accuracy", stCPID.Accuracy);
-
-                        entry.pushKV("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01));
-                        entry.pushKV("Last Blockhash Paid", stCPID.BlockHash);
-                        entry.pushKV("Last Block Paid",stCPID.LastBlock);
-                        entry.pushKV("Tx Count",(int)stCPID.Accuracy);
-
-                        results.push_back(entry);
+                        int64_t nTime = GetAdjustedTime();
+                        double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+                        double dAccrualAge, AvgMagnitude;
+                        int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+                        entry.pushKV("Owed", nBoinc / (double)COIN);
                     }
-                    else
-                    {
-                        entry.pushKV("CPID",structMag.cpid);
-                        entry.pushKV("Last Block Paid",structMag.LastBlock);
-                        entry.pushKV("DPOR Magnitude",  structMag.Magnitude);
-                        entry.pushKV("Payment Timespan (Days)",structMag.PaymentTimespan);
-                        entry.pushKV("Total Earned (14 days)",structMag.totalowed);
-                        entry.pushKV("DPOR Payments (14 days)",structMag.payments);
-                        double outstanding = Round(structMag.totalowed - structMag.payments,2);
-                        total_owed += outstanding;
-                        entry.pushKV("Outstanding Owed (14 days)",outstanding);
-                        entry.pushKV("InterestPayments (14 days)",structMag.interestPayments);
-                        entry.pushKV("Last Payment Time",TimestampToHRDate(structMag.LastPaymentTime));
-                        entry.pushKV("Owed",structMag.owed);
-                        entry.pushKV("Daily Paid",structMag.payments/14);
-                        entry.pushKV("Daily Owed",structMag.totalowed/14);
-                        results.push_back(entry);
-                    }
+                    entry.pushKV("Daily Paid",structMag.payments/14);
+                    // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
+                    double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
+                    entry.pushKV("Expected Earnings (14 days)", dExpected14);
+                    entry.pushKV("Expected Earnings (Daily)", dExpected14/14);
+
+                    // Fulfillment %
+                    double fulfilled = ((structMag.payments/14) / ((dExpected14/14)+.01)) * 100;
+                    entry.pushKV("Fulfillment %", fulfilled);
+
+                    entry.pushKV("CPID Lifetime Interest Paid", stCPID.InterestSubsidy);
+                    entry.pushKV("CPID Lifetime Research Paid", stCPID.ResearchSubsidy);
+                    entry.pushKV("CPID Lifetime Magnitude Sum", stCPID.TotalMagnitude);
+                    entry.pushKV("CPID Lifetime Accuracy", stCPID.Accuracy);
+
+                    entry.pushKV("CPID Lifetime Payments Per Day", stCPID.ResearchSubsidy/(days+.01));
+                    entry.pushKV("Last Blockhash Paid", stCPID.BlockHash);
+                    entry.pushKV("Last Block Paid",stCPID.LastBlock);
+                    entry.pushKV("Tx Count",(int)stCPID.Accuracy);
+
+                    results.push_back(entry);
                 }
             }
         }
@@ -2469,7 +2438,6 @@ UniValue MagnitudeReport(std::string cpid)
 
         UniValue entry2(UniValue::VOBJ);
         entry2.pushKV("Magnitude Unit (GRC payment per Magnitude per day)", magnitude_unit);
-        if (!IsResearchAgeEnabled(pindexBest->nHeight) && cpid.empty()) entry2.pushKV("Grand Total Outstanding Owed",total_owed);
         results.push_back(entry2);
 
         int nMaxDepth = (nBestHeight-CONSENSUS_LOOKBACK) - ( (nBestHeight-CONSENSUS_LOOKBACK) % BLOCK_GRANULARITY);
