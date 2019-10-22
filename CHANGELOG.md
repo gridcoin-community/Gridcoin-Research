@@ -4,7 +4,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [4.0.5.0] 2019-08-20, leisure
+## [4.0.6.0] 2019-10-22, leisure, "Ernestine"
+### Added
+ - Add testnet desktop launcher action for Linux #1516 (@caraka)
+ - Shuffle vSideStakeAlloc if necessary to support sidestaking to more than 6 destinations #1532 (@jamescowens)
+ - New Superblock format preparations for Fern #1526, #1542 (@jamescowens, @cyrossignol)
+ - Multisigtools
+   - Consolidate multisig unspent #1529 (@iFoggz)
+   - Scanforunspent #1547 (@iFoggz)
+   - consolidatemsunspent and scanforunspent bug fix #1561 (@iFoggz)
+ - New banning misbehavior handling and Peers Tab on Debug Console #1537 (@jamescowens)
+ - Reimplement getunconfirmedbalance rpc #1548 (@jamescowens)
+ - Add CLI switch to display binary version #1553 (@cyrossignol)
+
+### Changed
+ - Select smallest coins for contracts #1519 (@iFoggz)
+ - Move some functionality from miner to SelectCoinsForStaking + Respect the coin reserve setting + Randomize UTXO order #1525 (@iFoggz)
+ - For voting - if url does not contain http then add it #1531 (@ifoggz)
+ - Backport newer serialization facilities from Bitcoin #1535 (@cyrossignol)
+ - Refactor ThreadSocketHandler2() Inactivity checks #1538 (@iFoggz)
+ - Update outdated checkpoints #1539 (@barton2526)
+ - Change needed to build Gridcoin for OSX using homebrew #1540 (@Git-Jiro)
+ - Optimize scraper traffic for expiring manifests #1542 (@jamescowens)
+ - Move legacy neural vote warnings to debug log level #1560 (@cyrossignol)
+ - Change banlist save interval to 5 minutes #1564 (@jamescowens)
+ - Change default rpcconsole.ui window size to better support new Peers tab #1566 (@jamescowens)
+
+### Removed
+ - Remove deprecated RSA weight and legacy kernel #1507 (@cyrossignol)
+
+### Fixed
+ - Clean up compiler warnings #1521 (@cyrossignol)
+ - Handle missing external CPID in client_state.xml #1530 (@cyrossignol)
+ - Support boost 1.70+ #1533 (@iFoggz)
+ - Fix diagnostics failed to make connection to NTP server #1545 (@Git-Jiro)
+ - Install manpages in correct system location #1546 (@Git-Jiro)
+ - Fix ability to show help and version without a config file #1553 (@cyrossignol)
+ - Refactor QT UI variable names to be more consistent, Fix Difficulty default #1563 (@barton2526)
+ - Fix two regressions in previous UI refactor #1565 (@barton2526)
+ - Fix "Owed" amount in output of "magnitude" RPC method #1569 (@cyrossignol)
+
+## [4.0.5.0] 2019-08-20, leisure, "Elizabeth"
 ### Added
  - Add freedesktop.org desktop file and icon set #1438 (@a123b)
  - Add warning in help for blockchain scan for importprivkey #1469 (@jamescowens)
@@ -54,7 +94,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Adds back the new user wizard inadvertently removed #1464 (@jamescowens).
  - Repair scraper team filtering #1466 (@jamescowens).
 
-## [4.0.3.0] 2019-05-10, leisure
+## [4.0.3.0] 2019-05-10, leisure, "Denise"
 ### Added
  - Replace NeuralNetwork with portable C++ scraper #1387 (@jamescowens,
    @tomasbrod, @cycy, @TheCharlatan, @denravonska).
@@ -92,7 +132,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  - Remove auto unlock #1402 (@denravonska).
  - Remove superblock forwarding #1430 (@denravonska).
 
-## [4.0.2.0] 2019-04-03, leisure
+## [4.0.2.0] 2019-04-03, leisure, "Camilla"
 ### Added
  - Add `rainbymagnitude` RPC command #1235 (@Foggyx420).
  - Add stake splitting and side staking #1265 (@jamescowens).
@@ -147,7 +187,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
    #1366, (@tomasbrod, @jamescowens, @denravonska).
  - Fix crashes when voting in polls #1369 (@denravonska).
 
-## [4.0.0.0] 2018-10-19, mandatory
+## [4.0.0.0] 2018-10-19, mandatory, "Betsy"
 ### Added
  - Linux nodes can now stake superblocks using forwarded contracts,
    #1060 (@tomasbrod).
@@ -185,7 +225,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
  - Balance now includes unconfirmed coins sent by self #1192 (@Foggyx420).
 
-## [3.7.14.0] 2018-07-17, leisure
+## [3.7.14.0] 2018-07-17, leisure, "Annie Sue"
 ### Added
  - Support for Qt 5.9 (@thecharlatan)
  - Compatibility with boost-1.67 (@denravonska)
