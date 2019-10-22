@@ -145,7 +145,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         interesttotal+=bb.InterestSubsidy;
         researchcount+=(bb.ResearchSubsidy>0.001);
         minttotal+=cur->nMint;
-        unsigned sizeblock = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
+        unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk=std::min(size_min_blk,sizeblock);
         size_max_blk=std::max(size_max_blk,sizeblock);
         size_sum_blk+=sizeblock;
@@ -513,7 +513,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 
         cnt_trans += block.vtx.size()-2; /* 2 transactions are special */
         cnt_empty += ( block.vtx.size()<=2 );
-        double i_size = block.GetSerializeSize(SER_NETWORK, PROTOCOL_VERSION);
+        double i_size = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         sum_size= sum_size + i_size;
         min_size=std::min(min_size,i_size);
         max_size=std::max(max_size,i_size);

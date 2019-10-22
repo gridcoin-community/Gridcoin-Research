@@ -271,7 +271,12 @@ void VotingTableModel::resetData(bool history)
             item->vectorOfAnswers_ = iterPoll.answers;
             item->totalParticipants_ = iterPoll.total_participants;
             item->totalShares_ = iterPoll.total_shares;
-            item->url_ = QString::fromStdString(iterPoll.url);
+
+            item->url_ = QString::fromStdString(iterPoll.url).trimmed();
+
+            if (!item->url_.startsWith("http://") && !item->url_.startsWith("https://"))
+                item->url_.prepend("http://");
+
             item->bestAnswer_ = QString::fromStdString(iterPoll.best_answer).replace("_"," ");
             items.push_back(item);
         }

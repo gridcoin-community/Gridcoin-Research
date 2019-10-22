@@ -10,6 +10,7 @@ using namespace std;
 #include "bignum.h"
 #include "key.h"
 #include "main.h"
+#include "streams.h"
 #include "sync.h"
 #include "util.h"
 

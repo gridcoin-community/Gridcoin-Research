@@ -198,10 +198,6 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     if (block.IsProofOfStake())
         result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
     result.pushKV("CPID", bb.cpid);
-    if (!IsResearchAgeEnabled(blockindex->nHeight))
-    {
-        result.pushKV("RSAWeight",bb.RSAWeight);
-    }
 
     result.pushKV("Magnitude", bb.Magnitude);
     if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
@@ -620,7 +616,7 @@ bool TallyMagnitudesInSuperblock()
                 if (vProjects[i].length() > 1)
                 {
                     std::string project = ExtractValue(vProjects[i],",",0);
-                    double avg = RoundFromString(ExtractValue("0" + vProjects[i],",",1),0);
+
                     if (project.length() > 1)
                     {
                         StructCPID& stProject = GetInitializedStructCPID2(project,mvNetworkCopy);
@@ -2380,13 +2376,19 @@ UniValue MagnitudeReport(std::string cpid)
 
                     if (IsResearchAgeEnabled(pindexBest->nHeight))
                     {
-                        StructCPID& stCPID = GetLifetimeCPID(structMag.cpid);
+                        StructCPID& stCPID = GetLifetimeCPID(structMag.cpid); // Rescan...
                         double days = (GetAdjustedTime() - stCPID.LowLockTime) / 86400.0;
                         entry.pushKV("CPID",structMag.cpid);
                         entry.pushKV("Earliest Payment Time",TimestampToHRDate(stCPID.LowLockTime));
                         entry.pushKV("Magnitude (Last Superblock)", structMag.Magnitude);
                         entry.pushKV("Research Payments (14 days)",structMag.payments);
-                        entry.pushKV("Owed",(structMag.owed <= 0) ? 0 : structMag.owed);
+                        {
+                            int64_t nTime = GetAdjustedTime();
+                            double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
+                            double dAccrualAge, AvgMagnitude;
+                            int64_t nBoinc = ComputeResearchAccrual(nTime, structMag.cpid, "", pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
+                            entry.pushKV("Owed", nBoinc / (double)COIN);
+                        }
                         entry.pushKV("Daily Paid",structMag.payments/14);
                         // Research Age - Calculate Expected 14 Day Owed, and Daily Owed:
                         double dExpected14 = magnitude_unit * structMag.Magnitude * 14;
@@ -2485,7 +2487,7 @@ UniValue GetJsonUnspentReport()
     //Retrieve the historical magnitude
     if (IsResearcher(primary_cpid))
     {
-        StructCPID& st1 = GetLifetimeCPID(primary_cpid);
+        GetLifetimeCPID(primary_cpid); // Rescan...
         CBlockIndex* pHistorical = GetHistoricalMagnitude(primary_cpid);
         UniValue entry1(UniValue::VOBJ);
         entry1.pushKV("Researcher Magnitude",pHistorical->nMagnitude);

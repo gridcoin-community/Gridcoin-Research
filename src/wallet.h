@@ -13,6 +13,7 @@
 #include "key.h"
 #include "keystore.h"
 #include "script.h"
+#include "streams.h"
 #include "ui_interface.h"
 #include "walletdb.h"
 
@@ -63,13 +64,19 @@ public:
         vchPubKey = vchPubKeyIn;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH))
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            int nVersion = s.GetVersion();
             READWRITE(nVersion);
+        }
+
         READWRITE(nTime);
         READWRITE(vchPubKey);
-    )
+    }
 };
 
 /** A CWallet is an extension of a keystore, which also maintains a set of transactions and balances,
@@ -78,7 +85,7 @@ public:
 class CWallet : public CCryptoKeyStore
 {
 private:
-    bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl *coinControl=NULL) const;
+    bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl *coinControl=NULL, bool contract = false) const;
 
     CWalletDB *pwalletdbEncryption;
 
@@ -142,9 +149,9 @@ public:
     bool CanSupportFeature(enum WalletFeature wf) { AssertLockHeld(cs_wallet); return nWalletMaxVersion >= wf; }
 
 	void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime) const;
-    bool SelectCoinsForStaking(int64_t nTargetValue, unsigned int nSpendTime, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet, std::string& sError, bool fMiner = false) const;
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
-    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, bool contract = false) const;
 
     // keystore implementation
     // Generate a new key
@@ -483,16 +490,17 @@ public:
         nOrderPos = -1;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        CWalletTx* pthis = const_cast<CWalletTx*>(this);
-        if (fRead)
-            pthis->Init(NULL);
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         char fSpent = false;
 
-        if (!fRead)
-        {
-            pthis->mapValue["fromaccount"] = pthis->strFromAccount;
+        if (ser_action.ForRead()) {
+            Init(NULL);
+        } else {
+            mapValue["fromaccount"] = strFromAccount;
 
             std::string str;
             for (auto const& f : vfSpent)
@@ -501,15 +509,17 @@ public:
                 if (f)
                     fSpent = true;
             }
-            pthis->mapValue["spent"] = str;
 
-            WriteOrderPos(pthis->nOrderPos, pthis->mapValue);
+            mapValue["spent"] = str;
 
-            if (nTimeSmart)
-                pthis->mapValue["timesmart"] = strprintf("%u", nTimeSmart);
+            WriteOrderPos(nOrderPos, mapValue);
+
+            if (nTimeSmart) {
+                mapValue["timesmart"] = strprintf("%u", nTimeSmart);
+            }
         }
 
-        nSerSize += SerReadWrite(s, *(CMerkleTx*)this, nType, nVersion,ser_action);
+        READWRITEAS(CMerkleTx, *this);
         READWRITE(vtxPrev);
         READWRITE(mapValue);
         READWRITE(vOrderForm);
@@ -518,32 +528,30 @@ public:
         READWRITE(fFromMe);
         READWRITE(fSpent);
 
-		//Serialize two additional fields for Gridcoin (Reserved for future use):
-		//READWRITE(nResearchSubsidy);
-		//READWRITE(nInterestSubsidy);
+        if (ser_action.ForRead()) {
+            strFromAccount = mapValue["fromaccount"];
 
+            if (mapValue.count("spent")) {
+                for (auto const& c :  mapValue["spent"]) {
+                    vfSpent.push_back(c != '0');
+                }
+            } else {
+                vfSpent.assign(vout.size(), fSpent);
+            }
 
-        if (fRead)
-        {
-            pthis->strFromAccount = pthis->mapValue["fromaccount"];
+            ReadOrderPos(nOrderPos, mapValue);
 
-            if (mapValue.count("spent"))
-                for (auto const& c :  pthis->mapValue["spent"])
-                    pthis->vfSpent.push_back(c != '0');
-            else
-                pthis->vfSpent.assign(vout.size(), fSpent);
-
-            ReadOrderPos(pthis->nOrderPos, pthis->mapValue);
-
-            pthis->nTimeSmart = mapValue.count("timesmart") ? (unsigned int)atoi64(pthis->mapValue["timesmart"]) : 0;
+            nTimeSmart = mapValue.count("timesmart")
+                ? (unsigned int)atoi64(mapValue["timesmart"])
+                : 0;
         }
 
-        pthis->mapValue.erase("fromaccount");
-        pthis->mapValue.erase("version");
-        pthis->mapValue.erase("spent");
-        pthis->mapValue.erase("n");
-        pthis->mapValue.erase("timesmart");
-    )
+        mapValue.erase("fromaccount");
+        mapValue.erase("version");
+        mapValue.erase("spent");
+        mapValue.erase("n");
+        mapValue.erase("timesmart");
+    }
 
     // marks certain txout's as spent
     // returns true if any update took place
@@ -826,15 +834,21 @@ public:
         nTimeExpires = nExpires;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH))
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            int nVersion = s.GetVersion();
             READWRITE(nVersion);
+        }
+
         READWRITE(vchPrivKey);
         READWRITE(nTimeCreated);
         READWRITE(nTimeExpires);
         READWRITE(strComment);
-    )
+    }
 };
 
 
@@ -860,12 +874,18 @@ public:
         vchPubKey = CPubKey();
     }
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH))
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            int nVersion = s.GetVersion();
             READWRITE(nVersion);
+        }
+
         READWRITE(vchPubKey);
-    )
+    }
 };
 
 
@@ -900,23 +920,28 @@ public:
         nOrderPos = -1;
     }
 
-    IMPLEMENT_SERIALIZE
-    (
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         CAccountingEntry& me = *const_cast<CAccountingEntry*>(this);
-        if (!(nType & SER_GETHASH))
+        int nVersion = s.GetVersion();
+
+        if (!(s.GetType() & SER_GETHASH)) {
             READWRITE(nVersion);
+        }
+
         // Note: strAccount is serialized as part of the key, not here.
         READWRITE(nCreditDebit);
         READWRITE(nTime);
         READWRITE(strOtherAccount);
 
-        if (!fRead)
-        {
+        if (!ser_action.ForRead()) {
             WriteOrderPos(nOrderPos, me.mapValue);
 
-            if (!(mapValue.empty() && _ssExtra.empty()))
-            {
-                CDataStream ss(nType, nVersion);
+            if (!(mapValue.empty() && _ssExtra.empty())) {
+                CDataStream ss(s.GetType(), nVersion);
                 ss.insert(ss.begin(), '\0');
                 ss << mapValue;
                 ss.insert(ss.end(), _ssExtra.begin(), _ssExtra.end());
@@ -927,22 +952,29 @@ public:
         READWRITE(strComment);
 
         size_t nSepPos = strComment.find("\0", 0, 1);
-        if (fRead)
-        {
+
+        if (ser_action.ForRead()) {
             me.mapValue.clear();
-            if (std::string::npos != nSepPos)
-            {
-                CDataStream ss(std::vector<char>(strComment.begin() + nSepPos + 1, strComment.end()), nType, nVersion);
+
+            if (std::string::npos != nSepPos) {
+                CDataStream ss(
+                    std::vector<char>(strComment.begin() + nSepPos + 1, strComment.end()),
+                    s.GetType(),
+                    nVersion);
+
                 ss >> me.mapValue;
                 me._ssExtra = std::vector<char>(ss.begin(), ss.end());
             }
+
             ReadOrderPos(me.nOrderPos, me.mapValue);
         }
-        if (std::string::npos != nSepPos)
+
+        if (std::string::npos != nSepPos) {
             me.strComment.erase(nSepPos);
+        }
 
         me.mapValue.erase("n");
-    )
+    }
 
 private:
     std::vector<char> _ssExtra;

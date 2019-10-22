@@ -8,11 +8,13 @@
 #include "net.h"
 #include "txdb.h"
 #include "walletdb.h"
+#include "banman.h"
 #include "rpcserver.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "tally.h"
 #include "beacon.h"
+#include "scheduler.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
 
@@ -25,10 +27,13 @@
 
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
+
 #include "global_objects_noui.hpp"
 
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern boost::thread_group threadGroup;
+
+static boost::thread_group threadGroup;
+static CScheduler scheduler;
 
 void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
@@ -53,6 +58,12 @@ extern unsigned int nActiveBeforeSB;
 extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
+
+// Dump addresses to banlist.dat every 5 minutes (300 s)
+static constexpr int DUMP_BANS_INTERVAL = 300;
+
+std::unique_ptr<BanMan> g_banman;
+
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -100,6 +111,11 @@ void Shutdown(void* parg)
          LogPrintf("gridcoinresearch exiting...");
 
         fShutdown = true;
+
+        // clean up the threads running serviceQueue:
+        threadGroup.interrupt_all();
+        threadGroup.join_all();
+
         bitdb.Flush(false);
         StopNode();
         bitdb.Flush(true);
@@ -184,6 +200,7 @@ std::string HelpMessage()
     //gridcoinresearch ports: testnet ? 32748 : 32749;
     string strUsage = _("Options:") + "\n" +
         "  -?                     " + _("This help message") + "\n" +
+        "  -version               " + _("Print version and exit") + "\n" +
         "  -conf=<file>           " + _("Specify configuration file (default: gridcoinresearch.conf)") + "\n" +
         "  -pid=<file>            " + _("Specify pid file (default: gridcoind.pid)") + "\n" +
         "  -datadir=<dir>         " + _("Specify data directory") + "\n" +
@@ -191,6 +208,7 @@ std::string HelpMessage()
         "  -dbcache=<n>           " + _("Set database cache size in megabytes (default: 25)") + "\n" +
         "  -dblogsize=<n>         " + _("Set database disk log size in megabytes (default: 100)") + "\n" +
         "  -timeout=<n>           " + _("Specify connection timeout in milliseconds (default: 5000)") + "\n" +
+        "  -peertimeout=<n>       " + _("Specify p2p connection timeout in seconds. This option determines the amount of time a peer may be inactive before the connection to it is dropped. (minimum: 1, default: 45)") + "\n"
         "  -proxy=<ip:port>       " + _("Connect through socks proxy") + "\n" +
         "  -socks=<n>             " + _("Select the version of socks proxy to use (4-5, default: 5)") + "\n" +
         "  -tor=<ip:port>         " + _("Use proxy to reach tor hidden services (default: same as -proxy)") + "\n"
@@ -271,6 +289,15 @@ std::string HelpMessage()
         "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n";
 
     return strUsage;
+}
+
+std::string VersionMessage()
+{
+    // Note: this prints the version of the binary. It does not necessarily
+    // match the version of the running wallet when using the CLI to invoke
+    // RPC functions on a remote server.
+    //
+    return "Gridcoin Core " + FormatFullVersion() + "\n";
 }
 
 /** Sanity checks
@@ -495,9 +522,19 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (mapArgs.count("-timeout"))
     {
-        int nNewTimeout = GetArg("-timeout", 4000);
+        int nNewTimeout = GetArg("-timeout", 5000);
         if (nNewTimeout > 0 && nNewTimeout < 600000)
             nConnectTimeout = nNewTimeout;
+    }
+
+    if (mapArgs.count("-peertimeout"))
+    {
+        int nNewPeerTimeout = GetArg("-peertimeout", 45);
+
+        if (nNewPeerTimeout <= 0)
+            InitError(strprintf(_("Invalid amount for -peertimeout=<amount>: '%s'"), mapArgs["-peertimeout"]));
+
+        PEER_TIMEOUT = nNewPeerTimeout;
     }
 
     if (mapArgs.count("-paytxfee"))
@@ -591,6 +628,15 @@ bool AppInit2(ThreadHandlerPtr threads)
         fprintf(stdout, "Gridcoin server starting\n");
 
     int64_t nStart;
+
+
+    // Start the lightweight task scheduler thread
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // TODO: Do we need this? It would require porting the Bitcoin signal handler.
+    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
+
 
     // ********************************************************* Step 5: verify database integrity
 
@@ -910,6 +956,11 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 10: load peers
 
+    // Ban manager instance should not already be instantiated
+    assert(!g_banman);
+    // Create ban manager instance.
+    g_banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+
     uiInterface.InitMessage(_("Loading addresses..."));
     if (fDebug10) LogPrintf("Loading addresses...");
     nStart = GetTimeMillis();
@@ -983,6 +1034,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+
+    scheduler.scheduleEvery([]{
+        g_banman->DumpBanlist();
+    }, DUMP_BANS_INTERVAL * 1000);
+
 
     return true;
 }

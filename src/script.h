@@ -250,6 +250,9 @@ inline std::string ValueString(const std::vector<unsigned char>& vch)
         return HexStr(vch);
 }
 
+// TODO: change to prevector:
+typedef std::vector<unsigned char> CScriptBase;
+
 /** Serialized script, used inside transaction inputs and outputs */
 class CScript : public std::vector<unsigned char>
 {
@@ -289,6 +292,14 @@ public:
 #ifndef _MSC_VER
     CScript(const unsigned char* pbegin, const unsigned char* pend) : std::vector<unsigned char>(pbegin, pend) { }
 #endif
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITEAS(CScriptBase, *this);
+    }
 
     CScript& operator+=(const CScript& b)
     {

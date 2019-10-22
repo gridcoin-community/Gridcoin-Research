@@ -36,7 +36,7 @@ void ThreadRPCServer2(void* parg);
 static std::string strRPCUserColonPass;
 
 // These are created by StartRPCThreads, destroyed in StopRPCThreads
-static asio::io_service* rpc_io_service = NULL;
+static ioContext* rpc_io_service = NULL;
 static ssl::context* rpc_ssl_context = NULL;
 static boost::thread_group* rpc_worker_group = NULL;
 
@@ -286,6 +286,7 @@ static const CRPCCommand vRPCCommands[] =
     { "burn",                    &burn,                    cat_wallet        },
     { "checkwallet",             &checkwallet,             cat_wallet        },
     { "createrawtransaction",    &createrawtransaction,    cat_wallet        },
+    { "consolidatemsunspent",    &consolidatemsunspent,    cat_wallet        },
     { "decoderawtransaction",    &decoderawtransaction,    cat_wallet        },
     { "decodescript",            &decodescript,            cat_wallet        },
     { "dumpprivkey",             &dumpprivkey,             cat_wallet        },
@@ -301,6 +302,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet        },
     { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet        },
     { "gettransaction",          &gettransaction,          cat_wallet        },
+    { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet        },
     { "getwalletinfo",           &getwalletinfo,           cat_wallet        },
     { "importprivkey",           &importprivkey,           cat_wallet        },
     { "importwallet",            &importwallet,            cat_wallet        },
@@ -320,6 +322,7 @@ static const CRPCCommand vRPCCommands[] =
     { "repairwallet",            &repairwallet,            cat_wallet        },
     { "resendtx",                &resendtx,                cat_wallet        },
     { "reservebalance",          &reservebalance,          cat_wallet        },
+    { "scanforunspent",          &scanforunspent,          cat_wallet        },
     { "sendfrom",                &sendfrom,                cat_wallet        },
     { "sendmany",                &sendmany,                cat_wallet        },
     { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
@@ -408,6 +411,7 @@ static const CRPCCommand vRPCCommands[] =
     { "askforoutstandingblocks", &askforoutstandingblocks, cat_network       },
     { "getblockchaininfo",       &getblockchaininfo,       cat_network       },
     { "getnetworkinfo",          &getnetworkinfo,          cat_network       },
+    { "clearbanned",             &clearbanned,             cat_network       },
     { "currenttime",             &currenttime,             cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
@@ -424,12 +428,14 @@ static const CRPCCommand vRPCCommands[] =
     { "getrawmempool",           &getrawmempool,           cat_network       },
     { "listallpolls",            &listallpolls,            cat_network       },
     { "listallpolldetails",      &listallpolldetails,      cat_network       },
+    { "listbanned",              &listbanned,              cat_network       },
     { "listpolldetails",         &listpolldetails,         cat_network       },
     { "listpollresults",         &listpollresults,         cat_network       },
     { "listpolls",               &listpolls,               cat_network       },
     { "memorypool",              &memorypool,              cat_network       },
     { "networktime",             &networktime,             cat_network       },
     { "ping",                    &ping,                    cat_network       },
+    { "setban",                  &setban,                  cat_network       },
     { "showblock",               &showblock,               cat_network       },
     { "stop",                    &stop,                    cat_network       },
     { "vote",                    &vote,                    cat_network       },
@@ -509,7 +515,7 @@ static void RPCListen(boost::shared_ptr< basic_socket_acceptor<Protocol> > accep
                       const bool fUseSSL)
 {
     // Accept connection
-    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(acceptor->get_io_service(), context, fUseSSL);
+    AcceptedConnectionImpl<Protocol>* conn = new AcceptedConnectionImpl<Protocol>(GetIOServiceFromPtr(acceptor), context, fUseSSL);
 
     acceptor->async_accept(
                 conn->sslStream.lowest_layer(),
@@ -592,7 +598,7 @@ void StartRPCThreads()
     const bool fUseSSL = GetBoolArg("-rpcssl");
 
     assert(rpc_io_service == NULL);
-    rpc_io_service = new asio::io_service();
+    rpc_io_service = new ioContext();
     rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
     if (fUseSSL)
@@ -675,7 +681,7 @@ void StartRPCThreads()
     
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
-        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+        rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
 }
 
 void StopRPCThreads()

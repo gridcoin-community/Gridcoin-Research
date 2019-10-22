@@ -3,6 +3,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include "main.h"
+#include "streams.h"
 #include "wallet.h"
 
 #include "data/tx_valid.json.h"

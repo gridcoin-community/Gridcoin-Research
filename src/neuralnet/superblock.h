@@ -9,11 +9,210 @@
 #include <boost/variant/variant.hpp>
 #include <string>
 
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+
 std::string UnpackBinarySuperblock(std::string block);
 std::string PackBinarySuperblock(std::string sBlock);
 
+class ConvergedScraperStats; // Forward for Superblock
+
 namespace NN {
-class QuorumHash; // Forward for Superblock
+class Superblock; // Forward for QuorumHash
+
+//!
+//! \brief Hashes and stores the digest of a superblock.
+//!
+class QuorumHash
+{
+public:
+    //!
+    //! \brief Internal representation of the result of a legacy MD5-based
+    //! superblock hash.
+    //!
+    typedef std::array<unsigned char, 16> Md5Sum;
+
+    //!
+    //! \brief Describes the kind of hash contained in a \c QuorumHash object.
+    //!
+    enum class Kind
+    {
+        INVALID, //!< An empty or invalid quorum hash.
+        SHA256,  //!< Hash created for superblocks version 2 and greater.
+        MD5,     //!< Legacy hash created for superblocks before version 2.
+    };
+
+    //!
+    //! \brief A tag type that describes an empty or invalid quorum hash.
+    //!
+    struct Invalid { };
+
+    //!
+    //! \brief Initialize an invalid quorum hash object.
+    //!
+    QuorumHash();
+
+    //!
+    //! \brief Initialize a SHA256 quorum hash object variant.
+    //!
+    //! \param hash Contains the bytes of the superblock digest produced by
+    //! applying a SHA256 hashing algorithm to the significant data.
+    //!
+    QuorumHash(uint256 hash);
+
+    //!
+    //! \brief Initialize an MD5 quorum hash object variant.
+    //!
+    //! \param hash Contains the bytes of the superblock digest produced by the
+    //! legacy MD5-based superblock hashing algorithm ("neural hash").
+    //!
+    QuorumHash(Md5Sum legacy_hash);
+
+    //!
+    //! \brief Initialize the appropriate quorum hash variant from the supplied
+    //! bytes.
+    //!
+    //! Initializes to an invalid hash variant when the bytes do not represent
+    //! a valid quorum hash.
+    //!
+    //! \param bytes 32 bytes for a SHA256 hash or 16 bytes for a legacy MD5
+    //! hash.
+    //!
+    QuorumHash(const std::vector<unsigned char>& bytes);
+
+    //!
+    //! \brief Hash the provided superblock.
+    //!
+    //! \param superblock Superblock object containing the data to hash.
+    //!
+    //! \return The appropriate quorum hash variant digest depending on the
+    //! version number of the superblock.
+    //!
+    static QuorumHash Hash(const Superblock& superblock);
+
+    //!
+    //! \brief Initialize a quorum hash object by parsing the supplied string
+    //! representation of a hash.
+    //!
+    //! \param hex A 64-character hex-encoded string for a SHA256 hash, or a
+    //! 32-character hex-encoded string for a legacy MD5 hash.
+    //!
+    //! \return A quorum hash object that contains the bytes of the hash value
+    //! represented by the string or an invalid quorum hash if the string does
+    //! not contain a well-formed MD5 or SHA256 hash.
+    //!
+    static QuorumHash Parse(const std::string& hex);
+
+    bool operator==(const QuorumHash& other) const;
+    bool operator!=(const QuorumHash& other) const;
+    bool operator==(const uint256& other) const;
+    bool operator!=(const uint256& other) const;
+    bool operator==(const std::string& other) const;
+    bool operator!=(const std::string& other) const;
+
+    //!
+    //! \brief Describe the type of hash contained.
+    //!
+    //! \return A value enumerated on \c QuorumHash::Kind .
+    //!
+    Kind Which() const;
+
+    //!
+    //! \brief Determine whether the object contains a valid superblock hash.
+    //!
+    //! \return \c true if the object contains a SHA256 or legacy MD5 hash.
+    //!
+    bool Valid() const;
+
+    //!
+    //! \brief Get a pointer to the bytes in the hash.
+    //!
+    //! \return A pointer to the beginning of the bytes in the hash, or a
+    //! \c nullptr value if the object contains an invalid hash.
+    //!
+    const unsigned char* Raw() const;
+
+    //!
+    //! \brief Get the string representation of the hash.
+    //!
+    //! \return A 64-character hex-encoded string for a SHA256 hash, or a
+    //! 32-character hex-encoded string for a legacy MD5 hash. Returns an
+    //! empty string for an invalid hash.
+    //!
+    std::string ToString() const;
+
+    //!
+    //! \brief Serialize the object to the provided stream.
+    //!
+    //! \param stream The output stream.
+    //!
+    template<typename Stream>
+    void Serialize(Stream& stream) const
+    {
+        unsigned char kind = m_hash.which();
+
+        ::Serialize(stream, kind);
+
+        switch (static_cast<Kind>(kind)) {
+            case Kind::INVALID:
+                break; // Suppress warning.
+
+            case Kind::SHA256:
+                boost::get<uint256>(m_hash).Serialize(stream);
+                break;
+
+            case Kind::MD5: {
+                const Md5Sum& hash = boost::get<Md5Sum>(m_hash);
+
+                stream.write(CharCast(hash.data()), hash.size());
+                break;
+            }
+        }
+    }
+
+    //!
+    //! \brief Deserialize the object from the provided stream.
+    //!
+    //! \param stream   The input stream.
+    //!
+    template<typename Stream>
+    void Unserialize(Stream& stream)
+    {
+        unsigned char kind;
+
+        ::Unserialize(stream, kind);
+
+        switch (static_cast<Kind>(kind)) {
+            case Kind::SHA256: {
+                uint256 hash;
+                hash.Unserialize(stream);
+
+                m_hash = hash;
+                break;
+            }
+
+            case Kind::MD5: {
+                Md5Sum hash;
+                stream.read(CharCast(hash.data()), hash.size());
+
+                m_hash = hash;
+                break;
+            }
+
+            default:
+                m_hash = Invalid();
+                break;
+        }
+    }
+
+private:
+    //!
+    //! \brief Contains the bytes of a SHA256 or MD5 digest.
+    //!
+    //! CONSENSUS: Do not remove or reorder the types in this variant. This
+    //! class relies on the type ordinality to tag serialized values.
+    //!
+    boost::variant<Invalid, uint256, Md5Sum> m_hash;
+}; // QuorumHash
 
 //!
 //! \brief A snapshot of BOINC statistics used to calculate and verify research
@@ -177,20 +376,18 @@ public:
         void Add(const MiningId id, const uint16_t magnitude);
 
         //!
-        //! \brief Get the size of the data to serialize.
+        //! \brief Serialize the object to the provided stream.
         //!
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
+        //! \param stream The output stream.
         //!
-        //! \return Size of the data in bytes.
-        //!
-        unsigned int GetSerializeSize(int nType, int nVersion) const
+        template<typename Stream>
+        void Serialize(Stream& stream) const
         {
-            unsigned int size =  GetSizeOfCompactSize(m_magnitudes.size())
-                + m_magnitudes.size() * sizeof(Cpid)
-                + VARINT(m_zero_magnitude_count).GetSerializeSize();
+            WriteCompactSize(stream, m_magnitudes.size());
 
             for (const auto& cpid_pair : m_magnitudes) {
+                cpid_pair.first.Serialize(stream);
+
                 // Compact size encoding provides better compression for the
                 // magnitude values than VARINT because most CPIDs have mags
                 // less than 253:
@@ -198,28 +395,6 @@ public:
                 // Note: This encoding imposes an upper limit of MAX_SIZE on
                 // the encoded value. Magnitudes fall well within the limit.
                 //
-                size += GetSizeOfCompactSize(cpid_pair.second);
-            }
-
-            return size;
-        }
-
-        //!
-        //! \brief Serialize the object to the provided stream.
-        //!
-        //! \param stream   The output stream.
-        //! \param nType    Target protocol type (network, disk, etc.).
-        //! \param nVersion Protocol version.
-        //!
-        template<typename Stream>
-        void Serialize(Stream& stream, int nType, int nVersion) const
-        {
-            WriteCompactSize(stream, m_magnitudes.size());
-
-            for (const auto& cpid_pair : m_magnitudes) {
-                cpid_pair.first.Serialize(stream, nType, nVersion);
-
-                // Write magnitude using compact-size encoding:
                 WriteCompactSize(stream, cpid_pair.second);
             }
 
@@ -234,7 +409,7 @@ public:
         //! \param nVersion Protocol version.
         //!
         template<typename Stream>
-        void Unserialize(Stream& stream, int nType, int nVersion)
+        void Unserialize(Stream& stream)
         {
             m_magnitudes.clear();
             m_total_magnitude = 0;
@@ -243,7 +418,7 @@ public:
 
             for (size_t i = 0; i < size; i++) {
                 Cpid cpid;
-                cpid.Unserialize(stream, nType, nVersion);
+                cpid.Unserialize(stream);
 
                 // Read magnitude using compact-size encoding:
                 uint16_t magnitude = ReadCompactSize(stream);
@@ -320,13 +495,30 @@ public:
         uint64_t m_average_rac;  //!< Average project recent average credit.
         uint64_t m_rac;          //!< Sum of the RAC of all the project CPIDs.
 
-        IMPLEMENT_SERIALIZE
-        (
+        //!
+        //! \brief A truncated hash of the converged manifest part that forms
+        //! the project statistics.
+        //!
+        //! For fallback-to-project-level convergence scenarios, \c ProjectStats
+        //! objects include the hash of the manifest part to aid receiving nodes
+        //! with superblock validation. The hash is truncated to conserve space.
+        //!
+        uint32_t m_convergence_hint;
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
             READWRITE(VARINT(m_total_credit));
             READWRITE(VARINT(m_average_rac));
             READWRITE(VARINT(m_rac));
-        )
-    };
+
+            // ProjectIndex handles serialization of m_convergence_hint
+            // when creating superblocks from fallback-to-project-level
+            // convergence scenarios.
+        }
+    }; // ProjectStats
 
     //!
     //! \brief An optional type that either contains some project statistics or
@@ -343,6 +535,21 @@ public:
         typedef std::map<std::string, ProjectStats>::size_type size_type;
         typedef std::map<std::string, ProjectStats>::iterator iterator;
         typedef std::map<std::string, ProjectStats>::const_iterator const_iterator;
+
+        //!
+        //! \brief A serialization flag used to pass fallback-to-project-level
+        //! convergence context to \c ProjectStats serialization routines.
+        //!
+        //! The selected serialization modifier value will not conflict with
+        //! those enumerated in serialize.h.
+        //!
+        static constexpr int SER_CONVERGED_BY_PROJECT = 24;
+
+        //!
+        //! \brief Indicates that the superblock was generated from a fallback-
+        //! to-project-level convergence.
+        //!
+        bool m_converged_by_project;
 
         //!
         //! \brief Initialize an empty project index.
@@ -407,20 +614,67 @@ public:
         //!
         void Add(std::string name, const ProjectStats& stats);
 
-        IMPLEMENT_SERIALIZE
-        (
-            READWRITE(m_projects);
+        //!
+        //! \brief Set the convergence part hint for the specified project.
+        //!
+        //! \param part_data The convergence part to create the hint from.
+        //!
+        void SetHint(const std::string& name, const CSerializeData& part_data);
 
-            // Tally up the recent average credit after deserializing.
-            //
-            if (fRead) {
-                REF(m_total_rac) = 0;
+        //!
+        //! \brief Serialize the object to the provided stream.
+        //!
+        //! \param stream The output stream.
+        //!
+        template<typename Stream>
+        void Serialize(Stream& stream) const
+        {
+            if (!(stream.GetType() & SER_GETHASH)) {
+                stream << m_converged_by_project;
+            }
 
-                for (const auto& project_pair : m_projects) {
-                    REF(m_total_rac) += project_pair.second.m_rac;
+            WriteCompactSize(stream, m_projects.size());
+
+            for (const auto& project_pair : m_projects) {
+                stream << project_pair;
+
+                // Trigger serialization of ProjectStats convergence hints for
+                // superblocks generated by a fallback-to-project convergence:
+                //
+                if (!(stream.GetType() & SER_GETHASH) && m_converged_by_project) {
+                    stream << project_pair.second.m_convergence_hint;
                 }
             }
-        )
+        }
+
+        //!
+        //! \brief Deserialize the object from the provided stream.
+        //!
+        //! \param stream The input stream.
+        //!
+        template<typename Stream>
+        void Unserialize(Stream& stream)
+        {
+            m_projects.clear();
+            m_total_rac = 0;
+
+            stream >> m_converged_by_project;
+
+            const unsigned int project_count = ReadCompactSize(stream);
+            auto iter = m_projects.begin();
+
+            for (unsigned int i = 0; i < project_count; i++) {
+                std::pair<std::string, ProjectStats> project_pair;
+                stream >> project_pair;
+
+                if (m_converged_by_project) {
+                    stream >> project_pair.second.m_convergence_hint;
+                }
+
+                m_total_rac += project_pair.second.m_rac;
+                iter = m_projects.insert(iter, project_pair);
+            }
+        }
 
     private:
         //!
@@ -454,6 +708,16 @@ public:
     //!
     uint32_t m_version = CURRENT_VERSION;
 
+    //!
+    //! \brief The truncated scraper convergence content hash and underlying
+    //! manifest content hash (they are computed differently).
+    //!
+    //! These values aid receiving nodes with validation for superblocks created
+    //! from past convergence data.
+    //!
+    uint32_t m_convergence_hint;
+    uint32_t m_manifest_content_hint;
+
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magntudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
     //std::vector<BeaconAcknowledgement> m_verified_beacons;
@@ -461,18 +725,21 @@ public:
     int64_t m_height;    //!< Height of the block that contains the contract.
     int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
 
-    IMPLEMENT_SERIALIZE
-    (
-        if (!(nType & SER_GETHASH)) {
-            READWRITE(m_version);
-        }
+    ADD_SERIALIZE_METHODS;
 
-        nVersion = m_version;
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(m_version);
+            READWRITE(m_convergence_hint);
+            READWRITE(m_manifest_content_hint);
+        }
 
         READWRITE(m_cpids);
         READWRITE(m_projects);
         //READWRITE(m_verified_beacons);
-    )
+    }
 
     //!
     //! \brief Initialize an empty superblock object.
@@ -485,6 +752,18 @@ public:
     //! \param version Version number of the serialized superblock format.
     //!
     Superblock(uint32_t version);
+
+    //!
+    //! \brief Initialize a superblock from the provided converged scraper
+    //! statistics.
+    //!
+    //! \param stats Converged statistics containing CPID and project credit
+    //! data.
+    //!
+    //! \return A new superblock instance that contains the imported scraper
+    //! statistics.
+    //!
+    static Superblock FromConvergence(const ConvergedScraperStats& stats);
 
     //!
     //! \brief Initialize a superblock from the provided scraper statistics.
@@ -524,140 +803,66 @@ public:
     std::string PackLegacy() const;
 
     //!
+    //! \brief Determine whether the instance represents a complete superblock.
+    //!
+    //! \return \c true if the superblock contains all of the required elements.
+    //!
+    bool WellFormed() const;
+
+    //!
+    //! \brief Determine whether the superblock was generated from a fallback-
+    //! to-project-level scraper convergence.
+    //!
+    //! \return \c true if the ProjectIndex fallback convergence flag is set.
+    //!
+    bool ConvergedByProject() const;
+
+    //!
     //! \brief Get the current age of the superblock.
     //!
     //! \return Superblock age in seconds.
     //!
     int64_t Age() const;
-}; // Superblock
-
-//!
-//! \brief Hashes and stores the digest of a superblock.
-//!
-class QuorumHash
-{
-public:
-    //!
-    //! \brief Internal representation of the result of a legacy MD5-based
-    //! superblock hash.
-    //!
-    typedef std::array<unsigned char, 16> Md5Sum;
 
     //!
-    //! \brief Describes the kind of hash contained in a \c QuorumHash object.
+    //! \brief Get a hash of the significant data in the superblock.
     //!
-    enum class Kind
-    {
-        INVALID, //!< An empty or invalid quorum hash.
-        SHA256,  //!< Hash created for superblocks version 2 and greater.
-        MD5,     //!< Legacy hash created for superblocks before version 2.
-    };
-
+    //! \param regenerate If \c true, skip selection of any cached hash value
+    //! and recompute the hash.
     //!
-    //! \brief A tag type that describes an empty or invalid quorum hash.
+    //! \return A quorum hash object that contiains a SHA256 hash for version
+    //! 2+ superblocks or an MD5 hash for legacy version 1 superblocks.
     //!
-    struct Invalid { };
-
-    //!
-    //! \brief Initialize an invalid quorum hash object.
-    //!
-    QuorumHash();
-
-    //!
-    //! \brief Initialize a SHA256 quorum hash object variant.
-    //!
-    //! \param hash Contains the bytes of the superblock digest produced by
-    //! applying a SHA256 hashing algorithm to the significant data.
-    //!
-    QuorumHash(uint256 hash);
-
-    //!
-    //! \brief Initialize an MD5 quorum hash object variant.
-    //!
-    //! \param hash Contains the bytes of the superblock digest produced by the
-    //! legacy MD5-based superblock hashing algorithm ("neural hash").
-    //!
-    QuorumHash(Md5Sum legacy_hash);
-
-    //!
-    //! \brief Initialize the appropriate quorum hash variant from the supplied
-    //! bytes.
-    //!
-    //! Initializes to an invalid hash variant when the bytes do not represent
-    //! a valid quorum hash.
-    //!
-    //! \param bytes 32 bytes for a SHA256 hash or 16 bytes for a legacy MD5
-    //! hash.
-    //!
-    QuorumHash(const std::vector<unsigned char>& bytes);
-
-    //!
-    //! \brief Hash the provided superblock.
-    //!
-    //! \param superblock Superblock object containing the data to hash.
-    //!
-    //! \return The appropriate quorum hash variant digest depending on the
-    //! version number of the superblock.
-    //!
-    static QuorumHash Hash(const Superblock& superblock);
-
-    //!
-    //! \brief Initialize a quorum hash object by parsing the supplied string
-    //! representation of a hash.
-    //!
-    //! \param hex A 64-character hex-encoded string for a SHA256 hash, or a
-    //! 32-character hex-encoded string for a legacy MD5 hash.
-    //!
-    //! \return A quorum hash object that contains the bytes of the hash value
-    //! represented by the string or an invalid quorum hash if the string does
-    //! not contain a well-formed MD5 or SHA256 hash.
-    //!
-    static QuorumHash Parse(const std::string& hex);
-
-    bool operator==(const QuorumHash& other) const;
-    bool operator!=(const QuorumHash& other) const;
-    bool operator==(const uint256& other) const;
-    bool operator!=(const uint256& other) const;
-    bool operator==(const std::string& other) const;
-    bool operator!=(const std::string& other) const;
-
-    //!
-    //! \brief Describe the type of hash contained.
-    //!
-    //! \return A value enumerated on \c QuorumHash::Kind .
-    //!
-    Kind Which() const;
-
-    //!
-    //! \brief Determine whether the object contains a valid superblock hash.
-    //!
-    //! \return \c true if the object contains a SHA256 or legacy MD5 hash.
-    //!
-    bool Valid() const;
-
-    //!
-    //! \brief Get a pointer to the bytes in the hash.
-    //!
-    //! \return A pointer to the beginning of the bytes in the hash, or a
-    //! \c nullptr value if the object contains an invalid hash.
-    //!
-    const unsigned char* Raw() const;
-
-    //!
-    //! \brief Get the string representation of the hash.
-    //!
-    //! \return A 64-character hex-encoded string for a SHA256 hash, or a
-    //! 32-character hex-encoded string for a legacy MD5 hash. Returns an
-    //! empty string for an invalid hash.
-    //!
-    std::string ToString() const;
+    QuorumHash GetHash(const bool regenerate = false) const;
 
 private:
     //!
-    //! \brief Contains the bytes of a SHA256 or MD5 digest.
+    //! \brief The most recently-regenerated quorum hash of the superblock.
     //!
-    boost::variant<Invalid, uint256, Md5Sum> m_hash;
-}; // QuorumHash
+    //! Because of their size, superblocks are expensive to hash. A superblock
+    //! caches its quorum hash when calling the GetHash() method to speed up a
+    //! subsequent hash request. The block acceptance pipeline may need a hash
+    //! value in several places when processing a superblock.
+    //!
+    //! The cached value is NOT invalidated when modifying a superblock. Call
+    //! the GetHash() method with the argument set to \c true to regenerate a
+    //! cached quorum hash. A received superblock's significant data is never
+    //! modified, so the need to regenerate a cached hash will rarely occur.
+    //!
+    mutable QuorumHash m_hash_cache;
+}; // Superblock
+
+
+//!
+//! \brief Validate the supplied superblock by comparing it to local manifest
+//! data.
+//!
+//! \param superblock The superblock to validate.
+//! \param use_cache  If \c false, skip validation with the scraper cache.
+//!
+//! \return \c True if the local manifest data produces a matching superblock.
+//!
+bool ValidateSuperblock(const Superblock& superblock, const bool use_cache = true);
 } // namespace NN
 
 namespace std {
@@ -721,13 +926,17 @@ struct ConvergedScraperStats
     ScraperStats mScraperConvergedStats;
     ConvergedManifest Convergence;
 
+    // There is a small chance of collision on the key, but given this is really a hint map,
+    // It is okay.
+    // reduced nContentHash ------ SB Hash ---- Converged Manifest object
+    std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>> PastConvergences;
+
     // Legacy superblock contract and hash.
     std::string sContractHash;
     std::string sContract;
 
     // New superblock object and hash.
     NN::Superblock NewFormatSuperblock;
-    NN::QuorumHash nNewFormatSuperblockHash;
 
     uint32_t GetVersion()
     {
@@ -736,6 +945,43 @@ struct ConvergedScraperStats
         if (sContractHash.empty() && sContract.empty()) nVersion = NewFormatSuperblock.m_version;
 
         return nVersion;
+    }
+
+    void AddConvergenceToPastConvergencesMap()
+    {
+        uint32_t nReducedContentHash = Convergence.nContentHash.Get64() >> 32;
+
+        if (Convergence.nContentHash != uint256() && PastConvergences.find(nReducedContentHash) == PastConvergences.end())
+        {
+            // This is specifically this form of insert to insure that if there is a hint "collision" the referenced
+            // SB Hash and Convergence stored will be the LATER one.
+            PastConvergences[nReducedContentHash] = std::make_pair(NewFormatSuperblock.GetHash(), Convergence);
+        }
+    }
+
+    unsigned int DeleteOldConvergenceFromPastConvergencesMap()
+    {
+        unsigned int nDeleted = 0;
+
+        std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>>::iterator iter;
+        for (iter = PastConvergences.begin(); iter != PastConvergences.end(); )
+        {
+            // If the convergence entry is older than CManifest retention time, then delete the past convergence
+            // entry, because the underlying CManifest will be deleted by the housekeeping loop using the same
+            // aging. The erase advances the iterator in C++11.
+            if (iter->second.second.timestamp < GetAdjustedTime() - SCRAPER_CMANIFEST_RETENTION_TIME)
+            {
+                iter = PastConvergences.erase(iter);
+
+                ++nDeleted;
+            }
+            else
+            {
+                ++iter;
+            }
+        }
+
+        return nDeleted;
     }
 
 };

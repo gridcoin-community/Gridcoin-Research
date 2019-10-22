@@ -1,12 +1,24 @@
 #ifndef RPCCONSOLE_H
 #define RPCCONSOLE_H
 
+#include "qt/guiutil.h"
+#include "qt/peertablemodel.h"
+
+#include "net.h"
+
 #include <QDialog>
+#include <QWidget>
+#include <QMenu>
 
 namespace Ui {
     class RPCConsole;
 }
 class ClientModel;
+
+QT_BEGIN_NAMESPACE
+class QMenu;
+class QItemSelection;
+QT_END_NAMESPACE
 
 /** Local Bitcoin RPC console. */
 class RPCConsole: public QDialog
@@ -38,12 +50,22 @@ private slots:
     /** display messagebox with program parameters (same as bitcoin-qt --help) */
     void on_showCLOptionsButton_clicked();
     /** change the time range of the network traffic graph */
-    void on_sldGraphRange_valueChanged(int value);
+    void on_graphRangeSlider_valueChanged(int value);
     /** update traffic statistics */
     void updateTrafficStats(quint64 totalBytesIn, quint64 totalBytesOut);
+    void resizeEvent(QResizeEvent *event);
+    void showEvent(QShowEvent *event);
+    void hideEvent(QHideEvent *event);
     /** clear traffic graph */
-    void on_btnClearTrafficGraph_clicked();
-
+    void on_clearTrafficGraphButton_clicked();
+    /** Show custom context menu on Peers tab */
+    void showPeersTableContextMenu(const QPoint& point);
+    /** Show custom context menu on Bans tab */
+    void showBanTableContextMenu(const QPoint& point);
+    /** Hides ban table if no bans are present */
+    void showOrHideBanTableIfRequired();
+    /** clear the selected node */
+    void clearSelectedNode();
 
 public slots:
     void clear();
@@ -58,6 +80,20 @@ public slots:
     void browseHistory(int offset);
     /** Scroll console view to end */
     void scrollToEnd();
+    /** Handle selection of peer in peers list */
+    void peerSelected(const QItemSelection &selected, const QItemSelection &deselected);
+    /** Handle selection caching before update */
+    void peerLayoutAboutToChange();
+    /** Handle updated peer information */
+    void peerLayoutChanged();
+    /** Disconnect a selected node on the Peers tab */
+    void disconnectSelectedNode();
+    /** Ban a selected node on the Peers tab */
+    void banSelectedNode(int bantime);
+    /** Unban a selected node on the Bans tab */
+    void unbanSelectedNode();
+
+
 signals:
     // For RPC command executor
     void stopExecutor();
@@ -67,12 +103,29 @@ private:
     Ui::RPCConsole *ui;
     ClientModel *clientModel;
     QStringList history;
-    int historyPtr;
+    int historyPtr = 0;
+    QList<NodeId> cachedNodeids;
+    QMenu *peersTableContextMenu = nullptr;
+    QMenu *banTableContextMenu = nullptr;
     static QString FormatBytes(quint64 bytes);
     void setTrafficGraphRange(int mins);
-
+    /** show detailed information on ui about selected node */
+    void updateNodeDetail(const CNodeCombinedStats *stats);
 
     void startExecutor();
+
+    enum ColumnWidths
+    {
+        NETNODEID_COLUMN_WIDTH = 50,
+        ADDRESS_COLUMN_WIDTH = 130,
+        PING_COLUMN_WIDTH = 50,
+        SENT_COLUMN_WIDTH = 50,
+        RECEIVED_COLUMN_WIDTH = 60,
+        SUBVERSION_COLUMN_WIDTH = 130,
+        BANSUBNET_COLUMN_WIDTH = 130,
+        BANTIME_COLUMN_WIDTH = 130
+    };
+
 };
 
 #endif // RPCCONSOLE_H

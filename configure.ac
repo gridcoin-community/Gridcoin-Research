@@ -2,7 +2,7 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 4)
 define(_CLIENT_VERSION_MINOR, 0)
-define(_CLIENT_VERSION_REVISION, 5)
+define(_CLIENT_VERSION_REVISION, 6)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2019)
@@ -496,6 +496,19 @@ case $host in
      ;;
 esac
 
+dnl Suppress ABI compatibility warnings for ARM:
+dnl
+dnl   "note: parameter passing for argument of type [...] changed in GCC 7.1"
+dnl
+dnl These notices remind that code compiled with GCC 7.1+ are not ABI compatible
+dnl with environments built with previous GCC versions. We can remove this block
+dnl when the compiler no longer emits these warnings.
+dnl
+case "$host" in arm-*)
+    AC_MSG_WARN([Disabled ARM warnings for GCC 7.1 ABI compatibility.])
+    CXXFLAGS="$CXXFLAGS -Wno-psabi"
+esac
+
 if test "x$enable_debug" = xyes; then
     if test "x$GCC" = xyes; then
         if test x$TARGET_OS = xwindows; then
@@ -856,7 +869,9 @@ fi
 if test x$use_boost = xyes; then
 
 BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_ZLIB_LIB $BOOST_IOSTREAMS_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB $BOOST_CHRONO_LIB $BOOST_ZLIB_LIB"
-
+if test x$TARGET_OS = xdarwin; then
+  BOOST_LIBS="$BOOST_LIBS -lboost_system-mt"
+fi
 
 dnl If boost (prior to 1.57) was built without c++11, it emulated scoped enums
 dnl using c++98 constructs. Unfortunately, this implementation detail leaked into

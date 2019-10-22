@@ -237,7 +237,7 @@ void CDBEnv::CheckpointLSN(std::string strFile)
 void CDBEnv::lsn_reset(const std::string& strFile)
 {
     dbenv.lsn_reset(strFile.c_str(),0);
-}                                                                                                                                                    
+}
 
 CDB::CDB(const char *pszFile, const char* pszMode) :
     pdb(NULL), activeTxn(NULL)
@@ -491,7 +491,7 @@ void CDBEnv::Flush(bool fShutdown)
 // CAddrDB
 //
 
-
+/*
 CAddrDB::CAddrDB()
 {
     pathAddr = GetDataDir() / "peers.dat";
@@ -506,7 +506,7 @@ bool CAddrDB::Write(const CAddrMan& addr)
 
     // serialize addresses, checksum data up to that point, then append csum
     CDataStream ssPeers(SER_DISK, CLIENT_VERSION);
-    ssPeers << FLATDATA(pchMessageStart);
+    ssPeers << pchMessageStart;
     ssPeers << addr;
     uint256 hash = Hash(ssPeers.begin(), ssPeers.end());
     ssPeers << hash;
@@ -514,8 +514,8 @@ bool CAddrDB::Write(const CAddrMan& addr)
     // open temp output file, and associate with CAutoFile
     boost::filesystem::path pathTmp = GetDataDir() / tmpfn;
     FILE *file = fopen(pathTmp.string().c_str(), "wb");
-    CAutoFile fileout = CAutoFile(file, SER_DISK, CLIENT_VERSION);
-    if (!fileout)
+    CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
+    if (fileout.IsNull())
         return error("CAddrman::Write() : open failed");
 
     // Write and commit header, data
@@ -525,7 +525,7 @@ bool CAddrDB::Write(const CAddrMan& addr)
     catch (std::exception &e) {
         return error("CAddrman::Write() : I/O error");
     }
-    FileCommit(fileout);
+    FileCommit(fileout.Get());
     fileout.fclose();
 
     // replace existing peers.dat, if any, with new peers.dat.XXXX
@@ -539,8 +539,8 @@ bool CAddrDB::Read(CAddrMan& addr)
 {
     // open input file, and associate with CAutoFile
     FILE *file = fopen(pathAddr.string().c_str(), "rb");
-    CAutoFile filein = CAutoFile(file, SER_DISK, CLIENT_VERSION);
-    if (!filein)
+    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
+    if (filein.IsNull())
         return error("CAddrman::Read() : open failed");
 
     // use file size to size memory buffer
@@ -573,7 +573,7 @@ bool CAddrDB::Read(CAddrMan& addr)
     unsigned char pchMsgTmp[4];
     try {
         // de-serialize file header (pchMessageStart magic number) and
-        ssPeers >> FLATDATA(pchMsgTmp);
+        ssPeers >> pchMsgTmp;
 
         // verify the network matches ours
         if (memcmp(pchMsgTmp, pchMessageStart, sizeof(pchMsgTmp)))
@@ -588,4 +588,4 @@ bool CAddrDB::Read(CAddrMan& addr)
 
     return true;
 }
-
+*/

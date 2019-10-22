@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
 
     // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
     // but before showing splash screen.
-    if (mapArgs.count("-?") || mapArgs.count("--help"))
+    if (mapArgs.count("-?") || mapArgs.count("-help"))
     {
         GUIUtil::HelpMessageBox help;
         help.showOrPrint();
@@ -384,6 +384,12 @@ int main(int argc, char *argv[])
     threads->interruptAll();
     threads->removeAll();
     threads.reset();
+
+    // Current exit code was previously introduced to trigger a wallet restart
+    // when set to the value of 42. This feature was removed.
+    if (fDebug) {
+        LogPrintf("Exit code: %d", currentExitCode);
+    }
 
     return 0;
 }

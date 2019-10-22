@@ -1,12 +1,19 @@
+#pragma once
+
 /* scraper_net.h */
 
-/* Maybe the parts system will be usefull for other things so let's abstract
- * that to parent class. Sice it will be all in one file there will not be any
- * polymorfism.
+/* Maybe the parts system will be useful for other things so let's abstract
+ * that to parent class. Since it will be all in one file there will not be any
+ * polymorphism.
 */
 
 #include <key.h>
+#include "net.h"
+#include "streams.h"
 #include "sync.h"
+
+#include <univalue.h>
+
 
 /** Abstract class for blobs that are split into parts. */
 class CSplitBlob
@@ -21,7 +28,7 @@ public:
         CPart(const uint256& ihash)
             :hash(ihash)
         {}
-        CReaderStream getReader() const { return CReaderStream(&data); }
+        CDataStream getReader() const { return CDataStream(data.begin(), data.end(), SER_NETWORK, PROTOCOL_VERSION); }
         bool present() const {return !this->data.empty();}
     };
 
@@ -58,7 +65,9 @@ public:
     /* We could store the parts in mapRelay and have getdata service for free. */
     /** map from part hash to scraper Index, so we can attach incoming Part in Index */
     static std::map<uint256,CPart> mapParts;
-    int cntPartsRcvd =0;
+    size_t cntPartsRcvd =0;
+
+    static CCriticalSection cs_mapParts; // also protects vParts.
 
 };
 
@@ -69,8 +78,12 @@ class CScraperManifest
 public: /* static methods */
 
     /** map from index hash to scraper Index, so we can process Inv messages */
-    static std::map< uint256, std::unique_ptr<CScraperManifest> > mapManifest;
+    static std::map<uint256, std::unique_ptr<CScraperManifest>> mapManifest;
 
+    // ------------ hash -------------- nTime ------- pointer to CScraperManifest
+    static std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>> mapPendingDeletedManifest;
+
+    // Protects both mapManifest and MapPendingDeletedManifest
     static CCriticalSection cs_mapManifest;
 
     /** Process a message containing Index of Scraper Data.
@@ -101,11 +114,14 @@ public: /* static methods */
     static bool IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out);
 
     /** Delete Manifest (key version) **/
-    static bool DeleteManifest(const uint256& nHash);
+    static bool DeleteManifest(const uint256& nHash, const bool& fImmediate = false);
 
     /** Delete Manifest (iterator version) **/
     static std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator
-        DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter);
+        DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter, const bool& fImmediate = false);
+
+    /** Delete PendingDeletedManifests **/
+    static unsigned int DeletePendingDeletedManifests();
 
 
 public: /*==== fields ====*/
@@ -125,8 +141,8 @@ public: /*==== fields ====*/
         bool current =0;
         bool last =0;
 
-        void Serialize(CDataStream& s, int nType, int nVersion) const;
-        void Unserialize(CReaderStream& s, int nType, int nVersion);
+        void Serialize(CDataStream& s) const;
+        void Unserialize(CDataStream& s);
         UniValue ToJson() const;
     };
 
@@ -151,10 +167,12 @@ public: /* public methods */
     void Complete() override;
 
     /** Serialize this object for seding over the network. */
-    void Serialize(CDataStream& s, int nType, int nVersion) const;
-    void SerializeWithoutSignature(CDataStream& s, int nType, int nVersion) const;
-    void SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const;
-    void UnserializeCheck(CReaderStream& s, unsigned int& banscore_out);
-    UniValue ToJson() const;
+    void Serialize(CDataStream& s) const;
+    void SerializeWithoutSignature(CDataStream& s) const;
+    void SerializeForManifestCompare(CDataStream& ss) const;
+    void UnserializeCheck(CDataStream& s, unsigned int& banscore_out);
 
+    bool IsManifestCurrent() const;
+
+    UniValue ToJson() const;
 };

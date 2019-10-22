@@ -12,6 +12,7 @@
 #include "init.h"
 #include "base58.h"
 #include "backup.h"
+#include "streams.h"
 #include "util.h"
 
 #include <univalue.h>
@@ -742,6 +743,17 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 
     return ValueFromAmount(nBalance);
 }
+
+
+
+UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error("getunconfirmedbalance: returns unconfirmed balance in wallet\n");
+
+    return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
+}
+
 
 
 UniValue movecmd(const UniValue& params, bool fHelp)
@@ -2218,7 +2230,8 @@ UniValue reservebalance(const UniValue& params, bool fHelp)
                 "\n"
                 "<reserve> is true or false to turn balance reserve on or off.\n"
                 "<amount> is a real and rounded to cent.\n"
-                "Set reserve amount not participating in network protection.\n"
+                "Reserved amount secures a balance in wallet that can be spendable at anytime.\n"
+                "However reserve will secure utxo(s) of any size to respect this setting.\n"
                 "If no parameters provided current setting is printed.\n");
 
     if (params.size() > 0)

@@ -4,7 +4,7 @@
 #ifndef __CRYPTER_H__
 #define __CRYPTER_H__
 
-#include "allocators.h" /* for SecureString */
+#include "support/allocators/secure.h" /* for SecureString */
 #include "key.h"
 
 const unsigned int WALLET_CRYPTO_KEY_SIZE = 32;
@@ -39,14 +39,18 @@ public:
     // such as the various parameters to scrypt
     std::vector<unsigned char> vchOtherDerivationParameters;
 
-    IMPLEMENT_SERIALIZE
-    (
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         READWRITE(vchCryptedKey);
         READWRITE(vchSalt);
         READWRITE(nDerivationMethod);
         READWRITE(nDeriveIterations);
         READWRITE(vchOtherDerivationParameters);
-    )
+    }
+
     CMasterKey()
     {
         // 25000 rounds is just under 0.1 seconds on a 1.86 GHz Pentium M
@@ -83,42 +87,37 @@ typedef std::vector<unsigned char, secure_allocator<unsigned char> > CKeyingMate
 class CCrypter
 {
 private:
-    unsigned char chKey[WALLET_CRYPTO_KEY_SIZE];
-    unsigned char chIV[WALLET_CRYPTO_KEY_SIZE];
+    std::vector<unsigned char, secure_allocator<unsigned char>> vchKey;
+    std::vector<unsigned char, secure_allocator<unsigned char>> vchIV;
     bool fKeySet;
 
 public:
     bool SetKeyFromPassphrase(const SecureString &strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod);
-    bool Encrypt(const CKeyingMaterial& vchPlaintext, std::vector<unsigned char> &vchCiphertext);
-    bool Decrypt(const std::vector<unsigned char>& vchCiphertext, CKeyingMaterial& vchPlaintext);
+    bool Encrypt(const CKeyingMaterial& vchPlaintext, std::vector<unsigned char> &vchCiphertext) const;
+    bool Decrypt(const std::vector<unsigned char>& vchCiphertext, CKeyingMaterial& vchPlaintext) const;
     bool SetKey(const CKeyingMaterial& chNewKey, const std::vector<unsigned char>& chNewIV);
 
     void CleanKey()
     {
-        OPENSSL_cleanse(&chKey, sizeof chKey);
-        OPENSSL_cleanse(&chIV, sizeof chIV);
+        memory_cleanse(vchKey.data(), vchKey.size());
+        memory_cleanse(vchIV.data(), vchIV.size());
         fKeySet = false;
     }
 
     CCrypter()
     {
         fKeySet = false;
-
-        // Try to keep the key data out of swap (and be a bit over-careful to keep the IV that we don't even use out of swap)
-        // Note that this does nothing about suspend-to-disk (which will put all our key data on disk)
-        // Note as well that at no point in this program is any attempt made to prevent stealing of keys by reading the memory of the running process.
-        LockedPageManager::instance.LockRange(&chKey[0], sizeof chKey);
-        LockedPageManager::instance.LockRange(&chIV[0], sizeof chIV);
+        vchKey.resize(WALLET_CRYPTO_KEY_SIZE);
+        // TODO: Bitcoin uses an IV size of 16 defined by WALLET_CRYPTO_IV_SIZE.
+        vchIV.resize(WALLET_CRYPTO_KEY_SIZE);
     }
 
     ~CCrypter()
     {
         CleanKey();
-
-        LockedPageManager::instance.UnlockRange(&chKey[0], sizeof chKey);
-        LockedPageManager::instance.UnlockRange(&chIV[0], sizeof chIV);
     }
 };
+
 
 bool EncryptSecret(CKeyingMaterial& vMasterKey, const CSecret &vchPlaintext, const uint256& nIV, std::vector<unsigned char> &vchCiphertext);
 bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char> &vchCiphertext, const uint256& nIV, CSecret &vchPlaintext);

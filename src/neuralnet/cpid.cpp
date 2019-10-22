@@ -219,17 +219,6 @@ std::string MiningId::ToString() const
     return boost::apply_visitor(MiningIdToStringVisitor(), m_variant);
 }
 
-unsigned int MiningId::GetSerializeSize(int nType, int nVersion) const
-{
-    if (Which() == Kind::CPID) {
-        return 1 + 16; // Variant tag byte + CPID bytes
-    }
-
-    // For variants without any associated data, we serialize the variant tag
-    // only as a single byte:
-    return 1;
-}
-
 // -----------------------------------------------------------------------------
 // Class: MiningId::Invalid
 // -----------------------------------------------------------------------------

@@ -8,8 +8,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "allocators.h"
 #include "serialize.h"
+#include "support/allocators/secure.h"
 #include "uint256.h"
 #include "util.h"
 
@@ -73,9 +73,13 @@ public:
     friend bool operator!=(const CPubKey &a, const CPubKey &b) { return a.vchPubKey != b.vchPubKey; }
     friend bool operator<(const CPubKey &a, const CPubKey &b) { return a.vchPubKey < b.vchPubKey; }
 
-    IMPLEMENT_SERIALIZE(
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         READWRITE(vchPubKey);
-    )
+    }
 
     CKeyID GetID() const {
         return CKeyID(Hash160(vchPubKey));
@@ -149,7 +153,7 @@ public:
     // This is only slightly more CPU intensive than just verifying it.
     // If this function succeeds, the recovered public key is guaranteed to be valid
     // (the signature is a valid signature of the given data for that key)
-		
+
     // Ensure that signature is DER-encoded
     static bool ReserealizeSignature(std::vector<unsigned char>& vchSig);
 

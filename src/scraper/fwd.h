@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "support/allocators/zeroafterfree.h"
 #include "util.h"
 
 /*********************
@@ -30,6 +31,15 @@ enum class scrapereventtypes
     Sleep
 };
 
+enum class scraperSBvalidationtype
+{
+    Invalid,
+    Unknown,
+    CurrentCachedConvergence,
+    CachedPastConvergence,
+    ManifestLevelConvergence,
+    ProjectLevelConvergence
+};
 
 
 /*********************
@@ -63,6 +73,11 @@ struct ConvergedManifest
 
     // Used when convergence is at the manifest level (normal)
     std::map<ScraperID, uint256> mIncludedScraperManifests;
+    // The below is the manifest content hash for the underlying manifests that comprise the convergence. This
+    // will only be populated if the convergence is at the manifest level (bByParts == false). In that case, each
+    // manifest's content in the convergence must be the same. If the convergence is by project, this does not
+    // make sense to populate. See the above comment.
+    uint256 nUnderlyingManifestContentHash;
 
     // Used when convergence is at the manifest level (normal) and also at the part (project) level for
     // scrapers that are not part of any part (project) level convergence.

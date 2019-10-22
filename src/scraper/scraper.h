@@ -45,9 +45,11 @@ namespace boostio = boost::iostreams;
 // These can get overridden by the GetArgs in init.cpp or ScraperApplyAppCacheEntries.
 // The appcache entries will take precedence.
 
-// The amount of time to wait between scraper loop runs.
+// The amount of time to wait between scraper loop runs. This is in
+// milliseconds.
 unsigned int nScraperSleep = 300000;
-// The amount of time before SB is due to start scraping.
+// The amount of time before SB is due to start scraping. This is in
+// seconds.
 unsigned int nActiveBeforeSB = 14400;
 
 // Explorer mode flag. Only effective if scraper is active.
@@ -120,15 +122,31 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
 std::string ScraperGetNeuralHash();
-NN::QuorumHash ScraperGetSuperblockHash();
 bool ScraperSynchronizeDPOR();
+scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperblock, bool bUseCache = true);
 
 static std::vector<std::string> vstatsobjecttypestrings = { "NetWorkWide", "byCPID", "byProject", "byCPIDbyProject" };
+
+static std::vector<std::string> scraperSBvalidationtypestrings = {
+    "Invalid",
+    "Unknown",
+    "CurrentCachedConvergence",
+    "CachedPastConvergence",
+    "ManifestLevelConvergence",
+    "ProjectLevelConvergence"
+};
+
 
 const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
 {
     return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
 }
+
+const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType)
+{
+    return scraperSBvalidationtypestrings[static_cast<int>(ScraperSBValidationType)];
+}
+
 
 double MagRound(double dMag)
 {

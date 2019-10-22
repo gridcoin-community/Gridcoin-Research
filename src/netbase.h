@@ -78,11 +78,57 @@ class CNetAddr
         friend bool operator!=(const CNetAddr& a, const CNetAddr& b);
         friend bool operator<(const CNetAddr& a, const CNetAddr& b);
 
-        IMPLEMENT_SERIALIZE
-            (
-             READWRITE(FLATDATA(ip));
-            )
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(ip);
+        }
+
+        friend class CSubNet;
 };
+
+
+
+class CSubNet
+{
+    protected:
+        /// Network (base) address
+        CNetAddr network;
+        /// Netmask, in network byte order
+        uint8_t netmask[16];
+        /// Is this value valid? (only used to signal parse errors)
+        bool valid;
+
+    public:
+        CSubNet();
+        CSubNet(const CNetAddr &addr, int32_t mask);
+        CSubNet(const CNetAddr &addr, const CNetAddr &mask);
+
+        //constructor for single ip subnet (<ipv4>/32 or <ipv6>/128)
+        explicit CSubNet(const CNetAddr &addr);
+
+        bool Match(const CNetAddr &addr) const;
+
+        std::string ToString() const;
+        bool IsValid() const;
+
+        friend bool operator==(const CSubNet& a, const CSubNet& b);
+        friend bool operator!=(const CSubNet& a, const CSubNet& b) { return !(a == b); }
+        friend bool operator<(const CSubNet& a, const CSubNet& b);
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(network);
+            READWRITE(netmask);
+            READWRITE(valid);
+        }
+};
+
 
 /** A combination of a network address (CNetAddr) and a (TCP) port */
 class CService : public CNetAddr
@@ -116,15 +162,14 @@ class CService : public CNetAddr
         CService(const struct in6_addr& ipv6Addr, unsigned short port);
         CService(const struct sockaddr_in6& addr);
 
-        IMPLEMENT_SERIALIZE
-            (
-             CService* pthis = const_cast<CService*>(this);
-             READWRITE(FLATDATA(ip));
-             unsigned short portN = htons(port);
-             READWRITE(portN);
-             if (fRead)
-                 pthis->port = ntohs(portN);
-            )
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+             READWRITE(ip);
+             READWRITE(WrapBigEndian(port));
+        }
 };
 
 typedef std::pair<CService, int> proxyType;
@@ -140,6 +185,7 @@ bool LookupHost(const char *pszName, std::vector<CNetAddr>& vIP, unsigned int nM
 bool Lookup(const char *pszName, CService& addr, int portDefault = 0, bool fAllowLookup = true);
 bool Lookup(const char *pszName, std::vector<CService>& vAddr, int portDefault = 0, bool fAllowLookup = true, unsigned int nMaxSolutions = 0);
 bool LookupNumeric(const char *pszName, CService& addr, int portDefault = 0);
+bool LookupSubNet(const char *pszName, CSubNet& subnet);
 bool ConnectSocket(const CService &addr, SOCKET& hSocketRet, int nTimeout = nConnectTimeout);
 bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault = 0, int nTimeout = nConnectTimeout);
 

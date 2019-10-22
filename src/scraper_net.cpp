@@ -18,23 +18,28 @@
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
+CCriticalSection CSplitBlob::cs_mapParts;
 std::map< uint256, std::unique_ptr<CScraperManifest> > CScraperManifest::mapManifest;
+std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>> CScraperManifest::mapPendingDeletedManifest;
 CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+extern unsigned int nScraperSleep;
 extern AppCacheSectionExt mScrapersExt;
 extern std::atomic<int64_t> nSyncTime;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 {
-    /* Part of larger hashed blob. Currently only used for scraper data sharing.
+  /* Part of larger hashed blob. Currently only used for scraper data sharing.
    * retrive parent object from mapBlobParts
    * notify object or ignore if no object found
    * erase from mapAlreadyAskedFor
-  */
+   */
     auto& ss= vRecv;
     uint256 hash(Hash(ss.begin(), ss.end()));
     mapAlreadyAskedFor.erase(CInv(MSG_PART,hash));
@@ -75,6 +80,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     }
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 void CSplitBlob::addPart(const uint256& ihash)
 {
     assert( ihash != Hash(vParts.end(),vParts.end()) );
@@ -89,6 +95,7 @@ void CSplitBlob::addPart(const uint256& ihash)
     part.refs.emplace(this, n);
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 int CSplitBlob::addPartData(CDataStream&& vData)
 {
     uint256 hash(Hash(vData.begin(), vData.end()));
@@ -115,8 +122,11 @@ int CSplitBlob::addPartData(CDataStream&& vData)
     return n;
 }
 
+// Takes a lock on cs_mapParts.
 CSplitBlob::~CSplitBlob()
 {
+    LOCK(cs_mapParts);
+
     for(unsigned n= 0; n<vParts.size(); ++n)
     {
         CPart& part= *vParts[n];
@@ -126,6 +136,7 @@ CSplitBlob::~CSplitBlob()
     }
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 void CSplitBlob::UseAsSource(CNode* pfrom)
 {
     if(pfrom)
@@ -141,6 +152,7 @@ void CSplitBlob::UseAsSource(CNode* pfrom)
     }
 }
 
+// A lock needs to be taken on cs_mapParts before calling this function.
 bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash)
 {
     auto ipart= mapParts.find(hash);
@@ -166,20 +178,23 @@ bool CScraperManifest::AlreadyHave(CNode* pfrom, const CInv& inv)
     }
     if( MSG_SCRAPERINDEX !=inv.type )
     {
-        /* For any other objects, just say that we do not need it: */
+        // For any other objects, just say that we do not need it:
         return true;
     }
 
-    /* Inv-entory notification about scraper data index
-   * see if we already have it
-   * if yes, relay pfrom to Parts system as a fetch source and return true
-   * else return false
-  */
-
+   // Inventory notification about scraper data index--see if we already have it.
+   // If yes, relay pfrom to Parts system as a fetch source and return true
+   // else return false.
     auto found = mapManifest.find(inv.hash);
     if( found!=mapManifest.end() )
     {
-        found->second->UseAsSource(pfrom);
+        // Only record UseAsSource if manifest is current to avoid spurious parts.
+        {
+            LOCK(cs_mapParts);
+
+            if (found->second->IsManifestCurrent()) found->second->UseAsSource(pfrom);
+        }
+
         return true;
     }
     else
@@ -212,7 +227,7 @@ bool CScraperManifest::SendManifestTo(CNode* pto, const uint256& hash)
 }
 
 
-void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersion) const
+void CScraperManifest::dentry::Serialize(CDataStream& ss) const
 { /* TODO: remove this redundant code */
     ss<< project;
     ss<< ETag;
@@ -222,7 +237,7 @@ void CScraperManifest::dentry::Serialize(CDataStream& ss, int nType, int nVersio
     ss<< current;
     ss<< last;
 }
-void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVersion)
+void CScraperManifest::dentry::Unserialize(CDataStream& ss)
 {
     ss>> project;
     ss>> ETag;
@@ -233,8 +248,8 @@ void CScraperManifest::dentry::Unserialize(CReaderStream& ss, int nType, int nVe
     ss>> last;
 }
 
-
-void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int nVersion) const
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
+void CScraperManifest::SerializeWithoutSignature(CDataStream& ss) const
 {
     WriteCompactSize(ss, vParts.size());
     for( const CPart* part : vParts )
@@ -249,7 +264,8 @@ void CScraperManifest::SerializeWithoutSignature(CDataStream& ss, int nType, int
 }
 
 // This is to compare manifest content quickly. We just need the parts and the consensus block.
-void CScraperManifest::SerializeForManifestCompare(CDataStream& ss, int nType, int nVersion) const
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
+void CScraperManifest::SerializeForManifestCompare(CDataStream& ss) const
 {
     WriteCompactSize(ss, vParts.size());
     for( const CPart* part : vParts )
@@ -257,10 +273,10 @@ void CScraperManifest::SerializeForManifestCompare(CDataStream& ss, int nType, i
     ss<< ConsensusBlock;
 }
 
-
-void CScraperManifest::Serialize(CDataStream& ss, int nType, int nVersion) const
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this.
+void CScraperManifest::Serialize(CDataStream& ss) const
 {
-    SerializeWithoutSignature(ss, nType, nVersion);
+    SerializeWithoutSignature(ss);
     ss << signature;
 }
 
@@ -363,8 +379,8 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
     }
 }
 
-
-void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscore_out)
+// A lock must be taken on cs_mapManifest before calling this function.
+void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_out)
 {
     const auto pbegin = ss.begin();
 
@@ -408,15 +424,34 @@ void CScraperManifest::UnserializeCheck(CReaderStream& ss, unsigned int& banscor
         throw error("CScraperManifest: Invalid manifest key");
     if(!mkey.Verify(hash, signature))
         throw error("CScraperManifest: Invalid manifest signature");
-    for( const uint256& ph : vph )
+
+    {
+        LOCK(cs_mapParts);
+
+        for( const uint256& ph : vph )
         addPart(ph);
+    }
 }
 
-// A lock must be taken on cs_mapManifest before calling this function.
-bool CScraperManifest::DeleteManifest(const uint256& nHash)
+bool CScraperManifest::IsManifestCurrent() const
 {
-    if (mapManifest.erase(nHash))
+    // This checks to see if the manifest is current, i.e. not about to be deleted.
+    return (nTime >= GetAdjustedTime() - SCRAPER_CMANIFEST_RETENTION_TIME + (int64_t) nScraperSleep / 1000);
+}
+
+
+// A lock must be taken on cs_mapManifest before calling this function.
+bool CScraperManifest::DeleteManifest(const uint256& nHash, const bool& fImmediate)
+{
+    bool fDeleted = false;
+
+    auto iter = mapManifest.find(nHash);
+
+    if(iter != mapManifest.end())
     {
+        if (!fImmediate) mapPendingDeletedManifest[nHash] = std::make_pair(GetAdjustedTime(), std::move(iter->second));
+        mapManifest.erase(nHash);
+
         // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
         // that could have been used in the cached convergence, so the convergence may change.
         {
@@ -425,18 +460,52 @@ bool CScraperManifest::DeleteManifest(const uint256& nHash)
             ConvergedScraperStatsCache.bClean = false;
         }
 
-        return true;
+        fDeleted = true;
     }
-    else
-    {
-        return false;
-    }
+
+    return fDeleted;
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
-std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter)
+std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator CScraperManifest::DeleteManifest(std::map<uint256, std::unique_ptr<CScraperManifest>>::iterator& iter,
+                                                                                                const bool& fImmediate)
 {
-    return mapManifest.erase(iter);
+    if (!fImmediate) mapPendingDeletedManifest[iter->first] = std::make_pair(GetAdjustedTime(), std::move(iter->second));
+    iter = mapManifest.erase(iter);
+
+    // lock cs_ConvergedScraperStatsCache and mark ConvergedScraperStatsCache dirty because a manifest has been deleted
+    // that could have been used in the cached convergence, so the convergence may change. This is not conditional, because the
+    // iterator must be valid.
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ConvergedScraperStatsCache.bClean = false;
+    }
+    return iter;
+}
+
+// A lock must be taken on cs_mapManifest before calling this function.
+unsigned int CScraperManifest::DeletePendingDeletedManifests()
+{
+    unsigned int nDeleted = 0;
+    int64_t nDeleteThresholdTime = GetAdjustedTime() - nScraperSleep / 1000;
+
+    std::map<uint256, std::pair<int64_t, std::unique_ptr<CScraperManifest>>>::iterator iter;
+    for (iter = mapPendingDeletedManifest.begin(); iter != mapPendingDeletedManifest.end();)
+    {
+        // Delete any entry more than nScraperSleep old.
+        if (iter->second.first < nDeleteThresholdTime)
+        {
+            iter = mapPendingDeletedManifest.erase(iter);
+            ++nDeleted;
+        }
+        else
+        {
+            ++iter;
+        }
+    }
+
+    return nDeleted;
 }
 
 // A lock must be taken on cs_mapManifest before calling this function.
@@ -465,7 +534,6 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     CScraperManifest& manifest = *it.first->second;
     manifest.phash= &it.first->first;
     try {
-        //void Unserialize(Stream& s, int nType, int nVersion)
         manifest.UnserializeCheck(vRecv, banscore);
     } catch(bool& e) {
         mapManifest.erase(hash);
@@ -497,32 +565,37 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
         ConvergedScraperStatsCache.bClean = false;
     }
 
+    LOCK(cs_mapParts);
+
     LogPrint("manifest", "received manifest %s with %u / %u parts", hash.GetHex(),(unsigned)manifest.cntPartsRcvd,(unsigned)manifest.vParts.size());
-    if( manifest.isComplete() )
+    if(manifest.isComplete())
     {
         /* If we already got all the parts in memory, signal completion */
         manifest.Complete();
     } else {
         /* else request missing parts from the sender */
-        manifest.UseAsSource(pfrom);
+        // Note: As an additional buffer to prevent spurious part receipts, if the manifest timestamp is within nScraperSleep of expiration (i.e.
+        // about to go on the pending delete list, then do not request missing parts, as it is possible that the manifest will be deleted
+        // by the housekeeping loop in between the receipt of the manifest, request for parts, and receipt of parts otherwise.
+        if (manifest.IsManifestCurrent()) manifest.UseAsSource(pfrom);
     }
     return true;
 }
 
-// A lock needs to be taken on cs_mapManifest before calling this function.
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
 bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign)
 {
     m->pubkey= keySign.GetPubKey();
 
-    // serialize the content for comparison purposes and put in manifest.
     CDataStream sscomp(SER_NETWORK,1);
-    m->SerializeForManifestCompare(sscomp, SER_NETWORK, 1);
+    CDataStream ss(SER_NETWORK,1);
+
+    // serialize the content for comparison purposes and put in manifest.
+    m->SerializeForManifestCompare(sscomp);
     m->nContentHash = Hash(sscomp.begin(), sscomp.end());
 
     /* serialize and hash the object */
-    CDataStream ss(SER_NETWORK,1);
-    m->SerializeWithoutSignature(ss, SER_NETWORK, 1);
-    //ss << *m;
+    m->SerializeWithoutSignature(ss);
 
     /* sign the serialized manifest and append the signature */
     uint256 hash(Hash(ss.begin(),ss.end()));
@@ -567,6 +640,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     return true;
 }
 
+// A lock needs to be taken on cs_mapManifest and cs_mapParts before calling this function.
 void CScraperManifest::Complete()
 {
     /* Notify peers that we have a new manifest */
@@ -683,6 +757,9 @@ UniValue getmpart(const UniValue& params, bool fHelp)
                 "getmpart <hash>\n"
                 "Show content of CPart object.\n"
                 );
+
+    LOCK(CSplitBlob::cs_mapParts);
+
     auto ipart= CSplitBlob::mapParts.find(uint256(params[0].get_str()));
     if(ipart == CSplitBlob::mapParts.end())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Object not found");

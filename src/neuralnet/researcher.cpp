@@ -8,6 +8,7 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <openssl/md5.h>
 #include <set>
 
 using namespace NN;
@@ -209,6 +210,47 @@ void TryProjectCpid(MiningId& mining_id, const MiningProject& project)
 }
 
 //!
+//! \brief Compute an external CPID from the supplied internal CPID and the
+//! configured email address.
+//!
+//! A bug in BOINC sometimes results in an empty external CPID element in the
+//! client_state.xml file. For these cases, we'll recompute the external CPID
+//! of the project from the user's internal CPID and email address. This call
+//! validates that the the user's email address hash extracted from a project
+//! XML node matches the email set in the Gridcoin configuration file so that
+//! the wallet doesn't inadvertently generate an unowned CPID.
+//!
+//! \param email_hash    MD5 digest of the the email address to compare with
+//! the configured email.
+//! \param internal_cpid As extracted from client_state.xml. An input to the
+//! hash that generates the external CPID.
+//!
+//! \return The computed external CPID if the hash of the configured email
+//! address matches the supplied email address hash.
+//!
+boost::optional<Cpid> FallbackToCpidByEmail(
+    const std::string& email_hash,
+    const std::string& internal_cpid)
+{
+    if (email_hash.empty() || internal_cpid.empty()) {
+        return boost::none;
+    }
+
+    const std::string email = Researcher::Email();
+    std::vector<unsigned char> email_hash_bytes(16);
+
+    MD5(reinterpret_cast<const unsigned char*>(email.data()),
+        email.size(),
+        email_hash_bytes.data());
+
+    if (HexStr(email_hash_bytes) != email_hash) {
+        return boost::none;
+    }
+
+    return Cpid::Hash(internal_cpid, email);
+}
+
+//!
 //! \brief Try to detect a split CPID and log a warning message.
 //!
 //! In the future, we can extend this to display a warning in the UI.
@@ -255,7 +297,6 @@ void SetLegacyResearcherContext(const Researcher& researcher)
     mc.cpid = researcher.Id().ToString();
     mc.Magnitude = 0;
     mc.clientversion = "";
-    mc.RSAWeight = 0;
     mc.LastPaymentTime = 0;
     mc.lastblockhash = "0";
     // Reuse for debugging
@@ -324,6 +365,20 @@ MiningProject MiningProject::Parse(const std::string& xml)
     if (project.m_cpid.IsZero()) {
         const std::string external_cpid
             = ExtractXML(xml, "<external_cpid>", "</external_cpid>");
+
+        // A bug in BOINC sometimes results in an empty external CPID element
+        // in client_state.xml. For these cases, we'll recompute the external
+        // CPID of the project from the internal CPID and email address:
+        //
+        if (external_cpid.empty()) {
+            if (const boost::optional<Cpid> cpid = FallbackToCpidByEmail(
+                ExtractXML(xml, "<email_hash>", "</email_hash>"),
+                ExtractXML(xml, "<cross_project_id>", "</cross_project_id>")))
+            {
+                project.m_cpid = *cpid;
+                return project;
+            }
+        }
 
         // For the extremely rare case that a BOINC project assigned a user a
         // CPID that contains only zeroes, double check that a CPID parsed to

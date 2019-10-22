@@ -8,9 +8,9 @@
 #endif
 
 #include "db.h"
+#include "banman.h"
 #include "net.h"
 #include "init.h"
-#include "addrman.h"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -39,6 +39,7 @@ extern std::string GetCommandNonce(std::string command);
 
 extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
+int PEER_TIMEOUT = 45;
 
 void ThreadMessageHandler2(void* parg);
 void ThreadSocketHandler2(void* parg);
@@ -78,6 +79,9 @@ ThreadHandler* netThreads = new ThreadHandler;
 static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
+// Initialization of static class variable.
+std::atomic<NodeId> CNode::nLastNodeId {-1};
+
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
 vector<std::string> vAddedNodes;
@@ -93,6 +97,9 @@ CCriticalSection cs_vOneShots;
 
 set<CNetAddr> setservAddNodeAddresses;
 CCriticalSection cs_setservAddNodeAddresses;
+
+std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
+CCriticalSection CNode::cs_mapMisbehavior;
 
 static CSemaphore *semOutbound = NULL;
 
@@ -558,8 +565,6 @@ void AddressCurrentlyConnected(const CService& addr)
     addrman.Connected(addr);
 }
 
-
-
 std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
 std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
@@ -645,6 +650,11 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     }
 }
 
+NodeId CNode::GetNewNodeId()
+{
+    return nLastNodeId.fetch_add(1, std::memory_order_relaxed);
+}
+
 void CNode::CloseSocketDisconnect()
 {
     fDisconnect = true;
@@ -661,6 +671,46 @@ void CNode::CloseSocketDisconnect()
     }
 }
 
+
+bool CNode::DisconnectNode(const std::string& strNode)
+{
+    LOCK(cs_vNodes);
+    if (CNode* pnode = FindNode(strNode)) {
+        pnode->fDisconnect = true;
+        return true;
+    }
+    return false;
+}
+
+bool CNode::DisconnectNode(const CSubNet& subnet)
+{
+    bool disconnected = false;
+    LOCK(cs_vNodes);
+    for (CNode* pnode : vNodes) {
+        if (subnet.Match(pnode->addr)) {
+            pnode->fDisconnect = true;
+            disconnected = true;
+        }
+    }
+    return disconnected;
+}
+
+bool CNode::DisconnectNode(const CNetAddr& addr)
+{
+    return CNode::DisconnectNode(CSubNet(addr));
+}
+
+bool CNode::DisconnectNode(NodeId id)
+{
+    LOCK(cs_vNodes);
+    for(CNode* pnode : vNodes) {
+        if (id == pnode->GetId()) {
+            pnode->fDisconnect = true;
+            return true;
+        }
+    }
+    return false;
+}
 
 void CNode::PushVersion()
 {
@@ -685,30 +735,6 @@ void CNode::PushVersion()
 
 }
 
-std::map<CNetAddr, int64_t> CNode::setBanned;
-CCriticalSection CNode::cs_setBanned;
-
-void CNode::ClearBanned()
-{
-    setBanned.clear();
-}
-
-bool CNode::IsBanned(CNetAddr ip)
-{
-    bool fResult = false;
-    {
-        LOCK(cs_setBanned);
-        std::map<CNetAddr, int64_t>::iterator i = setBanned.find(ip);
-        if (i != setBanned.end())
-        {
-            int64_t t = (*i).second;
-            if (GetAdjustedTime() < t)
-                fResult = true;
-        }
-    }
-    return fResult;
-}
-
 bool CNode::Misbehaving(int howmuch)
 {
     if (addr.IsLocal())
@@ -717,40 +743,79 @@ bool CNode::Misbehaving(int howmuch)
         return false;
     }
 
-    nMisbehavior += howmuch;
-    if (nMisbehavior >= GetArg("-banscore", 100))
     {
-        int64_t banTime = GetAdjustedTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
-        if (fDebug10) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+        int nMisbehavior = 0;
+
+        LOCK(cs_mapMisbehavior);
+
+        nMisbehavior = GetMisbehavior() + howmuch;
+
+        mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+
+        if (nMisbehavior >= GetArg("-banscore", 100))
         {
-            LOCK(cs_setBanned);
-            if (setBanned[addr] < banTime)
-                setBanned[addr] = banTime;
-        }
-        CloseSocketDisconnect();
-        return true;
-    } else
-        if (fDebug10) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
-    return false;
+            if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+
+            g_banman->Ban(addr, BanReasonNodeMisbehaving);
+            CloseSocketDisconnect();
+            return true;
+        } else
+            if (fDebug) LogPrintf("Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
+        return false;
+    }
 }
 
-#undef X
-#define X(name) stats.name = name
+
+int CNode::GetMisbehavior() const
+{
+    int nMisbehavior = 0;
+
+    LOCK(cs_mapMisbehavior);
+
+    const auto& iMisbehavior = mapMisbehavior.find(addr);
+
+    if (iMisbehavior != mapMisbehavior.end())
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
+                    / (double) GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Make sure nMisbehavior doesn't go below zero.
+        nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+
+        // Delete entry if nMisbehavior is zero.
+        if (!nMisbehavior) mapMisbehavior.erase(iMisbehavior);
+    }
+
+    return nMisbehavior;
+}
+
 void CNode::copyStats(CNodeStats &stats)
 {
-    X(nServices);
-    X(nLastSend);
-    X(nLastRecv);
-    X(nTimeConnected);
-    X(addrName);
-    X(nVersion);
-    X(strSubVer);
-    X(fInbound);
-    X(nStartingHeight);
-    X(nMisbehavior);
-    X(sGRCAddress);
-    X(nTrust);
+    stats.id = id;
+    stats.nServices = nServices;
+    stats.addr = addr;
+    stats.nLastSend = nLastSend;
+    stats.nLastRecv = nLastRecv;
+    stats.nTimeConnected = nTimeConnected;
+    stats.nTimeOffset = nTimeOffset;
+    stats.addrName = addrName;
+    stats.nVersion = nVersion;
+    stats.strSubVer = strSubVer;
+    stats.fInbound = fInbound;
+    stats.nStartingHeight = nStartingHeight;
+    stats.sGRCAddress = sGRCAddress;
+    stats.nTrust = nTrust;
+    stats.nMisbehavior = GetMisbehavior();
 
+    // No lock for these two... using atomics.
+    stats.nSendBytes = nSendBytes;
+    stats.nRecvBytes = nRecvBytes;
 
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.
@@ -765,15 +830,32 @@ void CNode::copyStats(CNodeStats &stats)
 
     // Raw ping time is in microseconds, but show it to user as whole seconds (Bitcoin users should be well used to small numbers with many decimal places by now :)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
+    stats.dMinPing  = (((double)nMinPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
     stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
 
 }
-#undef X
+
+
+void CNode::CopyNodeStats(std::vector<CNodeStats>& vstats)
+{
+    vstats.clear();
+
+    LOCK(cs_vNodes);
+    vstats.reserve(vNodes.size());
+    for (auto const& pnode : vNodes) {
+        CNodeStats stats;
+        pnode->copyStats(stats);
+        vstats.push_back(stats);
+    }
+}
+
 
 // requires LOCK(cs_vRecvMsg)
 bool CNode::ReceiveMsgBytes(const char *pch, unsigned int nBytes)
 {
+    nRecvBytes += nBytes;
+
     while (nBytes > 0) {
 
         // get current incomplete message, or create a new one
@@ -864,6 +946,7 @@ void SocketSendData(CNode *pnode)
         int nBytes = send(pnode->hSocket, &data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
             pnode->nLastSend = GetAdjustedTime();
+            pnode->nSendBytes += nBytes;
             pnode->nSendOffset += nBytes;
             pnode->RecordBytesSent(nBytes);
             if (pnode->nSendOffset == data.size()) {
@@ -1103,7 +1186,7 @@ void ThreadSocketHandler2(void* parg)
                     LogPrintf("Surpassed max inbound connections maxconnections:%" PRId64 " minus max_outbound:%i", GetArg("-maxconnections",250), MAX_OUTBOUND_CONNECTIONS);
                 closesocket(hSocket);
             }
-            else if (CNode::IsBanned(addr))
+            else if (g_banman->IsBanned(addr))
             {
                 if (fDebug10) LogPrintf("connection from %s dropped (banned)", addr.ToString());
                 closesocket(hSocket);
@@ -1203,46 +1286,56 @@ void ThreadSocketHandler2(void* parg)
             //
             // Inactivity checking
             //
-            // Allow newbies to connect easily
-            int64_t nTime = GetAdjustedTime();
-            if (nTime - pnode->nTimeConnected > 24)
-            {
-                if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
-                {
-                    if (fDebug10) LogPrintf("Socket no message in first 24 seconds, IP %s, %d %d", NodeAddress(pnode), pnode->nLastRecv != 0, pnode->nLastSend != 0);
-                    pnode->Misbehaving(1);
-                    pnode->fDisconnect = true;
-                }
-            }
-
+            // Consider this for future removal as this really is not beneficial nor harmful.
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     if (fDebug10)
                         LogPrintf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ", NodeAddress(pnode), vNodes.size());
+
                     pnode->fDisconnect = true;
+
+                    continue;
             }
 
-            if (nTime - pnode->nTimeConnected > 24)
+            int64_t nTime = GetAdjustedTime();
+
+            if (nTime - pnode->nTimeConnected > PEER_TIMEOUT)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug10) LogPrintf("socket no message in first 24 seconds, %d %d", pnode->nLastRecv != 0, pnode->nLastSend != 0);
+                    if (fDebug10)
+                        LogPrintf("socket no message in first %d seconds, %d %d", PEER_TIMEOUT, pnode->nLastRecv != 0, pnode->nLastSend != 0);
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
+
                 else if (nTime - pnode->nLastSend > TIMEOUT_INTERVAL)
                 {
                     LogPrintf("socket sending timeout: %" PRId64 "s", nTime - pnode->nLastSend);
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
+
                 else if (nTime - pnode->nLastRecv > (pnode->nVersion > BIP0031_VERSION ? TIMEOUT_INTERVAL : 90*60))
                 {
                     LogPrintf("socket receive timeout: %" PRId64 "s", nTime - pnode->nLastRecv);
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
+
                 else if (pnode->nPingNonceSent && pnode->nPingUsecStart + TIMEOUT_INTERVAL * 1000000 < GetTimeMicros())
                 {
                     LogPrintf("ping timeout: %fs", 0.000001 * (GetTimeMicros() - pnode->nPingUsecStart));
+
                     pnode->fDisconnect = true;
+
+                    continue;
                 }
             }
         }
@@ -1899,7 +1992,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
         return false;
     if (!strDest)
         if (IsLocal(addrConnect) ||
-            FindNode((CNetAddr)addrConnect) || CNode::IsBanned(addrConnect) ||
+            FindNode((CNetAddr)addrConnect) || g_banman->IsBanned(addrConnect) ||
             FindNode(addrConnect.ToStringIPPort().c_str()))
             return false;
     if (strDest && FindNode(strDest))

@@ -12,8 +12,10 @@
 
 #include "netbase.h"
 #include "serialize.h"
-#include <string>
 #include "uint256.h"
+#include "version.h"
+
+#include <string>
 
 extern bool fTestNet;
 static inline unsigned short GetDefaultPort(const bool testnet = fTestNet)
@@ -39,13 +41,16 @@ class CMessageHeader
         std::string GetCommand() const;
         bool IsValid() const;
 
-        IMPLEMENT_SERIALIZE
-            (
-             READWRITE(FLATDATA(pchMessageStart));
-             READWRITE(FLATDATA(pchCommand));
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+             READWRITE(pchMessageStart);
+             READWRITE(pchCommand);
              READWRITE(nMessageSize);
              READWRITE(nChecksum);
-            )
+        }
 
     // TODO: make private (improves encapsulation)
 	//HALFORD: 12-26-2014 - Add Encryption to messages - Increase size by 32 for checksum + delimiters + 10 for timestamp = 50 = 62 (vs 12)
@@ -81,20 +86,29 @@ class CAddress : public CService
 
         void Init();
 
-        IMPLEMENT_SERIALIZE
-            (
-             CAddress* pthis = const_cast<CAddress*>(this);
-             CService* pip = (CService*)pthis;
-             if (fRead)
-                 pthis->Init();
-             if (nType & SER_DISK)
-                 READWRITE(nVersion);
-             if ((nType & SER_DISK) ||
-                 (nVersion >= CADDR_TIME_VERSION && !(nType & SER_GETHASH)))
-                 READWRITE(nTime);
-             READWRITE(nServices);
-             READWRITE(*pip);
-            )
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            if (ser_action.ForRead()) {
+                Init();
+            }
+
+            int nVersion = s.GetVersion();
+            if (s.GetType() & SER_DISK) {
+                READWRITE(nVersion);
+            }
+
+            if ((s.GetType() & SER_DISK)
+                || (nVersion >= CADDR_TIME_VERSION && !(s.GetType() & SER_GETHASH)))
+            {
+                READWRITE(nTime);
+            }
+
+            READWRITE(nServices);
+            READWRITEAS(CService, *this);
+        }
 
         void print() const;
 
@@ -117,11 +131,14 @@ class CInv
         CInv(int typeIn, const uint256& hashIn);
         CInv(const std::string& strType, const uint256& hashIn);
 
-        IMPLEMENT_SERIALIZE
-        (
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
             READWRITE(type);
             READWRITE(hash);
-        )
+        }
 
         friend bool operator<(const CInv& a, const CInv& b);
 

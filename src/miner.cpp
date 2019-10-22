@@ -16,6 +16,7 @@
 #include <memory>
 #include <algorithm>
 #include <tuple>
+#include <random>
 
 using namespace std;
 
@@ -35,8 +36,6 @@ double GetLastPaymentTimeByCPID(std::string cpid);
 bool HasActiveBeacon(const std::string& cpid);
 std::string SerializeBoincBlock(MiningCPID mcpid);
 bool LessVerbose(int iMax1000);
-
-int64_t GetRSAWeightByBlock(MiningCPID boincblock);
 
 namespace NN { std::string GetPrimaryCpid(); }
 
@@ -74,7 +73,7 @@ public:
 //!
 //! \return Always \false - suitable for returning from the call directly.
 //!
-bool BreakForNoCoins(CMinerStatus& status, const std::string& message)
+bool ReturnMinerError(CMinerStatus& status, const std::string& message)
 {
     LOCK(status.lock);
 
@@ -440,22 +439,14 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     txnew.vout.clear();
 
     // Choose coins to use
-    set <pair <const CWalletTx*,unsigned int> > CoinsToStake;
+    vector<pair<const CWalletTx*,unsigned int>> CoinsToStake;
+    string sError = "";
 
-    int64_t BalanceToStake = wallet.GetBalance();
-    int64_t nValueIn = 0;
-    //Request all the coins here, check reserve later
+    if (!wallet.SelectCoinsForStaking(txnew.nTime, CoinsToStake, sError, true))
+    {
+        ReturnMinerError(MinerStatus, sError);
 
-    if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, _("No coins"));
-    } else if (!wallet.SelectCoinsForStaking(BalanceToStake*2, txnew.nTime, CoinsToStake, nValueIn)) {
-        return BreakForNoCoins(MinerStatus, _("Waiting for coins to mature"));
-    }
-
-    BalanceToStake -= nReserveBalance;
-
-    if (BalanceToStake <= 0) {
-        return BreakForNoCoins(MinerStatus, _("Entire balance reserved"));
+        return false;
     }
 
     if(fDebug2) LogPrintf("CreateCoinStake: Staking nTime/16= %d Bits= %u",
@@ -480,13 +471,6 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
                 continue;
         }
 
-        // only count coins meeting min age requirement
-        if (CoinBlock.GetBlockTime() + nStakeMinAge > txnew.nTime)
-            continue;
-
-        if (CoinTx.vout[CoinTxN].nValue > BalanceToStake)
-            continue;
-
         {
             int64_t nStakeValue= CoinTx.vout[CoinTxN].nValue;
             StakeValueSum += nStakeValue /(double)COIN;
@@ -498,20 +482,11 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
             StakeCoinAgeSum += bn.getuint64();
         }
 
-        if(blocknew.nVersion==7)
-        {
-            NetworkTimer();
-            CoinWeight = CalculateStakeWeightV3(CoinTx,CoinTxN,GlobalCPUMiningCPID);
-            StakeKernelHash= CalculateStakeHashV3(CoinBlock,CoinTx,CoinTxN,txnew.nTime,GlobalCPUMiningCPID,mdPORNonce);
-        }
-        else
-        {
-            uint64_t StakeModifier = 0;
-            if(!FindStakeModifierRev(StakeModifier,pindexPrev))
-                continue;
-            CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
-            StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
-        }
+        uint64_t StakeModifier = 0;
+        if(!FindStakeModifierRev(StakeModifier,pindexPrev))
+            continue;
+        CoinWeight = CalculateStakeWeightV8(CoinTx,CoinTxN,GlobalCPUMiningCPID);
+        StakeKernelHash= CalculateStakeHashV8(CoinBlock,CoinTx,CoinTxN,txnew.nTime,StakeModifier,GlobalCPUMiningCPID);
 
         CBigNum StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
@@ -524,17 +499,14 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
         StakeDiffMax = std::max(StakeDiffMax,StakeKernelDiff);
 
         if (fDebug2) {
-            int64_t RSA_WEIGHT = GetRSAWeightByBlock(GlobalCPUMiningCPID);
             LogPrintf(
 "CreateCoinStake: V%d Time %.f, Por_Nonce %.f, Bits %jd, Weight %jd\n"
-" RSA_WEIGHT %.f\n"
 " Stk %72s\n"
 " Trg %72s\n"
 " Diff %0.7f of %0.7f",
             blocknew.nVersion,
             (double)txnew.nTime, mdPORNonce,
             (intmax_t)blocknew.nBits,(intmax_t)CoinWeight,
-            (double)RSA_WEIGHT,
             StakeKernelHash.GetHex().c_str(), StakeTarget.GetHex().c_str(),
             StakeKernelDiff, GetBlockDifficulty(blocknew.nBits)
             );
@@ -665,6 +637,22 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     unsigned int nMaxSideStakeOutputs = nMaxOutputs - 2;
     // Initialize nOutputUsed at 1, because one is already used for the empty coinstake flag output.
     unsigned int nOutputsUsed = 1;
+
+    // If the number of sidestaking allocation entries exceeds nMaxSideStakeOutputs, then shuffle the vSideStakeAlloc
+    // to support sidestaking with more than six entries. This is a super simple solution but has some disadvantages.
+    // If the person made a mistake and has the entries in the config file add up to more than 100%, then those entries
+    // resulting a cumulative total over 100% will always be excluded, not just randomly excluded, because the cumulative
+    // check is done in the order of the entries in the config file. This is not regarded as a big issue, because
+    // all of the entries are supposed to add up to less than or equal to 100%. Also when there are more than
+    // mMaxSideStakeOutput entries, the residual returned to the coinstake will vary when the entries are shuffled,
+    // because the total percentage of the selected entries will be randomized. No attempt to renormalize
+    // the percentages is done.
+    if (vSideStakeAlloc.size() > nMaxSideStakeOutputs)
+    {
+        unsigned int seed = static_cast<unsigned int>(GetAdjustedTime());
+
+        std::shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), std::default_random_engine(seed));
+    }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes
     // (interest or CBR) and research rewards.
@@ -988,26 +976,14 @@ bool CreateGridcoinReward(CBlock &blocknew, MiningCPID& miningcpid, uint64_t &nC
     miningcpid.superblock = "";
     miningcpid.GRCAddress = DefaultWalletAddress();
 
-    int64_t RSA_WEIGHT = GetRSAWeightByBlock(miningcpid);
     GlobalCPUMiningCPID.lastblockhash = miningcpid.lastblockhash;
 
-    double mint = CoinToDouble(nReward);
-    double PORDiff = GetBlockDifficulty(blocknew.nBits);
-
-    LogPrintf("CreateGridcoinReward: for %s mint %f {RSAWeight %f} Research %f, Interest %f ",
-        miningcpid.cpid.c_str(), mint, (double)RSA_WEIGHT,miningcpid.ResearchSubsidy,miningcpid.InterestSubsidy);
-
-    // Mint Limiter
-    if(blocknew.nVersion < 10)
-    {
-        double mintlimit = MintLimiter(PORDiff,RSA_WEIGHT,miningcpid.cpid,blocknew.nTime);
-        //INVESTORS
-        if(blocknew.nVersion < 8) mintlimit = std::max(mintlimit, 0.0051);
-        if (nReward == 0 || mint < mintlimit)
-        {
-                return error("CreateGridcoinReward: Mint %f of %f too small",(double)mint,(double)mintlimit);
-        }
-    }
+    LogPrintf(
+        "CreateGridcoinReward: for %s mint %f Research %f, Interest %f ",
+        miningcpid.cpid.c_str(),
+        CoinToDouble(nReward),
+        miningcpid.ResearchSubsidy,
+        miningcpid.InterestSubsidy);
 
     //fill in reward and boinc
     blocknew.vtx[1].vout[1].nValue += nReward;

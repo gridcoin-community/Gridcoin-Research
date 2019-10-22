@@ -18,6 +18,18 @@
 
 using namespace std;
 
+// Boost Support for 1.70+
+#if BOOST_VERSION >= 107000
+    #define GetIOService(s) ((boost::asio::io_context&)(s).get_executor().context())
+    #define GetIOServiceFromPtr(s) ((boost::asio::io_context&)(s->get_executor().context())) // this one
+    typedef boost::asio::io_context ioContext;
+
+#else
+    #define GetIOService(s) ((s).get_io_service())
+    #define GetIOServiceFromPtr(s) ((s)->get_io_service())
+    typedef boost::asio::io_service ioContext;
+#endif
+
 // HTTP status codes
 enum HTTPStatusCode
 {
@@ -50,8 +62,13 @@ enum RPCErrorCode
     RPC_DEPRECATED                  = -23, // Use for deprecated commands
 
     // P2P client errors
-    RPC_CLIENT_NOT_CONNECTED        = -9,  // Bitcoin is not connected
+    RPC_CLIENT_NOT_CONNECTED        = -9,  // Gridcoin is not connected
     RPC_CLIENT_IN_INITIAL_DOWNLOAD  = -10, // Still downloading initial blocks
+    RPC_CLIENT_NODE_ALREADY_ADDED   = -23, // Node is already added
+    RPC_CLIENT_NODE_NOT_ADDED       = -24, // Node has not been added before
+    RPC_CLIENT_NODE_NOT_CONNECTED   = -29, // Node to disconnect not found in connected nodes
+    RPC_CLIENT_INVALID_IP_OR_SUBNET = -30, // Invalid IP/Subnet
+    RPC_CLIENT_P2P_DISABLED         = -31, // No valid connection manager instance found
 
     // Wallet errors
     RPC_WALLET_ERROR                = -4,  // Unspecified problem with wallet (key not found etc.)
@@ -97,7 +114,7 @@ public:
     }
     bool connect(const std::string& server, const std::string& port)
     {
-        boost::asio::ip::tcp::resolver resolver(stream.get_io_service());
+        boost::asio::ip::tcp::resolver resolver(GetIOService(stream));
         boost::asio::ip::tcp::resolver::query query(server.c_str(), port.c_str());
         boost::asio::ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
         boost::asio::ip::tcp::resolver::iterator end;
@@ -133,10 +150,10 @@ class AcceptedConnectionImpl : public AcceptedConnection
 {
 public:
     AcceptedConnectionImpl(
-            boost::asio::io_service& io_service,
+            ioContext& io_context,
             boost::asio::ssl::context &context,
             bool fUseSSL) :
-        sslStream(io_service, context),
+        sslStream(io_context, context),
         _d(sslStream, fUseSSL),
         _stream(_d)
     {

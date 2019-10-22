@@ -7,6 +7,7 @@
 #include "init.h"
 #include "main.h"
 #include "optionsmodel.h"
+#include "streams.h"
 #include "walletmodel.h"
 #include "wallet.h"
 
@@ -22,18 +23,18 @@ SignVerifyMessageDialog::SignVerifyMessageDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    GUIUtil::setupAddressWidget(ui->addressIn_SM, this);
-    GUIUtil::setupAddressWidget(ui->addressIn_VM, this);
+    GUIUtil::setupAddressWidget(ui->addressInEdit_SM, this);
+    GUIUtil::setupAddressWidget(ui->addressInEdit_VM, this);
 
-    ui->addressIn_SM->installEventFilter(this);
-    ui->messageIn_SM->installEventFilter(this);
-    ui->signatureOut_SM->installEventFilter(this);
-    ui->addressIn_VM->installEventFilter(this);
-    ui->messageIn_VM->installEventFilter(this);
-    ui->signatureIn_VM->installEventFilter(this);
+    ui->addressInEdit_SM->installEventFilter(this);
+    ui->messageInEdit_SM->installEventFilter(this);
+    ui->signatureOutEdit_SM->installEventFilter(this);
+    ui->addressInEdit_VM->installEventFilter(this);
+    ui->messageInEdit_VM->installEventFilter(this);
+    ui->signatureInEdit_VM->installEventFilter(this);
 
-    ui->signatureOut_SM->setFont(GUIUtil::bitcoinAddressFont());
-    ui->signatureIn_VM->setFont(GUIUtil::bitcoinAddressFont());
+    ui->signatureOutEdit_SM->setFont(GUIUtil::bitcoinAddressFont());
+    ui->signatureInEdit_VM->setFont(GUIUtil::bitcoinAddressFont());
 }
 
 SignVerifyMessageDialog::~SignVerifyMessageDialog()
@@ -48,14 +49,14 @@ void SignVerifyMessageDialog::setModel(WalletModel *model)
 
 void SignVerifyMessageDialog::setAddress_SM(QString address)
 {
-    ui->addressIn_SM->setText(address);
-    ui->messageIn_SM->setFocus();
+    ui->addressInEdit_SM->setText(address);
+    ui->messageInEdit_SM->setFocus();
 }
 
 void SignVerifyMessageDialog::setAddress_VM(QString address)
 {
-    ui->addressIn_VM->setText(address);
-    ui->messageIn_VM->setFocus();
+    ui->addressInEdit_VM->setText(address);
+    ui->messageInEdit_VM->setFocus();
 }
 
 void SignVerifyMessageDialog::showTab_SM(bool fShow)
@@ -94,12 +95,12 @@ void SignVerifyMessageDialog::on_pasteButton_SM_clicked()
 void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
 {
     /* Clear old signature to ensure users don't get confused on error with an old signature displayed */
-    ui->signatureOut_SM->clear();
+    ui->signatureOutEdit_SM->clear();
 
-    CBitcoinAddress addr(ui->addressIn_SM->text().toStdString());
+    CBitcoinAddress addr(ui->addressInEdit_SM->text().toStdString());
     if (!addr.IsValid())
     {
-        ui->addressIn_SM->setValid(false);
+        ui->addressInEdit_SM->setValid(false);
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(tr("The entered address is invalid.") + QString(" ") + tr("Please check the address and try again."));
         return;
@@ -107,7 +108,7 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
     CKeyID keyID;
     if (!addr.GetKeyID(keyID))
     {
-        ui->addressIn_SM->setValid(false);
+        ui->addressInEdit_SM->setValid(false);
         ui->statusLabel_SM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_SM->setText(tr("The entered address does not refer to a key.") + QString(" ") + tr("Please check the address and try again."));
         return;
@@ -131,7 +132,7 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
 
     CDataStream ss(SER_GETHASH, 0);
     ss << strMessageMagic;
-    ss << ui->messageIn_SM->document()->toPlainText().toStdString();
+    ss << ui->messageInEdit_SM->document()->toPlainText().toStdString();
 
     std::vector<unsigned char> vchSig;
     if (!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
@@ -144,22 +145,22 @@ void SignVerifyMessageDialog::on_signMessageButton_SM_clicked()
     ui->statusLabel_SM->setStyleSheet("QLabel { color: green; }");
     ui->statusLabel_SM->setText(QString("<nobr>") + tr("Message signed.") + QString("</nobr>"));
 
-    ui->signatureOut_SM->setText(QString::fromStdString(EncodeBase64(&vchSig[0], vchSig.size())));
+    ui->signatureOutEdit_SM->setText(QString::fromStdString(EncodeBase64(&vchSig[0], vchSig.size())));
 }
 
 void SignVerifyMessageDialog::on_copySignatureButton_SM_clicked()
 {
-    QApplication::clipboard()->setText(ui->signatureOut_SM->text());
+    QApplication::clipboard()->setText(ui->signatureOutEdit_SM->text());
 }
 
 void SignVerifyMessageDialog::on_clearButton_SM_clicked()
 {
-    ui->addressIn_SM->clear();
-    ui->messageIn_SM->clear();
-    ui->signatureOut_SM->clear();
+    ui->addressInEdit_SM->clear();
+    ui->messageInEdit_SM->clear();
+    ui->signatureOutEdit_SM->clear();
     ui->statusLabel_SM->clear();
 
-    ui->addressIn_SM->setFocus();
+    ui->addressInEdit_SM->setFocus();
 }
 
 void SignVerifyMessageDialog::on_addressBookButton_VM_clicked()
@@ -177,10 +178,10 @@ void SignVerifyMessageDialog::on_addressBookButton_VM_clicked()
 
 void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
 {
-    CBitcoinAddress addr(ui->addressIn_VM->text().toStdString());
+    CBitcoinAddress addr(ui->addressInEdit_VM->text().toStdString());
     if (!addr.IsValid())
     {
-        ui->addressIn_VM->setValid(false);
+        ui->addressInEdit_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(tr("The entered address is invalid.") + QString(" ") + tr("Please check the address and try again."));
         return;
@@ -188,18 +189,18 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
     CKeyID keyID;
     if (!addr.GetKeyID(keyID))
     {
-        ui->addressIn_VM->setValid(false);
+        ui->addressInEdit_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(tr("The entered address does not refer to a key.") + QString(" ") + tr("Please check the address and try again."));
         return;
     }
 
     bool fInvalid = false;
-    std::vector<unsigned char> vchSig = DecodeBase64(ui->signatureIn_VM->text().toStdString().c_str(), &fInvalid);
+    std::vector<unsigned char> vchSig = DecodeBase64(ui->signatureInEdit_VM->text().toStdString().c_str(), &fInvalid);
 
     if (fInvalid)
     {
-        ui->signatureIn_VM->setValid(false);
+        ui->signatureInEdit_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(tr("The signature could not be decoded.") + QString(" ") + tr("Please check the signature and try again."));
         return;
@@ -207,12 +208,12 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
 
     CDataStream ss(SER_GETHASH, 0);
     ss << strMessageMagic;
-    ss << ui->messageIn_VM->document()->toPlainText().toStdString();
+    ss << ui->messageInEdit_VM->document()->toPlainText().toStdString();
 
     CKey key;
     if (!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
     {
-        ui->signatureIn_VM->setValid(false);
+        ui->signatureInEdit_VM->setValid(false);
         ui->statusLabel_VM->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel_VM->setText(tr("The signature did not match the message digest.") + QString(" ") + tr("Please check the signature and try again."));
         return;
@@ -231,12 +232,12 @@ void SignVerifyMessageDialog::on_verifyMessageButton_VM_clicked()
 
 void SignVerifyMessageDialog::on_clearButton_VM_clicked()
 {
-    ui->addressIn_VM->clear();
-    ui->signatureIn_VM->clear();
-    ui->messageIn_VM->clear();
+    ui->addressInEdit_VM->clear();
+    ui->signatureInEdit_VM->clear();
+    ui->messageInEdit_VM->clear();
     ui->statusLabel_VM->clear();
 
-    ui->addressIn_VM->setFocus();
+    ui->addressInEdit_VM->setFocus();
 }
 
 bool SignVerifyMessageDialog::eventFilter(QObject *object, QEvent *event)
@@ -249,9 +250,9 @@ bool SignVerifyMessageDialog::eventFilter(QObject *object, QEvent *event)
             ui->statusLabel_SM->clear();
 
             /* Select generated signature */
-            if (object == ui->signatureOut_SM)
+            if (object == ui->signatureOutEdit_SM)
             {
-                ui->signatureOut_SM->selectAll();
+                ui->signatureOutEdit_SM->selectAll();
                 return true;
             }
         }

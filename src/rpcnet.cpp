@@ -7,8 +7,10 @@
 #include "alert.h"
 #include "wallet.h"
 #include "db.h"
+#include "streams.h"
 #include "walletdb.h"
 #include "net.h"
+#include "banman.h"
 
 using namespace std;
 extern std::string NeuralRequest(std::string MyNeuralRequest);
@@ -228,6 +230,126 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
     return ret;
 }
 
+UniValue setban(const UniValue& params, bool fHelp)
+{
+    std::string strCommand;
+
+    if (!params[1].isNull())
+        strCommand = params[1].get_str();
+
+    if (fHelp || params.size() < 2 || params.size() > 4 || (strCommand != "add" && strCommand != "remove"))
+    {
+        throw runtime_error(
+                    "setban <ip or subnet> <command> [bantime] [absolute]: add or remove an IP/Subnet from the banned list.\n"
+                    "subnet: The IP/Subnet (see getpeerinfo for nodes IP) with an optional netmask (default is /32 = single IP) \n"
+                    "command: 'add' to add an IP/Subnet to the list, 'remove' to remove an IP/Subnet from the list \n"
+                    "bantime: time in seconds how long (or until when if [absolute] is set) the IP is banned \n"
+                    "         (0 or empty means using the default time of 24h which can also be overwritten by the -bantime startup argument)\n"
+                    "absolute: Defaults to false. If set, the bantime must be an absolute timestamp in seconds since epoch (Jan 1 1970 GMT).\n"
+                    );
+    }
+
+    if (!g_banman) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
+    }
+
+    CSubNet subNet;
+    CNetAddr netAddr;
+    bool isSubnet = false;
+
+    if (params[0].get_str().find('/') != std::string::npos)
+        isSubnet = true;
+
+    if (!isSubnet) {
+        std::vector<CNetAddr> resolved;
+        LookupHost(params[0].get_str().c_str(), resolved, 1, false);
+        netAddr = resolved[0];
+    }
+    else
+        LookupSubNet(params[0].get_str().c_str(), subNet);
+
+    if (! (isSubnet ? subNet.IsValid() : netAddr.IsValid()) )
+        throw JSONRPCError(RPC_CLIENT_INVALID_IP_OR_SUBNET, "Error: Invalid IP/Subnet");
+
+    if (strCommand == "add")
+    {
+        if (isSubnet ? g_banman->IsBanned(subNet) : g_banman->IsBanned(netAddr)) {
+            throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: IP/Subnet already banned");
+        }
+
+        int64_t banTime = 0; //use standard bantime if not specified
+        if (!params[2].isNull())
+            banTime = params[2].get_int64();
+
+        bool absolute = false;
+        if (params[3].isTrue())
+            absolute = true;
+
+        if (isSubnet) {
+            g_banman->Ban(subNet, BanReasonManuallyAdded, banTime, absolute);
+            CNode::DisconnectNode(subNet);
+        } else {
+            g_banman->Ban(netAddr, BanReasonManuallyAdded, banTime, absolute);
+            CNode::DisconnectNode(netAddr);
+        }
+    }
+    else if(strCommand == "remove")
+    {
+        if (!( isSubnet ? g_banman->Unban(subNet) : g_banman->Unban(netAddr) )) {
+            throw JSONRPCError(RPC_CLIENT_INVALID_IP_OR_SUBNET, "Error: Unban failed. Requested address/subnet was not previously banned.");
+        }
+    }
+    return NullUniValue;
+}
+
+UniValue listbanned(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+    {
+        throw runtime_error(
+            "listbanned: List all banned IPs/subnets.\n"
+            );
+    }
+
+    if(!g_banman) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
+    }
+
+    banmap_t banMap;
+    g_banman->GetBanned(banMap);
+
+    UniValue bannedAddresses(UniValue::VARR);
+    for (const auto& entry : banMap)
+    {
+        const CBanEntry& banEntry = entry.second;
+        UniValue rec(UniValue::VOBJ);
+        rec.pushKV("address", entry.first.ToString());
+        rec.pushKV("banned_until", banEntry.nBanUntil);
+        rec.pushKV("ban_created", banEntry.nCreateTime);
+        rec.pushKV("ban_reason", banEntry.banReasonToString());
+
+        bannedAddresses.push_back(rec);
+    }
+
+    return bannedAddresses;
+}
+
+UniValue clearbanned(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "clearbanned: Clear all banned IPs.\n"
+            );
+
+    if (!g_banman) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
+    }
+
+    g_banman->ClearBanned();
+
+    return NullUniValue;
+}
+
 
 bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit)
 {
@@ -272,6 +394,8 @@ UniValue ping(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+// Moved to CNode static.
+/*
 static void CopyNodeStats(std::vector<CNodeStats>& vstats)
 {
     vstats.clear();
@@ -284,6 +408,7 @@ static void CopyNodeStats(std::vector<CNodeStats>& vstats)
         vstats.push_back(stats);
     }
 }
+*/
 
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
@@ -299,7 +424,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
     {
         LOCK(cs_vNodes);
 
-        CopyNodeStats(vstats);
+        CNode::CopyNodeStats(vstats);
     }
 
     GatherNeuralHashes();
@@ -307,6 +432,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
     for (auto const& stats : vstats) {
         UniValue obj(UniValue::VOBJ);
 
+        obj.pushKV("id", stats.id);
         obj.pushKV("addr", stats.addrName);
 
           if (!(stats.addrLocal.empty()))
@@ -315,8 +441,13 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         obj.pushKV("services", strprintf("%08" PRIx64, stats.nServices));
         obj.pushKV("lastsend", stats.nLastSend);
         obj.pushKV("lastrecv", stats.nLastRecv);
+        obj.pushKV("bytessent", stats.nSendBytes);
+        obj.pushKV("bytesrecv", stats.nRecvBytes);
         obj.pushKV("conntime", stats.nTimeConnected);
+        obj.pushKV("timeoffset", stats.nTimeOffset);
         obj.pushKV("pingtime", stats.dPingTime);
+        if (stats.dMinPing < static_cast<double>(std::numeric_limits<int64_t>::max())/1e6)
+            obj.pushKV("minping", stats.dMinPing);
         if (stats.dPingWait > 0.0)
             obj.pushKV("pingwait", stats.dPingWait);
         obj.pushKV("version", stats.nVersion);

@@ -122,11 +122,11 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
-    connect(ui->labelPoll, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
+    connect(ui->pollLabel, SIGNAL(clicked()), this, SLOT(handlePollLabelClicked()));
 
     // init "out of sync" warning labels
-    ui->labelWalletStatus->setText("(" + tr("out of sync") + ")");
-    ui->labelTransactionsStatus->setText("(" + tr("out of sync") + ")");
+    ui->walletStatusLabel->setText("(" + tr("out of sync") + ")");
+    ui->transactionsStatusLabel->setText("(" + tr("out of sync") + ")");
 
     // start with displaying the "out of sync" warnings
     showOutOfSyncWarning(true);
@@ -184,17 +184,17 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     currentStake = stake;
     currentUnconfirmedBalance = unconfirmedBalance;
     currentImmatureBalance = immatureBalance;
-    ui->labelBalance->setText(BitcoinUnits::formatWithUnit(unit, balance));
-    ui->labelStake->setText(BitcoinUnits::formatWithUnit(unit, stake));
-    ui->labelUnconfirmed->setText(BitcoinUnits::formatWithUnit(unit, unconfirmedBalance));
-    ui->labelImmature->setText(BitcoinUnits::formatWithUnit(unit, immatureBalance));
-    ui->labelTotal->setText(BitcoinUnits::formatWithUnit(unit, balance + stake + unconfirmedBalance + immatureBalance));
+    ui->balanceLabel->setText(BitcoinUnits::formatWithUnit(unit, balance));
+    ui->stakeLabel->setText(BitcoinUnits::formatWithUnit(unit, stake));
+    ui->unconfirmedLabel->setText(BitcoinUnits::formatWithUnit(unit, unconfirmedBalance));
+    ui->immatureLabel->setText(BitcoinUnits::formatWithUnit(unit, immatureBalance));
+    ui->totalLabel->setText(BitcoinUnits::formatWithUnit(unit, balance + stake + unconfirmedBalance + immatureBalance));
 
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
     bool showImmature = immatureBalance != 0;
-    ui->labelImmature->setVisible(showImmature);
-    ui->labelImmatureText->setVisible(showImmature);
+    ui->immatureLabel->setVisible(showImmature);
+    ui->immatureTextLabel->setVisible(showImmature);
 	OverviewPage::UpdateBoincUtilization();
 
 }
@@ -202,15 +202,15 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
 void OverviewPage::UpdateBoincUtilization()
 {
     LOCK(GlobalStatusStruct.lock);
-    ui->labelBlocks->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
-    ui->labelDifficulty->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
-    ui->labelNetWeight->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
-    ui->labelCoinWeight->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
-    ui->labelMagnitude->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
-    ui->labelCpid->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
-    ui->labelStatus->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
-    ui->labelPoll->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()).replace(QChar('_'),QChar(' '), Qt::CaseSensitive));
-    ui->labelErrors->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
+    ui->blocksLabel->setText(QString::fromUtf8(GlobalStatusStruct.blocks.c_str()));
+    ui->difficultyLabel->setText(QString::fromUtf8(GlobalStatusStruct.difficulty.c_str()));
+    ui->netWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.netWeight.c_str()));
+    ui->coinWeightLabel->setText(QString::fromUtf8(GlobalStatusStruct.coinWeight.c_str()));
+    ui->magnitudeLabel->setText(QString::fromUtf8(GlobalStatusStruct.magnitude.c_str()));
+    ui->cpidLabel->setText(QString::fromUtf8(GlobalStatusStruct.cpid.c_str()));
+    ui->statusLabel->setText(QString::fromUtf8(GlobalStatusStruct.status.c_str()));
+    ui->pollLabel->setText(QString::fromUtf8(GlobalStatusStruct.poll.c_str()).replace(QChar('_'),QChar(' '), Qt::CaseSensitive));
+    ui->errorsLabel->setText(QString::fromUtf8(GlobalStatusStruct.errors.c_str()));
 }
 
 void OverviewPage::setModel(WalletModel *model)
@@ -257,8 +257,8 @@ void OverviewPage::updateDisplayUnit()
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
 {
-    ui->labelWalletStatus->setVisible(fShow);
-    ui->labelTransactionsStatus->setVisible(fShow);
+    ui->walletStatusLabel->setVisible(fShow);
+    ui->transactionsStatusLabel->setVisible(fShow);
 	OverviewPage::UpdateBoincUtilization();
 }
 

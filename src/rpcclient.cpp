@@ -45,10 +45,10 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
 
     // Connect to localhost
     bool fUseSSL = GetBoolArg("-rpcssl");
-    asio::io_service io_service;
+    ioContext io_context;
     ssl::context context(ssl::context::sslv23);
     context.set_options(ssl::context::no_sslv2);
-    asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_service, context);
+    asio::ssl::stream<asio::ip::tcp::socket> sslStream(io_context, context);
     SSLIOStreamDevice<asio::ip::tcp> d(sslStream, fUseSSL);
     iostreams::stream< SSLIOStreamDevice<asio::ip::tcp> > stream(d);
     if (!d.connect(GetArg("-rpcconnect", "127.0.0.1"), GetArg("-rpcport", ToString(GetDefaultRPCPort()))))
@@ -108,6 +108,12 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "burn"                   , 0 },
     { "createrawtransaction"   , 0 },
     { "createrawtransaction"   , 1 },
+    { "consolidatemsunspent"   , 1 },
+    { "consolidatemsunspent"   , 2 },
+    { "consolidatemsunspent"   , 3 },
+    { "consolidatemsunspent"   , 4 },
+    { "consolidatemsunspent"   , 5 },
+    { "consolidatemsunspent"   , 6 },
     { "getbalance"             , 1 },
     { "getbalance"             , 2 },
     { "getrawtransaction"      , 1 },
@@ -139,6 +145,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "rainbymagnitude"        , 0 },
     { "reservebalance"         , 0 },
     { "reservebalance"         , 1 },
+    { "scanforunspent"         , 1 },
+    { "scanforunspent"         , 2 },
+    { "scanforunspent"         , 3 },
     { "sendfrom"               , 2 },
     { "sendfrom"               , 3 },
     { "sendmany"               , 1 },
@@ -184,6 +193,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockbynumber"       , 1 },
     { "getblockhash"           , 0 },
     { "listpollresults"        , 1 },
+    { "setban"                 , 2 },
+    { "setban"                 , 3 },
     { "showblock"              , 0 },
 };
 

@@ -113,6 +113,37 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     SetArgument("email", "");
 }
 
+BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
+{
+    SetArgument("email", "researcher@example.com");
+
+    // A bug in BOINC sometimes results in the empty empty external CPID field
+    // as shown below. This will recompute the CPID from the internal CPID and
+    // the email address defined above if the email hash field matches the MD5
+    // digest of the email address:
+    //
+    NN::MiningProject project = NN::MiningProject::Parse(
+        R"XML(
+        <project>
+          <project_name>Project Name</project_name>
+          <team_name>Team Name</team_name>
+          <email_hash>b8b58cce3c90c7dc9f3601674202b21c</email_hash>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid></external_cpid>
+        </project>
+        )XML");
+
+    NN::Cpid cpid = NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
+
+    BOOST_CHECK(project.m_name == "project name");
+    BOOST_CHECK(project.m_cpid == cpid);
+    BOOST_CHECK(project.m_team == "team name");
+    BOOST_CHECK(project.m_error == NN::MiningProject::Error::NONE);
+
+    // Clean up:
+    SetArgument("email", "");
+}
+
 BOOST_AUTO_TEST_CASE(it_normalizes_project_names)
 {
     NN::MiningProject project("Project_NAME", NN::Cpid(), "team name");

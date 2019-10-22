@@ -8,6 +8,9 @@
 class OptionsModel;
 class AddressTableModel;
 class TransactionTableModel;
+class BanTableModel;
+class PeerTableModel;
+
 class CWallet;
 
 QT_BEGIN_NAMESPACE
@@ -24,6 +27,8 @@ public:
     ~ClientModel();
 
     OptionsModel *getOptionsModel();
+    PeerTableModel *getPeerTableModel();
+    BanTableModel *getBanTableModel();
 
     int getNumConnections() const;
     int getNumBlocks() const;
@@ -53,6 +58,8 @@ public:
     ConvergedScraperStats getConvergedScraperStatsCache() const;
 private:
     OptionsModel *optionsModel;
+    PeerTableModel *peerTableModel;
+    BanTableModel *banTableModel;
 
     int cachedNumBlocks;
     int cachedNumBlocksOfPeers;
@@ -75,6 +82,7 @@ signals:
 
 public slots:
     void updateTimer();
+    void updateBanlist();
     void updateNumConnections(int numConnections);
     void updateAlert(const QString &hash, int status);
     void updateScraper(int scraperEventtype, int status, const QString message);
