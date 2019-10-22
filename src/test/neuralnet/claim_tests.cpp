@@ -270,9 +270,11 @@ BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
 
     BOOST_CHECK(claim.Sign(private_key, last_block_hash) == true);
 
+    NN::Cpid cpid = claim.m_mining_id.TryCpid().get();
+
     const uint256 hashed = Hash(
-        claim.m_mining_id.TryCpid().get().Raw().begin(),
-        claim.m_mining_id.TryCpid().get().Raw().end(),
+        cpid.Raw().begin(),
+        cpid.Raw().end(),
         last_block_hash.begin(),
         last_block_hash.end());
 
@@ -310,9 +312,11 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_signature_for_a_research_reward_claim)
     const uint256 last_block_hash;
     CKey private_key = GetTestPrivateKey();
 
+    NN::Cpid cpid = claim.m_mining_id.TryCpid().get();
+
     const uint256 hashed = Hash(
-        claim.m_mining_id.TryCpid().get().Raw().begin(),
-        claim.m_mining_id.TryCpid().get().Raw().end(),
+        cpid.Raw().begin(),
+        cpid.Raw().end(),
         last_block_hash.begin(),
         last_block_hash.end());
 
