@@ -74,9 +74,6 @@ extern void IncrementNeuralNetworkSupermajority(const NN::QuorumHash& NeuralHash
 
 extern CBlockIndex* GetHistoricalMagnitude(std::string cpid);
 
-extern double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime, double& total_owed, double block_magnitude);
-
-extern double GetOwedAmount(std::string cpid);
 bool TallyMagnitudesInSuperblock();
 std::string GetCommandNonce(std::string command);
 
@@ -180,7 +177,6 @@ bool bForceUpdate = false;
 bool fQtActive = false;
 bool bGridcoinGUILoaded = false;
 
-extern double LederstrumpfMagnitude2(double Magnitude, int64_t locktime);
 extern void GetGlobalStatus();
 bool PollIsActive(const std::string& poll_contract);
 
@@ -1717,52 +1713,6 @@ double GetMagnitudeMultiplier(int64_t nTime)
     return magnitude_multiplier;
 }
 
-
-int64_t GetProofOfStakeMaxReward(uint64_t nCoinAge, int64_t nFees, int64_t locktime)
-{
-    int64_t nInterest = nCoinAge * GetCoinYearReward(locktime) * 33 / (365 * 33 + 8);
-    nInterest += 10*COIN;
-    int64_t nBoinc    = (GetMaximumBoincSubsidy(locktime)+1) * COIN;
-    int64_t nSubsidy  = nInterest + nBoinc;
-    return nSubsidy + nFees;
-}
-
-double GetProofOfResearchReward(std::string cpid, bool VerifyingBlock)
-{
-
-        StructCPID& mag = GetInitializedStructCPID2(cpid,mvMagnitudes);
-
-        if (!mag.initialized) return 0;
-        double owed = (mag.owed*1.0);
-        if (owed < 0) owed = 0;
-        // Coarse Payment Rule (helps prevent sync problems):
-        if (!VerifyingBlock)
-        {
-            //If owed less than 4% of max subsidy, assess at 0:
-            if (owed < (GetMaximumBoincSubsidy(GetAdjustedTime())/50))
-            {
-                owed = 0;
-            }
-            //Coarse payment rule:
-            if (mag.totalowed > (GetMaximumBoincSubsidy(GetAdjustedTime())*2))
-            {
-                //If owed more than 2* Max Block, pay normal amount
-                owed = (owed*1);
-            }
-            else
-            {
-                owed = owed/2;
-            }
-
-            if (owed > (GetMaximumBoincSubsidy(GetAdjustedTime()))) owed = GetMaximumBoincSubsidy(GetAdjustedTime());
-
-
-        }
-        //End of Coarse Payment Rule
-        return owed * COIN;
-}
-
-
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetConstantBlockReward(const CBlockIndex* index)
 {
@@ -1793,40 +1743,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
     bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
     double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude)
 {
-
-    // Non Research Age - RSA Mode - Legacy (before 10-20-2015)
-    if (!IsResearchAgeEnabled(pindexLast->nHeight))
-    {
-            int64_t nInterest = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-            int64_t nBoinc    = GetProofOfResearchReward(cpid,VerifyingBlock);
-            int64_t nSubsidy  = nInterest + nBoinc;
-            if (fDebug10 || GetBoolArg("-printcreation"))
-            {
-                LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " nBoinc=%" PRId64 "   ",
-                FormatMoney(nSubsidy), nCoinAge, nBoinc);
-            }
-            int64_t maxStakeReward1 = GetProofOfStakeMaxReward(nCoinAge, nFees, nTime);
-            int64_t maxStakeReward2 = GetProofOfStakeMaxReward(nCoinAge, nFees, GetAdjustedTime());
-            int64_t maxStakeReward = std::min(maxStakeReward1, maxStakeReward2);
-            if ((nSubsidy+nFees) > maxStakeReward) nSubsidy = maxStakeReward-nFees;
-            int64_t nTotalSubsidy = nSubsidy + nFees;
-            // This rule does not apply in v11
-            if (nBoinc > 1 && pindexLast->nVersion <= 10)
-            {
-                std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-
-                if (sTotalSubsidy.length() > 7)
-                {
-                    sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-                    nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-                }
-            }
-            OUT_POR = CoinToDouble(nBoinc);
-            OUT_INTEREST = CoinToDouble(nInterest);
-            return nTotalSubsidy;
-    }
-    else
-    {
             // Research Age Subsidy - PROD
             int64_t nBoinc = ComputeResearchAccrual(nTime, cpid, pindexLast, VerifyingBlock, VerificationPhase, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
             int64_t nInterest = 0;
@@ -1869,7 +1785,6 @@ int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid
             OUT_INTEREST = CoinToDouble(nInterest);
             return nTotalSubsidy;
     }
-}
 
 
 
@@ -1959,8 +1874,7 @@ bool CheckProofOfResearch(
      * which does not matter, because this one is no longer used */
     if(block.vtx.size() == 0 ||
        !block.IsProofOfStake() ||
-       pindexPrev->nHeight <= nGrandfather ||
-       !IsResearchAgeEnabled(pindexPrev->nHeight))
+       pindexPrev->nHeight <= nGrandfather)
         return true;
 
     const NN::Claim& claim = block.GetClaim();
@@ -2627,7 +2541,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 nStakeReward = nTxValueOut - nTxValueIn;
                 if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
                 // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
-                if (IsResearchAgeEnabled(pindex->nHeight) && fDebug10)
+                if (fDebug10)
                 {
                     int64_t nTotalCoinstake = 0;
                     for (unsigned int i = 0; i < tx.vout.size(); i++)
@@ -2696,15 +2610,10 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         if (!vtx[1].GetCoinAge(txdb, nCoinAge))
             return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
 
-        double dCalcStakeReward = CoinToDouble(GetProofOfStakeMaxReward(nCoinAge, nFees, nTime));
-
-        if (dStakeReward > dCalcStakeReward+1 && !IsResearchAgeEnabled(pindex->nHeight))
-            return DoS(1, error("ConnectBlock[] : coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeReward, dCalcStakeReward));
-
         //9-3-2015
         double dMaxResearchAgeReward = CoinToDouble(GetMaximumBoincSubsidy(nTime) * COIN * 255);
 
-        if (claim.m_research_subsidy > dMaxResearchAgeReward && IsResearchAgeEnabled(pindex->nHeight))
+        if (claim.m_research_subsidy > dMaxResearchAgeReward)
             return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %f, vs calculated=%f )", dStakeRewardWithoutFees, dMaxResearchAgeReward));
 
         if (!claim.HasResearchReward() && dStakeReward > 1)
@@ -2773,8 +2682,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         if (claim.HasResearchReward())
         {
             //ResearchAge: Since the best block may increment before the RA is connected but After the RA is computed, the ResearchSubsidy can sometimes be slightly smaller than we calculate here due to the RA timespan increasing.  So we will allow for time shift before rejecting the block.
-            double dDrift = IsResearchAgeEnabled(pindex->nHeight) ? claim.m_research_subsidy * .15 : 1;
-            if (IsResearchAgeEnabled(pindex->nHeight) && dDrift < 10) dDrift = 10;
+            double dDrift = claim.m_research_subsidy * .15;
+            if (dDrift < 10) dDrift = 10;
 
             if ((claim.TotalSubsidy() + dDrift) < dStakeRewardWithoutFees)
             {
@@ -2783,10 +2692,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                                      dStakeRewardWithoutFees, mint, OUT_INTEREST, OUT_POR, CoinToDouble(nFees), cpid));
             }
 
-            if (IsResearchAgeEnabled(pindex->nHeight)
-                && (BlockNeedsChecked(nTime) || nVersion>=9))
+            if (BlockNeedsChecked(nTime) || nVersion>=9)
             {
-
                 // 6-4-2017 - Verify researchers stored block magnitude
                 // 2018 02 04 - Moved here for better effect.
                 double dNeuralNetworkMagnitude = CalculatedMagnitude2(cpid, nTime);
@@ -2831,31 +2738,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 }
             }
         }
-
-        //Approve first coinstake in DPOR block
-        if (claim.HasResearchReward() && IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) && !IsResearchAgeEnabled(pindex->nHeight))
-        {
-            if (claim.m_research_subsidy > (GetOwedAmount(cpid) + 1))
-            {
-                StructCPID& strUntrustedHost = GetInitializedStructCPID2(cpid, mvMagnitudes);
-                if (claim.m_research_subsidy > strUntrustedHost.totalowed)
-                {
-                    double deficit = strUntrustedHost.totalowed - claim.m_research_subsidy;
-                    if ( (deficit < -500 && strUntrustedHost.Accuracy > 10) || (deficit < -150 && strUntrustedHost.Accuracy > 5) || deficit < -50)
-                    {
-                        LogPrintf("ConnectBlock[] : Researchers Reward results in deficit of %f for CPID %s with trust level of %f - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                  deficit, cpid, (double)strUntrustedHost.Accuracy, claim.m_research_subsidy,
-                                  OUT_POR, vtx[0].hashBoinc.c_str());
-                    }
-                    else
-                    {
-                        return error("ConnectBlock[] : Researchers Reward for CPID %s pays too much - (Submitted Research Subsidy %f vs calculated=%f) Hash: %s",
-                                     cpid, claim.m_research_subsidy,
-                                     OUT_POR, vtx[0].hashBoinc.c_str());
-                    }
-                }
-            }
-        }
     }
 
     //Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 30 blocks)
@@ -2879,7 +2761,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // 12-20-2015 : Add support for Binary Superblocks
             std::string superblock = UnpackBinarySuperblock(claim.m_superblock.PackLegacy());
             std::string neural_hash = GetQuorumHash(superblock);
-            std::string legacy_neural_hash = RetrieveMd5(superblock);
             double popularity = 0;
             std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
             // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
@@ -2912,31 +2793,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     return error("ConnectBlock[] : Superblock avg mag below 10; SuperblockHash: %s, Consensus Hash: %s",
                                  neural_hash.c_str(), consensus_hash.c_str());
                 }
-                if (!IsResearchAgeEnabled(pindex->nHeight))
-                {
-                    if (consensus_hash != neural_hash && consensus_hash != legacy_neural_hash)
-                    {
-                        return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                     neural_hash.c_str(), consensus_hash.c_str());
-                    }
-                }
-                else
-                {
                     if (consensus_hash != neural_hash)
                     {
                         return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
                                      neural_hash.c_str(), consensus_hash.c_str());
                     }
                 }
-
-            }
         }
 
         if(nVersion<9)
         {
             //If we are out of sync, and research age is enabled, and the superblock is valid, load it now, so we can continue checking blocks accurately
             // I would suggest to NOT bother with superblock at all here. It will be loaded in tally.
-            if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && IsResearchAgeEnabled(pindex->nHeight) && pindex->nHeight > nGrandfather)
+            if ((OutOfSyncByAge() || fColdBoot || fReorganizing) && pindex->nHeight > nGrandfather)
             {
                 if (claim.ContainsSuperblock())
                 {
@@ -2977,13 +2846,13 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     // Slow down Retallying when in RA mode so we minimize disruption of the network
     // TODO: Remove this if we can sync to v9 without it.
-    if ( (pindex->nHeight % 60 == 0) && IsResearchAgeEnabled(pindex->nHeight) && BlockNeedsChecked(pindex->nTime))
+    if ( (pindex->nHeight % 60 == 0) && BlockNeedsChecked(pindex->nTime))
     {
         if(!IsV9Enabled_Tally(pindexBest->nHeight))
             TallyResearchAverages(pindexBest);
     }
 
-    if (IsResearchAgeEnabled(pindex->nHeight) && !OutOfSyncByAge())
+    if (!OutOfSyncByAge())
     {
         fColdBoot = false;
     }
@@ -3110,15 +2979,6 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     /* fix up after disconnecting, prepare for new blocks */
     if(cnt_dis>0)
     {
-        // Block was disconnected - User is Re-eligibile for staking
-        const std::string primary_cpid = NN::GetPrimaryCpid();
-        StructCPID& sMag = GetInitializedStructCPID2(primary_cpid, mvMagnitudes);
-        if (sMag.initialized)
-        {
-            sMag.LastPaymentTime = 0;
-            mvMagnitudes[primary_cpid] = sMag;
-        }
-
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
             AcceptToMemoryPool(mempool, tx, NULL);
@@ -4561,57 +4421,6 @@ std::string RetrieveMd5(std::string s1)
     }
 }
 
-double GetOwedAmount(std::string cpid)
-{
-    if (mvMagnitudes.size() > 1)
-    {
-        StructCPID& m = GetInitializedStructCPID2(cpid,mvMagnitudes);
-        if (m.initialized) return m.owed;
-        return 0;
-    }
-    return 0;
-}
-
-
-double GetOutstandingAmountOwed(StructCPID &mag, std::string cpid, int64_t locktime,
-    double& total_owed, double block_magnitude)
-{
-    // Gridcoin Payment Magnitude Unit in RSA Owed calculation ensures rewards are capped at MaxBlockSubsidy*BLOCKS_PER_DAY
-    // Payment date range is stored in HighLockTime-LowLockTime
-    // If newbie has not participated for 14 days, use earliest payment in chain to assess payment window
-    // (Important to prevent e-mail change attacks) - Calculate payment timespan window in days
-    try
-    {
-        double payment_timespan = (GetAdjustedTime() - mag.EarliestPaymentTime)/38400;
-        if (payment_timespan < 2) payment_timespan =  2;
-        if (payment_timespan > 10) payment_timespan = 14;
-        mag.PaymentTimespan = Round(payment_timespan,0);
-        double research_magnitude = 0;
-        // Get neural network magnitude:
-        StructCPID stDPOR = GetInitializedStructCPID2(cpid,mvDPOR);
-        research_magnitude = LederstrumpfMagnitude2(stDPOR.Magnitude,locktime);
-        double owed_standard = payment_timespan * std::min(research_magnitude*GetMagnitudeMultiplier(locktime),
-            GetMaximumBoincSubsidy(locktime)*5.0);
-        double owed_network_cap = payment_timespan * GRCMagnitudeUnit(locktime) * research_magnitude;
-        double owed = std::min(owed_standard, owed_network_cap);
-        double paid = mag.payments;
-        double outstanding = std::min(owed-paid, GetMaximumBoincSubsidy(locktime) * 5.0);
-        total_owed = owed;
-        //if (outstanding < 0) outstanding=0;
-        return outstanding;
-    }
-    catch (std::exception &e)
-    {
-            LogPrintf("Error while Getting outstanding amount owed.");
-            return 0;
-    }
-    catch(...)
-    {
-            LogPrintf("Error while Getting outstanding amount owed.");
-            return 0;
-    }
-}
-
 bool BlockNeedsChecked(int64_t BlockTime)
 {
     if (IsLockTimeWithin14days(BlockTime, GetAdjustedTime()))
@@ -4659,21 +4468,12 @@ void AddResearchMagnitude(CBlockIndex* pIndex)
             stMag.TotalMagnitude += pIndex->nMagnitude;
         }
 
-        if (pIndex->nTime > stMag.LastPaymentTime)
-            stMag.LastPaymentTime = pIndex->nTime;
         if (pIndex->nTime < stMag.EarliestPaymentTime)
             stMag.EarliestPaymentTime = pIndex->nTime;
         if (pIndex->nTime < stMag.LowLockTime)
             stMag.LowLockTime = pIndex->nTime;
-        if (pIndex->nTime > stMag.HighLockTime)
-            stMag.HighLockTime = pIndex->nTime;
 
         stMag.payments += pIndex->nResearchSubsidy;
-        stMag.interestPayments += pIndex->nInterestSubsidy;
-        double total_owed = 0;
-        stMag.owed = GetOutstandingAmountOwed(stMag, cpid, pIndex->nTime, total_owed, pIndex->nMagnitude);
-
-        stMag.totalowed = total_owed;
     }
     catch (const std::bad_alloc& ba)
     {
@@ -4778,7 +4578,6 @@ void AddRARewardBlock(const CBlockIndex* pindex)
         }
 
         if (pindex->nTime < stCPID.LowLockTime)  stCPID.LowLockTime = pindex->nTime;
-        if (pindex->nTime > stCPID.HighLockTime) stCPID.HighLockTime = pindex->nTime;
 
         // Add block hash to CPID hash set.
         stCPID.rewardBlocks.emplace(pindex);
@@ -4849,8 +4648,6 @@ StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::str
         cpid.cpid = name;
         cpid.initialized=true;
         cpid.LowLockTime = std::numeric_limits<unsigned int>::max();
-        cpid.HighLockTime = 0;
-        cpid.LastPaymentTime = 0;
         cpid.EarliestPaymentTime = 99999999999;
         cpid.Accuracy = 0;
     }
@@ -4930,10 +4727,8 @@ bool TallyResearchAverages(CBlockIndex* index)
 {
     if(IsV9Enabled_Tally(index->nHeight))
         return TallyResearchAverages_v9(index);
-    else if(IsResearchAgeEnabled(index->nHeight) && !IsV9Enabled_Tally(index->nHeight))
-        return TallyResearchAverages_retired(index);
     else
-        return false;
+        return TallyResearchAverages_retired(index);
 }
 
 bool TallyResearchAverages_retired(CBlockIndex* index)
@@ -5521,7 +5316,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (!fTestNet && pfrom->nVersion < 180314 && IsResearchAgeEnabled(pindexBest->nHeight))
+        if (!fTestNet && pfrom->nVersion < 180314)
         {
             // disconnect from peers older than this proto version
             if (fDebug10) LogPrintf("ResearchAge: partner %s using obsolete version %i; disconnecting", pfrom->addr.ToString(), pfrom->nVersion);
@@ -6454,25 +6249,6 @@ bool ProcessMessages(CNode* pfrom)
     return fOk;
 }
 
-double LederstrumpfMagnitude2(double Magnitude, int64_t locktime)
-{
-    //2-1-2015 - Halford - The MagCap is 2000
-    double MagCap = 2000;
-    double out_mag = Magnitude;
-    if (Magnitude >= MagCap*.90 && Magnitude <= MagCap*1.0) out_mag = MagCap*.90;
-    if (Magnitude >= MagCap*1.0 && Magnitude <= MagCap*1.1) out_mag = MagCap*.91;
-    if (Magnitude >= MagCap*1.1 && Magnitude <= MagCap*1.2) out_mag = MagCap*.92;
-    if (Magnitude >= MagCap*1.2 && Magnitude <= MagCap*1.3) out_mag = MagCap*.93;
-    if (Magnitude >= MagCap*1.3 && Magnitude <= MagCap*1.4) out_mag = MagCap*.94;
-    if (Magnitude >= MagCap*1.4 && Magnitude <= MagCap*1.5) out_mag = MagCap*.95;
-    if (Magnitude >= MagCap*1.5 && Magnitude <= MagCap*1.6) out_mag = MagCap*.96;
-    if (Magnitude >= MagCap*1.6 && Magnitude <= MagCap*1.7) out_mag = MagCap*.97;
-    if (Magnitude >= MagCap*1.7 && Magnitude <= MagCap*1.8) out_mag = MagCap*.98;
-    if (Magnitude >= MagCap*1.8 && Magnitude <= MagCap*1.9) out_mag = MagCap*.99;
-    if (Magnitude >= MagCap*1.9)                            out_mag = MagCap*1.0;
-    return out_mag;
-}
-
 std::string GetLastPORBlockHash(std::string cpid)
 {
     StructCPID& stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
@@ -6484,19 +6260,13 @@ StructCPID GetStructCPID()
     StructCPID c;
     c.initialized=false;
     c.Magnitude=0;
-    c.owed=0;
     c.payments=0;
     c.TotalMagnitude=0;
     c.LowLockTime=0;
-    c.HighLockTime=0;
     c.Accuracy=0;
-    c.totalowed=0;
-    c.LastPaymentTime=0;
     c.EarliestPaymentTime=0;
-    c.PaymentTimespan=0;
     c.ResearchSubsidy = 0;
     c.InterestSubsidy = 0;
-    c.interestPayments = 0;
     c.payments = 0;
     c.LastBlock = 0;
     c.NetworkMagnitude=0;
@@ -6724,7 +6494,7 @@ void IncrementCurrentNeuralNetworkSupermajority(
         //This node has already voted, throw away the vote
         return;
     }
-
+    
     WriteCache(Section::CURRENTNEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
@@ -6774,7 +6544,7 @@ void IncrementNeuralNetworkSupermajority(
         //This node has already voted, throw away the vote
         return;
     }
-
+    
     WriteCache(Section::NEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
 
     double multiplier = distance < 40 ? 400 : 200;
@@ -7137,7 +6907,6 @@ void ZeroOutResearcherTotals(StructCPID& stCPID)
                 stCPID.ResearchSubsidy = 0;
                 stCPID.Accuracy = 0;
                 stCPID.LowLockTime = std::numeric_limits<unsigned int>::max();
-                stCPID.HighLockTime = 0;
                 stCPID.TotalMagnitude = 0;
     }
 }
@@ -7263,21 +7032,11 @@ bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
 
     // For now, let's call for a 25% participation rate (approx. 125 nodes):
     // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
-    uint256 uRef;
-    if (IsResearchAgeEnabled(pindexBest->nHeight))
-    {
-        uRef = fTestNet
-               ? uint256S("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-               : uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-    }
-    else
-    {
-        uRef = fTestNet
-               ? uint256S("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-               : uint256S("0x00000000000000000000000000000000fd182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-    }
+    arith_uint256 uRef = fTestNet
+       ? arith_uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
+       : arith_uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
 
-    uint256 uADH = uint256S("0x" + address_day_hash);
+    arith_uint256 uADH("0x" + address_day_hash);
     return (uADH < uRef);
 }
 

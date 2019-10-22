@@ -18,20 +18,14 @@ struct StructCPID
     bool initialized;
 
     double Magnitude;
-    double owed;
     double payments;
-    double interestPayments;
     double TotalMagnitude;
     uint32_t LowLockTime;
-    uint32_t HighLockTime;
     double Accuracy;
-    double totalowed;
-    double LastPaymentTime;
     double ResearchSubsidy;
     /* double ResearchAverageMagnitude; TotalMagnitude / (Accuracy+0.01) */
     double EarliestPaymentTime;
     double InterestSubsidy;
-    double PaymentTimespan;
     int32_t LastBlock;
     double NetworkMagnitude;
     double NetworkAvgMagnitude;
