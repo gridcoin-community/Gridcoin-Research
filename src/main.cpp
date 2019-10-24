@@ -1697,22 +1697,6 @@ int64_t GetCoinYearReward(int64_t nTime)
     return INTEREST;
 }
 
-double GetMagnitudeMultiplier(int64_t nTime)
-{
-    // Gridcoin Global Resarch Subsidy Multiplier Schedule
-    double magnitude_multiplier = 2;
-    if (nTime >= 1410393600 && nTime <= 1417305600) magnitude_multiplier =    2;  // between inception and 11-30-2014
-    if (nTime >= 1417305600 && nTime <= 1419897600) magnitude_multiplier =  1.5;  // between 11-30-2014 and 12-30-2014
-    if (nTime >= 1419897600 && nTime <= 1422576000) magnitude_multiplier =  1.5;  // between 12-30-2014 and 01-30-2015
-    if (nTime >= 1422576000 && nTime <= 1425254400) magnitude_multiplier =    1;  // between 01-30-2015 and 02-30-2015
-    if (nTime >= 1425254400 && nTime <= 1427673600) magnitude_multiplier =   .9;  // between 02-30-2015 and 03-30-2015
-    if (nTime >= 1427673600 && nTime <= 1430352000) magnitude_multiplier =   .8;  // between 03-30-2015 and 04-30-2015
-    if (nTime >= 1430352000 && nTime <= 1438310876) magnitude_multiplier =   .7;  // between 05-01-2015 and 07-31-2015
-    if (nTime >= 1438310876 && nTime <= 1447977700) magnitude_multiplier =  .60;  // between 08-01-2015 and 11-20-2015
-    if (nTime > 1447977700)                         magnitude_multiplier =  .50;  // from 11-21-2015  forever
-    return magnitude_multiplier;
-}
-
 // miner's coin stake reward based on coin age spent (coin-days)
 int64_t GetConstantBlockReward(const CBlockIndex* index)
 {
