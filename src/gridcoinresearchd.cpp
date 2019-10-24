@@ -15,6 +15,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "ui_interface.h"
+#include "upgrade.h"
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -83,6 +84,23 @@ bool AppInit(int argc, char* argv[])
             fprintf(stdout, "%s", VersionMessage().c_str());
 
             return false;
+        }
+
+        // Check to see if the user requested a snapshot!
+        if (mapArgs.count("-snapshotdownload"))
+        {
+            Upgrade Snapshot;
+
+            // Let's check make sure gridcoin is not already running in the data directory.
+            if (Snapshot.IsDataDirInUse())
+            {
+                fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
+
+                exit(1);
+            }
+
+            else
+                Snapshot.SnapshotMain();
         }
 
         LogPrintf("AppInit");

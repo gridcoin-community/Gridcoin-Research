@@ -18,6 +18,8 @@
 #include "qtipcserver.h"
 #include "util.h"
 #include "winshutdownmonitor.h"
+#include "upgrade.h"
+#include "upgradeqt.h"
 
 #include <QMessageBox>
 #include <QDebug>
@@ -58,6 +60,8 @@ Q_IMPORT_PLUGIN(QSvgIconPlugin);
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
 static QSplashScreen *splashref;
+
+int StartGridcoinQt(int argc, char *argv[]);
 
 static void ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style)
 {
@@ -128,6 +132,24 @@ static void InitMessage(const std::string &message)
     }
 }
 
+static void UpdateMessageBox(const std::string& message)
+{
+    std::string caption = _("Gridcoin Update Available");
+
+    if (guiref)
+    {
+        QMetaObject::invokeMethod(guiref, "update", Qt::QueuedConnection,
+                                   Q_ARG(QString, QString::fromStdString(caption)),
+                                   Q_ARG(QString, QString::fromStdString(message)));
+    }
+
+    else
+    {
+        LogPrintf("\r\n%s:\r\n%s", caption, message);
+        fprintf(stderr, "\r\n%s:\r\n%s\r\n", caption.c_str(), message.c_str());
+    }
+}
+
 static void QueueShutdown()
 {
     QMetaObject::invokeMethod(QCoreApplication::instance(), "quit", Qt::QueuedConnection);
@@ -190,215 +212,65 @@ int main(int argc, char *argv[])
 
     // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
     int currentExitCode = 0;
- 
-    // Set global boolean to indicate intended presence of GUI to core.
-    fQtActive = true;
-
-    std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
 
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
-    Q_INIT_RESOURCE(bitcoin);
-    Q_INIT_RESOURCE(bitcoin_locale);
-    QApplication app(argc, argv);
-	//uint SEM_FAILCRITICALERRORS= 0x0001;
-	//uint SEM_NOGPFAULTERRORBOX = 0x0002;
-#if defined(WIN32) && defined(QT_GUI)
-	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-#endif
-
-    // Install global event filter that makes sure that long tooltips can be word-wrapped
-    app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
-
-#if QT_VERSION < 0x050000
-    // Install qDebug() message handler to route to debug.log
-    qInstallMsgHandler(DebugMessageHandler);
-#else
-#if defined(WIN32)
-    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
-    qApp->installNativeEventFilter(new WinShutdownMonitor());
-#endif
-    // Install qDebug() message handler to route to debug.log
-    qInstallMessageHandler(DebugMessageHandler);
-#endif
-
     // Command-line options take precedence:
+    // Before this would of been done in main then config file loaded.
+    // But we need to check for snapshot argument anyway so doing so here is safe.
     ParseParameters(argc, argv);
 
-    // ... then bitcoin.conf:
-    if (!boost::filesystem::is_directory(GetDataDir(false)))
+    // Here we do it if it was started with the snapshot argument
+    if (mapArgs.count("-snapshotdownload"))
     {
-        // This message can not be translated, as translation is not initialized yet
-        // (which not yet possible because lang=XX can be overridden in bitcoin.conf in the data directory)
-        QMessageBox::critical(0, "Gridcoin",
-                              QString("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
-        return 1;
-    }
-    ReadConfigFile(mapArgs, mapMultiArgs);
+        Upgrade Snapshot;
 
-    // Application identification (must be set before OptionsModel is initialized,
-    // as it is used to locate QSettings)
-    app.setOrganizationName("Gridcoin");
-    //XXX app.setOrganizationDomain("");
-    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
-        app.setApplicationName("Gridcoin-Qt-testnet");
-    else
-        app.setApplicationName("Gridcoin-Qt");
+        // Let's check make sure gridcoin is not already running in the data directory.
+        if (Snapshot.IsDataDirInUse())
+        {
+            fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
 
-    // ... then GUI settings:
-    OptionsModel optionsModel;
-
-    // Get desired locale (e.g. "de_DE") from command line or use system locale
-    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
-    QString lang = lang_territory;
-    // Convert to "de" only by truncating "_DE"
-    lang.truncate(lang_territory.lastIndexOf('_'));
-
-    QTranslator qtTranslatorBase, qtTranslator, translatorBase, translator;
-    // Load language files for configured locale:
-    // - First load the translator for the base language, without territory
-    // - Then load the more specific locale translator
-
-    // Load e.g. qt_de.qm
-    if (qtTranslatorBase.load("qt_" + lang, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
-        app.installTranslator(&qtTranslatorBase);
-
-    // Load e.g. qt_de_DE.qm
-    if (qtTranslator.load("qt_" + lang_territory, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
-        app.installTranslator(&qtTranslator);
-
-    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in bitcoin.qrc)
-    if (translatorBase.load(lang, ":/translations/"))
-        app.installTranslator(&translatorBase);
-
-    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in bitcoin.qrc)
-    if (translator.load(lang_territory, ":/translations/"))
-        app.installTranslator(&translator);
-
-    // Subscribe to global signals from core
-    uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
-    uiInterface.ThreadSafeAskFee.connect(ThreadSafeAskFee);
-	uiInterface.ThreadSafeAskQuestion.connect(ThreadSafeAskQuestion);
-
-    uiInterface.ThreadSafeHandleURI.connect(ThreadSafeHandleURI);
-    uiInterface.InitMessage.connect(InitMessage);
-    uiInterface.QueueShutdown.connect(QueueShutdown);
-    uiInterface.Translate.connect(Translate);
-
-    // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
-    // but before showing splash screen.
-    if (mapArgs.count("-?") || mapArgs.count("-help"))
-    {
-        GUIUtil::HelpMessageBox help;
-        help.showOrPrint();
-        return 1;
-    }
-
-    QSplashScreen splash(QPixmap(":/images/splash"), 0);
-    if (GetBoolArg("-splash", true) && !GetBoolArg("-min"))
-    {
-        splash.setEnabled(false);
-        splash.show();
-        splashref = &splash;
-    }
-
-    app.processEvents();
-
-    app.setQuitOnLastWindowClosed(false);
-
-    try
-    {
-        // Regenerate startup link, to fix links to old versions
-        if (GUIUtil::GetStartOnSystemStartup())
-            GUIUtil::SetStartOnSystemStartup(true);
-
-        BitcoinGUI window;
-        guiref = &window;
-
-		QTimer *timer = new QTimer(guiref);
-		LogPrintf("Starting Gridcoin");
-
-		QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
-
-      if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
-		{
-				LogPrintf("Error; NewThread(ThreadAppInit2) failed");
-		        return 1;
-		}
-		else
-	    {
-			 //10-31-2015
-			while (!bGridcoinGUILoaded)
-			{
-				app.processEvents();
-				MilliSleep(300);
-			}
-
-            {
-                // Put this in a block, so that the Model objects are cleaned up before
-                // calling Shutdown().
-
-                if (splashref)
-                    splash.finish(&window);
-
-                ClientModel clientModel(&optionsModel);
-                WalletModel walletModel(pwalletMain, &optionsModel);
-
-                window.setClientModel(&clientModel);
-                window.setWalletModel(&walletModel);
-
-                // If -min option passed, start window minimized.
-                if(GetBoolArg("-min"))
-                {
-                    window.showMinimized();
-                }
-                else
-                {
-                    window.show();
-                }
-				timer->start(5000);
-
-                // Place this here as guiref has to be defined if we don't want to lose URIs
-                ipcInit(argc, argv);
-
-#if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
-                WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
-#endif
-
-                currentExitCode = app.exec();
-
-                window.hide();
-                window.setClientModel(0);
-                window.setWalletModel(0);
-                guiref = 0;
-            }
-            // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
-			LogPrintf("Main calling Shutdown...");
-            Shutdown(NULL);
+            exit(1);
         }
 
-    }
-	catch (std::exception& e)
-	{
-        handleRunawayException(&e);
-    }
-	catch (...)
-	{
-        handleRunawayException(NULL);
+        else
+            Snapshot.SnapshotMain();
     }
 
-    // delete thread handler
-    threads->interruptAll();
-    threads->removeAll();
-    threads.reset();
+    /** Start Qt as normal before it was moved into this function **/
+    currentExitCode = StartGridcoinQt(argc, argv);
 
-    // Current exit code was previously introduced to trigger a wallet restart
-    // when set to the value of 42. This feature was removed.
-    if (fDebug) {
-        LogPrintf("Exit code: %d", currentExitCode);
+    // We got a request to apply snapshot from GUI Menu selection
+    // We got this request and everything should be shutdown now.
+    // Except what we cannot shutdown.
+    // In future once code base for the databases are updated we won't need
+    // the wallet user to start the QT wallet themselves after the snapshot
+    // has been applied. We will be able to restart it ourselves
+    // See Bitcoin's database files and pointers involved and Reset()
+    // What prevents us from starting the wallet again internally
+    // is the lingering of database.
+    // The linger does not affect the snapshot process but prevents restart of wallet within main area
+
+    /** This is only if the GUI menu option was used! **/
+    if (fSnapshotRequest)
+    {
+        UpgradeQt test;
+
+        if (test.SnapshotMain())
+            LogPrintf("Snapshot: Success!");
+
+        else
+        {
+            if (fCancelOperation)
+                LogPrintf("Snapshot: Failed!; Canceled by user.");
+
+            else
+                LogPrintf("Sanpshot: Failed!");
+        }
     }
 
     return 0;
 }
+
 #endif // BITCOIN_QT_TEST

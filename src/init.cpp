@@ -17,6 +17,7 @@
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
+#include "upgrade.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -57,12 +58,14 @@ extern unsigned int nActiveBeforeSB;
 extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
+bool fSnapshotRequest = false;
 
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
 std::unique_ptr<BanMan> g_banman;
-
+/** Update checker pointer for CScheduler; **/
+std::unique_ptr<Upgrade> g_UpdateChecker;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -1043,6 +1046,10 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
+    /** Check for update on startup **/
+    g_UpdateChecker->CheckForLatestUpdate();
+    /** Add the CScheduler **/
+    scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, 24 * 60* 60 * 1000);
 
     return true;
 }

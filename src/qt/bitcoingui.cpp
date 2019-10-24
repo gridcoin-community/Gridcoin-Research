@@ -43,6 +43,7 @@
 #include "backup.h"
 #include "clicklabel.h"
 #include "univalue.h"
+#include "upgradeqt.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -769,6 +770,23 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
     } else {
         notificator->notify(Notificator::Critical, title, message);
     }
+}
+
+void BitcoinGUI::update(const QString &title, const QString &message)
+{
+    // Create our own message box; A dialog can go here in future for qt if we choose
+    QMessageBox* updatemsg = new QMessageBox;
+
+    updatemsg->setAttribute(Qt::WA_DeleteOnClose);
+    updatemsg->setWindowTitle(title);
+    updatemsg->setText(message);
+    updatemsg->setIcon(QMessageBox::Information);
+    updatemsg->setStandardButtons(QMessageBox::Ok);
+    updatemsg->setModal(false);
+    // Due to slight delay in gui load this could appear behind the gui ui
+    // The only other option available would make the message box stay on top of all applications
+
+    QTimer::singleShot(5000, updatemsg, SLOT(show()));
 }
 
 void BitcoinGUI::changeEvent(QEvent *e)
