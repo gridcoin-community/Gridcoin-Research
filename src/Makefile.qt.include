@@ -180,6 +180,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/transactionrecord.h \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
+  qt/upgradeqt.h \
   qt/votingdialog.h \
   qt/walletmodel.h \
   qt/winshutdownmonitor.h
@@ -222,6 +223,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/transactionrecord.cpp \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
+  qt/upgradeqt.cpp \
   qt/votingdialog.cpp \
   qt/walletmodel.cpp \
   qt/winshutdownmonitor.cpp
