@@ -6,6 +6,19 @@
 #include <stdexcept>
 
 //!
+//! \brief Struct for snapshot download progress updates.
+//!
+struct struct_SnapshotStatus{
+    bool SnapshotDownloadComplete = false;
+    bool SnapshotDownloadFailed = false;
+    int64_t SnapshotDownloadSpeed;
+    int SnapshotDownloadProgress;
+    long long SnapshotDownloadSize = 0;
+};
+
+extern struct_SnapshotStatus DownloadStatus;
+
+//!
 //! \brief HTTP exception.
 //!
 //! Used to signal an unexpected server response.
@@ -30,7 +43,10 @@ public:
     //!
     //! \brief Constructor.
     //!
-    Http();
+    //! \param Defaultly this will be true but for snapshot we need to use our own curl to avoid issues with a crash from progress monitor.
+    //!        In the destructor we check this as well so when snapshot download being used we don't get seg faulted out over clean up.
+    //!
+    Http(bool Scoped = true);
 
     //!
     //! \brief Destructor.
@@ -68,6 +84,44 @@ public:
             const std::string& url,
             const std::string& userpass = "");
 
+    //!
+    //! \brief Fetch github release information.
+    //!
+    //! Downloads the json data from github that contains information about latest releases.
+    //!
+    //! \param url URL to fetch json from.
+    //! \throws HttpException on invalid server response.
+    //!
+    std::string GetLatestVersionResponse(
+            const std::string& url);
+    //!
+    //! \brief Download Snapshot with progress updates.
+    //!
+    //! Downloads the snapshot from the latest snapshot.zip hosted on download.gridcoin.us.
+    //!
+    //! \param url URL of the snapshot.zip.
+    //! \param destination Destination of the snapshot file.
+    //!
+    //! \throws HttpException on invalid server response.
+    //!
+    void DownloadSnapshot(
+            const std::string& url,
+            const std::string& destination);
+    //!
+    //! \brief Fetch the sha256sum from snapshot server.
+    //!
+    //! Fetches the snapshot sha256 from snapshot server.
+    //!
+    //! \param url URL of the snapshot.zip.sha256
+    //!
+    //! \return the sha256sum from file
+    //!
+    //! \throws HttpException on invalid server response.
+    //!
+    std::string GetSnapshotSHA256(const std::string& url);
+
 private:
     void EvaluateResponse(int code, const std::string& url);
+    /** Downloading snapshot has a progress update function which collaspes when using scoped curl **/
+    bool fScoped;
 };
