@@ -1,4 +1,4 @@
-#include "UpgradeQt.h"
+#include "upgradeqt.h"
 #include "upgrade.h"
 #include "util.h"
 #include "db.h"
@@ -212,7 +212,7 @@ bool UpgradeQt::SnapshotMain()
 
         if (ExtractStatus.SnapshotExtractFailed)
         {
-            ErrorMsg(_("Snapshot extraction failed! Cleaning up any extract files"), _("The wallet will now shutdown."));
+            ErrorMsg(_("Snapshot extraction failed! Cleaning up any extracted data"), _("The wallet will now shutdown."));
 
             // Do this without checking on sucess, If it passed in stage 3 it will pass here.
             UpgradeMain.CleanupBlockchainData();
@@ -231,7 +231,7 @@ bool UpgradeQt::SnapshotMain()
 
     SnapshotApp.processEvents();
 
-    Msg(_("Snapshot Operation successful!"), _("The wallet is now shutting down."));
+    Msg(_("Snapshot Operation successful!"), _("The wallet is now shutting down. Please restart your wallet."));
 
     return true;
 }

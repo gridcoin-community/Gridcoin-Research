@@ -342,6 +342,10 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction = new QAction(tr("&Debug window"), this);
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
 
+    /** QT option for snapshot download **/
+    snapshotAction = new QAction(tr("&Snapshot Download"), this);
+    snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
+
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(optionsAction, SIGNAL(triggered()), this, SLOT(optionsClicked()));
@@ -355,6 +359,7 @@ void BitcoinGUI::createActions()
     connect(verifyMessageAction, SIGNAL(triggered()), this, SLOT(gotoVerifyMessageTab()));
     connect(diagnosticsAction, SIGNAL(triggered()), this, SLOT(diagnosticsClicked()));
     connect(newUserWizardAction, SIGNAL(triggered()), this, SLOT(newUserWizardClicked()));
+    connect(snapshotAction, SIGNAL(triggered()), this, SLOT(snapshotClicked()));
 }
 
 void BitcoinGUI::setIcons()
@@ -387,6 +392,7 @@ void BitcoinGUI::setIcons()
     verifyMessageAction->setIcon(QPixmap(":/icons/transaction_0"));
     exportAction->setIcon(QPixmap(":/icons/export"));
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
+    snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -405,6 +411,8 @@ void BitcoinGUI::createMenuBar()
     file->addAction(exportAction);
     file->addAction(signMessageAction);
     file->addAction(verifyMessageAction);
+    file->addSeparator();
+    file->addAction(snapshotAction);
     file->addSeparator();
     file->addAction(quitAction);
 
@@ -983,6 +991,41 @@ void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int 
                               .arg(BitcoinUnits::formatWithUnit(walletModel->getOptionsModel()->getDisplayUnit(), amount, true))
                               .arg(type)
                               .arg(address), icon);
+    }
+}
+
+void BitcoinGUI::snapshotClicked()
+{
+    QMessageBox Msg;
+
+    Msg.setIcon(QMessageBox::Question);
+    Msg.setText(tr("Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task."));
+    Msg.setInformativeText(tr("Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files."));
+    Msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    Msg.setDefaultButton(QMessageBox::No);
+
+    int result = Msg.exec();
+    bool fProceed;
+
+    switch (result)
+    {
+        case QMessageBox::Yes    :    fProceed = true;     break;
+        case QMessageBox::No     :    fProceed = false;    break;
+        default                  :    fProceed = false;    break;
+    }
+
+    if (!fProceed)
+    {
+        Msg.close();
+
+        return;
+    }
+
+    else
+    {
+        fSnapshotRequest = true;
+
+        qApp->quit();
     }
 }
 

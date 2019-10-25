@@ -234,7 +234,7 @@ bool Upgrade::VerifySHA256SUM()
     unsigned char *buffer[32768];
     int bytesread = 0;
 
-    FILE *file = fopen(fileloc.c_str(), "rb");
+    FILE *file = fsbridge::fopen(fileloc.c_str(), "rb");
 
     if (!file)
     {
@@ -383,7 +383,7 @@ bool Upgrade::ExtractSnapshot()
 
                     std::string ExtractFileString = ExtractPath.string() + "/" + ZipStat.name;
 
-                    FILE* ExtractFile = fopen(ExtractFileString.c_str(), "w");
+                    FILE* ExtractFile = fsbridge::fopen(ExtractFileString.c_str(), "wb");
 
                     if (!ExtractFile)
                     {
@@ -450,21 +450,3 @@ bool Upgrade::ExtractSnapshot()
 
     return true;
 }
-
-bool Upgrade::IsDataDirInUse()
-{
-    boost::filesystem::path pathLockFile = GetDataDir() / ".lock";
-    FILE* file = fopen(pathLockFile.string().c_str(), "a");
-
-    if (file)
-        fclose(file);
-
-    boost::interprocess::file_lock lock(pathLockFile.string().c_str());
-
-    if (!lock.try_lock())
-        return true;
-
-    else
-        return false;
-}
-

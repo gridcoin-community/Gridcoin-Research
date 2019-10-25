@@ -74,13 +74,6 @@ public:
     //! \return Bool on the success of matching SHA256SUM
     //!
     bool VerifySHA256SUM();
-
-    //!
-    //! \brief Checks to make sure Gridcoin is not already running
-    //!
-    //! \return Bool on the status of .lock
-    //!
-    bool IsDataDirInUse();
 };
 
 //!

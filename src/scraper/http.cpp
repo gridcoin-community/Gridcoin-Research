@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <memory>
-#include <boost/thread>
+#include <boost/thread.hpp>
 
 #if LIBCURL_VERSION_NUM >= 0x073d00
 /* In libcurl 7.61.0, support was added for extracting the time in plain
@@ -264,7 +264,7 @@ void Http::DownloadSnapshot(
         const std::string &url,
         const std::string &destination)
 {
-    ScopedFile fp(fopen(destination.c_str(), "wb"), &fclose);
+    ScopedFile fp(fsbridge::fopen(destination.c_str(), "wb"), &fclose);
 
     if(!fp)
     {

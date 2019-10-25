@@ -86,13 +86,20 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
+        if (!boost::filesystem::is_directory(GetDataDir(false)))
+        {
+            fprintf(stderr, "Error: Specified directory does not exist\n");
+            Shutdown(NULL);
+        }
+
         // Check to see if the user requested a snapshot!
         if (mapArgs.count("-snapshotdownload"))
         {
             Upgrade Snapshot;
 
             // Let's check make sure gridcoin is not already running in the data directory.
-            if (Snapshot.IsDataDirInUse())
+            // Use new probe feature
+            if (!LockDirectory(GetDataDir(), ".lock", true))
             {
                 fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
 
@@ -104,12 +111,6 @@ bool AppInit(int argc, char* argv[])
         }
 
         LogPrintf("AppInit");
-
-        if (!boost::filesystem::is_directory(GetDataDir(false)))
-        {
-            fprintf(stderr, "Error: Specified directory does not exist\n");
-            Shutdown(NULL);
-        }
 
         ReadConfigFile(mapArgs, mapMultiArgs);
 

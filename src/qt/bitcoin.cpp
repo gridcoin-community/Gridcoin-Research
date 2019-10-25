@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
         Upgrade Snapshot;
 
         // Let's check make sure gridcoin is not already running in the data directory.
-        if (Snapshot.IsDataDirInUse())
+        if (!LockDirectory(GetDataDir(), ".lock", true))
         {
             fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
 
@@ -269,6 +269,209 @@ int main(int argc, char *argv[])
                 LogPrintf("Sanpshot: Failed!");
         }
     }
+
+    return 0;
+}
+
+int StartGridcoinQt(int argc, char *argv[])
+{
+    // Set global boolean to indicate intended presence of GUI to core.
+    fQtActive = true;
+
+    std::shared_ptr<ThreadHandler> threads = std::make_shared<ThreadHandler>();
+
+    Q_INIT_RESOURCE(bitcoin);
+    Q_INIT_RESOURCE(bitcoin_locale);
+    QApplication app(argc, argv);
+    //uint SEM_FAILCRITICALERRORS= 0x0001;
+    //uint SEM_NOGPFAULTERRORBOX = 0x0002;
+#if defined(WIN32) && defined(QT_GUI)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
+
+    // Install global event filter that makes sure that long tooltips can be word-wrapped
+    app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
+
+#if QT_VERSION < 0x050000
+    // Install qDebug() message handler to route to debug.log
+    qInstallMsgHandler(DebugMessageHandler);
+#else
+#if defined(WIN32)
+    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
+    qApp->installNativeEventFilter(new WinShutdownMonitor());
+#endif
+    // Install qDebug() message handler to route to debug.log
+    qInstallMessageHandler(DebugMessageHandler);
+#endif
+
+    // bitcoin.conf:
+    if (!boost::filesystem::is_directory(GetDataDir(false)))
+    {
+        // This message can not be translated, as translation is not initialized yet
+        // (which not yet possible because lang=XX can be overridden in bitcoin.conf in the data directory)
+        QMessageBox::critical(0, "Gridcoin",
+                              QString("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
+        return 1;
+    }
+    ReadConfigFile(mapArgs, mapMultiArgs);
+
+    // Application identification (must be set before OptionsModel is initialized,
+    // as it is used to locate QSettings)
+    app.setOrganizationName("Gridcoin");
+    //XXX app.setOrganizationDomain("");
+    if(GetBoolArg("-testnet")) // Separate UI settings for testnet
+        app.setApplicationName("Gridcoin-Qt-testnet");
+    else
+        app.setApplicationName("Gridcoin-Qt");
+
+    // ... then GUI settings:
+    OptionsModel optionsModel;
+
+    // Get desired locale (e.g. "de_DE") from command line or use system locale
+    QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
+    QString lang = lang_territory;
+    // Convert to "de" only by truncating "_DE"
+    lang.truncate(lang_territory.lastIndexOf('_'));
+
+    QTranslator qtTranslatorBase, qtTranslator, translatorBase, translator;
+    // Load language files for configured locale:
+    // - First load the translator for the base language, without territory
+    // - Then load the more specific locale translator
+
+    // Load e.g. qt_de.qm
+    if (qtTranslatorBase.load("qt_" + lang, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+        app.installTranslator(&qtTranslatorBase);
+
+    // Load e.g. qt_de_DE.qm
+    if (qtTranslator.load("qt_" + lang_territory, QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+        app.installTranslator(&qtTranslator);
+
+    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in bitcoin.qrc)
+    if (translatorBase.load(lang, ":/translations/"))
+        app.installTranslator(&translatorBase);
+
+    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in bitcoin.qrc)
+    if (translator.load(lang_territory, ":/translations/"))
+        app.installTranslator(&translator);
+
+    // Subscribe to global signals from core
+    uiInterface.ThreadSafeMessageBox.connect(ThreadSafeMessageBox);
+    uiInterface.ThreadSafeAskFee.connect(ThreadSafeAskFee);
+    uiInterface.ThreadSafeAskQuestion.connect(ThreadSafeAskQuestion);
+
+    uiInterface.ThreadSafeHandleURI.connect(ThreadSafeHandleURI);
+    uiInterface.InitMessage.connect(InitMessage);
+    uiInterface.QueueShutdown.connect(QueueShutdown);
+    uiInterface.Translate.connect(Translate);
+
+    uiInterface.UpdateMessageBox.connect(UpdateMessageBox);
+
+    // Show help message immediately after parsing command-line options (for "-lang") and setting locale,
+    // but before showing splash screen.
+    if (mapArgs.count("-?") || mapArgs.count("-help"))
+    {
+        GUIUtil::HelpMessageBox help;
+        help.showOrPrint();
+        return 1;
+    }
+
+    QSplashScreen splash(QPixmap(":/images/splash"), 0);
+    if (GetBoolArg("-splash", true) && !GetBoolArg("-min"))
+    {
+        splash.setEnabled(false);
+        splash.show();
+        splashref = &splash;
+    }
+
+    app.processEvents();
+
+    app.setQuitOnLastWindowClosed(false);
+
+    try
+    {
+        // Regenerate startup link, to fix links to old versions
+        if (GUIUtil::GetStartOnSystemStartup())
+            GUIUtil::SetStartOnSystemStartup(true);
+
+        BitcoinGUI window;
+        guiref = &window;
+
+        QTimer *timer = new QTimer(guiref);
+        LogPrintf("Starting Gridcoin");
+
+        QObject::connect(timer, SIGNAL(timeout()), guiref, SLOT(timerfire()));
+
+      if (!threads->createThread(ThreadAppInit2,threads,"AppInit2 Thread"))
+        {
+                LogPrintf("Error; NewThread(ThreadAppInit2) failed");
+                return 1;
+        }
+        else
+        {
+             //10-31-2015
+            while (!bGridcoinGUILoaded)
+            {
+                app.processEvents();
+                MilliSleep(300);
+            }
+
+            {
+                // Put this in a block, so that the Model objects are cleaned up before
+                // calling Shutdown().
+
+                if (splashref)
+                    splash.finish(&window);
+
+                ClientModel clientModel(&optionsModel);
+                WalletModel walletModel(pwalletMain, &optionsModel);
+
+                window.setClientModel(&clientModel);
+                window.setWalletModel(&walletModel);
+
+                // If -min option passed, start window minimized.
+                if(GetBoolArg("-min"))
+                {
+                    window.showMinimized();
+                }
+                else
+                {
+                    window.show();
+                }
+                timer->start(5000);
+
+                // Place this here as guiref has to be defined if we don't want to lose URIs
+                ipcInit(argc, argv);
+
+#if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
+                WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
+#endif
+
+                int currentExitCode = app.exec();
+
+                window.hide();
+                window.setClientModel(0);
+                window.setWalletModel(0);
+                guiref = 0;
+            }
+            // Shutdown the core and its threads, but don't exit Bitcoin-Qt here
+            LogPrintf("Main calling Shutdown...");
+            Shutdown(NULL);
+        }
+
+    }
+    catch (std::exception& e)
+    {
+        handleRunawayException(&e);
+    }
+    catch (...)
+    {
+        handleRunawayException(NULL);
+    }
+
+    // delete thread handler
+    threads->interruptAll();
+    threads->removeAll();
+    threads.reset();
 
     return 0;
 }
