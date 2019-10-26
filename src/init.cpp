@@ -1046,10 +1046,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
-    /** Check for update on startup **/
-    g_UpdateChecker->CheckForLatestUpdate();
-    /** Add the CScheduler **/
-    scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, 24 * 60* 60 * 1000);
+    /** If this is not TestNet we check for updates on startup and daily **/
+    if (!fTestNet)
+    {
+        g_UpdateChecker->CheckForLatestUpdate();
+        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, 24 * 60* 60 * 1000);
+    }
 
     return true;
 }

@@ -92,8 +92,11 @@ bool AppInit(int argc, char* argv[])
             Shutdown(NULL);
         }
 
-        // Check to see if the user requested a snapshot!
-        if (mapArgs.count("-snapshotdownload"))
+        /** Check here config file incase TestNet is set there and not in mapArgs **/
+        ReadConfigFile(mapArgs, mapMultiArgs);
+
+        // Check to see if the user requested a snapshot and we are not running TestNet!
+        if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
         {
             Upgrade Snapshot;
 
@@ -111,8 +114,6 @@ bool AppInit(int argc, char* argv[])
         }
 
         LogPrintf("AppInit");
-
-        ReadConfigFile(mapArgs, mapMultiArgs);
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)

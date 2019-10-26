@@ -343,8 +343,11 @@ void BitcoinGUI::createActions()
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
 
     /** QT option for snapshot download **/
-    snapshotAction = new QAction(tr("&Snapshot Download"), this);
-    snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
+    if (!fTestNet)
+    {
+        snapshotAction = new QAction(tr("&Snapshot Download"), this);
+        snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
+    }
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));

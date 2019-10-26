@@ -210,19 +210,18 @@ int main(int argc, char *argv[])
 
     SetupEnvironment();
 
-    // Set default value to exit properly. Exit code 42 will trigger restart of the wallet.
-    int currentExitCode = 0;
-
     // Do this early as we don't want to bother initializing if we are just calling IPC
     ipcScanRelay(argc, argv);
 
     // Command-line options take precedence:
     // Before this would of been done in main then config file loaded.
-    // But we need to check for snapshot argument anyway so doing so here is safe.
+    // We will load config file here as well.
     ParseParameters(argc, argv);
 
-    // Here we do it if it was started with the snapshot argument
-    if (mapArgs.count("-snapshotdownload"))
+    ReadConfigFile(mapArgs, mapMultiArgs);
+
+    // Here we do it if it was started with the snapshot argument and we not TestNet
+    if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
     {
         Upgrade Snapshot;
 
@@ -239,7 +238,7 @@ int main(int argc, char *argv[])
     }
 
     /** Start Qt as normal before it was moved into this function **/
-    currentExitCode = StartGridcoinQt(argc, argv);
+    StartGridcoinQt(argc, argv);
 
     // We got a request to apply snapshot from GUI Menu selection
     // We got this request and everything should be shutdown now.
@@ -304,16 +303,12 @@ int StartGridcoinQt(int argc, char *argv[])
     qInstallMessageHandler(DebugMessageHandler);
 #endif
 
-    // bitcoin.conf:
     if (!boost::filesystem::is_directory(GetDataDir(false)))
     {
-        // This message can not be translated, as translation is not initialized yet
-        // (which not yet possible because lang=XX can be overridden in bitcoin.conf in the data directory)
         QMessageBox::critical(0, "Gridcoin",
                               QString("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
         return 1;
     }
-    ReadConfigFile(mapArgs, mapMultiArgs);
 
     // Application identification (must be set before OptionsModel is initialized,
     // as it is used to locate QSettings)
