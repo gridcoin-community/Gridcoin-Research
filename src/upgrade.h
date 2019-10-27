@@ -169,12 +169,16 @@ public:
                     ProgressString << " " << std::fixed << std::setprecision(1) << NewBytes << _(" KB/s");
                 }
 
-                else
+                else if (ProgressBytes >= 1000000)
                 {
                     NewBytes = ProgressBytes / (double)1000000;
 
                     ProgressString << " " << std::fixed << std::setprecision(1) << NewBytes << _(" MB/s");
                 }
+
+                // Unsupported progress
+                else
+                    ProgressString << _(" N/A");
             }
         }
 

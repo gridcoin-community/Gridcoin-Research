@@ -34,12 +34,9 @@ bool UpgradeQt::SnapshotMain()
 
     Upgrade UpgradeMain;
 
-    QProgressDialog Progress(ToQString(_("Snapshot Process")), ToQString(_("Cancel")), 0, 100);
+    QProgressDialog Progress("", ToQString(_("Cancel")), 0, 100);
     Progress.setWindowModality(Qt::WindowModal);
 
-    // We allow a user to cancel the process.
-    // Behaviour of when this is pressed will be handled by appropiate location.
-    Progress.setCancelButtonText(ToQString(_("Cancel")));
     Progress.setMinimumDuration(0);
     Progress.setAutoClose(false);
     Progress.setAutoReset(false);
@@ -64,11 +61,15 @@ bool UpgradeQt::SnapshotMain()
             return false;
         }
 
-        if (DownloadStatus.SnapshotDownloadSpeed < 1000000)
+        if (DownloadStatus.SnapshotDownloadSpeed < 1000000 && DownloadStatus.SnapshotDownloadSpeed > 0)
             OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000), 1) + _(" KB/s"));
 
-        else
+        else if (DownloadStatus.SnapshotDownloadSpeed > 1000000)
             OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000000), 1) + _(" MB/s"));
+
+        // Not supported
+        else
+            OutputText = ToQString(BaseProgressString + _(" N/A"));
 
         Progress.setLabelText(OutputText);
         Progress.setValue(DownloadStatus.SnapshotDownloadProgress);
