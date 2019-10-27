@@ -62,10 +62,14 @@ bool UpgradeQt::SnapshotMain()
         }
 
         if (DownloadStatus.SnapshotDownloadSpeed < 1000000 && DownloadStatus.SnapshotDownloadSpeed > 0)
-            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000), 1) + _(" KB/s"));
+            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000), 1) + _(" KB/s")
+                                   + " (" + RoundToString(DownloadStatus.SnapshotDownloadAmount / (double)(1024 * 1024 * 1024), 2) + _("GB/")
+                                   + RoundToString(DownloadStatus.SnapshotDownloadSize / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
 
         else if (DownloadStatus.SnapshotDownloadSpeed > 1000000)
-            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000000), 1) + _(" MB/s"));
+            OutputText = ToQString(BaseProgressString + RoundToString((DownloadStatus.SnapshotDownloadSpeed / (double)1000000), 1) + _(" MB/s")
+                                   + " (" + RoundToString(DownloadStatus.SnapshotDownloadAmount / (double)(1024 * 1024 * 1024), 2) + _("GB/")
+                                   + RoundToString(DownloadStatus.SnapshotDownloadSize / (double)(1024 * 1024 * 1024), 2) + _("GB)"));
 
         // Not supported
         else

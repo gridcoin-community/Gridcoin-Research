@@ -134,7 +134,7 @@ public:
     //!
     //! \return The need if progress bar needs to be updated
     //!
-    bool Update(int ProgressAmount, double ProgressBytes = 0)
+    bool Update(int ProgressAmount, double ProgressBytes = 0, long long ProgressNow = 0, long long ProgressTotal = 0)
     {
         /** Incase no change **/
         if (ProgressAmount == CurrentProgress)
@@ -163,22 +163,18 @@ public:
                 double NewBytes;
 
                 if (ProgressBytes < 1000000 && ProgressBytes > 0)
-                {
-                    NewBytes = ProgressBytes / (double)1000;
-
-                    ProgressString << " " << std::fixed << std::setprecision(1) << NewBytes << _(" KB/s");
-                }
+                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << _(" KB/s");
 
                 else if (ProgressBytes >= 1000000)
-                {
-                    NewBytes = ProgressBytes / (double)1000000;
-
-                    ProgressString << " " << std::fixed << std::setprecision(1) << NewBytes << _(" MB/s");
-                }
+                    ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000000) << _(" MB/s");
 
                 // Unsupported progress
                 else
                     ProgressString << _(" N/A");
+
+                ProgressString << " (" << std::fixed << std::setprecision(2) << (ProgressNow / (double)(1024 * 1024 * 1024)) << _("GB/");
+                ProgressString << std::fixed << std::setprecision(2) << (ProgressTotal / (double)(1024 * 1024 * 1024)) << _("GB)");
+
             }
         }
 

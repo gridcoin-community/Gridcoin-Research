@@ -131,13 +131,14 @@ void Upgrade::SnapshotMain()
         if (DownloadStatus.SnapshotDownloadFailed)
             throw std::runtime_error("Failed to download snapshot.zip; See debug.log");
 
-        if (Prog.Update(DownloadStatus.SnapshotDownloadProgress, DownloadStatus.SnapshotDownloadSpeed))
+        if (Prog.Update(DownloadStatus.SnapshotDownloadProgress, DownloadStatus.SnapshotDownloadSpeed, DownloadStatus.SnapshotDownloadAmount, DownloadStatus.SnapshotDownloadSize))
             std::cout << Prog.Status() << std::flush;
 
         MilliSleep(1000);
     }
 
-    if (Prog.Update(100))
+    // This is needed in some spots as the download can complete before the next progress update occurs so just 100% here as it was successful
+    if (Prog.Update(100, -1, DownloadStatus.SnapshotDownloadSize, DownloadStatus.SnapshotDownloadSize))
         std::cout << Prog.Status() << std::flush;
 
     std::cout << std::endl;

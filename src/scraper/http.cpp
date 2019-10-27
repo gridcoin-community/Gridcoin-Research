@@ -114,7 +114,10 @@ namespace
                     DownloadStatus.SnapshotDownloadSpeed = -1;
 #endif
                     if (DownloadStatus.SnapshotDownloadSize > 0 && (downnow > 0))
+                    {
                         DownloadStatus.SnapshotDownloadProgress = ((downnow / (double)DownloadStatus.SnapshotDownloadSize) * 100);
+                        DownloadStatus.SnapshotDownloadAmount = downnow;
+                    }
                 }
             }
         }
