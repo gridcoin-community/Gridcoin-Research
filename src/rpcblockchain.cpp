@@ -1728,25 +1728,6 @@ UniValue debugnet(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue dportally(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "dportally\n"
-                "\n"
-                "Request a tally of DPOR in superblock\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    TallyMagnitudesInSuperblock();
-
-    res.pushKV("Done", "Done");
-
-    return res;
-}
-
 UniValue forcequorum(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

@@ -189,7 +189,6 @@ extern UniValue debug2(const UniValue& params, bool fHelp);
 extern UniValue debug3(const UniValue& params, bool fHelp);
 extern UniValue debug4(const UniValue& params, bool fHelp);
 extern UniValue debugnet(const UniValue& params, bool fHelp);
-extern UniValue dportally(const UniValue& params, bool fHelp);
 extern UniValue forcequorum(const UniValue& params, bool fHelp);
 extern UniValue gatherneuralhashes(const UniValue& params, bool fHelp);
 extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);

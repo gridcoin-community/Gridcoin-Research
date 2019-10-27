@@ -368,7 +368,6 @@ static const CRPCCommand vRPCCommands[] =
     { "debug3",                  &debug3,                  cat_developer     },
     { "debug4",                  &debug4,                  cat_developer     },
     { "debugnet",                &debugnet,                cat_developer     },
-    { "dportally",               &dportally,               cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "forcequorum",             &forcequorum,             cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      cat_developer     },
