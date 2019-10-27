@@ -12,11 +12,11 @@
 #include "rpcserver.h"
 #include "init.h"
 #include "ui_interface.h"
-#include "tally.h"
 #include "beacon.h"
 #include "scheduler.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -34,7 +34,6 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
 
-void TallyResearchAverages(CBlockIndex* index);
 extern void ThreadAppInit2(void* parg);
 
 bool IsConfigFileEmpty();
@@ -816,6 +815,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
     LogPrintf(" block index %15" PRId64 "ms", GetTimeMillis() - nStart);
 
+    if (IsV9Enabled(pindexBest->nHeight)) {
+        uiInterface.InitMessage(_("Loading superblock cache..."));
+        LogPrintf("Loading superblock cache...");
+        NN::Tally::LoadSuperblockIndex(pindexBest);
+    }
+
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
     {
         PrintBlockTree();
@@ -1011,9 +1016,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Loading Network Averages..."));
     if (fDebug3) LogPrintf("Loading network averages");
 
-    CBlockIndex* tallyHeight = FindTallyTrigger(pindexBest);
-    if(tallyHeight)
-        TallyResearchAverages(tallyHeight);
+    NN::Tally::LegacyRecount(NN::Tally::FindTrigger(pindexBest));
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));

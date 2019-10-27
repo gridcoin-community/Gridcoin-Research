@@ -11,6 +11,7 @@
 #include "appcache.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
 #include "contract/contract.h"
 #include "util.h"
 
@@ -28,7 +29,6 @@ using namespace std;
 
 unsigned int nMinerSleep;
 double CoinToDouble(double surrogate);
-double CalculatedMagnitude2(std::string cpid, int64_t locktime);
 bool HasActiveBeacon(const std::string& cpid);
 bool LessVerbose(int iMax1000);
 
@@ -922,7 +922,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
 
     ComputeNeuralNetworkSupermajorityHashes();
 
-    if (!NeedASuperblock()) {
+    if (!NN::Tally::SuperblockNeeded()) {
         LogPrintf("AddNeuralContractOrVote: Not needed.");
         return;
     }
@@ -1001,7 +1001,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     nReward = GetProofOfStakeReward(
         nCoinAge,
         nFees,
-        claim.m_mining_id.ToString(),
+        claim.m_mining_id,
         false,  // Is verifying block? (no)
         0,      // Verification phase (N/A)
         pindexPrev->nTime,
@@ -1031,7 +1031,7 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     claim.m_organization = GetArgument("org", "").substr(0, NN::Claim::MAX_ORGANIZATION_SIZE);
 
     if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        claim.m_magnitude = CalculatedMagnitude2(cpid->ToString(), blocknew.nTime);
+        claim.m_magnitude = NN::Tally::GetMagnitude(*cpid);
     }
 
     LogPrintf(

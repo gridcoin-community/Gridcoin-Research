@@ -27,8 +27,6 @@
 
 using namespace std;
 
-int64_t GetMaximumBoincSubsidy(int64_t nTime);
-
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
 

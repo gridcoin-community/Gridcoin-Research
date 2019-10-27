@@ -12,8 +12,6 @@
 
 using namespace std;
 
-StructCPID GetStructCPID();
-
 namespace {
 //!
 //! \brief Calculate a legacy RSA weight value from the supplied claim block.

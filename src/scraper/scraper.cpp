@@ -6,6 +6,7 @@
 #include "ui_interface.h"
 
 #include "neuralnet/superblock.h"
+#include "neuralnet/tally.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -477,13 +478,11 @@ public:
 /*********************
 * Whitelist Data     *
 *********************/
-// TODO: Lock this somehow
 int64_t SuperblockAge()
 {
-    int64_t superblock_time = ReadCache(Section::SUPERBLOCK, "magnitudes").timestamp;
-    int64_t nSBage = GetAdjustedTime() - superblock_time;
+    LOCK(cs_main);
 
-    return nSBage;
+    return NN::Tally::CurrentSuperblock()->Age();
 }
 
 /*********************

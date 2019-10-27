@@ -13,6 +13,7 @@
 #include "appcache.h"
 #include "neuralnet/claim.h"
 #include "neuralnet/superblock.h"
+#include "neuralnet/tally.h"
 #include "util.h"
 
 #include <boost/filesystem.hpp>
@@ -260,8 +261,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
     UniValue result1(UniValue::VOBJ);
     if("last"==params[1].get_str())
     {
-        std::string sheight= ReadCache(Section::SUPERBLOCK, "block_number").value;
-        long height= RoundFromString(sheight,0);
+        const uint64_t height = NN::Tally::CurrentSuperblock()->m_height;
         if(!height)
         {
             result1.pushKV("error","No superblock loaded");
@@ -270,13 +270,13 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
         CBlockIndex* pblockindex = RPCBlockFinder.FindByHeight(height);
         if(!pblockindex)
         {
-            result1.pushKV("height_cache",sheight);
+            result1.pushKV("height_cache", height);
             result1.pushKV("error","Superblock not found in block index");
             return result1;
         }
         if(!pblockindex->nIsSuperBlock)
         {
-            result1.pushKV("height_cache",sheight);
+            result1.pushKV("height_cache", height);
             result1.pushKV("block_hash",pblockindex->GetBlockHash().GetHex());
             result1.pushKV("error","Superblock loaded not a Superblock");
             return result1;

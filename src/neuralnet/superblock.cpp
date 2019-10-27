@@ -1151,6 +1151,9 @@ private: // SuperblockValidator methods
 //! external CPID values and 2-byte (16-bit) magnitudes. The COUNT placeholder
 //! tallies the number of zero-magnitude CPIDs omitted from the contract.
 //!
+//! Binary-packed superblocks were introduced on mainnet with block 725000 and
+//! on testnet at block 10000.
+//!
 class LegacySuperblockParser
 {
 public:

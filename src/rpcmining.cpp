@@ -4,18 +4,14 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "main.h"
-#include "db.h"
-#include "txdb.h"
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
 #include "neuralnet/neuralnet.h"
-#include "global_objects_noui.hpp"
+#include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
+
 using namespace std;
-
-double GRCMagnitudeUnit(int64_t locktime);
-
-namespace NN { std::string GetPrimaryCpid(); }
 
 UniValue getmininginfo(const UniValue& params, bool fHelp)
 {
@@ -119,18 +115,16 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     //9-19-2015 - CM
     obj.pushKV("MyNeuralHash", NN::GetInstance()->GetNeuralHash());
 
-    std::string primary_cpid = NN::GetPrimaryCpid();
-    obj.pushKV("CPID", primary_cpid);
+    const NN::MiningId mining_id = NN::Researcher::Get()->Id();
+    obj.pushKV("CPID", mining_id.ToString());
 
-    if (IsResearcher(primary_cpid))
+    if (const NN::CpidOption cpid = mining_id.TryCpid())
     {
-        {
-            double dMagnitudeUnit = GRCMagnitudeUnit(nTime);
-            double dAccrualAge,AvgMagnitude;
-            int64_t nBoinc = ComputeResearchAccrual(nTime, primary_cpid, pindexBest, false, 69, dAccrualAge, dMagnitudeUnit, AvgMagnitude);
-            obj.pushKV("Magnitude Unit",dMagnitudeUnit);
-            obj.pushKV("BoincRewardPending",nBoinc/(double)COIN);
-        }
+        const NN::ResearchAccount& account = NN::Tally::GetAccount(*cpid);
+        const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexBest);
+
+        obj.pushKV("Magnitude Unit", calc->MagnitudeUnit());
+        obj.pushKV("BoincRewardPending", FormatMoney(calc->Accrual(account)));
     }
 
     obj.pushKV("MiningInfo 1", msMiningErrors);

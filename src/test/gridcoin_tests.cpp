@@ -9,7 +9,6 @@
 #include <map>
 #include <string>
 
-extern std::map<std::string, StructCPID> mvDPOR;
 extern bool fTestNet;
 double RoundFromString(std::string s, int place);
 
@@ -22,24 +21,10 @@ namespace
    {
       GridcoinTestsConfig()
       {
-         // Create a fake CPID
-         StructCPID& cpid = GetInitializedStructCPID2(TEST_CPID, mvMagnitudes);
-         cpid.cpid = TEST_CPID;
-         cpid.payments = 123;
-         //cpid.EarliestPaymentTime = 1490260000;
-         mvMagnitudes[TEST_CPID] = cpid;
-
-         // Create a fake DPOR
-         StructCPID& dpor = GetInitializedStructCPID2(TEST_CPID, mvDPOR);
-         dpor.Magnitude = 125;
-         mvDPOR[TEST_CPID] = dpor;
       }
 
       ~GridcoinTestsConfig()
       {
-         // Clean up.
-         mvMagnitudes.erase(TEST_CPID);
-         mvDPOR.erase(TEST_CPID);
       }
    };
 }
