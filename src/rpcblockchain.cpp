@@ -2993,11 +2993,6 @@ UniValue GetJSONVersionReport()
     return results;
 }
 
-std::string SuccessFail(bool f)
-{
-    return f ? "SUCCESS" : "FAIL";
-}
-
 std::string YesNo(bool f)
 {
     return f ? "Yes" : "No";
