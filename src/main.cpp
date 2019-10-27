@@ -28,6 +28,7 @@
 #include "appcache.h"
 #include "contract/contract.h"
 #include "scraper_net.h"
+#include "gridcoin.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/replace.hpp>

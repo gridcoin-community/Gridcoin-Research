@@ -21,7 +21,6 @@
 #include <arpa/inet.h>
 #endif
 
-#include "gridcoin.h"
 class CRequestTracker;
 class CNode;
 class CBlockIndex;
