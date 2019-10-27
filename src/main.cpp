@@ -6197,12 +6197,6 @@ bool ProcessMessages(CNode* pfrom)
     return fOk;
 }
 
-std::string GetLastPORBlockHash(std::string cpid)
-{
-    StructCPID& stCPID = GetInitializedStructCPID2(cpid,mvResearchAge);
-    return stCPID.BlockHash;
-}
-
 StructCPID GetStructCPID()
 {
     StructCPID c;
