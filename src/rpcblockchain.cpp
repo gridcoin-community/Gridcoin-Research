@@ -1087,7 +1087,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
-    int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID, false);
+    int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID);
     std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
     bool hasBeacon = HasActiveBeacon(sCPID);
 

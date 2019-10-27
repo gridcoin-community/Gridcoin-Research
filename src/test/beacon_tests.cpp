@@ -94,7 +94,7 @@ BOOST_FIXTURE_TEST_CASE(GetBeaconPublicKey_Advertising_clearsky, GridcoinBeaconT
 
 BOOST_FIXTURE_TEST_CASE(BeaconTimeStamp_clearsky, GridcoinBeaconTestsFixture)
 {
-    int64_t tstamp= BeaconTimeStamp("b67846ea8547cedd2d61ce492fe14102", false);
+    int64_t tstamp= BeaconTimeStamp("b67846ea8547cedd2d61ce492fe14102");
     BOOST_CHECK_EQUAL( tstamp , beacon1_time);
 }
 

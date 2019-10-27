@@ -6734,7 +6734,7 @@ int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, CBlockIndex* pin
         {
             // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as long as it is within 6 months old and NN mag > 0 and newbie is in the superblock and their lifetime paid is zero
             // Note: If Magnitude is zero, or researcher is not in superblock, or lifetimepaid > 0, this function returns zero
-            int64_t iBeaconTimestamp = BeaconTimeStamp(cpid, true);
+            int64_t iBeaconTimestamp = BeaconTimeStamp(cpid);
             if (IsLockTimeWithinMinutes(iBeaconTimestamp, 60*24*30*6, pindexBest->GetBlockTime()))
             {
                 double dNewbieAccrualAge = ((double)nTime - (double)iBeaconTimestamp) / 86400;

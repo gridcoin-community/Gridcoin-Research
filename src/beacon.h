@@ -71,7 +71,7 @@ int64_t BeaconAgeAdvertiseThreshold();
 void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::string& out_address, std::string& out_publickey);
 std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon);
 std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid);
-int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR);
+int64_t BeaconTimeStamp(const std::string& cpid);
 bool HasActiveBeacon(const std::string& cpid);
 
 bool VerifyBeaconContractTx(const CTransaction& tx);

@@ -131,29 +131,13 @@ std::set<std::string> GetAlternativeBeaconKeys(const std::string& cpid)
     return result;
 }
 
-int64_t BeaconTimeStamp(const std::string& cpid, bool bZeroOutAfterPOR)
+int64_t BeaconTimeStamp(const std::string& cpid)
 {
     if (!IsResearcher(cpid)) {
         return 0;
     }
 
     AssertLockHeld(cs_main);
-
-    const StructCPID& stMagnitude = GetInitializedStructCPID2(cpid, mvMagnitudes);
-    const StructCPID& stLifetime  = GetInitializedStructCPID2(cpid, mvResearchAge);
-
-    // New rules - 12-4-2015 - Pay newbie from the moment beacon was sent as
-    // long as it is within 6 months old and NN mag > 0 and newbie is in the
-    // superblock and their lifetime paid is zero.
-    //
-    // Note: If Magnitude is zero, or the researcher is not in a superblock,
-    // or lifetimepaid > 0, this function returns zero:
-    //
-    if (bZeroOutAfterPOR
-        && (stMagnitude.Magnitude <= 0 || stLifetime.ResearchSubsidy != 0))
-    {
-        return 0;
-    }
 
     const AppCacheEntry& entry = ReadCache(Section::BEACON, cpid);
 
