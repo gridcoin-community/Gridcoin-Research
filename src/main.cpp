@@ -155,7 +155,6 @@ BlockFinder blockFinder;
 
 extern std::string RetrieveMd5(std::string s1);
 
-bool bNetAveragesLoaded = false;
 bool bForceUpdate = false;
 bool fQtActive = false;
 bool bGridcoinGUILoaded = false;

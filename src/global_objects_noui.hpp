@@ -8,7 +8,6 @@
 
 extern int nBoincUtilization;
 extern std::string sRegVer;
-extern bool bNetAveragesLoaded;
 extern bool bForceUpdate;
 extern bool fQtActive;
 extern bool bGridcoinGUILoaded;

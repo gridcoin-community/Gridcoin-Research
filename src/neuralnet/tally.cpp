@@ -1123,8 +1123,6 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
 
     LogPrintf("Tally::LegacyRecount(%" PRId64 ")", pindex->nHeight);
 
-    bNetAveragesLoaded = false; // Disable miner
-
     const int64_t consensus_depth = pindex->nHeight - CONSENSUS_LOOKBACK;
     const int64_t lookback_depth = BLOCKS_PER_DAY * TALLY_DAYS;
 
@@ -1189,6 +1187,4 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     }
 
     g_network_tally.Reset(total_block_subsidy, total_research_subsidy);
-
-    bNetAveragesLoaded = true; // Enable miner
 }

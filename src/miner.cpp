@@ -1064,14 +1064,6 @@ bool IsMiningAllowed(CWallet *pwallet)
         status=false;
     }
 
-    if (!bNetAveragesLoaded)
-    {
-        LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+=_("Net averages not yet loaded; ");
-        if (LessVerbose(100) && IsResearcher(NN::GetPrimaryCpid())) LogPrintf("ResearchMiner:Net averages not yet loaded...");
-        status=false;
-    }
-
     if (vNodes.empty() || (!fTestNet&& IsInitialBlockDownload()) ||
         (!fTestNet&& vNodes.size() < 3)
         )
