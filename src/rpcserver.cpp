@@ -393,7 +393,6 @@ static const CRPCCommand vRPCCommands[] =
     { "superblockaverage",       &superblockaverage,       cat_developer     },
     { "tally",                   &tally,                   cat_developer     },
     { "tallyneural",             &tallyneural,             cat_developer     },
-    { "testnewcontract",         &testnewcontract,         cat_developer     },
     { "versionreport",           &versionreport,           cat_developer     },
     { "writedata",               &writedata,               cat_developer     },
 

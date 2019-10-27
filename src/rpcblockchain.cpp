@@ -2194,38 +2194,6 @@ UniValue tallyneural(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue testnewcontract(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "testnewcontract\n"
-                "\n"
-                "Tests current local neural contract\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string contract = NN::GetInstance()->GetNeuralContract();
-    std::string myNeuralHash = NN::GetInstance()->GetNeuralHash();
-    // Convert to Binary
-    std::string sBin = PackBinarySuperblock(contract);
-    // Hash of current superblock
-    std::string sUnpacked = UnpackBinarySuperblock(sBin);
-    std::string neural_hash = GetQuorumHash(contract);
-    std::string binary_neural_hash = GetQuorumHash(sUnpacked);
-
-    res.pushKV("My Neural Hash", myNeuralHash);
-    res.pushKV("Contract Test", contract);
-    res.pushKV("Contract Length", (int)contract.length());
-    res.pushKV("Binary Length", (int)sBin.length());
-    res.pushKV("Unpacked length", (int)sUnpacked.length());
-    res.pushKV("Unpacked", sUnpacked);
-    res.pushKV("Local Core Quorum Hash", neural_hash);
-    res.pushKV("Binary Local Core Quorum Hash", binary_neural_hash);
-    res.pushKV("Neural Network Live Quorum Hash", myNeuralHash);
-
-    return res;
-}
-
 UniValue versionreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
