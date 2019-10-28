@@ -20,6 +20,8 @@
 #include "contract/contract.h"
 #include "util.h"
 #include "neuralnet/project.h"
+#include "neuralnet/superblock.h"
+#include "neuralnet/cpid.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -29,6 +31,8 @@
 
 #include <univalue.h>
 
+extern CCriticalSection cs_ConvergedScraperStatsCache;
+extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 bool TallyResearchAverages_v9(CBlockIndex* index);
 using namespace std;
@@ -53,6 +57,7 @@ double GRCMagnitudeUnit(int64_t locktime);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
+extern bool ScraperSynchronizeDPOR();
 
 double Round(double d, int place);
 extern double GetSuperblockAvgMag(std::string data,double& out_beacon_count,double& out_participant_count,double& out_average, bool bIgnoreBeacons,int nHeight);
@@ -800,10 +805,11 @@ UniValue rain(const UniValue& params, bool fHelp)
 
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
-    if (fHelp || (params.size() < 1 || params.size() > 2))
+    if (fHelp || (params.size() < 2 || params.size() > 3))
         throw runtime_error(
-                "rainbymagnitude <amount> [message]\n"
+                "rainbymagnitude <whitelisted project> <amount> [message]\n"
                 "\n"
+                "<whitelisted project> --> Required: If a project is specified, rain will be limited to that project. Use * for network-wide.\n"
                 "<amount> --> Required: Specify amount of coints in double to be rained\n"
                 "[message] -> Optional: Provide a message rained to all rainees\n"
                 "\n"
@@ -811,66 +817,84 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    double dAmount = params[0].get_real();
+    std::string sProject = params[0].get_str();
+
+    if (fDebug) LogPrintf("rainbymagnitude: sProject = %s", sProject.c_str());
+
+    double dAmount = params[1].get_real();
 
     if (dAmount <= 0)
         throw runtime_error("Amount must be greater then 0");
 
     std::string sMessage = "";
 
-    if (params.size() > 1)
-        sMessage = params[1].get_str();
+    if (params.size() > 2)
+        sMessage = params[2].get_str();
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // Make sure statistics are up to date. This will do nothing if a convergence has already been cached and is clean.
+    bool bStatsAvail = ScraperSynchronizeDPOR();
 
-    CWalletTx wtx;
-    wtx.mapValue["comment"] = "Rain By Magnitude";
-    std::set<CBitcoinAddress> setAddress;
-    std::vector<std::pair<CScript, int64_t> > vecSend;
+    if (!bStatsAvail)
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, "Wallet has not formed a convergence from statistics information.");
+    }
 
-    wtx.hashBoinc = "<NARR>Rain By Magnitude: " + MakeSafeMessage(sMessage) + "</NARR>";
+    ScraperStats mScraperConvergedStats;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
 
-    // Gather Magnitude data
-//    std::string sSuperblock = ReadCache("superblock", "magnitudes").value;
+        // Make a local copy of the cached stats in the convergence and release the lock.
+        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
+    }
 
-//    if (sSuperblock.empty())
-//        throw runtime_error("Unable to load superblock data");
-
-//    std::vector<std::string> vSuperblock = split(sSuperblock, ";");
+    if (fDebug) LogPrintf("rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
 
     double dTotalAmount = 0;
     int64_t nTotalAmount = 0;
 
-    StructCPID structcpid = mvNetwork["NETWORK"];
+    double dTotalMagnitude = 0;
 
-    // Use total network magnitude here as using 115000 can results in a lower then intended sent amount due to a missing project
-    double dTotalNetworkMagnitude = structcpid.NetworkMagnitude;
+    statsobjecttype rainbymagmode = (sProject == "*" ? statsobjecttype::byCPID : statsobjecttype::byCPIDbyProject);
 
-    for(map<string,StructCPID>::iterator ii=mvMagnitudes.begin(); ii!=mvMagnitudes.end(); ++ii)
+    //------- CPID ----------------CPID address -- Mag
+    std::map<NN::Cpid, std::pair<CBitcoinAddress, double>> mCPIDRain;
+
+    for (const auto& entry : mScraperConvergedStats)
     {
-        StructCPID structMag = mvMagnitudes[(*ii).first];
+        // Only consider entries along the specfied dimension
+        if (entry.first.objecttype == rainbymagmode)
+        {
+            NN::Cpid CPIDKey;
 
-        if (structMag.initialized &&
-            !structMag.cpid.empty() &&
-            structMag.Magnitude > 0
-           )
-    {
+            if (rainbymagmode == statsobjecttype::byCPIDbyProject)
+            {
+                std::vector<std::string> vObjectStatsKey = split(entry.first.objectID, ",");
+
+                // Only process elements that match the specified project if in project level rain.
+                if (vObjectStatsKey[0] != sProject) continue;
+
+                CPIDKey = NN::Cpid::Parse(vObjectStatsKey[1]);
+            }
+            else
+            {
+                CPIDKey = NN::Cpid::Parse(entry.first.objectID);
+            }
+
+            double dCPIDMag = std::round(entry.second.statsvalue.dMag);
+
+            // Zero mag CPIDs do not get paid.
+            if (!dCPIDMag) continue;
+
             // Find beacon grc address
-            std::string scacheContract = ReadCache(Section::BEACON, structMag.cpid).value;
+            std::string scacheContract = ReadCache(Section::BEACON, CPIDKey.ToString()).value;
 
             // Should never occur but we know seg faults can occur in some cases
-            if (scacheContract.empty())
-                continue;
+            if (scacheContract.empty()) continue;
 
             std::string sContract = DecodeBase64(scacheContract);
             std::string sGRCAddress = ExtractValue(sContract, ";", 2);
 
             if (fDebug) LogPrintf("INFO: rainbymagnitude: sGRCaddress = %s.", sGRCAddress);
-
-            double dPayout = (structMag.Magnitude / dTotalNetworkMagnitude) * dAmount;
-
-            if (dPayout <= 0)
-                continue;
 
             CBitcoinAddress address(sGRCAddress);
 
@@ -880,19 +904,49 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
                 continue;
             }
 
+            mCPIDRain[CPIDKey] = std::make_pair(address, dCPIDMag);
+
+            // Increment the accumulated mag. This will be equal to the total mag of the valid CPIDs entered
+            // into the RAIN map, and will be used to normalize the payments.
+            dTotalMagnitude += dCPIDMag;
+
+            if (fDebug) LogPrintf("rainmagnitude: CPID = %s, address = %s, dCPIDMag = %f",
+                                  CPIDKey.ToString(), sGRCAddress, dCPIDMag);
+        }
+    }
+
+    if (mCPIDRain.empty() || !dTotalMagnitude)
+    {
+        throw JSONRPCError(RPC_MISC_ERROR, "No CPIDs to pay and/or total CPID magnitude is zero. This could be caused by an incorrect project specified.");
+    }
+
+    std::vector<std::pair<CScript, int64_t> > vecSend;
+
+    // Setup the payment vector now that the CPID entries and mags have been validated and the total mag is computed.
+    for(const auto& iter : mCPIDRain)
+    {
+        double dCPIDMag = iter.second.second;
+
+            double dPayout = (dCPIDMag / dTotalMagnitude) * dAmount;
+
             dTotalAmount += dPayout;
 
-            setAddress.insert(address);
-
             CScript scriptPubKey;
-            scriptPubKey.SetDestination(address.Get());
+            scriptPubKey.SetDestination(iter.second.first.Get());
 
             int64_t nAmount = roundint64(dPayout * COIN);
             nTotalAmount += nAmount;
 
             vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
-        }
+
+            if (fDebug) LogPrintf("rainmagnitude: address = %s, amount = %f", iter.second.first.ToString(), CoinToDouble(nAmount));
     }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CWalletTx wtx;
+    wtx.mapValue["comment"] = "Rain By Magnitude";
+    wtx.hashBoinc = "<NARR>Rain By Magnitude: " + MakeSafeMessage(sMessage) + "</NARR>";
 
     EnsureWalletIsUnlocked();
     // Check funds
