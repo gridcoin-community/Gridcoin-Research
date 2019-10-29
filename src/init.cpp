@@ -936,7 +936,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         for (auto const& strFile : mapMultiArgs["-loadblock"])
         {
-            FILE *file = fsbridge::fopen(strFile.c_str(), "rb");
+            FILE *file = fsbridge::fopen(strFile, "rb");
             if (file)
                 LoadExternalBlockFile(file);
         }
@@ -947,7 +947,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (filesystem::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file."));
 
-        FILE *file = fsbridge::fopen(pathBootstrap.string().c_str(), "rb");
+        FILE *file = fsbridge::fopen(pathBootstrap, "rb");
         if (file) {
             filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);

@@ -5,6 +5,7 @@
 #ifndef BITCOIN_DB_H
 #define BITCOIN_DB_H
 
+#include "fs.h"
 #include "main.h"
 #include "streams.h"
 
@@ -34,7 +35,7 @@ class CDBEnv
 private:
     bool fDbEnvInit;
     bool fMockDb;
-    boost::filesystem::path pathEnv;
+    fs::path pathEnv;
     std::string strPath;
 
     void EnvShutdown();
@@ -68,7 +69,7 @@ public:
     typedef std::pair<std::vector<unsigned char>, std::vector<unsigned char> > KeyValPair;
     bool Salvage(std::string strFile, bool fAggressive, std::vector<KeyValPair>& vResult);
 
-    bool Open(boost::filesystem::path pathEnv_);
+    bool Open(fs::path pathEnv_);
     void Close();
     void Flush(bool fShutdown);
     void CheckpointLSN(std::string strFile);
@@ -306,19 +307,5 @@ public:
 
     bool static Rewrite(const std::string& strFile, const char* pszSkip = NULL);
 };
-
-
-/** Access to the (IP) address database (peers.dat) */
-/*
-class CAddrDB
-{
-private:
-    boost::filesystem::path pathAddr;
-public:
-    CAddrDB();
-    bool Write(const CAddrMan& addr);
-    bool Read(CAddrMan& addr);
-};
-*/
 
 #endif // BITCOIN_DB_H

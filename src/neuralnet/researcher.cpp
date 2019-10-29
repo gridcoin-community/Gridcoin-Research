@@ -76,8 +76,8 @@ bool ConfiguredForInvestorMode()
 //!
 boost::optional<std::string> ReadClientStateXml()
 {
-    const std::string path = GetBoincDataDir();
-    std::string contents = GetFileContents(path + "client_state.xml");
+    const fs::path path = GetBoincDataDir();
+    std::string contents = GetFileContents(path / "client_state.xml");
 
     if (contents != "-1") {
         return boost::make_optional(std::move(contents));
@@ -86,7 +86,7 @@ boost::optional<std::string> ReadClientStateXml()
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
 
     if (!GetArgument("boincdatadir", "").empty()) {
-        LogPrintf("Could not access configured BOINC data directory %s", path);
+        LogPrintf("Could not access configured BOINC data directory %s", path.string());
     } else {
         LogPrintf(
             "BOINC data directory is not installed in the default location.\n"

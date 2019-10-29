@@ -844,7 +844,7 @@ bool CreateNewConfigFile(std::string boinc_email)
     std::string filename = "gridcoinresearch.conf";
     boost::filesystem::path path = GetDataDir() / filename;
     fsbridge::ofstream myConfig;
-    myConfig.open (path.string().c_str());
+    myConfig.open (path);
     std::string row = "email=" + boinc_email + "\r\n";
     myConfig << row;
     row = "addnode=node.gridcoin.us \r\n";
@@ -883,17 +883,15 @@ void BitcoinGUI::NewUserWizard()
         QString boincemail = "";
         //Typhoon- Check to see if boinc exists in default path - 11-19-2014
 
-        std::string sourcefile = GetBoincDataDir() + "client_state.xml";
-        std::string sout = "";
-        sout = GetFileContents(sourcefile);
+        fs::path sourcefile = GetBoincDataDir() / "client_state.xml";
+        std::string sout = GetFileContents(sourcefile);
         //bool BoincInstalled = true;
         std::string sBoincNarr = "";
         if (sout == "-1")
         {
             LogPrintf("BOINC not installed in default location! ");
             //BoincInstalled=false;
-            std::string nicePath = GetBoincDataDir();
-            sBoincNarr = "BOINC is not installed in the default location " + nicePath + "!  Please set boincdatadir in the gridcoinresearch.conf file to the correct path where the BOINC client_state.xml file resides.";
+            sBoincNarr = "BOINC is not installed in the default location " + sourcefile.string() + "!  Please set boincdatadir in the gridcoinresearch.conf file to the correct path where the BOINC client_state.xml file resides.";
         }
 
         bool ok;
