@@ -288,7 +288,15 @@ std::string HelpMessage()
         "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
         "  -rpcsslcertificatechainfile=<file.cert>  " + _("Server certificate file (default: server.cert)") + "\n" +
         "  -rpcsslprivatekeyfile=<file.pem>         " + _("Server private key (default: server.pem)") + "\n" +
-        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n";
+        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n"
+
+        "\n" + _("Update/Snapshot options:") + "\n"
+        "  -snapshotdownload            " + _("Download and apply latest snapshot") + "\n"
+        "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot zip file") + "\n"
+        "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot sha256sum file") + "\n"
+        "  -disableupdatechecks         " + _("Optional: Disable update checks by wallet") + "\n"
+        "  -updatecheckinterval=<mins>  " + _("Optional: Specify custom update interval checks (Default: 1440 (24 hours))") + "\n"
+        "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks") + "\n";
 
     return strUsage;
 }
@@ -1047,10 +1055,37 @@ bool AppInit2(ThreadHandlerPtr threads)
     }, DUMP_BANS_INTERVAL * 1000);
 
     /** If this is not TestNet we check for updates on startup and daily **/
-    if (!fTestNet)
+    /** If user has opted out of update checks then respect that **/
+    if (!fTestNet && !mapArgs.count("-disableupdatechecks"))
     {
         g_UpdateChecker->CheckForLatestUpdate();
-        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, 24 * 60* 60 * 1000);
+
+        int64_t UpdateCheckInterval = 24 * 60;
+
+        if (mapArgs.count("-updatecheckinterval"))
+        {
+            try
+            {
+                UpdateCheckInterval = GetArg("-updatecheckinterval", 24 * 60);
+                // trivial: Don't allow checks less then 60 minutes apart of update checks to prevent server DDoS (what is a good value)
+                if (UpdateCheckInterval < 60)
+                {
+                    LogPrintf("UpdateChecker: Update check interval too small of %" PRId64 "; Defaulting to 1440 (minutes)", UpdateCheckInterval);
+
+                    UpdateCheckInterval = 24 * 60;
+                }
+            }
+
+            catch (const std::exception& ex)
+            {
+                // Tell them the exception and what they had put in place
+                LogPrintf("UpdateChecker: Exception occured while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 1440 (minutes)", ex.what(), GetArgument("-updatecheckinterval", ""));
+
+                UpdateCheckInterval = 24 * 60;
+            }
+        }
+
+        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 1000);
     }
 
     return true;

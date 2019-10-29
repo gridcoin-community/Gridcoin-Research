@@ -33,7 +33,7 @@ void Upgrade::CheckForLatestUpdate()
 
     // We receive the response and it's in a json reply
     UniValue Response(UniValue::VOBJ);
-    std::string VersionResponse = VersionPull.GetLatestVersionResponse("https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest");
+    std::string VersionResponse = VersionPull.GetLatestVersionResponse();
 
     if (VersionResponse.empty())
     {
@@ -206,7 +206,7 @@ void Upgrade::DownloadSnapshot()
      // Download the snapshot.zip
     Http HTTPHandler(false);
 
-    HTTPHandler.DownloadSnapshot("https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip", GetDataDir().string() + "/snapshot.zip");
+    HTTPHandler.DownloadSnapshot();
 
     return;
 }
@@ -217,7 +217,7 @@ bool Upgrade::VerifySHA256SUM()
 
     std::string ServerSHA256SUM = "";
 
-    ServerSHA256SUM = HTTPHandler.GetSnapshotSHA256("https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip.sha256");
+    ServerSHA256SUM = HTTPHandler.GetSnapshotSHA256();
 
     if (ServerSHA256SUM.empty())
     {
@@ -231,11 +231,11 @@ bool Upgrade::VerifySHA256SUM()
     SHA256_CTX ctx;
     SHA256_Init(&ctx);
 
-    std::string fileloc = GetDataDir().string() + "/snapshot.zip";
+    boost::filesystem::path fileloc = GetDataDir() / "snapshot.zip";
     unsigned char *buffer[32768];
     int bytesread = 0;
 
-    FILE *file = fsbridge::fopen(fileloc.c_str(), "rb");
+    FILE *file = fsbridge::fopen(fileloc, "rb");
 
     if (!file)
     {
@@ -299,9 +299,13 @@ bool Upgrade::CleanupBlockchainData()
                 size_t FileLoc = Iter->path().filename().string().find("blk");
 
                 if (FileLoc != std::string::npos)
-                    if (!boost::filesystem::remove(*Iter))
-                        return false;
-
+                {
+                    std::string filetocheck = Iter->path().filename().string();
+                    // Check it ends with .dat and starts with blk
+                    if (filetocheck.substr(0, 3) == "blk" && filetocheck.substr(filetocheck.length() - 4, 4) == ".dat")
+                        if (!boost::filesystem::remove(*Iter))
+                            return false;
+                }
                 continue;
             }
         }
@@ -319,14 +323,14 @@ bool Upgrade::CleanupBlockchainData()
 
 bool Upgrade::ExtractSnapshot()
 {
-    std::string ArchiveFileString = GetDataDir().string() + "/snapshot.zip";
+    std::string ArchiveFileString = GetDataDir().string() +  "/snapshot.zip";
     const char* ArchiveFile = ArchiveFileString.c_str();
     boost::filesystem::path ExtractPath = GetDataDir();
     struct zip* ZipArchive;
     struct zip_file* ZipFile;
     struct zip_stat ZipStat;
     char Buf[1024*1024];
-    int i, j, err, len, fd;
+    int i, j, err, len;
     int64_t entries;
     long long totaluncompressedsize = 0;
     long long currentuncompressedsize = 0;
@@ -382,9 +386,9 @@ bool Upgrade::ExtractSnapshot()
                         return false;
                     }
 
-                    std::string ExtractFileString = ExtractPath.string() + "/" + ZipStat.name;
+                    boost::filesystem::path ExtractFileString = ExtractPath / ZipStat.name;
 
-                    FILE* ExtractFile = fsbridge::fopen(ExtractFileString.c_str(), "wb");
+                    FILE* ExtractFile = fsbridge::fopen(ExtractFileString, "wb");
 
                     if (!ExtractFile)
                     {
