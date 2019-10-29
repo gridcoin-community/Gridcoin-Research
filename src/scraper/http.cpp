@@ -231,10 +231,11 @@ std::string Http::GetEtag(
         _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 }
 
-std::string Http::GetLatestVersionResponse(const std::string& url)
+std::string Http::GetLatestVersionResponse()
 {
     std::string buffer;
     std::string header;
+    std::string url = GetArgument("-updatecheckurl", "https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest");
 
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Accept: */*");
@@ -250,7 +251,7 @@ std::string Http::GetLatestVersionResponse(const std::string& url)
     CURLcode res = curl_easy_perform(curl.get());
 
     if (res > 0)
-        throw std::runtime_error(tfm::format("Failed to get ETag for URL %s: %s", url, curl_easy_strerror(res)));
+        throw std::runtime_error(tfm::format("Failed to get version reponse from URL %s: %s", url, curl_easy_strerror(res)));
 
     curl_slist_free_all(headers);
 
@@ -263,18 +264,20 @@ std::string Http::GetLatestVersionResponse(const std::string& url)
     return buffer;
 }
 
-void Http::DownloadSnapshot(
-        const std::string &url,
-        const std::string &destination)
+void Http::DownloadSnapshot()
 {
-    ScopedFile fp(fsbridge::fopen(destination.c_str(), "wb"), &fclose);
+    std::string url = GetArgument("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+
+    boost::filesystem::path destination = GetDataDir() / "snapshot.zip";
+
+    ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
 
     if(!fp)
     {
         DownloadStatus.SnapshotDownloadFailed = true;
 
         throw std::runtime_error(
-                tfm::format("Snapshot Downloader: Error opening target %s: %s (%d)", destination, strerror(errno), errno));
+                tfm::format("Snapshot Downloader: Error opening target %s: %s (%d)", destination.string(), strerror(errno), errno));
     }
     std::string buffer;
     std::string header;
@@ -335,10 +338,11 @@ void Http::DownloadSnapshot(
     return;
 }
 
-std::string Http::GetSnapshotSHA256(const std::string& url)
+std::string Http::GetSnapshotSHA256()
 {
     std::string buffer;
     std::string header;
+    std::string url = GetArgument("-snapshotsha256url", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip.sha256");
 
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Accept: */*");

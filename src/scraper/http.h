@@ -90,36 +90,27 @@ public:
     //!
     //! Downloads the json data from github that contains information about latest releases.
     //!
-    //! \param url URL to fetch json from.
     //! \throws HttpException on invalid server response.
     //!
-    std::string GetLatestVersionResponse(
-            const std::string& url);
+    std::string GetLatestVersionResponse();
     //!
     //! \brief Download Snapshot with progress updates.
     //!
     //! Downloads the snapshot from the latest snapshot.zip hosted on download.gridcoin.us.
     //!
-    //! \param url URL of the snapshot.zip.
-    //! \param destination Destination of the snapshot file.
-    //!
     //! \throws HttpException on invalid server response.
     //!
-    void DownloadSnapshot(
-            const std::string& url,
-            const std::string& destination);
+    void DownloadSnapshot();
     //!
     //! \brief Fetch the sha256sum from snapshot server.
     //!
     //! Fetches the snapshot sha256 from snapshot server.
     //!
-    //! \param url URL of the snapshot.zip.sha256
-    //!
     //! \return the sha256sum from file
     //!
     //! \throws HttpException on invalid server response.
     //!
-    std::string GetSnapshotSHA256(const std::string& url);
+    std::string GetSnapshotSHA256();
 
 private:
     void EvaluateResponse(int code, const std::string& url);
