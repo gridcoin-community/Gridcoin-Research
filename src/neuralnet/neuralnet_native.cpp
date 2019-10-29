@@ -5,8 +5,6 @@
 #include <string>
 
 extern std::string GetArgument(const std::string& arg, const std::string& defaultvalue);
-extern std::string ScraperGetNeuralContract(bool bStoreConvergedStats = false, bool bContractDirectFromStatsUpdate = false);
-extern std::string ScraperGetNeuralHash();
 extern bool ScraperSynchronizeDPOR();
 extern std::string ExplainMagnitude(std::string sCPID);
 
@@ -28,7 +26,7 @@ std::string NeuralNetNative::GetNeuralVersion()
 
 std::string NeuralNetNative::GetNeuralHash()
 {
-    return ScraperGetNeuralHash();
+    return GetSuperblockHash().ToString();
 }
 
 QuorumHash NeuralNetNative::GetSuperblockHash()
@@ -38,7 +36,7 @@ QuorumHash NeuralNetNative::GetSuperblockHash()
 
 std::string NeuralNetNative::GetNeuralContract()
 {
-    return ScraperGetNeuralContract(false, false);
+    return GetSuperblockContract().PackLegacy();
 }
 
 Superblock NeuralNetNative::GetSuperblockContract()

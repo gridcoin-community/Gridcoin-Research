@@ -267,8 +267,6 @@ int64_t GetProofOfStakeReward(
 bool OutOfSyncByAge();
 std::string GetQuorumHash(const std::string& data);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-std::string PackBinarySuperblock(std::string sBlock);
-std::string UnpackBinarySuperblock(std::string sBlock);
 bool IsSuperBlock(CBlockIndex* pIndex);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);

@@ -137,9 +137,6 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests();
 bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifest);
 bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& projectWhitelist,
                                                 mmCSManifestsBinnedByScraper& mMapCSManifestsBinnedByScraper, ConvergedManifest& StructConvergedManifest);
-std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats);
-// Overloaded. See alternative in scraper.h.
-std::string ScraperGetNeuralHash(std::string sNeuralContract);
 
 bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist);
 bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist);
@@ -151,13 +148,6 @@ void AuthenticationETagClear();
 
 extern void MilliSleep(int64_t n);
 extern BeaconConsensus GetConsensusBeaconList();
-
-// For compatibility this will be used for the contract hashing to allow easy
-// roll-in of the new NN, because the Quorum functions look for the empty string
-// hash value and that will not be invariant if a hash function switch is done now.
-extern std::string GetQuorumHash(const std::string& data);
-extern std::string UnpackBinarySuperblock(std::string sBlock);
-extern std::string PackBinarySuperblock(std::string sBlock);
 
 /**********************
 * Scraper Logger      *
@@ -947,7 +937,7 @@ void Scraper(bool bSingleShot)
             }
         }
 
-        // Don't do this if called with singleshot, because ScraperGetNeuralContract will be done afterwards by
+        // Don't do this if called with singleshot, because ScraperGetSuperblockContract will be done afterwards by
         // the function that called the singleshot.
         if (!bSingleShot)
         {
@@ -1051,16 +1041,16 @@ bool ScraperHousekeeping()
 {
     // Periodically generate converged manifests and generate SB core and "contract"
     // This will probably be reduced to the commented out call as we near final testing,
-    // because ScraperGetNeuralContract(false) is called from the neuralnet native interface
+    // because ScraperGetSuperblockContract(false) is called from the neuralnet native interface
     // with the boolean false, meaning don't store the stats.
     // Lock both cs_Scraper and cs_StructScraperFileManifest.
 
-    std::string sSBCoreData;
+    NN::Superblock superblock;
 
     {
         LOCK2(cs_Scraper, cs_StructScraperFileManifest);
 
-        sSBCoreData = ScraperGetNeuralContract(true, false);
+        superblock = ScraperGetSuperblockContract(true, false);
     }
 
     {
@@ -1078,7 +1068,7 @@ bool ScraperHousekeeping()
              + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
     }
 
-    if (fDebug3 && !sSBCoreData.empty())
+    if (fDebug3 && !superblock.WellFormed())
     {
         UniValue input_params(UniValue::VARR);
 
@@ -1092,7 +1082,7 @@ bool ScraperHousekeeping()
     }
 
     // Show this node's contract hash in the log.
-    _log(logattribute::INFO, "ScraperHousekeeping", "neural contract (sSBCoreData) hash = " + ScraperGetNeuralHash(sSBCoreData));
+    _log(logattribute::INFO, "ScraperHousekeeping", "superblock contract hash = " + superblock.GetHash().ToString());
 
     // Visibility into the Quorum map...
     if (fDebug3)
@@ -3191,7 +3181,7 @@ std::string ExplainMagnitude(std::string sCPID)
 
     if (bConvergenceUpdateNeeded)
         // Don't need the output but will use the global cache, which will be updated.
-        ScraperGetNeuralContract(false, false);
+        ScraperGetSuperblockContract(false, false);
 
     // A purposeful copy here to avoid a long-term lock. May want to change to direct reference
     // and allow locking during the output.
@@ -3252,7 +3242,7 @@ std::string ExplainMagnitude(std::string sCPID)
     // "Signature"
     // The magic version number of 430 from .NET is there for compatibility with the old NN protocol.
     out.append("NN Host Version: 430, ");
-    out.append("NeuralHash: " + ConvergedScraperStatsCache.sContractHash + ", ");
+    out.append("NeuralHash: " + ConvergedScraperStatsCache.NewFormatSuperblock.GetHash().ToString() + ", ");
     out.append("SignatureCPID: " + NN::GetPrimaryCpid() + ", ");
     out.append("Time: " + DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()) + "<ROW>");
 
@@ -4484,253 +4474,6 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
 *    Neural Network    *
 ************************/
 
-
-std::string GenerateSBCoreDataFromScraperStats(ScraperStats& mScraperStats)
-{
-    stringbuilder xmlout;
-
-    xmlout.append("<AVERAGES>");
-
-    // The <AVERAGES> in the SB core data are actually the project level
-    for (auto const& entry : mScraperStats)
-    {
-        if (entry.first.objecttype == statsobjecttype::byProject)
-        {
-            xmlout.append(entry.first.objectID);
-            xmlout.append(",");
-            xmlout.fixeddoubleappend(entry.second.statsvalue.dAvgRAC, 0);
-            xmlout.append(",");
-            xmlout.fixeddoubleappend(entry.second.statsvalue.dRAC, 0);
-            xmlout.append(";");
-        }
-    }
-
-    // Find the single network wide NN entry and put in string.
-    ScraperObjectStatsKey StatsKey;
-    StatsKey.objecttype = statsobjecttype::NetworkWide;
-    StatsKey.objectID = "";
-
-    const auto iter = mScraperStats.find(StatsKey);
-
-    xmlout.append("NeuralNetwork");
-    xmlout.append(",");
-    xmlout.fixeddoubleappend(iter->second.statsvalue.dAvgRAC, 0);
-    xmlout.append(",");
-    xmlout.fixeddoubleappend(iter->second.statsvalue.dRAC, 0);
-    xmlout.append(";");
-
-    xmlout.append("</AVERAGES>");
-
-    xmlout.append("<QUOTES>btc,0;grc,0;</QUOTES>");
-
-    xmlout.append("<MAGNITUDES>");
-
-    // The <MAGNITUDES> in the SB core data are actually at the CPID level.
-    unsigned int nZeros = 0;
-    for (auto const& entry : mScraperStats)
-    {
-        if (entry.first.objecttype == statsobjecttype::byCPID)
-        {
-            // If the magnitude entry is zero suppress the CPID and increment the zero counter.
-            if (std::round(entry.second.statsvalue.dMag) > 0)
-            {
-                xmlout.append(entry.first.objectID);
-                xmlout.append(",");
-                xmlout.fixeddoubleappend(entry.second.statsvalue.dMag, 0);
-                xmlout.append(";");
-            }
-            else
-                nZeros++;
-        }
-    }
-
-    // Put all of the zero CPID mags at the end with 15,0; entries.
-    // TODO: This should be replaced with a <ZERO>X</ZERO> block as in the packed version
-    // at the next mandatory after the new NN rollout. This will require a change to the packer conditioned on the bv.
-    for (unsigned int i = 1; i <= nZeros; i++)
-        xmlout.append("0,15;");
-
-    xmlout.append("</MAGNITUDES>");
-
-    std::string sSBCoreData = xmlout.value();
-
-    _log(logattribute::INFO, "GenerateSBCoreDataFromScraperStats", "Generated SB Core Data.");
-
-    return sSBCoreData;
-}
-
-
-std::string ScraperGetNeuralContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
-{
-    // NOTE - OutOfSyncByAge calls PreviousBlockAge(), which takes a lock on cs_main. This is likely a deadlock culprit if called from here
-    // and the scraper or neuralnet loop nearly simultaneously. So we use an atomic flag updated by the scraper or neuralnet loop.
-    // If not in sync then immediately bail with a empty string.
-    if (fOutOfSyncByAge) return std::string();
-
-    // Check the age of the ConvergedScraperStats cache. If less than nScraperSleep / 1000 old (for seconds) or clean, then simply report back the cache contents.
-    // This prevents the relatively heavyweight stats computations from running too often. The time here may not exactly align with
-    // the scraper loop if it is running, but that is ok. The scraper loop updates the time in the cache too.
-    bool bConvergenceUpdateNeeded = true;
-    {
-        LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
-
-        // If the cache is less than nScraperSleep in minutes old OR not dirty...
-        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
-            bConvergenceUpdateNeeded = false;
-
-        // End LOCK(cs_ConvergedScraperStatsCache)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
-    }
-
-    ConvergedManifest StructConvergedManifest;
-    BeaconMap mBeaconMap;
-    std::string sSBCoreData;
-
-    // This is here to do new SB testing...
-    NN::Superblock superblock;
-
-    // if bConvergenceUpdate is needed, and...
-    // If bContractDirectFromStatsUpdate is set to true, this means that this is being called from
-    // ScraperSynchronizeDPOR() in fallback mode to force a single shot update of the stats files and
-    // direct generation of the contract from the single shot run. This will return immediately with a blank if
-    // IsScraperAuthorized() evaluates to false, because that means that by network policy, no non-scraper
-    // stats downloads are allowed by unauthorized scraper nodes.
-    // (If bConvergenceUpdate is not needed, then the scraper is operating by convergence already...
-    if (bConvergenceUpdateNeeded)
-    {
-        if (!bContractDirectFromStatsUpdate)
-        {
-            // ScraperConstructConvergedManifest also culls old CScraperManifests. If no convergence, then
-            // you can't make a SB core and you can't make a contract, so return the empty string. Also check
-            // to make sure the BeaconMap has been populated properly.
-            if (ScraperConstructConvergedManifest(StructConvergedManifest) && LoadBeaconListFromConvergedManifest(StructConvergedManifest, mBeaconMap))
-            {
-                ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
-
-                _log(logattribute::INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
-
-                if (bStoreConvergedStats)
-                {
-                    if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                        _log(logattribute::ERR, "ScraperGetNeuralContract", "StoreStats error occurred");
-                    else
-                        _log(logattribute::INFO, "ScraperGetNeuralContract", "Stored converged stats.");
-                }
-
-                // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
-                // lock before and do a direct assignment, but that will lock the cache for the whole stats computation,
-                // which is not really necessary.
-                {
-                    LOCK(cs_ConvergedScraperStatsCache);
-                    if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
-
-                    ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
-
-                    std::string sSBCoreDataPrev = ConvergedScraperStatsCache.sContract;
-
-                    sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperConvergedStats);
-
-                    ConvergedScraperStatsCache.mScraperConvergedStats = mScraperConvergedStats;
-                    ConvergedScraperStatsCache.nTime = GetAdjustedTime();
-                    ConvergedScraperStatsCache.sContractHash = ScraperGetNeuralHash(sSBCoreData);
-                    ConvergedScraperStatsCache.sContract = sSBCoreData;
-                    ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
-
-                    // This is here to do new SB testing...
-                    superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
-                    ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
-
-                    // Mark the cache clean, because it was just updated.
-                    ConvergedScraperStatsCache.bClean = true;
-
-                    // Signal UI of SBContract status
-                    if (!sSBCoreData.empty())
-                    {
-                        if (!sSBCoreDataPrev.empty())
-                        {
-                            // If the current is not empty and the previous is not empty and not the same, then there is an updated contract.
-                            if (sSBCoreData != sSBCoreDataPrev)
-                                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
-                        }
-                        else
-                            // If the previous was empty and the current is not empty, then there is a new contract.
-                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
-                    }
-                    else
-                        if (!sSBCoreDataPrev.empty())
-                            // If the current is empty and the previous was not empty, then the contract has been deleted.
-                            uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED, {});
-
-                    // End LOCK(cs_ConvergedScraperStatsCache)
-                    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
-                }
-
-
-                if (fDebug)
-                    _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from convergence \n" + sSBCoreData);
-                else
-                    _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from convergence");
-
-                return sSBCoreData;
-            }
-            else
-                return std::string();
-        }
-        // If bContractDirectFromStatsUpdate is true, then this is the single shot pass.
-        else if (IsScraperAuthorized())
-        {
-            // This part is the "second trip through from ScraperSynchronizeDPOR() as a fallback, if
-            // authorized.
-
-            // Do a single shot through the main scraper function to update all of the files.
-            ScraperSingleShot();
-
-            // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
-            // appropriate for the single shot.
-            ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
-            sSBCoreData = GenerateSBCoreDataFromScraperStats(mScraperStats);
-
-            // Signal the UI there is a contract.
-            if(!sSBCoreData.empty())
-                uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
-
-            if (fDebug)
-                _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from single shot\n" + sSBCoreData);
-            else
-                _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from single shot");
-
-            return sSBCoreData;
-        }
-    }
-    else
-    {
-        // If we are here, we are using cached information.
-
-        LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
-
-        sSBCoreData = ConvergedScraperStatsCache.sContract;
-
-        // Signal the UI of the "updated" contract. This needs to be sent because the scraper loop could
-        // have changed the state to something else, even though an update to the contract really hasn't happened,
-        // because it is cached.
-        uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
-
-        if (fDebug)
-            _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from cached converged stats\n" + sSBCoreData);
-        else
-            _log(logattribute::INFO, "ScraperGetNeuralContract", "SB Core Data from cached converged stats");
-
-        // End LOCK(cs_ConvergedScraperStatsCache)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
-
-    }
-
-    return sSBCoreData;
-}
-
-// This is for SB version 2+ (bv11+).
 NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate)
 {
     NN::Superblock empty_superblock;
@@ -4778,14 +4521,14 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
             {
                 ScraperStats mScraperConvergedStats = GetScraperStatsByConvergedManifest(StructConvergedManifest);
 
-                _log(logattribute::INFO, "ScraperGetNeuralContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
+                _log(logattribute::INFO, "ScraperGetSuperblockContract", "mScraperStats has the following number of elements: " + std::to_string(mScraperConvergedStats.size()));
 
                 if (bStoreConvergedStats)
                 {
                     if (!StoreStats(pathScraper / "ConvergedStats.csv.gz", mScraperConvergedStats))
-                        _log(logattribute::ERR, "ScraperGetNeuralContract", "StoreStats error occurred");
+                        _log(logattribute::ERR, "ScraperGetSuperblockContract", "StoreStats error occurred");
                     else
-                        _log(logattribute::INFO, "ScraperGetNeuralContract", "Stored converged stats.");
+                        _log(logattribute::INFO, "ScraperGetSuperblockContract", "Stored converged stats.");
                 }
 
                 // I know this involves a copy operation, but it minimizes the lock time on the cache... we may want to
@@ -4832,7 +4575,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                 }
 
 
-                _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object generated from convergence");
+                _log(logattribute::INFO, "ScraperGetSuperblockContract", "Superblock object generated from convergence");
 
                 return superblock;
             }
@@ -4857,7 +4600,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
             if(superblock.WellFormed())
                 uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_NEW, {});
 
-            _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object generated from single shot");
+            _log(logattribute::INFO, "ScraperGetSuperblockContract", "Superblock object generated from single shot");
 
             return superblock;
         }
@@ -4876,7 +4619,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
         // because it is cached.
         uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_UPDATED, {});
 
-        _log(logattribute::INFO, "ScraperGetNeuralContract", "Superblock object from cached converged stats");
+        _log(logattribute::INFO, "ScraperGetSuperblockContract", "Superblock object from cached converged stats");
 
         // End LOCK(cs_ConvergedScraperStatsCache)
         if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
@@ -4886,58 +4629,19 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
     return superblock;
 }
 
-
-// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes.
-std::string ScraperGetNeuralHash()
-{
-    std::string sNeuralContract = ScraperGetNeuralContract(false, false);
-
-    std::string sHash;
-
-    sHash = GetQuorumHash(sNeuralContract);
-
-    return sHash;
-}
-
-
-// Note: This is simply a wrapper around GetQuorumHash in main.cpp for compatibility purposes.
-std::string ScraperGetNeuralHash(std::string sNeuralContract)
-{
-    std::string sHash;
-
-    sHash = GetQuorumHash(sNeuralContract);
-
-    return sHash;
-}
-
 bool ScraperSynchronizeDPOR()
 {
-    bool bStatus = false;
-
     // First check to see if there is already a scraper convergence and a contract formable. If so, then no update needed.
     // If the appropriate scrapers are running and the node is in communication, then this is most likely going to be
     // the path, which means very little work.
-    std::string sNeuralContract = ScraperGetNeuralContract(false, false);
-
-    if (sNeuralContract != "")
-    {
-        bStatus = true;
-        // Return immediately here if successful, otherwise fallback to direct download if authorized.
-        return bStatus;
-    }
-    else
-    {
-        // Try again with the bool bContractDirectFromStatsUpdate set to true. This will cause a one-shot sync of the
-        // Scraper file manifest to the stats sites and then a construction of the contract directly from resultant
-        // mScraperStats, if the network policy allows one-off individual node stats downloads (i.e. IsScraperAuthorized()
-        // is true). If IsScraperAuthorized() is false, then this will do nothing but return an empty string.
-        std::string sNeuralContract = ScraperGetNeuralContract(false, true);
-    }
-
-    if (sNeuralContract != "")
-        bStatus = true;
-
-    return bStatus;
+    //
+    // Try again with the bool bContractDirectFromStatsUpdate set to true. This will cause a one-shot sync of the
+    // Scraper file manifest to the stats sites and then a construction of the contract directly from resultant
+    // mScraperStats, if the network policy allows one-off individual node stats downloads (i.e. IsScraperAuthorized()
+    // is true). If IsScraperAuthorized() is false, then this will do nothing but return an empty string.
+    //
+    return ScraperGetSuperblockContract(false, false).WellFormed()
+        || ScraperGetSuperblockContract(false, true).WellFormed();
 }
 
 //!
@@ -4994,23 +4698,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         // the convergence and populating the cache with the latest. If the cache has
         // already been updated via the housekeeping loop and is clean, this will be trivial.
 
-        NN::Superblock CurrentNodeSuperblock;
-
-        if (false /* NewFormatSuperblock.m_version >= 2 */)
-        {
-            CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
-        }
-        else
-        {
-            // Don't need the string return (old contract). Instead pick up the cached SB, which if updated would be
-            // the return value for ScraperGetSuperblockContract post bv11.
-            // This is really only for testing pre-bv11.
-            ScraperGetNeuralContract(true, false);
-
-            LOCK(cs_ConvergedScraperStatsCache);
-
-            CurrentNodeSuperblock = ConvergedScraperStatsCache.NewFormatSuperblock;
-        }
+        NN::Superblock CurrentNodeSuperblock = ScraperGetSuperblockContract(true, false);
 
         // If there is no superblock returned, the node is either out of sync, or has not
         // received enough manifests and parts to calculate a convergence. Return unknown.
@@ -5646,7 +5334,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        if (ConvergedScraperStatsCache.sContract.empty())
+        if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
             throw std::runtime_error(
                     "Wait until a convergence is formed.\n"
                     );
@@ -5665,7 +5353,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        sSBCoreData = ConvergedScraperStatsCache.sContract;
+        sSBCoreData = UnpackBinarySuperblock(ConvergedScraperStatsCache.NewFormatSuperblock.PackLegacy());
     }
 
     std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
