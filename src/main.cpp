@@ -1671,21 +1671,14 @@ int64_t GetProofOfStakeReward(
     uint64_t nCoinAge,
     int64_t nFees,
     const NN::MiningId mining_id,
-    bool VerifyingBlock,
-    int VerificationPhase,
     int64_t nTime,
-    CBlockIndex* pindexLast,
+    const CBlockIndex* pindexLast,
     double& OUT_POR,
-    double& OUT_INTEREST,
-    double& dAccrualAge,
-    double& dMagnitudeUnit,
-    double& AvgMagnitude)
+    double& OUT_INTEREST)
 {
     // Research Age Subsidy - PROD
     int64_t nBoinc = 0;
     int64_t nInterest = 0;
-
-    dMagnitudeUnit = NN::Tally::GetMagnitudeUnit(nTime);
 
     // Tally doesn't calculate research age averages until block version 9:
     //
@@ -1695,18 +1688,8 @@ int64_t GetProofOfStakeReward(
             const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexLast);
 
             nBoinc = calc->Accrual(account);
-            dAccrualAge = calc->AccrualDays(account);
-            AvgMagnitude = calc->AverageMagnitude(account);
-        } else {
-            dAccrualAge = 0.0;
-            AvgMagnitude = 0.0;
         }
     }
-
-    // TestNet: For any subsidy < 30 day duration, ensure 100% that we have a start magnitude and an end magnitude, otherwise make subsidy 0 : PASS
-    // TestNet: For any subsidy > 30 day duration, ensure 100% that we have a midpoint magnitude in Every Period, otherwise, make subsidy 0 : In Test as of 09-06-2015
-    // TestNet: Ensure no magnitudes are out of bounds to ensure we do not generate an insane payment : PASS (Lifetime PPD takes care of this)
-    // TestNet: Any subsidy with a duration wider than 6 months should not be paid : PASS
 
     /* Constant Block Reward */
     if (pindexLast->nVersion>=10)
@@ -1837,9 +1820,6 @@ bool CheckProofOfResearch(
     //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
     double OUT_POR = 0;
     double OUT_INTEREST = 0;
-    double dAccrualAge = 0;
-    double dMagnitudeUnit = 0;
-    double dAvgMagnitude = 0;
     int64_t nCoinAge = 0;
     int64_t nFees = 0;
 
@@ -1861,8 +1841,8 @@ bool CheckProofOfResearch(
              claim.m_mining_id.ToString());
     }
 
-    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, true, 1, block.nTime,
-                                                        pindexBest, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, block.nTime,
+                                                        pindexBest, OUT_POR, OUT_INTEREST);
 
     if(!IsV9Enabled_Tally(pindexPrev->nHeight))
     {
@@ -1873,8 +1853,8 @@ bool CheckProofOfResearch(
                                 claim.m_research_subsidy, OUT_POR, claim.m_mining_id.ToString());
 
             NN::Tally::LegacyRecount(pindexBest);
-            nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, true, 2, block.nTime,
-                                                        pindexBest, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+            nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, block.nTime,
+                                                        pindexBest, OUT_POR, OUT_INTEREST);
         }
     }
     (void)nCalculatedResearch;
@@ -2560,11 +2540,9 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         {
             double OUT_POR = 0;
             double OUT_INTEREST_OWED = 0;
-            double unused;
             int64_t calculatedResearchReward = GetProofOfStakeReward(
-                        nCoinAge, nFees, claim.m_mining_id, true, 1, nTime,
-                        pindex,
-                        OUT_POR, OUT_INTEREST_OWED, unused, unused, unused);
+                        nCoinAge, nFees, claim.m_mining_id, nTime,
+                        pindex, OUT_POR, OUT_INTEREST_OWED);
 
             if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
             {
@@ -2612,13 +2590,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     {
         double OUT_POR = 0;
         double OUT_INTEREST = 0;
-        double dAccrualAge = 0;
-        double dMagnitudeUnit = 0;
-        double dAvgMagnitude = 0;
 
         // ResearchAge 1:
-        GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, true, 1, nTime,
-                              pindex, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+        GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, nTime,
+                              pindex, OUT_POR, OUT_INTEREST);
+
         if (claim.HasResearchReward())
         {
             //ResearchAge: Since the best block may increment before the RA is
@@ -2652,7 +2628,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 // 2018 02 04 - Brod - Move cpid check here for better effect
                 /* Only signature check is sufficient here, but kiss and
                             call the function. The height is of previous block. */
-                if (pindex->nHeight > nGrandfather && !NN::VerifyClaim(claim, pindex->pprev->GetBlockHash()))
+                if (!NN::VerifyClaim(claim, pindex->pprev->GetBlockHash()))
                 {
                     if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
                         return DoS(20, error(
@@ -2665,8 +2641,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
                 if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
                 {
-                    GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, true, 2, nTime,
-                                          pindex, OUT_POR, OUT_INTEREST, dAccrualAge, dMagnitudeUnit, dAvgMagnitude);
+                    GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, nTime,
+                                          pindex, OUT_POR, OUT_INTEREST);
 
                     if (fTestNet && pindex->nVersion <= 9 && !is_claim_valid(nStakeReward, 0, OUT_INTEREST, nFees))
                     {

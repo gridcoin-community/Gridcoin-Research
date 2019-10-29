@@ -254,9 +254,15 @@ bool CheckProofOfResearch(
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
-int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, const NN::MiningId mining_id,
-	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
-	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+int64_t GetProofOfStakeReward(
+    uint64_t nCoinAge,
+    int64_t nFees,
+    const NN::MiningId mining_id,
+    int64_t nTime,
+    const CBlockIndex* pindexLast,
+    double& OUT_POR,
+    double& OUT_INTEREST);
 
 bool OutOfSyncByAge();
 std::string GetQuorumHash(const std::string& data);
