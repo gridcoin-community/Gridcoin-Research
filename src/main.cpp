@@ -584,6 +584,19 @@ void GetGlobalStatus()
             sWeight = sWeight.substr(0,13) + "E" + RoundToString((double)sWeight.length()-13,0);
         }
 
+        std::string current_poll;
+
+        try
+        {
+            LOCK(cs_main);
+            current_poll = GetCurrentOverviewTabPoll();
+        }
+        catch (std::exception &e)
+        {
+            current_poll = _("No current polls");
+            LogPrintf("Error obtaining last poll: %s", e.what());
+        }
+
         // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
         // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
         double dETTS = GetEstimatedTimetoStake()/86400.0;
@@ -598,15 +611,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
         GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * GRCMagnitudeUnit(GetAdjustedTime()),2);
         GlobalStatusStruct.cpid = GlobalCPUMiningCPID.cpid;
-        try
-        {
-            GlobalStatusStruct.poll = GetCurrentOverviewTabPoll();
-        }
-        catch (std::exception &e)
-        {
-            GlobalStatusStruct.poll = _("No current polls");
-            LogPrintf("Error obtaining last poll: %s", e.what());
-        }
+        GlobalStatusStruct.poll = std::move(current_poll);
 
         GlobalStatusStruct.status = msMiningErrors;
 
@@ -649,7 +654,7 @@ void GetGlobalStatus()
 
 std::string GetCurrentOverviewTabPoll()
 {
-    AssertLockHeld(MinerStatus.lock);
+    AssertLockHeld(cs_main);
 
     // The global msPoll variable contains the poll most-recently published to
     // the network. If it hasn't expired, return the title of this poll:

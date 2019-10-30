@@ -25,11 +25,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
             "\n"
             "Returns an object containing mining-related information\n");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    uint64_t nWeight = 0;
-    int64_t nTime= GetAdjustedTime();
-    pwalletMain->GetStakeWeight(nWeight);
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
     UniValue weight(UniValue::VOBJ);
@@ -39,16 +34,26 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     UniValue sidestakingalloc(UniValue::VOBJ);
     UniValue vsidestakingalloc(UniValue::VARR);
 
-    double nNetworkWeight = GetEstimatedNetworkWeight();
-    double nNetworkValue = nNetworkWeight / 80.0;
-    obj.pushKV("blocks",        nBestHeight);
-    diff.pushKV("proof-of-stake",    GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    int64_t nTime = GetAdjustedTime();
+    uint64_t nWeight = 0;
+    double nNetworkWeight = 0;
+    double nDifficulty = 0;
+    uint64_t nExpectedTime = 0;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        pwalletMain->GetStakeWeight(nWeight);
 
-    std::string current_poll;
+        nNetworkWeight = GetEstimatedNetworkWeight();
+        nDifficulty = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+        nExpectedTime = GetEstimatedTimetoStake();
+    }
+
+    obj.pushKV("blocks", nBestHeight);
+    diff.pushKV("proof-of-stake", nDifficulty);
+
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation
         bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-        uint64_t nExpectedTime = GetEstimatedTimetoStake();
         diff.pushKV("last-search-interval", MinerStatus.nLastCoinStakeSearchInterval);
         weight.pushKV("minimum",    MinerStatus.WeightMin);
         weight.pushKV("maximum",    MinerStatus.WeightMax);
@@ -57,7 +62,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         weight.pushKV("legacy",   nWeight/(double)COIN);
         obj.pushKV("stakeweight", weight);
         obj.pushKV("netstakeweight", nNetworkWeight);
-        obj.pushKV("netstakingGRCvalue", nNetworkValue);
+        obj.pushKV("netstakingGRCvalue", nNetworkWeight / 80.0);
         obj.pushKV("staking", staking);
         obj.pushKV("mining-error", MinerStatus.ReasonNotStaking);
         obj.pushKV("time-to-stake_days", nExpectedTime/86400.0);
@@ -68,14 +73,14 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("mining-kernels-found", MinerStatus.KernelsFound);
         obj.pushKV("kernel-diff-best",MinerStatus.KernelDiffMax);
         obj.pushKV("kernel-diff-sum",MinerStatus.KernelDiffSum);
-
-        current_poll = GetCurrentOverviewTabPoll();
     }
 
     int64_t nMinStakeSplitValue = 0;
     double dEfficiency = 0;
     int64_t nDesiredStakeSplitValue = 0;
     SideStakeAlloc vSideStakeAlloc;
+
+    LOCK(cs_main);
 
     // nMinStakeSplitValue, dEfficiency, and nDesiredStakeSplitValue are out parameters.
     bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeSplitValue);
@@ -133,8 +138,17 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         }
     }
 
+    std::string current_poll = "Poll: ";
+
+    try {
+        current_poll += GetCurrentOverviewTabPoll();
+    } catch (std::exception &e) {
+        current_poll += _("No current polls");
+        LogPrintf("Error obtaining last poll: %s", e.what());
+    }
+
     obj.pushKV("MiningInfo 1", msMiningErrors);
-    obj.pushKV("MiningInfo 2", "Poll: " + current_poll);
+    obj.pushKV("MiningInfo 2", current_poll);
     obj.pushKV("MiningInfo 5", msMiningErrors5);
     obj.pushKV("MiningInfo 6", msMiningErrors6);
     obj.pushKV("MiningInfo 7", msMiningErrors7);
