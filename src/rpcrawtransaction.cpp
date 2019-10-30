@@ -1251,14 +1251,14 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
             std::string backupdir = GetArg("-backupdir", "");
 
             if (backupdir.empty())
-                exportpath = GetDataDir() / "walletbackups/rpc" / exportfile;
+                exportpath = GetDataDir() / "walletbackups" / "rpc" / exportfile;
 
             else
-                exportpath = backupdir + "/" + exportfile;
+                exportpath = fs::path(backupdir) / exportfile;
 
             boost::filesystem::create_directory(exportpath.parent_path());
 
-            dataout.open(exportpath.string().c_str());
+            dataout.open(exportpath);
 
             if (!dataout)
             {

@@ -223,7 +223,7 @@ bool LockDirectory(const fs::path& directory, const std::string lockfile_name, b
 //!
 //! \return The file contents as a string.
 //!
-std::string GetFileContents(std::string filepath);
+std::string GetFileContents(const fs::path filepath);
 
 int GetRandInt(int nMax);
 uint64_t GetRand(uint64_t nMax);

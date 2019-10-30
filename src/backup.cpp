@@ -115,7 +115,7 @@ bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string&
     filesystem::create_directories(PrivateKeysTarget.parent_path());
     sTarget = PrivateKeysTarget.string();
     fsbridge::ofstream myBackup;
-    myBackup.open (PrivateKeysTarget.string().c_str());
+    myBackup.open(PrivateKeysTarget);
     std::string sError;
     for(const auto& keyPair : wallet.GetAllPrivateKeys(sError))
     {

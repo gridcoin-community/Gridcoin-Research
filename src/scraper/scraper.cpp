@@ -1402,7 +1402,7 @@ bool DownloadProjectHostFiles(const NN::WhitelistSnapshot& projectWhitelist)
 
         try
         {
-            http.Download(prjs.StatsUrl("host"), host_file.string(), userpass);
+            http.Download(prjs.StatsUrl("host"), host_file, userpass);
         }
         catch(const std::runtime_error& e)
         {
@@ -1574,7 +1574,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         {
             try
             {
-                http.Download(prjs.StatsUrl("team"), team_file.string(), userpass);
+                http.Download(prjs.StatsUrl("team"), team_file, userpass);
             }
             catch(const std::runtime_error& e)
             {
@@ -1825,7 +1825,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
 
         try
         {
-            http.Download(prjs.StatsUrl("user"), rac_file.string(), userpass);
+            http.Download(prjs.StatsUrl("user"), rac_file, userpass);
         }
         catch(const std::runtime_error& e)
         {
@@ -1837,7 +1837,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         if (fExplorer) AlignScraperFileManifestEntries(rac_file, "user_source", prjs.m_name, true);
 
         // Now that the source file is handled, process the file.
-        ProcessProjectRacFileByCPID(prjs.m_name, rac_file.string(), sRacETag, Consensus);
+        ProcessProjectRacFileByCPID(prjs.m_name, rac_file, sRacETag, Consensus);
     }
 
     // After processing, update global structure with the timestamp of the latest file in the manifest.
@@ -1889,13 +1889,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     in.push(boostio::gzip_decompressor());
     in.push(ingzfile);
 
-    std::string gzetagfile = "";
-
-    gzetagfile = project + "-" + etag + ".csv" + ".gz";
-
-    std::string gzetagfile_no_path = gzetagfile;
-    // Put path in.
-    gzetagfile = ((fs::path)(pathScraper / gzetagfile)).string();
+    fs::path gzetagfile = pathScraper / (project + "-" + etag + ".csv" + ".gz");
 
     fsbridge::ofstream outgzfile(gzetagfile, std::ios_base::out | std::ios_base::binary);
     boostio::filtering_ostream out;
@@ -2040,7 +2034,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 uint256 GetFileHash(const fs::path& inputfile)
 {
     // open input file, and associate with CAutoFile
-    FILE *file = fsbridge::fopen(inputfile.string().c_str(), "rb");
+    FILE *file = fsbridge::fopen(inputfile, "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     uint256 nHash;
     
@@ -3617,7 +3611,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
     fs::path inputfilewpath = pathScraper / inputfile;
     
     // open input file, and associate with CAutoFile
-    FILE *file = fsbridge::fopen(inputfilewpath.string().c_str(), "rb");
+    FILE *file = fsbridge::fopen(inputfilewpath, "rb");
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
     if (filein.IsNull())
@@ -3668,7 +3662,7 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
         fs::path inputfilewpath = pathScraper / inputfile;
 
         // open input file, and associate with CAutoFile
-        FILE *file = fsbridge::fopen(inputfilewpath.string().c_str(), "rb");
+        FILE *file = fsbridge::fopen(inputfilewpath, "rb");
         CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
         if (filein.IsNull())

@@ -480,7 +480,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     fsbridge::ofstream Output;
     boost::filesystem::path o_path = GetDataDir() / "reports" / ( "export_" + std::to_string(GetTime()) + ".txt" );
     boost::filesystem::create_directories(o_path.parent_path());
-    Output.open (o_path.string().c_str());
+    Output.open (o_path);
     Output.imbue(std::locale::classic());
     Output << std::fixed << std::setprecision(4);
     Output << "#midheight  ave_diff min_diff max_diff  "

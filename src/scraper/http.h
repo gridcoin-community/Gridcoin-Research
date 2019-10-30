@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fs.h>
+
 #include <string>
 #include <stdexcept>
 
@@ -48,7 +50,7 @@ public:
     //!
     void Download(
             const std::string& url,
-            const std::string& destination,
+            const fs::path& destination,
             const std::string& userpass = "");
 
     //!

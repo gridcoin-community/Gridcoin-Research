@@ -65,10 +65,10 @@ Http::~Http()
 
 void Http::Download(
         const std::string &url,
-        const std::string &destination,
+        const fs::path &destination,
         const std::string &userpass)
 {
-    ScopedFile fp(fsbridge::fopen(destination.c_str(), "wb"), &fclose);
+    ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
     if(!fp)
         throw std::runtime_error(
                 tfm::format("Error opening target %s: %s (%d)", destination, strerror(errno), errno));

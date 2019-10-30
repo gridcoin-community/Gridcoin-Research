@@ -34,6 +34,7 @@ GRIDCOIN_TESTS =\
   test/beacon_tests.cpp \
   test/bignum_tests.cpp \
   test/block_tests.cpp \
+  test/fs_tests.cpp \
   test/getarg_tests.cpp \
   test/gridcoin_tests.cpp \
   test/key_tests.cpp \
