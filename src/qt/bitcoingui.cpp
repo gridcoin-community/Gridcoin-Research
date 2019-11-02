@@ -837,29 +837,21 @@ std::string tostdstring(QString q)
 }
 
 
-
-
 bool CreateNewConfigFile(std::string boinc_email)
 {
-    std::string filename = "gridcoinresearch.conf";
-    boost::filesystem::path path = GetDataDir() / filename;
     fsbridge::ofstream myConfig;
-    myConfig.open (path);
-    std::string row = "email=" + boinc_email + "\r\n";
-    myConfig << row;
-    row = "addnode=node.gridcoin.us \r\n";
-    myConfig << row;
-    row = "addnode=www.grcpool.com \r\n";
-    myConfig << row;
-    row = "addnode=seeds.gridcoin.ifoggz-network.xyz \r\n";
-    myConfig << row;
-    row = "addnode=ec2-3-81-39-58.compute-1.amazonaws.com \r\n";
-    myConfig << row;
-    row = "addnode=addnode-us-central.cycy.me \r\n";
-    myConfig << row;
-    row = "addnode=gridcoin.ddns.net \r\n";
-    myConfig << row;
+    myConfig.open(GetDataDir() / "gridcoinresearch.conf");
+
+    myConfig << "email=" << boinc_email << "\n"
+        << "addnode=node.gridcoin.us\n"
+        << "addnode=www.grcpool.com\n"
+        << "addnode=seeds.gridcoin.ifoggz-network.xyz\n"
+        << "addnode=ec2-3-81-39-58.compute-1.amazonaws.com\n"
+        << "addnode=addnode-us-central.cycy.me\n"
+        << "addnode=gridcoin.ddns.net\n";
+
     myConfig.close();
+
     return true;
 }
 
