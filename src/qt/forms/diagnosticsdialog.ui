@@ -27,7 +27,7 @@
     <number>20</number>
    </property>
    <item>
-    <layout class="QGridLayout" name="gridLayout" rowminimumheight="30,20,20,20,20,20,20,20,20,20,20,20">
+    <layout class="QGridLayout" name="gridLayout" rowminimumheight="30,20,20,20,20,20,20,20,20,20,20">
      <property name="sizeConstraint">
       <enum>QLayout::SetMinimumSize</enum>
      </property>
@@ -49,7 +49,7 @@
      <property name="verticalSpacing">
       <number>8</number>
      </property>
-     <item row="5" column="0">
+     <item row="4" column="0">
       <widget class="QLabel" name="verifyCPIDIsInNNLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
@@ -68,7 +68,7 @@
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="2" column="1">
       <widget class="QLabel" name="verifyCPIDValidResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -119,14 +119,14 @@
        </property>
       </widget>
      </item>
-     <item row="4" column="0">
+     <item row="3" column="0">
       <widget class="QLabel" name="verifyCPIDHasRACLabel">
        <property name="text">
         <string>Verify CPID has RAC</string>
        </property>
       </widget>
      </item>
-     <item row="6" column="1">
+     <item row="5" column="1">
       <widget class="QLabel" name="verifyWalletIsSyncedResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -148,21 +148,21 @@
        </property>
       </widget>
      </item>
-     <item row="6" column="0">
+     <item row="5" column="0">
       <widget class="QLabel" name="verifyWalletIsSyncedLabel">
        <property name="text">
         <string>Verify wallet is synced</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="0">
+     <item row="2" column="0">
       <widget class="QLabel" name="verifyCPIDValidLabel">
        <property name="text">
         <string>Verify CPID is valid</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1">
+     <item row="3" column="1">
       <widget class="QLabel" name="verifyCPIDHasRACResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -184,13 +184,6 @@
        </property>
       </widget>
      </item>
-     <item row="2" column="0">
-      <widget class="QLabel" name="findCPIDLabel">
-       <property name="text">
-        <string>Find PrimaryCPID (Windows Only)</string>
-       </property>
-      </widget>
-     </item>
      <item row="0" column="0">
       <widget class="QLabel" name="diagnosticsLabel">
        <property name="font">
@@ -203,7 +196,7 @@
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
+     <item row="4" column="1">
       <widget class="QLabel" name="verifyCPIDIsInNNResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -225,14 +218,14 @@
        </property>
       </widget>
      </item>
-     <item row="7" column="0">
+     <item row="6" column="0">
       <widget class="QLabel" name="verifyClockLabel">
        <property name="text">
         <string>Verify clock</string>
        </property>
       </widget>
      </item>
-     <item row="7" column="1">
+     <item row="6" column="1">
       <widget class="QLabel" name="verifyClockResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -254,14 +247,14 @@
        </property>
       </widget>
      </item>
-     <item row="8" column="0">
+     <item row="7" column="0">
       <widget class="QLabel" name="verifySeedNodesLabel">
        <property name="text">
         <string>Verify connections to seeds</string>
        </property>
       </widget>
      </item>
-     <item row="8" column="1">
+     <item row="7" column="1">
       <widget class="QLabel" name="verifySeedNodesResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -283,14 +276,14 @@
        </property>
       </widget>
      </item>
-     <item row="9" column="0">
+     <item row="8" column="0">
       <widget class="QLabel" name="verifyConnectionsLabel">
        <property name="text">
         <string>Verify connections to network</string>
        </property>
       </widget>
      </item>
-     <item row="9" column="1">
+     <item row="8" column="1">
       <widget class="QLabel" name="verifyConnectionsResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -312,14 +305,14 @@
        </property>
       </widget>
      </item>
-     <item row="10" column="0">
+     <item row="9" column="0">
       <widget class="QLabel" name="verifyTCPPortLabel">
        <property name="text">
         <string>Verify TCP port 32749</string>
        </property>
       </widget>
      </item>
-     <item row="10" column="1">
+     <item row="9" column="1">
       <widget class="QLabel" name="verifyTCPPortResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
@@ -341,14 +334,14 @@
        </property>
       </widget>
      </item>
-     <item row="11" column="0">
+     <item row="10" column="0">
       <widget class="QLabel" name="checkClientVersionLabel">
        <property name="text">
         <string>Check client version</string>
        </property>
       </widget>
      </item>
-     <item row="11" column="1">
+     <item row="10" column="1">
       <widget class="QLabel" name="checkClientVersionResultLabel">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
