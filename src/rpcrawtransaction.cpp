@@ -114,13 +114,16 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                 {
                     res.push_back(std::make_pair(_("Message Type"), _("Add Beacon Contract")));
 
-                    std::string sBeaconEncodedContract = ExtractXML(msg, "<MV>", "</MV>");
+                    bool invalid = false;
+                    const std::string sBeaconEncodedContract = ExtractXML(msg, "<MV>", "</MV>");
+                    const std::string sBeaconDecodedContract = DecodeBase64(sBeaconEncodedContract, &invalid);
 
-                    if (sBeaconEncodedContract.length() < 256)
+                    if (invalid)
                     {
-                        // If for whatever reason the contract is not a proper one and the average length does exceed this size; Without this a seg fault will occur on the DecodeBase64
-                        // Another example is if an admin accidently uses add instead of delete in addkey to remove a beacon the 1 in <MV>1</MV> would cause a seg fault as well
-                        res.push_back(std::make_pair(_("ERROR"), _("Contract length for beacon is less then 256 in length. Size: ") + ToString(sBeaconEncodedContract.length())));
+                        // If for whatever reason the contract is not a proper one.
+                        // Another example is if an admin accidently uses add instead
+                        // of delete in addkey to remove a beacon the 1 in <MV>1</MV>
+                        res.push_back(std::make_pair(_("ERROR"), _("Invalid beacon contract. Size: ") + ToString(sBeaconEncodedContract.length())));
 
                         if (fDebug)
                             res.push_back(std::make_pair(_("Message Data"), sBeaconEncodedContract));
@@ -128,7 +131,6 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
                         return res;
                     }
 
-                    std::string sBeaconDecodedContract = DecodeBase64(sBeaconEncodedContract);
                     std::vector<std::string> vBeaconContract = split(sBeaconDecodedContract.c_str(), ";");
                     std::string sBeaconAddress = vBeaconContract[2];
                     std::string sBeaconPublicKey = vBeaconContract[3];
