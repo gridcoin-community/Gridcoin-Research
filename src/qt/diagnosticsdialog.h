@@ -27,7 +27,6 @@ private:
     bool VerifyCPIDIsInNeuralNetwork();
     bool VerifyWalletIsSynced();
     bool VerifyIsCPIDValid();
-    bool FindCPID();
     bool VerifyCPIDHasRAC();
     int VerifyCountSeedNodes();
     int VerifyCountConnections();
