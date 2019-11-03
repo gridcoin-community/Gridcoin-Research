@@ -9,9 +9,6 @@ class CNetAddr;
 class CTransaction;
 class CWallet;
 
-// Gridcoin
-struct StructCPID;
-
 class ThreadHandler;
 typedef std::shared_ptr<ThreadHandler> ThreadHandlerPtr;
 

@@ -399,8 +399,8 @@ struct Claim
     {
         READWRITE(m_version);
         READWRITE(m_mining_id);
-        READWRITE(m_client_version);
-        READWRITE(m_organization);
+        READWRITE(LIMITED_STRING(m_client_version, MAX_VERSION_SIZE));
+        READWRITE(LIMITED_STRING(m_organization, MAX_ORGANIZATION_SIZE));
 
         READWRITE(VarDouble<COIN_PLACES>(m_block_subsidy));
 

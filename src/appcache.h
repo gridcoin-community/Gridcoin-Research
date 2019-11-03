@@ -8,7 +8,6 @@ enum class Section
 {
     BEACON,
     BEACONALT,
-    SUPERBLOCK,
     GLOBAL,
     PROTOCOL,
     NEURALSECURITY,

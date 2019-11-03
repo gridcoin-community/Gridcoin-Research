@@ -10,6 +10,7 @@
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
+#include "global_objects_noui.hpp"
 #include "guiutil.h"
 #include "guiconstants.h"
 #include "init.h"

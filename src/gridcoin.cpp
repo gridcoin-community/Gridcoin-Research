@@ -29,12 +29,17 @@ namespace
         uint256S("d5441f7c35eb9ea1b786bbbed820b7f327504301ae70ef2ac3ca3cbc7106236b"), //T479114
         uint256S("18e2ed822c4c5686c0189f60ffbe828fa51e90873cc1ed3e534a257d2f09c360"), //T479282
         uint256S("7cb49bc17ecdb7b3a56e1290496d4866330fc9c7974c65b2034e1c6b951ea0fe"), //T511839
+        uint256S("ef0276ace2209c836a84d16e0ce787358a8a1d3da1a8795b6e7697f5c7a26c45"), //T539246 (block span)
+        uint256S("66a809c99fd224a9631d38c326c69e8c7e1507ad1a997117a7dd1e7780764d6c"), //T578074 (block span)
+        uint256S("8f4f6c5cb17fda158229a627d18d5cff30621e3612f464526f6f356e7a699838"), //T578162 (block span)
         uint256S("c1aa0511add3bed3f2e366d38b954285a7602cae10a7244e7fe35e4002e90cd5"), //T629408
         uint256S("639756cf39bf12a4a0ab4ea5ec10938fd0f463cc7bc1bd2916529a445ceba2ab"), //T680406
     };
+
+
 }
 
-std::set<uint256> GetBadBlocks()
+const std::set<uint256>& GetBadBlocks()
 {
     return fTestNet
             ? bad_blocks_testnet

@@ -9,6 +9,7 @@
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
+#include "neuralnet/tally.h"
 
 double GetTotalBalance();
 std::string TimestampToHRDate(double dtm);
@@ -16,7 +17,7 @@ double CoinToDouble(double surrogate);
 double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
-CBlockIndex* GetHistoricalMagnitude(std::string cpid);
+const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
 bool WalletOutOfSync();
 
 namespace NN { std::string GetPrimaryCpid(); }
@@ -97,8 +98,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     const std::string primary_cpid = NN::GetPrimaryCpid();
 
     std::string GRCAddress = DefaultWalletAddress();
-    StructCPID& structMag = GetInitializedStructCPID2(primary_cpid, mvMagnitudes);
-    double dmag = structMag.Magnitude;
+    double dmag = NN::Tally::MyMagnitude();
     double poll_duration = PollDuration(sTitle) * 86400;
 
     // Prevent Double Voting
@@ -293,8 +293,7 @@ std::string GetProvableVotingWeightXML()
     //Retrieve the historical magnitude
     if (IsResearcher(primary_cpid))
     {
-        GetLifetimeCPID(primary_cpid); // Rescan...
-        CBlockIndex* pHistorical = GetHistoricalMagnitude(primary_cpid);
+        const CBlockIndex* pHistorical = GetHistoricalMagnitude(NN::MiningId::Parse(primary_cpid));
         if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
         {
             std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
@@ -462,10 +461,9 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 
 double GetMoneySupplyFactor()
 {
-    StructCPID structcpid = mvNetwork["NETWORK"];
-    double TotalCPIDS = mvMagnitudes.size();
-    double AvgMagnitude = structcpid.NetworkAvgMagnitude;
-    double TotalNetworkMagnitude = TotalCPIDS*AvgMagnitude;
+    const NN::NetworkStats stats = NN::Tally::GetNetworkStats();
+
+    double TotalNetworkMagnitude = stats.m_total_cpids * stats.m_average_magnitude;
     if (TotalNetworkMagnitude < 100) TotalNetworkMagnitude=100;
     double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
     double Factor = (MoneySupply/TotalNetworkMagnitude+.01);

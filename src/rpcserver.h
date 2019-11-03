@@ -189,7 +189,6 @@ extern UniValue debug2(const UniValue& params, bool fHelp);
 extern UniValue debug3(const UniValue& params, bool fHelp);
 extern UniValue debug4(const UniValue& params, bool fHelp);
 extern UniValue debugnet(const UniValue& params, bool fHelp);
-extern UniValue dportally(const UniValue& params, bool fHelp);
 extern UniValue forcequorum(const UniValue& params, bool fHelp);
 extern UniValue gatherneuralhashes(const UniValue& params, bool fHelp);
 extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
@@ -211,7 +210,6 @@ extern UniValue sendrawcontract(const UniValue& params, bool fHelp);
 extern UniValue superblockaverage(const UniValue& params, bool fHelp);
 extern UniValue tally(const UniValue& params, bool fHelp);
 extern UniValue tallyneural(const UniValue& params, bool fHelp);
-extern UniValue testnewcontract(const UniValue& params, bool fHelp);
 extern UniValue versionreport(const UniValue& params, bool fhelp);
 extern UniValue writedata(const UniValue& params, bool fHelp);
 

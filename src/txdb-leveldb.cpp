@@ -16,6 +16,8 @@
 #include "kernel.h"
 #include "txdb.h"
 #include "main.h"
+#include "global_objects_noui.hpp"
+#include "neuralnet/tally.h"
 #include "block.h"
 #include "ui_interface.h"
 #include "util.h"
@@ -662,12 +664,13 @@ bool CTxDB::LoadBlockIndex()
         if(!IsResearchAgeEnabled(pindex->nHeight))
             continue;
 
-        if( pindex->IsUserCPID() && pindex->cpid.IsZero() )
-        {
-            RepairZeroCpidIndex(pindex);
-        }
+        if (pindex->IsUserCPID()) {
+            if (pindex->cpid.IsZero()) {
+                RepairZeroCpidIndex(pindex);
+            }
 
-        AddRARewardBlock(pindex);
+            NN::Tally::RecordRewardBlock(pindex);
+        }
     }
 
     LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);

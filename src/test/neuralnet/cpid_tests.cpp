@@ -523,7 +523,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_cpid)
 
     BOOST_CHECK(mining_id.Which() == NN::MiningId::Kind::CPID);
 
-    if (const boost::optional<const NN::Cpid&> cpid = mining_id.TryCpid()) {
+    if (const NN::CpidOption cpid = mining_id.TryCpid()) {
         BOOST_CHECK(*cpid == expected);
     } else {
         BOOST_FAIL("MiningId variant does not contain the CPID.");

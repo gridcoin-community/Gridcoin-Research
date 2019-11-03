@@ -12,4 +12,4 @@
 //!
 //! \return A list of currently known bad blocks.
 //!
-std::set<uint256> GetBadBlocks();
+const std::set<uint256>& GetBadBlocks();

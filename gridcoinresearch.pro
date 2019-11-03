@@ -259,7 +259,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/qt/diagnosticsdialog.h \
     src/backup.h \
     src/appcache.h \
-    src/tally.h \
     src/grcrestarter.h \
     src/neuralnet.h \
     src/qt/clicklabel.h
@@ -342,7 +341,6 @@ SOURCES += src/qt/bitcoin.cpp src/qt/bitcoingui.cpp \
     src/allocators.cpp \
     src/backup.cpp \
     src/appcache.cpp \
-    src/tally.cpp \
     src/grcrestarter.cpp \
     src/neuralnet.cpp \
     src/qt/clicklabel.cpp

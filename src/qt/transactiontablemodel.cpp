@@ -18,10 +18,6 @@
 #include <QDateTime>
 #include <QtAlgorithms>
 
-
-int64_t GetMaximumBoincSubsidy(int64_t nTime);
-double CoinToDouble(double surrogate);
-
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
         Qt::AlignLeft|Qt::AlignVCenter,

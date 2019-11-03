@@ -935,7 +935,8 @@ struct hash<NN::QuorumHash>
 struct ConvergedScraperStats
 {
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
-    // This flag is marked true in ScraperGetNeuralContract and false on receipt or deletion of statistics objects.
+    // This flag is marked true in ScraperGetSuperblockContract() and false on receipt or deletion of
+    // statistics objects.
     bool bClean = false;
 
     int64_t nTime;
@@ -947,21 +948,8 @@ struct ConvergedScraperStats
     // reduced nContentHash ------ SB Hash ---- Converged Manifest object
     std::map<uint32_t, std::pair<NN::QuorumHash, ConvergedManifest>> PastConvergences;
 
-    // Legacy superblock contract and hash.
-    std::string sContractHash;
-    std::string sContract;
-
     // New superblock object and hash.
     NN::Superblock NewFormatSuperblock;
-
-    uint32_t GetVersion()
-    {
-        uint32_t nVersion = 0;
-
-        if (sContractHash.empty() && sContract.empty()) nVersion = NewFormatSuperblock.m_version;
-
-        return nVersion;
-    }
 
     void AddConvergenceToPastConvergencesMap()
     {

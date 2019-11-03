@@ -368,7 +368,6 @@ static const CRPCCommand vRPCCommands[] =
     { "debug3",                  &debug3,                  cat_developer     },
     { "debug4",                  &debug4,                  cat_developer     },
     { "debugnet",                &debugnet,                cat_developer     },
-    { "dportally",               &dportally,               cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "forcequorum",             &forcequorum,             cat_developer     },
     { "gatherneuralhashes",      &gatherneuralhashes,      cat_developer     },
@@ -393,7 +392,6 @@ static const CRPCCommand vRPCCommands[] =
     { "superblockaverage",       &superblockaverage,       cat_developer     },
     { "tally",                   &tally,                   cat_developer     },
     { "tallyneural",             &tallyneural,             cat_developer     },
-    { "testnewcontract",         &testnewcontract,         cat_developer     },
     { "versionreport",           &versionreport,           cat_developer     },
     { "writedata",               &writedata,               cat_developer     },
 

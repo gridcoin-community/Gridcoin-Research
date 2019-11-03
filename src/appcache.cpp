@@ -17,7 +17,6 @@ namespace
     {
         { "beacon", Section::BEACON },
         { "beaconalt", Section::BEACONALT },
-        { "superblock", Section::SUPERBLOCK },
         { "global", Section::GLOBAL },
         { "protocol", Section::PROTOCOL },
         { "neuralsecurity", Section::NEURALSECURITY },

@@ -14,8 +14,6 @@
 #include "script.h"
 #include "scrypt.h"
 
-#include "global_objects_noui.hpp"
-
 #include <map>
 #include <unordered_map>
 #include <set>
@@ -40,8 +38,6 @@ static const int64_t DEFAULT_CBR = 10 * COIN;
 extern std::string msMasterProjectPublicKey;
 extern std::string msMasterMessagePublicKey;
 extern std::string msMasterMessagePrivateKey;
-
-void ClearOrphanBlocks();
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -126,11 +122,6 @@ inline int GetSuperblockAgeSpacing(int nHeight)
 	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
-inline bool AreBinarySuperblocksEnabled(int nHeight)
-{
-	return (fTestNet ? nHeight > 10000 : nHeight > 725000);
-}
-
 inline bool IsV9Enabled_Tally(int nHeight)
 {
     // 3 hours after v9
@@ -141,17 +132,10 @@ inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60;
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
-bool VerifySuperblock(const std::string& superblock, const CBlockIndex* parent);
 
 extern std::unordered_map<std::string, double> mvNeuralNetworkHash;
 extern std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
 extern std::unordered_map<std::string, double> mvNeuralVersion;
-
-extern std::map<std::string, StructCPID> mvDPOR;
-extern std::map<std::string, StructCPID> mvDPORCopy;
-
-
-extern std::map<std::string, StructCPID> mvResearchAge;
 
 struct BlockHasher
 {
@@ -270,19 +254,20 @@ bool CheckProofOfResearch(
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
-int64_t ComputeResearchAccrual(int64_t nTime, std::string cpid, CBlockIndex* pindexLast, bool bVerifyingBlock, int VerificationPhase, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
-int64_t GetProofOfStakeReward(uint64_t nCoinAge, int64_t nFees, std::string cpid,
-	bool VerifyingBlock, int VerificationPhase, int64_t nTime, CBlockIndex* pindexLast,
-	double& OUT_POR, double& OUT_INTEREST, double& dAccrualAge, double& dMagnitudeUnit, double& AvgMagnitude);
+
+int64_t GetProofOfStakeReward(
+    uint64_t nCoinAge,
+    int64_t nFees,
+    const NN::MiningId mining_id,
+    int64_t nTime,
+    const CBlockIndex* pindexLast,
+    double& OUT_POR,
+    double& OUT_INTEREST);
 
 bool OutOfSyncByAge();
-bool NeedASuperblock();
 std::string GetQuorumHash(const std::string& data);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-std::string PackBinarySuperblock(std::string sBlock);
-std::string UnpackBinarySuperblock(std::string sBlock);
 bool IsSuperBlock(CBlockIndex* pIndex);
-bool LoadSuperblock(std::string data, int64_t nTime, int height);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetAverageDifficulty(unsigned int nPoSInterval = 40);
@@ -291,7 +276,6 @@ double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
 double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
 
-void AddRARewardBlock(const CBlockIndex* pIndex);
 NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();
@@ -312,8 +296,6 @@ int64_t PreviousBlockAge();
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
-StructCPID& GetInitializedStructCPID2(const std::string& name, std::map<std::string, StructCPID>& vRef);
-StructCPID& GetLifetimeCPID(const std::string& cpid);
 bool IsResearcher(const std::string& cpid);
 extern bool ComputeNeuralNetworkSupermajorityHashes();
 

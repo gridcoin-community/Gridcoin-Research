@@ -185,7 +185,7 @@ private:
 //! \brief An optional type that either contains a reference to some external
 //! CPID value or does not.
 //!
-typedef boost::optional<const Cpid&> CpidOption;
+typedef boost::optional<const Cpid> CpidOption;
 
 //!
 //! \brief A variant type that identifies an entity that may receive rewards.

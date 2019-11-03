@@ -11,6 +11,7 @@
 #include "appcache.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
 #include "contract/contract.h"
 #include "util.h"
 
@@ -28,7 +29,6 @@ using namespace std;
 
 unsigned int nMinerSleep;
 double CoinToDouble(double surrogate);
-double CalculatedMagnitude2(std::string cpid, int64_t locktime);
 bool HasActiveBeacon(const std::string& cpid);
 bool LessVerbose(int iMax1000);
 
@@ -922,7 +922,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
 
     ComputeNeuralNetworkSupermajorityHashes();
 
-    if (!NeedASuperblock()) {
+    if (!NN::Tally::SuperblockNeeded()) {
         LogPrintf("AddNeuralContractOrVote: Not needed.");
         return;
     }
@@ -994,23 +994,16 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
         claim.m_mining_id = NN::MiningId::ForInvestor();
     }
 
-    double out_unused; // Drop currently unused values
-
     // Note: Since research age must be exact, we need to transmit the block
     // nTime here so it matches AcceptBlock():
     nReward = GetProofOfStakeReward(
         nCoinAge,
         nFees,
-        claim.m_mining_id.ToString(),
-        false,  // Is verifying block? (no)
-        0,      // Verification phase (N/A)
+        claim.m_mining_id,
         pindexPrev->nTime,
         pindexPrev,
         claim.m_research_subsidy,
-        claim.m_block_subsidy,
-        out_unused,
-        claim.m_magnitude_unit,
-        out_unused);
+        claim.m_block_subsidy);
 
     // If no pending research subsidy value exists, build an investor claim.
     // This avoids polluting the block index with non-research reward blocks
@@ -1029,9 +1022,10 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
 
     claim.m_client_version = FormatFullVersion().substr(0, NN::Claim::MAX_VERSION_SIZE);
     claim.m_organization = GetArgument("org", "").substr(0, NN::Claim::MAX_ORGANIZATION_SIZE);
+    claim.m_magnitude_unit = NN::Tally::GetMagnitudeUnit(pindexPrev->nTime);
 
     if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        claim.m_magnitude = CalculatedMagnitude2(cpid->ToString(), blocknew.nTime);
+        claim.m_magnitude = NN::Tally::GetMagnitude(*cpid);
     }
 
     LogPrintf(
@@ -1061,14 +1055,6 @@ bool IsMiningAllowed(CWallet *pwallet)
     {
         LOCK(MinerStatus.lock);
         MinerStatus.ReasonNotStaking+="Testnet-only version; ";
-        status=false;
-    }
-
-    if (!bNetAveragesLoaded)
-    {
-        LOCK(MinerStatus.lock);
-        MinerStatus.ReasonNotStaking+=_("Net averages not yet loaded; ");
-        if (LessVerbose(100) && IsResearcher(NN::GetPrimaryCpid())) LogPrintf("ResearchMiner:Net averages not yet loaded...");
         status=false;
     }
 
