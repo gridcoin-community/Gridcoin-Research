@@ -12,8 +12,6 @@ define $(package)_set_vars
   $(package)_build_opts+=CFLAGS="$($(package)_cflags) $($(package)_cppflags) -fPIC"
   $(package)_build_opts+=RANLIB="$($(package)_ranlib)"
   $(package)_build_opts+=AR="$($(package)_ar)"
-  $(package)_build_opts_darwin+=AR="$($(package)_libtool)"
-  $(package)_build_opts_darwin+=ARFLAGS="-o"
   $(package)_cxxflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cflags_aarch64_linux = $(GCCFLAGS)
   $(package)_cxxflags_arm_linux = $(GCCFLAGS)
@@ -33,7 +31,7 @@ define $(package)_preprocess_cmds
 endef
 
 define $(package)_config_cmds
-  CFLAGS=$(i686_cflag) ./configure --host=$(host) --prefix=$(host_prefix) --with-zlib=$(host_prefix) --with-bzip2=$(host_prefix) --with-pic --enable-static --enable-shared=no
+  $($(package)_build_opts) CFLAGS=$(i686_cflag)  ./configure --host=$(host) --prefix=$(host_prefix) --with-zlib=$(host_prefix) --with-bzip2=$(host_prefix) --with-pic --enable-static --enable-shared=no
 endef
 
 define $(package)_build_cmds
