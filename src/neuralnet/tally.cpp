@@ -726,7 +726,7 @@ BlockPtrOption ResearchAccount::LastRewardBlock() const
         return boost::none;
     }
 
-    return boost::make_optional<const CBlockIndex*>(m_last_block_ptr);
+    return BlockPtrOption(m_last_block_ptr);
 }
 
 uint256 ResearchAccount::LastRewardBlockHash() const

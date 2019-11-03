@@ -415,6 +415,7 @@ public:
         return *this;
     }
 
+    CScript& operator=(const CScript& other) = default;
 
     bool GetOp(iterator& pc, opcodetype& opcodeRet, std::vector<unsigned char>& vchRet)
     {
