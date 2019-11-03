@@ -14,13 +14,11 @@ namespace NN
     private:
         // Documentation in interface.
         bool IsEnabled();
-        std::string GetNeuralVersion();
         std::string GetNeuralHash();
         NN::QuorumHash GetSuperblockHash();
         std::string GetNeuralContract();
         NN::Superblock GetSuperblockContract();
         bool SynchronizeDPOR(const BeaconConsensus& beacons);
         std::string ExplainMagnitude(const std::string& data);
-        int64_t IsNeuralNet();
     };
 }

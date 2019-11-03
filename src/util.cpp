@@ -86,7 +86,6 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
-std::string GetNeuralVersion();
 
 bool fDevbuildCripple;
 
@@ -1181,25 +1180,14 @@ std::vector<std::string> split(const std::string& s, const std::string& delim)
     return elems;
 }
 
-std::string GetNeuralVersion()
-{
-    std::string neural_v = "0";
-    int64_t neural_id = NN::GetInstance()->IsNeuralNet();
-    neural_v = ToString(CLIENT_VERSION_MINOR) + "." + ToString(neural_id);
-    return neural_v;
-}
-
 // Format the subversion field according to BIP 14 spec (https://en.bitcoin.it/wiki/BIP_0014)
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments)
 {
-    std::string neural_v = GetNeuralVersion();
-
     std::ostringstream ss;
     ss << "/";
     ss << name << ":" << FormatVersion(nClientVersion);
 
     if (!comments.empty())         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
-    ss << "(" << neural_v << ")";
 
     ss << "/";
     return ss.str();

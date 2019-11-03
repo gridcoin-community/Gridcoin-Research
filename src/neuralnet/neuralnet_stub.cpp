@@ -9,11 +9,6 @@ bool NeuralNetStub::IsEnabled()
     return false;
 }
 
-std::string NeuralNetStub::GetNeuralVersion()
-{
-    return "0";
-}
-
 std::string NeuralNetStub::GetNeuralHash()
 {
     return std::string();
@@ -48,9 +43,4 @@ bool NeuralNetStub::SynchronizeDPOR(const BeaconConsensus& beacons)
 std::string NeuralNetStub::ExplainMagnitude(const std::string& data)
 {
     return std::string();
-}
-
-int64_t NeuralNetStub::IsNeuralNet()
-{
-    return 0;
 }

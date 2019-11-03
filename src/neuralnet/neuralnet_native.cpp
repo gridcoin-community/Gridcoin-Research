@@ -17,13 +17,6 @@ bool NeuralNetNative::IsEnabled()
     return GetArgument("disableneuralnetwork", "false") == "false";
 }
 
-// This is for compatibility
-std::string NeuralNetNative::GetNeuralVersion()
-{
-    int64_t neural_id = IsNeuralNet();
-    return std::to_string(CLIENT_VERSION_MINOR) + "." + std::to_string(neural_id);
-}
-
 std::string NeuralNetNative::GetNeuralHash()
 {
     return GetSuperblockHash().ToString();
@@ -54,12 +47,4 @@ bool NeuralNetNative::SynchronizeDPOR(const BeaconConsensus& beacons)
 std::string NeuralNetNative::ExplainMagnitude(const std::string& cpid)
 {
     return ::ExplainMagnitude(cpid);
-}
-
-int64_t NeuralNetNative::IsNeuralNet()
-{
-    // This is the NN version number. TODO: Consider different number for new NN?
-    int64_t nNeuralNetVersion = 1999;
-
-    return nNeuralNetVersion;
 }
