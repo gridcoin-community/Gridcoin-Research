@@ -4482,13 +4482,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
-        std::string acid = "";
-        vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
+        std::string legacy_dummy;
+
+        vRecv >> pfrom->nVersion
+            >> legacy_dummy      // pfrom->boinchashnonce
+            >> legacy_dummy      // pfrom->boinchashpw
+            >> legacy_dummy      // pfrom->cpid
+            >> legacy_dummy      // pfrom->enccpid
+            >> legacy_dummy      // acid
+            >> pfrom->nServices
+            >> nTime
+            >> addrMe;
 
         if (fDebug10)
-            LogPrintf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ..."
-                      ,pfrom->nVersion, pfrom->boinchashnonce, pfrom->boinchashpw
-                      ,pfrom->cpid.c_str(), pfrom->enccpid, acid);
+            LogPrintf("received aries version %i ...", pfrom->nVersion);
 
         int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
 
@@ -4546,7 +4553,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // 12-5-2015 - Append Trust fields
         pfrom->nTrust = 0;
 
-        if (!vRecv.empty())         vRecv >> pfrom->sGRCAddress;
+        if (!vRecv.empty())         vRecv >> legacy_dummy; // pfrom->sGRCAddress;
 
 
         // Allow newbies to connect easily with 0 blocks

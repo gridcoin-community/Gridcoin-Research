@@ -309,22 +309,6 @@ UniValue ping(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
-// Moved to CNode static.
-/*
-static void CopyNodeStats(std::vector<CNodeStats>& vstats)
-{
-    vstats.clear();
-
-    LOCK(cs_vNodes);
-    vstats.reserve(vNodes.size());
-    for (auto const& pnode : vNodes) {
-        CNodeStats stats;
-        pnode->copyStats(stats);
-        vstats.push_back(stats);
-    }
-}
-*/
-
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -372,11 +356,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
         bool bNeural = false;
         bNeural = Contains(stats.strSubVer, "1999");
         obj.pushKV("Neural Network", bNeural);
-        if (bNeural)
-        {
-            obj.pushKV("Neural Participant", IsNeuralNodeParticipant(stats.sGRCAddress, GetAdjustedTime()));
 
-        }
         ret.push_back(obj);
     }
 
