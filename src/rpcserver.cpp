@@ -356,7 +356,6 @@ static const CRPCCommand vRPCCommands[] =
     { "staketime",               &staketime,               cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },
-    { "syncdpor2",               &syncdpor2,               cat_mining        },
     { "upgradedbeaconreport",    &upgradedbeaconreport,    cat_mining        },
 
   // Developer commands
@@ -369,8 +368,6 @@ static const CRPCCommand vRPCCommands[] =
     { "debug4",                  &debug4,                  cat_developer     },
     { "debugnet",                &debugnet,                cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
-    { "forcequorum",             &forcequorum,             cat_developer     },
-    { "gatherneuralhashes",      &gatherneuralhashes,      cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
@@ -379,7 +376,6 @@ static const CRPCCommand vRPCCommands[] =
     { "listprojects",            &listprojects,            cat_developer     },
     { "memorizekeys",            &memorizekeys,            cat_developer     },
     { "network",                 &network,                 cat_developer     },
-    { "neuralrequest",           &neuralrequest,           cat_developer     },
     { "projects",                &projects,                cat_developer     },
     { "readconfig",              &readconfig,              cat_developer     },
     { "readdata",                &readdata,                cat_developer     },

@@ -198,7 +198,6 @@ extern std::string  msMiningErrors8;
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern std::string  msNeuralResponse;
 extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
 extern int nGrandfather;

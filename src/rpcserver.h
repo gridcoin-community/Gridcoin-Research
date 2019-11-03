@@ -177,7 +177,6 @@ extern UniValue resetcpids(const UniValue& params, bool fHelp);
 extern UniValue staketime(const UniValue& params, bool fHelp);
 extern UniValue superblockage(const UniValue& params, bool fHelp);
 extern UniValue superblocks(const UniValue& params, bool fHelp);
-extern UniValue syncdpor2(const UniValue& params, bool fHelp);
 extern UniValue upgradedbeaconreport(const UniValue& params, bool fHelp);
 
 // Developers
@@ -189,15 +188,12 @@ extern UniValue debug2(const UniValue& params, bool fHelp);
 extern UniValue debug3(const UniValue& params, bool fHelp);
 extern UniValue debug4(const UniValue& params, bool fHelp);
 extern UniValue debugnet(const UniValue& params, bool fHelp);
-extern UniValue forcequorum(const UniValue& params, bool fHelp);
-extern UniValue gatherneuralhashes(const UniValue& params, bool fHelp);
 extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 extern UniValue getlistof(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue memorizekeys(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);
-extern UniValue neuralrequest(const UniValue& params, bool fHelp);
 extern UniValue projects(const UniValue& params, bool fHelp);
 extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
