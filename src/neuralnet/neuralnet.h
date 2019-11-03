@@ -34,16 +34,6 @@ namespace NN
         virtual bool IsEnabled() = 0;
 
         //!
-        //! \brief Get application neural version.
-        //!
-        //! Fetches the application version with the neural network magic suffix
-        //! (\c 1999) if the neural net is enabled.
-        //!
-        //! \return Current application version with proper neural suffix.
-        //!
-        virtual std::string GetNeuralVersion() = 0;
-
-        //!
         //! \brief Get current neural hash from neural net.
         //!
         //! \note This is a synchoronous operation.
@@ -95,8 +85,6 @@ namespace NN
         virtual bool SynchronizeDPOR(const BeaconConsensus& beacons) = 0;
 
         virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
-
-        virtual int64_t IsNeuralNet() = 0;
     };
 
     //!

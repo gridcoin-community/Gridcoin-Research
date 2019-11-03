@@ -724,8 +724,8 @@ void CNode::PushVersion()
     std::string sboinchashargs;
     std::string nonce;
     std::string pw1;
-    std::string mycpid = "INVESTOR";
-    std::string acid = GetCommandNonce("aries");
+    std::string mycpid;
+    std::string acid;
 
     PushMessage("aries", PROTOCOL_VERSION, nonce, pw1,
                 mycpid, mycpid, acid, nLocalServices, nTime, addrYou, addrMe,
@@ -809,7 +809,6 @@ void CNode::copyStats(CNodeStats &stats)
     stats.strSubVer = strSubVer;
     stats.fInbound = fInbound;
     stats.nStartingHeight = nStartingHeight;
-    stats.sGRCAddress = sGRCAddress;
     stats.nTrust = nTrust;
     stats.nMisbehavior = GetMisbehavior();
 

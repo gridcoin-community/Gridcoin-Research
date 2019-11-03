@@ -48,14 +48,10 @@ extern std::string ExtractValue(std::string data, std::string delimiter, int pos
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-std::string NeuralRequest(std::string MyNeuralRequest);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 
 double Round(double d, int place);
-
-bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-bool FullSyncWithDPORNodes();
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
@@ -68,8 +64,6 @@ extern UniValue GetJsonUnspentReport();
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern UniValue GetJSONBeaconReport();
-
-void GatherNeuralHashes();
 
 double GetTotalBalance();
 
@@ -993,58 +987,24 @@ UniValue currentneuralreport(const UniValue& params, bool fHelp)
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 0)
         throw runtime_error(
-                "explainmagnitude [bool:force]\n"
+                "explainmagnitude\n"
                 "\n"
-                "[force] -> Optional: Force a response (excessive requests can result in temporary ban from neural responses)\n"
-                "\n"
-                "Displays information for the current neural hashes in network\n");
+                "Itemize your CPID magnitudes by project.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    bool bForce = false;
-
-    if (params.size() > 0)
-        bForce = params[0].get_bool();
-
     LOCK(cs_main);
-
-    // First try local node before bothering network...
 
     const std::string primary_cpid = NN::GetPrimaryCpid();
     std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(primary_cpid);
 
     if (sNeuralResponse.length() < 25)
     {
-        if (bForce)
-        {
-            if (msNeuralResponse.length() < 25)
-            {
-                res.pushKV("Neural Response", "Empty; Requesting a response..");
-                res.pushKV("WARNING", "Only force once and try again without force if response is not received. Doing too many force attempts gets a temporary ban from neural node responses");
-
-                msNeuralResponse = "";
-
-                AsyncNeuralRequest("explainmag", primary_cpid, 10);
-            }
-        }
-
-        if (msNeuralResponse.length() > 25)
-        {
-            res.pushKV("Neural Response", "true");
-
-            std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
-
-            for (unsigned int i = 0; i < vMag.size(); i++)
-                res.pushKV(RoundToString(i+1,0),vMag[i].c_str());
-        }
-
-        else
-            res.pushKV("Neural Response", "false; Try again at a later time");
+        res.pushKV("Neural Response", "false; Try again at a later time");
 
     }
-    // the local response was good so use it instead.
     else
     {
         res.pushKV("Neural Response", "true (from THIS node)");
@@ -1054,7 +1014,6 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
         for (unsigned int i = 0; i < vMag.size(); i++)
             res.pushKV(RoundToString(i+1,0),vMag[i].c_str());
     }
-
 
     return res;
 }
@@ -1290,22 +1249,6 @@ UniValue superblocks(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue syncdpor2(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "syncdpor2\n"
-                "\n"
-                "Synchronize with the neural network\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-    FullSyncWithDPORNodes();
-    res.pushKV("Syncing", 1);
-    return res;
-}
-
 UniValue upgradedbeaconreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1519,42 +1462,6 @@ UniValue debugnet(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue forcequorum(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "forcequorum\n"
-                "\n"
-                "Requests neural network for force a quorum among nodes\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    AsyncNeuralRequest("quorum", "gridcoin", 10);
-
-    res.pushKV("Requested a quorum - waiting for resolution.", 1);
-
-    return res;
-}
-
-UniValue gatherneuralhashes(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "gatherneuralhashes\n"
-                "\n"
-                "Requests neural network to gather neural hashes\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    GatherNeuralHashes();
-
-    res.pushKV("Sent", ".");
-
-    return res;
-}
-
 UniValue getlistof(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -1686,23 +1593,6 @@ UniValue network(const UniValue& params, bool fHelp)
     res.pushKV("Total Money Supply", money_supply);
     res.pushKV("Network Interest %", interest_percent);
     res.pushKV("Magnitude Unit (GRC payment per Magnitude per day)", stats.m_magnitude_unit);
-
-    return res;
-}
-
-UniValue neuralrequest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "neuralrequest\n"
-                "\n"
-                "Sends a request to neural network and displays response\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string response = NeuralRequest("REQUEST");
-
-    res.pushKV("Response", response);
 
     return res;
 }

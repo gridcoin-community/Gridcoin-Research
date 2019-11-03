@@ -43,11 +43,9 @@ extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern void CleanInboundConnections(bool bClearAll);
-bool RequestSupermajorityNeuralData();
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern void IncrementCurrentNeuralNetworkSupermajority(const NN::QuorumHash& quorum_hash, std::string GRCAddress, double distance);
-extern double ExtractMagnitudeFromExplainMagnitude();
 extern void GridcoinServices();
 extern bool StrLessThanReferenceHash(std::string rh);
 extern bool IsContract(CBlockIndex* pIndex);
@@ -56,9 +54,6 @@ int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
-
-bool AsyncNeuralRequest(std::string command_name,std::string cpid,int NodeLimit);
-extern bool FullSyncWithDPORNodes();
 
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
@@ -181,7 +176,6 @@ std::string    msMiningErrors7;
 std::string    msMiningErrors8;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
-std::string    msNeuralResponse;
 std::string    msHDDSerial;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
@@ -225,28 +219,6 @@ bool TimerMain(std::string timer_name, int max_ms)
         return true;
     }
     return false;
-}
-
-bool FullSyncWithDPORNodes()
-{
-    if(!NN::GetInstance()->IsEnabled())
-        return false;
-    // 3-30-2016 : First try to get the master database from another neural network node if these conditions occur:
-    // The foreign node is fully synced.  The foreign nodes quorum hash matches the supermajority hash.  My hash != supermajority hash.
-    double dCurrentPopularity = 0;
-    std::string sCurrentNeuralSupermajorityHash = GetCurrentNeuralNetworkSupermajorityHash(dCurrentPopularity);
-    std::string sMyNeuralHash = NN::GetInstance()->GetNeuralHash();
-    if (!sMyNeuralHash.empty() && sMyNeuralHash != sCurrentNeuralSupermajorityHash)
-    {
-        bool bNodeOnline = RequestSupermajorityNeuralData();
-        if (bNodeOnline)
-            return false;  // Async call to another node will continue after the node responds.
-    }
-
-    std::string errors1;
-    LoadAdminMessages(false,errors1);
-    NN::GetInstance()->SynchronizeDPOR(GetConsensusBeaconList());
-    return true;
 }
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval)
@@ -3620,57 +3592,6 @@ void GridcoinServices()
         LogPrintf("Daily backup results: Wallet -> %s Config -> %s", (bWalletBackupResults ? "true" : "false"), (bConfigBackupResults ? "true" : "false"));
     }
 
-    if (TimerMain("MyNeuralMagnitudeReport",30))
-    {
-        try
-        {
-            std::string primary_cpid = NN::GetPrimaryCpid();
-
-            if (msNeuralResponse.length() < 25 && IsResearcher(primary_cpid))
-            {
-                AsyncNeuralRequest("explainmag", primary_cpid, 5);
-                if (fDebug3) LogPrintf("Async explainmag sent for %s.", primary_cpid);
-            }
-            if (fDebug3) LogPrintf("MR Complete");
-        }
-        catch (std::exception &e)
-        {
-            LogPrintf("Error in MyNeuralMagnitudeReport1.");
-        }
-        catch(...)
-        {
-            LogPrintf("Error in MyNeuralMagnitudeReport.");
-        }
-    }
-
-    // Every N blocks as a Synchronized TEAM:
-    if ((nBestHeight % 30) == 0)
-    {
-        //Sync RAC with neural network IF superblock is over 24 hours Old, Or if we have No superblock (in case of the latter, age will be 45 years old)
-        // Note that nodes will NOT accept superblocks without a supermajority hash, so the last block will not be in memory unless it is a good superblock.
-        // Let's start syncing the neural network as soon as the LAST superblock is over 12 hours old.
-        // Also, lets do this as a TEAM exactly every 30 blocks (~30 minutes) to try to reach an EXACT consensus every half hour:
-        // For effeciency, the network sleeps for 20 hours after a good superblock is accepted
-        if (NN::Tally::SuperblockNeeded() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
-        {
-            if (fDebug3) LogPrintf("FSWDPOR ");
-            FullSyncWithDPORNodes();
-        }
-    }
-
-    if (( (nBestHeight-10) % 30 ) == 0)
-    {
-        // 10 Blocks after the network started syncing the neural network as a team, ask the neural network to come to a quorum
-        if (NN::Tally::SuperblockNeeded() && IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime()))
-        {
-            // First verify my node has a synced contract
-            if (NN::GetInstance()->GetSuperblockContract().WellFormed())
-            {
-                AsyncNeuralRequest("quorum","gridcoin",25);
-            }
-        }
-    }
-
     /* Do this only for users with valid CPID */
     if (TimerMain("send_beacon", 180)) {
         if (const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid()) {
@@ -3690,9 +3611,6 @@ void GridcoinServices()
             }
         }
     }
-
-    if (TimerMain("gather_cpids",480))
-        msNeuralResponse.clear();
 }
 
 bool AskForOutstandingBlocks(uint256 hashStart)
@@ -4521,47 +4439,6 @@ std::string NodeAddress(CNode* pfrom)
     return ip;
 }
 
-double ExtractMagnitudeFromExplainMagnitude()
-{
-        if (msNeuralResponse.empty()) return 0;
-        try
-        {
-            std::vector<std::string> vMag = split(msNeuralResponse.c_str(),"<ROW>");
-            for (unsigned int i = 0; i < vMag.size(); i++)
-            {
-                if (Contains(vMag[i],"Total Mag:"))
-                {
-                    std::vector<std::string> vMyMag = split(vMag[i].c_str(),":");
-                    if (vMyMag.size() > 0)
-                    {
-                        std::string sSubMag = vMyMag[1];
-                        boost::replace_all(sSubMag, " ", "");
-                        double dMag = RoundFromString("0"+sSubMag,0);
-                        return dMag;
-                    }
-                }
-            }
-            return 0;
-        }
-        catch(...)
-        {
-            return 0;
-        }
-        return 0;
-}
-
-bool VerifyExplainMagnitudeResponse()
-{
-    if (msNeuralResponse.empty())
-        return false;
-
-            double dMag = ExtractMagnitudeFromExplainMagnitude();
-            if (dMag==0)
-        msNeuralResponse.clear();
-
-    return dMag != 0;
-            }
-
 bool SecurityTest(CNode* pfrom, bool acid_test)
 {
     if (pfrom->nStartingHeight > (nBestHeight*.5) && acid_test) return true;
@@ -4605,13 +4482,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CAddress addrMe;
         CAddress addrFrom;
         uint64_t nNonce = 1;
-        std::string acid = "";
-        vRecv >> pfrom->nVersion >> pfrom->boinchashnonce >> pfrom->boinchashpw >> pfrom->cpid >> pfrom->enccpid >> acid >> pfrom->nServices >> nTime >> addrMe;
+        std::string legacy_dummy;
+
+        vRecv >> pfrom->nVersion
+            >> legacy_dummy      // pfrom->boinchashnonce
+            >> legacy_dummy      // pfrom->boinchashpw
+            >> legacy_dummy      // pfrom->cpid
+            >> legacy_dummy      // pfrom->enccpid
+            >> legacy_dummy      // acid
+            >> pfrom->nServices
+            >> nTime
+            >> addrMe;
 
         if (fDebug10)
-            LogPrintf("received aries version %i boinchashnonce %s boinchashpw %s cpid %s enccpid %s acid %s ..."
-                      ,pfrom->nVersion, pfrom->boinchashnonce, pfrom->boinchashpw
-                      ,pfrom->cpid.c_str(), pfrom->enccpid, acid);
+            LogPrintf("received aries version %i ...", pfrom->nVersion);
 
         int64_t timedrift = std::abs(GetAdjustedTime() - nTime);
 
@@ -4669,7 +4553,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // 12-5-2015 - Append Trust fields
         pfrom->nTrust = 0;
 
-        if (!vRecv.empty())         vRecv >> pfrom->sGRCAddress;
+        if (!vRecv.empty())         vRecv >> legacy_dummy; // pfrom->sGRCAddress;
 
 
         // Allow newbies to connect easily with 0 blocks
@@ -5267,33 +5151,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (!tracker.IsNull())
             tracker.fn(tracker.param1, vRecv);
     }
-    else if (strCommand == "neural")
-    {
-        std::string neural_request = "";
-        std::string neural_request_id = "";
-        vRecv >> neural_request >> neural_request_id;  // foreign node issued neural request with request ID:
-        std::string neural_response = "generic_response";
-
-        if (neural_request=="neural_data")
-        {
-            pfrom->PushMessage("ndata_nresp", NN::GetInstance()->GetNeuralContract());
-        }
-        else if (neural_request=="neural_hash")
-        {
-            pfrom->PushMessage("hash_nresp", NN::GetInstance()->GetNeuralHash());
-        }
-        else if (neural_request=="explainmag")
-        {
-            pfrom->PushMessage(
-                        "expmag_nresp",
-                        NN::GetInstance()->ExplainMagnitude(neural_request_id));
-        }
-        else if (neural_request=="quorum")
-        {
-            // 7-12-2015 Resolve discrepencies in w nodes to speak to each other
-            pfrom->PushMessage("quorum_nresp", NN::GetInstance()->GetNeuralContract());
-        }
-    }
     else if (strCommand == "ping")
     {
         std::string acid = "";
@@ -5370,41 +5227,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (bPingFinished) {
             pfrom->nPingNonceSent = 0;
         }
-    }
-    else if (strCommand == "hash_nresp")
-    {
-        std::string neural_response = "";
-        vRecv >> neural_response;
-        // if (pfrom->nNeuralRequestSent != 0)
-        // nNeuralNonce must match request ID
-        pfrom->NeuralHash = neural_response;
-        if (fDebug10) LogPrintf("hash_Neural Response %s ",neural_response);
-    }
-    else if (strCommand == "expmag_nresp")
-    {
-            std::string neural_response = "";
-            vRecv >> neural_response;
-            if (neural_response.length() > 10)
-            {
-                msNeuralResponse=neural_response;
-                //If invalid, try again 10-20-2015
-                VerifyExplainMagnitudeResponse();
-            }
-            if (fDebug10) LogPrintf("expmag_Neural Response %s ",neural_response);
-    }
-    else if (strCommand == "quorum_nresp")
-    {
-        std::string neural_contract = "";
-        vRecv >> neural_contract;
-        if (fDebug && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-    }
-    else if (strCommand == "ndata_nresp")
-    {
-        std::string neural_contract;
-        vRecv >> neural_contract;
-        if (fDebug3 && neural_contract.length() > 100) LogPrintf("Quorum contract received %s",neural_contract.substr(0,80));
-        if (neural_contract.length() > 10)
-            FullSyncWithDPORNodes();
     }
     else if (strCommand == "alert")
     {

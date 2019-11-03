@@ -149,8 +149,6 @@ public:
     double dPingWait;
 	std::string addrLocal;
 	int nTrust;
-	std::string sGRCAddress;
-	//std::string securityversion;
 };
 
 
@@ -226,13 +224,6 @@ public:
     CService addrLocal;
     int nVersion;
     std::string strSubVer;
-	std::string boinchashnonce;
-	std::string boinchashpw;
-	//12-10-2014 CPID Support
-	std::string cpid;
-	std::string enccpid;
-	std::string NeuralHash;
-	std::string sGRCAddress;
 	int nTrust;
 	////////////////////////
 
@@ -307,7 +298,6 @@ public:
         addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
         nVersion = 0;
         strSubVer = "";
-		//securityversion = "";
         fOneShot = false;
         fClient = false; // set by version message
         fInbound = fInboundIn;
@@ -326,8 +316,6 @@ public:
 		nLastOrphan=0;
 		nOrphanCount=0;
 		nOrphanCountViolations=0;
-		NeuralHash = "";
-		sGRCAddress = "";
 		nTrust = 0;
         hashCheckpointKnown.SetNull();
         setInventoryKnown.max_size(SendBufferSize() / 1000);
