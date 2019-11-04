@@ -874,6 +874,11 @@ bool SignStakeBlock(CBlock &block, CKey &key, vector<const CWalletTx*> &StakeInp
         }
 
         block.vtx[0].hashBoinc = block.m_claim.ToString(block.nVersion);
+
+        // Invalidate the claim object so that the new block is forced to parse
+        // it using the legacy routine when we pass it back to ProcessBlock():
+        //
+        block.m_claim.m_mining_id = NN::MiningId();
     } else {
         // After the mandatory switch to block version 11, the claim context is
         // serialized directly in the block, but we need to add the hash of the
