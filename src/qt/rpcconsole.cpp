@@ -748,7 +748,7 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
             ui->peerCommonHeight->setText(tr("Unknown"));
     }
 
-    ui->detailWidget->show();
+    ui->widget_2->show();
 }
 
 
@@ -845,7 +845,7 @@ void RPCConsole::clearSelectedNode()
 {
     ui->peerWidget->selectionModel()->clearSelection();
     cachedNodeids.clear();
-    ui->detailWidget->hide();
+    ui->widget_2->hide();
     ui->peerHeading->setText(tr("Select a peer to view detailed information."));
 }
 
