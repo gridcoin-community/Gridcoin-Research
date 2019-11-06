@@ -113,6 +113,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("walletStylesheet", "light");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
+        case DisableUpdateCheck:
+            return QVariant(fDisableUpdateCheck);
         default:
             return QVariant();
         }
@@ -211,6 +213,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
             emit coinControlFeaturesChanged(fCoinControlFeatures);
             }
+            break;
+        case DisableUpdateCheck:
+            fDisableUpdateCheck = value.toBool();
             break;
         default:
             break;

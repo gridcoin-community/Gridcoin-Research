@@ -59,7 +59,7 @@ extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
 bool fSnapshotRequest = false;
-
+bool fDisableUpdateCheck = false;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
@@ -292,10 +292,10 @@ std::string HelpMessage()
 
         "\n" + _("Update/Snapshot options:") + "\n"
         "  -snapshotdownload            " + _("Download and apply latest snapshot") + "\n"
-        "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot zip file") + "\n"
-        "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot sha256sum file") + "\n"
-        "  -disableupdatechecks         " + _("Optional: Disable update checks by wallet") + "\n"
-        "  -updatecheckinterval=<mins>  " + _("Optional: Specify custom update interval checks (Default: 1440 (24 hours))") + "\n"
+        "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot.zip file") + "\n"
+        "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot.sha256 file") + "\n"
+        "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
+        "  -updatecheckinterval=<mins>  " + _("Optional: Specify custom update interval checks in hours (Default: 24 hours (minimum 1 hour))") + "\n"
         "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks") + "\n";
 
     return strUsage;
@@ -388,6 +388,10 @@ bool AppInit2(ThreadHandlerPtr threads)
 #else
     SetConsoleCtrlHandler(consoleCtrlHandler, true);
 #endif
+
+    /** Check to see if the -disableupdatecheck is set.  **/
+    if (mapArgs.count("-disableupdatecheck"))
+        fDisableUpdateCheck = true;
 
     // ********************************************************* Step 2: parameter interactions
 
@@ -1055,38 +1059,52 @@ bool AppInit2(ThreadHandlerPtr threads)
     }, DUMP_BANS_INTERVAL * 1000);
 
     /** If this is not TestNet we check for updates on startup and daily **/
-    /** If user has opted out of update checks then respect that **/
-    if (!fTestNet && !mapArgs.count("-disableupdatechecks"))
+    /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
+    if (!fTestNet)
     {
-        g_UpdateChecker->CheckForLatestUpdate();
+        int64_t UpdateCheckInterval = 24;
 
-        int64_t UpdateCheckInterval = 24 * 60;
-
+        // Save some cycles and only so this area if the argument exists
         if (mapArgs.count("-updatecheckinterval"))
         {
             try
             {
-                UpdateCheckInterval = GetArg("-updatecheckinterval", 24 * 60);
-                // trivial: Don't allow checks less then 60 minutes apart of update checks to prevent server DDoS (what is a good value)
-                if (UpdateCheckInterval < 60)
+                UpdateCheckInterval = GetArg("-updatecheckinterval", 24);
+                // trivial: Don't allow checks less then 1 hour apart of update checks to prevent server DDoS (what is a good value)
+                if (UpdateCheckInterval < 1)
                 {
-                    LogPrintf("UpdateChecker: Update check interval too small of %" PRId64 "; Defaulting to 1440 (minutes)", UpdateCheckInterval);
+                    LogPrintf("UpdateChecker: Update check interval too small of %" PRId64 "; Defaulting to 24 hour intervals", UpdateCheckInterval);
 
-                    UpdateCheckInterval = 24 * 60;
+                    UpdateCheckInterval = 24;
                 }
             }
 
             catch (const std::exception& ex)
             {
                 // Tell them the exception and what they had put in place
-                LogPrintf("UpdateChecker: Exception occured while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 1440 (minutes)", ex.what(), GetArgument("-updatecheckinterval", ""));
+                LogPrintf("UpdateChecker: Exception occured while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 24 hour intervals", ex.what(), GetArgument("-updatecheckinterval", ""));
 
-                UpdateCheckInterval = 24 * 60;
+                UpdateCheckInterval = 24;
             }
         }
 
-        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 1000);
+        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 60 * 1000);
+
+        if (!fDisableUpdateCheck)
+        {
+            LogPrintf("UpdateChecker: Update checks scheduled every %" PRId64 " mins.", UpdateCheckInterval);
+
+            LogPrintf("Updatechecker: Performing startup update check.");
+
+            g_UpdateChecker->CheckForLatestUpdate();
+        }
+
+        else
+            LogPrintf("UpdateChecker: Update checks are disabled by user.");
     }
+
+    else
+        LogPrintf("UpdateChecker: Update checks are disable for TestNet.");
 
     return true;
 }

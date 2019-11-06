@@ -1,5 +1,6 @@
 #include "upgrade.h"
 #include "util.h"
+#include "init.h"
 
 #include <algorithm>
 #include <univalue.h>
@@ -23,8 +24,8 @@ Upgrade::Upgrade() {}
 
 void Upgrade::CheckForLatestUpdate()
 {
-    // If testnet skip this
-    if (fTestNet)
+    // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
+    if (fTestNet || fDisableUpdateCheck)
         return;
 
     Http VersionPull;

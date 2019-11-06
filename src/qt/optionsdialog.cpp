@@ -126,6 +126,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->transactionFee, OptionsModel::Fee);
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
+    mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
