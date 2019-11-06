@@ -389,9 +389,15 @@ bool AppInit2(ThreadHandlerPtr threads)
     SetConsoleCtrlHandler(consoleCtrlHandler, true);
 #endif
 
-    /** Check to see if the -disableupdatecheck is set.  **/
+    /* Check to see if the -disableupdatecheck is set.
+     * Be flexible and allow this to be set in config file.
+     *
+     * If set to 0 in config we do not disable the update checks
+     * If set to 1 in config we disable the update checks
+     * If command-line set it'll result in true since GetBoolArg sends back true
+     */
     if (mapArgs.count("-disableupdatecheck"))
-        fDisableUpdateCheck = true;
+        fDisableUpdateCheck = GetBoolArg("-disableupdatecheck", true);
 
     // ********************************************************* Step 2: parameter interactions
 
