@@ -333,11 +333,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         }
     }
 
-    // Debug view 12-7-2014 - Halford
-	// Smart Contracts
-
-    msHashBoinc = "";
-
     if (fDebug || true)
     {
         strHTML += "<hr><br><b>" + tr("Transaction Debits/Credits") + "</b><br><br>";
@@ -357,18 +352,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
         CTxDB txdb("r"); // To fetch source txouts
 
-        // Contracts
-		//std::string sContractLength = RoundToString((double)wtx.hashBoinc.length(),0);
-		//std::string sContractInfo = "";
-		//if (wtx.hashBoinc.length() > 255) sContractInfo = ": " + wtx.hashBoinc.substr(0,255);
-
-        //if (fDebug3)
-        //{
-				//Extract contract here from : wtx.hashBoinc - contract key
-				//strHTML += "<br><b>Contracts:</b> " + QString::fromStdString(sContractLength) + "<p><br>";
-        //}
-
-		msHashBoinc += wtx.hashBoinc;
         strHTML += "<br><b>" + tr("Transaction Inputs") + "</b>";
         strHTML += "<ul>";
 

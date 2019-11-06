@@ -167,7 +167,6 @@ extern bool LessVerbose(int iMax1000);
 double         mdPORNonce = 0;
 double         mdMachineTimerLast = 0;
 // Mining status variables
-std::string    msHashBoinc;
 std::string    msMiningErrors;
 std::string    msPoll;
 std::string    msMiningErrors5;
