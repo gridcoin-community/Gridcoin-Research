@@ -5351,34 +5351,16 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
-    std::string sSBCoreData;
-
+    std::string legacy_packed_contract;
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        sSBCoreData = UnpackBinarySuperblock(ConvergedScraperStatsCache.NewFormatSuperblock.PackLegacy());
+        legacy_packed_contract = ConvergedScraperStatsCache.NewFormatSuperblock.PackLegacy();
+        uint64_t legacy_packed_size = legacy_packed_contract.size();
+
+        _log(logattribute::INFO, "testnewsb", "legacy packed size = " + std::to_string(legacy_packed_size));
+        res.pushKV("legacy packed size", legacy_packed_size);
     }
-
-    std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
-    std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
-
-    if (sSBCoreData == sSBCoreData_out)
-    {
-        _log(logattribute::INFO, "testnewsb", "Generated contract passed binary pack/unpack");
-        res.pushKV("Generated legacy contract", "passed");
-    }
-    else
-    {
-        _log(logattribute::ERR, "testnewsb", "Generated contract FAILED binary pack/unpack");
-        _log(logattribute::INFO, "testnewsb", "sSBCoreData_out = \n" + sSBCoreData_out);
-        res.pushKV("Generated legacy contract", "FAILED");
-
-    }
-
-    _log(logattribute::INFO, "testnewsb", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
-    res.pushKV("sSBCoreData size", (uint64_t) sSBCoreData.size());
-    _log(logattribute::INFO, "testnewsb", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
-    res.pushKV("sSBPackedCoreData size", (uint64_t) sPackedSBCoreData.size());
 
     NN::Superblock NewFormatSuperblock;
     NN::Superblock NewFormatSuperblock_out;
@@ -5439,9 +5421,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock serialization", "FAILED");
     }
 
-    NN::Superblock NewFormatSuperblockFromLegacy = NN::Superblock::UnpackLegacy(sPackedSBCoreData);
+    NN::Superblock NewFormatSuperblockFromLegacy = NN::Superblock::UnpackLegacy(legacy_packed_contract);
     NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblockFromLegacy);
-    std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
 
     res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.ToString());
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
