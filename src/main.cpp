@@ -5955,43 +5955,6 @@ NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     return block.PullClaim();
 }
 
-std::string CPIDHash(double dMagIn, std::string sCPID)
-{
-    std::string sMag = RoundToString(dMagIn,0);
-    double dMagLength = (double)sMag.length();
-    double dExponent = pow(dMagLength,5);
-    std::string sMagComponent1 = RoundToString(dMagIn/(dExponent+.01),0);
-    std::string sSuffix = RoundToString(dMagLength * dExponent, 0);
-    std::string sHash = sCPID + sMagComponent1 + sSuffix;
-    return sHash;
-}
-
-std::string GetQuorumHash(const std::string& data)
-{
-    //Data includes the Magnitudes, and the Projects:
-    std::string sMags = ExtractXML(data,"<MAGNITUDES>","</MAGNITUDES>");
-    std::vector<std::string> vMags = split(sMags.c_str(),";");
-    std::string sHashIn = "";
-    for (unsigned int x = 0; x < vMags.size(); x++)
-    {
-        std::vector<std::string> vRow = split(vMags[x].c_str(),",");
-
-        // Each row should consist of two fields, CPID and magnitude.
-        if(vRow.size() < 2)
-            continue;
-
-        // First row (CPID) must be exactly 32 bytes.
-        const std::string& sCPID = vRow[0];
-        if(sCPID.size() != 32)
-            continue;
-
-        double dMag = RoundFromString(vRow[1],0);
-        sHashIn += CPIDHash(dMag, sCPID) + "<COL>";
-    }
-
-    return RetrieveMd5(sHashIn);
-}
-
 bool IsContract(CBlockIndex* pIndex)
 {
     return pIndex->nIsContract==1 ? true : false;

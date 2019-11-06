@@ -263,7 +263,6 @@ int64_t GetProofOfStakeReward(
     double& OUT_INTEREST);
 
 bool OutOfSyncByAge();
-std::string GetQuorumHash(const std::string& data);
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 bool IsSuperBlock(CBlockIndex* pIndex);
 
