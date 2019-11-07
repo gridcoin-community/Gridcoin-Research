@@ -45,7 +45,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 extern void CleanInboundConnections(bool bClearAll);
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
-extern void IncrementCurrentNeuralNetworkSupermajority(const NN::QuorumHash& quorum_hash, std::string GRCAddress, double distance);
 extern void GridcoinServices();
 extern bool StrLessThanReferenceHash(std::string rh);
 extern bool IsContract(CBlockIndex* pIndex);
@@ -53,7 +52,6 @@ extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
 extern void IncrementVersionCount(const std::string& Version);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-extern std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
@@ -141,7 +139,6 @@ int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
 std::unordered_map<std::string, double> mvNeuralNetworkHash;
-std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
 std::unordered_map<std::string, double> mvNeuralVersion;
 
 BlockFinder blockFinder;
@@ -4167,7 +4164,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     //Clear the neural network hash buffer
     mvNeuralNetworkHash.clear();
     mvNeuralVersion.clear();
-    mvCurrentNeuralNetworkHash.clear();
 
     // ClearCache was no-op in previous version due to bug. Now it was fixed,	
     // and we previously emulated the old behavior to prevent early forks when
@@ -4175,7 +4171,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
     // with time. If this causes an issue when syncing then considering making
     // this >=v9 only again.
     ClearCache(Section::NEURALSECURITY);
-    ClearCache(Section::CURRENTNEURALSECURITY);
     WriteCache(Section::NEURALSECURITY, "pending","0",GetAdjustedTime());
 
     try
@@ -4209,7 +4204,6 @@ bool ComputeNeuralNetworkSupermajorityHashes()
             IncrementVersionCount(claim.m_client_version);
             //Increment Neural Network Hashes Supermajority (over the last N blocks)
             IncrementNeuralNetworkSupermajority(claim.m_quorum_hash, claim.m_quorum_address, (nMaxDepth-pblockindex->nHeight)+10, pblockindex);
-            IncrementCurrentNeuralNetworkSupermajority(claim.m_quorum_hash, claim.m_quorum_address, (nMaxDepth-pblockindex->nHeight)+10);
         }
 
         if (fDebug3) LogPrintf(".11.");
@@ -5609,31 +5603,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-void IncrementCurrentNeuralNetworkSupermajority(
-    const NN::QuorumHash& quorum_hash,
-    std::string GRCAddress,
-    double distance)
-{
-    if (!quorum_hash.Valid())
-        return;
-
-    std::string NeuralHash = quorum_hash.ToString();
-
-    // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    const std::string& Security = ReadCache(Section::CURRENTNEURALSECURITY, GRCAddress).value;
-    if (Security == NeuralHash)
-    {
-        //This node has already voted, throw away the vote
-        return;
-    }
-    
-    WriteCache(Section::CURRENTNEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
-
-    double multiplier = distance < 40 ? 400 : 200;
-    double votes = (1/distance)*multiplier;
-    mvCurrentNeuralNetworkHash[NeuralHash] += votes;
-}
-
 void IncrementNeuralNetworkSupermajority(
     const NN::QuorumHash& quorum_hash,
     const std::string& GRCAddress,
@@ -5711,36 +5680,6 @@ std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
             highest_popularity = popularity;
             neural_hash = hash;
         }
-    }
-
-    out_popularity = highest_popularity;
-    return neural_hash;
-}
-
-
-std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity)
-{
-    // Copy to a sorted map.
-    std::map<std::string, double> sorted_hashes(
-                mvCurrentNeuralNetworkHash.begin(),
-                mvCurrentNeuralNetworkHash.end());
-
-    double highest_popularity = -1;
-    std::string neural_hash;
-    for(auto& entry : sorted_hashes)
-    {
-        auto& hash = entry.first;
-        auto& popularity = entry.second;
-
-                // d41d8 is the hash of an empty magnitude contract - don't count it
-        if(popularity > 0 &&
-           popularity > highest_popularity &&
-           hash != "TOTAL_VOTES" &&
-           hash != "d41d8cd98f00b204e9800998ecf8427e")
-                {
-                    highest_popularity = popularity;
-            neural_hash = hash;
-                }
     }
 
     out_popularity = highest_popularity;

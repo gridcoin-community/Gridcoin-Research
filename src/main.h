@@ -134,7 +134,6 @@ inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight)
 extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
 
 extern std::unordered_map<std::string, double> mvNeuralNetworkHash;
-extern std::unordered_map<std::string, double> mvCurrentNeuralNetworkHash;
 extern std::unordered_map<std::string, double> mvNeuralVersion;
 
 struct BlockHasher

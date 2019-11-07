@@ -11,7 +11,6 @@ enum class Section
     GLOBAL,
     PROTOCOL,
     NEURALSECURITY,
-    CURRENTNEURALSECURITY,
     TRXID,
     POLL,
     VOTE,

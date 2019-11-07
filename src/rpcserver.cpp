@@ -343,8 +343,6 @@ static const CRPCCommand vRPCCommands[] =
     { "advertisebeacon",         &advertisebeacon,         cat_mining        },
     { "beaconreport",            &beaconreport,            cat_mining        },
     { "beaconstatus",            &beaconstatus,            cat_mining        },
-    { "currentneuralhash",       &currentneuralhash,       cat_mining        },
-    { "currentneuralreport",     &currentneuralreport,     cat_mining        },
     { "explainmagnitude",        &explainmagnitude,        cat_mining        },
     { "getmininginfo",           &getmininginfo,           cat_mining        },
     { "lifetime",                &lifetime,                cat_mining        },

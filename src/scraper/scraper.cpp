@@ -1091,10 +1091,6 @@ bool ScraperHousekeeping()
         for (const auto& network_hash : mvNeuralNetworkHash)
             _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
                  + ", Popularity: " + std::to_string(network_hash.second));
-        _log(logattribute::INFO, "ScraperHousekeeping", "mvCurrentNeuralNetworkHash dump");
-        for (const auto& network_hash : mvCurrentNeuralNetworkHash)
-            _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
-                 + ", Popularity: " + std::to_string(network_hash.second));
     }
 
     logger& log = LogInstance();

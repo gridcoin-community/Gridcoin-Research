@@ -20,7 +20,6 @@ namespace
         { "global", Section::GLOBAL },
         { "protocol", Section::PROTOCOL },
         { "neuralsecurity", Section::NEURALSECURITY },
-        { "currentneuralsecurity", Section::CURRENTNEURALSECURITY },
         { "trxid", Section::TRXID },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
