@@ -89,7 +89,7 @@ bool UpgradeQt::SnapshotMain()
                 SnapshotDownloadThread.interrupt();
                 SnapshotDownloadThread.join();
 
-                Msg(_("Snapshot operation canceled."), _("The wallet will not shutdown."));
+                Msg(_("Snapshot operation canceled."), _("The wallet will now shutdown."));
 
                 return false;
             }

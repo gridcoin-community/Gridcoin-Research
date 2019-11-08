@@ -39,7 +39,7 @@ public:
     //!
     //! \brief Check for latest updates on github.
     //!
-    void CheckForLatestUpdate();
+    static void CheckForLatestUpdate();
 
     //!
     //! \brief Function that will be threaded to download snapshot
@@ -52,7 +52,7 @@ public:
     //!
     //! \return Bool on the success of cleanup
     //!
-    bool CleanupBlockchainData();
+    static bool CleanupBlockchainData();
 
     //!
     //! \brief Extracts the snapshot zip file
@@ -73,7 +73,12 @@ public:
     //!
     //! \return Bool on the success of matching SHA256SUM
     //!
-    bool VerifySHA256SUM();
+    static bool VerifySHA256SUM();
+
+    //!
+    //! \brief Small function to delete the snapshot.zip file
+    //!
+    static void DeleteSnapshot();
 };
 
 //!

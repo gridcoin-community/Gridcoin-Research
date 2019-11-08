@@ -235,7 +235,7 @@ std::string Http::GetLatestVersionResponse()
 {
     std::string buffer;
     std::string header;
-    std::string url = GetArgument("-updatecheckurl", "https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest");
+    std::string url = GetArg("-updatecheckurl", "https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest");
 
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Accept: */*");
@@ -266,7 +266,7 @@ std::string Http::GetLatestVersionResponse()
 
 void Http::DownloadSnapshot()
 {
-    std::string url = GetArgument("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+    std::string url = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
 
     boost::filesystem::path destination = GetDataDir() / "snapshot.zip";
 
@@ -279,6 +279,7 @@ void Http::DownloadSnapshot()
         throw std::runtime_error(
                 tfm::format("Snapshot Downloader: Error opening target %s: %s (%d)", destination.string(), strerror(errno), errno));
     }
+
     std::string buffer;
     std::string header;
 
@@ -333,6 +334,11 @@ void Http::DownloadSnapshot()
         }
     }
 
+    // Validate HTTP return code.
+    long response_code;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+    EvaluateResponse(response_code, url);
+
     DownloadStatus.SnapshotDownloadComplete = true;
 
     return;
@@ -342,7 +348,7 @@ std::string Http::GetSnapshotSHA256()
 {
     std::string buffer;
     std::string header;
-    std::string url = GetArgument("-snapshotsha256url", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip.sha256");
+    std::string url = GetArg("-snapshotsha256url", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip.sha256");
 
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Accept: */*");
@@ -365,6 +371,11 @@ std::string Http::GetSnapshotSHA256()
 
        return "";
     }
+
+    // Validate HTTP return code.
+    long response_code;
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &response_code);
+    EvaluateResponse(response_code, url);
 
     if (buffer.empty())
     {

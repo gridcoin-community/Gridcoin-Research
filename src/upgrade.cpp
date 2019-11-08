@@ -31,10 +31,22 @@ void Upgrade::CheckForLatestUpdate()
     Http VersionPull;
 
     std::string GithubResponse = "";
+    std::string VersionResponse = "";
 
     // We receive the response and it's in a json reply
     UniValue Response(UniValue::VOBJ);
-    std::string VersionResponse = VersionPull.GetLatestVersionResponse();
+
+    try
+    {
+        VersionResponse = VersionPull.GetLatestVersionResponse();
+    }
+
+    catch (const std::runtime_error& e)
+    {
+        LogPrintf("Update Checker: Exception occured while checking for latest update. (%s)", e.what());
+
+        return;
+    }
 
     if (VersionResponse.empty())
     {
@@ -118,7 +130,7 @@ void Upgrade::SnapshotMain()
 {
     std::cout << std::endl;
     std::cout << _("Snapshot Process Has Begun.") << std::endl;
-    std::cout << _("Warning: Ending this process after Stage 2 will result in result in syncing from 0 or a incomplete/corrupted blockchain.") << std::endl << std::endl << std::flush;
+    std::cout << _("Warning: Ending this process after Stage 2 will result in result in syncing from 0 or an incomplete/corrupted blockchain.") << std::endl << std::endl << std::flush;
 
     // Create a thread for snapshot to be downloaded
     boost::thread SnapshotDownloadThread(std::bind(&Upgrade::DownloadSnapshot, this));
@@ -207,7 +219,17 @@ void Upgrade::DownloadSnapshot()
      // Download the snapshot.zip
     Http HTTPHandler(false);
 
-    HTTPHandler.DownloadSnapshot();
+    try
+    {
+        HTTPHandler.DownloadSnapshot();
+    }
+
+    catch(std::runtime_error& e)
+    {
+        LogPrintf("Snapshot Downloader: Exception occured while attempting to download snapshot (%s)", e.what());
+
+        DownloadStatus.SnapshotDownloadFailed = true;
+    }
 
     return;
 }
@@ -218,7 +240,15 @@ bool Upgrade::VerifySHA256SUM()
 
     std::string ServerSHA256SUM = "";
 
-    ServerSHA256SUM = HTTPHandler.GetSnapshotSHA256();
+    try
+    {
+        ServerSHA256SUM = HTTPHandler.GetSnapshotSHA256();
+    }
+
+    catch (std::runtime_error& e)
+    {
+        LogPrintf("Snapshot (VerifySHA256SUM): Exception occured while attempting to retrieve snapshot SHA256SUM (%s)", e.what());
+    }
 
     if (ServerSHA256SUM.empty())
     {
@@ -455,4 +485,29 @@ bool Upgrade::ExtractSnapshot()
     }
 
     return true;
+}
+
+void Upgrade::DeleteSnapshot()
+{
+    // File is out of scope now check if it exists and if so delete it.
+    // This covers partial downloaded files or a http response downloaded into file.
+    std::string snapshotfile = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+
+    size_t pos = snapshotfile.find_last_of("/");
+
+    snapshotfile = snapshotfile.substr(pos + 1, (snapshotfile.length() - pos - 1));
+
+    try
+    {
+        boost::filesystem::path snapshotpath = GetDataDir() / snapshotfile;
+
+        if (boost::filesystem::exists(snapshotpath))
+            if (boost::filesystem::is_regular_file(snapshotpath))
+                boost::filesystem::remove(snapshotpath);
+    }
+
+    catch (boost::filesystem::filesystem_error& e)
+    {
+        LogPrintf("Snapshot Downloader: Exception occured while attempting to delete snapshot (%s)", e.code().message());
+    }
 }

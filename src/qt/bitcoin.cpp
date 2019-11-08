@@ -235,6 +235,9 @@ int main(int argc, char *argv[])
 
         else
             Snapshot.SnapshotMain();
+
+        // Delete snapshot regardless of result.
+        Snapshot.DeleteSnapshot();
     }
 
     /** Start Qt as normal before it was moved into this function **/

@@ -4,13 +4,13 @@ native_packages := native_ccache
 qt_packages = qrencode
 
 ifeq ($(QT_59),1)
-qt_linux_packages:=qt59 expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans libzip
-qt_darwin_packages=qt59 libzip
-qt_mingw32_packages=qt59 libzip
+qt_linux_packages:=qt59 expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans
+qt_darwin_packages=qt59
+qt_mingw32_packages=qt59
 else
-qt_linux_packages:=qt expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans libzip
-qt_darwin_packages=qt libzip
-qt_mingw32_packages=qt libzip
+qt_linux_packages:=qt expat dbus libxcb xcb_proto libXau xproto freetype fontconfig libX11 xextproto libXext xtrans
+qt_darwin_packages=qt
+qt_mingw32_packages=qt
 endif
 
 ifeq ($(BDB_53),1)

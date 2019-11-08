@@ -295,7 +295,7 @@ std::string HelpMessage()
         "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
         "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
         "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
-        "  -updatecheckinterval=<mins>  " + _("Optional: Specify custom update interval checks in hours (Default: 24 hours (minimum 1 hour))") + "\n"
+        "  -updatecheckinterval=<hours> " + _("Optional: Specify custom update interval checks in hours (Default: 24 hours (minimum 1 hour))") + "\n"
         "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks (ex: https://sub.domain.com/location/latest") + "\n";
 
     return strUsage;

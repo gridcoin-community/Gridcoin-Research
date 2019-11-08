@@ -111,6 +111,9 @@ bool AppInit(int argc, char* argv[])
 
             else
                 Snapshot.SnapshotMain();
+
+            // Delete snapshot file regardless of end result
+            Snapshot.DownloadSnapshot();
         }
 
         LogPrintf("AppInit");
