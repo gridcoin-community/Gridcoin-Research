@@ -275,7 +275,7 @@ bool Upgrade::VerifySHA256SUM()
         return false;
     }
 
-    while (bytesread = fread(buffer, 1, sizeof(buffer), file))
+    while ((bytesread = fread(buffer, 1, sizeof(buffer), file)))
         SHA256_Update(&ctx, buffer, bytesread);
 
     SHA256_Final(digest, &ctx);
@@ -305,13 +305,12 @@ bool Upgrade::CleanupBlockchainData()
     // We must delete previous blockchain data
     // txleveldb
     // blk*.dat
-    boost::filesystem::directory_iterator Iter(CleanupPath);
     boost::filesystem::directory_iterator IterEnd;
 
     try
     {
         // Remove the files. We iterate as we know blk* will exist more and more in future as well
-        for (Iter; Iter != IterEnd; ++Iter)
+        for (boost::filesystem::directory_iterator Iter(CleanupPath); Iter != IterEnd; ++Iter)
         {
             if (boost::filesystem::is_directory(Iter->path()))
             {
@@ -361,11 +360,11 @@ bool Upgrade::ExtractSnapshot()
     struct zip_file* ZipFile;
     struct zip_stat ZipStat;
     char Buf[1024*1024];
-    int i, j, err, len;
-    int64_t entries;
+    int err;
+    uint64_t i, j;
+    int64_t entries, len, sum;
     long long totaluncompressedsize = 0;
     long long currentuncompressedsize = 0;
-    long long sum;
     int64_t lastupdated = GetAdjustedTime();
 
     try
@@ -386,7 +385,7 @@ bool Upgrade::ExtractSnapshot()
         entries = zip_get_num_entries(ZipArchive, 0);
 
         // Lets scan for total size uncompressed so we can do a detailed progress for the watching user
-        for (j = 0; j < entries; j++)
+        for (j = 0; j < (uint64_t)entries; j++)
         {
             if (zip_stat_index(ZipArchive, j, 0, &ZipStat) == 0)
             {
@@ -396,7 +395,7 @@ bool Upgrade::ExtractSnapshot()
         }
 
         // Now extract
-        for (i = 0; i < entries; i++)
+        for (i = 0; i < (uint64_t)entries; i++)
         {
             if (zip_stat_index(ZipArchive, i, 0, &ZipStat) == 0)
             {
@@ -432,7 +431,7 @@ bool Upgrade::ExtractSnapshot()
 
                     sum = 0;
 
-                    while (sum != ZipStat.size)
+                    while ((uint64_t)sum != ZipStat.size)
                     {
                         boost::this_thread::interruption_point();
 
@@ -447,7 +446,7 @@ bool Upgrade::ExtractSnapshot()
                             return false;
                         }
 
-                        fwrite(Buf, 1, len, ExtractFile);
+                        fwrite(Buf, 1, (uint64_t)len, ExtractFile);
 
                         sum += len;
                         currentuncompressedsize += len;

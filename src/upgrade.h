@@ -165,8 +165,6 @@ public:
 
             if (Type == 0)
             {
-                double NewBytes;
-
                 if (ProgressBytes < 1000000 && ProgressBytes > 0)
                     ProgressString << " " << std::fixed << std::setprecision(1) << (ProgressBytes / (double)1000) << _(" KB/s");
 
