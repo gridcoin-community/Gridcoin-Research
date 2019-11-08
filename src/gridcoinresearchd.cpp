@@ -102,7 +102,7 @@ bool AppInit(int argc, char* argv[])
 
             // Let's check make sure gridcoin is not already running in the data directory.
             // Use new probe feature
-            if (!LockDirectory(GetDataDir(), ".lock", true))
+            if (!LockDirectory(GetDataDir(), ".lock", false))
             {
                 fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
 
@@ -113,7 +113,7 @@ bool AppInit(int argc, char* argv[])
                 Snapshot.SnapshotMain();
 
             // Delete snapshot file regardless of end result
-            Snapshot.DownloadSnapshot();
+            Snapshot.DeleteSnapshot();
         }
 
         LogPrintf("AppInit");

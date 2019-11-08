@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
         Upgrade Snapshot;
 
         // Let's check make sure gridcoin is not already running in the data directory.
-        if (!LockDirectory(GetDataDir(), ".lock", true))
+        if (!LockDirectory(GetDataDir(), ".lock", false))
         {
             fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
 
