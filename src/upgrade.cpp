@@ -130,7 +130,7 @@ void Upgrade::SnapshotMain()
 {
     std::cout << std::endl;
     std::cout << _("Snapshot Process Has Begun.") << std::endl;
-    std::cout << _("Warning: Ending this process after Stage 2 will result in result in syncing from 0 or an incomplete/corrupted blockchain.") << std::endl << std::endl << std::flush;
+    std::cout << _("Warning: Ending this process after Stage 2 will result in result in syncing from 0 or an incomplete/corrupted blockchain.") << std::endl << std::endl;
 
     // Create a thread for snapshot to be downloaded
     boost::thread SnapshotDownloadThread(std::bind(&Upgrade::DownloadSnapshot, this));
@@ -209,7 +209,7 @@ void Upgrade::SnapshotMain()
         std::cout << Prog.Status() << std::flush;
 
     std::cout << std::endl;
-    std::cout << _("Snapshot Process Complete!") << std::endl << std::flush;
+    std::cout << _("Snapshot Process Complete!") << std::endl;
 
     return;
 }

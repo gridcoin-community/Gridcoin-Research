@@ -100,10 +100,10 @@ private:
     /** Keep this even for simplicity **/
     const int LengthBar = 50;
     /** Keep spaced for cleaning look thou this may not be perfect when translated **/
-    const std::string StartStrings[4] = { _("Stage (1/4): Downloading snapshot.zip:              "),
-                                          _("Stage (2/4): Verify SHA256SUM of snapshot.zip:      "),
-                                          _("Stage (3/4): Cleanup blockchain data:               "),
-                                          _("Stage (4/4): Extracting snapshot.zip:               ") };
+    const std::string StartStrings[4] = { _("Stage (1/4): Downloading snapshot.zip:         "),
+                                          _("Stage (2/4): Verify SHA256SUM of snapshot.zip: "),
+                                          _("Stage (3/4): Cleanup blockchain data:          "),
+                                          _("Stage (4/4): Extracting snapshot.zip:          ") };
 
     int Variant;
 
