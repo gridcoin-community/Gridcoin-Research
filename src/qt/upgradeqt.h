@@ -33,7 +33,7 @@ public:
     //! \param text Main text displaying on QMessageBox.
     //! \param informativetext Informative text diaplying on QMessageBox.
     //!
-    void ErrorMsg(const std::string& text, const std::string& informativetext);
+    static void ErrorMsg(const std::string& text, const std::string& informativetext);
     //!
     //! \brief Msg box for displaying informative information during snapshot process.
     //!
@@ -43,20 +43,20 @@ public:
     //!
     //! \return Response made by user.
     //!
-    int Msg(const std::string& text, const std::string& informativetext, bool question = false);
+    static int Msg(const std::string& text, const std::string& informativetext, bool question = false);
     //!
     //! \brief Function return intent of user of requested action.
     //!
     //! \return bool
     //!
-    bool CancelOperation();
+    static bool CancelOperation();
     //!
     //! \brief Function to convert std::string to QString to keep code cleaner
     //!
     //! \param String to convert to QString
     //!
     //! \return QString
-    QString ToQString(const std::string& string);
+    static QString ToQString(const std::string& string);
 };
 #endif // UPGRADEQT_H
 
