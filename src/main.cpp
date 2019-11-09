@@ -42,7 +42,6 @@
 extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
-extern void CleanInboundConnections(bool bClearAll);
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern void GridcoinServices();
@@ -3660,21 +3659,6 @@ void ClearOrphanBlocks()
 
     mapOrphanBlocks.clear();
     mapOrphanBlocksByPrev.clear();
-}
-
-void CleanInboundConnections(bool bClearAll)
-{
-        if (IsLockTimeWithinMinutes(nLastCleaned, 10, GetAdjustedTime())) return;
-        nLastCleaned = GetAdjustedTime();
-        LOCK(cs_vNodes);
-        for(CNode* pNode : vNodes)
-        {
-                if (pNode->nStartingHeight < (nBestHeight-1000) || bClearAll)
-                {
-                        pNode->fDisconnect=true;
-                }
-        }
-        LogPrintf("Cleaning inbound connections");
 }
 
 bool WalletOutOfSync()
