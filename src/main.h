@@ -187,7 +187,6 @@ static const uint64_t nMinDiskSpace = 52428800;
 extern double       mdPORNonce;
 extern double       mdMachineTimerLast;
 
-extern std::string  msHashBoinc;
 extern std::string  msMiningErrors;
 extern std::string  msPoll;
 extern std::string  msMiningErrors5;
