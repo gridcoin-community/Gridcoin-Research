@@ -318,6 +318,9 @@ void RPCConsole::setClientModel(ClientModel *model)
         ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH * logicalDpiX() / 96);
         ui->peerWidget->horizontalHeader()->setStretchLastSection(true);
 
+        // Hide peerDetailWidget as initial state
+        ui->peerDetailWidget->hide();
+
         // create peer table context menu actions
         QAction* disconnectAction = new QAction(tr("&Disconnect"), this);
         QAction* banAction1h      = new QAction(tr("Ban for") + " " + tr("1 &hour"), this);
@@ -748,7 +751,7 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
             ui->peerCommonHeight->setText(tr("Unknown"));
     }
 
-    ui->widget_2->show();
+    ui->peerDetailWidget->show();
 }
 
 
@@ -845,7 +848,7 @@ void RPCConsole::clearSelectedNode()
 {
     ui->peerWidget->selectionModel()->clearSelection();
     cachedNodeids.clear();
-    ui->widget_2->hide();
+    ui->peerDetailWidget->hide();
     ui->peerHeading->setText(tr("Select a peer to view detailed information."));
 }
 
