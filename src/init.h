@@ -23,5 +23,4 @@ std::string VersionMessage();
 std::string LogSomething();
 
 extern bool fSnapshotRequest;
-extern bool fDisableUpdateCheck;
 #endif

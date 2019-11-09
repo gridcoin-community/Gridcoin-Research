@@ -59,6 +59,8 @@ void OptionsModel::Init()
         SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
     if (!language.isEmpty())
         SoftSetArg("-lang", language.toStdString());
+    if (settings.contains("fDisableUpdateCheck"))
+        SoftSetBoolArg("-disableupdatecheck", settings.value("fDisableUpdateCheck").toBool());
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -114,7 +116,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
         case DisableUpdateCheck:
-            return QVariant(fDisableUpdateCheck);
+            return QVariant(GetBoolArg("-disableupdatecheck", false));
         default:
             return QVariant();
         }
@@ -215,7 +217,8 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             }
             break;
         case DisableUpdateCheck:
-            fDisableUpdateCheck = value.toBool();
+            SetArgument("disableupdatecheck", value.toBool() ? "1" : "0");
+            settings.setValue("fDisableUpdateCheck", value.toBool());
             break;
         default:
             break;

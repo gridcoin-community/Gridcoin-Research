@@ -25,7 +25,7 @@ Upgrade::Upgrade() {}
 void Upgrade::CheckForLatestUpdate()
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
-    if (fTestNet || fDisableUpdateCheck)
+    if (fTestNet || GetBoolArg("-disableupdatecheck", false))
         return;
 
     Http VersionPull;
@@ -55,16 +55,30 @@ void Upgrade::CheckForLatestUpdate()
         return;
     }
 
-    Response.read(VersionResponse);
-
-    // Get the information we need:
-    // 'body' for information about changes
-    // 'tag_name' for version
-    // 'name' for checking if its a mandatory or leisure
-    std::string GithubReleaseData = find_value(Response, "tag_name").get_str();
-    std::string GithubReleaseTypeData = find_value(Response, "name").get_str();
-    std::string GithubReleaseBody = find_value(Response, "body").get_str();
+    std::string GithubReleaseData = "";
+    std::string GithubReleaseTypeData = "";
+    std::string GithubReleaseBody = "";
     std::string GithubReleaseType = "";
+
+    try
+    {
+        Response.read(VersionResponse);
+
+        // Get the information we need:
+        // 'body' for information about changes
+        // 'tag_name' for version
+        // 'name' for checking if its a mandatory or leisure
+        GithubReleaseData = find_value(Response, "tag_name").get_str();
+        GithubReleaseTypeData = find_value(Response, "name").get_str();
+        GithubReleaseBody = find_value(Response, "body").get_str();
+    }
+
+    catch (std::exception& ex)
+    {
+        LogPrintf("Update Checker: Exception occured while parsing json response (%s)", ex.what());
+
+        return;
+    }
 
     if (GithubReleaseTypeData.find("leisure"))
         GithubReleaseType = _("leisure");

@@ -59,7 +59,6 @@ extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
 bool fSnapshotRequest = false;
-bool fDisableUpdateCheck = false;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
@@ -388,16 +387,6 @@ bool AppInit2(ThreadHandlerPtr threads)
 #else
     SetConsoleCtrlHandler(consoleCtrlHandler, true);
 #endif
-
-    /* Check to see if the -disableupdatecheck is set.
-     * Be flexible and allow this to be set in config file.
-     *
-     * If set to 0 in config we do not disable the update checks
-     * If set to 1 in config we disable the update checks
-     * If command-line set it'll result in true since GetBoolArg sends back true
-     */
-    if (mapArgs.count("-disableupdatecheck"))
-        fDisableUpdateCheck = GetBoolArg("-disableupdatecheck", true);
 
     // ********************************************************* Step 2: parameter interactions
 
@@ -1096,9 +1085,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
         scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 60 * 1000);
 
-        if (!fDisableUpdateCheck)
+        if (!GetBoolArg("-disableupdatecheck", false))
         {
-            LogPrintf("UpdateChecker: Update checks scheduled every %" PRId64 " mins.", UpdateCheckInterval);
+            LogPrintf("UpdateChecker: Update checks scheduled every %" PRId64 " hours.", UpdateCheckInterval);
 
             LogPrintf("Updatechecker: Performing startup update check.");
 

@@ -268,7 +268,7 @@ int main(int argc, char *argv[])
                 LogPrintf("Snapshot: Failed!; Canceled by user.");
 
             else
-                LogPrintf("Sanpshot: Failed!");
+                LogPrintf("Snapshot: Failed!");
         }
     }
 
