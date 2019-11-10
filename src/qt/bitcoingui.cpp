@@ -341,13 +341,8 @@ void BitcoinGUI::createActions()
     exportAction->setToolTip(tr("Export the data in the current tab to a file"));
     openRPCConsoleAction = new QAction(tr("&Debug window"), this);
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
-
-    /** QT option for snapshot download **/
-    if (!fTestNet)
-    {
-        snapshotAction = new QAction(tr("&Snapshot Download"), this);
-        snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
-    }
+    snapshotAction = new QAction(tr("&Snapshot Download"), this);
+    snapshotAction->setToolTip(tr("Download and apply latest snapshot"));
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -414,8 +409,13 @@ void BitcoinGUI::createMenuBar()
     file->addAction(exportAction);
     file->addAction(signMessageAction);
     file->addAction(verifyMessageAction);
-    file->addSeparator();
-    file->addAction(snapshotAction);
+
+    if (!GetBoolArg("-testnet", false))
+    {
+        file->addSeparator();
+        file->addAction(snapshotAction);
+    }
+
     file->addSeparator();
     file->addAction(quitAction);
 
