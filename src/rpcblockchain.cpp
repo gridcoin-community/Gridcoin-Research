@@ -1755,44 +1755,6 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue tally(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "tally\n"
-                "\n"
-                "Requests a tally of research averages\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    const CBlockIndex* tallyIndex = NN::Tally::FindTrigger(pindexBest);
-    NN::Tally::LegacyRecount(tallyIndex);
-
-    res.pushKV("Tally Network Averages", 1);
-
-    return res;
-}
-
-UniValue tallyneural(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "tallyneural\n"
-                "\n"
-                "Requests a tally of neural network\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    ComputeNeuralNetworkSupermajorityHashes();
-    res.pushKV("Ready", ".");
-
-    return res;
-}
-
 UniValue versionreport(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
