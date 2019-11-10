@@ -444,7 +444,7 @@ int StartGridcoinQt(int argc, char *argv[])
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
 
-                int currentExitCode = app.exec();
+                app.exec();
 
                 window.hide();
                 window.setClientModel(0);
