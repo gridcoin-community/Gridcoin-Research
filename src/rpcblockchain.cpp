@@ -55,8 +55,6 @@ double Round(double d, int place);
 
 std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 
-UniValue GetJSONNeuralNetworkReport();
-
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 extern UniValue GetJsonUnspentReport();
 
@@ -1087,21 +1085,6 @@ UniValue neuralhash(const UniValue& params, bool fHelp)
     std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
 
     res.pushKV("Popular", consensus_hash);
-
-    return res;
-}
-
-UniValue neuralreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "neuralreport\n"
-                "\n"
-                "Displays neural report for the network\n");
-
-    LOCK(cs_main);
-
-    UniValue res = GetJSONNeuralNetworkReport();
 
     return res;
 }
@@ -2253,92 +2236,6 @@ UniValue GetJSONBeaconReport()
         entry.pushKV(key, grcaddress);
     }
 
-    results.push_back(entry);
-    return results;
-}
-
-
-double GetTotalNeuralNetworkHashVotes()
-{
-    double total = 0;
-    
-    // Copy to a sorted map.
-    std::map<std::string, double> sorted_hashes(
-                mvNeuralNetworkHash.begin(),
-                mvNeuralNetworkHash.end());
-    
-    for(auto& entry : sorted_hashes)
-    {
-        auto& neural_hash = entry.first;
-        auto& popularity = entry.second;
-
-        // d41d8 is the hash of an empty magnitude contract - don't count it
-        if(popularity >= 0.01 &&
-           neural_hash != "TOTAL_VOTES" &&
-           neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
-        {
-            total += popularity;
-        }
-    }
-    
-    return total;
-}
-
-UniValue GetJSONNeuralNetworkReport()
-{
-    UniValue results(UniValue::VARR);
-    //Returns a report of the networks neural hashes in order of popularity
-    std::string report = "Neural_hash, Popularity\n";
-    std::string row = "";
-    double pct = 0;
-    UniValue entry(UniValue::VOBJ);
-    entry.pushKV("Neural Hash","Popularity,Percent %");
-    double votes = GetTotalNeuralNetworkHashVotes();
-
-    // Copy to a sorted map.
-    std::map<std::string, double> sorted_hashes(
-                mvNeuralNetworkHash.begin(),
-                mvNeuralNetworkHash.end());
-    
-    for(auto& hash : sorted_hashes)
-    {
-        auto& neural_hash = hash.first;
-        auto& popularity = hash.second;
-        
-        //If the hash != empty_hash: >= .01
-        if (popularity > 0 &&
-            neural_hash != "TOTAL_VOTES" &&
-            neural_hash != "d41d8cd98f00b204e9800998ecf8427e")
-        {
-            row = neural_hash + "," + RoundToString(popularity,0);
-            report += row + "\n";
-            pct = (((double)popularity)/(votes+.01))*100;
-            entry.pushKV(neural_hash,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
-        }
-    }
-    // If we have a pending superblock, append it to the report:
-    std::string SuperblockHeight = ReadCache(Section::NEURALSECURITY, "pending").value;
-    if (!SuperblockHeight.empty() && SuperblockHeight != "0")
-    {
-        entry.pushKV("Pending",SuperblockHeight);
-    }
-
-    const int64_t superblock_age = NN::Tally::CurrentSuperblock()->Age();
-
-    entry.pushKV("Superblock Age",superblock_age);
-    if (superblock_age > GetSuperblockAgeSpacing(nBestHeight))
-    {
-        int iRoot = 30;
-        int iModifier = (nBestHeight % iRoot);
-        int iQuorumModifier = (nBestHeight % 10);
-        int iLastNeuralSync = nBestHeight - iModifier;
-        int iNextNeuralSync = iLastNeuralSync + iRoot;
-        int iLastQuorum = nBestHeight - iQuorumModifier;
-        int iNextQuorum = iLastQuorum + 10;
-        entry.pushKV("Last Sync", iLastNeuralSync);
-        entry.pushKV("Next Sync", iNextNeuralSync);
-        entry.pushKV("Next Quorum", iNextQuorum);
-    }
     results.push_back(entry);
     return results;
 }

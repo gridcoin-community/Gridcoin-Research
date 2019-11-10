@@ -170,7 +170,6 @@ extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
 extern UniValue myneuralhash(const UniValue& params, bool fHelp);
 extern UniValue neuralhash(const UniValue& params, bool fHelp);
-extern UniValue neuralreport(const UniValue& params, bool fHelp);
 extern UniValue resetcpids(const UniValue& params, bool fHelp);
 extern UniValue staketime(const UniValue& params, bool fHelp);
 extern UniValue superblockage(const UniValue& params, bool fHelp);
