@@ -231,7 +231,7 @@ void Upgrade::SnapshotMain()
 void Upgrade::DownloadSnapshot()
 {
      // Download the snapshot.zip
-    Http HTTPHandler(false);
+    Http HTTPHandler;
 
     try
     {
