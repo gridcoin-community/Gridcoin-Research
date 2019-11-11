@@ -16,6 +16,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "qtipcserver.h"
+#include "txdb.h"
 #include "util.h"
 #include "winshutdownmonitor.h"
 #include "upgrade.h"
@@ -260,6 +261,16 @@ int main(int argc, char *argv[])
     if (fSnapshotRequest)
     {
         UpgradeQt test;
+
+        // Release LevelDB file handles on Windows so we can remove the old
+        // blockchain files:
+        //
+        // We should really close it in Shutdown() when the main application
+        // exits. Before we can do that, we need to solve an old outstanding
+        // conflict with the behavior of "-daemon" on Linux that prematurely
+        // closes the DB when the process forks.
+        //
+        CTxDB().Close();
 
         if (test.SnapshotMain())
             LogPrintf("Snapshot: Success!");
