@@ -260,7 +260,7 @@ int main(int argc, char *argv[])
     /** This is only if the GUI menu option was used! **/
     if (fSnapshotRequest)
     {
-        UpgradeQt test;
+        UpgradeQt Snapshot;
 
         // Release LevelDB file handles on Windows so we can remove the old
         // blockchain files:
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
         //
         CTxDB().Close();
 
-        if (test.SnapshotMain())
+        if (Snapshot.SnapshotMain())
             LogPrintf("Snapshot: Success!");
 
         else
