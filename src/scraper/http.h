@@ -42,19 +42,6 @@ class Http
 {
 public:
     //!
-    //! \brief Constructor.
-    //!
-    //! \param Defaultly this will be true but for snapshot we need to use our own curl to avoid issues with a crash from progress monitor.
-    //!        In the destructor we check this as well so when snapshot download being used we don't get seg faulted out over clean up.
-    //!
-    Http(bool Scoped = true);
-
-    //!
-    //! \brief Destructor.
-    //!
-    ~Http();
-
-    //!
     //! \brief Download file from server.
     //!
     //! Attempts to download \p url to \p destination using optional HTTP
@@ -113,7 +100,24 @@ public:
     std::string GetSnapshotSHA256();
 
 private:
+    //!
+    //! \brief RAII wrapper around libcurl's initialization/cleanup functions.
+    //!
+    struct CurlLifecycle
+    {
+        CurlLifecycle();
+        ~CurlLifecycle();
+    };
+
+    //!
+    //! \brief Manages the libcurl lifecycle by invoking initailization and
+    //! cleanup functions.
+    //!
+    //! The static lifetime of this object ensures that curl_global_init() is
+    //! called at the beginning of the program before it starts other threads
+    //! and that curl_global_cleanup() is called when the program ends.
+    //!
+    static CurlLifecycle curl_lifecycle;
+
     void EvaluateResponse(int code, const std::string& url);
-    /** Downloading snapshot has a progress update function which collaspes when using scoped curl **/
-    bool fScoped;
 };

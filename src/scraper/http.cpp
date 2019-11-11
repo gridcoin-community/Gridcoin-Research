@@ -137,21 +137,19 @@ namespace
     };
 
 #endif
-}
+} // anonymous namespace
 
-Http::Http(bool Scoped)
+Http::CurlLifecycle::CurlLifecycle()
 {
-    fScoped = Scoped;
-
-    if (fScoped)
-        curl_global_init(CURL_GLOBAL_ALL);
+    curl_global_init(CURL_GLOBAL_ALL);
 }
 
-Http::~Http()
+Http::CurlLifecycle::~CurlLifecycle()
 {
-    if (fScoped)
-        curl_global_cleanup();
+    curl_global_cleanup();
 }
+
+Http::CurlLifecycle Http::curl_lifecycle;
 
 void Http::Download(
         const std::string &url,
