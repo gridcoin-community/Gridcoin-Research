@@ -789,8 +789,9 @@ void BitcoinGUI::update(const QString &title, const QString &message)
     QMessageBox* updatemsg = new QMessageBox;
 
     updatemsg->setAttribute(Qt::WA_DeleteOnClose);
-    updatemsg->setWindowTitle(title);
-    updatemsg->setText(message);
+    updatemsg->setWindowTitle("Gridcoin");
+    updatemsg->setText(title);
+    updatemsg->setDetailedText(message);
     updatemsg->setIcon(QMessageBox::Information);
     updatemsg->setStandardButtons(QMessageBox::Ok);
     updatemsg->setModal(false);

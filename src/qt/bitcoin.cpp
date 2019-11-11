@@ -134,7 +134,7 @@ static void InitMessage(const std::string &message)
 
 static void UpdateMessageBox(const std::string& message)
 {
-    std::string caption = _("Gridcoin Update Available");
+    std::string caption = _("Gridcoin Update Available. Click show details for changelog.");
 
     if (guiref)
     {
