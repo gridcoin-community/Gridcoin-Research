@@ -147,7 +147,7 @@ public slots:
     void setEncryptionStatus(int status);
 
     /** Notify the user if there is an update available */
-    void update(const QString &title, const QString &message);
+    void update(const QString& title, const QString& version, const QString& message);
 
     /** Notify the user of an error in the network or transaction handling code. */
     void error(const QString &title, const QString &message, bool modal);

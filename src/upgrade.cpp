@@ -134,8 +134,10 @@ void Upgrade::CheckForLatestUpdate()
     std::string ClientMessage = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
     ClientMessage.append(_("Github version: ") + GithubReleaseData + "\r\n");
     ClientMessage.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
-    ClientMessage.append(GithubReleaseBody);
-    uiInterface.UpdateMessageBox(ClientMessage);
+
+    std::string ChangeLog = GithubReleaseBody;
+
+    uiInterface.UpdateMessageBox(ClientMessage, ChangeLog);
 
     return;
 }

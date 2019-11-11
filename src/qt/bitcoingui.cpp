@@ -783,14 +783,14 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
     }
 }
 
-void BitcoinGUI::update(const QString &title, const QString &message)
+void BitcoinGUI::update(const QString &title, const QString& version, const QString &message)
 {
     // Create our own message box; A dialog can go here in future for qt if we choose
     QMessageBox* updatemsg = new QMessageBox;
 
     updatemsg->setAttribute(Qt::WA_DeleteOnClose);
-    updatemsg->setWindowTitle("Gridcoin");
-    updatemsg->setText(title);
+    updatemsg->setWindowTitle(title);
+    updatemsg->setText(version);
     updatemsg->setDetailedText(message);
     updatemsg->setIcon(QMessageBox::Information);
     updatemsg->setStandardButtons(QMessageBox::Ok);

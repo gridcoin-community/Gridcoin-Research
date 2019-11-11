@@ -132,14 +132,16 @@ static void InitMessage(const std::string &message)
     }
 }
 
-static void UpdateMessageBox(const std::string& message)
+static void UpdateMessageBox(const std::string& version, const std::string& message)
 {
-    std::string caption = _("Gridcoin Update Available. Click show details for changelog.");
+    std::string caption = _("Gridcoin Update Available");
 
     if (guiref)
     {
+        std::string guiaddition = version + _("Click \"Show Details\" to view changes in latest update.");
         QMetaObject::invokeMethod(guiref, "update", Qt::QueuedConnection,
                                    Q_ARG(QString, QString::fromStdString(caption)),
+                                   Q_ARG(QString, QString::fromStdString(guiaddition)),
                                    Q_ARG(QString, QString::fromStdString(message)));
     }
 
