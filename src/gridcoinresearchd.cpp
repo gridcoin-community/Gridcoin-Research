@@ -110,9 +110,23 @@ bool AppInit(int argc, char* argv[])
             }
 
             else
-                Snapshot.SnapshotMain();
+            {
+                try
+                {
+                    Snapshot.SnapshotMain();
+                }
 
-            // Delete snapshot file regardless of end result
+                catch (std::runtime_error& e)
+                {
+                    LogPrintf("Snapshot Downloader: Runtime exception occured in SanpshotMain() (%s)", e.what());
+
+                    Snapshot.DeleteSnapshot();
+
+                    exit(1);
+                }
+            }
+
+            // Delete snapshot file
             Snapshot.DeleteSnapshot();
         }
 

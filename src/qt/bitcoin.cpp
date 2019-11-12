@@ -237,7 +237,22 @@ int main(int argc, char *argv[])
         }
 
         else
-            Snapshot.SnapshotMain();
+        {
+            try
+            {
+                Snapshot.SnapshotMain();
+            }
+
+            catch (std::runtime_error& e)
+            {
+                LogPrintf("Snapshot Downloader: Runtime exception occured in SanpshotMain() (%s)", e.what());
+
+                Snapshot.DeleteSnapshot();
+
+                exit(1);
+            }
+
+        }
 
         // Delete snapshot regardless of result.
         Snapshot.DeleteSnapshot();
@@ -283,6 +298,8 @@ int main(int argc, char *argv[])
             else
                 LogPrintf("Snapshot: Failed!");
         }
+
+        Snapshot.DeleteSnapshot();
     }
 
     return 0;

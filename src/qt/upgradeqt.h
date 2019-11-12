@@ -57,6 +57,11 @@ public:
     //!
     //! \return QString
     static QString ToQString(const std::string& string);
+    //!
+    //! \brief Small function to delete the snapshot.zip file
+    //!
+    static void DeleteSnapshot();
+
 };
 #endif // UPGRADEQT_H
 

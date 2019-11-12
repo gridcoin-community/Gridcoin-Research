@@ -309,3 +309,28 @@ bool UpgradeQt::CancelOperation()
     // It'll only be 1 or 0
     return Msg(_("Cancel snapshot operation?"), _("Are you sure you want to cancel the snapshot operation?"), true);
 }
+
+void UpgradeQt::DeleteSnapshot()
+{
+    // File is out of scope now check if it exists and if so delete it.
+    // This covers partial downloaded files or a http response downloaded into file.
+    std::string snapshotfile = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+
+    size_t pos = snapshotfile.find_last_of("/");
+
+    snapshotfile = snapshotfile.substr(pos + 1, (snapshotfile.length() - pos - 1));
+
+    try
+    {
+        boost::filesystem::path snapshotpath = GetDataDir() / snapshotfile;
+
+        if (boost::filesystem::exists(snapshotpath))
+            if (boost::filesystem::is_regular_file(snapshotpath))
+                boost::filesystem::remove(snapshotpath);
+    }
+
+    catch (boost::filesystem::filesystem_error& e)
+    {
+        LogPrintf("Snapshot Downloader: Exception occured while attempting to delete snapshot (%s)", e.code().message());
+    }
+}
