@@ -59,7 +59,7 @@ std::string GetCurrentNeuralNetworkSupermajorityHash(double& out_popularity);
 UniValue GetJSONNeuralNetworkReport();
 UniValue GetJSONCurrentNeuralNetworkReport();
 
-extern UniValue GetJSONVersionReport();
+extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 extern UniValue GetJsonUnspentReport();
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -1833,17 +1833,27 @@ UniValue tallyneural(const UniValue& params, bool fHelp)
 
 UniValue versionreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-                "versionreport\n"
+                "versionreport <lookback:int> <full:bool>\n"
                 "\n"
-                "Displays a report on various versions recently stake on the network\n");
+                "<lookback> --> Number of blocks to tally from the chain head "
+                    "(default: " + std::to_string(BLOCKS_PER_DAY) + ").\n"
+                "<full> ------> Classify by commit suffix (default: false).\n"
+                "\n"
+                "Display the software versions of nodes that recently staked.\n");
+
+    const int64_t lookback = params.size() > 0
+        ? std::max(params[0].get_int(), 1)
+        : BLOCKS_PER_DAY;
+
+    const bool full_version = params.size() > 1
+        ? params[1].get_bool()
+        : false;
 
     LOCK(cs_main);
 
-    UniValue myNeuralJSON = GetJSONVersionReport();
-
-    return myNeuralJSON;
+    return GetJSONVersionReport(lookback, full_version);
 }
 
 UniValue writedata(const UniValue& params, bool fHelp)
@@ -2500,42 +2510,48 @@ UniValue GetJSONCurrentNeuralNetworkReport()
 }
 
 
-UniValue GetJSONVersionReport()
+UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
 {
-    UniValue results(UniValue::VARR);
-    //Returns a report of the GRC Version staking blocks over the last 100 blocks
-    std::string report = "Version, Popularity\n";
-    std::string row = "";
-    double pct = 0;
-    UniValue entry(UniValue::VOBJ);
-    entry.pushKV("Version","Popularity,Percent %");
-    
-    double votes = 0;
-    for(auto it : mvNeuralVersion)
-        votes += it.second;
-    
-    // Copy to a sorted map.
-    std::map<std::string, double> sorted_versions(
-                mvNeuralVersion.begin(),
-                mvNeuralVersion.end());
-    
-    for(auto& version : sorted_versions)
+    const int64_t min_height = std::max<int64_t>(nBestHeight - lookback, 0);
+
+    std::map<std::string, uint64_t> version_tally;
+
+    for (const CBlockIndex* pindex = pindexBest;
+        pindex && pindex->nHeight > min_height;
+        pindex = pindex->pprev)
     {
-        auto& neural_ver = version.first;
-        auto& popularity = version.second;        
-        
-        //If the hash != empty_hash:
-        if (popularity > 0)
-        {
-            row = neural_ver + "," + RoundToString(popularity,0);
-            report += row + "\n";
-            pct = popularity/(votes+.01)*100;
-            entry.pushKV(neural_ver,RoundToString(popularity,0) + "; " + RoundToString(pct,2) + "%");
+        CBlock block;
+        block.ReadFromDisk(pindex);
+
+        std::string version = block.PullClaim().m_client_version;
+
+        if (version.empty()) {
+            version = "unknown";
+        } else if (!full_version) {
+            // Ignore the source control version commit ID after the hyphen:
+            const size_t separator_position = version.find('-');
+
+            if (separator_position != std::string::npos) {
+                version.erase(separator_position);
+            }
         }
+
+        ++version_tally[version];
     }
-    
-    results.push_back(entry);
-    return results;
+
+    UniValue json(UniValue::VARR);
+
+    for (const auto& version_pair : version_tally) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("version", version_pair.first);
+        entry.pushKV("count", version_pair.second);
+        entry.pushKV("percent", ((double)version_pair.second / lookback) * 100);
+
+        json.push_back(entry);
+    }
+
+    return json;
 }
 
 std::string YesNo(bool f)

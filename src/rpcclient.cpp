@@ -184,6 +184,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendalert2"             , 4 },
     { "sendalert2"             , 5 },
     { "testnewsb"              , 0 },
+    { "versionreport"          , 0 },
+    { "versionreport"          , 1 },
 
     // Network
     { "addpoll"                , 1 },
