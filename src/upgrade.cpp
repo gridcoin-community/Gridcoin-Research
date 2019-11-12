@@ -20,7 +20,19 @@ struct_SnapshotExtractStatus ExtractStatus;
 
 bool fCancelOperation = false;
 
-Upgrade::Upgrade() {}
+Upgrade::Upgrade()
+{
+    // Clear the structs
+    DownloadStatus.SnapshotDownloadSize = 0;
+    DownloadStatus.SnapshotDownloadSpeed = 0;
+    DownloadStatus.SnapshotDownloadAmount = 0;
+    DownloadStatus.SnapshotDownloadFailed = false;
+    DownloadStatus.SnapshotDownloadComplete = false;
+    DownloadStatus.SnapshotDownloadProgress = 0;
+    ExtractStatus.SnapshotExtractFailed = false;
+    ExtractStatus.SnapshotExtractComplete = false;
+    ExtractStatus.SnapshotExtractProgress = 0;
+}
 
 void Upgrade::CheckForLatestUpdate()
 {
