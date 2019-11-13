@@ -18,7 +18,6 @@ namespace NN
         NN::QuorumHash GetSuperblockHash();
         std::string GetNeuralContract();
         NN::Superblock GetSuperblockContract();
-        bool SynchronizeDPOR(const BeaconConsensus& beacons);
         std::string ExplainMagnitude(const std::string& cpid);
     };
 }

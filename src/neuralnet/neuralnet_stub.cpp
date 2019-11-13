@@ -34,12 +34,6 @@ NN::Superblock NeuralNetStub::GetSuperblockContract()
     return EmptySuperblock;
 }
 
-
-bool NeuralNetStub::SynchronizeDPOR(const BeaconConsensus& beacons)
-{
-    return false;
-}
-
 std::string NeuralNetStub::ExplainMagnitude(const std::string& data)
 {
     return std::string();

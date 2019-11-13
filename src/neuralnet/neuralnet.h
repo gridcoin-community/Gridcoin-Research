@@ -1,6 +1,5 @@
 #pragma once
 
-#include "beacon.h"
 #include "project.h"
 #include "superblock.h"
 
@@ -72,17 +71,6 @@ namespace NN
         //! \return Most recent superblock contract if available.
         //!
         virtual NN::Superblock GetSuperblockContract() = 0;
-
-        //!
-        //! \brief Synchronize DPOR data.
-        //!
-        //! Asynchronously asks the neural net to download BOINC statistic files
-        //! and calculate CPID magnitudes. If called while synchronization is
-        //! already in progress this will do nothing.
-        //!
-        //! \param beacons Beacon consensus list.
-        //!
-        virtual bool SynchronizeDPOR(const BeaconConsensus& beacons) = 0;
 
         virtual std::string ExplainMagnitude(const std::string& cpid) = 0;
     };
