@@ -19,7 +19,6 @@ namespace
         { "beaconalt", Section::BEACONALT },
         { "global", Section::GLOBAL },
         { "protocol", Section::PROTOCOL },
-        { "neuralsecurity", Section::NEURALSECURITY },
         { "trxid", Section::TRXID },
         { "poll", Section::POLL },
         { "vote", Section::VOTE },
