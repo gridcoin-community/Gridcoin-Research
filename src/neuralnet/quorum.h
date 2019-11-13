@@ -8,6 +8,12 @@ namespace NN {
 
 class Claim;
 class QuorumHash;
+class Superblock;
+
+//!
+//! \brief A received superblock stored in the quorum superblock index.
+//!
+typedef std::shared_ptr<const Superblock> SuperblockPtr;
 
 //!
 //! \brief Produces, stores, and validates superblocks.
@@ -79,5 +85,70 @@ public:
     static bool ValidateSuperblockClaim(
         const Claim& claim,
         const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Get a reference to the current active superblock.
+    //!
+    //! \return The most recent superblock applied by the tally.
+    //!
+    static SuperblockPtr CurrentSuperblock();
+
+    //!
+    //! \brief Get a reference to the upcoming superblock.
+    //!
+    //! After a node receives a new superblock, the tally must commit it before
+    //! it becomes active.
+    //!
+    //! \return A superblock pending activation if one exists. Returns an empty
+    //! superblock when the tally already activated the latest superblock.
+    //!
+    static SuperblockPtr PendingSuperblock();
+
+    //!
+    //! \brief Determine whether any superblocks are pending activation.
+    //!
+    //! \return \c true if the index contains a superblock loaded at a height
+    //! above the last tally window.
+    //!
+    static bool HasPendingSuperblock();
+
+    //!
+    //! \brief Determine whether the network expects a new superblock.
+    //!
+    //! \return \c true if the age of the current superblock exceeds the
+    //! protocol's superblock spacing parameter.
+    //!
+    static bool SuperblockNeeded();
+
+    //!
+    //! \brief Initialze the tally's superblock context.
+    //!
+    //! \param pindexLast The most recent block to begin loading backward from.
+    //!
+    static void LoadSuperblockIndex(const CBlockIndex* pindexLast);
+
+    //!
+    //! \brief Push a new superblock into the tally.
+    //!
+    //! \param superblock Contains the superblock data to load.
+    //! \param pindex     Represents the block that contains the superblock.
+    //!
+    static void PushSuperblock(Superblock superblock, const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Drop the last superblock loaded into the tally.
+    //!
+    //! \param pindex Represents the block that contains the superblock to drop.
+    //!
+    static void PopSuperblock(const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Activate the superblock received at the specified height.
+    //!
+    //! \param height The height of the block that contains the superblock.
+    //!
+    //! \return \c true if a superblock at the specified height was activated.
+    //!
+    static bool CommitSuperblock(const uint32_t height);
 };
 }

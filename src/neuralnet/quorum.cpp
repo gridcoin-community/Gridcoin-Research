@@ -1,7 +1,6 @@
 #include "base58.h"
 #include "main.h"
 #include "neuralnet/quorum.h"
-#include "neuralnet/tally.h"
 #include "util/reverse_iterator.h"
 
 #include <openssl/md5.h>
@@ -10,6 +9,196 @@
 using namespace NN;
 
 namespace {
+//!
+//! \brief Organizes superblocks for lookup to calculate research rewards.
+//!
+class SuperblockIndex
+{
+    //!
+    //! \brief Number of superblocks to store in the active cache.
+    //!
+    static constexpr size_t CACHE_SIZE = 3;
+
+public:
+    //!
+    //! \brief Get a reference to the current active superblock.
+    //!
+    //! \return The most recent superblock applied by the tally.
+    //!
+    SuperblockPtr Current() const
+    {
+        if (m_cache.empty()) {
+            return std::make_shared<const Superblock>();
+        }
+
+        return m_cache.front();
+    }
+
+    //!
+    //! \brief Get a reference to the upcoming superblock.
+    //!
+    //! After a node receives a new superblock, the tally must commit it before
+    //! it becomes active.
+    //!
+    //! \return A superblock pending activation if one exists. Returns an empty
+    //! superblock when the tally already activated the latest superblock.
+    //!
+    SuperblockPtr Pending() const
+    {
+        if (m_pending.empty()) {
+            return std::make_shared<const Superblock>();
+        }
+
+        return m_pending.rbegin()->second;
+    }
+
+    //!
+    //! \brief Determine whether any superblocks are pending activation.
+    //!
+    //! \return \c true if the index contains a superblock loaded at a height
+    //! above the last tally window.
+    //!
+    bool HasPending() const
+    {
+        return !m_pending.empty();
+    }
+
+    //!
+    //! \brief Activate the superblock received at the specified height.
+    //!
+    //! \param height The height of the block that contains the superblock.
+    //!
+    //! \return \c true if a superblock at the specified height was activated.
+    //!
+    bool Commit(const uint32_t height)
+    {
+        static const auto log = [](const uint32_t height, const char* msg) {
+            LogPrintf("SuperblockIndex::Commit(%" PRId64 "): %s", height, msg);
+        };
+
+        if (m_pending.empty()) {
+            log(height, "none pending.");
+            return false;
+        }
+
+        auto pending_iter = m_pending.find(height);
+
+        if (pending_iter == m_pending.end()) {
+            log(height, "not pending.");
+            return false;
+        }
+
+        ++pending_iter;
+
+        for (auto iter = m_pending.begin() ; iter != pending_iter; ++iter) {
+            m_cache.emplace_front(std::move(iter->second));
+
+            if (m_cache.size() > CACHE_SIZE) {
+                m_cache.pop_back();
+            }
+        }
+
+        m_pending.erase(m_pending.begin(), pending_iter);
+
+        log(Current()->m_height, "commit.");
+
+        return true;
+    }
+
+    //!
+    //! \brief Add a new superblock to the index in a pending state.
+    //!
+    //! \param superblock Contains the superblock data to add.
+    //!
+    void PushSuperblock(Superblock superblock)
+    {
+        m_pending.emplace(
+            superblock.m_height,
+            std::make_shared<const Superblock>(std::move(superblock)));
+    }
+
+    //!
+    //! \brief Remove the most recently added superblock from the index.
+    //!
+    void PopSuperblock()
+    {
+        if (!m_pending.empty()) {
+            auto iter = m_pending.end();
+            m_pending.erase(--iter);
+        } else if (!m_cache.empty()) {
+            m_cache.pop_front();
+        }
+    }
+
+    //!
+    //! \brief Refill the superblock index cache.
+    //!
+    //! \param pindexLast The block to begin loading superblocks backward from.
+    //!
+    void Reload(const CBlockIndex* pindexLast)
+    {
+        // Move committed superblocks back to pending. The next tally recount
+        // will commit the superblocks at the appropriate height.
+        //
+        if (!m_cache.empty()) {
+            for (auto&& superblock : m_cache) {
+                m_pending.emplace(superblock->m_height, std::move(superblock));
+            }
+
+            m_cache.clear();
+        }
+
+        if (!m_pending.empty() && m_pending.size() < CACHE_SIZE) {
+            const int64_t lowest_height = m_pending.begin()->first;
+
+            while (pindexLast->nHeight >= lowest_height) {
+                if (!pindexLast->pprev) {
+                    return;
+                }
+
+                pindexLast = pindexLast->pprev;
+            }
+        }
+
+        // TODO: for now, just load the last three superblocks. We'll build a
+        // better index when we implement superblock windows:
+        //
+        while (m_pending.size() < CACHE_SIZE) {
+            while (pindexLast->nIsSuperBlock != 1) {
+                if (!pindexLast->pprev) {
+                    return;
+                }
+
+                pindexLast = pindexLast->pprev;
+            }
+
+            CBlock block;
+            block.ReadFromDisk(pindexLast);
+            Claim claim = block.PullClaim();
+
+            claim.m_superblock.m_height = pindexLast->nHeight;
+            claim.m_superblock.m_timestamp = pindexLast->nTime;
+
+            PushSuperblock(std::move(claim.m_superblock));
+
+            pindexLast = pindexLast->pprev;
+        }
+    }
+private:
+    //!
+    //! \brief A set of recently-added superblocks not yet activated by the
+    //! tally recount.
+    //!
+    std::map<uint32_t, SuperblockPtr> m_pending;
+
+    //!
+    //! \brief Contains a cache of recent activated superblocks.
+    //!
+    //! TODO: refactor this for superblock windows.
+    //!
+    std::deque<SuperblockPtr> m_cache;
+}; // SuperblockIndex
+
 //!
 //! \brief A vote for a superblock for legacy quorum consensus.
 //!
@@ -216,7 +405,7 @@ private:
     void RefillVoteCache(const CBlockIndex* pindex)
     {
         const int64_t min_height = std::max<int64_t>(
-            Tally::CurrentSuperblock()->m_height + 1,
+            Quorum::CurrentSuperblock()->m_height + 1,
             pindex->nHeight - STANDARD_LOOKBACK);
 
         if (!m_votes.empty()) {
@@ -271,7 +460,7 @@ private:
     PopularityMap BuildPopularityMap(const int64_t last_height) const
     {
         const int64_t min_height = std::max<int64_t>(
-            Tally::CurrentSuperblock()->m_height + 1,
+            Quorum::CurrentSuperblock()->m_height + 1,
             last_height - STANDARD_LOOKBACK);
 
         PopularityMap popularity_map;
@@ -305,6 +494,11 @@ private:
         return popularity_map;
     }
 }; // LegacyConsensus
+
+//!
+//! \brief Stores recent superblock data.
+//!
+SuperblockIndex g_superblock_index;
 
 //!
 //! \brief Orchestrates superblock voting for legacy quorum consensus.
@@ -345,7 +539,7 @@ bool Quorum::ValidateSuperblockClaim(
     const Claim& claim,
     const CBlockIndex* const pindex)
 {
-    if (!NN::Tally::SuperblockNeeded()) {
+    if (!SuperblockNeeded()) {
         return error("ValidateSuperblockClaim(): superblock too early.");
     }
 
@@ -371,4 +565,63 @@ bool Quorum::ValidateSuperblockClaim(
     }
 
     return true;
+}
+
+SuperblockPtr Quorum::CurrentSuperblock()
+{
+    return g_superblock_index.Current();
+}
+
+SuperblockPtr Quorum::PendingSuperblock()
+{
+    return g_superblock_index.Pending();
+}
+
+bool Quorum::HasPendingSuperblock()
+{
+    return g_superblock_index.HasPending();
+}
+
+bool Quorum::SuperblockNeeded()
+{
+    if (HasPendingSuperblock()) {
+        return false;
+    }
+
+    const SuperblockPtr superblock = g_superblock_index.Current();
+
+    return !superblock->WellFormed()
+        || superblock->Age() > GetSuperblockAgeSpacing(nBestHeight);
+
+}
+
+void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
+{
+    if (!pindexLast) {
+        return;
+    }
+
+    g_superblock_index.Reload(pindexLast);
+}
+
+void Quorum::PushSuperblock(Superblock superblock, const CBlockIndex* const pindex)
+{
+    LogPrintf("Quorum::PushSuperblock(%" PRId64 ")", pindex->nHeight);
+
+    superblock.m_height = pindex->nHeight;
+    superblock.m_timestamp = pindex->nTime;
+
+    g_superblock_index.PushSuperblock(std::move(superblock));
+}
+
+void Quorum::PopSuperblock(const CBlockIndex* const pindex)
+{
+    LogPrintf("Quorum::PopSuperblock(%" PRId64 ")", pindex->nHeight);
+
+    g_superblock_index.PopSuperblock();
+}
+
+bool Quorum::CommitSuperblock(const uint32_t height)
+{
+    return g_superblock_index.Commit(height);
 }

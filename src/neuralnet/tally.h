@@ -10,18 +10,12 @@ class CBlockIndex;
 namespace NN {
 
 class Cpid;
-class Superblock;
 
 //!
 //! \brief An optional type that contains a pointer to a block index object or
 //! does not.
 //!
 typedef boost::optional<const CBlockIndex*> BlockPtrOption;
-
-//!
-//! \brief A received superblock stored in the tally superblock index.
-//!
-typedef std::shared_ptr<const Superblock> SuperblockPtr;
 
 //!
 //! \brief A report that contains an overview of network payment statistics
@@ -522,43 +516,6 @@ public:
     //! \param pindex Contains information about the block to erase.
     //!
     static void ForgetRewardBlock(const CBlockIndex* const pindex);
-
-    //!
-    //! \brief Get a reference to the current active superblock.
-    //!
-    //! \return The most recent superblock applied by the tally.
-    //!
-    static SuperblockPtr CurrentSuperblock();
-
-    //!
-    //! \brief Determine whether the network expects a new superblock.
-    //!
-    //! \return \c true if the age of the current superblock exceeds the
-    //! protocol's superblock spacing parameter.
-    //!
-    static bool SuperblockNeeded();
-
-    //!
-    //! \brief Initialze the tally's superblock context.
-    //!
-    //! \param pindexLast The most recent block to begin loading backward from.
-    //!
-    static void LoadSuperblockIndex(const CBlockIndex* pindexLast);
-
-    //!
-    //! \brief Push a new superblock into the tally.
-    //!
-    //! \param superblock Contains the superblock data to load.
-    //! \param pindex     Represents the block that contains the superblock.
-    //!
-    static void PushSuperblock(Superblock superblock, const CBlockIndex* const pindex);
-
-    //!
-    //! \brief Drop the last superblock loaded into the tally.
-    //!
-    //! \param pindex Represents the block that contains the superblock to drop.
-    //!
-    static void PopSuperblock(const CBlockIndex* const pindex);
 
     //!
     //! \brief Recount the two-week network averages.
