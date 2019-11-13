@@ -1,6 +1,8 @@
 #include "base58.h"
 #include "main.h"
+#include "neuralnet/claim.h"
 #include "neuralnet/quorum.h"
+#include "neuralnet/superblock.h"
 #include "util/reverse_iterator.h"
 
 #include <openssl/md5.h>
@@ -551,6 +553,18 @@ bool Quorum::ValidateSuperblockClaim(
 {
     if (!SuperblockNeeded()) {
         return error("ValidateSuperblockClaim(): superblock too early.");
+    }
+
+    if (pindex->nVersion >= 11) {
+        // Superblocks are not included in the input for the claim hash (and,
+        // therefor, not for the block's hash), so we need to verify the hash
+        // to protect the integrity of the superblock data:
+        //
+        if (claim.m_superblock.GetHash() != claim.m_quorum_hash) {
+            return error("ValidateSuperblockClaim(): quorum hash mismatch.");
+        }
+
+        return  NN::ValidateSuperblock(claim.m_superblock);
     }
 
     const CBitcoinAddress address(claim.m_quorum_address);

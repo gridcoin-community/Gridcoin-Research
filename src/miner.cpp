@@ -924,6 +924,26 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         return;
     }
 
+    if (blocknew.nVersion >= 11) {
+        NN::Superblock superblock = NN::Quorum::CreateSuperblock();
+
+        if (!superblock.WellFormed()) {
+            LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+            return;
+        }
+
+        blocknew.m_claim.m_quorum_hash = superblock.GetHash();
+        blocknew.m_claim.m_superblock = std::move(superblock);
+
+        LogPrintf(
+            "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+            GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
+
+        return;
+    }
+
+    // TODO: remove the rest below after switch to block version 11:
+
     std::string quorum_address = DefaultWalletAddress();
 
     if (!NN::Quorum::Participating(quorum_address, blocknew.nTime)) {

@@ -2654,14 +2654,18 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             // initial chain:
             //
             if (!fColdBoot && !NN::Quorum::ValidateSuperblockClaim(claim, pindex)) {
-                return false;
+                return DoS(25, error("ConnectBlock : Rejected invalid superblock."));
             }
 
             // Note: PullClaim() invalidates the m_claim field by moving it.
             // This must be the last instance where a claim is referenced:
             //
             NN::Quorum::PushSuperblock(std::move(PullClaim().m_superblock), pindex);
-        } else {
+        } else if (nVersion <= 10) {
+            // Block versions 11+ validate superblocks from scraper convergence
+            // instead of the legacy quorum system so we only record votes from
+            // version 10 blocks and below:
+            //
             NN::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
         }
     }
@@ -2791,7 +2795,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             NN::Quorum::PopSuperblock(pindexBest);
         }
 
-        if (pindexBest->nHeight > nGrandfather) {
+        if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
             NN::Quorum::ForgetVote(pindexBest);
         }
 

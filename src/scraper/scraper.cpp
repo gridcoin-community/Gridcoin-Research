@@ -4534,6 +4534,11 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
                     superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
+
+                    if (!IsV11Enabled(nBestHeight)) {
+                        superblock.m_version = 1;
+                    }
+
                     ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
 
                     // Mark the cache clean, because it was just updated.

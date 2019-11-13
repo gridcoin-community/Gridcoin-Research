@@ -263,6 +263,7 @@ public:
     {
         UNKNOWN,           //!< Not enough manifest data to try validation.
         INVALID,           //!< It does not match a valid set of manifest data.
+        HISTORICAL,        //!< It is older than the manifest retention period.
         VALID_CURRENT,     //!< It matches the current cached convergence.
         VALID_PAST,        //!< It matches a cached past convergence.
         VALID_BY_MANIFEST, //!< It matches a single manifest supermajority.
@@ -299,6 +300,10 @@ public:
         //
         if (!local_contract.WellFormed()) {
             return Result::UNKNOWN;
+        }
+
+        if (m_superblock.Age() < SCRAPER_CMANIFEST_RETENTION_TIME) {
+            return Result::HISTORICAL;
         }
 
         if (use_cache) {
@@ -1352,6 +1357,9 @@ bool NN::ValidateSuperblock(
             break;
         case Result::INVALID:
             message = "INVALID - Validation failed";
+            break;
+        case Result::HISTORICAL:
+            message = "HISTORICAL - Skipped historical superblock.";
             break;
         case Result::VALID_CURRENT:
             message = "VALID_CURRENT - Matched current cached convergence";
