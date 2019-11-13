@@ -6,13 +6,13 @@
 #include "main.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
-#include "kernel.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
 #include "neuralnet/neuralnet.h"
 #include "neuralnet/project.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 #include "backup.h"
@@ -20,12 +20,6 @@
 #include "contract/polls.h"
 #include "contract/contract.h"
 #include "util.h"
-
-#include <iostream>
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
-#include <boost/algorithm/string.hpp>
-#include <fstream>
-#include <algorithm>
 
 #include <univalue.h>
 
@@ -43,7 +37,6 @@ bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
-bool StrLessThanReferenceHash(std::string rh);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
@@ -51,18 +44,12 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 
-double Round(double d, int place);
-
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
-
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 extern UniValue GetJsonUnspentReport();
-
-bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern UniValue GetJSONBeaconReport();
 
+bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double GetTotalBalance();
-
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 
@@ -1081,10 +1068,9 @@ UniValue neuralhash(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    LOCK(cs_main);
 
-    res.pushKV("Popular", consensus_hash);
+    res.pushKV("Popular", NN::Quorum::FindPopularHash(pindexBest).ToString());
 
     return res;
 }
@@ -1141,12 +1127,12 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    const NN::SuperblockPtr superblock = NN::Tally::CurrentSuperblock();
+    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
     res.pushKV("Superblock Age", superblock->Age());
     res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock->m_timestamp));
     res.pushKV("Superblock Block Number", superblock->m_height);
-    res.pushKV("Pending Superblock Height", ReadCache(Section::NEURALSECURITY, "pending").value);
+    res.pushKV("Pending Superblock Height", NN::Quorum::PendingSuperblock()->m_height);
 
     return res;
 }
@@ -1642,12 +1628,10 @@ UniValue refhash(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::string rh = params[0].get_str();
-    bool r1 = StrLessThanReferenceHash(rh);
-    bool r2 = IsNeuralNodeParticipant(DefaultWalletAddress(), GetAdjustedTime());
+    bool r1 = NN::Quorum::Participating(params[0].get_str(), GetAdjustedTime());
+    bool r2 = NN::Quorum::Participating(DefaultWalletAddress(), GetAdjustedTime());
 
     res.pushKV("<Ref Hash", r1);
-
     res.pushKV("WalletAddress<Ref Hash", r2);
 
     return res;
@@ -1726,14 +1710,14 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    const NN::SuperblockPtr superblock = NN::Tally::CurrentSuperblock();
+    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
     res.pushKV("beacon_count", (uint64_t)superblock->m_cpids.TotalCount());
     res.pushKV("beacon_participant_count", (uint64_t)superblock->m_cpids.size());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("superblock_valid", superblock->WellFormed());
     res.pushKV("Superblock Age", superblock->Age());
-    res.pushKV("Dire Need of Superblock", NN::Tally::SuperblockNeeded());
+    res.pushKV("Dire Need of Superblock", NN::Quorum::SuperblockNeeded());
 
     return res;
 }

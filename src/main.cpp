@@ -8,19 +8,15 @@
 #include "streams.h"
 #include "alert.h"
 #include "checkpoints.h"
-#include "db.h"
 #include "txdb.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "kernel.h"
 #include "block.h"
-#include "scrypt.h"
-#include "global_objects_noui.hpp"
-#include "rpcserver.h"
-#include "rpcclient.h"
 #include "beacon.h"
 #include "miner.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
 #include "neuralnet/tally.h"
@@ -30,12 +26,9 @@
 #include "scraper_net.h"
 #include "gridcoin.h"
 
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 #include <boost/thread.hpp>
 #include <boost/range/adaptor/reversed.hpp>
-#include <openssl/md5.h>
 #include <ctime>
 #include <math.h>
 
@@ -45,21 +38,16 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern void GridcoinServices();
-extern bool StrLessThanReferenceHash(std::string rh);
 extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
-extern void IncrementVersionCount(const std::string& Version);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
-extern void IncrementNeuralNetworkSupermajority(const NN::QuorumHash& NeuralHash, const std::string& GRCAddress, double distance, const CBlockIndex* pblockindex);
-
 extern const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
-
 std::string GetCommandNonce(std::string command);
+double GetDifficulty(const CBlockIndex* blockindex);
 
 unsigned int nNodeLifespan;
 
@@ -74,8 +62,6 @@ CCriticalSection cs_setpwalletRegistered;
 set<CWallet*> setpwalletRegistered;
 
 CCriticalSection cs_main;
-
-extern std::string NodeAddress(CNode* pfrom);
 
 CTxMemPool mempool;
 int64_t nLastAskedForBlocks = 0;
@@ -137,14 +123,9 @@ int64_t nTransactionFee = MIN_TX_FEE;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
-std::unordered_map<std::string, double> mvNeuralNetworkHash;
-std::unordered_map<std::string, double> mvNeuralVersion;
-
 BlockFinder blockFinder;
 
 // Gridcoin - Rob Halford
-
-extern std::string RetrieveMd5(std::string s1);
 
 bool bForceUpdate = false;
 bool fQtActive = false;
@@ -171,9 +152,8 @@ std::string    msMiningErrors7;
 std::string    msMiningErrors8;
 std::string    msMiningErrorsIncluded;
 std::string    msMiningErrorsExcluded;
-std::string    msHDDSerial;
-//When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 
+//When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;
 int nNewIndex = 271625;
 int nNewIndex2 = 364500;
@@ -1620,7 +1600,7 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
     // be overridden using an admin message. This allows us to change the reward
     // amount without having to release a mandatory with updated rules. In the case
     // there is a breach or leaked admin keys the rewards are clamped to twice that
-    // of the default value.    
+    // of the default value.
     const int64_t MIN_CBR = 0;
     const int64_t MAX_CBR = DEFAULT_CBR * 2;
 
@@ -2218,7 +2198,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             if(!sMType.empty())
             {
                 std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-                
+
                 try
                 {
                     if (!NN::DeleteContract(sMType, sMKey)) {
@@ -2638,68 +2618,24 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         }
     }
 
-    //Gridcoin: Maintain network consensus for Payments and Neural popularity:  (As of 7-5-2015 this is now done exactly every 30 blocks)
-
-    //DPOR - 6/12/2015 - Reject superblocks not hashing to the supermajority:
-
-    if (claim.ContainsSuperblock())
-    {
-        if(nVersion >= 9)
-        {
-            // break away from block timing
-            if (fDebug) LogPrintf("ConnectBlock: Updating Neural Supermajority (v9 CB) height %d",pindex->nHeight);
-            ComputeNeuralNetworkSupermajorityHashes();
-            // Prevent duplicate superblocks
-            if(!NN::Tally::SuperblockNeeded())
-                return error(("ConnectBlock: SuperBlock rcvd, but not Needed (too early)"));
-        }
-
-        if ((pindex->nHeight > nGrandfather && !fReorganizing) || nVersion >= 9)
-        {
-            // Only reject superblock when it is new And when QuorumHash of Block != the Popular Quorum Hash:
-            if ((IsLockTimeWithinMinutes(GetBlockTime(), 15, GetAdjustedTime()) || nVersion>=9) && !fColdBoot)
-            {
-                double popularity = 0;
-                std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
-
-                // Let this take effect together with stakev8
-                if (nVersion>=8)
-                {
-                    try
-                    {
-                        CBitcoinAddress address;
-                        bool validaddressinblock = address.SetString(claim.m_quorum_address);
-                        validaddressinblock &= address.IsValid();
-                        if (!validaddressinblock)
-                        {
-                            return error("ConnectBlock[] : Superblock staked with invalid GRC address in block");
-                        }
-                        if (!IsNeuralNodeParticipant(claim.m_quorum_address, nTime))
-                        {
-                            return error("ConnectBlock[] : Superblock staked by ineligible neural node participant");
-                        }
-                    }
-                    catch (...)
-                    {
-                        return error("ConnectBlock[] : Superblock stake check caused unknown exception with GRC address %s", claim.m_quorum_address);
-                    }
-                }
-
-                if (claim.m_superblock.GetHash() != consensus_hash)
-                {
-                    return error("ConnectBlock[] : Superblock hash does not match consensus hash; SuperblockHash: %s, Consensus Hash: %s",
-                                 claim.m_superblock.GetHash().ToString(), consensus_hash);
-                }
+    if (pindex->nHeight > nGrandfather) {
+        if (claim.ContainsSuperblock()) {
+            // TODO: find the invalid historical superblocks so we can remove
+            // the fColdBoot condition that skips this check when syncing the
+            // initial chain:
+            //
+            if (!fColdBoot && !NN::Quorum::ValidateSuperblockClaim(claim, pindex)) {
+                return false;
             }
 
             // Note: PullClaim() invalidates the m_claim field by moving it.
             // This must be the last instance where a claim is referenced:
             //
-            NN::Tally::PushSuperblock(std::move(PullClaim().m_superblock), pindex);
+            NN::Quorum::PushSuperblock(std::move(PullClaim().m_superblock), pindex);
+        } else {
+            NN::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
         }
     }
-
-    //  End of Network Consensus
 
     // Gridcoin: Track payments to CPID, and last block paid
     NN::Tally::RecordRewardBlock(pindex);
@@ -2823,7 +2759,11 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         }
 
         if (pindexBest->nIsSuperBlock == 1) {
-            NN::Tally::PopSuperblock(pindexBest);
+            NN::Quorum::PopSuperblock(pindexBest);
+        }
+
+        if (pindexBest->nHeight > nGrandfather) {
+            NN::Quorum::ForgetVote(pindexBest);
         }
 
         // New best block
@@ -2853,7 +2793,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (fDebug10) LogPrintf("DisconnectBlocksBatch: LoadAdminMessages");
         std::string admin_messages;
         LoadAdminMessages(true, admin_messages);
-        NN::Tally::LoadSuperblockIndex(pindexBest);
+        NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight)) {
@@ -3069,19 +3009,6 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         const CBlockLocator locator(pindexNew);
         ::SetBestChain(locator);
     }
-
-    if(IsV9Enabled_Tally(nBestHeight))
-    {
-        // Update quorum data.
-        if (pindexNew->nVersion >= 10 && (nBestHeight % 3) == 0) // TODO
-        {
-            if (fDebug) LogPrintf("SetBestChain: Updating Neural Supermajority (v9 %%3) height %d",nBestHeight);
-            ComputeNeuralNetworkSupermajorityHashes();
-        }
-    }
-    //else if (!fIsInitialDownload)
-    //    // Retally after reorganize to sync up amounts owed.
-    //    NN::Tally::LegacyRecount(pindexNew);
 
     if (fDebug)
     {
@@ -4038,25 +3965,6 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
     return XMLdata.substr(loc + (key.length()), loc_end - loc - (key.length()));
 }
 
-std::string RetrieveMd5(std::string s1)
-{
-    try
-    {
-        const char* chIn = s1.c_str();
-        unsigned char digest2[16];
-        MD5((unsigned char*)chIn, strlen(chIn), (unsigned char*)&digest2);
-        char mdString2[33];
-        for(int i = 0; i < 16; i++) sprintf(&mdString2[i*2], "%02x", (unsigned int)digest2[i]);
-        std::string xmd5(mdString2);
-        return xmd5;
-    }
-    catch (std::exception &e)
-    {
-        LogPrintf("MD5 INVALID!");
-        return "";
-    }
-}
-
 bool BlockNeedsChecked(int64_t BlockTime)
 {
     if (IsLockTimeWithin14days(BlockTime, GetAdjustedTime()))
@@ -4137,66 +4045,6 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid)
     // Update caches with new timestamps.
     WriteCache(Section::GLOBAL, "nGRCTime", "", nGRCTime);
     WriteCache(Section::GLOBAL, "nCPIDTime", "", nCPIDTime);
-    return true;
-}
-
-bool ComputeNeuralNetworkSupermajorityHashes()
-{
-    if (nBestHeight < 15)
-        return true;
-    
-    //Clear the neural network hash buffer
-    mvNeuralNetworkHash.clear();
-    mvNeuralVersion.clear();
-
-    // ClearCache was no-op in previous version due to bug. Now it was fixed,	
-    // and we previously emulated the old behavior to prevent early forks when
-    // switching to v9. We want to clear these to avoid the data stacking up
-    // with time. If this causes an issue when syncing then considering making
-    // this >=v9 only again.
-    ClearCache(Section::NEURALSECURITY);
-    WriteCache(Section::NEURALSECURITY, "pending","0",GetAdjustedTime());
-
-    try
-    {
-        int nMaxDepth = nBestHeight;
-        int nLookback = 100;
-        int nMinDepth = (nMaxDepth - nLookback);
-        if (nMinDepth < 2)   nMinDepth = 2;
-        CBlock block;
-        CBlockIndex* pblockindex = pindexBest;
-        while (pblockindex->nHeight > nMinDepth)
-        {
-            if (!pblockindex || !pblockindex->pprev)
-                return false;
-            
-            pblockindex = pblockindex->pprev;
-            if (pblockindex == pindexGenesisBlock)
-                return false;
-            if (!pblockindex->IsInMainChain())
-                continue;
-            
-            block.ReadFromDisk(pblockindex);
-            const NN::Claim& claim = block.GetClaim();
-            
-            //If block is pending: 7-25-2015
-            if (claim.ContainsSuperblock())
-            {
-                WriteCache(Section::NEURALSECURITY, "pending",ToString(pblockindex->nHeight),GetAdjustedTime());
-            }
-
-            IncrementVersionCount(claim.m_client_version);
-            //Increment Neural Network Hashes Supermajority (over the last N blocks)
-            IncrementNeuralNetworkSupermajority(claim.m_quorum_hash, claim.m_quorum_address, (nMaxDepth-pblockindex->nHeight)+10, pblockindex);
-        }
-
-        if (fDebug3) LogPrintf(".11.");
-    }
-    catch (std::exception &e)
-    {
-            LogPrintf("Neural Error while memorizing hashes.");
-    }
-    
     return true;
 }
 
@@ -5587,89 +5435,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-void IncrementNeuralNetworkSupermajority(
-    const NN::QuorumHash& quorum_hash,
-    const std::string& GRCAddress,
-    double distance,
-    const CBlockIndex* pblockindex)
-{
-    if (!quorum_hash.Valid())
-        return;
-
-    const std::string NeuralHash = quorum_hash.ToString();
-
-    if (pblockindex->nVersion >= 8)
-    {
-        try
-        {
-            CBitcoinAddress address(GRCAddress);
-            bool validaddresstovote = address.IsValid();
-            if (!validaddresstovote)
-            {
-                if (fDebug) LogPrintf("INNS : Vote found in block with invalid GRC address. HASH: %s GRC: %s", NeuralHash, GRCAddress);
-                return;
-            }
-            if (!IsNeuralNodeParticipant(GRCAddress, pblockindex->nTime))
-            {
-                if (fDebug) LogPrintf("INNS : Vote found in block from ineligible neural node participant. HASH: %s GRC: %s", NeuralHash, GRCAddress);
-                return;
-            }
-        }
-        catch (const bignum_error& innse)
-        {
-            LogPrintf("INNS : Exception: %s", innse.what());
-            return;
-        }
-    }
-
-    // 6-13-2015 ONLY Count Each Neural Hash Once per GRC address / CPID (1 VOTE PER RESEARCHER)
-    const std::string& Security = ReadCache(Section::NEURALSECURITY, GRCAddress).value;
-    if (Security == NeuralHash)
-    {
-        //This node has already voted, throw away the vote
-        return;
-    }
-    
-    WriteCache(Section::NEURALSECURITY, GRCAddress,NeuralHash,GetAdjustedTime());
-
-    double multiplier = distance < 40 ? 400 : 200;
-    double votes = (1/distance)*multiplier;
-    mvNeuralNetworkHash[NeuralHash] += votes;
-}
-
-void IncrementVersionCount(const std::string& Version)
-{
-    if(!Version.empty())
-        mvNeuralVersion[Version]++;
-}
-
-
-
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity)
-{
-    double highest_popularity = -1;
-    std::string neural_hash;
-
-    for(const auto& network_hash : mvNeuralNetworkHash)
-    {
-        const std::string& hash = network_hash.first;
-        double popularity       = network_hash.second;
-
-        // d41d8 is the hash of an empty magnitude contract - don't count it
-        if (popularity > 0 &&
-            popularity > highest_popularity &&
-            hash != "d41d8cd98f00b204e9800998ecf8427e" &&
-            hash != "TOTAL_VOTES")
-        {
-            highest_popularity = popularity;
-            neural_hash = hash;
-        }
-    }
-
-    out_popularity = highest_popularity;
-    return neural_hash;
-}
-
 bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
 {
     const std::string &msg = tx.hashBoinc;
@@ -5742,7 +5507,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
                     if(fDebug10 && sMessageType=="beacon" ){
                         LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
                     }
-                    
+
                     try
                     {
                         if (!NN::DeleteContract(sMessageType, sMessageKey)) {
@@ -5886,34 +5651,6 @@ bool IsContract(CBlockIndex* pIndex)
 bool IsSuperBlock(CBlockIndex* pIndex)
 {
     return pIndex->nIsSuperBlock==1 ? true : false;
-}
-
-bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime)
-{
-    //Calculate the neural network nodes abililty to particiapte by GRC_Address_Day
-    int address_day = GetDayOfYear(locktime);
-    std::string address_tohash = addr + "_" + ToString(address_day);
-    std::string address_day_hash = RetrieveMd5(address_tohash);
-
-    // For now, let's call for a 25% participation rate (approx. 125 nodes):
-    // When RA is enabled, 25% of the neural network nodes will work on a quorum at any given time to alleviate stress on the project sites:
-    arith_uint256 uRef = fTestNet
-       ? arith_uint256("0x00000000000000000000000000000000ed182f81388f317df738fd9994e7020b")
-       : arith_uint256("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-
-    arith_uint256 uADH("0x" + address_day_hash);
-    return (uADH < uRef);
-}
-
-
-bool StrLessThanReferenceHash(std::string rh)
-{
-    int address_day = GetDayOfYear(GetAdjustedTime());
-    std::string address_tohash = rh + "_" + ToString(address_day);
-    std::string address_day_hash = RetrieveMd5(address_tohash);
-    uint256 uRef = fTestNet ? uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b") : uint256S("0x000000000000000000000000000000004d182f81388f317df738fd9994e7020b"); //This hash is approx 25% of the md5 range (90% for testnet)
-    uint256 uADH = uint256S("0x" + address_day_hash);
-    return (uADH < uRef);
 }
 
 bool IsResearcher(const std::string& cpid)

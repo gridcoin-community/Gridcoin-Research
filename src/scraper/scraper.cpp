@@ -5,8 +5,8 @@
 #include "http.h"
 #include "ui_interface.h"
 
+#include "neuralnet/quorum.h"
 #include "neuralnet/superblock.h"
-#include "neuralnet/tally.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -472,7 +472,7 @@ int64_t SuperblockAge()
 {
     LOCK(cs_main);
 
-    return NN::Tally::CurrentSuperblock()->Age();
+    return NN::Quorum::CurrentSuperblock()->Age();
 }
 
 /*********************
@@ -1083,15 +1083,6 @@ bool ScraperHousekeeping()
 
     // Show this node's contract hash in the log.
     _log(logattribute::INFO, "ScraperHousekeeping", "superblock contract hash = " + superblock.GetHash().ToString());
-
-    // Visibility into the Quorum map...
-    if (fDebug3)
-    {
-        _log(logattribute::INFO, "ScraperHousekeeping", "mvNeuralNetworkHash dump");
-        for (const auto& network_hash : mvNeuralNetworkHash)
-            _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
-                 + ", Popularity: " + std::to_string(network_hash.second));
-    }
 
     logger& log = LogInstance();
 

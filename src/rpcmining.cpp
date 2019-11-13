@@ -8,6 +8,7 @@
 #include "miner.h"
 #include "rpcserver.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 
@@ -111,13 +112,13 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.pushKV("difficulty",    diff);
     obj.pushKV("errors",        GetWarnings("statusbar"));
     obj.pushKV("pooledtx",      (uint64_t)mempool.size());
-    //double nCutoff =  GetAdjustedTime() - (60*60*24*14);
+
     obj.pushKV("testnet",       fTestNet);
-    double neural_popularity = 0;
-    std::string neural_hash = GetNeuralNetworkSupermajorityHash(neural_popularity);
-    obj.pushKV("PopularNeuralHash", neural_hash);
-    obj.pushKV("NeuralPopularity", neural_popularity);
-    //9-19-2015 - CM
+
+    if (pindexBest->nVersion <= 10) {
+        obj.pushKV("PopularNeuralHash", NN::Quorum::FindPopularHash(pindexBest).ToString());
+    }
+
     obj.pushKV("MyNeuralHash", NN::GetInstance()->GetNeuralHash());
 
     const NN::MiningId mining_id = NN::Researcher::Get()->Id();

@@ -131,11 +131,6 @@ inline bool IsV9Enabled_Tally(int nHeight)
 inline int64_t FutureDrift(int64_t nTime, int nHeight) { return nTime + 20 * 60; }
 inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 90 : 60; }
 
-extern bool IsNeuralNodeParticipant(const std::string& addr, int64_t locktime);
-
-extern std::unordered_map<std::string, double> mvNeuralNetworkHash;
-extern std::unordered_map<std::string, double> mvNeuralVersion;
-
 struct BlockHasher
 {
     size_t operator()(const uint256& hash) const { return hash.GetUint64(); }
@@ -196,7 +191,6 @@ extern std::string  msMiningErrors8;
 extern std::string  msMiningErrorsIncluded;
 extern std::string  msMiningErrorsExcluded;
 
-extern std::string  msHDDSerial;
 extern bool         mbBlocksDownloaded;
 extern int nGrandfather;
 extern int nNewIndex;
@@ -262,7 +256,6 @@ int64_t GetProofOfStakeReward(
     double& OUT_INTEREST);
 
 bool OutOfSyncByAge();
-std::string GetNeuralNetworkSupermajorityHash(double& out_popularity);
 bool IsSuperBlock(CBlockIndex* pIndex);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
@@ -293,7 +286,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         bool* pfMissingInputs);
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
 bool IsResearcher(const std::string& cpid);
-extern bool ComputeNeuralNetworkSupermajorityHashes();
 
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
 

@@ -15,6 +15,7 @@
 #include "beacon.h"
 #include "scheduler.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 
@@ -818,7 +819,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (IsV9Enabled(pindexBest->nHeight)) {
         uiInterface.InitMessage(_("Loading superblock cache..."));
         LogPrintf("Loading superblock cache...");
-        NN::Tally::LoadSuperblockIndex(pindexBest);
+        NN::Quorum::LoadSuperblockIndex(pindexBest);
     }
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
@@ -987,9 +988,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (fDebug3) LogPrintf("Loading admin Messages");
     LoadAdminMessages(true,sOut);
     LogPrintf("Done loading Admin messages");
-
-    uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
-    ComputeNeuralNetworkSupermajorityHashes();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     NN::Researcher::Reload();

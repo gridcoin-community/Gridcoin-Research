@@ -8,8 +8,8 @@
 #include "miner.h"
 #include "kernel.h"
 #include "main.h"
-#include "appcache.h"
 #include "neuralnet/neuralnet.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 #include "contract/contract.h"
@@ -914,33 +914,22 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         return;
     }
 
-    std::string quorum_address = DefaultWalletAddress();
-
-    if (!IsNeuralNodeParticipant(quorum_address, blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not participating.");
-        return;
-    }
-
-    if (fDebug) {
-        LogPrintf("AddNeuralContractOrVote: Updating neural supermajority...");
-    }
-
-    ComputeNeuralNetworkSupermajorityHashes();
-
-    if (!NN::Tally::SuperblockNeeded()) {
+    if (!NN::Quorum::SuperblockNeeded()) {
         LogPrintf("AddNeuralContractOrVote: Not needed.");
         return;
     }
 
-    int pending_height = RoundFromString(ReadCache(Section::NEURALSECURITY, "pending").value, 0);
-
-    if (pending_height >= (pindexBest->nHeight - 200)) {
+    if (NN::Quorum::HasPendingSuperblock()) {
         LogPrintf("AddNeuralContractOrVote: Already pending.");
         return;
     }
 
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    std::string quorum_address = DefaultWalletAddress();
+
+    if (!NN::Quorum::Participating(quorum_address, blocknew.nTime)) {
+        LogPrintf("AddNeuralContractOrVote: Not participating.");
+        return;
+    }
 
     // Add our Neural Vote
     //
@@ -960,6 +949,8 @@ void AddNeuralContractOrVote(CBlock& blocknew)
     LogPrintf(
         "AddNeuralContractOrVote: Added our quorum vote: %s",
         blocknew.m_claim.m_quorum_hash.ToString());
+
+    const NN::QuorumHash consensus_hash = NN::Quorum::FindPopularHash(pindexBest);
 
     if (blocknew.m_claim.m_quorum_hash != consensus_hash) {
         LogPrintf("AddNeuralContractOrVote: Not in consensus.");
