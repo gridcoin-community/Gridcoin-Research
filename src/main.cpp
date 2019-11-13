@@ -15,7 +15,7 @@
 #include "block.h"
 #include "beacon.h"
 #include "miner.h"
-#include "neuralnet/neuralnet.h"
+#include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/superblock.h"
@@ -174,6 +174,35 @@ std::string sRegVer;
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
 // End of Gridcoin Global vars
+
+// TODO: replace these with upcoming contract handler implementation:
+namespace {
+bool AddContract(
+    const std::string& type,
+    const std::string& key,
+    const std::string& value,
+    const int64_t& timestamp)
+{
+    if (type == "project" || type == "projectmapping") {
+        NN::GetWhitelist().Add(key, value, timestamp);
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+bool DeleteContract(const std::string& type, const std::string& key)
+{
+    if (type == "project" || type == "projectmapping") {
+        NN::GetWhitelist().Delete(key);
+    } else {
+        return false;
+    }
+
+    return true;
+}
+} // anonymous namespace
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -2201,7 +2230,7 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
                 try
                 {
-                    if (!NN::DeleteContract(sMType, sMKey)) {
+                    if (!DeleteContract(sMType, sMKey)) {
                         DeleteCache(StringToSection(sMType), sMKey);
                     }
                     if(fDebug)
@@ -5483,7 +5512,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                     try
                     {
-                        if (!NN::AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
+                        if (!AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
                             WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
 
                             if(fDebug10 && sMessageType=="beacon" )
@@ -5510,7 +5539,7 @@ bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipi
 
                     try
                     {
-                        if (!NN::DeleteContract(sMessageType, sMessageKey)) {
+                        if (!DeleteContract(sMessageType, sMessageKey)) {
                             DeleteCache(StringToSection(sMessageType), sMessageKey);
                         }
                         fMessageLoaded = true;

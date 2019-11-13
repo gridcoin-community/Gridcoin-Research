@@ -1,10 +1,10 @@
 #include "main.h"
-#include "neuralnet/neuralnet.h"
 #include "scraper.h"
 #include "scraper_net.h"
 #include "http.h"
 #include "ui_interface.h"
 
+#include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/superblock.h"
 

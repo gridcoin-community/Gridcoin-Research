@@ -9,7 +9,6 @@
 #include "miner.h"
 #include "kernel.h"
 #include "main.h"
-#include "neuralnet/neuralnet.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
@@ -934,11 +933,11 @@ void AddNeuralContractOrVote(CBlock& blocknew)
 
     // Add our Neural Vote
     //
-    // GetSuperblockHash() returns an invalid QuorumHash when the node has not
-    // yet received enough scraper data to resolve a convergence locally so it
+    // CreateSuperblock() will return an empty superblock when the node has not
+    // yet received enough scraper data to resolve a convergence locally, so it
     // cannot vote for a superblock.
     //
-    blocknew.m_claim.m_quorum_hash = NN::GetInstance()->GetSuperblockHash();
+    blocknew.m_claim.m_quorum_hash = NN::Quorum::CreateSuperblock().GetHash();
 
     if (!blocknew.m_claim.m_quorum_hash.Valid()) {
         LogPrintf("AddNeuralContractOrVote: Local contract empty.");
@@ -959,7 +958,7 @@ void AddNeuralContractOrVote(CBlock& blocknew)
     }
 
     // We have consensus, add our superblock contract:
-    blocknew.m_claim.m_superblock = NN::GetInstance()->GetSuperblockContract();
+    blocknew.m_claim.m_superblock = NN::Quorum::CreateSuperblock();
 
     LogPrintf(
         "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",

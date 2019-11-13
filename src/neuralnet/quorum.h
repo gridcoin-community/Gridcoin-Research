@@ -34,6 +34,14 @@ class Quorum
 {
 public:
     //!
+    //! \brief Determine whether the quorum system is active.
+    //!
+    //! \return \c true if the scraper is disabled or if the quorum system is
+    //! explicitly configured as active.
+    //!
+    static bool Active();
+
+    //!
     //! \brief Determine whether the provided address participates in the
     //! quorum consensus at the specified time.
     //!
@@ -126,6 +134,13 @@ public:
     //! \param pindexLast The most recent block to begin loading backward from.
     //!
     static void LoadSuperblockIndex(const CBlockIndex* pindexLast);
+
+    //!
+    //! \brief Create a new superblock from scraper convergence data.
+    //!
+    //! \return A new superblock to publish to the network.
+    //!
+    static Superblock CreateSuperblock();
 
     //!
     //! \brief Push a new superblock into the tally.

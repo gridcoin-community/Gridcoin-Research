@@ -7,7 +7,6 @@
 #include "init.h"
 #include "miner.h"
 #include "rpcserver.h"
-#include "neuralnet/neuralnet.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
@@ -119,7 +118,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         obj.pushKV("PopularNeuralHash", NN::Quorum::FindPopularHash(pindexBest).ToString());
     }
 
-    obj.pushKV("MyNeuralHash", NN::GetInstance()->GetNeuralHash());
+    obj.pushKV("MyNeuralHash", NN::Quorum::CreateSuperblock().GetHash().ToString());
 
     const NN::MiningId mining_id = NN::Researcher::Get()->Id();
     obj.pushKV("CPID", mining_id.ToString());

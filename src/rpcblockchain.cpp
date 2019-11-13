@@ -10,7 +10,6 @@
 #include "block.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "neuralnet/neuralnet.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -43,6 +42,7 @@ bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
+std::string ExplainMagnitude(std::string sCPID);
 
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
 extern UniValue GetJsonUnspentReport();
@@ -945,7 +945,7 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     const std::string primary_cpid = NN::GetPrimaryCpid();
-    std::string sNeuralResponse = NN::GetInstance()->ExplainMagnitude(primary_cpid);
+    std::string sNeuralResponse = ExplainMagnitude(primary_cpid);
 
     if (sNeuralResponse.length() < 25)
     {
@@ -1051,9 +1051,9 @@ UniValue myneuralhash(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::string myNeuralHash = NN::GetInstance()->GetNeuralHash();
+    LOCK(cs_main);
 
-    res.pushKV("My Neural Hash", myNeuralHash.c_str());
+    res.pushKV("My Neural Hash", NN::Quorum::CreateSuperblock().GetHash().ToString());
 
     return res;
 }
@@ -1267,7 +1267,7 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    const NN::Superblock superblock = NN::GetInstance()->GetSuperblockContract();
+    const NN::Superblock superblock = NN::Quorum::CreateSuperblock();
 
     res.pushKV("Contract", SuperblockToJson(superblock));
     res.pushKV("beacon_count", (uint64_t)superblock.m_cpids.TotalCount());

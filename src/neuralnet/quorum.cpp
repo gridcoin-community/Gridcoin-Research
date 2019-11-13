@@ -8,6 +8,10 @@
 
 using namespace NN;
 
+Superblock ScraperGetSuperblockContract(
+    bool bStoreConvergedStats = false,
+    bool bContractDirectFromStatsUpdate = false);
+
 namespace {
 //!
 //! \brief Organizes superblocks for lookup to calculate research rewards.
@@ -512,6 +516,12 @@ LegacyConsensus g_legacy_consensus;
 // Class: Quorum
 // -----------------------------------------------------------------------------
 
+bool Quorum::Active()
+{
+    return !GetBoolArg("-disablenn", false)
+        && (!GetBoolArg("-scraper", false) || GetBoolArg("-usenewnn", false));
+}
+
 bool Quorum::Participating(const std::string& grc_address, const int64_t time)
 {
     return LegacyConsensus::Participating(grc_address, time);
@@ -602,6 +612,15 @@ void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
     }
 
     g_superblock_index.Reload(pindexLast);
+}
+
+Superblock Quorum::CreateSuperblock()
+{
+    if (!Active()) {
+        return Superblock();
+    }
+
+    return ScraperGetSuperblockContract();
 }
 
 void Quorum::PushSuperblock(Superblock superblock, const CBlockIndex* const pindex)
