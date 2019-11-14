@@ -114,12 +114,6 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
 
     obj.pushKV("testnet",       fTestNet);
 
-    if (pindexBest->nVersion <= 10) {
-        obj.pushKV("PopularNeuralHash", NN::Quorum::FindPopularHash(pindexBest).ToString());
-    }
-
-    obj.pushKV("MyNeuralHash", NN::Quorum::CreateSuperblock().GetHash().ToString());
-
     const NN::MiningId mining_id = NN::Researcher::Get()->Id();
     obj.pushKV("CPID", mining_id.ToString());
 
