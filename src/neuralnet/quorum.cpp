@@ -83,25 +83,29 @@ public:
         };
 
         if (m_pending.empty()) {
-            log(height, "none pending.");
+            if (fDebug) {
+                log(height, "none pending.");
+            }
+
             return false;
         }
 
-        auto pending_iter = m_pending.find(height);
+        auto pending_iter = m_pending.upper_bound(height);
 
-        if (pending_iter == m_pending.end()) {
-            log(height, "not pending.");
+        if (pending_iter == m_pending.begin()) {
+            if (fDebug) {
+                log(height, "not pending.");
+            }
+
             return false;
         }
-
-        ++pending_iter;
 
         for (auto iter = m_pending.begin() ; iter != pending_iter; ++iter) {
-            m_cache.emplace_front(std::move(iter->second));
-
-            if (m_cache.size() > CACHE_SIZE) {
+            if (m_cache.size() > CACHE_SIZE + 1) {
                 m_cache.pop_back();
             }
+
+            m_cache.emplace_front(std::move(iter->second));
         }
 
         m_pending.erase(m_pending.begin(), pending_iter);

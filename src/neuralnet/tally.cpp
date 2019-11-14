@@ -910,43 +910,25 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
 
     // Seek to the head of the tally window:
     while (pindex->nHeight > max_depth) {
-        if (!pindex->pprev || pindex == pindexGenesisBlock) {
+        if (!pindex->pprev) {
             return;
         }
 
         pindex = pindex->pprev;
     }
 
-    // Apply the last superblock in the tally window:
-    //
-    // It is necessary to scan past min_height in some cases because a
-    // pending superblock may lie outside the tally window.
-    //
-    if (Quorum::HasPendingSuperblock()) {
-        for (const CBlockIndex* psb = pindex;
-            psb && psb != pindexGenesisBlock;
-            psb = psb->pprev)
-        {
-            if (psb->nIsSuperBlock != 1) {
-                continue;
-            }
+    if (Quorum::CommitSuperblock(max_depth)) {
+        const SuperblockPtr current = Quorum::CurrentSuperblock();
 
-            if (Quorum::CommitSuperblock(psb->nHeight)) {
-                const SuperblockPtr current = Quorum::CurrentSuperblock();
-
-                g_network_tally.ApplySuperblock(current);
-                g_researcher_tally.ApplySuperblock(current);
-            }
-
-            break;
-        }
+        g_network_tally.ApplySuperblock(current);
+        g_researcher_tally.ApplySuperblock(current);
     }
 
     double total_block_subsidy = 0;
     double total_research_subsidy = 0;
 
     while (pindex->nHeight > min_depth) {
-        if (!pindex->pprev || pindex->pprev == pindexGenesisBlock) {
+        if (!pindex->pprev) {
             return;
         }
 

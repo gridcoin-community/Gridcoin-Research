@@ -158,11 +158,13 @@ public:
     static void PopSuperblock(const CBlockIndex* const pindex);
 
     //!
-    //! \brief Activate the superblock received at the specified height.
+    //! \brief Activate the superblock received at or below the specified
+    //! height.
     //!
-    //! \param height The height of the block that contains the superblock.
+    //! \param height The maximum height to activate superblocks up to.
     //!
-    //! \return \c true if a superblock at the specified height was activated.
+    //! \return \c true if a superblock at or below the specified height was
+    //! activated.
     //!
     static bool CommitSuperblock(const uint32_t height);
 };
