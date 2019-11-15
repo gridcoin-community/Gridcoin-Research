@@ -1805,7 +1805,15 @@ QuorumHash QuorumHash::Hash(const ScraperStats& stats)
 QuorumHash QuorumHash::Parse(const std::string& hex)
 {
     if (hex.size() == sizeof(uint256) * 2) {
-        return QuorumHash(ParseHex(hex));
+        // A uint256 object stores bytes in the reverse order of its string
+        // representation. We could parse the string through the uint256S()
+        // function, but this doesn't provide a mechanism to detect invalid
+        // strings.
+        //
+        std::vector<unsigned char> bytes = ParseHex(hex);
+        std::reverse(bytes.begin(), bytes.end());
+
+        return QuorumHash(bytes);
     }
 
     if (hex.size() == sizeof(Md5Sum) * 2) {

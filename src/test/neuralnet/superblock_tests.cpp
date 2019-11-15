@@ -1813,7 +1813,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_sha256_hash_string)
         0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
     };
 
-    NN::QuorumHash hash = NN::QuorumHash::Parse(HexStr(expected));
+    NN::QuorumHash hash = NN::QuorumHash::Parse(uint256(expected).ToString());
 
     BOOST_CHECK(hash.Which() == NN::QuorumHash::Kind::SHA256);
     BOOST_CHECK_EQUAL_COLLECTIONS(
