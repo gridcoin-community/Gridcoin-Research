@@ -315,6 +315,8 @@ bool Upgrade::VerifySHA256SUM()
 
     std::string FileSHA256SUM = {mdString};
 
+    fclose(file);
+
     if (ServerSHA256SUM == FileSHA256SUM)
         return true;
 
