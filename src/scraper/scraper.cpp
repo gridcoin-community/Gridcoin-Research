@@ -5334,10 +5334,13 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
-            throw std::runtime_error(
-                    "Wait until a convergence is formed.\n"
-                    );
+		if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
+		{
+		    UniValue error(UniValue::VOBJ);
+		    error.pushKV("Error:", "Wait until a convergence is formed.");
+
+		    return error;
+		}
     }
 
     UniValue res(UniValue::VOBJ);
