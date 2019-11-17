@@ -519,16 +519,9 @@ bool Upgrade::ExtractSnapshot()
 void Upgrade::DeleteSnapshot()
 {
     // File is out of scope now check if it exists and if so delete it.
-    // This covers partial downloaded files or a http response downloaded into file.
-    std::string snapshotfile = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
-
-    size_t pos = snapshotfile.find_last_of("/");
-
-    snapshotfile = snapshotfile.substr(pos + 1, (snapshotfile.length() - pos - 1));
-
     try
     {
-        boost::filesystem::path snapshotpath = GetDataDir() / snapshotfile;
+        boost::filesystem::path snapshotpath = GetDataDir() / "snapshot.zip";
 
         if (boost::filesystem::exists(snapshotpath))
             if (boost::filesystem::is_regular_file(snapshotpath))
