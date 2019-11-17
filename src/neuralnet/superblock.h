@@ -11,9 +11,6 @@
 
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
 
-std::string UnpackBinarySuperblock(std::string block);
-std::string PackBinarySuperblock(std::string sBlock);
-
 class ConvergedScraperStats; // Forward for Superblock
 
 namespace NN {

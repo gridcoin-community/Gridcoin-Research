@@ -94,10 +94,8 @@ GRIDCOIN_CORE_H = \
 	mruset.h \
 	neuralnet/claim.h \
 	neuralnet/cpid.h \
-	neuralnet/neuralnet.h \
-   neuralnet/neuralnet_native.h \
-   neuralnet/neuralnet_stub.h \
 	neuralnet/project.h \
+	neuralnet/quorum.h \
 	neuralnet/researcher.h \
 	neuralnet/superblock.h \
 	neuralnet/tally.h \
@@ -165,10 +163,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	miner.cpp \
 	neuralnet/claim.cpp \
 	neuralnet/cpid.cpp \
-   neuralnet/neuralnet.cpp \
-   neuralnet/neuralnet_native.cpp \
-   neuralnet/neuralnet_stub.cpp \
 	neuralnet/project.cpp \
+	neuralnet/quorum.cpp \
 	neuralnet/researcher.cpp \
 	neuralnet/superblock.cpp \
 	neuralnet/tally.cpp \
@@ -221,8 +217,6 @@ libgridcoin_util_a-version.$(OBJEXT): obj/build.h
 libgridcoin_util_a_CPPFLAGS = $(AM_CPPFLAGS) $(GRIDCOIN_INCLUDES)
 libgridcoin_util_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libgridcoin_util_a_SOURCES = $(GRIDCOIN_CORE_CPP) \
-    neuralnet/neuralnet_stub.cpp \
-    neuralnet/neuralnet.cpp \
     $(GRIDCOIN_CORE_H)
 
 if TARGET_WINDOWS

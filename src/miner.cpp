@@ -4,12 +4,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "beacon.h"
 #include "txdb.h"
 #include "miner.h"
 #include "kernel.h"
 #include "main.h"
-#include "appcache.h"
-#include "neuralnet/neuralnet.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 #include "contract/contract.h"
@@ -914,41 +914,50 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         return;
     }
 
-    std::string quorum_address = DefaultWalletAddress();
-
-    if (!IsNeuralNodeParticipant(quorum_address, blocknew.nTime)) {
-        LogPrintf("AddNeuralContractOrVote: Not participating.");
-        return;
-    }
-
-    if (fDebug) {
-        LogPrintf("AddNeuralContractOrVote: Updating neural supermajority...");
-    }
-
-    ComputeNeuralNetworkSupermajorityHashes();
-
-    if (!NN::Tally::SuperblockNeeded()) {
+    if (!NN::Quorum::SuperblockNeeded()) {
         LogPrintf("AddNeuralContractOrVote: Not needed.");
         return;
     }
 
-    int pending_height = RoundFromString(ReadCache(Section::NEURALSECURITY, "pending").value, 0);
-
-    if (pending_height >= (pindexBest->nHeight - 200)) {
+    if (NN::Quorum::HasPendingSuperblock()) {
         LogPrintf("AddNeuralContractOrVote: Already pending.");
         return;
     }
 
-    double popularity = 0;
-    std::string consensus_hash = GetNeuralNetworkSupermajorityHash(popularity);
+    if (blocknew.nVersion >= 11) {
+        NN::Superblock superblock = NN::Quorum::CreateSuperblock();
+
+        if (!superblock.WellFormed()) {
+            LogPrintf("AddNeuralContractOrVote: Local contract empty.");
+            return;
+        }
+
+        blocknew.m_claim.m_quorum_hash = superblock.GetHash();
+        blocknew.m_claim.m_superblock = std::move(superblock);
+
+        LogPrintf(
+            "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",
+            GetSerializeSize(blocknew.m_claim.m_superblock, SER_NETWORK, 1));
+
+        return;
+    }
+
+    // TODO: remove the rest below after switch to block version 11:
+
+    std::string quorum_address = DefaultWalletAddress();
+
+    if (!NN::Quorum::Participating(quorum_address, blocknew.nTime)) {
+        LogPrintf("AddNeuralContractOrVote: Not participating.");
+        return;
+    }
 
     // Add our Neural Vote
     //
-    // GetSuperblockHash() returns an invalid QuorumHash when the node has not
-    // yet received enough scraper data to resolve a convergence locally so it
+    // CreateSuperblock() will return an empty superblock when the node has not
+    // yet received enough scraper data to resolve a convergence locally, so it
     // cannot vote for a superblock.
     //
-    blocknew.m_claim.m_quorum_hash = NN::GetInstance()->GetSuperblockHash();
+    blocknew.m_claim.m_quorum_hash = NN::Quorum::CreateSuperblock().GetHash();
 
     if (!blocknew.m_claim.m_quorum_hash.Valid()) {
         LogPrintf("AddNeuralContractOrVote: Local contract empty.");
@@ -961,13 +970,15 @@ void AddNeuralContractOrVote(CBlock& blocknew)
         "AddNeuralContractOrVote: Added our quorum vote: %s",
         blocknew.m_claim.m_quorum_hash.ToString());
 
+    const NN::QuorumHash consensus_hash = NN::Quorum::FindPopularHash(pindexBest);
+
     if (blocknew.m_claim.m_quorum_hash != consensus_hash) {
         LogPrintf("AddNeuralContractOrVote: Not in consensus.");
         return;
     }
 
     // We have consensus, add our superblock contract:
-    blocknew.m_claim.m_superblock = NN::GetInstance()->GetSuperblockContract();
+    blocknew.m_claim.m_superblock = NN::Quorum::CreateSuperblock();
 
     LogPrintf(
         "AddNeuralContractOrVote: Added our Superblock (size %" PRIszu ").",

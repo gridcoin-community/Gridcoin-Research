@@ -14,7 +14,7 @@
 #include "ui_interface.h"
 #include "beacon.h"
 #include "scheduler.h"
-#include "neuralnet/neuralnet.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 
@@ -400,7 +400,36 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     LogPrintf("Boost Version: %s", s.str());
 
-    NN::SetInstance(NN::CreateNeuralNet());
+
+    // The purpose of the complicated defaulting below is that if not running
+    // the scraper the new nn should run by default. If running the scraper,
+    // then the new NN should not run unless explicitly specified to do so.
+
+    // For example. gridcoinresearch(d) with no args will run the NN but not the scraper.
+    // gridcoinresearch(d) -scraper will run the scraper but not the NN components.
+    // gridcoinresearch(d) -scraper -usenewnn will run both the scraper and the NN.
+    // -disablenn overrides the -usenewnn directive.
+
+    // If -disablenn is NOT specified or set to false...
+    if (!GetBoolArg("-disablenn", false))
+    {
+        // Then if -scraper is specified (set to true)...
+        if (GetBoolArg("-scraper", false))
+        {
+            // Activate explorer extended features if -explorer is set
+            if (GetBoolArg("-explorer", false)) fExplorer = true;
+        }
+    }
+
+    if (NN::Quorum::Active())
+    {
+        LogPrintf("INFO: Native C++ neural network is active.");
+    }
+    else
+    {
+        LogPrintf("INFO: Native C++ neural network is inactive.");
+    }
+
 
     nNodeLifespan = GetArg("-addrlifespan", 7);
     fUseFastIndex = GetBoolArg("-fastindex", false);
@@ -818,7 +847,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (IsV9Enabled(pindexBest->nHeight)) {
         uiInterface.InitMessage(_("Loading superblock cache..."));
         LogPrintf("Loading superblock cache...");
-        NN::Tally::LoadSuperblockIndex(pindexBest);
+        NN::Quorum::LoadSuperblockIndex(pindexBest);
     }
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))
@@ -987,9 +1016,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (fDebug3) LogPrintf("Loading admin Messages");
     LoadAdminMessages(true,sOut);
     LogPrintf("Done loading Admin messages");
-
-    uiInterface.InitMessage(_("Compute Neural Network Hashes..."));
-    ComputeNeuralNetworkSupermajorityHashes();
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     NN::Researcher::Reload();

@@ -1,12 +1,12 @@
 #include "main.h"
-#include "neuralnet/neuralnet.h"
 #include "scraper.h"
 #include "scraper_net.h"
 #include "http.h"
 #include "ui_interface.h"
 
+#include "neuralnet/project.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/superblock.h"
-#include "neuralnet/tally.h"
 
 #include <zlib.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -472,7 +472,7 @@ int64_t SuperblockAge()
 {
     LOCK(cs_main);
 
-    return NN::Tally::CurrentSuperblock()->Age();
+    return NN::Quorum::CurrentSuperblock()->Age();
 }
 
 /*********************
@@ -1083,19 +1083,6 @@ bool ScraperHousekeeping()
 
     // Show this node's contract hash in the log.
     _log(logattribute::INFO, "ScraperHousekeeping", "superblock contract hash = " + superblock.GetHash().ToString());
-
-    // Visibility into the Quorum map...
-    if (fDebug3)
-    {
-        _log(logattribute::INFO, "ScraperHousekeeping", "mvNeuralNetworkHash dump");
-        for (const auto& network_hash : mvNeuralNetworkHash)
-            _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
-                 + ", Popularity: " + std::to_string(network_hash.second));
-        _log(logattribute::INFO, "ScraperHousekeeping", "mvCurrentNeuralNetworkHash dump");
-        for (const auto& network_hash : mvCurrentNeuralNetworkHash)
-            _log(logattribute::INFO, "ScraperHousekeeping", "NN Contract Hash: " + network_hash.first
-                 + ", Popularity: " + std::to_string(network_hash.second));
-    }
 
     logger& log = LogInstance();
 
@@ -4547,6 +4534,11 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
                     superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
+
+                    if (!IsV11Enabled(nBestHeight)) {
+                        superblock.m_version = 1;
+                    }
+
                     ConvergedScraperStatsCache.NewFormatSuperblock = superblock;
 
                     // Mark the cache clean, because it was just updated.
@@ -5351,34 +5343,16 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     // Contract binary pack/unpack check...
     _log(logattribute::INFO, "testnewsb", "Checking compatibility with binary SB pack/unpack by packing then unpacking, then comparing to the original");
 
-    std::string sSBCoreData;
-
+    std::string legacy_packed_contract;
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        sSBCoreData = UnpackBinarySuperblock(ConvergedScraperStatsCache.NewFormatSuperblock.PackLegacy());
+        legacy_packed_contract = ConvergedScraperStatsCache.NewFormatSuperblock.PackLegacy();
+        uint64_t legacy_packed_size = legacy_packed_contract.size();
+
+        _log(logattribute::INFO, "testnewsb", "legacy packed size = " + std::to_string(legacy_packed_size));
+        res.pushKV("legacy packed size", legacy_packed_size);
     }
-
-    std::string sPackedSBCoreData = PackBinarySuperblock(sSBCoreData);
-    std::string sSBCoreData_out = UnpackBinarySuperblock(sPackedSBCoreData);
-
-    if (sSBCoreData == sSBCoreData_out)
-    {
-        _log(logattribute::INFO, "testnewsb", "Generated contract passed binary pack/unpack");
-        res.pushKV("Generated legacy contract", "passed");
-    }
-    else
-    {
-        _log(logattribute::ERR, "testnewsb", "Generated contract FAILED binary pack/unpack");
-        _log(logattribute::INFO, "testnewsb", "sSBCoreData_out = \n" + sSBCoreData_out);
-        res.pushKV("Generated legacy contract", "FAILED");
-
-    }
-
-    _log(logattribute::INFO, "testnewsb", "sSBCoreData size = " + std::to_string(sSBCoreData.size()));
-    res.pushKV("sSBCoreData size", (uint64_t) sSBCoreData.size());
-    _log(logattribute::INFO, "testnewsb", "sPackedSBCoreData size = " + std::to_string(sPackedSBCoreData.size()));
-    res.pushKV("sSBPackedCoreData size", (uint64_t) sPackedSBCoreData.size());
 
     NN::Superblock NewFormatSuperblock;
     NN::Superblock NewFormatSuperblock_out;
@@ -5439,28 +5413,17 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NewFormatSuperblock serialization", "FAILED");
     }
 
-    NN::Superblock NewFormatSuperblockFromLegacy = NN::Superblock::UnpackLegacy(sPackedSBCoreData);
+    NN::Superblock NewFormatSuperblockFromLegacy = NN::Superblock::UnpackLegacy(legacy_packed_contract);
     NN::QuorumHash new_legacy_hash = NN::QuorumHash::Hash(NewFormatSuperblockFromLegacy);
-    std::string old_legacy_hash = GetQuorumHash(sSBCoreData_out);
 
     res.pushKV("NewFormatSuperblockHash", nNewFormatSuperblockHash.ToString());
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
     res.pushKV("new_legacy_hash", new_legacy_hash.ToString());
     _log(logattribute::INFO, "testnewsb", "new_legacy_hash = " + new_legacy_hash.ToString());
-    res.pushKV("old_legacy_hash", old_legacy_hash);
-    _log(logattribute::INFO, "testnewsb", "old_legacy_hash = " + old_legacy_hash);
     res.pushKV("nNewFormatSuperblockReducedContentHashFromConvergenceHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromConvergenceHint);
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromConvergenceHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromConvergenceHint));
     res.pushKV("nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint);
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint));
-
-    if (new_legacy_hash == old_legacy_hash) {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash passed.");
-        res.pushKV("NewFormatSuperblock legacy hash", "passed");
-    } else {
-        _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy hash FAILED.");
-        res.pushKV("NewFormatSuperblock legacy hash", "FAILED");
-    }
 
     _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
     res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock.m_cpids.Zeros()));

@@ -461,7 +461,6 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
 
     claim.m_superblock = GetTestSuperblock();
     claim.m_quorum_hash = claim.m_superblock.GetHash();
-    claim.m_quorum_address = "mk8PmpcTGLCZky8YqFHEEwXs5px3hGfQBG";
 
     CDataStream expected(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -471,7 +470,6 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
         << claim.m_organization
         << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
         << claim.m_quorum_hash
-        << claim.m_quorum_address
         << claim.m_superblock;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
@@ -521,7 +519,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
 
     expected.m_superblock = GetTestSuperblock();
     expected.m_quorum_hash = expected.m_superblock.GetHash();
-    expected.m_quorum_address = "mk8PmpcTGLCZky8YqFHEEwXs5px3hGfQBG";
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -531,7 +528,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
         << expected.m_organization
         << NN::VarDouble<COIN_PLACES>(expected.m_block_subsidy)
         << expected.m_quorum_hash
-        << expected.m_quorum_address
         << expected.m_superblock;
 
     NN::Claim claim;
@@ -545,7 +541,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
     BOOST_CHECK(claim.m_block_subsidy == expected.m_block_subsidy);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
-    BOOST_CHECK(claim.m_quorum_address == expected.m_quorum_address);
+    BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock.WellFormed() == true);
     BOOST_CHECK(claim.m_superblock.GetHash() == expected.m_superblock.GetHash());
 
@@ -588,7 +584,6 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
 
     claim.m_superblock = GetTestSuperblock();
     claim.m_quorum_hash = claim.m_superblock.GetHash();
-    claim.m_quorum_address = "mk8PmpcTGLCZky8YqFHEEwXs5px3hGfQBG";
 
     CDataStream expected(SER_NETWORK, claim.m_version);
 
@@ -602,7 +597,6 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
         << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash
-        << claim.m_quorum_address
         << claim.m_superblock;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
@@ -658,7 +652,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
 
     expected.m_superblock = GetTestSuperblock();
     expected.m_quorum_hash = expected.m_superblock.GetHash();
-    expected.m_quorum_address = "mk8PmpcTGLCZky8YqFHEEwXs5px3hGfQBG";
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
 
@@ -672,7 +665,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
         << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(expected.m_magnitude_unit)
         << expected.m_signature
         << expected.m_quorum_hash
-        << expected.m_quorum_address
         << expected.m_superblock;
 
     NN::Claim claim;
@@ -691,7 +683,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
-    BOOST_CHECK(claim.m_quorum_address == expected.m_quorum_address);
+    BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock.WellFormed() == true);
     BOOST_CHECK(claim.m_superblock.GetHash() == expected.m_superblock.GetHash());
 }

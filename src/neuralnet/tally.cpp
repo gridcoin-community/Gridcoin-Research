@@ -1,6 +1,7 @@
 #include "beacon.h"
 #include "main.h"
 #include "neuralnet/cpid.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 #include "util.h"
@@ -64,178 +65,6 @@ int64_t GetMaxResearchSubsidy(const int64_t nTime)
     // The .5 allows for fractional amounts after the 4th decimal place (used to store the POR indicator)
     return MaxSubsidy+.5;
 }
-
-//!
-//! \brief Organizes superblocks for lookup to calculate research rewards.
-//!
-class SuperblockIndex
-{
-    //!
-    //! \brief Number of superblocks to store in the active cache.
-    //!
-    static constexpr size_t CACHE_SIZE = 3;
-
-public:
-    //!
-    //! \brief Get a reference to the current active superblock.
-    //!
-    //! \return The most recent superblock applied by the tally.
-    //!
-    SuperblockPtr Current() const
-    {
-        if (m_cache.empty()) {
-            return std::make_shared<const Superblock>();
-        }
-
-        return m_cache.front();
-    }
-
-    //!
-    //! \brief Determine whether any superblocks are pending activation.
-    //!
-    //! \return \c true if the index contains a superblock loaded at a height
-    //! above the last tally window.
-    //!
-    bool HasPending() const
-    {
-        return !m_pending.empty();
-    }
-
-    //!
-    //! \brief Activate the superblock received at the specified height.
-    //!
-    //! \param height The height of the block that contains the superblock.
-    //!
-    //! \return \c true if a superblock at the specified height was activated.
-    //!
-    bool Commit(const uint32_t height)
-    {
-        static const auto log = [](const uint32_t height, const char* msg) {
-            LogPrintf("SuperblockIndex::Commit(%" PRId64 "): %s", height, msg);
-        };
-
-        if (m_pending.empty()) {
-            log(height, "none pending.");
-            return false;
-        }
-
-        auto pending_iter = m_pending.find(height);
-
-        if (pending_iter == m_pending.end()) {
-            log(height, "not pending.");
-            return false;
-        }
-
-        ++pending_iter;
-
-        for (auto iter = m_pending.begin() ; iter != pending_iter; ++iter) {
-            m_cache.emplace_front(std::move(iter->second));
-
-            if (m_cache.size() > CACHE_SIZE) {
-                m_cache.pop_back();
-            }
-        }
-
-        m_pending.erase(m_pending.begin(), pending_iter);
-
-        log(height, "commit.");
-
-        return true;
-    }
-
-    //!
-    //! \brief Add a new superblock to the index in a pending state.
-    //!
-    //! \param superblock Contains the superblock data to add.
-    //!
-    void PushSuperblock(Superblock superblock)
-    {
-        m_pending.emplace(
-            superblock.m_height,
-            std::make_shared<const Superblock>(std::move(superblock)));
-    }
-
-    //!
-    //! \brief Remove the most recently added superblock from the index.
-    //!
-    void PopSuperblock()
-    {
-        if (!m_pending.empty()) {
-            auto iter = m_pending.end();
-            m_pending.erase(--iter);
-        } else if (!m_cache.empty()) {
-            m_cache.pop_front();
-        }
-    }
-
-    //!
-    //! \brief Refill the superblock index cache.
-    //!
-    //! \param pindexLast The block to begin loading superblocks backward from.
-    //!
-    void Reload(const CBlockIndex* pindexLast)
-    {
-        // Move committed superblocks back to pending. The next tally recount
-        // will commit the superblocks at the appropriate height.
-        //
-        if (!m_cache.empty()) {
-            for (auto&& superblock : m_cache) {
-                m_pending.emplace(superblock->m_height, std::move(superblock));
-            }
-
-            m_cache.clear();
-        }
-
-        if (!m_pending.empty() && m_pending.size() < CACHE_SIZE) {
-            const int64_t lowest_height = m_pending.begin()->first;
-
-            while (pindexLast->nHeight >= lowest_height) {
-                if (!pindexLast->pprev || pindexLast == pindexGenesisBlock) {
-                    return;
-                }
-
-                pindexLast = pindexLast->pprev;
-            }
-        }
-
-        // TODO: for now, just load the last three superblocks. We'll build a
-        // better index when we implement superblock windows:
-        //
-        while (m_pending.size() < CACHE_SIZE) {
-            while (pindexLast->nIsSuperBlock != 1) {
-                if (!pindexLast->pprev || pindexLast == pindexGenesisBlock) {
-                    return;
-                }
-
-                pindexLast = pindexLast->pprev;
-            }
-
-            CBlock block;
-            block.ReadFromDisk(pindexLast);
-            Claim claim = block.PullClaim();
-
-            claim.m_superblock.m_height = pindexLast->nHeight;
-            claim.m_superblock.m_timestamp = pindexLast->nTime;
-
-            PushSuperblock(std::move(claim.m_superblock));
-
-            pindexLast = pindexLast->pprev;
-        }
-    }
-private:
-    //!
-    //! \brief A set of recently-added superblocks not yet activated by the
-    //! tally recount.
-    //!
-    std::map<uint32_t, SuperblockPtr> m_pending;
-
-    //!
-    //! \brief Contains a cache of recent activated superblocks.
-    //!
-    //! TODO: refactor this for superblock windows.
-    //!
-    std::deque<SuperblockPtr> m_cache;
-}; // SuperblockIndex
 
 //!
 //! \brief Contains the two-week network average tally used to produce the
@@ -694,7 +523,6 @@ private:
     const double m_magnitude_unit; //!< Network magnitude unit to factor in.
 }; // NewbieAccrualComputer
 
-SuperblockIndex g_superblock_index; //!< Organizes recent superblocks.
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
 NetworkTally g_network_tally;       //!< Tracks two-week network averages.
 
@@ -966,7 +794,7 @@ NetworkStats Tally::GetNetworkStats(int64_t time)
         time = GetAdjustedTime();
     }
 
-    const SuperblockPtr superblock = CurrentSuperblock();
+    const SuperblockPtr superblock = Quorum::CurrentSuperblock();
 
     NetworkStats stats = g_network_tally.GetStats(time);
 
@@ -985,7 +813,7 @@ double Tally::GetMagnitudeUnit(const int64_t payment_time)
 uint16_t Tally::MyMagnitude()
 {
     if (const auto cpid_option = NN::Researcher::Get()->Id().TryCpid()) {
-        return CurrentSuperblock()->m_cpids.MagnitudeOf(*cpid_option);
+        return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(*cpid_option);
     }
 
     return 0;
@@ -1026,7 +854,7 @@ AccrualComputer Tally::GetComputer(
 
 uint16_t Tally::GetMagnitude(const Cpid cpid)
 {
-    return CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
+    return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
 }
 
 uint16_t Tally::GetMagnitude(const MiningId mining_id)
@@ -1060,61 +888,6 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     }
 }
 
-SuperblockPtr Tally::CurrentSuperblock()
-{
-    return g_superblock_index.Current();
-}
-
-bool Tally::SuperblockNeeded()
-{
-    const SuperblockPtr superblock = g_superblock_index.Current();
-
-    if (!superblock->WellFormed()) {
-        return true;
-    }
-
-    if (superblock->Age() <= GetSuperblockAgeSpacing(nBestHeight)) {
-        return false;
-    }
-
-    for (const CBlockIndex* pindex = pindexBest;
-        pindex && pindex->nHeight + 15 > nBestHeight;
-        pindex = pindex->pprev)
-    {
-        if (pindex->nIsSuperBlock == 1) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void Tally::LoadSuperblockIndex(const CBlockIndex* pindexLast)
-{
-    if (!pindexLast) {
-        return;
-    }
-
-    g_superblock_index.Reload(pindexLast);
-}
-
-void Tally::PushSuperblock(Superblock superblock, const CBlockIndex* const pindex)
-{
-    LogPrintf("Tally::PushSuperblock(%" PRId64 ")", pindex->nHeight);
-
-    superblock.m_height = pindex->nHeight;
-    superblock.m_timestamp = pindex->nTime;
-
-    g_superblock_index.PushSuperblock(std::move(superblock));
-}
-
-void Tally::PopSuperblock(const CBlockIndex* const pindex)
-{
-    LogPrintf("Tally::PopSuperblock(%" PRId64 ")", pindex->nHeight);
-
-    g_superblock_index.PopSuperblock();
-}
-
 void Tally::LegacyRecount(const CBlockIndex* pindex)
 {
     if (!pindex) {
@@ -1137,43 +910,25 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
 
     // Seek to the head of the tally window:
     while (pindex->nHeight > max_depth) {
-        if (!pindex->pprev || pindex == pindexGenesisBlock) {
+        if (!pindex->pprev) {
             return;
         }
 
         pindex = pindex->pprev;
     }
 
-    // Apply the last superblock in the tally window:
-    //
-    // It is necessary to scan past min_height in some cases because a
-    // pending superblock may lie outside the tally window.
-    //
-    if (g_superblock_index.HasPending()) {
-        for (const CBlockIndex* psb = pindex;
-            psb && psb != pindexGenesisBlock;
-            psb = psb->pprev)
-        {
-            if (psb->nIsSuperBlock != 1) {
-                continue;
-            }
+    if (Quorum::CommitSuperblock(max_depth)) {
+        const SuperblockPtr current = Quorum::CurrentSuperblock();
 
-            if (g_superblock_index.Commit(psb->nHeight)) {
-                const SuperblockPtr current = g_superblock_index.Current();
-
-                g_network_tally.ApplySuperblock(current);
-                g_researcher_tally.ApplySuperblock(current);
-            }
-
-            break;
-        }
+        g_network_tally.ApplySuperblock(current);
+        g_researcher_tally.ApplySuperblock(current);
     }
 
     double total_block_subsidy = 0;
     double total_research_subsidy = 0;
 
     while (pindex->nHeight > min_depth) {
-        if (!pindex->pprev || pindex->pprev == pindexGenesisBlock) {
+        if (!pindex->pprev) {
             return;
         }
 

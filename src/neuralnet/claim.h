@@ -416,12 +416,10 @@ struct Claim
 
         READWRITE(m_quorum_hash);
 
-        if (!(s.GetType() & SER_GETHASH) && m_quorum_hash.Valid()) {
-            READWRITE(m_quorum_address);
-
-            if (!(s.GetType() & SER_SKIPSUPERBLOCK)) {
-                READWRITE(m_superblock);
-            }
+        if (!(s.GetType() & (SER_GETHASH|SER_SKIPSUPERBLOCK))
+            && m_quorum_hash.Valid())
+        {
+            READWRITE(m_superblock);
         }
     }
 }; // Claim

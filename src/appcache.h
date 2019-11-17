@@ -10,8 +10,6 @@ enum class Section
     BEACONALT,
     GLOBAL,
     PROTOCOL,
-    NEURALSECURITY,
-    CURRENTNEURALSECURITY,
     TRXID,
     POLL,
     VOTE,
