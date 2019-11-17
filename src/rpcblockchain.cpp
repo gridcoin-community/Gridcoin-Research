@@ -1963,7 +1963,6 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Expected Earnings (14 days)", calc->ExpectedDaily(account) * 14);
     json.pushKV("Expected Earnings (Daily)", calc->ExpectedDaily(account));
 
-    json.pushKV("Lifetime Stake Paid", account.m_total_block_subsidy);
     json.pushKV("Lifetime Research Paid", account.m_total_research_subsidy);
     json.pushKV("Lifetime Magnitude Sum", (int)account.m_total_magnitude);
     json.pushKV("Lifetime Magnitude Average", account.AverageLifetimeMagnitude());

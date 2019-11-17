@@ -254,7 +254,6 @@ public:
     {
         ResearchAccount& account = m_researchers[cpid];
 
-        account.m_total_block_subsidy += pindex->nInterestSubsidy;
         account.m_total_research_subsidy += pindex->nResearchSubsidy;
 
         if (pindex->nMagnitude > 0) {
@@ -294,7 +293,6 @@ public:
 
         assert(pindex == account.m_last_block_ptr);
 
-        account.m_total_block_subsidy -= pindex->nInterestSubsidy;
         account.m_total_research_subsidy -= pindex->nResearchSubsidy;
 
         if (pindex->nMagnitude > 0) {
@@ -533,8 +531,7 @@ NetworkTally g_network_tally;       //!< Tracks two-week network averages.
 // -----------------------------------------------------------------------------
 
 ResearchAccount::ResearchAccount()
-    : m_total_block_subsidy(0)
-    , m_total_research_subsidy(0)
+    : m_total_research_subsidy(0)
     , m_magnitude(0)
     , m_total_magnitude(0)
     , m_accuracy(0)

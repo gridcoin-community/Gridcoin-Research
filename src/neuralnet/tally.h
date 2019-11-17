@@ -60,7 +60,6 @@ struct BlockIndexHeightComparator
 class ResearchAccount
 {
 public:
-    double m_total_block_subsidy;        //!< Total lifetime block reward paid.
     double m_total_research_subsidy;     //!< Total lifetime research paid.
 
     uint16_t m_magnitude;                //!< Current magnitude in superblock.
