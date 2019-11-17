@@ -6034,3 +6034,44 @@ bool IsResearcher(const std::string& cpid)
 {
     return cpid.length() == 32;
 }
+
+/** Fees collected in block by miner **/
+int64_t GetFeesCollected(const CBlock& block)
+{
+    // Return 0 if there is no transactions in block.
+    if (block.vtx.size() < 2)
+        return 0;
+
+    int64_t nFees = 0;
+
+    for (unsigned int i = 2; i < block.vtx.size(); i++)
+    {
+        int64_t nDebit = 0;
+        int64_t nCredit = 0;
+        const CTransaction& txData = block.vtx[i];
+
+        // Scan inputs
+        for (const auto& txvinDataParse : txData.vin)
+        {
+            uint256 hashblock;
+            CTransaction txvinData;
+            const COutPoint& txinputData = txvinDataParse.prevout;
+
+            if (GetTransaction(txinputData.hash, txvinData, hashblock))
+                nDebit += txvinData.vout[txinputData.n].nValue;
+
+            // Incase; just return 0
+            else
+                return 0;
+        }
+
+        // Scan outputs
+        for (const auto& txvoutDataParse : txData.vout)
+            nCredit += txvoutDataParse.nValue;
+
+        // Since we now have the input and output amount results we calculate the fees spent
+        nFees += nDebit - nCredit;
+    }
+
+    return nFees;
+}

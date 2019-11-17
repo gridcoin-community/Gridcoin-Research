@@ -69,6 +69,7 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
         res.push_back(std::make_pair(_("Magnitude"), RoundToString(claim.m_magnitude, 8)));
     }
 
+    res.push_back(std::make_pair(_("Fees Collected"), RoundToString(GetFeesCollected(block) / (double)COIN, 8)));
     res.push_back(std::make_pair(_("Is Superblock"), (claim.ContainsSuperblock() ? "Yes" : "No")));
 
     if(fDebug)
