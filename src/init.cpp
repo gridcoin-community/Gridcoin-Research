@@ -326,6 +326,64 @@ bool InitSanityCheck(void)
     return true;
 }
 
+/**
+ * Initialize global loggers.
+ *
+ * Note that this is called very early in the process lifetime, so you should be
+ * careful about what global state you rely on here.
+ */
+void InitLogging()
+{
+    fPrintToConsole = GetBoolArg("-printtoconsole");
+    fPrintToDebugger = GetBoolArg("-printtodebugger");
+    fLogTimestamps = GetBoolArg("-logtimestamps", true);
+
+    LogInstance().m_print_to_file = !IsArgNegated("-debuglogfile");
+    LogInstance().m_file_path = AbsPathForConfigVal(GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
+
+    //printf("LogInstance().m_file_path = %s\n", LogInstance().m_file_path.c_str());
+    //printf("LogInstance().m_print_to_file = %i\n", LogInstance().m_print_to_file);
+
+    LogInstance().m_print_to_console = fPrintToConsole;
+    LogInstance().m_log_timestamps = fLogTimestamps;
+    LogInstance().m_log_time_micros = GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
+    LogInstance().m_log_threadnames = GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
+
+    BCLog::LogFlags flags = BCLog::LogFlags::ALL;
+
+    LogInstance().EnableCategory(flags);
+
+    //printf("LogInstance().GetCategoryMask() = %x\n", LogInstance().GetCategoryMask());
+
+    fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
+
+    if (LogInstance().m_print_to_file)
+    {
+        if (GetBoolArg("-shrinkdebugfile", LogInstance().DefaultShrinkDebugFile()))
+        {
+            // Do this first since it both loads a bunch of debug.log into memory,
+            // and because this needs to happen before any other debug.log printing
+            LogInstance().ShrinkDebugFile();
+        }
+    }
+    if (!LogInstance().StartLogging())
+    {
+       strprintf("Could not open debug log file %s", LogInstance().m_file_path.string());
+    }
+
+    if (!LogInstance().m_log_timestamps)
+        LogPrintf("Startup time: %s\n", FormatISO8601DateTime(GetTime()));
+    LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
+    LogPrintf("Using data directory %s\n", GetDataDir().string());
+
+    std::string version_string = FormatFullVersion();
+#ifdef DEBUG
+    version_string += " (debug build)";
+#else
+    version_string += " (release build)";
+#endif
+    LogPrintf(PACKAGE_NAME " version %s\n", version_string);
+}
 
 
 
@@ -552,11 +610,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     /* force fServer when running without GUI */
     if(!fQtActive)
         fServer = true;
-
-    fPrintToConsole = GetBoolArg("-printtoconsole");
-    fPrintToDebugger = GetBoolArg("-printtodebugger");
-    fLogTimestamps = GetBoolArg("-logtimestamps");
-    fLogTimestamps = true;
 
     if (mapArgs.count("-timeout"))
     {

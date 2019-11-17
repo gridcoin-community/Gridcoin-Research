@@ -350,7 +350,7 @@ public:
     }
 };
 
-logger& LogInstance()
+logger& ScraperLogInstance()
 {
     // This is similar to Bitcoin's newer approach.
     static logger* scraperlogger{new logger()};
@@ -389,7 +389,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
     sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
 
     //logger log;
-    logger& log = LogInstance();
+    logger& log = ScraperLogInstance();
 
     log.output(sOut);
 
@@ -720,7 +720,7 @@ void Scraper(bool bSingleShot)
     }
 
     // Initialize log singleton. Must be after the imbue.
-    LogInstance();
+    ScraperLogInstance();
 
     if (!bSingleShot)
         _log(logattribute::INFO, "Scraper", "Starting Scraper thread.");
@@ -811,7 +811,7 @@ void Scraper(bool bSingleShot)
                 }
 
                 // Need the log archive check here, because we don't run housekeeping in this while loop.
-                logger& log = LogInstance();
+                logger& log = ScraperLogInstance();
 
                 fs::path plogfile_out;
 
@@ -975,7 +975,7 @@ void NeuralNetwork()
         pathScraper = pathDataDir  / "Scraper";
 
         // Initialize log singleton. Must be after the imbue.
-        LogInstance();
+        ScraperLogInstance();
     }
 
 
@@ -1084,7 +1084,7 @@ bool ScraperHousekeeping()
     // Show this node's contract hash in the log.
     _log(logattribute::INFO, "ScraperHousekeeping", "superblock contract hash = " + superblock.GetHash().ToString());
 
-    logger& log = LogInstance();
+    logger& log = ScraperLogInstance();
 
     fs::path plogfile_out;
 
@@ -5298,7 +5298,7 @@ UniValue archivescraperlog(const UniValue& params, bool fHelp)
                 "archivescraperlog takes no arguments and results in immediate archiving of the scraper log\n"
                 );
 
-    logger& log = LogInstance();
+    logger& log = ScraperLogInstance();
 
     fs::path pfile_out;
     bool ret = log.archive(true, pfile_out);

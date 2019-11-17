@@ -355,6 +355,8 @@ int StartGridcoinQt(int argc, char *argv[])
     // ... then GUI settings:
     OptionsModel optionsModel;
 
+    InitLogging();
+
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
     QString lang = lang_territory;
