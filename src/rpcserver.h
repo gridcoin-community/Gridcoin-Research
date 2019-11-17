@@ -210,7 +210,7 @@ extern UniValue getmpart(const UniValue& params, bool fHelp);
 extern UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
 extern UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
 extern UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
-extern UniValue archivescraperlog(const UniValue& params, bool fHelp);
+extern UniValue archivelog(const UniValue& params, bool fHelp);
 extern UniValue testnewsb(const UniValue& params, bool fHelp);
 
 // Network

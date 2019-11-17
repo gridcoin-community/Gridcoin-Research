@@ -7,7 +7,20 @@
 #include <util/threadnames.h>
 #include "util/time.h"
 
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/copy.hpp>
+#include <boost/filesystem/fstream.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+
 #include <mutex>
+#include <set>
+
+// Unavoidable because these are in util.h.
+extern fs::path &GetDataDir(bool fNetSpecific);
+extern std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime);
+extern bool GetBoolArg(const std::string& strArg, bool fDefault);
+extern int64_t GetArg(const std::string& strArg, int64_t nDefault);
 
 const char * const DEFAULT_DEBUGLOGFILE = "debug.log";
 
@@ -26,12 +39,13 @@ BCLog::Logger& LogInstance()
  * have a trivial destructor.
  *
  * This method of initialization was originally introduced in
- * ee3374234c60aba2cc4c5cd5cac1c0aefc2d817c.
+ * Bitcoin core commit ee3374234c60aba2cc4c5cd5cac1c0aefc2d817c.
  */
     static BCLog::Logger* g_logger{new BCLog::Logger()};
     return *g_logger;
 }
 
+boost::gregorian::date BCLog::Logger::PrevArchiveCheckDate = boost::posix_time::from_time_t(GetAdjustedTime()).date();
 bool fLogIPs = DEFAULT_LOGIPS;
 
 static int FileWriteStr(const std::string &str, FILE *fp)
@@ -342,3 +356,143 @@ void BCLog::Logger::ShrinkDebugFile()
     else if (file != nullptr)
         fclose(file);
 }
+
+bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
+{
+    bool fArchiveDaily = GetBoolArg("-logarchivedaily", true);
+
+    int64_t nTime = GetAdjustedTime();
+    boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
+    fs::path plogfile;
+    fs::path pfile_temp;
+    fs::path pathDataDir = GetDataDir(false);
+
+    std::stringstream ssArchiveCheckDate, ssPrevArchiveCheckDate;
+
+    ssArchiveCheckDate << ArchiveCheckDate;
+    ssPrevArchiveCheckDate << PrevArchiveCheckDate;
+
+    fs::path LogArchiveDir = pathDataDir / "logarchive";
+
+    // Check to see if the log archive directory exists and is a directory. If not create it.
+    if (fs::exists(LogArchiveDir))
+    {
+        // If it is a normal file, this is not right. Remove the file and replace with the log archive directory.
+        if (fs::is_regular_file(LogArchiveDir))
+        {
+            fs::remove(LogArchiveDir);
+            fs::create_directory(LogArchiveDir);
+        }
+    }
+    else
+    {
+        fs::create_directory(LogArchiveDir);
+    }
+
+    if (fImmediate || (fArchiveDaily && ArchiveCheckDate > PrevArchiveCheckDate))
+    {
+        {
+            std::lock_guard<std::mutex> scoped_lock(m_cs);
+
+            fclose(m_fileout);
+
+            plogfile = m_file_path;
+
+            pfile_temp = static_cast<fs::path>(m_file_path.stem().string() + "-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + m_file_path.extension().string());
+
+            pfile_out = LogArchiveDir / static_cast<fs::path>((m_file_path.filename().stem().string() + "-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime)
+                                         + m_file_path.filename().extension().string() + ".gz"));
+
+            try
+            {
+                fs::rename(plogfile, pfile_temp);
+            }
+            catch(...)
+            {
+                LogPrintf("ERROR: Logger: archive: Failed to rename logging file\n");
+                return false;
+            }
+
+            // Re-open logging file. (This is subtly different than the flag based reopen above, because the file must be closed first, renamed for compression,
+            // and then a new one opened.
+            FILE* new_fileout = fsbridge::fopen(m_file_path, "a");
+            if (new_fileout)
+            {
+                setbuf(new_fileout, nullptr); // unbuffered
+                m_fileout = new_fileout;
+            }
+
+            PrevArchiveCheckDate = ArchiveCheckDate;
+        }
+
+        fsbridge::ifstream infile(pfile_temp, std::ios_base::in | std::ios_base::binary);
+
+        if (!infile)
+        {
+            LogPrintf("ERROR: Logger: Failed to open archive log file for compression %s.", pfile_temp.string());
+            return false;
+        }
+
+        fsbridge::ofstream outgzfile(pfile_out, std::ios_base::out | std::ios_base::binary);
+
+        if (!outgzfile)
+        {
+            LogPrintf("ERROR: Logger: Failed to open archive gzip file %s.", pfile_out.string());
+            return false;
+        }
+
+        boost::iostreams::filtering_ostream out;
+        out.push(boost::iostreams::gzip_compressor());
+        out.push(outgzfile);
+
+        boost::iostreams::copy(infile, out);
+
+        infile.close();
+        outgzfile.flush();
+        outgzfile.close();
+
+        fs::remove(pfile_temp);
+
+        bool fDeleteOldLogArchives = GetBoolArg("-deleteoldlogarchives", true);
+
+        if (fDeleteOldLogArchives)
+        {
+            unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 14);
+            LogPrintf ("INFO: Logger: nRetention %i.", nRetention);
+
+            std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
+
+            // Iterate through the log archive directory and delete the oldest files beyond the retention rule
+            // The names are in format <logname base>-YYYYMMDDHHMMSS.log for the logs, so filter by containing <logname base>.
+            // The greater than sort in the set should then return descending order by datetime.
+            for (fs::directory_entry& DirEntry : fs::directory_iterator(LogArchiveDir))
+            {
+                std::string sFilename = DirEntry.path().filename().string();
+                size_t FoundPos = sFilename.find(m_file_path.filename().stem().string());
+
+                if (FoundPos != std::string::npos) SortedDirEntries.insert(DirEntry);
+            }
+
+            // Now iterate through set of filtered filenames. Delete all files greater than retention count.
+            unsigned int i = 0;
+            for (auto const& iter : SortedDirEntries)
+            {
+                if (i >= nRetention)
+                {
+                    fs::remove(iter.path());
+
+                    LogPrintf("INFO: Logger: Removed old archive gzip file %s.", iter.path().filename().string());
+                }
+
+                ++i;
+            }
+        }
+
+        return true; // archive condition was satisfied. Return true after rotating and archiving.
+    }
+    else
+    {
+        return false; // archive condition was not satisfied. Do nothing and return false.
+    }
+}
+

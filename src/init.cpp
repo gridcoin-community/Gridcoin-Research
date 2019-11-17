@@ -359,7 +359,8 @@ void InitLogging()
 
     if (LogInstance().m_print_to_file)
     {
-        if (GetBoolArg("-shrinkdebugfile", LogInstance().DefaultShrinkDebugFile()))
+        // Only shrink debug file at start if log archiving is set to false.
+        if (!GetBoolArg("-logarchivedaily", true) && GetBoolArg("-shrinkdebugfile", LogInstance().DefaultShrinkDebugFile()))
         {
             // Do this first since it both loads a bunch of debug.log into memory,
             // and because this needs to happen before any other debug.log printing

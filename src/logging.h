@@ -16,6 +16,10 @@
 #include <string>
 #include <vector>
 
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/gregorian/greg_date.hpp>
+
 static const bool DEFAULT_LOGTIMEMICROS = false;
 static const bool DEFAULT_LOGIPS        = false;
 static const bool DEFAULT_LOGTIMESTAMPS = true;
@@ -23,6 +27,9 @@ static const bool DEFAULT_LOGTHREADNAMES = false;
 extern const char* const DEFAULT_DEBUGLOGFILE;
 
 extern bool fLogIPs;
+
+// Unavoidable because this is in util.h.
+extern int64_t GetAdjustedTime();
 
 struct CLogCategoryActive
 {
@@ -90,6 +97,7 @@ namespace BCLog {
 
         fs::path m_file_path;
         std::atomic<bool> m_reopen_file{false};
+        static boost::gregorian::date PrevArchiveCheckDate;
 
         /** Send a string to the log output */
         void LogPrintStr(const std::string& str);
@@ -122,6 +130,8 @@ namespace BCLog {
         void DisconnectTestLogger();
 
         void ShrinkDebugFile();
+
+        bool archive(bool fImmediate, fs::path pfile_out);
 
         uint32_t GetCategoryMask() const { return m_categories.load(); }
 
