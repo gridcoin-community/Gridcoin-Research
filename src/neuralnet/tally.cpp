@@ -110,57 +110,12 @@ public:
     }
 
     //!
-    //! \brief Get the average network-wide daily research payment per day.
-    //!
-    //! \return Average research payment per day over the last two weeks.
-    //!
-    double DailyResearchSubsidyAverage() const
-    {
-        return m_two_week_research_subsidy / TALLY_DAYS;
-    }
-
-    //!
-    //! \brief Get the average network-wide daily block subsidy payment per day.
-    //!
-    //! \return Average block subsidy  payment per day over the last two weeks.
-    //!
-    double DailyBlockSubsidyAverage() const
-    {
-        return m_two_week_block_subsidy / TALLY_DAYS;
-    }
-
-    //!
-    //! \brief Get a report that contains an overview of the network payment
-    //! statistics stored in the tally.
-    //!
-    //! \param time Determines the max reward based on a schedule.
-    //!
-    //! \return A partial report of network statistics available in the object.
-    //!
-    NetworkStats GetStats(const int64_t time) const
-    {
-        NetworkStats stats;
-
-        stats.m_magnitude_unit = GetMagnitudeUnit(time);
-
-        stats.m_average_daily_research_subsidy = DailyResearchSubsidyAverage();
-        stats.m_max_daily_research_subsidy = MaxEmission(time);
-
-        stats.m_two_week_block_subsidy = m_two_week_block_subsidy;
-        stats.m_average_daily_block_subsidy = DailyBlockSubsidyAverage();
-
-        return stats;
-    }
-
-    //!
     //! \brief Reset the two-week averages to the provided values.
     //!
-    //! \param block_subsidy    Sum of block payments over the last two weeks.
     //! \param research_subsidy Sum of research payments over the last two weeks.
     //!
-    void Reset(double block_subsidy, double research_subsidy)
+    void Reset(double research_subsidy)
     {
-        m_two_week_block_subsidy = block_subsidy;
         m_two_week_research_subsidy = research_subsidy;
     }
 
@@ -178,7 +133,6 @@ public:
 
 private:
     uint32_t m_total_magnitude = 0;         //!< Sum of the magnitude of all CPIDs.
-    double m_two_week_block_subsidy = 0;    //!< Sum of block subsidy payments.
     double m_two_week_research_subsidy = 0; //!< Sum of research subsidy payments.
 }; // NetworkTally
 
@@ -785,21 +739,9 @@ CBlockIndex* Tally::FindTrigger(CBlockIndex* pindex)
     return pindex;
 }
 
-NetworkStats Tally::GetNetworkStats(int64_t time)
+double Tally::MaxEmission(const int64_t payment_time)
 {
-    if (time == 0) {
-        time = GetAdjustedTime();
-    }
-
-    const SuperblockPtr superblock = Quorum::CurrentSuperblock();
-
-    NetworkStats stats = g_network_tally.GetStats(time);
-
-    stats.m_total_cpids = superblock->m_cpids.size();
-    stats.m_total_magnitude = superblock->m_cpids.TotalMagnitude();
-    stats.m_average_magnitude = superblock->m_cpids.AverageMagnitude();
-
-    return stats;
+    return NetworkTally::MaxEmission(payment_time);
 }
 
 double Tally::GetMagnitudeUnit(const int64_t payment_time)
@@ -921,7 +863,6 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
         g_researcher_tally.ApplySuperblock(current);
     }
 
-    double total_block_subsidy = 0;
     double total_research_subsidy = 0;
 
     while (pindex->nHeight > min_depth) {
@@ -931,12 +872,8 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
 
         pindex = pindex->pprev;
 
-        // Note: block subsidy is not required for the tally system. We only
-        // count these for informational statistics:
-        //
-        total_block_subsidy += pindex->nInterestSubsidy;
         total_research_subsidy += pindex->nResearchSubsidy;
     }
 
-    g_network_tally.Reset(total_block_subsidy, total_research_subsidy);
+    g_network_tally.Reset(total_research_subsidy);
 }

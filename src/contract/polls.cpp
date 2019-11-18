@@ -9,6 +9,7 @@
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
+#include "neuralnet/quorum.h"
 #include "neuralnet/tally.h"
 
 double GetTotalBalance();
@@ -461,9 +462,9 @@ double ReturnVerifiedVotingMagnitude(std::string sXML, bool bCreatedAfterSecurit
 
 double GetMoneySupplyFactor()
 {
-    const NN::NetworkStats stats = NN::Tally::GetNetworkStats();
+    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
-    double TotalNetworkMagnitude = stats.m_total_cpids * stats.m_average_magnitude;
+    double TotalNetworkMagnitude = superblock->m_cpids.TotalMagnitude();
     if (TotalNetworkMagnitude < 100) TotalNetworkMagnitude=100;
     double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
     double Factor = (MoneySupply/TotalNetworkMagnitude+.01);

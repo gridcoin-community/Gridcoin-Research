@@ -1511,19 +1511,34 @@ UniValue network(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
 
-    const NN::NetworkStats stats = NN::Tally::GetNetworkStats();
-    const double money_supply = DoubleFromAmount(pindexBest->nMoneySupply);
-    const double interest_percent = stats.m_average_daily_block_subsidy * 365 / (money_supply + 0.01);
+    const int64_t now = pindexBest->nTime;
+    const int64_t two_weeks_ago = now - (60 * 60 * 24 * 14);
+    const double money_supply = pindexBest->nMoneySupply;
+    const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
-    res.pushKV("Network Total Magnitude", (int)stats.m_total_magnitude);
-    res.pushKV("Network Average Magnitude", stats.m_average_magnitude);
-    res.pushKV("Network Avg Daily Payments", stats.m_average_daily_research_subsidy);
-    res.pushKV("Network Max Daily Payments", stats.m_max_daily_research_subsidy);
-    res.pushKV("Network Interest Paid (14 days)", stats.m_two_week_block_subsidy);
-    res.pushKV("Network Avg Daily Interest", stats.m_average_daily_block_subsidy);
-    res.pushKV("Total Money Supply", money_supply);
-    res.pushKV("Network Interest %", interest_percent);
-    res.pushKV("Magnitude Unit (GRC payment per Magnitude per day)", stats.m_magnitude_unit);
+    double two_week_block_subsidy = 0;
+    double two_week_research_subsidy = 0;
+
+    for (const CBlockIndex* pindex = pindexBest;
+        pindex && pindex->nTime > two_weeks_ago;
+        pindex = pindex->pprev)
+    {
+        two_week_block_subsidy += pindex->nInterestSubsidy;
+        two_week_research_subsidy += pindex->nResearchSubsidy;
+    }
+
+    res.pushKV("total_magnitude", (int)superblock->m_cpids.TotalMagnitude());
+    res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
+    res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(now));
+    res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy * COIN));
+    res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy * COIN / 14));
+    res.pushKV("research_paid_daily_limit", ValueFromAmount(NN::Tally::MaxEmission(now) * COIN));
+    res.pushKV("stake_paid_two_weeks", ValueFromAmount(two_week_block_subsidy * COIN));
+    res.pushKV("stake_paid_daily_average", ValueFromAmount(two_week_block_subsidy * COIN / 14));
+    res.pushKV("total_money_supply", ValueFromAmount(money_supply));
+    res.pushKV("network_interest_percent", money_supply > 0
+        ? (two_week_block_subsidy / 14) * 365 / (money_supply / COIN)
+        : 0);
 
     return res;
 }

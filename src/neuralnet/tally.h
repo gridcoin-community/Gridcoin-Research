@@ -18,26 +18,6 @@ class Cpid;
 typedef boost::optional<const CBlockIndex*> BlockPtrOption;
 
 //!
-//! \brief A report that contains an overview of network payment statistics
-//! stored in the tally.
-//!
-class NetworkStats
-{
-public:
-    size_t m_total_cpids;       //!< Number of CPIDs as of the last superblock.
-    uint32_t m_total_magnitude; //!< Magnitude as of the last superblock.
-    double m_average_magnitude; //!< Average magnitude as of last superblock.
-    double m_magnitude_unit;    //!< Current magnitude unit.
-
-    double m_two_week_research_subsidy;      //!< Total as of the last tally.
-    double m_average_daily_research_subsidy; //!< Average as of the last tally.
-    double m_max_daily_research_subsidy;     //!< Max research reward constant.
-
-    double m_two_week_block_subsidy;      //!< Total as of the last tally.
-    double m_average_daily_block_subsidy; //!< Average as of the last tally.
-};
-
-//!
 //! \brief Compares CBlockIndex objects by comparing block heights.
 //!
 struct BlockIndexHeightComparator
@@ -425,14 +405,13 @@ public:
     static CBlockIndex* FindTrigger(CBlockIndex* pindex);
 
     //!
-    //! \brief Get a report that contains an overview of the network payment
-    //! statistics stored in the tally.
+    //! \brief Get the maximum network-wide research reward amount per day.
     //!
-    //! \param time If zero, produce a report for the current time.
+    //! \param payment_time Determines the max reward based on a schedule.
     //!
-    //! \return A copy of the current network statistics.
+    //! \return Maximum daily emission in units of GRC (not COIN).
     //!
-    static NetworkStats GetNetworkStats(int64_t time = 0);
+    static double MaxEmission(const int64_t payment_time);
 
     //!
     //! \brief Get the current network magnitude unit.
