@@ -1133,6 +1133,14 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
+    // Primitive, but this is what the scraper does in the scraper houskeeping loop. It checks to see if the logs need to be archived
+    // by default every 5 mins. Note that passing false to the archive function means that if we have not crossed over the day boundary,
+    // it does nothing, so this is a very inexpensive call. Also if -logarchivedaily is set to false, then this will be a no-op.
+    scheduler.scheduleEvery([]{
+        fs::path plogfile_out;
+        LogInstance().archive(false, plogfile_out);
+    }, 300 * 1000);
+
     /** If this is not TestNet we check for updates on startup and daily **/
     /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
     if (!fTestNet)
