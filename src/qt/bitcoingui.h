@@ -105,6 +105,7 @@ private:
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
     QAction *openRPCConsoleAction;
+    QAction *snapshotAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -144,6 +145,9 @@ public slots:
        @see WalletModel::EncryptionStatus
     */
     void setEncryptionStatus(int status);
+
+    /** Notify the user if there is an update available */
+    void update(const QString& title, const QString& version, const QString& message);
 
     /** Notify the user of an error in the network or transaction handling code. */
     void error(const QString &title, const QString &message, bool modal);
@@ -196,6 +200,8 @@ private slots:
     void diagnosticsClicked();
 
     void newUserWizardClicked();
+
+    void snapshotClicked();
 
 #ifndef Q_OS_MAC
     /** Handle tray icon clicked */

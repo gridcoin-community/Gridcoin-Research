@@ -15,6 +15,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 #include "ui_interface.h"
+#include "upgrade.h"
 
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -85,15 +86,51 @@ bool AppInit(int argc, char* argv[])
             return false;
         }
 
-        LogPrintf("AppInit");
-
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified directory does not exist\n");
             Shutdown(NULL);
         }
 
+        /** Check here config file incase TestNet is set there and not in mapArgs **/
         ReadConfigFile(mapArgs, mapMultiArgs);
+
+        // Check to see if the user requested a snapshot and we are not running TestNet!
+        if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
+        {
+            Upgrade Snapshot;
+
+            // Let's check make sure gridcoin is not already running in the data directory.
+            // Use new probe feature
+            if (!LockDirectory(GetDataDir(), ".lock", false))
+            {
+                fprintf(stderr, "Cannot obtain a lock on data directory %s.  Gridcoin is probably already running.", GetDataDir().string().c_str());
+
+                exit(1);
+            }
+
+            else
+            {
+                try
+                {
+                    Snapshot.SnapshotMain();
+                }
+
+                catch (std::runtime_error& e)
+                {
+                    LogPrintf("Snapshot Downloader: Runtime exception occured in SanpshotMain() (%s)", e.what());
+
+                    Snapshot.DeleteSnapshot();
+
+                    exit(1);
+                }
+            }
+
+            // Delete snapshot file
+            Snapshot.DeleteSnapshot();
+        }
+
+        LogPrintf("AppInit");
 
         // Command-line RPC  - Test this - ensure single commands execute and exit please.
         for (int i = 1; i < argc; i++)

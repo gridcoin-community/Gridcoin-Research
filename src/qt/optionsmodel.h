@@ -32,6 +32,7 @@ public:
         Language,          // QString
         WalletStylesheet,  // QString
         CoinControlFeatures, // bool
+        DisableUpdateCheck, // bool
         OptionIDRowCount,
     };
 

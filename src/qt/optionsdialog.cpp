@@ -5,6 +5,7 @@
 #include "bitcoinunits.h"
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
+#include "init.h"
 
 #include <QDir>
 #include <QIntValidator>
@@ -88,6 +89,9 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     connect(mapper, SIGNAL(currentIndexChanged(int)), this, SLOT(disableApplyButton()));
     /* setup/change UI elements when proxy IP is invalid/valid */
     connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)), this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
+
+    if (fTestNet)
+        ui->disableUpdateCheck->setHidden(true);
 }
 
 OptionsDialog::~OptionsDialog()
@@ -126,6 +130,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->transactionFee, OptionsModel::Fee);
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
     mapper->addMapping(ui->gridcoinAtStartup, OptionsModel::StartAtStartup);
+    mapper->addMapping(ui->disableUpdateCheck, OptionsModel::DisableUpdateCheck);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);

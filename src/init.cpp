@@ -17,6 +17,7 @@
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
+#include "upgrade.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -57,12 +58,13 @@ extern unsigned int nActiveBeforeSB;
 extern bool fExplorer;
 extern bool fUseFastIndex;
 extern boost::filesystem::path pathScraper;
-
+bool fSnapshotRequest = false;
 // Dump addresses to banlist.dat every 5 minutes (300 s)
 static constexpr int DUMP_BANS_INTERVAL = 300;
 
 std::unique_ptr<BanMan> g_banman;
-
+/** Update checker pointer for CScheduler; **/
+std::unique_ptr<Upgrade> g_UpdateChecker;
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -285,7 +287,15 @@ std::string HelpMessage()
         "  -rpcssl                                  " + _("Use OpenSSL (https) for JSON-RPC connections") + "\n" +
         "  -rpcsslcertificatechainfile=<file.cert>  " + _("Server certificate file (default: server.cert)") + "\n" +
         "  -rpcsslprivatekeyfile=<file.pem>         " + _("Server private key (default: server.pem)") + "\n" +
-        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n";
+        "  -rpcsslciphers=<ciphers>                 " + _("Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)") + "\n"
+
+        "\n" + _("Update/Snapshot options:") + "\n"
+        "  -snapshotdownload            " + _("Download and apply latest snapshot") + "\n"
+        "  -snapshoturl=<url>           " + _("Optional: Specify url of snapshot.zip file (ex: https://sub.domain.com/location/snapshot.zip)") + "\n"
+        "  -snapshotsha256url=<url>     " + _("Optional: Specify url of snapshot.sha256 file (ex: https://sub.domain.com/location/snapshot.sha256)") + "\n"
+        "  -disableupdatecheck          " + _("Optional: Disable update checks by wallet") + "\n"
+        "  -updatecheckinterval=<hours> " + _("Optional: Specify custom update interval checks in hours (Default: 24 hours (minimum 1 hour))") + "\n"
+        "  -updatecheckurl=<url>        " + _("Optional: Specify url of update version checks (ex: https://sub.domain.com/location/latest") + "\n";
 
     return strUsage;
 }
@@ -1069,6 +1079,53 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
 
+    /** If this is not TestNet we check for updates on startup and daily **/
+    /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/
+    if (!fTestNet)
+    {
+        int64_t UpdateCheckInterval = 24;
+
+        // Save some cycles and only so this area if the argument exists
+        if (mapArgs.count("-updatecheckinterval"))
+        {
+            try
+            {
+                UpdateCheckInterval = GetArg("-updatecheckinterval", 24);
+                // trivial: Don't allow checks less then 1 hour apart of update checks to prevent server DDoS (what is a good value)
+                if (UpdateCheckInterval < 1)
+                {
+                    LogPrintf("UpdateChecker: Update check interval too small of %" PRId64 "; Defaulting to 24 hour intervals", UpdateCheckInterval);
+
+                    UpdateCheckInterval = 24;
+                }
+            }
+
+            catch (const std::exception& ex)
+            {
+                // Tell them the exception and what they had put in place
+                LogPrintf("UpdateChecker: Exception occured while obtaining interval for update checks (ex: %s -updatecheckinterval=%s); Defaulting to 24 hour intervals", ex.what(), GetArgument("-updatecheckinterval", ""));
+
+                UpdateCheckInterval = 24;
+            }
+        }
+
+        scheduler.scheduleEvery([]{g_UpdateChecker->CheckForLatestUpdate();}, UpdateCheckInterval * 60 * 60 * 1000);
+
+        if (!GetBoolArg("-disableupdatecheck", false))
+        {
+            LogPrintf("UpdateChecker: Update checks scheduled every %" PRId64 " hours.", UpdateCheckInterval);
+
+            LogPrintf("Updatechecker: Performing startup update check.");
+
+            g_UpdateChecker->CheckForLatestUpdate();
+        }
+
+        else
+            LogPrintf("UpdateChecker: Update checks are disabled by user.");
+    }
+
+    else
+        LogPrintf("UpdateChecker: Update checks are disable for TestNet.");
 
     return true;
 }

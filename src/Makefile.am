@@ -6,7 +6,7 @@ DIST_SUBDIRS = univalue
 
 AM_LDFLAGS = ${libcurl_LIBS} $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
-AM_CPPFLAGS = ${libcurl_CFLAGS} $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB
+AM_CPPFLAGS = ${libcurl_CFLAGS} $(HARDENED_CPPFLAGS) -DSTATICLIB -DCURL_STATICLIB -DMINIUPNP_STATICLIB -DZIP_STATIC -DNN_STATIC_LIB
 EXTRA_LIBRARIES =
 
 if EMBEDDED_UNIVALUE
@@ -130,6 +130,7 @@ GRIDCOIN_CORE_H = \
 	txdb-leveldb.h \
 	ui_interface.h \
 	uint256.h \
+        upgrade.h \
 	util/memory.h \
 	util/reverse_iterator.h \
 	util/strencodings.h \
@@ -198,6 +199,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	sync.cpp \
 	txdb-leveldb.cpp \
 	uint256.cpp \
+        upgrade.cpp \
 	util/strencodings.cpp \
 	util.cpp \
 	version.cpp \

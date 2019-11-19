@@ -71,6 +71,9 @@ public:
     /** Show message box. */
     boost::signals2::signal<void (const std::string& message, const std::string& caption, int style)> ThreadSafeMessageBox;
 
+    /** Update notification message box. */
+    boost::signals2::signal<void (const std::string&version, const std::string& message)> UpdateMessageBox;
+
     /** Ask the user whether they want to pay a fee or not. */
     boost::signals2::signal<bool (int64_t nFeeRequired, const std::string& strCaption), boost::signals2::last_value<bool> > ThreadSafeAskFee;
 

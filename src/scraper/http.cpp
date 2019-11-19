@@ -1,13 +1,27 @@
 #include "http.h"
 #include "tinyformat.h"
+#include "util.h"
 
 #include <curl/curl.h>
 #include <stdio.h>
 #include <string.h>
 #include <memory>
+#include <boost/thread.hpp>
 
-// Only for troubleshooting. This should be removed before production.
-#include "util.h"
+#if LIBCURL_VERSION_NUM >= 0x073d00
+/* In libcurl 7.61.0, support was added for extracting the time in plain
+   microseconds. Lets make this so we can allow a user using own depends
+   for compile. */
+#define timetype curl_off_t
+#define timeopt CURLINFO_TOTAL_TIME_T
+#define progressinterval 3000000
+#else
+#define timetype double
+#define timeopt CURLINFO_TOTAL_TIME
+#define progressinterval 1
+#endif
+
+struct_SnapshotStatus DownloadStatus;
 
 enum class logattribute {
     // Can't use ERROR here because it is defined already in windows.h.
@@ -51,17 +65,91 @@ namespace
 
         return curl;
     }
-}
 
-Http::Http()
+    struct progress {
+      timetype lastruntime;
+      CURL *curl;
+    };
+
+    static int newerprogress_callback(void *ptr, curl_off_t downtotal, curl_off_t downnow, curl_off_t uptotal, curl_off_t uplnow)
+    {
+        struct progress *pg = (struct progress*)ptr;
+        CURL *curl = pg->curl;
+
+        // Thread inturrupting
+        try
+        {
+            boost::this_thread::interruption_point();
+            // Set this once.
+            if (DownloadStatus.SnapshotDownloadSize == 0)
+                DownloadStatus.SnapshotDownloadSize = downtotal;
+
+            timetype currenttime = 0;
+            curl_easy_getinfo(curl, timeopt, &currenttime);
+
+            // Update every 1 second
+            if ((currenttime - pg->lastruntime) >= progressinterval)
+            {
+                pg->lastruntime = currenttime;
+
+                curl_off_t speed;
+                CURLcode result;
+
+                result = curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD_T, &speed);
+
+                // Download speed update
+                if (result == CURLE_OK)
+                {
+
+#if LIBCURL_VERSION_NUM >= 0x073700
+                    if (speed > 0)
+                        DownloadStatus.SnapshotDownloadSpeed = speed;
+
+                    else {
+                        DownloadStatus.SnapshotDownloadSpeed = 0;
+
+                    }
+#else
+                    // Not supported by libcurl
+                    DownloadStatus.SnapshotDownloadSpeed = -1;
+#endif
+                    if (DownloadStatus.SnapshotDownloadSize > 0 && (downnow > 0))
+                    {
+                        DownloadStatus.SnapshotDownloadProgress = ((downnow / (double)DownloadStatus.SnapshotDownloadSize) * 100);
+                        DownloadStatus.SnapshotDownloadAmount = downnow;
+                    }
+                }
+            }
+        }
+
+        catch (boost::thread_interrupted&)
+        {
+            return 1;
+        }
+
+        return 0;
+    };
+
+#if LIBCURL_VERSION_NUM < 0x072000
+    static int olderprogress_callback(void *ptr, double downtotal, double downnow, double uptotal, double upnow)
+    {
+        return newerprogress_callback(ptr, (curl_off_t)downtotal, (curl_off_t)downnow, (curl_off_t)uptotal, (curl_off_t)uptotal, (curl_off_t)upnow);
+    };
+
+#endif
+} // anonymous namespace
+
+Http::CurlLifecycle::CurlLifecycle()
 {
     curl_global_init(CURL_GLOBAL_ALL);
 }
 
-Http::~Http()
+Http::CurlLifecycle::~CurlLifecycle()
 {
     curl_global_cleanup();
 }
+
+Http::CurlLifecycle Http::curl_lifecycle;
 
 void Http::Download(
         const std::string &url,
@@ -139,6 +227,177 @@ std::string Http::GetEtag(
     // This needs to go away for production along with the above external function declaration and the fixup enum to support _log here.
     if (fDebug)
         _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
+}
+
+std::string Http::GetLatestVersionResponse()
+{
+    std::string buffer;
+    std::string header;
+    std::string url = GetArg("-updatecheckurl", "https://api.github.com/repos/gridcoin-community/Gridcoin-Research/releases/latest");
+
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Accept: */*");
+    headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
+
+    ScopedCurl curl = GetContext();
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, curl_write_string);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &buffer);
+    curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, &header);
+    curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
+
+    CURLcode res = curl_easy_perform(curl.get());
+
+    if (res > 0)
+        throw std::runtime_error(tfm::format("Failed to get version reponse from URL %s: %s", url, curl_easy_strerror(res)));
+
+    curl_slist_free_all(headers);
+
+    // Validate HTTP return code.
+    long response_code;
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &response_code);
+    EvaluateResponse(response_code, url);
+
+    // Return the Http response
+    return buffer;
+}
+
+void Http::DownloadSnapshot()
+{
+    std::string url = GetArg("-snapshoturl", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip");
+
+    boost::filesystem::path destination = GetDataDir() / "snapshot.zip";
+
+    ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
+
+    if(!fp)
+    {
+        DownloadStatus.SnapshotDownloadFailed = true;
+
+        throw std::runtime_error(
+                tfm::format("Snapshot Downloader: Error opening target %s: %s (%d)", destination.string(), strerror(errno), errno));
+    }
+
+    std::string buffer;
+    std::string header;
+
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Accept: */*");
+    headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
+
+    CURL* curl;
+    curl = curl_easy_init();
+
+    struct progress fileprogress;
+
+    fileprogress.lastruntime = 0;
+    fileprogress.curl = curl;
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_PROXY, "");
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 10000L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 60L);
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_file);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp.get());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+#if LIBCURL_VERSION_NUM >= 0x072000
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, newerprogress_callback);
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &fileprogress);
+#else
+    curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, olderprogress_callback);
+    curl_east_setopt(curl, CURLOPT_PROGRESSDATA, &fileprogress);
+#endif
+
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res > 0)
+    {
+        if (res == CURLE_ABORTED_BY_CALLBACK)
+            return;
+
+        else
+        {
+            DownloadStatus.SnapshotDownloadFailed = true;
+
+            throw std::runtime_error(tfm::format("Snapshot Downloader: Failed to download file %s: %s", url, curl_easy_strerror(res)));
+        }
+    }
+
+    // Validate HTTP return code.
+    long response_code;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+    EvaluateResponse(response_code, url);
+
+    DownloadStatus.SnapshotDownloadComplete = true;
+
+    return;
+}
+
+std::string Http::GetSnapshotSHA256()
+{
+    std::string buffer;
+    std::string header;
+    std::string url = GetArg("-snapshotsha256url", "https://download.gridcoin.us/download/downloadstake/signed/snapshot.zip.sha256");
+
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Accept: */*");
+    headers = curl_slist_append(headers, "User-Agent: curl/7.63.0");
+
+    ScopedCurl curl = GetContext();
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, curl_write_string);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &buffer);
+    curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, &header);
+    curl_easy_setopt(curl.get(), CURLOPT_HTTPHEADER, headers);
+
+    CURLcode res = curl_easy_perform(curl.get());
+
+    curl_slist_free_all(headers);
+
+    if (res > 0)
+    {
+       LogPrintf("Snapshot (GetSnapshotSHA256):  Failed to SHA256SUM of snapshot.zip for URL %s: %s", url, curl_easy_strerror(res));
+
+       return "";
+    }
+
+    // Validate HTTP return code.
+    long response_code;
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &response_code);
+    EvaluateResponse(response_code, url);
+
+    if (buffer.empty())
+    {
+        LogPrintf("Snapshot (GetSnapshotSHA256): Failed to receive SHA256SUM from url: %s", url);
+
+        return "";
+    }
+
+    size_t loc = buffer.find(" ");
+
+    if (loc == std::string::npos)
+    {
+        LogPrintf("Snapshot (GetSnapshotSHA256): Malformed SHA256SUM from url: %s", url);
+
+        return "";
+    }
+
+    else
+    {
+        if (fDebug)
+            LogPrintf("Snapshot Downloader: Receives SHA256SUM of %s", buffer.substr(0, loc));
+
+        return buffer.substr(0, loc);
+    }
 }
 
 void Http::EvaluateResponse(int code, const std::string& url)

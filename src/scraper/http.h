@@ -6,6 +6,20 @@
 #include <stdexcept>
 
 //!
+//! \brief Struct for snapshot download progress updates.
+//!
+struct struct_SnapshotStatus{
+    bool SnapshotDownloadComplete = false;
+    bool SnapshotDownloadFailed = false;
+    int64_t SnapshotDownloadSpeed;
+    int SnapshotDownloadProgress;
+    long long SnapshotDownloadSize = 0;
+    long long SnapshotDownloadAmount = 0;
+};
+
+extern struct_SnapshotStatus DownloadStatus;
+
+//!
 //! \brief HTTP exception.
 //!
 //! Used to signal an unexpected server response.
@@ -27,16 +41,6 @@ class HttpException : public std::runtime_error
 class Http
 {
 public:
-    //!
-    //! \brief Constructor.
-    //!
-    Http();
-
-    //!
-    //! \brief Destructor.
-    //!
-    ~Http();
-
     //!
     //! \brief Download file from server.
     //!
@@ -68,6 +72,52 @@ public:
             const std::string& url,
             const std::string& userpass = "");
 
+    //!
+    //! \brief Fetch github release information.
+    //!
+    //! Downloads the json data from github that contains information about latest releases.
+    //!
+    //! \throws HttpException on invalid server response.
+    //!
+    std::string GetLatestVersionResponse();
+    //!
+    //! \brief Download Snapshot with progress updates.
+    //!
+    //! Downloads the snapshot from the latest snapshot.zip hosted on download.gridcoin.us.
+    //!
+    //! \throws HttpException on invalid server response.
+    //!
+    void DownloadSnapshot();
+    //!
+    //! \brief Fetch the sha256sum from snapshot server.
+    //!
+    //! Fetches the snapshot sha256 from snapshot server.
+    //!
+    //! \return the sha256sum from file
+    //!
+    //! \throws HttpException on invalid server response.
+    //!
+    std::string GetSnapshotSHA256();
+
 private:
+    //!
+    //! \brief RAII wrapper around libcurl's initialization/cleanup functions.
+    //!
+    struct CurlLifecycle
+    {
+        CurlLifecycle();
+        ~CurlLifecycle();
+    };
+
+    //!
+    //! \brief Manages the libcurl lifecycle by invoking initailization and
+    //! cleanup functions.
+    //!
+    //! The static lifetime of this object ensures that curl_global_init() is
+    //! called at the beginning of the program before it starts other threads
+    //! and that curl_global_cleanup() is called when the program ends.
+    //!
+    static CurlLifecycle curl_lifecycle;
+
     void EvaluateResponse(int code, const std::string& url);
 };
