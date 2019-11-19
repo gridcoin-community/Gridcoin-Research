@@ -257,7 +257,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
         result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
     }
 
-    result.pushKV("fees_collected", RoundToString(GetFeesCollected(block) / (double)COIN, 8));
+    result.pushKV("fees_collected", ValueFromAmount(GetFeesCollected(block)));
     result.pushKV("IsSuperBlock", (int)blockindex->nIsSuperBlock);
     result.pushKV("IsContract", (int)blockindex->nIsContract);
 
