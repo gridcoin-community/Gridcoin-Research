@@ -1876,12 +1876,6 @@ UniValue execute(const UniValue& params, bool fHelp)
 UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 {
     UniValue results(UniValue::VARR);
-    UniValue c(UniValue::VOBJ);
-    std::string Narr = ToString(GetAdjustedTime());
-    c.pushKV("SuperBlock Report (14 days)",Narr);
-    if (!cpid.empty())      c.pushKV("CPID",cpid);
-
-    results.push_back(c);
 
     int nMaxDepth = nBestHeight;
     int nLookback = BLOCKS_PER_DAY * lookback;
@@ -1893,6 +1887,8 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         if (!pblockindex || !pblockindex->pprev || pblockindex == pindexGenesisBlock) return results;
         pblockindex = pblockindex->pprev;
     }
+
+    const NN::CpidOption cpid_parsed = NN::MiningId::Parse(cpid).TryCpid();
 
     while (pblockindex->nHeight > nMinDepth)
     {
@@ -1909,12 +1905,21 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
                 const NN::Superblock& superblock = claim->m_superblock;
 
                 UniValue c(UniValue::VOBJ);
-                c.pushKV("Block #" + ToString(pblockindex->nHeight),pblockindex->GetBlockHash().GetHex());
-                c.pushKV("Date",TimestampToHRDate(pblockindex->nTime));
-                c.pushKV("Average Mag", superblock.m_cpids.AverageMagnitude());
-                c.pushKV("Wallet Version", claim->m_client_version);
+                c.pushKV("height", ToString(pblockindex->nHeight));
+                c.pushKV("block", pblockindex->GetBlockHash().GetHex());
+                c.pushKV("date", TimestampToHRDate(pblockindex->nTime));
+                c.pushKV("wallet_version", claim->m_client_version);
 
-                if (const NN::CpidOption cpid_parsed = NN::MiningId::Parse(cpid).TryCpid())
+                c.pushKV("total_cpids", (int)superblock.m_cpids.TotalCount());
+                c.pushKV("active_beacons", (int)superblock.m_cpids.size());
+                c.pushKV("inactive_beacons", (int)superblock.m_cpids.Zeros());
+
+                c.pushKV("total_magnitude", superblock.m_cpids.TotalMagnitude());
+                c.pushKV("average_magnitude", superblock.m_cpids.AverageMagnitude());
+
+                c.pushKV("total_projects", (int)superblock.m_projects.size());
+
+                if (cpid_parsed)
                 {
                     c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed));
                 }
