@@ -208,7 +208,7 @@ void BanMan::SweepBanned()
 
                 m_is_dirty = true;
                 notify_ui = true;
-                LogPrint("network", "%s: Removed banned node ip/subnet from banlist.dat: %s\n", __func__, sub_net.ToString());
+                LogPrint("net", "%s: Removed banned node ip/subnet from banlist.dat: %s\n", __func__, sub_net.ToString());
             } else
                 ++it;
         }

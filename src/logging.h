@@ -79,6 +79,7 @@ namespace BCLog {
         SCRAPER     = (1 << 21),
         MANIFEST    = (1 << 22),
         SB          = (1 << 23),
+        ALERT       = (1 << 24),
         ALL         = ~(uint32_t)0,
     };
 

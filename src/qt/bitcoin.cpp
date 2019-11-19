@@ -171,7 +171,7 @@ static std::string Translate(const char* psz)
 void DebugMessageHandler(QtMsgType type, const char *msg)
 {
     if (type == QtDebugMsg) {
-        LogPrint("Qt", "GUI: %s\n", msg);
+        LogPrint("qt", "GUI: %s\n", msg);
     } else {
         LogPrintf("GUI: %s\n", msg);
     }
@@ -181,7 +181,7 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
 {
     Q_UNUSED(context);
     if (type == QtDebugMsg) {
-        LogPrint("Qt", "GUI: %s\n", msg.toStdString());
+        LogPrint("qt", "GUI: %s\n", msg.toStdString());
     } else {
         LogPrintf("GUI: %s\n", msg.toStdString());
     }

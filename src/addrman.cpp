@@ -302,7 +302,7 @@ void CAddrMan::Good_(const CService &addr, int64_t nTime)
     // TODO: maybe re-add the node, but for now, just bail out
     if (nUBucket == -1) return;
 
-    if (fDebug10) LogPrint("addr", "Moving %s to tried", addr.ToString());
+    LogPrint("addrman", "Moving %s to tried", addr.ToString());
 
     // move nId to the tried tables
     MakeTried(info, nId, nUBucket);
