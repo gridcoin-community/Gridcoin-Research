@@ -6044,6 +6044,8 @@ int64_t GetFeesCollected(const CBlock& block)
 
     int64_t nFees = 0;
 
+    CTxDB txdb("r");
+
     for (unsigned int i = 2; i < block.vtx.size(); i++)
     {
         int64_t nDebit = 0;
@@ -6053,14 +6055,11 @@ int64_t GetFeesCollected(const CBlock& block)
         // Scan inputs
         for (const auto& txvinDataParse : txData.vin)
         {
-            uint256 hashblock;
             CTransaction txvinData;
-            const COutPoint& txinputData = txvinDataParse.prevout;
 
-            if (GetTransaction(txinputData.hash, txvinData, hashblock))
-                nDebit += txvinData.vout[txinputData.n].nValue;
+            if (txdb.ReadDiskTx(txvinDataParse.prevout.hash, txvinData))
+                nDebit += txvinData.vout[txvinDataParse.prevout.n].nValue;
 
-            // Incase; just return 0
             else
                 return 0;
         }
