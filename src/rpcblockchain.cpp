@@ -1985,12 +1985,6 @@ UniValue execute(const UniValue& params, bool fHelp)
 UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 {
     UniValue results(UniValue::VARR);
-    UniValue c(UniValue::VOBJ);
-    std::string Narr = ToString(GetAdjustedTime());
-    c.pushKV("SuperBlock Report (14 days)",Narr);
-    if (!cpid.empty())      c.pushKV("CPID",cpid);
-
-    results.push_back(c);
 
     int nMaxDepth = nBestHeight;
     int nLookback = BLOCKS_PER_DAY * lookback;
