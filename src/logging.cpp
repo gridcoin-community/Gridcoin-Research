@@ -18,7 +18,6 @@
 
 // Unavoidable because these are in util.h.
 extern fs::path &GetDataDir(bool fNetSpecific);
-extern std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime);
 extern bool GetBoolArg(const std::string& strArg, bool fDefault);
 extern int64_t GetArg(const std::string& strArg, int64_t nDefault);
 
