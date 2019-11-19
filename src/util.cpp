@@ -435,6 +435,11 @@ bool GetBoolArg(const std::string& strArg, bool fDefault)
     return fDefault;
 }
 
+bool IsArgSet(const std::string& strArg)
+{
+    return !(GetArg(strArg, "never_used_as_argument") == "never_used_as_argument");
+}
+
 bool IsArgNegated(const std::string& strArg)
 {
     return GetArg(strArg, "true") == "false";

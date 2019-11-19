@@ -182,6 +182,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	rpcblockchain.cpp \
 	rpcclient.cpp \
 	rpcdump.cpp \
+	rpcmisc.cpp \
 	rpcmining.cpp \
 	rpcnet.cpp \
 	rpcprotocol.cpp \

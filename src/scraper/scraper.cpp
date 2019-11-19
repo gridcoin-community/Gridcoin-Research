@@ -310,7 +310,7 @@ public:
 
             if (fDeleteOldLogArchives)
             {
-                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 14);
+                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 30);
                 LogPrintf ("INFO: ScraperLogger: nRetention %i.", nRetention);
 
                 std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;

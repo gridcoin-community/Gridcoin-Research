@@ -349,9 +349,9 @@ void InitLogging()
     LogInstance().m_log_time_micros = GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
     LogInstance().m_log_threadnames = GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
 
-    BCLog::LogFlags flags = BCLog::LogFlags::ALL;
+    //BCLog::LogFlags flags = BCLog::LogFlags::ALL;
 
-    LogInstance().EnableCategory(flags);
+    //LogInstance().EnableCategory(flags);
 
     //printf("LogInstance().GetCategoryMask() = %x\n", LogInstance().GetCategoryMask());
 
@@ -367,6 +367,52 @@ void InitLogging()
             LogInstance().ShrinkDebugFile();
         }
     }
+
+    if (IsArgSet("-debug"))
+    {
+        // Special-case: if -debug=0/-nodebug is set, turn off debugging messages
+        std::vector<std::string> categories;
+
+        if (mapArgs.count("-debug") && mapMultiArgs["-debug"].size() > 0)
+        {
+            for (auto const& sSubParam : mapMultiArgs["-debug"])
+            {
+                categories.push_back(sSubParam);
+            }
+        }
+
+        if (std::none_of(categories.begin(), categories.end(),
+            [](std::string cat){return cat == "0" || cat == "none";}))
+        {
+            for (const auto& cat : categories)
+            {
+                if (!LogInstance().EnableCategory(cat))
+                {
+                    InitWarning(strprintf("Unsupported logging category %s=%s.", "-debug", cat));
+                }
+            }
+        }
+    }
+
+    std::vector<std::string> excluded_categories;
+
+    if (mapArgs.count("-debugexclude") && mapMultiArgs["-debugexclude"].size() > 0)
+    {
+        for (auto const& sSubParam : mapMultiArgs["-debugexclude"])
+        {
+            excluded_categories.push_back(sSubParam);
+        }
+    }
+
+    // Now remove the logging categories which were explicitly excluded
+    for (const std::string& cat : excluded_categories)
+    {
+        if (!LogInstance().DisableCategory(cat))
+        {
+            InitWarning(strprintf("Unsupported logging category %s=%s.", "-debugexclude", cat));
+        }
+    }
+
     if (!LogInstance().StartLogging())
     {
        strprintf("Could not open debug log file %s", LogInstance().m_file_path.string());

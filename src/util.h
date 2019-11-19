@@ -327,6 +327,20 @@ int64_t GetArg(const std::string& strArg, int64_t nDefault);
  */
 bool GetBoolArg(const std::string& strArg, bool fDefault=false);
 
+/**
+ * Return true if argument is set
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return boolean
+ */
+bool IsArgSet(const std::string& strArg);
+
+/**
+ * Return true if argument is negated
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return boolean
+ */
 bool IsArgNegated(const std::string& strArg);
 
 /**

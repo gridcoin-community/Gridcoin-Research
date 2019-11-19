@@ -175,6 +175,9 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::COINDB, "coindb"},
     {BCLog::QT, "qt"},
     {BCLog::LEVELDB, "leveldb"},
+    {BCLog::SCRAPER, "scraper"},
+    {BCLog::MANIFEST, "manifest"},
+    {BCLog::SB, "superblock"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };
@@ -456,7 +459,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
         if (fDeleteOldLogArchives)
         {
-            unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 14);
+            unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 30);
             LogPrintf ("INFO: Logger: nRetention %i.", nRetention);
 
             std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;

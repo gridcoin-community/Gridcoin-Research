@@ -76,6 +76,9 @@ namespace BCLog {
         COINDB      = (1 << 18),
         QT          = (1 << 19),
         LEVELDB     = (1 << 20),
+        SCRAPER     = (1 << 21),
+        MANIFEST    = (1 << 22),
+        SB          = (1 << 23),
         ALL         = ~(uint32_t)0,
     };
 
