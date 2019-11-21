@@ -57,15 +57,15 @@ UniValue logging(const UniValue& params, bool fHelp)
             "When called with arguments, adds or removes categories from debug logging and return the lists above.\n"
             "The arguments are evaluated in order \"include\", \"exclude\".\n"
             "If an item is both included and excluded, it will thus end up being excluded.\n"
-            "The valid logging categories are: " + ListLogCategories() + "\n"
+            "The valid logging categories are: " + ListLogCategories() + ".\n"
             "In addition, the following are available as category names with special meanings:\n"
             "all or 1: represent all logging categories.\n"
             "none or 0: even if other logging categories are specified, ignore all of them.\n\n"
             "Examples:\n"
             "logging all net: enables all and disables net.\n"
-            "logging none: disables all.\n\n"
+            "logging \"\" all: disables all.\n\n"
             "Note that unlike Bitcoin, we don't process JSON arrays correctly as arguments yet for the command line,\n"
-            "so, for the rpc cli, it is limited to one enable and/or one disable category.\n"
+            "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the full arrays.\n"
             );
     }
 
