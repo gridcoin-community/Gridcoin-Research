@@ -318,7 +318,7 @@ public:
             return Result::UNKNOWN;
         }
 
-        if (m_superblock.Age() < SCRAPER_CMANIFEST_RETENTION_TIME) {
+        if (m_superblock.Age() > SCRAPER_CMANIFEST_RETENTION_TIME) {
             return Result::HISTORICAL;
         }
 
