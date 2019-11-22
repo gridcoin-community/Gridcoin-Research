@@ -86,6 +86,18 @@ public:
     //!
     static QuorumHash Hash(const Superblock& superblock);
 
+    //!
+    //! \brief Hash the provided scraper statistics to produce the same quorum
+    //! hash that would be generated for a superblock created from the stats.
+    //!
+    //! CONSENSUS: This method will only produce a SHA256 quorum hash matching
+    //! version 2+ superblocks. Do not use it to produce hashes of the scraper
+    //! statistics for legacy superblocks.
+    //!
+    //! \param stats Scraper statistics from a convergence to hash.
+    //!
+    //! \return A SHA256 quorum hash of the scraper statistics.
+    //!
     static QuorumHash Hash(const ScraperStats& stats);
 
     //!
@@ -382,6 +394,18 @@ public:
         //! \param magnitude Total magnitude to associate with the CPID.
         //!
         void Add(const MiningId id, const uint16_t magnitude);
+
+        //!
+        //! \brief Add the supplied mining ID to the index if it represents a
+        //! valid CPID after rounding the magnitude to an integer.
+        //!
+        //! This method ignores an attempt to add a duplicate entry if a CPID
+        //! already exists.
+        //!
+        //! \param id        May contain a CPID.
+        //! \param magnitude Total magnitude to associate with the CPID.
+        //!
+        void RoundAndAdd(const MiningId id, const double magnitude);
 
         //!
         //! \brief Serialize the object to the provided stream.
@@ -772,7 +796,9 @@ public:
     //! \return A new superblock instance that contains the imported scraper
     //! statistics.
     //!
-    static Superblock FromConvergence(const ConvergedScraperStats& stats);
+    static Superblock FromConvergence(
+        const ConvergedScraperStats& stats,
+        const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
     //! \brief Initialize a superblock from the provided scraper statistics.
@@ -783,7 +809,9 @@ public:
     //! \return A new superblock instance that contains the imported scraper
     //! statistics.
     //!
-    static Superblock FromStats(const ScraperStats& stats);
+    static Superblock FromStats(
+        const ScraperStats& stats,
+        const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
     //! \brief Initialize a superblock from a legacy superblock contract.
