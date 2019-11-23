@@ -10,6 +10,8 @@
 
 extern CWallet* pwalletMain;
 
+void InitLogging();
+
 void StartShutdown();
 
 bool ShutdownRequested();

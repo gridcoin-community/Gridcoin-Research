@@ -326,6 +326,111 @@ bool InitSanityCheck(void)
     return true;
 }
 
+/**
+ * Initialize global loggers.
+ *
+ * Note that this is called very early in the process lifetime, so you should be
+ * careful about what global state you rely on here.
+ */
+void InitLogging()
+{
+    fPrintToConsole = GetBoolArg("-printtoconsole");
+    fPrintToDebugger = GetBoolArg("-printtodebugger");
+    fLogTimestamps = GetBoolArg("-logtimestamps", true);
+
+    LogInstance().m_print_to_file = !IsArgNegated("-debuglogfile");
+    LogInstance().m_file_path = AbsPathForConfigVal(GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
+
+    //printf("LogInstance().m_file_path = %s\n", LogInstance().m_file_path.c_str());
+    //printf("LogInstance().m_print_to_file = %i\n", LogInstance().m_print_to_file);
+
+    LogInstance().m_print_to_console = fPrintToConsole;
+    LogInstance().m_log_timestamps = fLogTimestamps;
+    LogInstance().m_log_time_micros = GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
+    LogInstance().m_log_threadnames = GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
+
+    //BCLog::LogFlags flags = BCLog::LogFlags::ALL;
+
+    //LogInstance().EnableCategory(flags);
+
+    //printf("LogInstance().GetCategoryMask() = %x\n", LogInstance().GetCategoryMask());
+
+    fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
+
+    if (LogInstance().m_print_to_file)
+    {
+        // Only shrink debug file at start if log archiving is set to false.
+        if (!GetBoolArg("-logarchivedaily", true) && GetBoolArg("-shrinkdebugfile", LogInstance().DefaultShrinkDebugFile()))
+        {
+            // Do this first since it both loads a bunch of debug.log into memory,
+            // and because this needs to happen before any other debug.log printing
+            LogInstance().ShrinkDebugFile();
+        }
+    }
+
+    if (IsArgSet("-debug"))
+    {
+        // Special-case: if -debug=0/-nodebug is set, turn off debugging messages
+        std::vector<std::string> categories;
+
+        if (mapArgs.count("-debug") && mapMultiArgs["-debug"].size() > 0)
+        {
+            for (auto const& sSubParam : mapMultiArgs["-debug"])
+            {
+                categories.push_back(sSubParam);
+            }
+        }
+
+        if (std::none_of(categories.begin(), categories.end(),
+            [](std::string cat){return cat == "0" || cat == "none";}))
+        {
+            for (const auto& cat : categories)
+            {
+                if (!LogInstance().EnableCategory(cat))
+                {
+                    InitWarning(strprintf("Unsupported logging category %s=%s.", "-debug", cat));
+                }
+            }
+        }
+    }
+
+    std::vector<std::string> excluded_categories;
+
+    if (mapArgs.count("-debugexclude") && mapMultiArgs["-debugexclude"].size() > 0)
+    {
+        for (auto const& sSubParam : mapMultiArgs["-debugexclude"])
+        {
+            excluded_categories.push_back(sSubParam);
+        }
+    }
+
+    // Now remove the logging categories which were explicitly excluded
+    for (const std::string& cat : excluded_categories)
+    {
+        if (!LogInstance().DisableCategory(cat))
+        {
+            InitWarning(strprintf("Unsupported logging category %s=%s.", "-debugexclude", cat));
+        }
+    }
+
+    if (!LogInstance().StartLogging())
+    {
+       strprintf("Could not open debug log file %s", LogInstance().m_file_path.string());
+    }
+
+    if (!LogInstance().m_log_timestamps)
+        LogPrintf("Startup time: %s\n", FormatISO8601DateTime(GetTime()));
+    LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
+    LogPrintf("Using data directory %s\n", GetDataDir().string());
+
+    std::string version_string = FormatFullVersion();
+#ifdef DEBUG
+    version_string += " (debug build)";
+#else
+    version_string += " (release build)";
+#endif
+    LogPrintf(PACKAGE_NAME " version %s\n", version_string);
+}
 
 
 
@@ -552,11 +657,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     /* force fServer when running without GUI */
     if(!fQtActive)
         fServer = true;
-
-    fPrintToConsole = GetBoolArg("-printtoconsole");
-    fPrintToDebugger = GetBoolArg("-printtodebugger");
-    fLogTimestamps = GetBoolArg("-logtimestamps");
-    fLogTimestamps = true;
 
     if (mapArgs.count("-timeout"))
     {
@@ -1078,6 +1178,14 @@ bool AppInit2(ThreadHandlerPtr threads)
     scheduler.scheduleEvery([]{
         g_banman->DumpBanlist();
     }, DUMP_BANS_INTERVAL * 1000);
+
+    // Primitive, but this is what the scraper does in the scraper houskeeping loop. It checks to see if the logs need to be archived
+    // by default every 5 mins. Note that passing false to the archive function means that if we have not crossed over the day boundary,
+    // it does nothing, so this is a very inexpensive call. Also if -logarchivedaily is set to false, then this will be a no-op.
+    scheduler.scheduleEvery([]{
+        fs::path plogfile_out;
+        LogInstance().archive(false, plogfile_out);
+    }, 300 * 1000);
 
     /** If this is not TestNet we check for updates on startup and daily **/
     /** We still add to the scheduler regardless of the users choice however the choice is respected when they opt out**/

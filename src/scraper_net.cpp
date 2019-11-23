@@ -417,7 +417,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     uint256 hash = Hash(pbegin, ss.begin());
 
     ss >> signature;
-    LogPrint("Manifest", "CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
+    LogPrint("manifest", "CScraperManifest::UnserializeCheck: hash of signature = %s", Hash(signature.begin(), signature.end()).GetHex());
 
     CKey mkey;
     if(!mkey.SetPubKey(pubkey))

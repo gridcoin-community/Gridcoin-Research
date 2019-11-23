@@ -143,6 +143,8 @@ bool AppInit(int argc, char* argv[])
             exit(ret);
         }
 
+        InitLogging();
+
         fRet = AppInit2(threads);
     }
     catch (std::exception& e) {

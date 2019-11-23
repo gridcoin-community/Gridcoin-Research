@@ -89,6 +89,7 @@ GRIDCOIN_CORE_H = \
 	kernel.h \
 	key.h \
 	keystore.h \
+	logging.h \
 	main.h \
 	miner.h \
 	mruset.h \
@@ -134,6 +135,8 @@ GRIDCOIN_CORE_H = \
 	util/memory.h \
 	util/reverse_iterator.h \
 	util/strencodings.h \
+	util/threadnames.h \
+	util/time.h \
 	util.h \
 	version.h \
 	walletdb.h \
@@ -160,6 +163,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	kernel.cpp \
 	key.cpp \
 	keystore.cpp \
+	logging.cpp \
 	main.cpp \
 	miner.cpp \
 	neuralnet/claim.cpp \
@@ -178,6 +182,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	rpcblockchain.cpp \
 	rpcclient.cpp \
 	rpcdump.cpp \
+	rpcmisc.cpp \
 	rpcmining.cpp \
 	rpcnet.cpp \
 	rpcprotocol.cpp \
@@ -201,6 +206,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	uint256.cpp \
         upgrade.cpp \
 	util/strencodings.cpp \
+	util/threadnames.cpp \
+	util/time.cpp \
 	util.cpp \
 	version.cpp \
 	wallet.cpp \

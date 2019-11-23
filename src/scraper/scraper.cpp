@@ -154,7 +154,7 @@ extern BeaconConsensus GetConsensusBeaconList();
 **********************/
 
 
-class logger
+class ScraperLogger
 {
 
 private:
@@ -167,7 +167,7 @@ private:
 
 public:
 
-    logger()
+    ScraperLogger()
     {
         LOCK(cs_log);
 
@@ -178,7 +178,7 @@ public:
             LogPrintf("ERROR: Scraper: Logger: Failed to open logging file\n");
     }
 
-    ~logger()
+    ~ScraperLogger()
     {
         LOCK(cs_log);
 
@@ -212,7 +212,7 @@ public:
 
     bool archive(bool fImmediate, fs::path pfile_out)
     {
-        bool fArchiveDaily = GetBoolArg("-scraperlogarchivedaily", true);
+        bool fArchiveDaily = GetBoolArg("-logarchivedaily", true);
 
         int64_t nTime = GetAdjustedTime();
         boost::gregorian::date ArchiveCheckDate = boost::posix_time::from_time_t(nTime).date();
@@ -224,7 +224,7 @@ public:
         ssArchiveCheckDate << ArchiveCheckDate;
         ssPrevArchiveCheckDate << PrevArchiveCheckDate;
 
-        if (fDebug) LogPrintf("INFO: Scraper: Logger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
+        if (fDebug) LogPrintf("INFO: ScraperLogger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
 
         fs::path LogArchiveDir = pathDataDir / "logarchive";
 
@@ -264,7 +264,7 @@ public:
                 }
                 catch(...)
                 {
-                    LogPrintf("ERROR: Scraper: Logger: Failed to rename logging file\n");
+                    LogPrintf("ERROR: ScraperLogger: Failed to rename logging file\n");
                     return false;
                 }
 
@@ -273,7 +273,7 @@ public:
                 logfile.open(plogfile, std::ios_base::out | std::ios_base::app);
 
                 if (!logfile.is_open())
-                    LogPrintf("ERROR: Scraper: Logger: Failed to open logging file\n");
+                    LogPrintf("ERROR: ScraperLogger: Failed to open logging file\n");
 
                 PrevArchiveCheckDate = ArchiveCheckDate;
             }
@@ -282,7 +282,7 @@ public:
 
             if (!infile)
             {
-                LogPrintf("ERROR: logger: Failed to open archive log file for compression %s.", pfile_temp.string());
+                LogPrintf("ERROR: ScraperLogger: Failed to open archive log file for compression %s.", pfile_temp.string());
                 return false;
             }
 
@@ -290,7 +290,7 @@ public:
 
             if (!outgzfile)
             {
-                LogPrintf("ERROR: logger: Failed to open archive gzip file %s.", pfile_out.string());
+                LogPrintf("ERROR: Scraperogger: Failed to open archive gzip file %s.", pfile_out.string());
                 return false;
             }
 
@@ -310,8 +310,8 @@ public:
 
             if (fDeleteOldLogArchives)
             {
-                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 14);
-                LogPrintf ("INFO: logger: nRetention %i.", nRetention);
+                unsigned int nRetention = (unsigned int)GetArg("-logarchiveretainnumfiles", 30);
+                LogPrintf ("INFO: ScraperLogger: nRetention %i.", nRetention);
 
                 std::set<fs::directory_entry, std::greater <fs::directory_entry>> SortedDirEntries;
 
@@ -334,7 +334,7 @@ public:
                     {
                         fs::remove(iter.path());
 
-                        LogPrintf("INFO: logger: Removed old archive gzip file %s.", iter.path().filename().string());
+                        LogPrintf("INFO: ScraperLogger: Removed old archive gzip file %s.", iter.path().filename().string());
                     }
 
                     ++i;
@@ -350,17 +350,15 @@ public:
     }
 };
 
-logger& LogInstance()
+ScraperLogger& ScraperLogInstance()
 {
     // This is similar to Bitcoin's newer approach.
-    static logger* scraperlogger{new logger()};
+    static ScraperLogger* scraperlogger{new ScraperLogger()};
     return *scraperlogger;
 }
 
-
-boost::gregorian::date logger::PrevArchiveCheckDate = boost::posix_time::from_time_t(GetAdjustedTime()).date();
-CCriticalSection logger::cs_log;
-
+CCriticalSection ScraperLogger::cs_log;
+boost::gregorian::date ScraperLogger::PrevArchiveCheckDate = boost::posix_time::from_time_t(GetAdjustedTime()).date();
 
 
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage)
@@ -389,7 +387,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
     sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
 
     //logger log;
-    logger& log = LogInstance();
+    ScraperLogger& log = ScraperLogInstance();
 
     log.output(sOut);
 
@@ -720,7 +718,7 @@ void Scraper(bool bSingleShot)
     }
 
     // Initialize log singleton. Must be after the imbue.
-    LogInstance();
+    ScraperLogInstance();
 
     if (!bSingleShot)
         _log(logattribute::INFO, "Scraper", "Starting Scraper thread.");
@@ -811,7 +809,7 @@ void Scraper(bool bSingleShot)
                 }
 
                 // Need the log archive check here, because we don't run housekeeping in this while loop.
-                logger& log = LogInstance();
+                ScraperLogger& log = ScraperLogInstance();
 
                 fs::path plogfile_out;
 
@@ -975,7 +973,7 @@ void NeuralNetwork()
         pathScraper = pathDataDir  / "Scraper";
 
         // Initialize log singleton. Must be after the imbue.
-        LogInstance();
+        ScraperLogInstance();
     }
 
 
@@ -1084,7 +1082,7 @@ bool ScraperHousekeeping()
     // Show this node's contract hash in the log.
     _log(logattribute::INFO, "ScraperHousekeeping", "superblock contract hash = " + superblock.GetHash().ToString());
 
-    logger& log = LogInstance();
+    ScraperLogger& log = ScraperLogInstance();
 
     fs::path plogfile_out;
 
@@ -5291,19 +5289,28 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 }
 
 
-UniValue archivescraperlog(const UniValue& params, bool fHelp)
+UniValue archivelog(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0 )
+    if (fHelp || params.size() != 1 )
         throw std::runtime_error(
-                "archivescraperlog takes no arguments and results in immediate archiving of the scraper log\n"
+                "archivelog <log>\n"
+                "Immediately archives the specified log. Currently valid valus are debug and scraper.\n"
                 );
 
-    logger& log = LogInstance();
+    std::string sLogger = params[0].get_str();
 
     fs::path pfile_out;
-    bool ret = log.archive(true, pfile_out);
+    bool ret;
 
-    //log.closelogfile();
+    if (sLogger == "debug")
+    {
+        ret = LogInstance().archive(true, pfile_out);
+    }
+    else if (sLogger == "scraper")
+    {
+        ret = ScraperLogInstance().archive(true, pfile_out);
+    }
+    else ret = false;
 
     return UniValue(ret);
 }

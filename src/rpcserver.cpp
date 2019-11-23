@@ -371,6 +371,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getsupervotes",           &rpc_getsupervotes,       cat_developer     },
     { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
+    { "logging",                 &logging,                 cat_developer     },
     { "memorizekeys",            &memorizekeys,            cat_developer     },
     { "network",                 &network,                 cat_developer     },
     { "parselegacysb",           &parselegacysb,           cat_developer     },
@@ -392,7 +393,7 @@ static const CRPCCommand vRPCCommands[] =
     { "sendscraperfilemanifest", &sendscraperfilemanifest, cat_developer     },
     { "savescraperfilemanifest", &savescraperfilemanifest, cat_developer     },
     { "deletecscrapermanifest",  &deletecscrapermanifest,  cat_developer     },
-    { "archivescraperlog",       &archivescraperlog,       cat_developer     },
+    { "archivelog",              &archivelog,              cat_developer     },
     { "testnewsb",               &testnewsb,               cat_developer     },
 
   // Network commands

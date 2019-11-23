@@ -123,15 +123,6 @@ void SetupEnvironment()
 #endif
 }
 
-void MilliSleep(int64_t n)
-{
-#if BOOST_VERSION >= 105000
-    boost::this_thread::sleep_for(boost::chrono::milliseconds(n));
-#else
-    boost::this_thread::sleep(boost::posix_time::milliseconds(n));
-#endif
-}
-
 // Init OpenSSL library multithreading support
 static CCriticalSection** ppmutexOpenSSL;
 void locking_callback(int mode, int i, const char* file, int line) NO_THREAD_SAFETY_ANALYSIS
@@ -175,13 +166,6 @@ public:
     }
 }
 instance_of_cinit;
-
-
-
-
-
-
-
 
 void RandAddSeed()
 {
@@ -243,104 +227,6 @@ uint256 GetRandHash()
     uint256 hash;
     RAND_bytes((unsigned char*)&hash, sizeof(hash));
     return hash;
-}
-
-bool LogAcceptCategory(const char* category)
-{
-    if (category != NULL)
-    {
-        if (!fDebug) return false;
-        const vector<string>& categories = mapMultiArgs["-debug"];
-        if (find(categories.begin(), categories.end(), string(category)) == categories.end())
-            return false;
-    }
-    return true;
-}
-
-void LogPrintStr(const std::string &str)
-{
-    if (fPrintToConsole)
-    {
-        // print to console
-        fwrite(str.data(), 1, str.size(), stdout);
-    }
-    //else
-    if (!fPrintToDebugger)
-    {
-        // print to debug.log
-        static FILE* fileout = NULL;
-
-        if (!fileout)
-        {
-            fs::path pathDebug = GetDataDir() / "debug.log";
-            fileout = fsbridge::fopen(pathDebug, "a");
-            if (fileout) setbuf(fileout, NULL); // unbuffered
-        }
-        if (fileout)
-        {
-            static bool fStartedNewLine = true;
-
-            // This routine may be called by global destructors during shutdown.
-            // Since the order of destruction of static/global objects is undefined,
-            // allocate mutexDebugLog on the heap the first time this routine
-            // is called to avoid crashes during shutdown.
-            static boost::mutex* mutexDebugLog = NULL;
-            if (mutexDebugLog == NULL) mutexDebugLog = new boost::mutex();
-            boost::mutex::scoped_lock scoped_lock(*mutexDebugLog);
-
-            // reopen the log file, if requested
-            if (fReopenDebugLog) {
-                fReopenDebugLog = false;
-
-                fs::path pathDebug = GetDataDir() / "debug.log";
-                FILE* new_fileout = fsbridge::fopen(pathDebug, "a");
-
-                if (new_fileout) {
-                    setbuf(new_fileout, NULL); // unbuffered
-                    fclose(fileout);
-                    fileout = new_fileout;
-                }
-            }
-
-            // Debug print useful for profiling
-            if (fLogTimestamps && fStartedNewLine)
-                fprintf(fileout, "%s ", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()).c_str());
-            if (!str.empty() && str[str.size() - 1] == '\n')
-                fStartedNewLine = true;
-            else
-                fStartedNewLine = false;
-
-            fwrite(str.data(), 1, str.size(), fileout);
-            fflush(fileout);
-        }
-    }
-
-/*#ifdef WIN32
-    if (fPrintToDebugger)
-    {
-        static CCriticalSection cs_OutputDebugStringF;
-
-        // accumulate and output a line at a time
-        {
-            LOCK(cs_OutputDebugStringF);
-            static std::string buffer;
-
-            va_list arg_ptr;
-            va_start(arg_ptr, str.c_str());
-            buffer += vstrprintf(str.c_str(), arg_ptr);
-            va_end(arg_ptr);
-
-            int line_start = 0, line_end;
-            while((line_end = buffer.find('\n', line_start)) != -1)
-            {
-                OutputDebugStringA(buffer.substr(line_start, line_end - line_start).c_str());
-                line_start = line_end + 1;
-            }
-            buffer.erase(0, line_start);
-        }
-    }
-#endif */
-    return;
 }
 
 int GetDayOfYear(int64_t timestamp)
@@ -549,6 +435,16 @@ bool GetBoolArg(const std::string& strArg, bool fDefault)
     return fDefault;
 }
 
+bool IsArgSet(const std::string& strArg)
+{
+    return !(GetArg(strArg, "never_used_as_argument") == "never_used_as_argument");
+}
+
+bool IsArgNegated(const std::string& strArg)
+{
+    return GetArg(strArg, "true") == "false";
+}
+
 bool SoftSetArg(const std::string& strArg, const std::string& strValue)
 {
     if (mapArgs.count(strArg))
@@ -601,13 +497,6 @@ bool WildcardMatch(const string& str, const string& mask)
     return WildcardMatch(str.c_str(), mask.c_str());
 }
 
-
-
-
-
-
-
-
 static std::string FormatException(std::exception* pex, const char* pszThread)
 {
 #ifdef WIN32
@@ -647,7 +536,13 @@ void PrintExceptionContinue(std::exception* pex, const char* pszThread)
     strMiscWarning = message;
 }
 
-
+fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific)
+{
+    if (path.is_absolute()) {
+        return path;
+    }
+    return fs::absolute(path, GetDataDir(net_specific));
+}
 
 fs::path GetDefaultDataDir()
 {
@@ -983,31 +878,8 @@ std::string GetFileContents(const fs::path filepath)
     return out.str();
 }
 
-//
-// "Never go to sea with two chronometers; take one or three."
-// Our three time sources are:
-//  - System clock
-//  - Median of other nodes clocks
-//  - The user (asking the user to fix the system clock if the first two disagree)
-//
-static int64_t nMockTime = 0;  // For unit testing
-
-int64_t GetTime()
-{
-    if (nMockTime) return nMockTime;
-
-    return time(NULL);
-}
-
-int64_t GetSystemTimeInSeconds()
-{
-    return GetTimeMicros()/1000000;
-}
-
-void SetMockTime(int64_t nMockTimeIn)
-{
-    nMockTime = nMockTimeIn;
-}
+#ifndef UPGRADERFLAG
+// avoid including unnecessary files for standalone upgrader
 
 static int64_t nTimeOffset = 0;
 
@@ -1020,21 +892,6 @@ int64_t GetAdjustedTime()
 {
     return GetTime() + GetTimeOffset();
 }
-
-bool IsLockTimeWithin14days(int64_t locktime, int64_t reference)
-{
-    return IsLockTimeWithinMinutes(locktime, 14 * 24 * 60, reference);
-}
-
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference)
-{
-    int64_t cutOff = reference - minutes * 60;
-    return locktime >= cutOff;
-}
-
-#ifndef UPGRADERFLAG
-// avoid including unnecessary files for standalone upgrader
-
 
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample)
 {

@@ -35,6 +35,8 @@
 // of this file to reduce the header load:
 #include "tinyformat.h"
 #include <util/strencodings.h>
+#include "util/time.h"
+#include "logging.h"
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -94,7 +96,7 @@ std::unique_ptr<T> MakeUnique(Args&&... args)
     return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
-void MilliSleep(int64_t n);
+//void MilliSleep(int64_t n);
 
 extern int GetDayOfYear(int64_t timestamp);
 
@@ -140,50 +142,6 @@ extern bool fDevbuildCripple;
 void RandAddSeed();
 void RandAddSeedPerfmon();
 
-/* Return true if log accepts specified category */
-bool LogAcceptCategory(const char* category);
-/* Send a string to the log output */
-void LogPrintStr(const std::string &str);
-
-#define LogPrintf(...) do { LogPrint(NULL, __VA_ARGS__); } while (0)
-
-/* When we switch to C++11, this can be switched to variadic templates instead
- * of this macro-based construction (see tinyformat.h).
- */
-#define MAKE_ERROR_AND_LOG_FUNC(n)                                        \
-    /*   Print to debug.log if -debug=category switch is given OR category is NULL. */ \
-    template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline void LogPrint(const char* category, const char* format, TINYFORMAT_VARARGS(n))  \
-    {                                                                         \
-        if(!LogAcceptCategory(category)) return;                            \
-        LogPrintStr(tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n");      \
-        return;                                                               \
-    }                                                                         \
-    /*   Log error and return false */                                        \
-    template<TINYFORMAT_ARGTYPES(n)>                                          \
-    static inline bool error(const char* format, TINYFORMAT_VARARGS(n))                     \
-    {                                                                         \
-        LogPrintStr("ERROR: " + tfm::format(format, TINYFORMAT_PASSARGS(n)) + "\n"); \
-        return false;                                                         \
-    }
-
-TINYFORMAT_FOREACH_ARGNUM(MAKE_ERROR_AND_LOG_FUNC)
-
-/* Zero-arg versions of logging and error, these are not covered by
- * TINYFORMAT_FOREACH_ARGNUM
-*/
-static inline void LogPrint(const char* category, const char* format)
-{
-    if(!LogAcceptCategory(category)) return;
-    LogPrintStr(format + std::string("\n"));
-    return;
-}
-static inline bool error(const char* format)
-{
-    LogPrintStr(std::string("ERROR: ") + format + std::string("\n"));
-    return false;
-}
-
 void LogException(std::exception* pex, const char* pszThread);
 void PrintException(std::exception* pex, const char* pszThread);
 void PrintExceptionContinue(std::exception* pex, const char* pszThread);
@@ -199,6 +157,7 @@ bool FileCommit(FILE *fileout);
 std::string TimestampToHRDate(double dtm);
 
 bool RenameOver(fs::path src, fs::path dest);
+fs::path AbsPathForConfigVal(const fs::path& path, bool net_specific = true);
 fs::path GetDefaultDataDir();
 fs::path GetProgramDir();
 
@@ -228,14 +187,8 @@ std::string GetFileContents(const fs::path filepath);
 int GetRandInt(int nMax);
 uint64_t GetRand(uint64_t nMax);
 uint256 GetRandHash();
-int64_t GetTime();
-int64_t GetTimeMicros();
-int64_t GetSystemTimeInSeconds();
-void SetMockTime(int64_t nMockTimeIn);
-int64_t GetAdjustedTime();
 int64_t GetTimeOffset();
-bool IsLockTimeWithin14days(int64_t locktime, int64_t reference);
-bool IsLockTimeWithinMinutes(int64_t locktime, int minutes, int64_t reference);
+int64_t GetAdjustedTime();
 std::string FormatFullVersion();
 std::string FormatSubVersion(const std::string& name, int nClientVersion, const std::vector<std::string>& comments);
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
@@ -322,33 +275,6 @@ inline int64_t GetPerformanceCounter()
     return nCounter;
 }
 
-inline int64_t GetTimeMillis()
-{
-    return (boost::posix_time::ptime(boost::posix_time::microsec_clock::universal_time()) -
-            boost::posix_time::ptime(boost::gregorian::date(1970,1,1))).total_milliseconds();
-}
-
-inline int64_t GetTimeMicros()
-{
-    return (boost::posix_time::ptime(boost::posix_time::microsec_clock::universal_time()) -
-            boost::posix_time::ptime(boost::gregorian::date(1970,1,1))).total_microseconds();
-}
-
-inline std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime)
-{
-    time_t n = nTime;
-    struct tm* ptmTime = gmtime(&n);
-    char pszTime[200];
-    strftime(pszTime, sizeof(pszTime), pszFormat, ptmTime);
-    return pszTime;
-}
-
-static const std::string strTimestampFormat = "%Y-%m-%d %H:%M:%S UTC";
-inline std::string DateTimeStrFormat(int64_t nTime)
-{
-    return DateTimeStrFormat(strTimestampFormat.c_str(), nTime);
-}
-
 inline bool IsSwitchChar(char c)
 {
 #ifdef WIN32
@@ -400,6 +326,22 @@ int64_t GetArg(const std::string& strArg, int64_t nDefault);
  * @return command-line argument or default value
  */
 bool GetBoolArg(const std::string& strArg, bool fDefault=false);
+
+/**
+ * Return true if argument is set
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return boolean
+ */
+bool IsArgSet(const std::string& strArg);
+
+/**
+ * Return true if argument is negated
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return boolean
+ */
+bool IsArgNegated(const std::string& strArg);
 
 /**
  * Set an argument if it doesn't already have a value
