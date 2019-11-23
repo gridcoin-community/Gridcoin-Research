@@ -1891,4 +1891,5 @@ public:
 
 extern CTxMemPool mempool;
 
+int64_t GetFeesCollected(const CBlock& block);
 #endif
