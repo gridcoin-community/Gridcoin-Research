@@ -73,9 +73,9 @@ public:
                     continue;
 
                 case statsobjecttype::byCPID:
-                    m_superblock.m_cpids.Add(
+                    m_superblock.m_cpids.RoundAndAdd(
                         Cpid::Parse(object_id),
-                        std::round(entry.second.statsvalue.dMag));
+                        entry.second.statsvalue.dMag);
 
                     break;
 
@@ -83,9 +83,9 @@ public:
                     m_superblock.m_projects.Add(
                         object_id,
                         Superblock::ProjectStats(
-                            std::round(entry.second.statsvalue.dTC),
-                            std::round(entry.second.statsvalue.dAvgRAC),
-                            std::round(entry.second.statsvalue.dRAC))
+                            std::nearbyint(entry.second.statsvalue.dTC),
+                            std::nearbyint(entry.second.statsvalue.dAvgRAC),
+                            std::nearbyint(entry.second.statsvalue.dRAC))
                     );
 
                     break;
@@ -113,6 +113,10 @@ private:
 //! compute a matching superblock hash directly from scraper statistics. This
 //! class generates quorum hashes from scraper statistics that will match the
 //! hashes of corresponding superblock objects.
+//!
+//! CONSENSUS: This class will only produce a SHA256 quorum hash for versions
+//! 2+ superblocks. Do not use it to produce hashes of scraper statistics for
+//! legacy superblocks.
 //!
 class ScraperStatsQuorumHasher
 {
@@ -196,6 +200,18 @@ private:
                 } else {
                     m_zero_magnitude_count++;
                 }
+            }
+
+            //!
+            //! \brief Round and hash a CPID/magnitude pair as it would exist
+            //! in the Superblock::CpidIndex container.
+            //!
+            //! \param cpid      The CPID value to hash.
+            //! \param magnitude The magnitude value to hash.
+            //!
+            void RoundAndAdd(Cpid cpid, double magnitude)
+            {
+                Add(cpid, std::nearbyint(magnitude));
             }
 
             //!
@@ -302,7 +318,7 @@ public:
             return Result::UNKNOWN;
         }
 
-        if (m_superblock.Age() < SCRAPER_CMANIFEST_RETENTION_TIME) {
+        if (m_superblock.Age() > SCRAPER_CMANIFEST_RETENTION_TIME) {
             return Result::HISTORICAL;
         }
 
@@ -1402,9 +1418,11 @@ Superblock::Superblock(uint32_t version)
 {
 }
 
-Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
+Superblock Superblock::FromConvergence(
+    const ConvergedScraperStats& stats,
+    const uint32_t version)
 {
-    Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats);
+    Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats, version);
 
     superblock.m_convergence_hint = stats.Convergence.nContentHash.GetUint64() >> 32;
 
@@ -1430,10 +1448,19 @@ Superblock Superblock::FromConvergence(const ConvergedScraperStats& stats)
     return superblock;
 }
 
-Superblock Superblock::FromStats(const ScraperStats& stats)
+Superblock Superblock::FromStats(const ScraperStats& stats, const uint32_t version)
 {
-    Superblock superblock;
+    Superblock superblock(version);
     ScraperStatsSuperblockBuilder<Superblock> builder(superblock);
+
+    if (version == 1) {
+        // Force the CPID index into legacy mode to capture zero-magnitude
+        // CPIDs that result from rounding.
+        //
+        // TODO: encapsulate this
+        //
+        superblock.m_cpids = Superblock::CpidIndex(0);
+    }
 
     builder.BuildFromStats(stats);
 
@@ -1621,6 +1648,25 @@ void Superblock::CpidIndex::Add(const MiningId id, const uint16_t magnitude)
     if (const CpidOption cpid = id.TryCpid()) {
         Add(*cpid, magnitude);
     } else if (!m_legacy) {
+        m_zero_magnitude_count++;
+    }
+}
+
+void Superblock::CpidIndex::RoundAndAdd(const MiningId id, const double magnitude)
+{
+    // The ScraperGetNeuralContract() function that these classes replace
+    // rounded magnitude values using a half-away-from-zero rounding mode
+    // to determine whether floating-point magnitudes round-down to zero,
+    // but it added the magnitude values to the superblock with half-even
+    // rounding. This caused legacy superblock contracts to contain CPIDs
+    // with zero magnitude when the rounding results differed.
+    //
+    // To create legacy superblocks from scraper statistics with matching
+    // hashes, we filter magnitudes using the same rounding rules:
+    //
+    if (!m_legacy || std::round(magnitude) > 0) {
+        Add(id, std::nearbyint(magnitude));
+    } else {
         m_zero_magnitude_count++;
     }
 }

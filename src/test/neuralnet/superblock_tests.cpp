@@ -991,6 +991,58 @@ BOOST_AUTO_TEST_CASE(it_adds_a_cpid_magnitude_to_the_index)
     BOOST_CHECK(cpids.size() == 1);
 }
 
+BOOST_AUTO_TEST_CASE(it_adds_a_rounded_cpid_magnitude_to_the_index)
+{
+    NN::Superblock::CpidIndex cpids;
+
+    NN::Cpid cpid1 = NN::Cpid::Parse("00010203040506070809101112131415");
+    NN::Cpid cpid2 = NN::Cpid::Parse("15141312111009080706050403020100");
+
+    cpids.RoundAndAdd(cpid1, 123.5);
+    cpids.RoundAndAdd(cpid2, 123.4);
+
+    BOOST_CHECK(cpids.MagnitudeOf(cpid1) == 124);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid2) == 123);
+}
+
+BOOST_AUTO_TEST_CASE(it_adds_a_legacy_rounded_cpid_magnitude_to_the_index)
+{
+    // Initializing the CPID index with a count of zero-magnitude CPIDs
+    // switches it to legacy mode:
+    //
+    NN::Superblock::CpidIndex cpids(0);
+
+    NN::Cpid cpid1 = NN::Cpid::Parse("11111111111111111111111111111111");
+    NN::Cpid cpid2 = NN::Cpid::Parse("22222222222222222222222222222222");
+    NN::Cpid cpid3 = NN::Cpid::Parse("33333333333333333333333333333333");
+    NN::Cpid cpid4 = NN::Cpid::Parse("44444444444444444444444444444444");
+
+    // The ScraperGetNeuralContract() function that these classes replace
+    // rounded magnitude values using a half-away-from-zero rounding mode
+    // to determine whether floating-point magnitudes round-down to zero,
+    // but it added the magnitude values to the superblock with half-even
+    // rounding. This caused legacy superblock contracts to contain CPIDs
+    // with zero magnitude when the rounding results differed.
+    //
+    // To create legacy superblocks from scraper statistics with matching
+    // hashes, we filter magnitudes using the same rounding rules:
+    //
+    //  - A magnitude of 0.5 is rounded-down to zero.
+    //  - A magnitude less than 0.5 is omitted from the superblock.
+    //
+    cpids.RoundAndAdd(cpid1, 1.1);
+    cpids.RoundAndAdd(cpid2, 1.5);
+    cpids.RoundAndAdd(cpid3, 0.5);
+    cpids.RoundAndAdd(cpid4, 0.4);
+
+    BOOST_CHECK(cpids.size() == 3); // cpid4 is omitted
+
+    BOOST_CHECK(cpids.MagnitudeOf(cpid1) == 1);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid2) == 2);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid3) == 0);
+    BOOST_CHECK(cpids.MagnitudeOf(cpid4) == 0);
+}
+
 BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_duplicate_cpid)
 {
     NN::Superblock::CpidIndex cpids;

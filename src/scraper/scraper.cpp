@@ -4533,10 +4533,10 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                     ConvergedScraperStatsCache.nTime = GetAdjustedTime();
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
-                    superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
-
-                    if (!IsV11Enabled(nBestHeight)) {
-                        superblock.m_version = 1;
+                    if (IsV11Enabled(nBestHeight)) {
+                        superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
+                    } else {
+                        superblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache, 1);
                     }
 
                     ConvergedScraperStatsCache.NewFormatSuperblock = superblock;

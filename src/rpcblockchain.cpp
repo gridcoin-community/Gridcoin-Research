@@ -1529,6 +1529,24 @@ UniValue network(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue parselegacysb(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1)
+        throw runtime_error(
+                "parselegacysb\n"
+                "\n"
+                "Convert a legacy superblock contract to JSON.\n");
+
+    UniValue json(UniValue::VOBJ);
+
+    NN::Superblock superblock = NN::Superblock::UnpackLegacy(params[0].get_str());
+
+    json.pushKV("contract", SuperblockToJson(superblock));
+    json.pushKV("legacy_hash", superblock.GetHash().ToString());
+
+    return json;
+}
+
 UniValue projects(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

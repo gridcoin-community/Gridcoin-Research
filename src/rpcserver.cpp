@@ -373,6 +373,7 @@ static const CRPCCommand vRPCCommands[] =
     { "listprojects",            &listprojects,            cat_developer     },
     { "memorizekeys",            &memorizekeys,            cat_developer     },
     { "network",                 &network,                 cat_developer     },
+    { "parselegacysb",           &parselegacysb,           cat_developer     },
     { "projects",                &projects,                cat_developer     },
     { "readconfig",              &readconfig,              cat_developer     },
     { "readdata",                &readdata,                cat_developer     },

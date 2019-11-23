@@ -191,6 +191,7 @@ extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue memorizekeys(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);
+extern UniValue parselegacysb(const UniValue& params, bool fHelp);
 extern UniValue projects(const UniValue& params, bool fHelp);
 extern UniValue readconfig(const UniValue& params, bool fHelp);
 extern UniValue readdata(const UniValue& params, bool fHelp);
