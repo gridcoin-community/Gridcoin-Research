@@ -1051,6 +1051,23 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("%s", strErrors.str());
     LogPrintf(" wallet      %15" PRId64 "ms", GetTimeMillis() - nStart);
 
+    // Zap wallet transactions if specified as a command line argument.
+    if (GetBoolArg("-zapwallettxes", false))
+    {
+        std::vector<CWalletTx> vWtx;
+
+        LogPrintf("Zapping wallet transactions.");
+
+        DBErrors nZapWalletTxRet = pwalletMain->ZapWalletTx(vWtx);
+
+        LogPrintf("%u transactions zapped.", vWtx.size());
+
+        if (nZapWalletTxRet != DBErrors::DB_LOAD_OK)
+        {
+            strErrors << _("Error loading %s: Wallet corrupted") << walletFileName.string() << "\n";
+        }
+    }
+
     RegisterWallet(pwalletMain);
 
     CBlockIndex *pindexRescan = pindexBest;
