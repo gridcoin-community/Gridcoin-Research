@@ -304,7 +304,7 @@ public:
         const PopularityMap popularity_map = BuildPopularityMap(pindex->nHeight);
         auto popular = popularity_map.cbegin();
 
-        if (popular == popularity_map.end()) {
+        if (popular == popularity_map.cend()) {
             return QuorumHash();
         }
 
@@ -414,9 +414,7 @@ private:
     //!
     void RefillVoteCache(const CBlockIndex* pindex)
     {
-        const int64_t min_height = std::max<int64_t>(
-            Quorum::CurrentSuperblock()->m_height + 1,
-            pindex->nHeight - STANDARD_LOOKBACK);
+        const int64_t min_height = pindex->nHeight - STANDARD_LOOKBACK;
 
         if (!m_votes.empty()) {
             pindex = m_votes.begin()->second.m_pindex;
@@ -469,9 +467,12 @@ private:
     //!
     PopularityMap BuildPopularityMap(const int64_t last_height) const
     {
-        const int64_t min_height = std::max<int64_t>(
-            Quorum::CurrentSuperblock()->m_height + 1,
-            last_height - STANDARD_LOOKBACK);
+        // Note: we begin aggregating vote weights from the block before
+        // last_height. However, last_height is still the basis for vote
+        // weight distance calculations.
+        //
+        const int64_t max_height = last_height - 1;
+        const int64_t min_height = last_height - STANDARD_LOOKBACK;
 
         PopularityMap popularity_map;
         std::map<CBitcoinAddress, QuorumHash> addresses_seen;
@@ -479,6 +480,10 @@ private:
         for (const auto& vote_pair : reverse_iterate(m_votes)) {
             const int64_t vote_height = vote_pair.first;
             const QuorumVote& vote = vote_pair.second;
+
+            if (vote_height > max_height) {
+                continue;
+            }
 
             if (vote_height < min_height) {
                 break;
@@ -583,7 +588,8 @@ bool Quorum::ValidateSuperblockClaim(
             "ineligible quorum participant: %s", claim.m_quorum_address);
     }
 
-    const QuorumHash popular_hash = FindPopularHash(pindex);
+    // Popular hash search begins from the block before:
+    const QuorumHash popular_hash = FindPopularHash(pindex->pprev);
 
     if (claim.m_superblock.GetHash() != popular_hash) {
         return error("ValidateSuperblockClaim(): "
