@@ -394,6 +394,8 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
     if (fImmediate || (fArchiveDaily && ArchiveCheckDate > PrevArchiveCheckDate))
     {
+        std::string rename_error_msg;
+
         {
             std::lock_guard<std::mutex> scoped_lock(m_cs);
 
@@ -410,10 +412,10 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             {
                 fs::rename(plogfile, pfile_temp);
             }
-            catch(...)
+            catch(const std::exception& e)
             {
-                LogPrintf("ERROR: Logger: archive: Failed to rename logging file\n");
-                return false;
+                rename_error_msg = "Failed to rename logging file: ";
+                rename_error_msg += e.what();
             }
 
             // Re-open logging file. (This is subtly different than the flag based reopen above, because the file must be closed first, renamed for compression,
@@ -426,6 +428,12 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
             }
 
             PrevArchiveCheckDate = ArchiveCheckDate;
+        }
+
+        if (!rename_error_msg.empty())
+        {
+            LogPrintf("ERROR: Logger: archive: %s", rename_error_msg);
+            return false;
         }
 
         fsbridge::ifstream infile(pfile_temp, std::ios_base::in | std::ios_base::binary);
