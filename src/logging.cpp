@@ -403,7 +403,7 @@ bool BCLog::Logger::archive(bool fImmediate, fs::path pfile_out)
 
             plogfile = m_file_path;
 
-            pfile_temp = static_cast<fs::path>(m_file_path.stem().string() + "-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + m_file_path.extension().string());
+            pfile_temp = LogArchiveDir / static_cast<fs::path>(m_file_path.stem().string() + "-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime) + m_file_path.extension().string());
 
             pfile_out = LogArchiveDir / static_cast<fs::path>((m_file_path.filename().stem().string() + "-" + DateTimeStrFormat("%Y%m%d%H%M%S", nTime)
                                          + m_file_path.filename().extension().string() + ".gz"));
