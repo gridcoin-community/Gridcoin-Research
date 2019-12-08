@@ -340,20 +340,10 @@ void InitLogging()
 
     LogInstance().m_print_to_file = !IsArgNegated("-debuglogfile");
     LogInstance().m_file_path = AbsPathForConfigVal(GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
-
-    //printf("LogInstance().m_file_path = %s\n", LogInstance().m_file_path.c_str());
-    //printf("LogInstance().m_print_to_file = %i\n", LogInstance().m_print_to_file);
-
     LogInstance().m_print_to_console = fPrintToConsole;
     LogInstance().m_log_timestamps = fLogTimestamps;
     LogInstance().m_log_time_micros = GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
     LogInstance().m_log_threadnames = GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
-
-    //BCLog::LogFlags flags = BCLog::LogFlags::ALL;
-
-    //LogInstance().EnableCategory(flags);
-
-    //printf("LogInstance().GetCategoryMask() = %x\n", LogInstance().GetCategoryMask());
 
     fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
 
@@ -743,8 +733,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 #endif
 
-    ShrinkDebugFile();
-    LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
     LogPrintf("Gridcoin version %s (%s)", FormatFullVersion(), CLIENT_DATE);
     LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)

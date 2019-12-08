@@ -791,29 +791,6 @@ bool FileCommit(FILE *file)
     return true;
 }
 
-
-void ShrinkDebugFile()
-{
-    // Scroll debug.log if it's getting too big
-    fs::path pathLog = GetDataDir() / "debug.log";
-    FILE* file = fsbridge::fopen(pathLog, "r");
-    if (file && fs::file_size(pathLog) > 1000000)
-    {
-        // Restart the file with some of the end
-        char pch[200000];
-        fseek(file, -sizeof(pch), SEEK_END);
-        int nBytes = fread(pch, 1, sizeof(pch), file);
-        fclose(file);
-
-        file = fsbridge::fopen(pathLog, "w");
-        if (file)
-        {
-            fwrite(pch, 1, nBytes, file);
-            fclose(file);
-        }
-    }
-}
-
 bool DirIsWritable(const fs::path& directory)
 {
     fs::path tmpFile = directory / fs::unique_path();

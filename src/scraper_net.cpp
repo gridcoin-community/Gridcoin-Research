@@ -452,7 +452,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(NN::GetWhitelist().Snapshot().size()) /
                                                                     std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
 
-    if (projects.size() > nMaxProjects)
+    if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
     {
         // Immmediately ban the node from which the manifest was received.
         banscore_out = GetArg("-banscore", 100);

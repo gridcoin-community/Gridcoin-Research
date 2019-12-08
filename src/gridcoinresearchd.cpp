@@ -52,6 +52,8 @@ bool AppInit(int argc, char* argv[])
 
     SetupEnvironment();
 
+    // Note every function above the InitLogging() call must use fprintf or similar.
+
     ThreadHandlerPtr threads = std::make_shared<ThreadHandler>();
     bool fRet = false;
 
@@ -94,6 +96,9 @@ bool AppInit(int argc, char* argv[])
 
         /** Check here config file incase TestNet is set there and not in mapArgs **/
         ReadConfigFile(mapArgs, mapMultiArgs);
+
+        // Initialize logging as early as possible.
+        InitLogging();
 
         // Check to see if the user requested a snapshot and we are not running TestNet!
         if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
@@ -142,8 +147,6 @@ bool AppInit(int argc, char* argv[])
             int ret = CommandLineRPC(argc, argv);
             exit(ret);
         }
-
-        InitLogging();
 
         fRet = AppInit2(threads);
     }

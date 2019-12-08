@@ -171,7 +171,6 @@ void ReadConfigFile(ArgsMap& mapSettingsRet, ArgsMultiMap& mapMultiSettingsRet);
 #ifdef WIN32
 fs::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif
-void ShrinkDebugFile();
 bool DirIsWritable(const fs::path& directory);
 bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
 

@@ -213,8 +213,7 @@ int main(int argc, char *argv[])
 
     SetupEnvironment();
 
-    // Do this early as we don't want to bother initializing if we are just calling IPC
-    ipcScanRelay(argc, argv);
+    // Note every function above the InitLogging() call must use fprintf or similar.
 
     // Command-line options take precedence:
     // Before this would of been done in main then config file loaded.
@@ -222,6 +221,12 @@ int main(int argc, char *argv[])
     ParseParameters(argc, argv);
 
     ReadConfigFile(mapArgs, mapMultiArgs);
+
+    // Initialize logging as early as possible.
+    InitLogging();
+
+    // Do this early as we don't want to bother initializing if we are just calling IPC
+    ipcScanRelay(argc, argv);
 
     // Here we do it if it was started with the snapshot argument and we not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
@@ -245,7 +250,7 @@ int main(int argc, char *argv[])
 
             catch (std::runtime_error& e)
             {
-                LogPrintf("Snapshot Downloader: Runtime exception occured in SanpshotMain() (%s)", e.what());
+                LogPrintf("Snapshot Downloader: Runtime exception occured in SnapshotMain() (%s)", e.what());
 
                 Snapshot.DeleteSnapshot();
 
@@ -354,8 +359,6 @@ int StartGridcoinQt(int argc, char *argv[])
 
     // ... then GUI settings:
     OptionsModel optionsModel;
-
-    InitLogging();
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
