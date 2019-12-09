@@ -123,7 +123,7 @@ bool AppInit(int argc, char* argv[])
 
                 catch (std::runtime_error& e)
                 {
-                    LogPrintf("Snapshot Downloader: Runtime exception occured in SanpshotMain() (%s)", e.what());
+                    LogPrintf("Snapshot Downloader: Runtime exception occured in SnapshotMain() (%s)", e.what());
 
                     Snapshot.DeleteSnapshot();
 

@@ -171,7 +171,7 @@ static std::string Translate(const char* psz)
 void DebugMessageHandler(QtMsgType type, const char *msg)
 {
     if (type == QtDebugMsg) {
-        LogPrint("qt", "GUI: %s\n", msg);
+        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg);
     } else {
         LogPrintf("GUI: %s\n", msg);
     }
@@ -181,7 +181,7 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
 {
     Q_UNUSED(context);
     if (type == QtDebugMsg) {
-        LogPrint("qt", "GUI: %s\n", msg.toStdString());
+        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg.toStdString());
     } else {
         LogPrintf("GUI: %s\n", msg.toStdString());
     }
@@ -333,12 +333,13 @@ int StartGridcoinQt(int argc, char *argv[])
     // Install qDebug() message handler to route to debug.log
     qInstallMsgHandler(DebugMessageHandler);
 #else
-#if defined(WIN32)
-    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
-    qApp->installNativeEventFilter(new WinShutdownMonitor());
-#endif
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
+#endif
+
+#if defined(WIN32) && QT_VERSION >= 0x050000
+    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
+    app.installNativeEventFilter(new WinShutdownMonitor());
 #endif
 
     if (!boost::filesystem::is_directory(GetDataDir(false)))
@@ -442,10 +443,14 @@ int StartGridcoinQt(int argc, char *argv[])
         else
         {
              //10-31-2015
-            while (!bGridcoinGUILoaded)
+            while (!bGridcoinCoreInitComplete)
             {
                 app.processEvents();
-                MilliSleep(300);
+
+                // The sleep here has to be pretty short to avoid a buffer overflow crash with
+                // fast CPUs due to too many events. It originally was set to 300 ms and has
+                // been reduced to 100 ms.
+                MilliSleep(100);
             }
 
             {
@@ -478,6 +483,8 @@ int StartGridcoinQt(int argc, char *argv[])
 #if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
+
+                LogPrintf("GUI loaded.");
 
                 app.exec();
 

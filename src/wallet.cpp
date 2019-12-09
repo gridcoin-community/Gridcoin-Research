@@ -1966,6 +1966,9 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     fFirstRunRet = !vchDefaultKey.IsValid();
 
     NewThread(ThreadFlushWalletDB, &strWalletFile);
+
+    LogPrintf("LoadWallet: started wallet flush thread.");
+
     return DB_LOAD_OK;
 }
 

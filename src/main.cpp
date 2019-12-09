@@ -129,7 +129,7 @@ BlockFinder blockFinder;
 
 bool bForceUpdate = false;
 bool fQtActive = false;
-bool bGridcoinGUILoaded = false;
+bool bGridcoinCoreInitComplete = false;
 
 extern void GetGlobalStatus();
 bool PollIsActive(const std::string& poll_contract);
