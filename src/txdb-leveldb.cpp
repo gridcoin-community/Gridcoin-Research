@@ -648,17 +648,9 @@ bool CTxDB::LoadBlockIndex()
     CBlockIndex* pindex = BlockFinder().FindByHeight(1);
 
     LogPrintf("RA scan blocks %i-%i", pindex->nHeight, pindexBest->nHeight);
-    nLoaded=pindex->nHeight;
+
     for ( ; pindex ; pindex= pindex->pnext )
     {
-        if(fQtActive && (pindex->nHeight % 10000) == 0)
-        {
-            nLoaded +=10000;
-            if (nLoaded > nHighest) nHighest=nLoaded;
-            if (nHighest < nGrandfather) nHighest=nGrandfather;
-            uiInterface.InitMessage(strprintf("%" PRId64 "/%" PRId64 " %s", nLoaded, nHighest, _("POR Blocks Verified")));
-        }
-
         // Block repair and reward collection only needs to be done after
         // research age has been enabled.
         if(!IsResearchAgeEnabled(pindex->nHeight))

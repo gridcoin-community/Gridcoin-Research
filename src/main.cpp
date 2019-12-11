@@ -129,7 +129,7 @@ BlockFinder blockFinder;
 
 bool bForceUpdate = false;
 bool fQtActive = false;
-bool bGridcoinGUILoaded = false;
+bool bGridcoinCoreInitComplete = false;
 
 extern void GetGlobalStatus();
 bool PollIsActive(const std::string& poll_contract);
@@ -4781,7 +4781,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                             unsigned int banscore_out = 0;
 
                             // Also don't send a manifest that is not current.
-                            if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out) && manifest.IsManifestCurrent())
+                            if (CScraperManifest::IsManifestAuthorized(manifest.nTime, manifest.pubkey, banscore_out) && manifest.IsManifestCurrent())
                             {
                                 CScraperManifest::SendManifestTo(pfrom, inv.hash);
                             }

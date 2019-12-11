@@ -15,6 +15,7 @@
 #include "appcache.h"
 #include "scraper/fwd.h"
 #include "neuralnet/superblock.h"
+#include "neuralnet/project.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;
@@ -25,12 +26,14 @@ CCriticalSection CScraperManifest::cs_mapManifest;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
+extern double CONVERGENCE_BY_PROJECT_RATIO;
 extern unsigned int nScraperSleep;
 extern AppCacheSectionExt mScrapersExt;
 extern std::atomic<int64_t> nSyncTime;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
+extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
 
 // A lock needs to be taken on cs_mapParts before calling this function.
 bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
@@ -283,7 +286,7 @@ void CScraperManifest::Serialize(CDataStream& ss) const
 
 // This is the complement to IsScraperAuthorizedToBroadcastManifests in the scraper.
 // It is used to determine whether received manifests are authorized.
-bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out)
+bool CScraperManifest::IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out)
 {
     bool bIsValid = PubKey.IsValid();
     if (!bIsValid)
@@ -361,6 +364,15 @@ bool CScraperManifest::IsManifestAuthorized(CPubKey& PubKey, unsigned int& bansc
             nLastFalseEntryTime = std::max(nLastFalseEntryTime, entry.second.timestamp);
     }
 
+    // Check for excessive manifest publishing rate by the associated scraper. If the maximum rate is exceeded
+    // Then return false. This is exempt from the grace period below.
+    if (IsScraperMaximumManifestPublishingRateExceeded(nTime, PubKey))
+    {
+        // Immediate ban
+        banscore_out = GetArg("-banscore", 100);
+        return false;
+    }
+
     if (bAuthorized)
         return true;
     else
@@ -387,6 +399,8 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     vector<uint256> vph;
     ss>>vph;
     ss>> pubkey;
+    ss>> sCManifestName;
+    ss>> nTime;
 
     // This will set the bCheckAuthorized flag to false if a message
     // is received while the wallet is not in sync. If in sync and
@@ -395,13 +409,11 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     // which will also result in an increase in banscore, if past the grace period.
     if (OutOfSyncByAge())
         bCheckedAuthorized = false;
-    else if (IsManifestAuthorized(pubkey, banscore_out))
+    else if (IsManifestAuthorized(nTime, pubkey, banscore_out))
         bCheckedAuthorized = true;
     else
         throw error("CScraperManifest::UnserializeCheck: Unapproved scraper ID");
 
-    ss>> sCManifestName;
-    ss>> nTime;
     ss>> ConsensusBlock;
     ss>> BeaconList >> BeaconList_c;
     ss>> projects;
@@ -411,6 +423,42 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
     for(const dentry& prj : projects)
         if(prj.part1+prj.partc>vph.size())
             throw error("CScraperManifest::UnserializeCheck: project part out of range");
+
+    // It is not reasonable for a manifest to contain more than nMaxProjects, where this is
+    // calculated by dividing the current whitelist size by the CONVERGENCE_BY_PROJECT_RATIO,
+    // taking the ceiling and then adding 2. The motivation behind this is the corner case where
+    // the whitelist has been reduced in size by that ratio as a corrective action in the situation
+    // where suddenly a number of projects are not available, and a convergence was not able to be formed.
+    // Then existing manifests on the network would have the reciprocol of that ratio projects. I
+    // take the ceiling and add 2 for a safety measure. For a CONVERGENCE_BY_PROJECT_RATIO of 0.75, which
+    // is the network default, and a whitelist count of 20, this would come out to ceil(20.0/0.75)+2 = 29.
+    // Or if the whitelist were suddenly reduced from 20 to 15, then it would be ceil(15.0/0.75)+2 = 22.
+    // Note that this places limits on the change of the whitelist without causing nodes to ban the scrapers
+    // But it is exceedingly unlikely to need to change the whitelist by more than this ratio.
+    // Let's look at several scenarios to see the actual constraints using a
+    // CONVERGENCE_BY_PROJECT_RATIO of 0.75 ...
+
+    // Whitelist = 0 .... nMaxProjects = 2. (So whitelist could be reduced by 2 from 2 to 0 without tripping.)
+    // Whitelist = 1 .... nMaxProjects = 4. (So whitelist could be reduced by 3 from 4 to 1 without tripping.)
+    // Whitelist = 5 .... nMaxProjects = 9. (So whitelist could be reduced by 4 from 9 to 5 without tripping.)
+    // Whitelist = 10 ... nMaxProjects = 16. (So whitelist could be reduced by 6 from 16 to 10 without tripping.)
+    // Whitelist = 15 ... nMaxProjects = 22. (So whitelist could be reduced by 7 from 22 to 15 without tripping.)
+    // Whitelist = 20 ... nMaxProjects = 29. (So whitelist could be reduced by 9 from 29 to 20 without tripping.)
+
+    // There is also a clamp on the divisor to ensure it is never less than 0.5, even if the CONVERGENCE_BY_PROJECT_RATIO
+    // is set to below 0.5, both to prevent a divide by zero exception, and also prevent unreasonably lose limits. So this
+    // means the loosest limit that is allowed is essentially 2 * whitelist + 2.
+
+    unsigned int nMaxProjects = static_cast<unsigned int>(std::ceil(static_cast<double>(NN::GetWhitelist().Snapshot().size()) /
+                                                                    std::max(0.5, CONVERGENCE_BY_PROJECT_RATIO)) + 2);
+
+    if (!OutOfSyncByAge() && projects.size() > nMaxProjects)
+    {
+        // Immmediately ban the node from which the manifest was received.
+        banscore_out = GetArg("-banscore", 100);
+
+        throw error("CScraperManifest::UnserializeCheck: Too many projects in the manifest.");
+    }
 
     ss >> nContentHash;
 
@@ -604,10 +652,6 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     if (fDebug3) LogPrintf("INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
     LogPrint("manifest", "adding new local manifest");
-    /* at this point it is easier to pretend like it was received from network */
-    // ^ Yes, but your are creating a new object and pointer that way. It is better to do
-    // a special insert routine below, which forwards the object (pointer).
-    // return CScraperManifest::RecvManifest(0, ss);
 
     /* try inserting into map */
     const auto it = mapManifest.emplace(hash, std::move(m));

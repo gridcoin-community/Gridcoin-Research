@@ -111,7 +111,7 @@ public: /* static methods */
     static bool addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& keySign);
 
     /** Validate whether recieved manifest is authorized */
-    static bool IsManifestAuthorized(CPubKey& PubKey, unsigned int& banscore_out);
+    static bool IsManifestAuthorized(int64_t& nTime, CPubKey& PubKey, unsigned int& banscore_out);
 
     /** Delete Manifest (key version) **/
     static bool DeleteManifest(const uint256& nHash, const bool& fImmediate = false);

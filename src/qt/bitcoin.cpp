@@ -171,7 +171,7 @@ static std::string Translate(const char* psz)
 void DebugMessageHandler(QtMsgType type, const char *msg)
 {
     if (type == QtDebugMsg) {
-        LogPrint("qt", "GUI: %s\n", msg);
+        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg);
     } else {
         LogPrintf("GUI: %s\n", msg);
     }
@@ -181,7 +181,7 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
 {
     Q_UNUSED(context);
     if (type == QtDebugMsg) {
-        LogPrint("qt", "GUI: %s\n", msg.toStdString());
+        LogPrint(BCLog::LogFlags::QT, "GUI: %s\n", msg.toStdString());
     } else {
         LogPrintf("GUI: %s\n", msg.toStdString());
     }
@@ -213,8 +213,7 @@ int main(int argc, char *argv[])
 
     SetupEnvironment();
 
-    // Do this early as we don't want to bother initializing if we are just calling IPC
-    ipcScanRelay(argc, argv);
+    // Note every function above the InitLogging() call must use fprintf or similar.
 
     // Command-line options take precedence:
     // Before this would of been done in main then config file loaded.
@@ -222,6 +221,12 @@ int main(int argc, char *argv[])
     ParseParameters(argc, argv);
 
     ReadConfigFile(mapArgs, mapMultiArgs);
+
+    // Initialize logging as early as possible.
+    InitLogging();
+
+    // Do this early as we don't want to bother initializing if we are just calling IPC
+    ipcScanRelay(argc, argv);
 
     // Here we do it if it was started with the snapshot argument and we not TestNet
     if (mapArgs.count("-snapshotdownload") && !mapArgs.count("-testnet"))
@@ -245,7 +250,7 @@ int main(int argc, char *argv[])
 
             catch (std::runtime_error& e)
             {
-                LogPrintf("Snapshot Downloader: Runtime exception occured in SanpshotMain() (%s)", e.what());
+                LogPrintf("Snapshot Downloader: Runtime exception occured in SnapshotMain() (%s)", e.what());
 
                 Snapshot.DeleteSnapshot();
 
@@ -328,12 +333,13 @@ int StartGridcoinQt(int argc, char *argv[])
     // Install qDebug() message handler to route to debug.log
     qInstallMsgHandler(DebugMessageHandler);
 #else
-#if defined(WIN32)
-    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
-    qApp->installNativeEventFilter(new WinShutdownMonitor());
-#endif
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
+#endif
+
+#if defined(WIN32) && QT_VERSION >= 0x050000
+    // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
+    app.installNativeEventFilter(new WinShutdownMonitor());
 #endif
 
     if (!boost::filesystem::is_directory(GetDataDir(false)))
@@ -354,8 +360,6 @@ int StartGridcoinQt(int argc, char *argv[])
 
     // ... then GUI settings:
     OptionsModel optionsModel;
-
-    InitLogging();
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(GetArg("-lang", QLocale::system().name().toStdString()));
@@ -439,10 +443,14 @@ int StartGridcoinQt(int argc, char *argv[])
         else
         {
              //10-31-2015
-            while (!bGridcoinGUILoaded)
+            while (!bGridcoinCoreInitComplete)
             {
                 app.processEvents();
-                MilliSleep(300);
+
+                // The sleep here has to be pretty short to avoid a buffer overflow crash with
+                // fast CPUs due to too many events. It originally was set to 300 ms and has
+                // been reduced to 100 ms.
+                MilliSleep(100);
             }
 
             {
@@ -475,6 +483,8 @@ int StartGridcoinQt(int argc, char *argv[])
 #if defined(WIN32) && defined(QT_GUI) && QT_VERSION >= 0x050000
                 WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)window.winId());
 #endif
+
+                LogPrintf("GUI loaded.");
 
                 app.exec();
 

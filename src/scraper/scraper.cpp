@@ -3516,6 +3516,119 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 }
 
 
+// This function computes the average time between manifests as a function of the last 10 received manifests
+// plus the nTime provided as the argument. This gives ten intervals for sampling between manifests. If the
+// average time between manifests is less than 50% of the nScraperSleep interval, or the most recent manifest
+// for a scraper is more than five minutes in the future (accounts for clock skew) then the publishing rate
+// of the scraper is deemed too high. This is actually used in CScraperManifest::IsManifestAuthorized to ban
+// a scraper that is abusing the network by sending too many manifests over a very short period of time.
+bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey)
+{
+    mmCSManifestsBinnedByScraper mMapCSManifestBinnedByScraper;
+
+    {
+        LOCK(CScraperManifest::cs_mapManifest);
+
+        mMapCSManifestBinnedByScraper = BinCScraperManifestsByScraper();
+    }
+
+    CKeyID ManifestKeyID = PubKey.GetID();
+
+    CBitcoinAddress ManifestAddress;
+    ManifestAddress.Set(ManifestKeyID);
+
+    // This is the address corresponding to the manifest public key, and is the scraper ID key in the outer map.
+    std::string sManifestAddress = ManifestAddress.ToString();
+
+    const auto& iScraper = mMapCSManifestBinnedByScraper.find(sManifestAddress);
+
+    if (iScraper == mMapCSManifestBinnedByScraper.end())
+    {
+        // There are no previous manifests on this node corresponding to the supplied public key.
+        return false;
+    }
+
+    unsigned int nIntervals = 0;
+    int64_t nCurrentTime = GetAdjustedTime();
+    int64_t nBeginTime = 0;
+    int64_t nEndTime = 0;
+    int64_t nTotalTime = 0;
+    int64_t nAvgTimeBetweenManifests = 0;
+
+    std::multimap<int64_t, ScraperID, std::greater <int64_t>> mScraperManifests;
+
+    // Insert manifest referenced by the argument first (the "incoming" manifest). Note that it may NOT have the most recent time.
+    // This is followed by the rest so that we have a unified map with the incoming in the right order.
+    mScraperManifests.insert(std::make_pair(nTime, sManifestAddress));
+
+    // Insert the rest of the manifests for the scraper matching the public key.
+    for (const auto& iManifest : iScraper->second)
+    {
+        mScraperManifests.insert(std::make_pair(iManifest.first, sManifestAddress));
+    }
+
+    // Remember the map is sorted in descending order of time, so the end comes before the beginning.
+    for (const auto& iManifest : mScraperManifests)
+    {
+        ++nIntervals;
+
+        if (nIntervals == 1)
+        {
+            // Set the end of the measurement interval to the most recent manifest for the scraper.
+            nEndTime = iManifest.first;
+        }
+
+        // Set the beginning time of the interval to the time at this element
+        nBeginTime = iManifest.first;
+
+        // Go till 10 intervals (between samples) OR time interval reaches 5 expected scraper updates at 3 nScraperSleep scraper cycles per update,
+        // whichever occurs first.
+        if (nIntervals == 10 || (nCurrentTime - nBeginTime) >= nScraperSleep * 3 * 5 / 1000) break;
+    }
+
+    // Do not allow the most recent manifest from a scraper to be more than five minutes into the future from GetAdjustedTime. (This takes
+    // into account reasonable clock skew between the scraper and this node, but prevents future dating manifests to try and fool the rate calculation.)
+    // Note that this is regardless of the minimum sample size below.
+    if (nEndTime - nCurrentTime > 300)
+    {
+        _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
+             " has published a manifest more than 5 minutes in the future. Banning the scraper.");
+
+        return true;
+    }
+
+    // We are not going to allow less than 5 intervals in the sample. If it is less than 5 intervals, it has either passed the break
+    // condition above (or even slower), or there really are very few published total, in which the sample size is too small to judge
+    // the rate.
+    if (nIntervals < 5) return false;
+
+
+    // nTotalTime cannot be negative because of the sort order of mScraperManifests, and nIntervals is protected against being zero
+    // by the above conditional.
+    nTotalTime = nEndTime - nBeginTime;
+    nAvgTimeBetweenManifests = nTotalTime / nIntervals;
+
+    // nScraperSleep is in milliseconds. If the average interval is less than 50% of nScraperSleep in seconds, ban the scraper.
+    // Note that this is at least a factor of 6 faster than the expected rate given usual project update velocity.
+    if (nAvgTimeBetweenManifests < nScraperSleep / 2000)
+    {
+        _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
+             " has published too many manifests in too short a time:\n" +
+             "Number of manifests sampled = " + std::to_string(nIntervals + 1) + "\n"
+             "nEndTime = " + std::to_string(nEndTime) + "\n" +
+             "nBeginTime = " + std::to_string(nBeginTime) + "\n" +
+             "nTotalTime = " + std::to_string(nTotalTime) + "\n" +
+             "nAvgTimeBetweenManifests = " + std::to_string(nAvgTimeBetweenManifests) +"\n" +
+             "Banning the scraper.\n");
+
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 // This function is necessary because some CScraperManifest messages are likely to be received before the wallet is in sync. Therefore, they
 // cannot be checked at that time by the deserialize check. Instead, while the wallet is not in sync, the local CScraperManifest flag
 // bCheckedAuthorized will be set to false on any manifests received during that time. Once the wallet is in sync, this function will be
@@ -3536,7 +3649,7 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
         // We are not going to do anything with the banscore here, but it is an out parameter of IsManifestAuthorized.
         unsigned int banscore_out = 0;
 
-        if (CScraperManifest::IsManifestAuthorized(manifest.pubkey, banscore_out))
+        if (CScraperManifest::IsManifestAuthorized(manifest.nTime, manifest.pubkey, banscore_out))
         {
             manifest.bCheckedAuthorized = true;
             ++iter;

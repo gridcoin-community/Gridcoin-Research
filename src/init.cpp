@@ -340,20 +340,10 @@ void InitLogging()
 
     LogInstance().m_print_to_file = !IsArgNegated("-debuglogfile");
     LogInstance().m_file_path = AbsPathForConfigVal(GetArg("-debuglogfile", DEFAULT_DEBUGLOGFILE));
-
-    //printf("LogInstance().m_file_path = %s\n", LogInstance().m_file_path.c_str());
-    //printf("LogInstance().m_print_to_file = %i\n", LogInstance().m_print_to_file);
-
     LogInstance().m_print_to_console = fPrintToConsole;
     LogInstance().m_log_timestamps = fLogTimestamps;
     LogInstance().m_log_time_micros = GetBoolArg("-logtimemicros", DEFAULT_LOGTIMEMICROS);
     LogInstance().m_log_threadnames = GetBoolArg("-logthreadnames", DEFAULT_LOGTHREADNAMES);
-
-    //BCLog::LogFlags flags = BCLog::LogFlags::ALL;
-
-    //LogInstance().EnableCategory(flags);
-
-    //printf("LogInstance().GetCategoryMask() = %x\n", LogInstance().GetCategoryMask());
 
     fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
 
@@ -423,13 +413,13 @@ void InitLogging()
     LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
     LogPrintf("Using data directory %s\n", GetDataDir().string());
 
-    std::string version_string = FormatFullVersion();
+    std::string build_type;
 #ifdef DEBUG
-    version_string += " (debug build)";
+    build_type = "debug build";
 #else
-    version_string += " (release build)";
+    build_type = "release build";
 #endif
-    LogPrintf(PACKAGE_NAME " version %s\n", version_string);
+    LogPrintf(PACKAGE_NAME " version %s (%s - %s)", FormatFullVersion(), build_type, CLIENT_DATE);
 }
 
 
@@ -438,11 +428,16 @@ void ThreadAppInit2(ThreadHandlerPtr th)
 {
     // Make this thread recognisable
     RenameThread("grc-appinit2");
-    bGridcoinGUILoaded=false;
-    LogPrintf("Initializing GUI...");
+
+    bGridcoinCoreInitComplete = false;
+
+    LogPrintf("Initializing Core...");
+
     AppInit2(th);
-    LogPrintf("GUI Loaded...");
-    bGridcoinGUILoaded = true;
+
+    LogPrintf("Core Initialized...");
+
+    bGridcoinCoreInitComplete = true;
 }
 
 
@@ -743,9 +738,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 #endif
 
-    ShrinkDebugFile();
-    LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("Gridcoin version %s (%s)", FormatFullVersion(), CLIENT_DATE);
     LogPrintf("Using OpenSSL version %s", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
         LogPrintf("Startup time: %s", DateTimeStrFormat("%x %H:%M:%S",  GetAdjustedTime()));
@@ -767,15 +759,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         fprintf(stdout, "Gridcoin server starting\n");
 
     int64_t nStart;
-
-
-    // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
-    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
-
-    // TODO: Do we need this? It would require porting the Bitcoin signal handler.
-    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
-
 
     // ********************************************************* Step 5: verify database integrity
 
@@ -1191,6 +1174,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+
+    // Start the lightweight task scheduler thread
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // TODO: Do we need this? It would require porting the Bitcoin signal handler.
+    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
 
     scheduler.scheduleEvery([]{
         g_banman->DumpBanlist();

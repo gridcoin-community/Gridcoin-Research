@@ -70,7 +70,7 @@ bool BCLog::Logger::StartLogging()
 
         // Add newlines to the logfile to distinguish this execution from the
         // last one.
-        FileWriteStr("\n\n\n\n\n", m_fileout);
+        FileWriteStr("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n", m_fileout);
     }
 
     // dump buffered messages from before we opened the log
