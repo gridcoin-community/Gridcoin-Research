@@ -3603,8 +3603,8 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
     if (nIntervals < 5) return false;
 
 
-    // nTotalTime be negative because of the sort order of mScraperManifests, and nIntervals is protected against being zero by the
-    // above conditional.
+    // nTotalTime cannot be negative because of the sort order of mScraperManifests, and nIntervals is protected against being zero
+    // by the above conditional.
     nTotalTime = nEndTime - nBeginTime;
     nAvgTimeBetweenManifests = nTotalTime / nIntervals;
 
