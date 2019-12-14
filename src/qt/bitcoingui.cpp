@@ -1425,25 +1425,42 @@ void BitcoinGUI::timerfire()
 
 }
 
-QString BitcoinGUI::GetEstimatedTime(unsigned int nEstimateTime)
+QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
 {
     QString text;
-    if (nEstimateTime < 60)
+
+    if (!nEstimateTime)
     {
-            text = tr("%n second(s)", "", nEstimateTime);
+        text = tr("undefined");
+
+        return text;
     }
-        else if (nEstimateTime < 60*60)
+
+    // Start with 1/yr
+    double frequency = 3600.0 * 24.0 * 365.0 / nEstimateTime;
+    QString unit = tr("year");
+    double next_unit_threshold = 1.0;
+
+    if (frequency >= next_unit_threshold * 12.0)
     {
-            text = tr("%n minute(s)", "", nEstimateTime/60);
+        frequency /= 12.0;
+        unit = tr("month");
     }
-        else if (nEstimateTime < 24*60*60)
+
+    if (frequency >= next_unit_threshold * 30.0)
     {
-            text = tr("%n hour(s)", "", nEstimateTime/(60*60));
+        frequency /= 30.0;
+        unit = tr("day");
     }
-        else
+
+    if (frequency >= next_unit_threshold * 24.0)
     {
-            text = tr("%n day(s)", "", nEstimateTime/(60*60*24));
+        frequency /= 24.0;
+        unit = tr("hour");
     }
+
+    text = tr("%1 times per %2").arg(QString(RoundToString(frequency, 2).c_str())).arg(unit);
+
     return text;
 }
 
@@ -1454,7 +1471,7 @@ void BitcoinGUI::updateStakingIcon()
     uint64_t nWeight, nLastInterval;
     std::string ReasonNotStaking;
     { LOCK(MinerStatus.lock);
-        // not using real weight to not break calculation - fixed - but retaining GRC units for instead of internal weight units.
+        // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
         nWeight = MinerStatus.WeightSum / 80.0;
         nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
         ReasonNotStaking = MinerStatus.ReasonNotStaking;
@@ -1462,13 +1479,12 @@ void BitcoinGUI::updateStakingIcon()
 
     uint64_t nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
     bool staking = nLastInterval && nWeight;
-    uint64_t nEstimateTime = GetEstimatedTimetoStake();
 
     if (staking)
     {
-        QString text = GetEstimatedTime(nEstimateTime);
+        QString text = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> time to earn reward is %3.")
+        labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
                                      .arg(nWeight).arg(nNetworkWeight).arg(text));
     }
     else

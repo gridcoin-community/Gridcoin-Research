@@ -232,7 +232,7 @@ private slots:
     void updateStakingIcon();
     void updateScraperIcon(int scraperEventtype, int status);
 
-	QString GetEstimatedTime(unsigned int nEstimateTime);
+	QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
 	void timerfire();
 
