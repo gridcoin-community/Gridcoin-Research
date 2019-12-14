@@ -109,6 +109,21 @@ namespace GUIUtil
         int size_threshold;
     };
 
+    /** Qt event filter that suppress context help question mark for all windows.
+     */
+
+    class WindowContextHelpButtonHintFilter : public QObject
+    {
+        Q_OBJECT
+
+    public:
+        explicit WindowContextHelpButtonHintFilter(QObject *parent = 0);
+
+    protected:
+        bool eventFilter(QObject *obj, QEvent *evt);
+    };
+
+
     bool GetStartOnSystemStartup();
     bool SetStartOnSystemStartup(bool fAutoStart);
 
