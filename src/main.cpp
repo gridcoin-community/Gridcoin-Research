@@ -5267,13 +5267,24 @@ bool ProcessMessages(CNode* pfrom)
     return fOk;
 }
 
+// Note: this function requires a lock on cs_main before calling. (See below comments.)
 bool SendMessages(CNode* pto, bool fSendTrickle)
 {
+    // Some comments and TODOs in order...
+    // 1. This function never returns anything but true... (try to find a return other than true).
+    // 2. The try lock inside this function causes a potential deadlock due to a lock order reversal in main.
+    // 3. The reason for the interior lock is vacated by 1. So the below is commented out, and moved to
+    //    the ThreadMessageHandler2 in net.cpp.
+    // 4. We need to research why we never return false at all, and subordinately, why we never consume
+    //    the value of this function.
+
+    /*
     // Treat lock failures as send successes in case the caller disconnects
     // the node based on the return value.
     TRY_LOCK(cs_main, lockMain);
     if(!lockMain)
         return true;
+    */
 
     // Don't send anything until we get their version message
     if (pto->nVersion == 0)
