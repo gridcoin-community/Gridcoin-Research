@@ -97,6 +97,17 @@ bool AppInit(int argc, char* argv[])
         /** Check here config file incase TestNet is set there and not in mapArgs **/
         ReadConfigFile(mapArgs, mapMultiArgs);
 
+        // Command-line RPC  - Test this - ensure single commands execute and exit please.
+        for (int i = 1; i < argc; i++)
+            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
+                fCommandLine = true;
+
+        if (fCommandLine)
+        {
+            int ret = CommandLineRPC(argc, argv);
+            exit(ret);
+        }
+
         // Initialize logging as early as possible.
         InitLogging();
 
@@ -136,17 +147,6 @@ bool AppInit(int argc, char* argv[])
         }
 
         LogPrintf("AppInit");
-
-        // Command-line RPC  - Test this - ensure single commands execute and exit please.
-        for (int i = 1; i < argc; i++)
-            if (!IsSwitchChar(argv[i][0]) && !boost::algorithm::istarts_with(argv[i], "gridcoinresearchd"))
-                fCommandLine = true;
-
-        if (fCommandLine)
-        {
-            int ret = CommandLineRPC(argc, argv);
-            exit(ret);
-        }
 
         fRet = AppInit2(threads);
     }
