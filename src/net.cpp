@@ -2072,9 +2072,23 @@ void ThreadMessageHandler2(void* parg)
 
             // Send messages
             {
-                TRY_LOCK(pnode->cs_vSend, lockSend);
-                if (lockSend)
-                    SendMessages(pnode, pnode == pnodeTrickle);
+                // Having the outer cs_main TRY_LOCK here with reversed logic
+                // has the same effect as the original TRY_LOCK in Sendmessages,
+                // which was if !lockMain return true immediately. (Note
+                // that the return value of SendMessages was never consumed.
+                // and this is the only place in the code where SendMessages is
+                // called. This is to eliminate a potential deadlock condition
+                // due to logic order reversal.
+
+                TRY_LOCK(cs_main, lockMain);
+                if(lockMain)
+                {
+                    TRY_LOCK(pnode->cs_vSend, lockSend);
+                    if (lockSend)
+                    {
+                        SendMessages(pnode, pnode == pnodeTrickle);
+                    }
+                }
             }
 
             if (fShutdown)
