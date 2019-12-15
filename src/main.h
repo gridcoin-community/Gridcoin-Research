@@ -260,10 +260,12 @@ bool IsSuperBlock(CBlockIndex* pIndex);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetAverageDifficulty(unsigned int nPoSInterval = 40);
-//double GetEstimatedTimetoStake(unsigned int nPoSInterval = 40, double dConfidence = 0.8);
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
-double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = 0.8);
+// The defeult confidence is 1-1/e which is the mean for the geometric distribution.
+
+const double DEFAULT_ETTS_CONFIDENCE = 0.632120558829;
+double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 
 NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
