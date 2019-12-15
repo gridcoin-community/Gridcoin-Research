@@ -357,6 +357,25 @@ bool ToolTipToRichTextFilter::eventFilter(QObject *obj, QEvent *evt)
     return QObject::eventFilter(obj, evt);
 }
 
+WindowContextHelpButtonHintFilter::WindowContextHelpButtonHintFilter(QObject *parent) :
+    QObject(parent)
+{
+
+}
+
+bool WindowContextHelpButtonHintFilter::eventFilter (QObject *obj, QEvent *event)
+{
+    if (event->type () == QEvent::Create)
+    {
+        if (obj->isWidgetType ())
+        {
+            auto w = static_cast<QWidget *> (obj);
+            w->setWindowFlags (w->windowFlags () & (~Qt::WindowContextHelpButtonHint));
+        }
+    }
+    return QObject::eventFilter (obj, event);
+}
+
 #ifdef WIN32
 boost::filesystem::path static StartupShortcutPath()
 {

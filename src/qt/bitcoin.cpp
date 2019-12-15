@@ -329,6 +329,9 @@ int StartGridcoinQt(int argc, char *argv[])
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
 
+    // Install global event filter that suppresses help context question mark
+    app.installEventFilter(new GUIUtil::WindowContextHelpButtonHintFilter(&app));
+
 #if QT_VERSION < 0x050000
     // Install qDebug() message handler to route to debug.log
     qInstallMsgHandler(DebugMessageHandler);
