@@ -353,7 +353,6 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_a_research_reward_claim)
         << claim.m_block_subsidy
         << claim.m_research_subsidy
         << claim.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash;
 
@@ -563,7 +562,6 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher)
         << claim.m_block_subsidy
         << claim.m_research_subsidy
         << claim.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash;
 
@@ -593,7 +591,6 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
         << claim.m_block_subsidy
         << claim.m_research_subsidy
         << claim.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash
         << claim.m_superblock;
@@ -621,7 +618,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
         << expected.m_block_subsidy
         << expected.m_research_subsidy
         << expected.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(expected.m_magnitude_unit)
         << expected.m_signature
         << expected.m_quorum_hash;
 
@@ -637,7 +633,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
 
     BOOST_CHECK(claim.m_research_subsidy == expected.m_research_subsidy);
     BOOST_CHECK(claim.m_magnitude == expected.m_magnitude);
-    BOOST_CHECK(claim.m_magnitude_unit == expected.m_magnitude_unit);
+    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
@@ -661,7 +657,6 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
         << expected.m_block_subsidy
         << expected.m_research_subsidy
         << expected.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(expected.m_magnitude_unit)
         << expected.m_signature
         << expected.m_quorum_hash
         << expected.m_superblock;
@@ -678,7 +673,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
 
     BOOST_CHECK(claim.m_research_subsidy == expected.m_research_subsidy);
     BOOST_CHECK(claim.m_magnitude == expected.m_magnitude);
-    BOOST_CHECK(claim.m_magnitude_unit == expected.m_magnitude_unit);
+    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
