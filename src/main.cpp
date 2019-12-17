@@ -2495,8 +2495,20 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             int64_t pos_owed,
             int64_t fees)
     {
-        // Round to Halfords to avoid epsilon errors.
-        int64_t max_owed = roundint64((double)por_owed * 1.25) + pos_owed + fees;
+        int64_t max_owed;
+
+        if (nVersion < 11) {
+            // Blocks version 10 and below represented rewards as floating-point
+            // values and needed to accomodate floating-point errors so we'll do
+            // the same rounding on the floating-point representations:
+            //
+            double subsidy = ((double)por_owed / COIN) * 1.25;
+            subsidy += (double)pos_owed / COIN;
+
+            max_owed = roundint64(subsidy * COIN) + fees;
+        } else {
+            max_owed = por_owed + pos_owed + fees;
+        }
 
         // Block version 9 and below allowed a 1 GRC wiggle.
         if(nVersion < 10)
