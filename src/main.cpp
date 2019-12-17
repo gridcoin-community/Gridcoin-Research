@@ -2598,8 +2598,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
             //sometimes be slightly smaller than we calculate here due to the
             //RA timespan increasing.  So we will allow for time shift before
             //rejecting the block.
-            double nDrift = claim.m_research_subsidy * .15;
-            if (nDrift < 10 * COIN) nDrift = 10 * COIN;
+            int64_t nDrift = 0;
+
+            if (pindex->nVersion <= 10) {
+                nDrift = claim.m_research_subsidy * .15;
+                if (nDrift < 10 * COIN) nDrift = 10 * COIN;
+            }
 
             if ((claim.TotalSubsidy() + nDrift) < nStakeRewardWithoutFees)
             {
