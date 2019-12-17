@@ -1045,12 +1045,12 @@ bool CreateGridcoinReward(CBlock &blocknew, uint64_t &nCoinAge, CBlockIndex* pin
     }
 
     LogPrintf(
-        "CreateGridcoinReward: for %s mint %f magnitude %d Research %f, Interest %f ",
+        "CreateGridcoinReward: for %s mint %s magnitude %d Research %s, Interest %s",
         claim.m_mining_id.ToString(),
-        CoinToDouble(nReward),
+        FormatMoney(nReward),
         claim.m_magnitude,
-        claim.m_research_subsidy,
-        claim.m_block_subsidy);
+        FormatMoney(claim.m_research_subsidy),
+        FormatMoney(claim.m_block_subsidy));
 
     blocknew.vtx[1].vout[1].nValue += nReward;
 

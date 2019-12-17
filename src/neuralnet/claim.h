@@ -182,7 +182,8 @@ struct Claim
     std::string m_organization; // MiningCPID::Organization
 
     //!
-    //! \brief The GRC value minted for generating the new block.
+    //! \brief The value minted for generating the new block in units of
+    //! 1/100000000 GRC.
     //!
     //! Below the switch to constant block rewards, this field contains the
     //! amount of accrued interest claimed by the staking node. It contains
@@ -193,7 +194,7 @@ struct Claim
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    double m_block_subsidy; // MiningCPID::InterestSubsidy
+    int64_t m_block_subsidy; // MiningCPID::InterestSubsidy
 
     //!
     //! \brief Hash of the block below the block containing this claim.
@@ -210,7 +211,8 @@ struct Claim
     uint256 m_last_block_hash; // MiningCPID::lastblockhash
 
     //!
-    //! \brief The GRC value of the research rewards claimed by the node.
+    //! \brief The value of the research rewards claimed by the node in units
+    //! of 1/100000000 GRC.
     //!
     //! Contains a value of zero for investor claims.
     //!
@@ -219,7 +221,7 @@ struct Claim
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    double m_research_subsidy; // MiningCPID::ResearchSubsidy
+    int64_t m_research_subsidy; // MiningCPID::ResearchSubsidy
 
     //!
     //! \brief The researcher magnitude value from the superblock at the time
@@ -333,7 +335,7 @@ struct Claim
     //! \return The sum of the block subsidy and research subsidy declared in
     //! the claim.
     //!
-    double TotalSubsidy() const;
+    int64_t TotalSubsidy() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.
@@ -402,12 +404,12 @@ struct Claim
         READWRITE(LIMITED_STRING(m_client_version, MAX_VERSION_SIZE));
         READWRITE(LIMITED_STRING(m_organization, MAX_ORGANIZATION_SIZE));
 
-        READWRITE(VarDouble<COIN_PLACES>(m_block_subsidy));
+        READWRITE(m_block_subsidy);
 
         // Serialize research-related fields only for researcher claims:
         //
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
-            READWRITE(VarDouble<COIN_PLACES>(m_research_subsidy));
+            READWRITE(m_research_subsidy);
             READWRITE(m_magnitude);
             READWRITE(VarDouble<MAG_UNIT_PLACES>(m_magnitude_unit));
 

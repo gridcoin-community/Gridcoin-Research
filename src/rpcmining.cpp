@@ -123,7 +123,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexBest);
 
         obj.pushKV("Magnitude Unit", calc->MagnitudeUnit());
-        obj.pushKV("BoincRewardPending", FormatMoney(calc->Accrual(account)));
+        obj.pushKV("BoincRewardPending", ValueFromAmount(calc->Accrual(account)));
     }
 
     std::string current_poll = "Poll: ";

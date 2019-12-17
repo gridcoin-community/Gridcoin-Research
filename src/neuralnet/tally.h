@@ -40,7 +40,7 @@ struct BlockIndexHeightComparator
 class ResearchAccount
 {
 public:
-    double m_total_research_subsidy;     //!< Total lifetime research paid.
+    int64_t m_total_research_subsidy;    //!< Total lifetime research paid.
 
     uint16_t m_magnitude;                //!< Current magnitude in superblock.
     uint32_t m_total_magnitude;          //!< Total lifetime magnitude sum.
@@ -59,7 +59,7 @@ public:
     //!
     //! \return \c true if no block contains a reward for the account's CPID.
     //!
-    double IsNew() const;
+    bool IsNew() const;
 
     //!
     //! \brief Get a pointer to the last block with a research reward earned by
@@ -210,16 +210,16 @@ public:
     //! \brief Get the average daily research payment over the lifetime of the
     //! account.
     //!
-    //! \return Average research payment in units of GRC (not COIN).
+    //! \return Average research payment in units of 1/100000000 GRC.
     //!
-    virtual double PaymentPerDay(const ResearchAccount& account) const = 0;
+    virtual int64_t PaymentPerDay(const ResearchAccount& account) const = 0;
 
     //!
     //! \brief Get the average daily research payment limit of the account.
     //!
-    //! \return Payment per day limit in units of GRC (not COIN).
+    //! \return Payment per day limit in units of 1/100000000 GRC.
     //!
-    virtual double PaymentPerDayLimit(const ResearchAccount& account) const = 0;
+    virtual int64_t PaymentPerDayLimit(const ResearchAccount& account) const = 0;
 
     //!
     //! \brief Determine whether the account exceeded the daily payment limit.
@@ -233,15 +233,15 @@ public:
     //! \brief Get the expected daily research payment for the account based on
     //! the current network payment conditions.
     //!
-    //! \return Expected daily payment in units of GRC (not COIN).
+    //! \return Expected daily payment in units of 1/100000000 GRC.
     //!
-    virtual double ExpectedDaily(const ResearchAccount& account) const = 0;
+    virtual int64_t ExpectedDaily(const ResearchAccount& account) const = 0;
 
     //!
     //! \brief Get the pending research reward for the account without applying
     //! any limit rules.
     //!
-    //! \return Pending payment in units of COIN.
+    //! \return Pending payment in units of 1/100000000 GRC.
     //!
     virtual int64_t RawAccrual(const ResearchAccount& account) const = 0;
 
@@ -249,7 +249,7 @@ public:
     //! \brief Get the pending research reward for the account as expected by
     //! the network.
     //!
-    //! \return Pending payment in units of COIN.
+    //! \return Pending payment in units of 1/100000000 GRC.
     //!
     virtual int64_t Accrual(const ResearchAccount& account) const = 0;
 };
@@ -285,7 +285,7 @@ public:
     //!
     //! \param payment_time Time of payment to calculate rewards for.
     //!
-    //! \return Max reward allowed in units of COIN.
+    //! \return Max reward allowed in units of 1/100000000 GRC.
     //!
     static int64_t MaxReward(const int64_t payment_time);
 
@@ -321,16 +321,16 @@ public:
     //! \brief Get the average daily research payment over the lifetime of the
     //! account.
     //!
-    //! \return Average research payment in units of GRC (not COIN).
+    //! \return Average research payment in units of 1/100000000 GRC.
     //!
-    double PaymentPerDay(const ResearchAccount& account) const override;
+    int64_t PaymentPerDay(const ResearchAccount& account) const override;
 
     //!
     //! \brief Get the average daily research payment limit of the account.
     //!
-    //! \return Payment per day limit in units of GRC (not COIN).
+    //! \return Payment per day limit in units of 1/100000000 GRC.
     //!
-    double PaymentPerDayLimit(const ResearchAccount& account) const override;
+    int64_t PaymentPerDayLimit(const ResearchAccount& account) const override;
 
     //!
     //! \brief Determine whether the account exceeded the daily payment limit.
@@ -344,15 +344,15 @@ public:
     //! \brief Get the expected daily research payment for the account based on
     //! the current network payment conditions.
     //!
-    //! \return Expected daily payment in units of GRC (not COIN).
+    //! \return Expected daily payment in units of 1/100000000 GRC.
     //!
-    double ExpectedDaily(const ResearchAccount& account) const override;
+    int64_t ExpectedDaily(const ResearchAccount& account) const override;
 
     //!
     //! \brief Get the pending research reward for the account without applying
     //! any limit rules.
     //!
-    //! \return Pending payment in units of COIN.
+    //! \return Pending payment in units of 1/100000000 GRC.
     //!
     int64_t RawAccrual(const ResearchAccount& account) const override;
 
@@ -360,7 +360,7 @@ public:
     //! \brief Get the pending research reward for the account as expected by
     //! the network.
     //!
-    //! \return Pending payment in units of COIN.
+    //! \return Pending payment in units of 1/100000000 GRC.
     //!
     int64_t Accrual(const ResearchAccount& account) const override;
 
@@ -409,9 +409,9 @@ public:
     //!
     //! \param payment_time Determines the max reward based on a schedule.
     //!
-    //! \return Maximum daily emission in units of GRC (not COIN).
+    //! \return Maximum daily emission in units of 1/100000000 GRC.
     //!
-    static double MaxEmission(const int64_t payment_time);
+    static int64_t MaxEmission(const int64_t payment_time);
 
     //!
     //! \brief Get the current network magnitude unit.
