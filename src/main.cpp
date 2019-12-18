@@ -2588,8 +2588,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                 vtx[1].GetHash().ToString().substr(0,10));
         }
 
-        //9-3-2015
-        int64_t nMaxResearchAgeReward = NN::ResearchAgeComputer::MaxReward(nTime);
+        // TODO: determine max reward from accrual computer implementation:
+        int64_t nMaxResearchAgeReward = 12750 * COIN;
 
         if (claim.m_research_subsidy > nMaxResearchAgeReward)
             return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %s, vs calculated=%s )",
