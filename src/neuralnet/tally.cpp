@@ -6,7 +6,6 @@
 #include "neuralnet/tally.h"
 #include "util.h"
 
-#include <deque>
 #include <unordered_map>
 
 using namespace NN;
@@ -482,115 +481,6 @@ ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
 NetworkTally g_network_tally;       //!< Tracks two-week network averages.
 
 } // Anonymous namespace
-
-// -----------------------------------------------------------------------------
-// Class: ResearchAccount
-// -----------------------------------------------------------------------------
-
-ResearchAccount::ResearchAccount()
-    : m_total_research_subsidy(0)
-    , m_magnitude(0)
-    , m_total_magnitude(0)
-    , m_accuracy(0)
-    , m_first_block_ptr(nullptr)
-    , m_last_block_ptr(nullptr)
-{
-}
-
-bool ResearchAccount::IsNew() const
-{
-    return m_first_block_ptr == nullptr;
-}
-
-BlockPtrOption ResearchAccount::FirstRewardBlock() const
-{
-    if (m_first_block_ptr == nullptr) {
-        return boost::none;
-    }
-
-    return BlockPtrOption(m_first_block_ptr);
-}
-
-uint256 ResearchAccount::FirstRewardBlockHash() const
-{
-    if (const BlockPtrOption pindex = FirstRewardBlock()) {
-        return (*pindex)->GetBlockHash();
-    }
-
-    return uint256();
-}
-
-uint32_t ResearchAccount::FirstRewardHeight() const
-{
-    if (const BlockPtrOption pindex = FirstRewardBlock()) {
-        return (*pindex)->nHeight;
-    }
-
-    return 0;
-}
-
-int64_t ResearchAccount::FirstRewardTime() const
-{
-    if (const BlockPtrOption pindex = FirstRewardBlock()) {
-        return (*pindex)->nTime;
-    }
-
-    return 0;
-}
-
-BlockPtrOption ResearchAccount::LastRewardBlock() const
-{
-    if (m_last_block_ptr == nullptr) {
-        return boost::none;
-    }
-
-    return BlockPtrOption(m_last_block_ptr);
-}
-
-uint256 ResearchAccount::LastRewardBlockHash() const
-{
-    if (const BlockPtrOption pindex = LastRewardBlock()) {
-        return (*pindex)->GetBlockHash();
-    }
-
-    return uint256();
-}
-
-uint32_t ResearchAccount::LastRewardHeight() const
-{
-    if (const BlockPtrOption pindex = LastRewardBlock()) {
-        return (*pindex)->nHeight;
-    }
-
-    return 0;
-}
-
-int64_t ResearchAccount::LastRewardTime() const
-{
-    if (const BlockPtrOption pindex = LastRewardBlock()) {
-        return (*pindex)->nTime;
-    }
-
-    return 0;
-}
-
-uint16_t ResearchAccount::LastRewardMagnitude() const
-{
-    if (const BlockPtrOption pindex = LastRewardBlock()) {
-        return (*pindex)->nMagnitude;
-    }
-
-    return 0;
-}
-
-double ResearchAccount::AverageLifetimeMagnitude() const
-{
-    if (m_accuracy <= 0) {
-        return 0.0;
-    }
-
-    return (double)m_total_magnitude / m_accuracy;
-}
 
 // -----------------------------------------------------------------------------
 // Class: ResearchAgeComputer

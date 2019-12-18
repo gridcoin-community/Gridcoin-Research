@@ -93,6 +93,7 @@ GRIDCOIN_CORE_H = \
 	main.h \
 	miner.h \
 	mruset.h \
+	neuralnet/account.h \
 	neuralnet/claim.h \
 	neuralnet/cpid.h \
 	neuralnet/project.h \
