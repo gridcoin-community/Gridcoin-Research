@@ -2408,7 +2408,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
 }
 
-bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, bool fReorganizing)
+bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
     if (!CheckBlock("ConnectBlock",pindex->pprev->nHeight, 395*COIN, !fJustCheck, !fJustCheck, false,false))
@@ -2633,7 +2633,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         pindex->nIsSuperBlock = claim.ContainsSuperblock() ? 1 : 0;
     }
 
-    if (pindex->nHeight > nGrandfather && !fReorganizing)
+    if (pindex->nHeight > nGrandfather)
     {
         int64_t out_research_subsidy = 0;
         int64_t out_block_subsidy = 0;
@@ -3047,7 +3047,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             assert(pindex->GetBlockHash()==block.GetHash(true));
             assert(pindex->pprev == pindexBest);
-            if (!block.ConnectBlock(txdb, pindex, false, false))
+            if (!block.ConnectBlock(txdb, pindex, false))
             {
                 txdb.TxnAbort();
                 error("ReorganizeChain: ConnectBlock %s failed", hash.ToString().c_str());
