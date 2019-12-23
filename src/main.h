@@ -252,8 +252,8 @@ int64_t GetProofOfStakeReward(
     const NN::MiningId mining_id,
     int64_t nTime,
     const CBlockIndex* pindexLast,
-    int64_t& OUT_POR,
-    int64_t& OUT_INTEREST);
+    int64_t& out_research_subsidy,
+    int64_t& out_block_subsidy);
 
 bool OutOfSyncByAge();
 bool IsSuperBlock(CBlockIndex* pIndex);

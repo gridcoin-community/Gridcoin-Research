@@ -1654,12 +1654,12 @@ int64_t GetProofOfStakeReward(
     const NN::MiningId mining_id,
     int64_t nTime,
     const CBlockIndex* pindexLast,
-    int64_t& OUT_POR,
-    int64_t& OUT_INTEREST)
+    int64_t& out_research_subsidy,
+    int64_t& out_block_subsidy)
 {
     // Research Age Subsidy - PROD
-    OUT_POR = 0;
-    OUT_INTEREST = 0;
+    out_research_subsidy = 0;
+    out_block_subsidy = 0;
 
     // Tally doesn't calculate research age averages until block version 9:
     //
@@ -1668,27 +1668,27 @@ int64_t GetProofOfStakeReward(
             const NN::ResearchAccount& account = NN::Tally::GetAccount(*cpid);
             const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexLast);
 
-            OUT_POR = calc->Accrual(account);
+            out_research_subsidy = calc->Accrual(account);
         }
     }
 
     /* Constant Block Reward */
     if (pindexLast->nVersion>=10)
-        OUT_INTEREST = GetConstantBlockReward(pindexLast);
+        out_block_subsidy = GetConstantBlockReward(pindexLast);
     else
-        OUT_INTEREST = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
+        out_block_subsidy = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 
-    int64_t nSubsidy = OUT_INTEREST + OUT_POR;
+    int64_t nSubsidy = out_block_subsidy + out_research_subsidy;
 
     if (fDebug10 || GetBoolArg("-printcreation"))
     {
-        LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " OUT_POR=%s",
-            FormatMoney(nSubsidy), nCoinAge, FormatMoney(OUT_POR));
+        LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " research=%s",
+            FormatMoney(nSubsidy), nCoinAge, FormatMoney(out_research_subsidy));
     }
 
     int64_t nTotalSubsidy = nSubsidy + nFees;
     // This rule does not apply in v11
-    if (OUT_POR > 1 && pindexLast->nVersion <= 10)
+    if (out_research_subsidy > 1 && pindexLast->nVersion <= 10)
     {
         std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
         if (sTotalSubsidy.length() > 7)
@@ -1797,8 +1797,8 @@ bool CheckProofOfResearch(
         return true;
 
     //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-    int64_t OUT_POR = 0;
-    int64_t OUT_INTEREST = 0;
+    int64_t out_research_subsidy = 0;
+    int64_t out_block_subsidy = 0;
     int64_t nCoinAge = 0;
     int64_t nFees = 0;
 
@@ -1821,34 +1821,34 @@ bool CheckProofOfResearch(
     }
 
     int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, block.nTime,
-                                                        pindexBest, OUT_POR, OUT_INTEREST);
+                                                        pindexBest, out_research_subsidy, out_block_subsidy);
 
     if(!IsV9Enabled_Tally(pindexPrev->nHeight))
     {
-        if (claim.m_research_subsidy > ((OUT_POR * 1.25) + COIN))
+        if (claim.m_research_subsidy > ((out_research_subsidy * 1.25) + COIN))
         {
             if (fDebug) {
                 LogPrintf("CheckProofOfResearch: Researchers Reward Pays too much : Retallying : "
-                    "claimed %s vs calculated StakeReward %s for CPID %s",
+                    "claimed %s vs calculated %s for CPID %s",
                     FormatMoney(claim.m_research_subsidy),
-                    FormatMoney(OUT_POR),
+                    FormatMoney(out_research_subsidy),
                     claim.m_mining_id.ToString());
             }
 
             NN::Tally::LegacyRecount(pindexBest);
             nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, block.nTime,
-                                                        pindexBest, OUT_POR, OUT_INTEREST);
+                                                        pindexBest, out_research_subsidy, out_block_subsidy);
         }
     }
     (void)nCalculatedResearch;
 
-    if (claim.m_research_subsidy > ((OUT_POR * 1.25) + COIN))
+    if (claim.m_research_subsidy > ((out_research_subsidy * 1.25) + COIN))
     {
         if(fDebug) LogPrintf("CheckProofOfResearch: pHistorical was %s", GetHistoricalMagnitude(claim.m_mining_id)->GetBlockHash().GetHex());
 
         return block.DoS(10, error("CheckProofOfResearch: Researchers Reward Pays too much : claimed %s vs calculated %s for CPID %s",
             FormatMoney(claim.m_research_subsidy),
-            FormatMoney(OUT_POR),
+            FormatMoney(out_research_subsidy),
             claim.m_mining_id.ToString()));
     }
 
@@ -2533,19 +2533,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
         if (!claim.HasResearchReward() && nStakeReward > 1)
         {
-            int64_t OUT_POR = 0;
-            int64_t OUT_INTEREST_OWED = 0;
+            int64_t out_research_subsidy = 0;
+            int64_t out_block_subsidy = 0;
             int64_t calculatedResearchReward = GetProofOfStakeReward(
                         nCoinAge, nFees, claim.m_mining_id, nTime,
-                        pindex, OUT_POR, OUT_INTEREST_OWED);
+                        pindex, out_research_subsidy, out_block_subsidy);
 
-            if(!is_claim_valid(nStakeReward, 0, OUT_INTEREST_OWED, nFees))
+            if(!is_claim_valid(nStakeReward, 0, out_block_subsidy, nFees))
             {
                 if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
                     return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : claimed %s vs calculated %s, Interest %s, Fees %s",
                         FormatMoney(nStakeReward),
                         FormatMoney(calculatedResearchReward),
-                        FormatMoney(OUT_INTEREST_OWED),
+                        FormatMoney(out_block_subsidy),
                         FormatMoney(nFees)));
 
                 LogPrintf("WARNING: ignoring invalid invalid claims on block %s", pindex->GetBlockHash().ToString());
@@ -2584,12 +2584,12 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
     if (pindex->nHeight > nGrandfather && !fReorganizing)
     {
-        int64_t OUT_POR = 0;
-        int64_t OUT_INTEREST = 0;
+        int64_t out_research_subsidy = 0;
+        int64_t out_block_subsidy = 0;
 
         // ResearchAge 1:
         GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, nTime,
-                              pindex, OUT_POR, OUT_INTEREST);
+                              pindex, out_research_subsidy, out_block_subsidy);
 
         if (claim.HasResearchReward())
         {
@@ -2607,15 +2607,15 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
 
             if ((claim.TotalSubsidy() + nDrift) < nStakeRewardWithoutFees)
             {
-                return DoS(20, error("ConnectBlock[] : Researchers Interest %s + Research %s + TimeDrift %s = %s exceeded by StakeRewardWithoutFees %s, with mint %s, Out_Interest %s, OUT_POR %s, Fees %s, for CPID %s",
+                return DoS(20, error("ConnectBlock[] : Researchers Interest %s + Research %s + TimeDrift %s = %s exceeded by StakeRewardWithoutFees %s, with mint %s, stake %s, research %s, Fees %s, for CPID %s",
                      FormatMoney(claim.m_block_subsidy),
                      FormatMoney(claim.m_research_subsidy),
                      FormatMoney(nDrift),
                      FormatMoney(claim.TotalSubsidy() + nDrift),
                      FormatMoney(nStakeRewardWithoutFees),
                      FormatMoney(pindex->nMint),
-                     FormatMoney(OUT_INTEREST),
-                     FormatMoney(OUT_POR),
+                     FormatMoney(out_block_subsidy),
+                     FormatMoney(out_research_subsidy),
                      FormatMoney(nFees),
                      claim.m_mining_id.ToString()));
             }
@@ -2647,40 +2647,40 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
                     else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
                 }
 
-                if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
+                if(!is_claim_valid(nStakeReward, out_research_subsidy, out_block_subsidy, nFees))
                 {
                     GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, nTime,
-                                          pindex, OUT_POR, OUT_INTEREST);
+                                          pindex, out_research_subsidy, out_block_subsidy);
 
-                    if (fTestNet && pindex->nVersion <= 9 && !is_claim_valid(nStakeReward, 0, OUT_INTEREST, nFees))
+                    if (fTestNet && pindex->nVersion <= 9 && !is_claim_valid(nStakeReward, 0, out_block_subsidy, nFees))
                     {
                         // Testnet contains some blocks with bad interest claims that were previously masked
                         // by research age short 10-block-span pending accrual:
-                        LogPrintf("WARNING ConnectBlock[ResearchAge] : Interest Pays too much : bad block ignored: Interest %s and Research %s and StakeReward %s, OUT_POR %s, with Out_Interest %s for CPID %s",
+                        LogPrintf("WARNING ConnectBlock[ResearchAge] : Interest Pays too much : bad block ignored: Interest %s and Research %s and StakeReward %s, research %s, with stake %s for CPID %s",
                             FormatMoney(claim.m_block_subsidy),
                             FormatMoney(claim.m_research_subsidy),
                             FormatMoney(nStakeReward),
-                            FormatMoney(OUT_POR),
-                            FormatMoney(OUT_INTEREST),
+                            FormatMoney(out_research_subsidy),
+                            FormatMoney(out_block_subsidy),
                             claim.m_mining_id.ToString());
                     }
-                    else if(!is_claim_valid(nStakeReward, OUT_POR, OUT_INTEREST, nFees))
+                    else if(!is_claim_valid(nStakeReward, out_research_subsidy, out_block_subsidy, nFees))
                     {
                         if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
-                            return DoS(10, error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %s and Research %s and StakeReward %s, OUT_POR %s, with OUT_INTEREST %s for CPID %s",
+                            return DoS(10, error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %s and Research %s and StakeReward %s, research %s, with stake %s for CPID %s",
                                 FormatMoney(claim.m_block_subsidy),
                                 FormatMoney(claim.m_research_subsidy),
                                 FormatMoney(nStakeReward),
-                                FormatMoney(OUT_POR),
-                                FormatMoney(OUT_INTEREST),
+                                FormatMoney(out_research_subsidy),
+                                FormatMoney(out_block_subsidy),
                                 claim.m_mining_id.ToString()));
                         else
-                            LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %s and Research %s and StakeReward %s, OUT_POR %s, with OUT_INTEREST %s for CPID %s",
+                            LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %s and Research %s and StakeReward %s, research %s, with stake %s for CPID %s",
                                 FormatMoney(claim.m_block_subsidy),
                                 FormatMoney(claim.m_research_subsidy),
                                 FormatMoney(nStakeReward),
-                                FormatMoney(OUT_POR),
-                                FormatMoney(OUT_INTEREST),
+                                FormatMoney(out_research_subsidy),
+                                FormatMoney(out_block_subsidy),
                                 claim.m_mining_id.ToString());
                     }
                 }
