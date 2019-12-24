@@ -253,8 +253,9 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     UniValue obj(UniValue::VOBJ);
-    obj.pushKV("proof-of-work",        GetDifficulty());
-    obj.pushKV("proof-of-stake",       GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    obj.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    obj.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+
     return obj;
 }
 
@@ -1786,13 +1787,13 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ), diff(UniValue::VOBJ);
 
-    res.pushKV("blocks",          nBestHeight);
-    res.pushKV("moneysupply",     ValueFromAmount(pindexBest->nMoneySupply));
-    diff.pushKV("proof-of-work",  GetDifficulty());
-    diff.pushKV("proof-of-stake", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
-    res.pushKV("difficulty",      diff);
-    res.pushKV("testnet",         fTestNet);
-    res.pushKV("errors",          GetWarnings("statusbar"));
+    res.pushKV("blocks", nBestHeight);
+    res.pushKV("moneysupply", ValueFromAmount(pindexBest->nMoneySupply));
+    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
+    res.pushKV("difficulty", diff);
+    res.pushKV("testnet", fTestNet);
+    res.pushKV("errors", GetWarnings("statusbar"));
 
     return res;
 }
