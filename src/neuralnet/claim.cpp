@@ -135,14 +135,14 @@ Claim Claim::Parse(const std::string& claim, int block_version)
                     c.m_quorum_hash = QuorumHash::Parse(s[21]);
         case 20: //c.OrganizationKey = s[20];
         case 19: c.m_organization = std::move(s[19]);
-        case 18: c.m_block_subsidy = RoundFromString(s[18], subsidy_places);
+        case 18: c.m_block_subsidy = RoundFromString(s[18], subsidy_places) * COIN;
         case 17: //c.m_last_block_hash = uint256(s[17]);
         case 16: c.m_quorum_address = s[16];
         case 15: c.m_magnitude = RoundFromString(s[15], 0);
         case 14: //c.cpidv2 = s[14];
         case 13: //c.m_rsa_weight = RoundFromString(s[13], 0);
         case 12: //c.m_last_payment_time = RoundFromString(s[12], 0);
-        case 11: c.m_research_subsidy = RoundFromString(s[11], 2);
+        case 11: c.m_research_subsidy = RoundFromString(s[11], 2) * COIN;
         case 10: c.m_client_version = std::move(s[10]);
         case  9: //c.NetworkRAC = RoundFromString(s[9], 0);
         case  8:
@@ -187,7 +187,7 @@ bool Claim::ContainsSuperblock() const
     return m_superblock.WellFormed();
 }
 
-double Claim::TotalSubsidy() const
+int64_t Claim::TotalSubsidy() const
 {
     return m_block_subsidy + m_research_subsidy;
 }
@@ -245,14 +245,14 @@ std::string Claim::ToString(const int block_version) const
         + delim // + RoundToString(mcpid.nonce, 0)
         + delim // + RoundToString(mcpid.NetworkRAC, 0)
         + delim + m_client_version
-        + delim + RoundToString(m_research_subsidy, subsidy_places)
+        + delim + RoundToString((double)m_research_subsidy / COIN, subsidy_places)
         + delim // + std::to_string(m_last_payment_time)
         + delim // + std::to_string(m_rsa_weight)
         + delim // + mcpid.cpidv2
         + delim + std::to_string(m_magnitude)
         + delim + m_quorum_address
         + delim + BlockHashToString(m_last_block_hash)
-        + delim + RoundToString(m_block_subsidy, subsidy_places)
+        + delim + RoundToString((double)m_block_subsidy / COIN, subsidy_places)
         + delim + m_organization
         + delim // + mcpid.OrganizationKey
         + delim + m_quorum_hash.ToString()

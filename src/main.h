@@ -252,8 +252,8 @@ int64_t GetProofOfStakeReward(
     const NN::MiningId mining_id,
     int64_t nTime,
     const CBlockIndex* pindexLast,
-    double& OUT_POR,
-    double& OUT_INTEREST);
+    int64_t& out_research_subsidy,
+    int64_t& out_block_subsidy);
 
 bool OutOfSyncByAge();
 bool IsSuperBlock(CBlockIndex* pIndex);
@@ -1344,8 +1344,8 @@ public:
     int64_t nMoneySupply;
     // Gridcoin (7-11-2015) Add new Accrual Fields to block index
     NN::Cpid cpid;
-    double nResearchSubsidy;
-    double nInterestSubsidy;
+    int64_t nResearchSubsidy;
+    int64_t nInterestSubsidy;
     double nMagnitude;
     // Indicators (9-13-2015)
     unsigned int nIsSuperBlock;
@@ -1653,14 +1653,19 @@ public:
 
         //7-11-2015 - Gridcoin - New Accrual Fields (Note, Removing the determinstic block number to make this happen all the time):
         std::string cpid_hex = GetMiningId().ToString();
+        double research_subsidy_grc = nResearchSubsidy / (double)COIN;
+        double interest_subsidy_grc = nInterestSubsidy / (double)COIN;
+
         READWRITE(cpid_hex);
+        READWRITE(research_subsidy_grc);
+        READWRITE(interest_subsidy_grc);
 
         if (ser_action.ForRead()) {
             const_cast<CDiskBlockIndex*>(this)->SetMiningId(NN::MiningId::Parse(cpid_hex));
+            nResearchSubsidy = research_subsidy_grc * COIN;
+            nInterestSubsidy = interest_subsidy_grc * COIN;
         }
 
-        READWRITE(nResearchSubsidy);
-        READWRITE(nInterestSubsidy);
         READWRITE(nMagnitude);
 
         //9-13-2015 - Indicators

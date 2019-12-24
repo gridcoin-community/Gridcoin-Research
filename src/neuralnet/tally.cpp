@@ -116,7 +116,7 @@ public:
     //!
     void Reset(double research_subsidy)
     {
-        m_two_week_research_subsidy = research_subsidy;
+        m_two_week_research_subsidy = research_subsidy / COIN;
     }
 
     //!
@@ -336,14 +336,14 @@ public:
         return 0.0;
     }
 
-    double PaymentPerDay(const ResearchAccount& account) const override
+    int64_t PaymentPerDay(const ResearchAccount& account) const override
     {
-        return 0.0;
+        return 0;
     }
 
-    double PaymentPerDayLimit(const ResearchAccount& account) const override
+    int64_t PaymentPerDayLimit(const ResearchAccount& account) const override
     {
-        return 0.0;
+        return 0;
     }
 
     bool ExceededRecentPayments(const ResearchAccount& account) const override
@@ -351,19 +351,19 @@ public:
         return false;
     }
 
-    double ExpectedDaily(const ResearchAccount& account) const override
+    int64_t ExpectedDaily(const ResearchAccount& account) const override
     {
-        return 0.0;
+        return 0;
     }
 
     int64_t RawAccrual(const ResearchAccount& account) const override
     {
-        return 0.0;
+        return 0;
     }
 
     int64_t Accrual(const ResearchAccount& account) const override
     {
-        return 0.0;
+        return 0;
     }
 }; // NullAccrualComputer
 
@@ -420,9 +420,9 @@ public:
         return account.m_magnitude;
     }
 
-    double PaymentPerDayLimit(const ResearchAccount& account) const override
+    int64_t PaymentPerDayLimit(const ResearchAccount& account) const override
     {
-        return 500.00;
+        return 500 * COIN;
     }
 
     bool ExceededRecentPayments(const ResearchAccount& account) const override
@@ -430,14 +430,14 @@ public:
         return RawAccrual(account) > PaymentPerDayLimit(account) * COIN;
     }
 
-    double ExpectedDaily(const ResearchAccount& account) const override
+    int64_t ExpectedDaily(const ResearchAccount& account) const override
     {
-        return account.m_magnitude * m_magnitude_unit;
+        return account.m_magnitude * m_magnitude_unit * COIN;
     }
 
     int64_t RawAccrual(const ResearchAccount& account) const override
     {
-        return AccrualDays(account) * account.m_magnitude * m_magnitude_unit * COIN;
+        return AccrualDays(account) * ExpectedDaily(account);
     }
 
     int64_t Accrual(const ResearchAccount& account) const override
@@ -466,7 +466,7 @@ public:
             return 500 * COIN;
         }
 
-        return (accrual * COIN) + (1 * COIN);
+        return accrual + (1 * COIN);
     }
 
 private:
@@ -494,7 +494,7 @@ ResearchAccount::ResearchAccount()
 {
 }
 
-double ResearchAccount::IsNew() const
+bool ResearchAccount::IsNew() const
 {
     return m_last_block_ptr == nullptr;
 }
@@ -622,7 +622,7 @@ double ResearchAgeComputer::AverageMagnitude(const ResearchAccount& account) con
     return total_mag / 3;
 }
 
-double ResearchAgeComputer::PaymentPerDay(const ResearchAccount& account) const
+int64_t ResearchAgeComputer::PaymentPerDay(const ResearchAccount& account) const
 {
     if (account.IsNew()) {
         return 0;
@@ -639,9 +639,9 @@ double ResearchAgeComputer::PaymentPerDay(const ResearchAccount& account) const
     return account.m_total_research_subsidy / (lifetime_days + 0.01);
 }
 
-double ResearchAgeComputer::PaymentPerDayLimit(const ResearchAccount& account) const
+int64_t ResearchAgeComputer::PaymentPerDayLimit(const ResearchAccount& account) const
 {
-    return account.AverageLifetimeMagnitude() * m_magnitude_unit * 5;
+    return account.AverageLifetimeMagnitude() * m_magnitude_unit * COIN * 5;
 }
 
 bool ResearchAgeComputer::ExceededRecentPayments(const ResearchAccount& account) const
@@ -649,9 +649,9 @@ bool ResearchAgeComputer::ExceededRecentPayments(const ResearchAccount& account)
     return PaymentPerDay(account) > PaymentPerDayLimit(account);
 }
 
-double ResearchAgeComputer::ExpectedDaily(const ResearchAccount& account) const
+int64_t ResearchAgeComputer::ExpectedDaily(const ResearchAccount& account) const
 {
-    return account.m_magnitude * m_magnitude_unit;
+    return account.m_magnitude * m_magnitude_unit * COIN;
 }
 
 int64_t ResearchAgeComputer::RawAccrual(const ResearchAccount& account) const
@@ -674,7 +674,7 @@ int64_t ResearchAgeComputer::Accrual(const ResearchAccount& account) const
     if (AccrualBlockSpan(account) < 10) {
         if (fDebug) {
             LogPrintf(
-                "Accrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %f)",
+                "Accrual: %s Block Span less than 10 (%d) -> Accrual 0 (would be %s)",
                 m_cpid.ToString(),
                 AccrualBlockSpan(account),
                 FormatMoney(RawAccrual(account)));
@@ -691,17 +691,17 @@ int64_t ResearchAgeComputer::Accrual(const ResearchAccount& account) const
     if (ExceededRecentPayments(account)) {
         if (fDebug) {
             LogPrintf("Accrual: %s RA-PPD, "
-                "PPD=%f, "
+                "PPD=%s, "
                 "unit=%f, "
                 "RAAvgMag=%f, "
-                "RASubsidy=%f, "
-                "RALowLockTime=%d "
-                "-> Accrual 0 (would be %f)",
+                "RASubsidy=%s, "
+                "RALowLockTime=%" PRIu64 " "
+                "-> Accrual 0 (would be %s)",
                 m_cpid.ToString(),
-                PaymentPerDay(account),
+                FormatMoney(PaymentPerDay(account)),
                 m_magnitude_unit,
                 account.AverageLifetimeMagnitude(),
-                account.m_total_research_subsidy,
+                FormatMoney(account.m_total_research_subsidy),
                 account.m_first_payment_time,
                 FormatMoney(RawAccrual(account)));
         }
@@ -739,9 +739,9 @@ CBlockIndex* Tally::FindTrigger(CBlockIndex* pindex)
     return pindex;
 }
 
-double Tally::MaxEmission(const int64_t payment_time)
+int64_t Tally::MaxEmission(const int64_t payment_time)
 {
-    return NetworkTally::MaxEmission(payment_time);
+    return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
 double Tally::GetMagnitudeUnit(const int64_t payment_time)
@@ -863,7 +863,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
         g_researcher_tally.ApplySuperblock(current);
     }
 
-    double total_research_subsidy = 0;
+    int64_t total_research_subsidy = 0;
 
     while (pindex->nHeight > min_depth) {
         if (!pindex->pprev) {

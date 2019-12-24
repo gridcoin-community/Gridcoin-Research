@@ -11,94 +11,6 @@ class CPubKey;
 
 namespace NN {
 //!
-//! \brief Converts non-negative \c double values to unsigned integers and
-//! serializes or deserializes them using variable-width integer encoding.
-//!
-//! The Claim class contains \c double type floating-point values to match
-//! the representation expected by legacy code. To improve the portability
-//! of these values, we serialize these values as unsigned integers scaled
-//! to store the appropriate accuracy.
-//!
-//! \tparam scale Accuracy of the floating-point number to store.
-//!
-template<size_t scale>
-class ClaimDoubleCompressor
-{
-public:
-    //!
-    //! \brief Wrap the supplied double reference for serialization operations.
-    //!
-    //! \param value The double value to serialize as a variable-width integer.
-    //!
-    explicit ClaimDoubleCompressor(double& value) : m_value(value)
-    {
-    }
-
-    //!
-    //! \brief Wrap the supplied double reference for serialization operations.
-    //!
-    //! \param value The double value to serialize as a variable-width integer.
-    //!
-    explicit ClaimDoubleCompressor(const double& value) : m_value(REF(value))
-    {
-    }
-
-    //!
-    //! \brief Serialize the object to the provided stream.
-    //!
-    //! \param stream   The output stream.
-    //!
-    template<typename Stream>
-    void Serialize(Stream& stream) const
-    {
-        VARINT(GetUnsigned()).Serialize(stream);
-    }
-
-    //!
-    //! \brief Deserialize the object from the provided stream.
-    //!
-    //! \param stream   The input stream.
-    //!
-    template<typename Stream>
-    void Unserialize(Stream& stream)
-    {
-        uint64_t packed;
-
-        VARINT(packed).Unserialize(stream);
-
-        m_value = static_cast<double>(packed) / std::pow(10, scale);
-    }
-
-private:
-    double& m_value; //!< The target value to serialize or deserialize.
-
-    //!
-    //! \brief Calculate the integer value of the wrapped floating-point number.
-    //!
-    //! \return Unsigned integer representation scaled to the specified number
-    //! of places (half-even rounding).
-    //!
-    uint64_t GetUnsigned() const
-    {
-        // Claim objects should never contain negative floating-point values
-        // at serialization time.
-        //
-        assert(m_value >= 0);
-
-        // Round using the same mode as RoundToString() (half-even; banker's
-        // rounding) to match the behavior:
-        //
-        return std::nearbyint(m_value * std::pow(10, scale));
-    }
-}; // ClaimDoubleCompressor
-
-//!
-//! \brief An alias for use within \c SerializationOp blocks.
-//!
-template<size_t scale>
-using VarDouble = ClaimDoubleCompressor<scale>;
-
-//!
 //! \brief Contains the reward claim context embedded in each generated block.
 //!
 //! Gridcoin blocks require some auxiliary information about claimed rewards to
@@ -182,7 +94,8 @@ struct Claim
     std::string m_organization; // MiningCPID::Organization
 
     //!
-    //! \brief The GRC value minted for generating the new block.
+    //! \brief The value minted for generating the new block in units of
+    //! 1/100000000 GRC.
     //!
     //! Below the switch to constant block rewards, this field contains the
     //! amount of accrued interest claimed by the staking node. It contains
@@ -193,7 +106,7 @@ struct Claim
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    double m_block_subsidy; // MiningCPID::InterestSubsidy
+    int64_t m_block_subsidy; // MiningCPID::InterestSubsidy
 
     //!
     //! \brief Hash of the block below the block containing this claim.
@@ -210,7 +123,8 @@ struct Claim
     uint256 m_last_block_hash; // MiningCPID::lastblockhash
 
     //!
-    //! \brief The GRC value of the research rewards claimed by the node.
+    //! \brief The value of the research rewards claimed by the node in units
+    //! of 1/100000000 GRC.
     //!
     //! Contains a value of zero for investor claims.
     //!
@@ -219,7 +133,7 @@ struct Claim
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    double m_research_subsidy; // MiningCPID::ResearchSubsidy
+    int64_t m_research_subsidy; // MiningCPID::ResearchSubsidy
 
     //!
     //! \brief The researcher magnitude value from the superblock at the time
@@ -333,7 +247,7 @@ struct Claim
     //! \return The sum of the block subsidy and research subsidy declared in
     //! the claim.
     //!
-    double TotalSubsidy() const;
+    int64_t TotalSubsidy() const;
 
     //!
     //! \brief Sign an instance that claims research rewards.
@@ -402,14 +316,13 @@ struct Claim
         READWRITE(LIMITED_STRING(m_client_version, MAX_VERSION_SIZE));
         READWRITE(LIMITED_STRING(m_organization, MAX_ORGANIZATION_SIZE));
 
-        READWRITE(VarDouble<COIN_PLACES>(m_block_subsidy));
+        READWRITE(m_block_subsidy);
 
         // Serialize research-related fields only for researcher claims:
         //
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
-            READWRITE(VarDouble<COIN_PLACES>(m_research_subsidy));
+            READWRITE(m_research_subsidy);
             READWRITE(m_magnitude);
-            READWRITE(VarDouble<MAG_UNIT_PLACES>(m_magnitude_unit));
 
             READWRITE(m_signature);
         }

@@ -20,7 +20,7 @@ NN::Claim GetInvestorClaim()
     claim.m_mining_id = NN::MiningId::ForInvestor();
     claim.m_client_version = "v4.0.4.6-unk";
     claim.m_organization = "Example Org";
-    claim.m_block_subsidy = 10.0;
+    claim.m_block_subsidy = 10.0 * COIN;
 
     return claim;
 }
@@ -37,8 +37,8 @@ NN::Claim GetResearcherClaim()
     claim.m_mining_id = NN::Cpid::Parse("00010203040506070809101112131415");
     claim.m_client_version = "v4.0.4.6-unk";
     claim.m_organization = "Example Org";
-    claim.m_block_subsidy = 10.0;
-    claim.m_research_subsidy = 123.456;
+    claim.m_block_subsidy = 10.0 * COIN;
+    claim.m_research_subsidy = 123.456 * COIN;
     claim.m_magnitude = 123;
     claim.m_magnitude_unit = 0.123456;
     claim.m_signature = {
@@ -107,10 +107,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_claim)
     BOOST_CHECK(claim.m_client_version.empty() == true);
     BOOST_CHECK(claim.m_organization.empty() == true);
 
-    BOOST_CHECK(claim.m_block_subsidy == 0.0);
+    BOOST_CHECK(claim.m_block_subsidy == 0);
 
     BOOST_CHECK(claim.m_magnitude == 0);
-    BOOST_CHECK(claim.m_research_subsidy == 0.0);
+    BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude_unit == 0.0);
 
     BOOST_CHECK(claim.m_signature.empty() == true);
@@ -129,10 +129,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
     BOOST_CHECK(claim.m_client_version.empty() == true);
     BOOST_CHECK(claim.m_organization.empty() == true);
 
-    BOOST_CHECK(claim.m_block_subsidy == 0.0);
+    BOOST_CHECK(claim.m_block_subsidy == 0);
 
     BOOST_CHECK(claim.m_magnitude == 0);
-    BOOST_CHECK(claim.m_research_subsidy == 0.0);
+    BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude_unit == 0.0);
 
     BOOST_CHECK(claim.m_signature.empty() == true);
@@ -207,10 +207,10 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_boincblock_string_for_researcher)
     BOOST_CHECK(claim.m_client_version == "v4.0.4.6-unk");
     BOOST_CHECK(claim.m_organization == "Example Org");
 
-    BOOST_CHECK(claim.m_block_subsidy == 10.0);
+    BOOST_CHECK(claim.m_block_subsidy == 10.0 * COIN);
 
     BOOST_CHECK(claim.m_magnitude == 123);
-    BOOST_CHECK(claim.m_research_subsidy == 47.25);
+    BOOST_CHECK(claim.m_research_subsidy == 47.25 * COIN);
     BOOST_CHECK(claim.m_magnitude_unit == 0.123456);
 
     BOOST_CHECK(claim.m_signature == signature);
@@ -253,12 +253,11 @@ BOOST_AUTO_TEST_CASE(it_sums_the_block_and_research_reward_subsidies)
 {
     NN::Claim claim = GetInvestorClaim();
 
-    BOOST_CHECK(claim.TotalSubsidy() == 10.0);
+    BOOST_CHECK(claim.TotalSubsidy() == 10.0 * COIN);
 
     claim = GetResearcherClaim();
 
-    // Legacy double format of subsidy fields can cause floating-point errors:
-    BOOST_CHECK(std::round(claim.TotalSubsidy() * 1000.0) / 1000.0 == 133.456);
+    BOOST_CHECK(claim.TotalSubsidy() == 13345600000);
 }
 
 BOOST_AUTO_TEST_CASE(it_signs_itself_with_the_supplied_beacon_private_key)
@@ -335,7 +334,7 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_an_investor_claim)
         << claim.m_mining_id
         << claim.m_client_version
         << claim.m_organization
-        << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
+        << claim.m_block_subsidy
         << claim.m_quorum_hash;
 
     BOOST_CHECK(claim.GetHash() == hasher.GetHash());
@@ -351,10 +350,9 @@ BOOST_AUTO_TEST_CASE(it_generates_a_hash_for_a_research_reward_claim)
         << claim.m_mining_id
         << claim.m_client_version
         << claim.m_organization
-        << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
-        << NN::VarDouble<COIN_PLACES>(claim.m_research_subsidy)
+        << claim.m_block_subsidy
+        << claim.m_research_subsidy
         << claim.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash;
 
@@ -388,8 +386,8 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_boincblock_string)
     claim.m_mining_id = cpid;
     claim.m_client_version = "v4.0.4.6-unk";
     claim.m_organization = "Example Org";
-    claim.m_block_subsidy = 10.0;
-    claim.m_research_subsidy = 47.24638888;
+    claim.m_block_subsidy = 10.0 * COIN;
+    claim.m_research_subsidy = 47.24638888 * COIN;
     claim.m_magnitude = 123;
     claim.m_magnitude_unit = 0.123456;
     claim.m_signature = signature;
@@ -442,7 +440,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor)
         << claim.m_mining_id
         << claim.m_client_version
         << claim.m_organization
-        << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
+        << claim.m_block_subsidy
         << claim.m_quorum_hash;
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
@@ -468,7 +466,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_investor_with_superblock)
         << claim.m_mining_id
         << claim.m_client_version
         << claim.m_organization
-        << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
+        << claim.m_block_subsidy
         << claim.m_quorum_hash
         << claim.m_superblock;
 
@@ -491,7 +489,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
         << expected.m_mining_id
         << expected.m_client_version
         << expected.m_organization
-        << NN::VarDouble<COIN_PLACES>(expected.m_block_subsidy)
+        << expected.m_block_subsidy
         << expected.m_quorum_hash;
 
     NN::Claim claim;
@@ -505,7 +503,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
     BOOST_CHECK(claim.m_block_subsidy == expected.m_block_subsidy);
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
 
-    BOOST_CHECK(claim.m_research_subsidy == 0.0);
+    BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude == 0.0);
     BOOST_CHECK(claim.m_magnitude_unit == 0.0);
     BOOST_CHECK(claim.m_signature.empty() == true);
@@ -526,7 +524,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
         << expected.m_mining_id
         << expected.m_client_version
         << expected.m_organization
-        << NN::VarDouble<COIN_PLACES>(expected.m_block_subsidy)
+        << expected.m_block_subsidy
         << expected.m_quorum_hash
         << expected.m_superblock;
 
@@ -545,7 +543,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
     BOOST_CHECK(claim.m_superblock.WellFormed() == true);
     BOOST_CHECK(claim.m_superblock.GetHash() == expected.m_superblock.GetHash());
 
-    BOOST_CHECK(claim.m_research_subsidy == 0.0);
+    BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude == 0.0);
     BOOST_CHECK(claim.m_magnitude_unit == 0.0);
     BOOST_CHECK(claim.m_signature.empty() == true);
@@ -561,10 +559,9 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher)
         << claim.m_mining_id
         << claim.m_client_version
         << claim.m_organization
-        << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
-        << NN::VarDouble<COIN_PLACES>(claim.m_research_subsidy)
+        << claim.m_block_subsidy
+        << claim.m_research_subsidy
         << claim.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash;
 
@@ -591,10 +588,9 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_researcher_with_superblock)
         << claim.m_mining_id
         << claim.m_client_version
         << claim.m_organization
-        << NN::VarDouble<COIN_PLACES>(claim.m_block_subsidy)
-        << NN::VarDouble<COIN_PLACES>(claim.m_research_subsidy)
+        << claim.m_block_subsidy
+        << claim.m_research_subsidy
         << claim.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(claim.m_magnitude_unit)
         << claim.m_signature
         << claim.m_quorum_hash
         << claim.m_superblock;
@@ -619,10 +615,9 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
         << expected.m_mining_id
         << expected.m_client_version
         << expected.m_organization
-        << NN::VarDouble<COIN_PLACES>(expected.m_block_subsidy)
-        << NN::VarDouble<COIN_PLACES>(expected.m_research_subsidy)
+        << expected.m_block_subsidy
+        << expected.m_research_subsidy
         << expected.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(expected.m_magnitude_unit)
         << expected.m_signature
         << expected.m_quorum_hash;
 
@@ -638,7 +633,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
 
     BOOST_CHECK(claim.m_research_subsidy == expected.m_research_subsidy);
     BOOST_CHECK(claim.m_magnitude == expected.m_magnitude);
-    BOOST_CHECK(claim.m_magnitude_unit == expected.m_magnitude_unit);
+    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
@@ -659,10 +654,9 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
         << expected.m_mining_id
         << expected.m_client_version
         << expected.m_organization
-        << NN::VarDouble<COIN_PLACES>(expected.m_block_subsidy)
-        << NN::VarDouble<COIN_PLACES>(expected.m_research_subsidy)
+        << expected.m_block_subsidy
+        << expected.m_research_subsidy
         << expected.m_magnitude
-        << NN::VarDouble<NN::Claim::MAG_UNIT_PLACES>(expected.m_magnitude_unit)
         << expected.m_signature
         << expected.m_quorum_hash
         << expected.m_superblock;
@@ -679,7 +673,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
 
     BOOST_CHECK(claim.m_research_subsidy == expected.m_research_subsidy);
     BOOST_CHECK(claim.m_magnitude == expected.m_magnitude);
-    BOOST_CHECK(claim.m_magnitude_unit == expected.m_magnitude_unit);
+    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);

@@ -80,8 +80,8 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     std::map<std::string,long> c_cpid;
     std::map<std::string,long> c_org;
     int64_t researchcount = 0;
-    double researchtotal = 0;
-    double interesttotal = 0;
+    int64_t researchtotal = 0;
+    int64_t interesttotal = 0;
     int64_t minttotal = 0;
     //int64_t stakeinputtotal = 0;
     int64_t poscount = 0;
@@ -146,7 +146,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
         c_version[claim.m_client_version]++;
         researchtotal += claim.m_research_subsidy;
         interesttotal += claim.m_block_subsidy;
-        researchcount += (claim.m_research_subsidy > 0.001);
+        researchcount += (claim.m_research_subsidy > 10000); // 0.001
         minttotal+=cur->nMint;
         unsigned sizeblock = GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION);
         size_min_blk=std::min(size_min_blk,sizeblock);
@@ -182,9 +182,9 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     {
         UniValue result(UniValue::VOBJ);
         result.pushKV("block", blockcount);
-        result.pushKV("research", researchtotal);
-        result.pushKV("interest", interesttotal);
-        result.pushKV("mint", minttotal/(double)COIN);
+        result.pushKV("research", ValueFromAmount(researchtotal));
+        result.pushKV("interest", ValueFromAmount(interesttotal));
+        result.pushKV("mint", ValueFromAmount(minttotal));
         //result.pushKV("stake_input", stakeinputtotal/(double)COIN);
         result.pushKV("blocksizek", size_sum_blk/(double)1024);
         result.pushKV("posdiff", diff_sum);
@@ -192,9 +192,9 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     }
     {
         UniValue result(UniValue::VOBJ);
-        result.pushKV("research", researchtotal/(double)researchcount);
-        result.pushKV("interest", interesttotal/(double)blockcount);
-        result.pushKV("mint", (minttotal/(double)blockcount)/(double)COIN);
+        result.pushKV("research", ValueFromAmount(researchtotal / researchcount));
+        result.pushKV("interest", ValueFromAmount(interesttotal / blockcount));
+        result.pushKV("mint", ValueFromAmount(minttotal / blockcount));
         //result.pushKV("stake_input", (stakeinputtotal/(double)poscount)/(double)COIN);
         result.pushKV("spacing_sec", ((double)l_last_time-(double)l_first_time)/(double)blockcount);
         result.pushKV("block_per_day", ((double)blockcount*86400.0)/((double)l_last_time-(double)l_first_time));
@@ -675,8 +675,8 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             if(detail>=2 && detail<20)
             {
                 line+="<|>"+cur->GetMiningId().ToString()
-                    + "<|>"+RoundToString(cur->nResearchSubsidy,4)
-                    + "<|>"+RoundToString(cur->nInterestSubsidy,4);
+                    + "<|>"+FormatMoney(cur->nResearchSubsidy)
+                    + "<|>"+FormatMoney(cur->nInterestSubsidy);
             }
         }
         else
@@ -688,8 +688,8 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             result2.pushKV("iscontract", (bool)cur->nIsContract );
             result2.pushKV("ismodifier", (bool)cur->GeneratedStakeModifier() );
             result2.pushKV("cpid", cur->GetMiningId().ToString() );
-            result2.pushKV("research", cur->nResearchSubsidy );
-            result2.pushKV("interest", cur->nInterestSubsidy );
+            result2.pushKV("research", ValueFromAmount(cur->nResearchSubsidy));
+            result2.pushKV("interest", ValueFromAmount(cur->nInterestSubsidy));
             result2.pushKV("magnitude", cur->nMagnitude );
         }
 

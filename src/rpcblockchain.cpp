@@ -122,9 +122,9 @@ UniValue ClaimToJson(const NN::Claim& claim)
     json.pushKV("client_version", claim.m_client_version);
     json.pushKV("organization", claim.m_organization);
 
-    json.pushKV("block_subsidy", claim.m_block_subsidy);
+    json.pushKV("block_subsidy", ValueFromAmount(claim.m_block_subsidy));
 
-    json.pushKV("research_subsidy", claim.m_research_subsidy);
+    json.pushKV("research_subsidy", ValueFromAmount(claim.m_research_subsidy));
     json.pushKV("magnitude", claim.m_magnitude);
     json.pushKV("magnitude_unit", claim.m_magnitude_unit);
 
@@ -180,7 +180,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     result.pushKV("height", blockindex->nHeight);
     result.pushKV("version", block.nVersion);
     result.pushKV("merkleroot", block.hashMerkleRoot.GetHex());
-    result.pushKV("mint", CoinToDouble(blockindex->nMint));
+    result.pushKV("mint", ValueFromAmount(blockindex->nMint));
     result.pushKV("MoneySupply", blockindex->nMoneySupply);
     result.pushKV("time", block.GetBlockTime());
     result.pushKV("nonce", (uint64_t)block.nNonce);
@@ -760,7 +760,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     res.pushKV("Rain By Magnitude",  "Sent");
     res.pushKV("TXID", wtx.GetHash().GetHex());
     res.pushKV("Rain Amount Sent", dTotalAmount);
-    res.pushKV("TX Fee", ((double)nFeeRequired) / COIN);
+    res.pushKV("TX Fee", ValueFromAmount(nFeeRequired));
     res.pushKV("# of Recipients", (uint64_t)vecSend.size());
 
     if (!sMessage.empty())
@@ -1003,7 +1003,7 @@ UniValue lifetime(const UniValue& params, bool fHelp)
             break;
 
         if (pindex->GetMiningId() == *cpid && (pindex->nResearchSubsidy > 0))
-            res.pushKV(ToString(pindex->nHeight), RoundToString(pindex->nResearchSubsidy, 2));
+            res.pushKV(ToString(pindex->nHeight), ValueFromAmount(pindex->nResearchSubsidy));
     }
     //8-14-2015
     const NN::ResearchAccount account = NN::Tally::GetAccount(*cpid);
@@ -1517,8 +1517,8 @@ UniValue network(const UniValue& params, bool fHelp)
     const double money_supply = pindexBest->nMoneySupply;
     const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
-    double two_week_block_subsidy = 0;
-    double two_week_research_subsidy = 0;
+    int64_t two_week_block_subsidy = 0;
+    int64_t two_week_research_subsidy = 0;
 
     for (const CBlockIndex* pindex = pindexBest;
         pindex && pindex->nTime > two_weeks_ago;
@@ -1531,14 +1531,14 @@ UniValue network(const UniValue& params, bool fHelp)
     res.pushKV("total_magnitude", (int)superblock->m_cpids.TotalMagnitude());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(now));
-    res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy * COIN));
-    res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy * COIN / 14));
-    res.pushKV("research_paid_daily_limit", ValueFromAmount(NN::Tally::MaxEmission(now) * COIN));
-    res.pushKV("stake_paid_two_weeks", ValueFromAmount(two_week_block_subsidy * COIN));
-    res.pushKV("stake_paid_daily_average", ValueFromAmount(two_week_block_subsidy * COIN / 14));
+    res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
+    res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy / 14));
+    res.pushKV("research_paid_daily_limit", ValueFromAmount(NN::Tally::MaxEmission(now)));
+    res.pushKV("stake_paid_two_weeks", ValueFromAmount(two_week_block_subsidy));
+    res.pushKV("stake_paid_daily_average", ValueFromAmount(two_week_block_subsidy / 14));
     res.pushKV("total_money_supply", ValueFromAmount(money_supply));
     res.pushKV("network_interest_percent", money_supply > 0
-        ? (two_week_block_subsidy / 14) * 365 / (money_supply / COIN)
+        ? (two_week_block_subsidy / 14) * 365 / money_supply
         : 0);
 
     return res;
@@ -1988,22 +1988,22 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Last Height Paid", (int)account.LastRewardHeight());
 
     json.pushKV("Accrual Days", calc->AccrualDays(account));
-    json.pushKV("Owed", FormatMoney(calc->Accrual(account)));
+    json.pushKV("Owed", ValueFromAmount(calc->Accrual(account)));
 
     if (fDebug) {
-        json.pushKV("Owed (raw)", FormatMoney(calc->RawAccrual(account)));
+        json.pushKV("Owed (raw)", ValueFromAmount(calc->RawAccrual(account)));
     }
 
-    json.pushKV("Expected Earnings (14 days)", calc->ExpectedDaily(account) * 14);
-    json.pushKV("Expected Earnings (Daily)", calc->ExpectedDaily(account));
+    json.pushKV("Expected Earnings (14 days)", ValueFromAmount(calc->ExpectedDaily(account) * 14));
+    json.pushKV("Expected Earnings (Daily)", ValueFromAmount(calc->ExpectedDaily(account)));
 
-    json.pushKV("Lifetime Research Paid", account.m_total_research_subsidy);
+    json.pushKV("Lifetime Research Paid", ValueFromAmount(account.m_total_research_subsidy));
     json.pushKV("Lifetime Magnitude Sum", (int)account.m_total_magnitude);
     json.pushKV("Lifetime Magnitude Average", account.AverageLifetimeMagnitude());
     json.pushKV("Lifetime Payments", (int)account.m_accuracy);
 
-    json.pushKV("Lifetime Payments Per Day", calc->PaymentPerDay(account));
-    json.pushKV("Lifetime Payments Per Day Limit", calc->PaymentPerDayLimit(account));
+    json.pushKV("Lifetime Payments Per Day", ValueFromAmount(calc->PaymentPerDay(account)));
+    json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit(account)));
 
     return json;
 }
