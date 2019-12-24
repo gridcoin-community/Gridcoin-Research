@@ -2574,8 +2574,17 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     if (IsProofOfStake() && pindex->nHeight > nGrandfather)
     {
         // ppcoin: coin stake tx earns reward instead of paying fee
-        if (!vtx[1].GetCoinAge(txdb, nCoinAge))
-            return error("ConnectBlock[] : %s unable to get coin age for coinstake", vtx[1].GetHash().ToString().substr(0,10).c_str());
+        //
+        // With block version 10, Gridcoin switched to constant block rewards
+        // that do not depend on coin age, so we can avoid reading the blocks
+        // and transactions from the disk. The CheckProofOfStake*() functions
+        // of the kernel verify the transaction timestamp and that the staked
+        // inputs exist in the main chain.
+        //
+        if (pindex->nVersion <= 9 && !vtx[1].GetCoinAge(txdb, nCoinAge)) {
+            return error("ConnectBlock[] : %s unable to get coin age for coinstake",
+                vtx[1].GetHash().ToString().substr(0,10));
+        }
 
         //9-3-2015
         int64_t nMaxResearchAgeReward = NN::ResearchAgeComputer::MaxReward(nTime);
@@ -3202,28 +3211,6 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
     if (fDebug && GetBoolArg("-printcoinage"))
         LogPrintf("coin age bnCoinDay=%s", bnCoinDay.ToString());
     nCoinAge = bnCoinDay.getuint64();
-    return true;
-}
-
-// ppcoin: total coin age spent in block, in the unit of coin-days.
-bool CBlock::GetCoinAge(uint64_t& nCoinAge) const
-{
-    nCoinAge = 0;
-
-    CTxDB txdb("r");
-    for (auto const& tx : vtx)
-    {
-        uint64_t nTxCoinAge;
-        if (tx.GetCoinAge(txdb, nTxCoinAge))
-            nCoinAge += nTxCoinAge;
-        else
-            return false;
-    }
-
-    if (nCoinAge == 0) // block coin age minimum 1 coin-day
-        nCoinAge = 1;
-    if (fDebug && GetBoolArg("-printcoinage"))
-        LogPrintf("block coin age total nCoinDays=%" PRIu64, nCoinAge);
     return true;
 }
 

@@ -15,7 +15,6 @@ struct CMinerStatus
     std::string ReasonNotStaking;
     uint64_t WeightSum,WeightMin,WeightMax;
     double ValueSum;
-    double CoinAgeSum;
     int Version;
     uint64_t CreatedCnt;
     uint64_t AcceptedCnt;
