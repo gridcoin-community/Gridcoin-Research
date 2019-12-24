@@ -16,7 +16,6 @@
 #include <QTimer>
 
 static const int64_t nClientStartupTime = GetTime();
-double GetDifficulty(const CBlockIndex* blockindex = NULL);
 extern ConvergedScraperStats ConvergedScraperStatsCache;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 

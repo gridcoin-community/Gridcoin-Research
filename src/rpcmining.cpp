@@ -33,19 +33,22 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     int64_t nTime = GetAdjustedTime();
     uint64_t nWeight = 0;
     double nNetworkWeight = 0;
-    double nDifficulty = 0;
+    double nCurrentDiff = 0;
+    double nTargetDiff = 0;
     uint64_t nExpectedTime = 0;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         pwalletMain->GetStakeWeight(nWeight);
 
         nNetworkWeight = GetEstimatedNetworkWeight();
-        nDifficulty = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+        nCurrentDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
+        nTargetDiff = GetBlockDifficulty(GetNextTargetRequired(pindexBest));
         nExpectedTime = GetEstimatedTimetoStake();
     }
 
     obj.pushKV("blocks", nBestHeight);
-    diff.pushKV("proof-of-stake", nDifficulty);
+    diff.pushKV("current", nCurrentDiff);
+    diff.pushKV("target", nTargetDiff);
 
     { LOCK(MinerStatus.lock);
         // not using real weigh to not break calculation

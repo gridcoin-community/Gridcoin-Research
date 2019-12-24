@@ -232,7 +232,6 @@ void PrintBlockTree();
 bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn);
-double GetBlockDifficulty(unsigned int nBits);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
 std::string GetCurrentOverviewTabPoll();
@@ -259,6 +258,8 @@ bool OutOfSyncByAge();
 bool IsSuperBlock(CBlockIndex* pIndex);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
+double GetDifficulty(const CBlockIndex* blockindex = NULL);
+double GetBlockDifficulty(unsigned int nBits);
 double GetAverageDifficulty(unsigned int nPoSInterval = 40);
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
 // GetAverageDifficulty(nPosInterval) = to dDiff here.

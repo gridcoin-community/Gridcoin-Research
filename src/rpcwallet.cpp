@@ -117,7 +117,8 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("proxy",         (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 
-    diff.pushKV("proof-of-stake", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    diff.pushKV("current", GetDifficulty(GetLastBlockIndex(pindexBest, true)));
+    diff.pushKV("target", GetBlockDifficulty(GetNextTargetRequired(pindexBest)));
     obj.pushKV("difficulty",    diff);
 
     obj.pushKV("testnet",       fTestNet);
@@ -385,7 +386,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     CWalletTx wtx;
     if (params.size() > 2 && !params[2].isNull() && !params[2].get_str().empty())
         wtx.mapValue["comment"] = params[2].get_str();
-    if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())        
+    if (params.size() > 3 && !params[3].isNull() && !params[3].get_str().empty())
         wtx.mapValue["to"]      = params[3].get_str();
     if (params.size() > 4 && !params[4].isNull() && !params[4].get_str().empty())
         wtx.hashBoinc += "<MESSAGE>" + MakeSafeMessage(params[4].get_str()) + "</MESSAGE>";
