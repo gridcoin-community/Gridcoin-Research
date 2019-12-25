@@ -2355,14 +2355,10 @@ void StartNode(void* parg)
     {
         LogPrintf("Scraper disabled.");
 
-        // If the neural network is specified to be disabled, do not enable housekeeping thread.
-        if (!GetBoolArg("-disablenn", false))
-        {
-            LogPrintf("NN housekeeping thread enabled.");
+        LogPrintf("NN housekeeping thread enabled.");
 
-            if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
-                LogPrintf("Error: createThread(NeuralNetwork) failed");
-        }
+        if (!netThreads->createThread(ThreadNeuralNetwork,NULL,"NeuralNetwork"))
+            LogPrintf("Error: createThread(NeuralNetwork) failed");
     }
 }
 
