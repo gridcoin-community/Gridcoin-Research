@@ -215,14 +215,12 @@ public:
             account.m_total_magnitude += pindex->nMagnitude;
         }
 
-        if (account.m_last_block_ptr == nullptr
-            || pindex->nHeight > account.m_last_block_ptr->nHeight)
-        {
+        if (account.m_first_block_ptr == nullptr) {
+            account.m_first_block_ptr = pindex;
             account.m_last_block_ptr = pindex;
-        }
-
-        if (pindex->nTime < account.m_first_payment_time) {
-            account.m_first_payment_time = pindex->nTime;
+        } else {
+            assert(pindex->nHeight > account.m_last_block_ptr->nHeight);
+            account.m_last_block_ptr = pindex;
         }
     }
 
@@ -238,14 +236,15 @@ public:
 
         assert(iter != m_researchers.end());
 
-        if (iter->second.m_accuracy == 1) {
+        ResearchAccount& account = iter->second;
+
+        assert(account.m_first_block_ptr != nullptr);
+        assert(pindex == account.m_last_block_ptr);
+
+        if (pindex == account.m_first_block_ptr) {
             m_researchers.erase(iter);
             return;
         }
-
-        ResearchAccount& account = iter->second;
-
-        assert(pindex == account.m_last_block_ptr);
 
         account.m_total_research_subsidy -= pindex->nResearchSubsidy;
 
@@ -493,14 +492,50 @@ ResearchAccount::ResearchAccount()
     , m_magnitude(0)
     , m_total_magnitude(0)
     , m_accuracy(0)
-    , m_first_payment_time(std::numeric_limits<uint64_t>::max())
+    , m_first_block_ptr(nullptr)
     , m_last_block_ptr(nullptr)
 {
 }
 
 bool ResearchAccount::IsNew() const
 {
-    return m_last_block_ptr == nullptr;
+    return m_first_block_ptr == nullptr;
+}
+
+BlockPtrOption ResearchAccount::FirstRewardBlock() const
+{
+    if (m_first_block_ptr == nullptr) {
+        return boost::none;
+    }
+
+    return BlockPtrOption(m_first_block_ptr);
+}
+
+uint256 ResearchAccount::FirstRewardBlockHash() const
+{
+    if (const BlockPtrOption pindex = FirstRewardBlock()) {
+        return (*pindex)->GetBlockHash();
+    }
+
+    return uint256();
+}
+
+uint32_t ResearchAccount::FirstRewardHeight() const
+{
+    if (const BlockPtrOption pindex = FirstRewardBlock()) {
+        return (*pindex)->nHeight;
+    }
+
+    return 0;
+}
+
+int64_t ResearchAccount::FirstRewardTime() const
+{
+    if (const BlockPtrOption pindex = FirstRewardBlock()) {
+        return (*pindex)->nTime;
+    }
+
+    return 0;
 }
 
 BlockPtrOption ResearchAccount::LastRewardBlock() const
@@ -632,7 +667,7 @@ int64_t ResearchAgeComputer::PaymentPerDay(const ResearchAccount& account) const
         return 0;
     }
 
-    const int64_t elapsed = m_payment_time - account.m_first_payment_time;
+    const int64_t elapsed = m_payment_time - account.FirstRewardTime();
     const double lifetime_days = elapsed / ONE_DAY_IN_SECONDS;
 
     // The extra 0.01 days was used in old code as a lazy way to avoid division
@@ -706,7 +741,7 @@ int64_t ResearchAgeComputer::Accrual(const ResearchAccount& account) const
                 m_magnitude_unit,
                 account.AverageLifetimeMagnitude(),
                 FormatMoney(account.m_total_research_subsidy),
-                account.m_first_payment_time,
+                account.FirstRewardTime(),
                 FormatMoney(RawAccrual(account)));
         }
 

@@ -46,7 +46,7 @@ public:
     uint32_t m_total_magnitude;          //!< Total lifetime magnitude sum.
     uint32_t m_accuracy;                 //!< Non-zero magnitude payment count.
 
-    uint64_t m_first_payment_time;       //!< Time of first research payment.
+    const CBlockIndex* m_first_block_ptr; //!< First block with research reward.
     const CBlockIndex* m_last_block_ptr; //!< Last block with research reward.
 
     //!
@@ -60,6 +60,41 @@ public:
     //! \return \c true if no block contains a reward for the account's CPID.
     //!
     bool IsNew() const;
+
+    //!
+    //! \brief Get a pointer to the first block with a research reward earned by
+    //! the account.
+    //!
+    //! \return A pointer to the block index if the account earned a research
+    //! reward before.
+    //!
+    BlockPtrOption FirstRewardBlock() const;
+
+    //!
+    //! \brief Get the hash of the first block with a research reward earned by
+    //! the account.
+    //!
+    //! \return The SHA256 hash of the account's first reward block.
+    //!
+    uint256 FirstRewardBlockHash() const;
+
+    //!
+    //! \brief Get the height of the first block with a research reward earned
+    //! by the account.
+    //!
+    //! \return A block height of zero if the account never earned a research
+    //! reward before.
+    //!
+    uint32_t FirstRewardHeight() const;
+
+    //!
+    //! \brief Get the timestamp of the first block with a research reward
+    //! earned by the account.
+    //!
+    //! \return A timestamp of zero if the account never earned a research
+    //! reward before.
+    //!
+    int64_t FirstRewardTime() const;
 
     //!
     //! \brief Get a pointer to the last block with a research reward earned by
