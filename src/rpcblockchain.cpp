@@ -1926,6 +1926,8 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Current Magnitude Unit", calc->MagnitudeUnit());
 
     json.pushKV("First Payment Time", TimestampToHRDate(account.FirstRewardTime()));
+    json.pushKV("First Block Paid", account.FirstRewardBlockHash().ToString());
+    json.pushKV("First Height Paid", (int)account.FirstRewardHeight());
 
     json.pushKV("Last Payment Time", TimestampToHRDate(account.LastRewardTime()));
     json.pushKV("Last Block Paid", account.LastRewardBlockHash().ToString());
