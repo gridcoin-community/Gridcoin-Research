@@ -445,6 +445,10 @@ public:
         constexpr int64_t six_months = ONE_DAY_IN_SECONDS * 30 * 6;
 
         if (AccrualAge(account) >= six_months) {
+            if (account.m_magnitude <= 0) {
+                return 0;
+            }
+
             if (fDebug) {
                 LogPrintf(
                     "Accrual: %s Invalid Beacon, Using 0.01 age bootstrap",
