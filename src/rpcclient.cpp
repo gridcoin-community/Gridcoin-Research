@@ -60,8 +60,8 @@ UniValue CallRPC(const string& strMethod, const UniValue& params)
     mapRequestHeaders["Authorization"] = string("Basic ") + strUserPass64;
 
     // Send request
-    string strRequest = JSONRPCRequest(strMethod, params, 1);
-    string strPost = HTTPPost(strRequest, mapRequestHeaders);
+    std::string strRequest = JSONRPCRequest(strMethod, params, 1);
+    std::string strPost = HTTPPost(strRequest, mapRequestHeaders);
     stream << strPost << std::flush;
 
     // Receive HTTP reply status

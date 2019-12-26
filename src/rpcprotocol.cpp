@@ -32,9 +32,9 @@
 // and to be compatible with other JSON-RPC implementations.
 //
 
-string HTTPPost(const string& strMsg, const map<string,string>& mapRequestHeaders)
+std::string HTTPPost(const std::string& strMsg, const std::map<std::string,std::string>& mapRequestHeaders)
 {
-    ostringstream s;
+    std::ostringstream s;
     s << "POST / HTTP/1.1\r\n"
       << "User-Agent: gridcoin-json-rpc/" << FormatFullVersion() << "\r\n"
       << "Host: 127.0.0.1\r\n"
@@ -49,20 +49,20 @@ string HTTPPost(const string& strMsg, const map<string,string>& mapRequestHeader
     return s.str();
 }
 
-string rfc1123Time()
+std::string rfc1123Time()
 {
     char buffer[64];
     time_t now;
     time(&now);
     struct tm* now_gmt = gmtime(&now);
-    string locale(setlocale(LC_TIME, NULL));
+    std::string locale(setlocale(LC_TIME, NULL));
     setlocale(LC_TIME, "C"); // we want POSIX (aka "C") weekday/month strings
     strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S +0000", now_gmt);
     setlocale(LC_TIME, locale.c_str());
-    return string(buffer);
+    return std::string(buffer);
 }
 
-string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
+std::string HTTPReply(int nStatus, const std::string& strMsg, bool keepalive)
 {
     if (nStatus == HTTP_UNAUTHORIZED)
         return strprintf("HTTP/1.0 401 Authorization Required\r\n"
@@ -106,22 +106,22 @@ string HTTPReply(int nStatus, const string& strMsg, bool keepalive)
         strMsg);
 }
 
-int ReadHTTPHeaders(std::basic_istream<char>& stream, map<string, string>& mapHeadersRet)
+int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet)
 {
     int nLen = 0;
     while (true)
     {
-        string str;
+        std::string str;
         std::getline(stream, str);
         if (str.empty() || str == "\r")
             break;
-        string::size_type nColon = str.find(":");
-        if (nColon != string::npos)
+        std::string::size_type nColon = str.find(":");
+        if (nColon != std::string::npos)
         {
-            string strHeader = str.substr(0, nColon);
+            std::string strHeader = str.substr(0, nColon);
             boost::trim(strHeader);
             boost::to_lower(strHeader);
-            string strValue = str.substr(nColon+1);
+            std::string strValue = str.substr(nColon+1);
             boost::trim(strValue);
             mapHeadersRet[strHeader] = strValue;
             if (strHeader == "content-length")
@@ -132,13 +132,13 @@ int ReadHTTPHeaders(std::basic_istream<char>& stream, map<string, string>& mapHe
 }
 
 bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
-                         string& http_method, string& http_uri)
+                         std::string& http_method, std::string& http_uri)
 {
-    string str;
-    getline(stream, str);
+    std::string str;
+    std::getline(stream, str);
 
     // HTTP request line is space-delimited
-    vector<string> vWords;
+    std::vector<std::string> vWords;
     boost::split(vWords, str, boost::is_any_of(" "));
     if (vWords.size() < 2)
         return false;
@@ -154,7 +154,7 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
         return false;
 
     // parse proto, if present
-    string strProto = "";
+    std::string strProto;
     if (vWords.size() > 2)
         strProto = vWords[2];
 
@@ -168,9 +168,9 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
 
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
 {
-    string str;
-    getline(stream, str);
-    vector<string> vWords;
+    std::string str;
+    std::getline(stream, str);
+    std::vector<std::string> vWords;
     boost::split(vWords, str, boost::is_any_of(" "));
     if (vWords.size() < 2)
         return HTTP_INTERNAL_SERVER_ERROR;
@@ -181,8 +181,8 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
     return atoi(vWords[1].c_str());
 }
 
-int ReadHTTPMessage(std::basic_istream<char>& stream, map<string,
-                    string>& mapHeadersRet, string& strMessageRet,
+int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string,
+                    std::string>& mapHeadersRet, std::string& strMessageRet,
                     int nProto)
 {
     mapHeadersRet.clear();
@@ -196,12 +196,12 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, map<string,
     // Read message
     if (nLen > 0)
     {
-        vector<char> vch(nLen);
+        std::vector<char> vch(nLen);
         stream.read(&vch[0], nLen);
-        strMessageRet = string(vch.begin(), vch.end());
+        strMessageRet = std::string(vch.begin(), vch.end());
     }
 
-    string sConHdr = mapHeadersRet["connection"];
+    std::string sConHdr = mapHeadersRet["connection"];
 
     if ((sConHdr != "close") && (sConHdr != "keep-alive"))
     {
@@ -224,7 +224,7 @@ int ReadHTTPMessage(std::basic_istream<char>& stream, map<string,
 // http://www.codeproject.com/KB/recipes/JSON_Spirit.aspx
 //
 
-string JSONRPCRequest(const string& strMethod, const UniValue& params, const UniValue& id)
+std::string JSONRPCRequest(const std::string& strMethod, const UniValue& params, const UniValue& id)
 {
     UniValue request(UniValue::VOBJ);
     request.push_back(Pair("method", strMethod));
@@ -245,13 +245,13 @@ UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const Un
     return reply;
 }
 
-string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id)
+std::string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id)
 {
     UniValue reply = JSONRPCReplyObj(result, error, id);
     return reply.write() + "\n";
 }
 
-UniValue JSONRPCError(int code, const string& message)
+UniValue JSONRPCError(int code, const std::string& message)
 {
     UniValue error(UniValue::VOBJ);
     error.pushKV("code", code);
