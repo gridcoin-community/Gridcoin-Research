@@ -323,7 +323,7 @@ public:
                     std::string sFilename = DirEntry.path().filename().string();
                     size_t FoundPos = sFilename.find("scraper");
 
-                    if (FoundPos != string::npos) SortedDirEntries.insert(DirEntry);
+                    if (FoundPos != std::string::npos) SortedDirEntries.insert(DirEntry);
                 }
 
                 // Now iterate through set of filtered filenames. Delete all files greater than retention count.
@@ -3842,7 +3842,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
     mmCSManifestsBinnedByScraper mMapCSManifestsBinnedByScraper = ScraperCullAndBinCScraperManifests();
     
     // Do a map for unique manifest times ordered by descending time then content hash.
-    std::multimap<int64_t, uint256, greater<int64_t>> mManifestsBinnedByTime;
+    std::multimap<int64_t, uint256, std::greater<int64_t>> mManifestsBinnedByTime;
     // and also by content hash, then scraperID and manifest (not content) hash.
     std::multimap<uint256, std::pair<ScraperID, uint256>> mManifestsBinnedbyContent;
     std::multimap<uint256, std::pair<ScraperID, uint256>>::iterator convergence;
@@ -4112,7 +4112,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
         // parts, so we will need to choose the latest consensus block by manifest time. This will occur naturally below if tracked in
         // this manner. We will also want the BeaconList from the associated manifest.
         // ------ manifest time --- object hash - consensus block hash - manifest hash.
-        std::multimap<int64_t, std::tuple<uint256, uint256, uint256>, greater<int64_t>> mProjectObjectsBinnedByTime;
+        std::multimap<int64_t, std::tuple<uint256, uint256, uint256>, std::greater<int64_t>> mProjectObjectsBinnedByTime;
         // and also by project object (content) hash, then scraperID and project.
         std::multimap<uint256, std::pair<ScraperID, std::string>> mProjectObjectsBinnedbyContent;
         std::multimap<uint256, std::pair<ScraperID, std::string>>::iterator ProjectConvergence;

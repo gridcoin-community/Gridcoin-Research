@@ -396,7 +396,7 @@ void CScraperManifest::UnserializeCheck(CDataStream& ss, unsigned int& banscore_
 {
     const auto pbegin = ss.begin();
 
-    vector<uint256> vph;
+    std::vector<uint256> vph;
     ss>>vph;
     ss>> pubkey;
     ss>> sCManifestName;
