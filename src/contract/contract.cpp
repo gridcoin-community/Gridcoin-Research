@@ -140,8 +140,8 @@ std::string executeRain(std::string sRecipients)
 {
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain";
-    set<CBitcoinAddress> setAddress;
-    vector<pair<CScript, int64_t> > vecSend;
+    std::set<CBitcoinAddress> setAddress;
+    std::vector<std::pair<CScript, int64_t> > vecSend;
     std::string sRainCommand = ExtractXML(sRecipients,"<RAIN>","</RAIN>");
     std::string sRainMessage = MakeSafeMessage(ExtractXML(sRecipients,"<RAINMESSAGE>","</RAINMESSAGE>"));
     std::string sRain = "<NARR>Project Rain: " + sRainMessage + "</NARR>";
@@ -172,10 +172,10 @@ std::string executeRain(std::string sRecipients)
                 {
                     CBitcoinAddress address(sAddress);
                     if (!address.IsValid())
-                        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, string("Invalid Gridcoin address: ")+sAddress);
+                        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Gridcoin address: ")+sAddress);
 
                     if (setAddress.count(address))
-                        throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ")+sAddress);
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, duplicated address: ")+sAddress);
 
                     setAddress.insert(address);
                     dTotalToSend += dAmount;
@@ -183,7 +183,7 @@ std::string executeRain(std::string sRecipients)
                     CScript scriptPubKey;
                     scriptPubKey.SetDestination(address.Get());
                     totalAmount += nAmount;
-                    vecSend.push_back(make_pair(scriptPubKey, nAmount));
+                    vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
                 }
             }
         }

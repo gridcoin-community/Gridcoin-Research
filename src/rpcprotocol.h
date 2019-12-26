@@ -16,8 +16,6 @@
 
 #include <univalue.h>
 
-using namespace std;
-
 // Boost Support for 1.70+
 #if BOOST_VERSION >= 107000
     #define GetIOService(s) ((boost::asio::io_context&)(s).get_executor().context())
@@ -182,16 +180,16 @@ private:
     boost::iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
 };
 
-string HTTPPost(const string& strMsg, const map<string,string>& mapRequestHeaders);
-string HTTPReply(int nStatus, const string& strMsg, bool keepalive);
+std::string HTTPPost(const std::string& strMsg, const std::map<std::string,std::string>& mapRequestHeaders);
+std::string HTTPReply(int nStatus, const std::string& strMsg, bool keepalive);
 bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
                          std::string& http_method, std::string& http_uri);
 int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto);
 int ReadHTTPHeaders(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet);
 int ReadHTTPMessage(std::basic_istream<char>& stream, std::map<std::string, std::string>& mapHeadersRet,
                     std::string& strMessageRet, int nProto);
-string JSONRPCRequest(const string& strMethod, const UniValue& params, const UniValue& id);
+std::string JSONRPCRequest(const std::string& strMethod, const UniValue& params, const UniValue& id);
 UniValue JSONRPCReplyObj(const UniValue& result, const UniValue& error, const UniValue& id);
-string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id);
+std::string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValue& id);
 UniValue JSONRPCError(int code, const std::string& message);
 
