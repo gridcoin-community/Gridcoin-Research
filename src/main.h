@@ -237,11 +237,6 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 std::string GetCurrentOverviewTabPoll();
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
-// Validate researcher rewards.
-bool CheckProofOfResearch(
-    const CBlockIndex* pindexPrev, //previous block in chain index
-    const CBlock &block);    //block to check
-
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
 

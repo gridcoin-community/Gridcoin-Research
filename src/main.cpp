@@ -1836,80 +1836,6 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits)
     return true;
 }
 
-bool CheckProofOfResearch(
-        const CBlockIndex* pindexPrev, //previous block in chain index
-        const CBlock &block)     //block to check
-{
-    /* In this function GetProofOfStakeReward is called with wrong pindex,
-     * which does not matter, because this one is no longer used */
-    if(block.vtx.size() == 0 ||
-       !block.IsProofOfStake() ||
-       pindexPrev->nHeight <= nGrandfather)
-        return true;
-
-    const NN::Claim& claim = block.GetClaim();
-    if(!claim.HasResearchReward())
-        return true;
-
-    //For higher security, plus lets catch these bad blocks before adding them to the chain to prevent reorgs:
-    int64_t out_research_subsidy = 0;
-    int64_t out_block_subsidy = 0;
-    int64_t nCoinAge = 0;
-    int64_t nFees = 0;
-
-    bool fNeedsChecked = BlockNeedsChecked(block.nTime) || block.nVersion>=9;
-
-    if(!fNeedsChecked)
-        return true;
-
-    // 6-4-2017 - Verify researchers stored block magnitude
-    double dNeuralNetworkMagnitude = NN::Tally::GetMagnitude(claim.m_mining_id);
-
-    if (claim.m_magnitude > (dNeuralNetworkMagnitude*1.25)
-        && (fTestNet || (!fTestNet && pindexPrev->nHeight > 947000)))
-    {
-        return error(
-            "CheckProofOfResearch: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
-             claim.m_magnitude,
-             dNeuralNetworkMagnitude,
-             claim.m_mining_id.ToString());
-    }
-
-    int64_t nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, block.nTime,
-                                                        pindexBest, out_research_subsidy, out_block_subsidy);
-
-    if(!IsV9Enabled_Tally(pindexPrev->nHeight))
-    {
-        if (claim.m_research_subsidy > ((out_research_subsidy * 1.25) + COIN))
-        {
-            if (fDebug) {
-                LogPrintf("CheckProofOfResearch: Researchers Reward Pays too much : Retallying : "
-                    "claimed %s vs calculated %s for CPID %s",
-                    FormatMoney(claim.m_research_subsidy),
-                    FormatMoney(out_research_subsidy),
-                    claim.m_mining_id.ToString());
-            }
-
-            NN::Tally::LegacyRecount(pindexBest);
-            nCalculatedResearch = GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, block.nTime,
-                                                        pindexBest, out_research_subsidy, out_block_subsidy);
-        }
-    }
-    (void)nCalculatedResearch;
-
-    if (claim.m_research_subsidy > ((out_research_subsidy * 1.25) + COIN))
-    {
-        if(fDebug) LogPrintf("CheckProofOfResearch: pHistorical was %s", GetHistoricalMagnitude(claim.m_mining_id)->GetBlockHash().GetHex());
-
-        return block.DoS(10, error("CheckProofOfResearch: Researchers Reward Pays too much : claimed %s vs calculated %s for CPID %s",
-            FormatMoney(claim.m_research_subsidy),
-            FormatMoney(out_research_subsidy),
-            claim.m_mining_id.ToString()));
-    }
-
-    return true;
-}
-
 // Return maximum amount of blocks that other nodes claim to have
 int GetNumBlocksOfPeers()
 {
@@ -3517,17 +3443,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
             return error("AcceptBlock(): Failed to carry v7 proof hash.");
         }
     }
-
-    if(nVersion<9)
-    {
-        // Verify proof of research.
-        if(!CheckProofOfResearch(pindexPrev, *this))
-        {
-            return error("WARNING: AcceptBlock(): check proof-of-research failed for block %s, nonce %i", hash.ToString().c_str(), nNonce);
-        }
-    }
-    /*else Do not check v9 rewards here as context here is insufficient and it is
-      checked again in ConnectBlock */
 
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
