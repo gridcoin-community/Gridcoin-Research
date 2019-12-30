@@ -1031,7 +1031,14 @@ public:
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
-        READWRITE(nNonce);
+
+        // Besides early blocks, Gridcoin uses Proof-of-Stake for consensus,
+        // so we don't need the nonce field. Don't serialize it after blocks
+        // version 11 and later:
+        //
+        if (nVersion <= 10) {
+            READWRITE(nNonce);
+        }
     }
 
     void SetNull()
@@ -1051,7 +1058,9 @@ public:
 
     uint256 GetHash() const
     {
-        if (nVersion >= 7)
+        if (nVersion >= 11)
+            return Hash(BEGIN(nVersion), END(nBits));
+        else if (nVersion >= 7)
             return Hash(BEGIN(nVersion), END(nNonce));
         else
             return GetPoWHash();
