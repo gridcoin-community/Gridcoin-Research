@@ -41,6 +41,7 @@ extern void GridcoinServices();
 extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
+bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient);
 extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
@@ -2630,19 +2631,6 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
         pindex->nResearchSubsidy = claim.m_research_subsidy;
         pindex->nInterestSubsidy = claim.m_block_subsidy;
         pindex->nIsSuperBlock = claim.ContainsSuperblock() ? 1 : 0;
-
-        // Must scan transactions after CoinStake to know if this is a contract.
-        int iPos = 0;
-        pindex->nIsContract = 0;
-        for (auto const& tx : vtx)
-        {
-            if (tx.hashBoinc.length() > 3 && iPos > 0)
-            {
-                pindex->nIsContract = 1;
-                break;
-            }
-            iPos++;
-        }
     }
 
     if (pindex->nHeight > nGrandfather && !fReorganizing)
@@ -2777,15 +2765,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck, boo
     // Gridcoin: Track payments to CPID, and last block paid
     NN::Tally::RecordRewardBlock(pindex);
 
+    // Load contracts:
+    auto tx_iter = vtx.begin();
+    ++tx_iter; // skip the first transaction
+
+    for (auto end = vtx.end(); tx_iter != end; ++tx_iter) {
+        if (tx_iter->hashBoinc.length() > 3) {
+            pindex->nIsContract = 1;
+            MemorizeMessage(*tx_iter, 0, ""); // TODO: replace with contract handler
+        }
+    }
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
-
-    if (pindex->nHeight % 5 == 0 && pindex->nHeight > 100)
-    {
-        std::string errors1 = "";
-        LoadAdminMessages(false,errors1);
-    }
 
     if (!OutOfSyncByAge())
     {
@@ -3100,10 +3092,6 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         nBestChainTrust = pindexBest->nChainTrust;
         nTimeBestReceived =  GetAdjustedTime();
         cnt_con++;
-
-        // Load recent contracts
-        std::string admin_messages;
-        LoadAdminMessages(false, admin_messages);
 
         if (IsV9Enabled_Tally(nBestHeight) && NN::Tally::IsTrigger(nBestHeight)) {
             NN::Tally::LegacyRecount(pindexBest);
