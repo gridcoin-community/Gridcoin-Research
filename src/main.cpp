@@ -1623,7 +1623,8 @@ bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
 {
     if (!fReadTransactions)
     {
-        *this = pindex->GetBlockHeader();
+        SetNull();
+        *(static_cast<CBlockHeader*>(this)) = pindex->GetBlockHeader();
         return true;
     }
     if (!ReadFromDisk(pindex->nFile, pindex->nBlockPos, fReadTransactions))
@@ -4940,7 +4941,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 pindex = pindex->pnext;
         }
 
-        vector<CBlock> vHeaders;
+        vector<CBlockHeader> vHeaders;
         int nLimit = 1000;
         LogPrintf("getheaders %d to %s", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20));
         for (; pindex; pindex = pindex->pnext)

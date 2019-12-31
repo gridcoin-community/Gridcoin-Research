@@ -73,7 +73,7 @@ static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208e
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool IsProtocolV2(int nHeight)
 {
-	return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
+    return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
 }
 
 inline bool IsResearchAgeEnabled(int nHeight)
@@ -119,7 +119,7 @@ inline bool IsV11Enabled(int nHeight)
 
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
-	return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
+    return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
 }
 
 inline bool IsV9Enabled_Tally(int nHeight)
@@ -617,7 +617,7 @@ public:
     // Denial-of-service detection:
     mutable int nDoS;
     bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
-	std::string hashBoinc;
+    std::string hashBoinc;
 
     CTransaction()
     {
@@ -635,7 +635,7 @@ public:
         READWRITE(vout);
         READWRITE(nLockTime);
 
-		READWRITE(hashBoinc);
+        READWRITE(hashBoinc);
     }
 
     void SetNull()
@@ -646,7 +646,7 @@ public:
         vout.clear();
         nLockTime = 0;
         nDoS = 0;  // Denial-of-service prevention
-		hashBoinc="";
+        hashBoinc="";
     }
 
     bool IsNull() const
@@ -1003,19 +1003,83 @@ public:
  * Blocks are appended to blk0001.dat files on disk.  Their location on disk
  * is indexed by CBlockIndex objects in memory.
  */
-class CBlock
+class CBlockHeader
 {
 public:
+    static const int32_t CURRENT_VERSION = 10;
+
     // header
-    static const int CURRENT_VERSION = 10;
-    int nVersion;
+    int32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
-    unsigned int nTime;
-    unsigned int nBits;
+    uint32_t nTime;
+    uint32_t nBits;
+    uint32_t nNonce;
 
-    unsigned int nNonce;
+    CBlockHeader()
+    {
+        SetNull();
+    }
 
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nVersion);
+        READWRITE(hashPrevBlock);
+        READWRITE(hashMerkleRoot);
+        READWRITE(nTime);
+        READWRITE(nBits);
+
+        // Besides early blocks, Gridcoin uses Proof-of-Stake for consensus,
+        // so we don't need the nonce field. Don't serialize it after blocks
+        // version 11 and later:
+        //
+        if (nVersion <= 10) {
+            READWRITE(nNonce);
+        }
+    }
+
+    void SetNull()
+    {
+        nVersion = CURRENT_VERSION;
+        hashPrevBlock.SetNull();
+        hashMerkleRoot.SetNull();
+        nTime = 0;
+        nBits = 0;
+        nNonce = 0;
+    }
+
+    bool IsNull() const
+    {
+        return (nBits == 0);
+    }
+
+    uint256 GetHash() const
+    {
+        if (nVersion >= 11)
+            return Hash(BEGIN(nVersion), END(nBits));
+        else if (nVersion >= 7)
+            return Hash(BEGIN(nVersion), END(nNonce));
+        else
+            return GetPoWHash();
+    }
+
+    uint256 GetPoWHash() const
+    {
+        return scrypt_blockhash(CVOIDBEGIN(nVersion));
+    }
+
+    int64_t GetBlockTime() const
+    {
+        return (int64_t)nTime;
+    }
+};
+
+class CBlock : public CBlockHeader
+{
+public:
     // network and disk
     std::vector<CTransaction> vtx;
 
@@ -1037,17 +1101,18 @@ public:
         SetNull();
     }
 
+    CBlock(const CBlockHeader &header)
+    {
+        SetNull();
+        *(static_cast<CBlockHeader*>(this)) = header;
+    }
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
-        READWRITE(nVersion);
-        READWRITE(hashPrevBlock);
-        READWRITE(hashMerkleRoot);
-        READWRITE(nTime);
-        READWRITE(nBits);
-        READWRITE(nNonce);
+        READWRITEAS(CBlockHeader, *this);
 
         // ConnectBlock depends on vtx following header to generate CDiskTxPos
         if (!(s.GetType() & (SER_GETHASH|SER_BLOCKHEADERONLY))) {
@@ -1077,35 +1142,25 @@ public:
 
     void SetNull()
     {
-        nVersion = CBlock::CURRENT_VERSION;
-        hashPrevBlock.SetNull();
-        hashMerkleRoot.SetNull();
-        nTime = 0;
-        nBits = 0;
-        nNonce = 0;
+        CBlockHeader::SetNull();
+
         vtx.clear();
         vchBlockSig.clear();
-	    vMerkleTree.clear();
+        vMerkleTree.clear();
         nDoS = 0;
         m_claim = NN::Claim();
     }
 
-    bool IsNull() const
+    CBlockHeader GetBlockHeader() const
     {
-        return (nBits == 0);
-    }
-
-    uint256 GetHash() const
-    {
-        if (nVersion > 6)
-            return Hash(BEGIN(nVersion), END(nNonce));
-        else
-            return GetPoWHash();
-    }
-
-    uint256 GetPoWHash() const
-    {
-        return scrypt_blockhash(CVOIDBEGIN(nVersion));
+        CBlockHeader block;
+        block.nVersion       = nVersion;
+        block.hashPrevBlock  = hashPrevBlock;
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime          = nTime;
+        block.nBits          = nBits;
+        block.nNonce         = nNonce;
+        return block;
     }
 
     const NN::Claim& GetClaim() const
@@ -1138,11 +1193,6 @@ public:
     const NN::Superblock& GetSuperblock() const
     {
         return GetClaim().m_superblock;
-    }
-
-    int64_t GetBlockTime() const
-    {
-        return (int64_t)nTime;
     }
 
     // entropy bit for stake modifier if chosen by modifier
@@ -1438,9 +1488,9 @@ public:
         nIsContract = 0;
     }
 
-    CBlock GetBlockHeader() const
+    CBlockHeader GetBlockHeader() const
     {
-        CBlock block;
+        CBlockHeader block;
         block.nVersion       = nVersion;
         if (pprev)
             block.hashPrevBlock = pprev->GetBlockHash();
@@ -1689,7 +1739,7 @@ public:
         if (fUseFastIndex && (nTime < GetAdjustedTime() - 24 * 60 * 60) && !blockHash.IsNull())
             return blockHash;
 
-        CBlock block;
+        CBlockHeader block;
         block.nVersion        = nVersion;
         block.hashPrevBlock   = hashPrev;
         block.hashMerkleRoot  = hashMerkleRoot;
