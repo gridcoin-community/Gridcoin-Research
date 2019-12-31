@@ -1155,7 +1155,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
     }
 
     // Update the tx's hashBlock
-    hashBlock = pblock->GetHash();
+    hashBlock = pblock->GetHash(true);
 
     // Locate the transaction
     for (nIndex = 0; nIndex < (int)pblock->vtx.size(); nIndex++)
@@ -1577,7 +1577,7 @@ int CTxIndex::GetDepthInMainChain() const
     if (!block.ReadFromDisk(pos.nFile, pos.nBlockPos, false))
         return 0;
     // Find the block in the index
-    BlockMap::iterator mi = mapBlockIndex.find(block.GetHash());
+    BlockMap::iterator mi = mapBlockIndex.find(block.GetHash(true));
     if (mi == mapBlockIndex.end())
         return 0;
     CBlockIndex* pindex = (*mi).second;
@@ -1603,7 +1603,7 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
         {
             CBlock block;
             if (block.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
-                hashBlock = block.GetHash();
+                hashBlock = block.GetHash(true);
             return true;
         }
     }
@@ -1629,7 +1629,7 @@ bool CBlock::ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions)
     }
     if (!ReadFromDisk(pindex->nFile, pindex->nBlockPos, fReadTransactions))
         return false;
-    if (GetHash() != pindex->GetBlockHash())
+    if (GetHash(true) != pindex->GetBlockHash())
         return error("CBlock::ReadFromDisk() : GetHash() doesn't match index");
     return true;
 }
@@ -2949,7 +2949,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
     //assert(pindexBest || hashBestChain == pindexBest->GetBlockHash());
     //assert(nBestHeight = pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
     //assert(!pindexBest->pnext);
-    assert(pindexNew->GetBlockHash()==blockNew.GetHash());
+    assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
     /* note: it was already determined that this chain is better than current best */
     /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overriden by command */
     assert( !pindexGenesisBlock == !pindexBest );
@@ -3025,16 +3025,16 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         {
             if (!block.ReadFromDisk(pindex))
                 return error("ReorganizeChain: ReadFromDisk for connect failed");
-            assert(pindex->GetBlockHash()==block.GetHash());
+            assert(pindex->GetBlockHash()==block.GetHash(true));
         }
         else
         {
             assert(pindex==pindexNew);
-            assert(pindexNew->GetBlockHash()==block.GetHash());
-            assert(pindexNew->GetBlockHash()==blockNew.GetHash());
+            assert(pindexNew->GetBlockHash()==block.GetHash(true));
+            assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
         }
 
-        uint256 hash = block.GetHash();
+        uint256 hash = block.GetHash(true);
         arith_uint256 nBestBlockTrust;
 
         if (fDebug) LogPrintf("ReorganizeChain: connect %s",hash.ToString());
@@ -3053,7 +3053,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         }
         else
         {
-            assert(pindex->GetBlockHash()==block.GetHash());
+            assert(pindex->GetBlockHash()==block.GetHash(true));
             assert(pindex->pprev == pindexBest);
             if (!block.ConnectBlock(txdb, pindex, false, false))
             {
@@ -3218,7 +3218,7 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const
 bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof)
 {
     // Check for duplicate
-    uint256 hash = GetHash();
+    uint256 hash = GetHash(true);
     if (mapBlockIndex.count(hash))
         return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
 
@@ -3291,7 +3291,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
 {
     // Allow the genesis block to pass.
     if(hashPrevBlock.IsNull() &&
-       GetHash() == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
+       GetHash(true) == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
         return true;
 
     // These are checks that are independent of context
@@ -3307,7 +3307,7 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     }
 
     // Check proof of work matches claimed amount
-    if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
+    if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits))
         return DoS(50, error("CheckBlock[] : proof of work failed"));
 
     //Reject blocks with diff that has grown to an extrordinary level (should never happen)
@@ -3441,7 +3441,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
 
     // Check for duplicate
-    uint256 hash = GetHash();
+    uint256 hash = GetHash(true);
     if (mapBlockIndex.count(hash))
         return error("AcceptBlock() : block already in mapBlockIndex");
 
@@ -3544,7 +3544,7 @@ bool CBlock::AcceptBlock(bool generated_by_me)
     // PoW is checked in CheckBlock[]
     if (IsProofOfWork())
     {
-        hashProof = GetPoWHash();
+        hashProof = GetHash(true);
     }
 
     //Grandfather
@@ -3717,7 +3717,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me)
     AssertLockHeld(cs_main);
 
     // Check for duplicate
-    uint256 hash = pblock->GetHash();
+    uint256 hash = pblock->GetHash(true);
     if (mapBlockIndex.count(hash))
         return error("ProcessBlock() : already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().c_str());
     if (mapOrphanBlocks.count(hash))
@@ -3865,7 +3865,7 @@ bool CBlock::CheckBlockSignature() const
             return false;
         if (vchBlockSig.empty())
             return false;
-        return key.Verify(GetHash(), vchBlockSig);
+        return key.Verify(GetHash(true), vchBlockSig);
     }
 
     return false;
@@ -4012,7 +4012,7 @@ bool LoadBlockIndex(bool fAllowNew)
         block.nNonce = !fTestNet ? 130208 : 22436;
         LogPrintf("starting Genesis Check...");
         // If genesis block hash does not match, then generate new genesis hash.
-        if (block.GetHash() != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+        if (block.GetHash(true) != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
         {
             LogPrintf("Searching for genesis block...");
             // This will figure out a valid hash and Nonce if you're
@@ -4021,7 +4021,7 @@ bool LoadBlockIndex(bool fAllowNew)
             arith_uint256 thash;
             while (true)
             {
-                thash = UintToArith256(block.GetHash());
+                thash = UintToArith256(block.GetHash(true));
                 if (thash <= hashTarget)
                     break;
                 if ((block.nNonce & 0xFFF) == 0)
@@ -4037,7 +4037,7 @@ bool LoadBlockIndex(bool fAllowNew)
             }
             LogPrintf("block.nTime = %u ", block.nTime);
             LogPrintf("block.nNonce = %u ", block.nNonce);
-            LogPrintf("block.GetHash = %s", block.GetHash().ToString());
+            LogPrintf("block.GetHash = %s", block.GetHash(true).ToString());
         }
 
 
@@ -4048,7 +4048,7 @@ bool LoadBlockIndex(bool fAllowNew)
         //GENESIS3: Official Merkle Root
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
-        assert(block.GetHash() == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         assert(block.CheckBlock("LoadBlockIndex",1,10*COIN));
 
         // Start new block file
@@ -4210,7 +4210,7 @@ void PrintBlockTree()
             pindex->nHeight,
             pindex->nFile,
             pindex->nBlockPos,
-            block.GetHash().ToString().c_str(),
+            block.GetHash(true).ToString().c_str(),
             block.nBits,
             DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
             FormatMoney(pindex->nMint).c_str(),
@@ -5025,7 +5025,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CBlock block;
         std::string acid = "";
         vRecv >> block >> acid;
-        uint256 hashBlock = block.GetHash();
+        uint256 hashBlock = block.GetHash(true);
 
         LogPrintf(" Received block %s; ", hashBlock.ToString());
         if (fDebug10) block.print();

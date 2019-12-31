@@ -1049,6 +1049,7 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+        m_hash_cache.SetNull();
     }
 
     bool IsNull() const
@@ -1056,14 +1057,30 @@ public:
         return (nBits == 0);
     }
 
-    uint256 GetHash() const
+    uint256 GetHash(const bool use_cache = false) const
     {
-        if (nVersion >= 11)
-            return Hash(BEGIN(nVersion), END(nBits));
-        else if (nVersion >= 7)
-            return Hash(BEGIN(nVersion), END(nNonce));
-        else
-            return GetPoWHash();
+        // The block hash cache field prevents repeated computations of the
+        // block's hash in the block acceptance pipeline. It's particularly
+        // effective for early blocks with expensive scrypt hashes. Dynamic
+        // caching isn't the prettiest solution, but it provides an interim
+        // performance advantage as we refactor legacy code.
+        //
+        // use_cache defaults to false to discourage use of the cache except
+        // in carefully chosen single-threaded scenarios. Avoid hash caching
+        // for block objects except where thread-safety is obvious and where
+        // performance improves significantly.
+        //
+        if (use_cache) {
+            if (!m_hash_cache.IsNull()) {
+                return m_hash_cache;
+            }
+
+            m_hash_cache = ComputeHash();
+
+            return m_hash_cache;
+        }
+
+        return ComputeHash();
     }
 
     uint256 GetPoWHash() const
@@ -1074,6 +1091,18 @@ public:
     int64_t GetBlockTime() const
     {
         return (int64_t)nTime;
+    }
+
+private:
+    mutable uint256 m_hash_cache;
+
+    uint256 ComputeHash() const
+    {
+        if (nVersion >= 7) {
+            return SerializeHash(*this);
+        }
+
+        return GetPoWHash();
     }
 };
 
@@ -1199,9 +1228,9 @@ public:
     unsigned int GetStakeEntropyBit() const
     {
         // Take last bit of block hash as entropy bit
-        unsigned int nEntropyBit = ((GetHash().GetUint64()) & 1llu);
+        unsigned int nEntropyBit = ((GetHash(true).GetUint64()) & 1llu);
         if (fDebug && GetBoolArg("-printstakemodifier"))
-            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash().ToString(), nEntropyBit);
+            LogPrintf("GetStakeEntropyBit: hashBlock=%s nEntropyBit=%u", GetHash(true).ToString(), nEntropyBit);
         return nEntropyBit;
     }
 
@@ -1327,7 +1356,7 @@ public:
         }
 
         // Check the header
-        if (fReadTransactions && IsProofOfWork() && !CheckProofOfWork(GetPoWHash(), nBits))
+        if (fReadTransactions && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits))
             return error("CBlock::ReadFromDisk() : errors in block header");
 
         return true;
