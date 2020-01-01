@@ -14,6 +14,7 @@
 #include "backup.h"
 #include "streams.h"
 #include "util.h"
+#include "miner.h"
 
 #include <univalue.h>
 
@@ -140,19 +141,30 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
                 "\n"
                 "Displays information about the wallet\n");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
     UniValue res(UniValue::VOBJ);
 
-    res.pushKV("walletversion", pwalletMain->GetVersion());
-    res.pushKV("balance",       ValueFromAmount(pwalletMain->GetBalance()));
-    res.pushKV("newmint",       ValueFromAmount(pwalletMain->GetNewMint()));
-    res.pushKV("stake",         ValueFromAmount(pwalletMain->GetStake()));
-    res.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
-    res.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (pwalletMain->IsCrypted())
-        res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+        res.pushKV("walletversion", pwalletMain->GetVersion());
+        res.pushKV("balance",       ValueFromAmount(pwalletMain->GetBalance()));
+        res.pushKV("newmint",       ValueFromAmount(pwalletMain->GetNewMint()));
+        res.pushKV("stake",         ValueFromAmount(pwalletMain->GetStake()));
+        res.pushKV("keypoololdest", pwalletMain->GetOldestKeyPoolTime());
+        res.pushKV("keypoolsize",   (int)pwalletMain->GetKeyPoolSize());
+
+        if (pwalletMain->IsCrypted())
+            res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+    }
+
+    {
+        LOCK(MinerStatus.lock);
+
+        bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+
+        res.pushKV("staking", staking);
+        res.pushKV("mining-error", MinerStatus.ReasonNotStaking);
+    }
 
     return res;
 }
