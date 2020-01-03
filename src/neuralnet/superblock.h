@@ -627,6 +627,7 @@ public:
         uint64_t m_total_credit; //!< All-time credit produced by the project.
         uint64_t m_average_rac;  //!< Average project recent average credit.
         uint64_t m_rac;          //!< Sum of the RAC of all the project CPIDs.
+        ZeroCreditTally m_zcd;   //!< Tracks zero-credit days for greylistiing.
 
         //!
         //! \brief A truncated hash of the converged manifest part that forms
@@ -638,6 +639,27 @@ public:
         //!
         uint32_t m_convergence_hint;
 
+        //!
+        //! \brief Determine whether the project triggered automated greylist
+        //! rules.
+        //!
+        //! \return \c true if the zero-credit days exceeded the limit.
+        //!
+        bool Greylisted() const;
+
+        //!
+        //! \brief Produce a new zero-credit day tally for the subsequent
+        //! superblock by calculating the difference in credit.
+        //!
+        //! \param next_credit The projects credit for the upcoming superblock.
+        //! If no greater than the current credit, set the latest day to a zero
+        //! credit day.
+        //!
+        //! \return A zero-credit day tally object for the project in the next
+        //! superblock.
+        //!
+        ZeroCreditTally AdvanceZcd(const uint64_t next_credit) const;
+
         ADD_SERIALIZE_METHODS;
 
         template <typename Stream, typename Operation>
@@ -646,6 +668,7 @@ public:
             READWRITE(VARINT(m_total_credit));
             READWRITE(VARINT(m_average_rac));
             READWRITE(VARINT(m_rac));
+            READWRITE(m_zcd);
 
             // ProjectIndex handles serialization of m_convergence_hint
             // when creating superblocks from fallback-to-project-level

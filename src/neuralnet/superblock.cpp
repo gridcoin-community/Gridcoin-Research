@@ -1680,6 +1680,7 @@ Superblock::ProjectStats::ProjectStats()
     : m_total_credit(0)
     , m_average_rac(0)
     , m_rac(0)
+    , m_zcd(0)
     , m_convergence_hint(0)
 {
 }
@@ -1691,6 +1692,7 @@ Superblock::ProjectStats::ProjectStats(
     : m_total_credit(total_credit)
     , m_average_rac(average_rac)
     , m_rac(rac)
+    , m_zcd(0)
     , m_convergence_hint(0)
 {
 }
@@ -1699,8 +1701,20 @@ Superblock::ProjectStats::ProjectStats(uint64_t average_rac, uint64_t rac)
     : m_total_credit(0)
     , m_average_rac(average_rac)
     , m_rac(rac)
+    , m_zcd(0)
     , m_convergence_hint(0)
 {
+}
+
+bool Superblock::ProjectStats::Greylisted() const
+{
+    return m_zcd.Greylisted();
+}
+
+ZeroCreditTally
+Superblock::ProjectStats::AdvanceZcd(const uint64_t next_credit) const
+{
+    return m_zcd.AdvanceByDelta(m_total_credit, next_credit);
 }
 
 // -----------------------------------------------------------------------------

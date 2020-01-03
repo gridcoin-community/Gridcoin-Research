@@ -743,11 +743,13 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x96, 0x38,                                     // Total credit (VARINT)
         0x66,                                           // Average RAC (VARINT)
         0x80, 0x4b,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0xb5, 0x58,                                     // Total credit (VARINT)
         0x68,                                           // Average RAC (VARINT)
         0x80, 0x4f,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
     };
 
     NN::Superblock superblock = NN::Superblock::FromConvergence(GetTestConvergence());
@@ -782,11 +784,13 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x96, 0x38,                                     // Total credit (VARINT)
         0x66,                                           // Average RAC (VARINT)
         0x80, 0x4b,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0xb5, 0x58,                                     // Total credit (VARINT)
         0x68,                                           // Average RAC (VARINT)
         0x80, 0x4f,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
     };
 
     NN::Superblock superblock;
@@ -857,12 +861,14 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         0x96, 0x38,                                     // Total credit (VARINT)
         0x66,                                           // Average RAC (VARINT)
         0x80, 0x4b,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0xb5, 0x58,                                     // Total credit (VARINT)
         0x68,                                           // Average RAC (VARINT)
         0x80, 0x4f,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
     };
 
@@ -902,12 +908,14 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         0x96, 0x38,                                     // Total credit (VARINT)
         0x66,                                           // Average RAC (VARINT)
         0x80, 0x4b,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0xb5, 0x58,                                     // Total credit (VARINT)
         0x68,                                           // Average RAC (VARINT)
         0x80, 0x4f,                                     // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
     };
 
@@ -1296,6 +1304,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_a_zero_statistics_object)
     BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 0);
     BOOST_CHECK(stats.m_rac == 0);
+    BOOST_CHECK(stats.m_zcd.Count() == 0);
     BOOST_CHECK(stats.m_convergence_hint == 0);
 }
 
@@ -1306,6 +1315,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_supplied_statistics)
     BOOST_CHECK(stats.m_total_credit == 123);
     BOOST_CHECK(stats.m_average_rac == 456);
     BOOST_CHECK(stats.m_rac == 789);
+    BOOST_CHECK(stats.m_zcd.Count() == 0);
     BOOST_CHECK(stats.m_convergence_hint == 0);
 }
 
@@ -1316,7 +1326,31 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_supplied_legacy_superblock_statistics)
     BOOST_CHECK(stats.m_total_credit == 0);
     BOOST_CHECK(stats.m_average_rac == 123);
     BOOST_CHECK(stats.m_rac == 456);
+    BOOST_CHECK(stats.m_zcd.Count() == 0);
     BOOST_CHECK(stats.m_convergence_hint == 0);
+}
+
+BOOST_AUTO_TEST_CASE(it_determines_whether_it_triggred_automated_greylisting)
+{
+    NN::Superblock::ProjectStats stats(123, 456, 789);
+
+    BOOST_CHECK(stats.Greylisted() == false);
+
+    stats.m_zcd = NN::ZeroCreditTally(254); // 7 days
+
+    BOOST_CHECK(stats.Greylisted() == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_advances_the_zcd_tally_for_the_next_superblock)
+{
+    NN::Superblock::ProjectStats stats(123, 456, 789);
+    NN::ZeroCreditTally tally = stats.AdvanceZcd(124); // non-zero-credit delta
+
+    BOOST_CHECK_EQUAL(tally.Count(), 0);
+
+    tally = stats.AdvanceZcd(123); // zero-credit delta
+
+    BOOST_CHECK_EQUAL(tally.Count(), 1);
 }
 
 BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
@@ -1325,6 +1359,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x01, // Total credit (VARINT)
         0x02, // Average RAC (VARINT)
         0x03, // Total RAC (VARINT)
+        0x00, // Zero-credit days (VARINT)
     };
 
     NN::Superblock::ProjectStats project(1, 2, 3);
@@ -1344,6 +1379,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x01, // Total credit (VARINT)
         0x02, // Average RAC (VARINT)
         0x03, // Total RAC (VARINT)
+        0x00, // Zero-credit days (VARINT)
     };
 
     NN::Superblock::ProjectStats project;
@@ -1572,11 +1608,13 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
     };
 
     NN::Superblock::ProjectIndex projects;
@@ -1603,11 +1641,13 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
     };
 
     NN::Superblock::ProjectIndex projects;
@@ -1653,12 +1693,14 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
     };
 
@@ -1692,12 +1734,14 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_fallback_convergence)
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74, // "project_2" key
         0x5f, 0x32,                                     // ...
         0x01,                                           // Total credit (VARINT)
         0x02,                                           // Average RAC (VARINT)
         0x03,                                           // Total RAC (VARINT)
+        0x00,                                           // ZCD (VARINT)
         0x76, 0x13, 0x59, 0xd3,                         // Convergence hint
     };
 
@@ -1832,11 +1876,13 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
         0x00,                                            // Total credit
         0x00,                                            // Average RAC
         0x00,                                            // Total RAC
+        0x00,                                            // Zero-credit days
         0x09, 0x70, 0x72, 0x6f, 0x6a, 0x65, 0x63, 0x74,  // "project_2" key
         0x5f, 0x32,                                      // ...
         0x00,                                            // Total credit
         0x00,                                            // Average RAC
         0x00,                                            // Total RAC
+        0x00,                                            // Zero-credit days
     };
 
     uint256 expected = Hash(input.begin(), input.end());
