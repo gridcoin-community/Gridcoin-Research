@@ -468,6 +468,9 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
 
+            // Clear "unable to send beacon" warning message (if any):
+            msMiningErrors6.clear();
+
             return true;
         }
         catch(UniValue& objError)
