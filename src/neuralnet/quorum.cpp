@@ -194,6 +194,7 @@ public:
             pindexLast = pindexLast->pprev;
         }
     }
+
 private:
     //!
     //! \brief A set of recently-added superblocks not yet activated by the
@@ -520,6 +521,11 @@ SuperblockIndex g_superblock_index;
 //!
 LegacyConsensus g_legacy_consensus;
 
+//!
+//! \brief Manages automated greylisting of projects on the Gridcoin whitelist.
+//!
+Greylist g_greylist;
+
 } // anonymous namespace
 
 
@@ -667,4 +673,14 @@ void Quorum::PopSuperblock(const CBlockIndex* const pindex)
 bool Quorum::CommitSuperblock(const uint32_t height)
 {
     return g_superblock_index.Commit(height);
+}
+
+GreylistSnapshot Quorum::FilterGreylist(WhitelistSnapshot projects)
+{
+    return g_greylist.Filter(std::move(projects));
+}
+
+GreylistReason Quorum::CheckGreylist(const std::string& project_name)
+{
+    return g_greylist.Check(project_name);
 }
