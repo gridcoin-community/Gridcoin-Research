@@ -119,31 +119,6 @@ public:
     }
 
     //!
-    //! \brief Get the average magnitude of the account over the accrual time
-    //! span.
-    //!
-    double AverageMagnitude(const ResearchAccount& account) const override
-    {
-        uint16_t last_magnitude = account.LastRewardMagnitude();
-
-        if (AccrualBlockSpan(account) <= BLOCKS_PER_DAY * 20) {
-            return (double)(last_magnitude + account.m_magnitude) / 2;
-        }
-
-        // If the accrual age is greater than than 20 days, add the midpoint
-        // average magnitude to ensure that the overall average magnitude is
-        // accurate:
-        //
-        // TODO: use superblock windows to calculate more precise average
-        //
-        const double total_mag = last_magnitude
-            + account.AverageLifetimeMagnitude()
-            + account.m_magnitude;
-
-        return total_mag / 3;
-    }
-
-    //!
     //! \brief Get the average daily research payment over the lifetime of the
     //! account.
     //!
@@ -285,5 +260,37 @@ private:
     const int64_t m_payment_time;  //!< Time of payment to calculate rewards at.
     const double m_magnitude_unit; //!< Network magnitude unit to factor in.
     const uint32_t m_last_height;  //!< Height of the block for the reward.
+
+    //!
+    //! \brief Get the average magnitude of the account over the accrual time
+    //! span.
+    //!
+    //! \param account Account of the CPID to calculate average magnitude for.
+    //!
+    //! \return Average of the CPID's current magnitude and the magnitude for
+    //! the CPID's last generated block. When the CPID's last staked block is
+    //! older than roughly 20 days, this average includes the CPID's lifetime
+    //! average magnitude as well.
+    //!
+    double AverageMagnitude(const ResearchAccount& account) const
+    {
+        uint16_t last_magnitude = account.LastRewardMagnitude();
+
+        if (AccrualBlockSpan(account) <= BLOCKS_PER_DAY * 20) {
+            return (double)(last_magnitude + account.m_magnitude) / 2;
+        }
+
+        // If the accrual age is greater than than 20 days, add the midpoint
+        // average magnitude to ensure that the overall average magnitude is
+        // accurate:
+        //
+        // TODO: use superblock windows to calculate more precise average
+        //
+        const double total_mag = last_magnitude
+            + account.AverageLifetimeMagnitude()
+            + account.m_magnitude;
+
+        return total_mag / 3;
+    }
 }; // ResearchAgeComputer
 } // anonymous namespace

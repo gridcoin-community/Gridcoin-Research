@@ -51,12 +51,6 @@ public:
     virtual int64_t AccrualBlockSpan(const ResearchAccount& account) const = 0;
 
     //!
-    //! \brief Get the average magnitude of the account over the accrual time
-    //! span.
-    //!
-    virtual double AverageMagnitude(const ResearchAccount& account) const = 0;
-
-    //!
     //! \brief Get the average daily research payment over the lifetime of the
     //! account.
     //!

@@ -64,11 +64,6 @@ public:
         return 0;
     }
 
-    double AverageMagnitude(const ResearchAccount& account) const override
-    {
-        return account.m_magnitude;
-    }
-
     int64_t PaymentPerDay(const ResearchAccount& account) const override
     {
         return 0;
