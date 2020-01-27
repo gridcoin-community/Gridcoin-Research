@@ -327,7 +327,7 @@ AccrualComputer Tally::GetComputer(
         return MakeUnique<NullAccrualComputer>();
     }
 
-    if (GetAccount(cpid).IsNew()) {
+    if (!GetAccount(cpid).IsActive(last_block_ptr->nHeight)) {
         return MakeUnique<NewbieAccrualComputer>(
             cpid,
             payment_time,

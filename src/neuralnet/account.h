@@ -55,6 +55,33 @@ public:
     }
 
     //!
+    //! \brief Determine whether the account is considered active.
+    //!
+    //! \return \c true if the account is not new and the CPID staked a block
+    //! within the last six months.
+    //!
+    bool IsActive(const int64_t height) const
+    {
+        if (IsNew()) {
+            return false;
+        }
+
+        const int64_t block_span = height - LastRewardHeight();
+
+        // If a CPID's last staked block occurred earlier than six months ago,
+        // the account is considered inactive by legacy rules.
+        //
+        // This condition emulates the GetHistoricalMagnitude() function which
+        // scans backward from pindexBest, one block below the claimed height,
+        // so we decrease the block span by one to match the original.
+        //
+        // Note that "six months" here is usually closer to seven months since
+        // the network emits fewer blocks per day than the constant implies.
+        //
+        return block_span - 1 <= BLOCKS_PER_DAY * 30 * 6;
+    }
+
+    //!
     //! \brief Get a pointer to the first block with a research reward earned by
     //! the account.
     //!
