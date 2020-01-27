@@ -34,6 +34,7 @@ namespace
         uint256S("8f4f6c5cb17fda158229a627d18d5cff30621e3612f464526f6f356e7a699838"), //T578162 (block span)
         uint256S("c1aa0511add3bed3f2e366d38b954285a7602cae10a7244e7fe35e4002e90cd5"), //T629408
         uint256S("639756cf39bf12a4a0ab4ea5ec10938fd0f463cc7bc1bd2916529a445ceba2ab"), //T680406
+        uint256S("ba1aae8ea37a9c330b298bd2b569448f0249a685bb0a8e85698fe44d1edca774"), //T1145954 (6-month cutoff)
     };
 
 
