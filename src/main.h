@@ -237,11 +237,6 @@ std::string ExtractXML(const std::string& XMLdata, const std::string& key, const
 std::string GetCurrentOverviewTabPoll();
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);
-// Validate researcher rewards.
-bool CheckProofOfResearch(
-    const CBlockIndex* pindexPrev, //previous block in chain index
-    const CBlock &block);    //block to check
-
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
 int64_t GetConstantBlockReward(const CBlockIndex* index);
 
@@ -1386,7 +1381,7 @@ public:
 
 
     bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
-    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false, bool fReorganizing=false);
+    bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
     bool ReadFromDisk(const CBlockIndex* pindex, bool fReadTransactions=true);
     bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
     bool CheckBlock(std::string sCaller, int height1, int64_t mint, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) const;
