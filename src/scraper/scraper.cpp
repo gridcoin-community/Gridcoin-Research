@@ -3614,9 +3614,9 @@ bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& Pub
     nTotalTime = nEndTime - nBeginTime;
     nAvgTimeBetweenManifests = nTotalTime / nIntervals;
 
-    // nScraperSleep is in milliseconds. If the average interval is less than 50% of nScraperSleep in seconds, ban the scraper.
-    // Note that this is at least a factor of 6 faster than the expected rate given usual project update velocity.
-    if (nAvgTimeBetweenManifests < nScraperSleep / 2000)
+    // nScraperSleep is in milliseconds. If the average interval is less than 25% of nScraperSleep in seconds, ban the scraper.
+    // Note that this is at least a factor of 12 faster than the expected rate given usual project update velocity.
+    if (nAvgTimeBetweenManifests < nScraperSleep / 4000)
     {
         _log(logattribute::CRITICAL, "IsScraperMaximumManifestPublishingRateExceeded", "Scraper " + sManifestAddress +
              " has published too many manifests in too short a time:\n" +
