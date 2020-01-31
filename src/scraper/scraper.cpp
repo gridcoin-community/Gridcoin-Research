@@ -81,6 +81,8 @@ mTeamIDs TeamIDMap;
 typedef std::map<std::string, std::string> mProjectTeamETags;
 mProjectTeamETags ProjTeamETags;
 
+std::vector<std::string> GetTeamWhiteList();
+
 std::string urlsanity(const std::string& s, const std::string& type);
 std::string lowercase(std::string s);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
@@ -482,6 +484,24 @@ int64_t SuperblockAge()
     int64_t nSBage = GetAdjustedTime() - superblock_time;
 
     return nSBage;
+}
+
+std::vector<std::string> GetTeamWhiteList()
+{
+    std::string delimiter;
+
+    // Due to a delimiter changeout from "|" to "<>" we must check to see if "<>" is in use
+    // in the protocol string.
+    if (TEAM_WHITELIST.find("<>") != std::string::npos)
+    {
+        delimiter = "<>";
+    }
+    else
+    {
+        delimiter = "|";
+    }
+
+    return split(TEAM_WHITELIST, delimiter);
 }
 
 /*********************
@@ -1442,7 +1462,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         const auto iter = TeamIDMap.find(prjs.m_name);
         bool fProjTeamIDsMissing = false;
 
-        if (iter == TeamIDMap.end() || iter->second.size() != split(TEAM_WHITELIST, "|").size()) fProjTeamIDsMissing = true;
+        if (iter == TeamIDMap.end() || iter->second.size() != GetTeamWhiteList().size()) fProjTeamIDsMissing = true;
 
         // If fExplorer is false, which means we do not need to retain team files, and there are no TeamID entries missing,
         // then skip processing altogether.
@@ -1618,7 +1638,7 @@ bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, co
 
     _log(logattribute::INFO, "ProcessProjectTeamFile", "Started processing " + file.filename().string());
 
-    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
+    std::vector<std::string> vTeamWhiteList = GetTeamWhiteList();
 
     std::string line;
     stringbuilder builder;
@@ -2160,23 +2180,14 @@ bool LoadTeamIDList(const fs::path& file)
     in.push(ingzfile);
 
     std::string line;
-    std::string separator;
+    std::string separator = "<>";
 
     // Header. This is used to construct the team names vector, since the team IDs were stored in the same order.
     std::getline(in, line);
 
-    // This is to detect and handle the loading of a legacy existing TeamID.csv.gz file that contains commas rather than pipes.
-    // The file will be rewritten with pipe separators when the team files are processed.
-    if (line.find("|") != std::string::npos)
-    {
-        separator = "|";
-    }
-    else
-    {
-        _log(logattribute::INFO, "LoadTeamIDList", "Loading from legacy TeamID.csv.gz file with comma separator. This will be converted to pipe separator.");
-
-        separator = ",";
-    }
+    // This is to detect an existing TeamID.csv.gz file that contains the wrong separators. The load will be aborted,
+    // This will cause an overwrite of the file with the correct separators when the team files are processed fresh.
+    if (line.find(separator) == std::string::npos) return false;
 
     // This is in the form Project, Gridcoin, ...."
     std::vector<std::string> vTeamNames = split(line, separator);
@@ -2326,7 +2337,7 @@ bool StoreTeamIDList(const fs::path& file)
     // Header
     stream << "Project";
 
-    std::vector<std::string> vTeamWhiteList = split(TEAM_WHITELIST, "|");
+    std::vector<std::string> vTeamWhiteList = GetTeamWhiteList();
     std::set<std::string> setTeamWhiteList;
 
     // Ensure that the team names are in the correct order.
@@ -2334,7 +2345,7 @@ bool StoreTeamIDList(const fs::path& file)
         setTeamWhiteList.insert(iTeam);
 
     for (auto const& iTeam: setTeamWhiteList)
-        stream << "|" << iTeam;
+        stream << "<>" << iTeam;
 
     stream << std::endl;
 
@@ -2355,18 +2366,13 @@ bool StoreTeamIDList(const fs::path& file)
 
             if (iter != iProject.second.end())
             {
-                sProjectEntry += "|" + std::to_string(iter->second);
+                sProjectEntry += "<>" + std::to_string(iter->second);
             }
             else
             {
-                sProjectEntry += "|-1";
+                sProjectEntry += "<>-1";
             }
         }
-
-   /*
-        for (auto const& iTeam : iProject.second)
-            sProjectEntry += "|" + std::to_string(iTeam.second);
-    */
 
         stream << sProjectEntry << std::endl;
     }
