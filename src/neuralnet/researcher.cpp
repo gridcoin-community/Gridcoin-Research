@@ -160,8 +160,14 @@ std::set<std::string> GetTeamWhitelist()
     }
 
     std::set<std::string> teams;
+    std::string delimiter = "<>";
 
-    for (auto&& team_name : split(entry.value, "|")) {
+    // Handle the transition of the team whitelist delimiter from "|" to "<>":
+    if (entry.value.find(delimiter) == std::string::npos) {
+        delimiter = "|";
+    }
+
+    for (auto&& team_name : split(entry.value, delimiter)) {
         if (team_name.empty()) {
             continue;
         }
