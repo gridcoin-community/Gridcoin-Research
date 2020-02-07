@@ -91,13 +91,13 @@ public:
 
     int64_t Accrual(const ResearchAccount& account) const override
     {
+        if (account.m_magnitude <= 0) {
+            return 0;
+        }
+
         constexpr int64_t six_months = 86400 * 30 * 6; // seconds
 
         if (AccrualAge(account) >= six_months) {
-            if (account.m_magnitude <= 0) {
-                return 0;
-            }
-
             if (fDebug) {
                 LogPrintf(
                     "Accrual: %s Invalid Beacon, Using 0.01 age bootstrap",
