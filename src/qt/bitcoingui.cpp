@@ -450,6 +450,7 @@ void BitcoinGUI::createMenuBar()
 
 void BitcoinGUI::createToolBars()
 {
+    // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
     addToolBar(Qt::LeftToolBarArea,toolbar);
@@ -514,6 +515,8 @@ void BitcoinGUI::createToolBars()
     toolbar2->addWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
+
+    // Top tool bar (clickable Gridcoin and BOINC logos)
     QToolBar *toolbar3 = addToolBar("Logo bar");
     addToolBar(Qt::TopToolBarArea,toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
@@ -532,6 +535,18 @@ void BitcoinGUI::createToolBars()
     connect(boincLogoLabel, SIGNAL(clicked()), this, SLOT(boincClicked()));
     toolbar3->addWidget(boincLogoLabel);
 
+    // Use a red color for the toolbars background if on testnet.
+    if (GetBoolArg("-testnet"))
+    {
+        toolbar2->setStyleSheet("background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 darkRed, stop: 1 darkRed)");
+        toolbar3->setStyleSheet("background-color:darkRed");
+    }
+    else
+    {
+        toolbar2->setStyleSheet("background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127))");
+        toolbar3->setStyleSheet("background-color:rgb(65,0,127)");
+    }
+
 
 }
 
@@ -545,19 +560,19 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         {
             setWindowTitle(windowTitle() + QString(" ") + tr("[testnet]"));
 #ifndef Q_OS_MAC
-            qApp->setWindowIcon(QPixmap(":/images/gridcoin"));
-            setWindowIcon(QPixmap(":/images/gridcoin"));
+            qApp->setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
+            setWindowIcon(QPixmap(":/images/gridcoin_testnet"));
 #else
-            MacDockIconHandler::instance()->setIcon(QPixmap(":/images/gridcoin"));
+            MacDockIconHandler::instance()->setIcon(QPixmap(":/images/gridcoin_testnet"));
 #endif
             if(trayIcon)
             {
                 trayIcon->setToolTip(tr("Gridcoin client") + QString(" ") + tr("[testnet]"));
-                trayIcon->setIcon(QPixmap(":/images/gridcoin"));
-                toggleHideAction->setIcon(QPixmap(":/images/gridcoin"));
+                trayIcon->setIcon(QPixmap(":/images/gridcoin_testnet"));
+                toggleHideAction->setIcon(QPixmap(":/images/gridcoin_testnet"));
             }
 
-            aboutAction->setIcon(QPixmap(":/images/gridcoin"));
+            aboutAction->setIcon(QPixmap(":/images/gridcoin_testnet"));
         }
 
         // Keep up to date with client

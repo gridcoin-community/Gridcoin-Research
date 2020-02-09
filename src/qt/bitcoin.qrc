@@ -73,6 +73,7 @@
         <file alias="boinc_w">res/images/boinc_logo_white.svg</file>
         <file alias="gridcoin">res/images/gridcoin.svg</file>
         <file alias="about_light">res/images/about_light.svg</file>
+        <file alias="gridcoin_testnet">res/images/gridcoin_testnet.svg</file>
     </qresource>
     <qresource prefix="/movies"/>
     <qresource prefix="/stylesheets">
