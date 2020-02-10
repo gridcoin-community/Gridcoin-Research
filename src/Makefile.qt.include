@@ -312,6 +312,7 @@ RES_IMAGES = \
   qt/res/images/gridcoin_horizontal.svg \
   qt/res/images/boinc_logo_white.svg \
   qt/res/images/gridcoin.svg \
+  qt/res/images/gridcoin_testnet.svg \
   qt/res/images/about_light.svg
 
 RES_STYLESHEETS = \

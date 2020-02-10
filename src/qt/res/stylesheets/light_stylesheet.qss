@@ -360,20 +360,17 @@ QListWidget{
     padding-top:1.25em;
     min-width:8em;
     height:100%;    
-    background: transparent;
     color: black;
 }
 
 #toolbar2 {
     border:none;
-    background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(195,195,195), stop: 1 rgb(195,195,195));
     min-width:1.625em;
     max-width:1.625em;
 }
 
 #toolbar3 {
     border:none;
-    background-color:rgb(65,0,127);
     min-height:3.25em;
     max-height:3.25em;
 }
