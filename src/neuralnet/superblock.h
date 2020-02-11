@@ -1187,9 +1187,6 @@ public:
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
     //std::vector<BeaconAcknowledgement> m_verified_beacons;
 
-    int64_t m_height;    //!< Height of the block that contains the contract.
-    int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
-
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -1285,13 +1282,6 @@ public:
     //! \return \c true if the ProjectIndex fallback convergence flag is set.
     //!
     bool ConvergedByProject() const;
-
-    //!
-    //! \brief Get the current age of the superblock.
-    //!
-    //! \return Superblock age in seconds.
-    //!
-    int64_t Age() const;
 
     //!
     //! \brief Get a hash of the significant data in the superblock.

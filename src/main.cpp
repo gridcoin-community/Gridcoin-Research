@@ -2689,18 +2689,23 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     if (pindex->nHeight > nGrandfather) {
         if (claim.ContainsSuperblock()) {
+            // Note: PullClaim() invalidates the m_claim field by moving it.
+            // This must be the last instance where a claim is referenced:
+            //
+            NN::Claim claim = PullClaim();
+            NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(
+                std::move(claim.m_superblock),
+                pindex);
+
             // TODO: find the invalid historical superblocks so we can remove
             // the fColdBoot condition that skips this check when syncing the
             // initial chain:
             //
-            if (!fColdBoot && !NN::Quorum::ValidateSuperblockClaim(claim, pindex)) {
+            if (!fColdBoot && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex)) {
                 return DoS(25, error("ConnectBlock : Rejected invalid superblock."));
             }
 
-            // Note: PullClaim() invalidates the m_claim field by moving it.
-            // This must be the last instance where a claim is referenced:
-            //
-            NN::Quorum::PushSuperblock(std::move(PullClaim().m_superblock), pindex);
+            NN::Quorum::PushSuperblock(std::move(superblock));
         } else if (nVersion <= 10) {
             // Block versions 11+ validate superblocks from scraper convergence
             // instead of the legacy quorum system so we only record votes from

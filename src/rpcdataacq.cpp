@@ -261,7 +261,7 @@ UniValue rpc_getsupervotes(const UniValue& params, bool fHelp)
     UniValue result1(UniValue::VOBJ);
     if("last"==params[1].get_str())
     {
-        const uint64_t height = NN::Quorum::CurrentSuperblock()->m_height;
+        const uint64_t height = NN::Quorum::CurrentSuperblock().m_height;
         if(!height)
         {
             result1.pushKV("error","No superblock loaded");

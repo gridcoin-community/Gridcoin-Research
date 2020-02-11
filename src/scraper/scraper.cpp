@@ -472,7 +472,7 @@ int64_t SuperblockAge()
 {
     LOCK(cs_main);
 
-    return NN::Quorum::CurrentSuperblock()->Age();
+    return NN::Quorum::CurrentSuperblock().Age();
 }
 
 std::vector<std::string> GetTeamWhiteList()
@@ -5561,7 +5561,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("legacy packed size", legacy_packed_size);
     }
 
-    NN::Superblock NewFormatSuperblock;
+    NN::SuperblockPtr NewFormatSuperblock = NN::SuperblockPtr::Empty();
     NN::Superblock NewFormatSuperblock_out;
     CDataStream ss(SER_NETWORK, 1);
     uint64_t nNewFormatSuperblockSerSize;
@@ -5574,33 +5574,33 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-        NewFormatSuperblock = NN::Superblock::FromConvergence(ConvergedScraperStatsCache);
-        // NewFormatSuperblock = NN::Superblock::FromStats(ConvergedScraperStatsCache.mScraperConvergedStats);
-        NewFormatSuperblock.m_timestamp = ConvergedScraperStatsCache.nTime;
+        NewFormatSuperblock = NN::SuperblockPtr::BindShared(
+            NN::Superblock::FromConvergence(ConvergedScraperStatsCache),
+            pindexBest);
 
         _log(logattribute::INFO, "testnewsb", "ConvergedScraperStatsCache.Convergence.bByParts = " + std::to_string(ConvergedScraperStatsCache.Convergence.bByParts));
     }
 
-    _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock.m_projects.size()));
-    res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock.m_projects.size());
-    _log(logattribute::INFO, "testnewsb", "m_cpids size = " + std::to_string(NewFormatSuperblock.m_cpids.size()));
-    res.pushKV("m_cpids size", (uint64_t) NewFormatSuperblock.m_cpids.size());
-    _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
-    res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock.m_cpids.Zeros());
+    _log(logattribute::INFO, "testnewsb", "m_projects size = " + std::to_string(NewFormatSuperblock->m_projects.size()));
+    res.pushKV("m_projects size", (uint64_t) NewFormatSuperblock->m_projects.size());
+    _log(logattribute::INFO, "testnewsb", "m_cpids size = " + std::to_string(NewFormatSuperblock->m_cpids.size()));
+    res.pushKV("m_cpids size", (uint64_t) NewFormatSuperblock->m_cpids.size());
+    _log(logattribute::INFO, "testnewsb", "zero-mag count = " + std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
+    res.pushKV("zero-mag count", (uint64_t) NewFormatSuperblock->m_cpids.Zeros());
 
-    nNewFormatSuperblockSerSize = GetSerializeSize(NewFormatSuperblock, SER_NETWORK, 1);
-    nNewFormatSuperblockHash = NewFormatSuperblock.GetHash();
+    nNewFormatSuperblockSerSize = GetSerializeSize(*NewFormatSuperblock, SER_NETWORK, 1);
+    nNewFormatSuperblockHash = NewFormatSuperblock->GetHash();
 
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
-    res.pushKV("NewFormatSuperblock.m_version", (uint64_t) NewFormatSuperblock.m_version);
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock->m_version));
+    res.pushKV("NewFormatSuperblock.m_version", (uint64_t) NewFormatSuperblock->m_version);
 
-    nNewFormatSuperblockReducedContentHashFromConvergenceHint = NewFormatSuperblock.m_convergence_hint;
-    nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = NewFormatSuperblock.m_manifest_content_hint;
+    nNewFormatSuperblockReducedContentHashFromConvergenceHint = NewFormatSuperblock->m_convergence_hint;
+    nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = NewFormatSuperblock->m_manifest_content_hint;
 
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockSerSize = " + std::to_string(nNewFormatSuperblockSerSize));
     res.pushKV("nNewFormatSuperblockSerSize", nNewFormatSuperblockSerSize);
 
-    ss << NewFormatSuperblock;
+    ss << *NewFormatSuperblock;
     ss >> NewFormatSuperblock_out;
 
     nNewFormatSuperblock_outSerSize = GetSerializeSize(NewFormatSuperblock_out, SER_NETWORK, 1);
@@ -5609,7 +5609,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblock_outSerSize = " + std::to_string(nNewFormatSuperblock_outSerSize));
     res.pushKV("nNewFormatSuperblock_outSerSize", nNewFormatSuperblock_outSerSize);
 
-    if (NewFormatSuperblock.GetHash() == nNewFormatSuperblock_outHash)
+    if (NewFormatSuperblock->GetHash() == nNewFormatSuperblock_outHash)
     {
         _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock serialization passed.");
         res.pushKV("NewFormatSuperblock serialization", "passed");
@@ -5632,8 +5632,8 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     res.pushKV("nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint", (uint64_t) nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint);
     _log(logattribute::INFO, "testnewsb", "nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint = " + std::to_string(nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint));
 
-    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
-    res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock.m_cpids.Zeros()));
+    _log(logattribute::INFO, "testnewsb", "NewFormatSuperblock legacy unpack number of zero mags = " + std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
+    res.pushKV("NewFormatSuperblock legacy unpack number of zero mags", std::to_string(NewFormatSuperblock->m_cpids.Zeros()));
 
     // Log the number of bits used to force key collisions.
     _log(logattribute::INFO, "testnewsb", "nReducedCacheBits = " + std::to_string(nReducedCacheBits));
@@ -5644,7 +5644,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     //
 
     // nReducedCacheBits is only used for non-cached tests.
-    scraperSBvalidationtype validity = ::ValidateSuperblock(NewFormatSuperblock, true);
+    scraperSBvalidationtype validity = ::ValidateSuperblock(*NewFormatSuperblock, true);
 
     if (validity != scraperSBvalidationtype::Invalid && validity != scraperSBvalidationtype::Unknown)
     {
@@ -5658,7 +5658,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     }
 
     // nReducedCacheBits is only used here for non-cached tests.
-    scraperSBvalidationtype validity2 = ::ValidateSuperblock(NewFormatSuperblock, false, nReducedCacheBits);
+    scraperSBvalidationtype validity2 = ::ValidateSuperblock(*NewFormatSuperblock, false, nReducedCacheBits);
 
     if (validity2 != scraperSBvalidationtype::Invalid && validity2 != scraperSBvalidationtype::Unknown)
     {
@@ -5738,7 +5738,6 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
         // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
         RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64() >> 32;
-        RandomPastSB.m_timestamp = RandomPastConvergedManifest.timestamp;
 
         if (RandomPastConvergedManifest.bByParts)
         {
@@ -5794,7 +5793,11 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         // SuperblockValidator class tests (past convergence)
         //
 
-        if (NN::Quorum::ValidateSuperblock(RandomPastSB))
+        NN::SuperblockPtr RandomPastSBPtr = NN::SuperblockPtr::BindShared(
+            std::move(RandomPastSB),
+            pindexBest);
+
+        if (NN::Quorum::ValidateSuperblock(RandomPastSBPtr))
         {
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (using cache) passed");
             res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "passed");
@@ -5805,7 +5808,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "failed");
         }
 
-        if (NN::Quorum::ValidateSuperblock(RandomPastSB, false, nReducedCacheBits))
+        if (NN::Quorum::ValidateSuperblock(RandomPastSBPtr, false, nReducedCacheBits))
         {
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (without using cache) passed");
             res.pushKV("NN::ValidateSuperblock validation against random past (without using cache)", "passed");

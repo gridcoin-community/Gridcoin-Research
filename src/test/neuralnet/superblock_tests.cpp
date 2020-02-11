@@ -427,9 +427,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_superblock)
     BOOST_CHECK(superblock.m_projects.empty() == true);
     BOOST_CHECK(superblock.m_projects.TotalRac() == 0);
     BOOST_CHECK(superblock.m_projects.AverageRac() == 0);
-
-    BOOST_CHECK(superblock.m_height == 0);
-    BOOST_CHECK(superblock.m_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
@@ -447,9 +444,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
     BOOST_CHECK(superblock.m_projects.empty() == true);
     BOOST_CHECK(superblock.m_projects.TotalRac() == 0);
     BOOST_CHECK(superblock.m_projects.AverageRac() == 0);
-
-    BOOST_CHECK(superblock.m_height == 0);
-    BOOST_CHECK(superblock.m_timestamp == 0);
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
@@ -809,16 +803,6 @@ BOOST_AUTO_TEST_CASE(it_checks_whether_it_was_created_from_fallback_convergence)
     superblock.m_projects.SetHint("project_name", CSerializeData());
 
     BOOST_CHECK(superblock.ConvergedByProject() == true);
-}
-
-BOOST_AUTO_TEST_CASE(it_calculates_its_age)
-{
-    NN::Superblock superblock;
-
-    superblock.m_timestamp = GetAdjustedTime() - 1;
-
-    BOOST_CHECK(superblock.Age() > 0);
-    BOOST_CHECK(superblock.Age() < GetAdjustedTime());
 }
 
 BOOST_AUTO_TEST_CASE(it_generates_its_quorum_hash)

@@ -43,7 +43,7 @@ public:
     SuperblockPtr Current() const
     {
         if (m_cache.empty()) {
-            return std::make_shared<const Superblock>();
+            return SuperblockPtr::Empty();
         }
 
         return m_cache.front();
@@ -61,7 +61,7 @@ public:
     SuperblockPtr Pending() const
     {
         if (m_pending.empty()) {
-            return std::make_shared<const Superblock>();
+            return SuperblockPtr::Empty();
         }
 
         return m_pending.rbegin()->second;
@@ -119,7 +119,7 @@ public:
 
         m_pending.erase(m_pending.begin(), pending_iter);
 
-        log(Current()->m_height, "commit.");
+        log(Current().m_height, "commit.");
 
         return true;
     }
@@ -129,11 +129,9 @@ public:
     //!
     //! \param superblock Contains the superblock data to add.
     //!
-    void PushSuperblock(Superblock superblock)
+    void PushSuperblock(SuperblockPtr superblock)
     {
-        m_pending.emplace(
-            superblock.m_height,
-            std::make_shared<const Superblock>(std::move(superblock)));
+        m_pending.emplace(superblock.m_height, std::move(superblock));
     }
 
     //!
@@ -161,7 +159,7 @@ public:
         //
         if (!m_cache.empty()) {
             for (auto&& superblock : m_cache) {
-                m_pending.emplace(superblock->m_height, std::move(superblock));
+                m_pending.emplace(superblock.m_height, std::move(superblock));
             }
 
             m_cache.clear();
@@ -195,10 +193,9 @@ public:
             block.ReadFromDisk(pindexLast);
             Claim claim = block.PullClaim();
 
-            claim.m_superblock.m_height = pindexLast->nHeight;
-            claim.m_superblock.m_timestamp = pindexLast->nTime;
-
-            PushSuperblock(std::move(claim.m_superblock));
+            PushSuperblock(SuperblockPtr::BindShared(
+                std::move(claim.m_superblock),
+                pindexLast));
 
             pindexLast = pindexLast->pprev;
         }
@@ -1455,6 +1452,7 @@ void Quorum::ForgetVote(const CBlockIndex* const pindex)
 
 bool Quorum::ValidateSuperblockClaim(
     const Claim& claim,
+    const SuperblockPtr& superblock,
     const CBlockIndex* const pindex)
 {
     if (!SuperblockNeeded()) {
@@ -1466,11 +1464,11 @@ bool Quorum::ValidateSuperblockClaim(
         // therefor, not for the block's hash), so we need to verify the hash
         // to protect the integrity of the superblock data:
         //
-        if (claim.m_superblock.GetHash() != claim.m_quorum_hash) {
+        if (superblock->GetHash() != claim.m_quorum_hash) {
             return error("ValidateSuperblockClaim(): quorum hash mismatch.");
         }
 
-        return  NN::ValidateSuperblock(claim.m_superblock);
+        return ValidateSuperblock(superblock);
     }
 
     const CBitcoinAddress address(claim.m_quorum_address);
@@ -1488,10 +1486,10 @@ bool Quorum::ValidateSuperblockClaim(
     // Popular hash search begins from the block before:
     const QuorumHash popular_hash = FindPopularHash(pindex->pprev);
 
-    if (claim.m_superblock.GetHash() != popular_hash) {
+    if (superblock->GetHash() != popular_hash) {
         return error("ValidateSuperblockClaim(): "
             "superblock hash mismatch: %s popular: %s",
-            claim.m_superblock.GetHash().ToString(),
+            superblock->GetHash().ToString(),
             popular_hash.ToString());
     }
 
@@ -1561,7 +1559,7 @@ bool Quorum::SuperblockNeeded()
     const SuperblockPtr superblock = g_superblock_index.Current();
 
     return !superblock->WellFormed()
-        || superblock->Age() > GetSuperblockAgeSpacing(nBestHeight);
+        || superblock.Age() > GetSuperblockAgeSpacing(nBestHeight);
 
 }
 
@@ -1583,12 +1581,9 @@ Superblock Quorum::CreateSuperblock()
     return ScraperGetSuperblockContract();
 }
 
-void Quorum::PushSuperblock(Superblock superblock, const CBlockIndex* const pindex)
+void Quorum::PushSuperblock(SuperblockPtr superblock)
 {
-    LogPrintf("Quorum::PushSuperblock(%" PRId64 ")", pindex->nHeight);
-
-    superblock.m_height = pindex->nHeight;
-    superblock.m_timestamp = pindex->nTime;
+    LogPrintf("Quorum::PushSuperblock(%" PRId64 ")", superblock.m_height);
 
     g_superblock_index.PushSuperblock(std::move(superblock));
 }

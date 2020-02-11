@@ -496,8 +496,6 @@ Superblock::Superblock()
     : m_version(Superblock::CURRENT_VERSION)
     , m_convergence_hint(0)
     , m_manifest_content_hint(0)
-    , m_height(0)
-    , m_timestamp(0)
 {
 }
 
@@ -505,8 +503,6 @@ Superblock::Superblock(uint32_t version)
     : m_version(version)
     , m_convergence_hint(0)
     , m_manifest_content_hint(0)
-    , m_height(0)
-    , m_timestamp(0)
 {
 }
 
@@ -614,11 +610,6 @@ bool Superblock::WellFormed() const
 bool Superblock::ConvergedByProject() const
 {
     return m_projects.m_converged_by_project;
-}
-
-int64_t Superblock::Age() const
-{
-    return GetAdjustedTime() - m_timestamp;
 }
 
 QuorumHash Superblock::GetHash(const bool regenerate) const

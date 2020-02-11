@@ -92,7 +92,7 @@ public:
     //!
     void ApplySuperblock(const SuperblockPtr superblock)
     {
-        LogPrintf("NetworkTally::ApplySuperblock(%" PRId64 ")", superblock->m_height);
+        LogPrintf("NetworkTally::ApplySuperblock(%" PRId64 ")", superblock.m_height);
         m_total_magnitude = superblock->m_cpids.TotalMagnitude();
     }
 
@@ -267,7 +267,7 @@ private:
     //! \brief A link to the current active superblock used to lazily update
     //! researcher magnitudes when supplying an account.
     //!
-    SuperblockPtr m_current_superblock = std::make_shared<Superblock>();
+    SuperblockPtr m_current_superblock = SuperblockPtr::Empty();
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
