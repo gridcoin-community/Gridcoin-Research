@@ -191,11 +191,9 @@ public:
 
             CBlock block;
             block.ReadFromDisk(pindexLast);
-            Claim claim = block.PullClaim();
 
-            PushSuperblock(SuperblockPtr::BindShared(
-                std::move(claim.m_superblock),
-                pindexLast));
+            PushSuperblock(
+                SuperblockPtr::BindShared(block.PullSuperblock(), pindexLast));
 
             pindexLast = pindexLast->pprev;
         }

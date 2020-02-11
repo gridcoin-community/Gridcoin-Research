@@ -2689,13 +2689,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 
     if (pindex->nHeight > nGrandfather) {
         if (claim.ContainsSuperblock()) {
-            // Note: PullClaim() invalidates the m_claim field by moving it.
-            // This must be the last instance where a claim is referenced:
+            // Note: PullSuperblock() invalidates the m_claim.m_superblock field
+            // by moving it. This must be the last instance where we reference a
+            // superblock in a block's claim field:
             //
-            NN::Claim claim = PullClaim();
-            NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(
-                std::move(claim.m_superblock),
-                pindex);
+            NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(PullSuperblock(), pindex);
 
             // TODO: find the invalid historical superblocks so we can remove
             // the fColdBoot condition that skips this check when syncing the
