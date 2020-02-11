@@ -95,6 +95,21 @@ public:
         const CBlockIndex* const pindex);
 
     //!
+    //! \brief Validate the supplied superblock by comparing it to the node's
+    //! local manifest data.
+    //!
+    //! \param superblock The superblock to validate.
+    //! \param use_cache  If \c false, skip validation with the scraper cache.
+    //! \param hint_bits  For testing by-project fallback validation.
+    //!
+    //! \return \c true if local manifest data produces a matching superblock.
+    //!
+    static bool ValidateSuperblock(
+        const Superblock& superblock,
+        const bool use_cache = true,
+        const size_t hint_bits = 32);
+
+    //!
     //! \brief Get a reference to the current active superblock.
     //!
     //! \return The most recent superblock applied by the tally.

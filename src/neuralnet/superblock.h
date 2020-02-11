@@ -1320,22 +1320,6 @@ private:
     //!
     mutable QuorumHash m_hash_cache;
 }; // Superblock
-
-
-//!
-//! \brief Validate the supplied superblock by comparing it to local manifest
-//! data.
-//!
-//! \param superblock The superblock to validate.
-//! \param use_cache  If \c false, skip validation with the scraper cache.
-//! \param hint_bits  For testing by-project fallback validation.
-//!
-//! \return \c True if the local manifest data produces a matching superblock.
-//!
-bool ValidateSuperblock(
-    const Superblock& superblock,
-    const bool use_cache = true,
-    const size_t hint_bits = 32);
 } // namespace NN
 
 namespace std {

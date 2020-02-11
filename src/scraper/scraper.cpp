@@ -5675,7 +5675,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     // SuperblockValidator class tests (current convergence)
     //
 
-    if (NN::ValidateSuperblock(NewFormatSuperblock))
+    if (NN::Quorum::ValidateSuperblock(NewFormatSuperblock))
     {
         _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (using cache) passed");
         res.pushKV("NN::ValidateSuperblock validation against current (using cache)", "passed");
@@ -5686,7 +5686,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         res.pushKV("NN::ValidateSuperblock validation against current (using cache)", "failed");
     }
 
-    if (NN::ValidateSuperblock(NewFormatSuperblock, false, nReducedCacheBits))
+    if (NN::Quorum::ValidateSuperblock(NewFormatSuperblock, false, nReducedCacheBits))
     {
         _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against current (without using cache) passed");
         res.pushKV("NN::ValidateSuperblock validation against current (without using cache)", "passed");
@@ -5794,7 +5794,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         // SuperblockValidator class tests (past convergence)
         //
 
-        if (NN::ValidateSuperblock(RandomPastSB))
+        if (NN::Quorum::ValidateSuperblock(RandomPastSB))
         {
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (using cache) passed");
             res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "passed");
@@ -5805,7 +5805,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
             res.pushKV("NN::ValidateSuperblock validation against random past (using cache)", "failed");
         }
 
-        if (NN::ValidateSuperblock(RandomPastSB, false, nReducedCacheBits))
+        if (NN::Quorum::ValidateSuperblock(RandomPastSB, false, nReducedCacheBits))
         {
             _log(logattribute::INFO, "testnewsb", "NN::ValidateSuperblock validation against random past (without using cache) passed");
             res.pushKV("NN::ValidateSuperblock validation against random past (without using cache)", "passed");
