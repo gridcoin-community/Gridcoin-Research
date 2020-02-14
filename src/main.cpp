@@ -570,7 +570,7 @@ void GetGlobalStatus()
 
     try
     {
-        double boincmagnitude = NN::Tally::MyMagnitude().Floating();
+        double boincmagnitude = NN::Quorum::MyMagnitude().Floating();
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
         nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
@@ -2623,7 +2623,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             {
                 // 6-4-2017 - Verify researchers stored block magnitude
                 // 2018 02 04 - Moved here for better effect.
-                double dNeuralNetworkMagnitude = NN::Tally::GetMagnitude(claim.m_mining_id).Floating();
+                double dNeuralNetworkMagnitude = NN::Quorum::GetMagnitude(claim.m_mining_id).Floating();
                 if (claim.m_magnitude > (dNeuralNetworkMagnitude * 1.25)
                     && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000)))
                 {

@@ -1924,7 +1924,7 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     const NN::AccrualComputer calc = NN::Tally::GetComputer(cpid, now, pindexBest);
 
     json.pushKV("CPID", cpid.ToString());
-    json.pushKV("Magnitude (Last Superblock)", account.m_magnitude);
+    json.pushKV("Magnitude (Last Superblock)", NN::Quorum::GetMagnitude(cpid).Floating());
     json.pushKV("Current Magnitude Unit", calc->MagnitudeUnit());
 
     json.pushKV("First Payment Time", TimestampToHRDate(account.FirstRewardTime()));

@@ -8,6 +8,7 @@ class CBlockIndex;
 namespace NN {
 
 class Claim;
+class Magnitude;
 class QuorumHash;
 class Superblock;
 
@@ -194,6 +195,33 @@ public:
         const SuperblockPtr& superblock,
         const bool use_cache = true,
         const size_t hint_bits = 32);
+
+    //!
+    //! \brief Get the current magnitude of the CPID loaded by the wallet.
+    //!
+    //! \return The wallet user's magnitude or zero if the wallet started in
+    //! investor mode.
+    //!
+    static Magnitude MyMagnitude();
+
+    //!
+    //! \brief Get the current magnitude for the specified CPID.
+    //!
+    //! \param cpid The CPID to fetch the magnitude for.
+    //!
+    //! \return Magnitude as of the last tallied superblock.
+    //!
+    static Magnitude GetMagnitude(const Cpid cpid);
+
+    //!
+    //! \brief Get the current magnitude for the specified mining ID.
+    //!
+    //! \param cpid May contain a CPID to fetch the magnitude for.
+    //!
+    //! \return Magnitude as of the last tallied superblock or zero if the
+    //! mining ID represents an investor.
+    //!
+    static Magnitude GetMagnitude(const MiningId mining_id);
 
     //!
     //! \brief Get a reference to the current active superblock.
