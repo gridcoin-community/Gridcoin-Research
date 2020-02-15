@@ -92,10 +92,10 @@ namespace
             {
                 pg->lastruntime = currenttime;
 
-                curl_off_t speed;
+                double speed;
                 CURLcode result;
 
-                result = curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD_T, &speed);
+                result = curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD, &speed);
 
                 // Download speed update
                 if (result == CURLE_OK)
@@ -103,7 +103,7 @@ namespace
 
 #if LIBCURL_VERSION_NUM >= 0x073700
                     if (speed > 0)
-                        DownloadStatus.SnapshotDownloadSpeed = speed;
+                        DownloadStatus.SnapshotDownloadSpeed = (int64_t)speed;
 
                     else {
                         DownloadStatus.SnapshotDownloadSpeed = 0;
