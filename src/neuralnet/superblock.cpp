@@ -1197,7 +1197,8 @@ public:
         try {
             m_zero_mags = std::stoi(ExtractXML(packed, "<ZERO>", "</ZERO>"));
         } catch (...) {
-            LogPrintf("LegacySuperblock: Failed to parse zero mag CPIDs");
+            LogPrint(BCLog::LogFlags::SB,
+                "LegacySuperblock: Failed to parse zero mag CPIDs.\n");
         }
     }
 
@@ -1233,7 +1234,8 @@ public:
                     parts.size() > 2 ? std::stoi(parts[2]) : 0)); // RAC
 
             } catch (...) {
-                LogPrintf("ExtractProjects(): Failed to parse project RAC.");
+                LogPrint(BCLog::LogFlags::SB,
+                    "LegacySuperblock: Failed to parse project RAC.\n");
             }
         }
 
@@ -1302,7 +1304,8 @@ private:
             try {
                 magnitudes.Add(MiningId::Parse(parts[0]), std::stoi(parts[1]));
             } catch(...) {
-                LogPrintf("ExtractTextMagnitude(): Failed to parse magnitude.");
+                LogPrint(BCLog::LogFlags::SB,
+                    "LegacySuperblock: Failed to parse magnitude.\n");
             }
         }
 
