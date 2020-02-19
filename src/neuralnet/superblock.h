@@ -351,17 +351,6 @@ public:
         uint16_t MagnitudeOf(const Cpid& cpid) const;
 
         //!
-        //! \brief Get the offset of the provided CPID in the index.
-        //!
-        //! \param cpid The CPID to look-up the offset for.
-        //!
-        //! \return The CPID's zero-based offset if it exists in the index, or
-        //! the offset after the last element in the index (the index size) if
-        //! it doesn't.
-        //!
-        size_t OffsetOf(const Cpid& cpid) const;
-
-        //!
         //! \brief Get the CPID indexed at the specified offset.
         //!
         //! \param offset Zero-based offset of the CPID to fetch.

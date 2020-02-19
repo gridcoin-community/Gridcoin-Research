@@ -1611,18 +1611,6 @@ uint16_t Superblock::CpidIndex::MagnitudeOf(const Cpid& cpid) const
     return iter->second;
 }
 
-size_t Superblock::CpidIndex::OffsetOf(const Cpid& cpid) const
-{
-    const auto iter = m_magnitudes.find(cpid);
-
-    if (iter == m_magnitudes.end()) {
-        return m_magnitudes.size();
-    }
-
-    // Not very efficient--we can optimize this if needed:
-    return std::distance(m_magnitudes.begin(), iter);
-}
-
 Superblock::CpidIndex::const_iterator
 Superblock::CpidIndex::At(const size_t offset) const
 {
