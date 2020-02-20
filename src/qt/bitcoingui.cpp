@@ -15,6 +15,7 @@
 #include "transactiontablemodel.h"
 #include "addressbookpage.h"
 
+#include "global_objects_noui.hpp"
 #include "diagnosticsdialog.h"
 #include "sendcoinsdialog.h"
 #include "signverifymessagedialog.h"

@@ -1,5 +1,4 @@
 #include "appcache.h"
-#include "main.h"
 #include "util.h"
 
 #include <boost/algorithm/string.hpp>

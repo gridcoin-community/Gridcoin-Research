@@ -24,6 +24,7 @@
 #include "beacon.h"
 #include "miner.h"
 #include <random>
+#include "global_objects_noui.hpp"
 
 using namespace std;
 

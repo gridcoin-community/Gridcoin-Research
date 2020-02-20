@@ -8,6 +8,7 @@
 #include "rpcprotocol.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
+#include "checkpoints.h"
 #include "txdb.h"
 #include "beacon.h"
 #include "neuralnet/project.h"

@@ -12,11 +12,9 @@
 #endif
 
 #include <string>
-
 #include <stdint.h>
 
 #include "scraper/fwd.h"
-#include "neuralnet/superblock.h"
 
 class CBasicKeyStore;
 class CWallet;
@@ -79,7 +77,7 @@ public:
 
 	/** Ask the user a question */
     boost::signals2::signal<bool (std::string caption, std::string body), boost::signals2::last_value<bool> > ThreadSafeAskQuestion;
-	
+
     /** Handle a URL passed at the command line. */
     boost::signals2::signal<void (const std::string& strURI)> ThreadSafeHandleURI;
 

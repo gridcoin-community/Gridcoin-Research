@@ -3,7 +3,6 @@
 
 #include <QObject>
 #include "scraper/fwd.h"
-#include "neuralnet/superblock.h"
 
 class OptionsModel;
 class AddressTableModel;
@@ -11,6 +10,7 @@ class TransactionTableModel;
 class BanTableModel;
 class PeerTableModel;
 
+class ConvergedScraperStats;
 class CWallet;
 
 QT_BEGIN_NAMESPACE
