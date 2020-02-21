@@ -5434,7 +5434,88 @@ UniValue archivelog(const UniValue& params, bool fHelp)
     return UniValue(ret);
 }
 
+UniValue convergencereport(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0 )
+        throw std::runtime_error(
+                "convergencereport\n"
+                "Display local node report of scraper convergence.\n"
+                );
 
+    // See if converged stats/contract update needed...
+    bool bConvergenceUpdateNeeded = true;
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
+        {
+            bConvergenceUpdateNeeded = false;
+        }
+    }
+
+    if (bConvergenceUpdateNeeded)
+    {
+        // Don't need the output but will use the global cache, which will be updated.
+        ScraperGetSuperblockContract(false, false);
+    }
+
+    UniValue result(UniValue::VOBJ);
+
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
+        {
+            throw JSONRPCError(RPC_MISC_ERROR, "Error: A convergence cannot be formed at this time. Please review the scraper.log for details.");
+        }
+
+        int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
+
+        result.pushKV("convergence_timestamp", nConvergenceTime);
+        result.pushKV("convergence_datetime", DateTimeStrFormat("%x %H:%M:%S UTC",  nConvergenceTime));
+
+        UniValue ExcludedProjects(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.vExcludedProjects)
+        {
+            ExcludedProjects.push_back(entry);
+        }
+
+        result.pushKV("excluded_projects", ExcludedProjects);
+
+
+        UniValue IncludedScrapers(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.vIncludedScrapers)
+        {
+            IncludedScrapers.push_back(entry);
+        }
+
+        result.pushKV("included_scrapers", IncludedScrapers);
+
+
+        UniValue ExcludedScrapers(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.vExcludedScrapers)
+        {
+            ExcludedScrapers.push_back(entry);
+        }
+
+        result.pushKV("excluded_scrapers", ExcludedScrapers);
+
+
+        UniValue ScrapersNotPublishing(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing)
+        {
+            ScrapersNotPublishing.push_back(entry);
+        }
+
+        result.pushKV("scrapers_not_publishing", ScrapersNotPublishing);
+    }
+
+    return result;
+}
 
 UniValue testnewsb(const UniValue& params, bool fHelp)
 {
