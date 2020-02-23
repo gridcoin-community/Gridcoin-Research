@@ -28,6 +28,8 @@ namespace boost {
 #include <boost/program_options/detail/config_file.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/thread.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/filter/newline.hpp>
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
 #include <cstdarg>
@@ -710,10 +712,14 @@ void ReadConfigFile(ArgsMap& mapSettingsRet,
     if (!streamConfig.good())
         return; // No bitcoin.conf file is OK
 
+    boost::iostreams::filtering_istream streamFilteredConfig;
+    streamFilteredConfig.push(boost::iostreams::newline_filter(boost::iostreams::newline::posix));
+    streamFilteredConfig.push(streamConfig);
+
     set<string> setOptions;
     setOptions.insert("*");
 
-    for (boost::program_options::detail::config_file_iterator it(streamConfig, setOptions), end; it != end; ++it)
+    for (boost::program_options::detail::config_file_iterator it(streamFilteredConfig, setOptions), end; it != end; ++it)
     {
         // Don't overwrite existing settings so command line settings override bitcoin.conf
         string strKey = string("-") + it->string_key;
