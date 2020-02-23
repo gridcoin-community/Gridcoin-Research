@@ -586,9 +586,13 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
                 "\n"
                 "Performs a single transaction to consolidate UTXOs on\n"
                 "a given address. The optional parameter of UTXO size will result\n"
-                "in consolidating UTXOs to generate an output of that size or\n"
-                "the output for the total value of the specified maximum,\n"
-                "maximum number of smallest inputs, whichever is less.\n");
+                "in consolidating UTXOs to generate an output less than that size or\n"
+                "the total value of the specified maximum number of smallest inputs,\n"
+                "whichever is less.\n"
+                "\n"
+                "The script is designed to be run repeatedly and will become a no-op\n"
+                "if the UTXO's are consolidated such that no more meet the specified\n"
+                "criteria. This is ideal for automated periodic scripting.\n");
 
     UniValue result(UniValue::VOBJ);
 
@@ -598,8 +602,8 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     int64_t nConsolidateLimit = 0;
     // Set default maximum consolidation to 50 inputs if it is not specified. This is based
     // on performance tests on the Pi to ensure the transaction returns within a reasonable time.
-    // The performance tests on the Pi show about 3 UTXO's/second. Intel machines should do
-    // about 3x that. The GUI will not be responsive during the transaction.
+    // The performance tests on the Pi show about 3 UTXOs/second. Intel machines should do
+    // about 3x that. The GUI will not be responsive during the transaction due to locking.
     unsigned int nInputNumberLimit = 50;
 
     if (params.size() > 1) nConsolidateLimit = AmountFromValue(params[1]);
@@ -655,21 +659,41 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
     // to elegantly select the UTXO's from the smallest upwards.
     for (auto const& out : mInputs)
     {
-        // Increment first so the count is 1 based.
-        ++iInputCount;
+        int64_t nUTXOValue = out.second.tx->vout[out.second.i].nValue;
+
+        if (iInputCount == nInputNumberLimit || ((nValue + nUTXOValue) > nConsolidateLimit && nConsolidateLimit != 0)) break;
+
+        // This has been moved after the break to change the behavior so that the
+        // consolidation is limited to the set of UTXO's SMALLER than the nConsolidateLimit
+        // in the case that the next UTXO would go OVER the limit. The prior behavior
+        // would include that next UTXO and produce a UTXO larger than desired.
+        // Both methods have undesirable corner cases:
+        // Old behavior corner case... UTXO 1 to n gets to nConsolidateLimit - epsilon,
+        // and the next one is the rest of the value on the address, which causes
+        // undesired complete consolidation of the address.
+        // New behavior corner case... UTXO 1 to n are all very small and total value
+        // adds up to a small fraction of nConsolidateLimit. Next UTXO is similar to
+        // nConsolidateLimit, but is not included, which means the output UTXO is limited
+        // to the consolidation of the smaller UTXO's and produces a UTXO that is much
+        // smaller than desired. To consolidate the next UTXO would require changing the
+        // input parameters to the function.
+        // Feedback from users indicate the latter is preferable to the former. The only way
+        // to solve both is to include a "change" UTXO to true up the mismatch. This is
+        // overly complex and not worth the implementation time.
+
+        nValue += nUTXOValue;
 
         if (fDebug) LogPrintf("INFO: consolidateunspent: input value = %f, confirmations = %" PRId64, ((double) out.first) / (double) COIN, out.second.nDepth);
 
         setCoins.insert(make_pair(out.second.tx, out.second.i));
-        nValue += out.second.tx->vout[out.second.i].nValue;
 
-        if (iInputCount == nInputNumberLimit || (nValue >= nConsolidateLimit && nConsolidateLimit != 0)) break;
+        ++iInputCount;
     }
 
     // If number of inputs that meet criteria is less than two, then do nothing.
     if (iInputCount < 2)
     {
-        result.pushKV("result", true);
+        result.pushKV("result", false);
         result.pushKV("UTXOs consolidated", (uint64_t) 0);
 
         return result;
