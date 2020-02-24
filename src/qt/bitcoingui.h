@@ -5,6 +5,7 @@
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <stdint.h>
+#include "guiconstants.h"
 
 class TransactionTableModel;
 class ClientModel;
@@ -77,6 +78,7 @@ private:
     QLabel *labelConnectionsIcon;
     QLabel *labelBlocksIcon;
     QLabel *labelScraperIcon;
+    QLabel *labelBeaconIcon;
 
     QMenuBar *appMenuBar;
     QAction *overviewAction;
@@ -120,6 +122,8 @@ private:
 
     // name extension to change icons according to stylesheet
     QString sSheet;
+
+    int STATUSBAR_ICONSIZE = UNSCALED_STATUSBAR_ICONSIZE * logicalDpiX() / 96;
 
     /** Create the main UI actions. */
     void createActions();
@@ -231,6 +235,7 @@ private slots:
     void updateWeight();
     void updateStakingIcon();
     void updateScraperIcon(int scraperEventtype, int status);
+    void updateBeaconIcon();
 
 	QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 

@@ -453,12 +453,12 @@ void BitcoinGUI::createToolBars()
     // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
-    addToolBar(Qt::LeftToolBarArea,toolbar);
+    addToolBar(Qt::LeftToolBarArea, toolbar);
     toolbar->setOrientation(Qt::Vertical);
-    toolbar->setMovable( false );
+    toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
-    toolbar->setIconSize(QSize(50,25));
+    toolbar->setIconSize(QSize(50, 25));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
@@ -474,10 +474,23 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(unlockWalletAction);
     toolbar->addAction(lockWalletAction);
 
-    // Status bar notification icons
+    addToolBarBreak(Qt::LeftToolBarArea);
+
+
+    // Status bar notification icons (Status toolbar)
+    QToolBar *toolbar2 = addToolBar("Status toolbar");
+    addToolBar(Qt::LeftToolBarArea, toolbar2);
+    toolbar2->setOrientation(Qt::Vertical);
+    //toolbar2->setGeometry(0, 0, STATUSBAR_ICONSIZE, 0);
+    toolbar2->setMinimumWidth(STATUSBAR_ICONSIZE);
+    toolbar2->setContentsMargins(0, 0, 0, 0);
+    toolbar2->setMovable(false);
+    toolbar2->setObjectName("toolbar2");
+
     QFrame *frameBlocks = new QFrame();
 
     frameBlocks->setContentsMargins(0,0,0,0);
+    frameBlocks->setMinimumWidth(STATUSBAR_ICONSIZE);
 
     QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
     frameBlocksLayout->setContentsMargins(1,0,1,0);
@@ -487,14 +500,16 @@ void BitcoinGUI::createToolBars()
     labelConnectionsIcon = new QLabel();
     labelBlocksIcon = new QLabel();
     labelScraperIcon = new QLabel();
+    labelBeaconIcon = new QLabel();
 
     frameBlocksLayout->addWidget(labelEncryptionIcon);
     frameBlocksLayout->addWidget(labelStakingIcon);
     frameBlocksLayout->addWidget(labelConnectionsIcon);
     frameBlocksLayout->addWidget(labelBlocksIcon);
     frameBlocksLayout->addWidget(labelScraperIcon);
-    //12-21-2015 Prevent Lock from falling off the page
+    frameBlocksLayout->addWidget(labelBeaconIcon);
 
+    //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
     if (GetBoolArg("-staking", true))
@@ -505,22 +520,21 @@ void BitcoinGUI::createToolBars()
         updateStakingIcon();
     }
 
-    frameBlocks->setObjectName("frame");
-    addToolBarBreak(Qt::LeftToolBarArea);
-    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
-    addToolBar(Qt::LeftToolBarArea,toolbar2);
-    toolbar2->setOrientation(Qt::Vertical);
-    toolbar2->setMovable( false );
-    toolbar2->setObjectName("toolbar2");
+    QTimer *timerBeaconIcon = new QTimer(labelBeaconIcon);
+    connect(timerBeaconIcon, SIGNAL(timeout()), this, SLOT(updateBeaconIcon()));
+    timerBeaconIcon->start(30 * 1000);
+    updateBeaconIcon();
+
     toolbar2->addWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
 
+
     // Top tool bar (clickable Gridcoin and BOINC logos)
     QToolBar *toolbar3 = addToolBar("Logo bar");
-    addToolBar(Qt::TopToolBarArea,toolbar3);
+    addToolBar(Qt::TopToolBarArea, toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
-    toolbar3->setMovable( false );
+    toolbar3->setMovable(false);
     toolbar3->setObjectName("toolbar3");
     ClickLabel *grcLogoLabel = new ClickLabel();
     grcLogoLabel->setObjectName("gridcoinLogoHorizontal");
@@ -1498,13 +1512,13 @@ void BitcoinGUI::updateStakingIcon()
     if (staking)
     {
         QString text = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
-        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
                                      .arg(nWeight).arg(nNetworkWeight).arg(text));
     }
     else
     {
-        labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         //Part of this string wont be translated :(
         labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
     }
@@ -1569,7 +1583,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     }
     else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(QIcon(":/icons/gray_scraper").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelScraperIcon->setToolTip(tr("Scraper: superblock not needed - inactive."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
@@ -1580,7 +1594,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(QIcon(":/icons/green_scraper").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
         if (bDisplayScrapers)
         {
@@ -1606,8 +1620,14 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && status == CT_DELETED)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/quit").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(QIcon(":/icons/red_and_white_x").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));
     }
 
+}
+
+void BitcoinGUI::updateBeaconIcon()
+{
+    labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_green").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+    labelBeaconIcon->setToolTip(tr("Iconsize = %1.").arg(QString(std::to_string(STATUSBAR_ICONSIZE).c_str())));
 }

@@ -366,7 +366,7 @@ QListWidget{
 #toolbar2 {
     border:none;
     min-width:1.625em;
-    max-width:1.625em;
+    max-width:3em;
 }
 
 #toolbar3 {
