@@ -69,8 +69,8 @@
         <file alias="connect_3">res/icons/connect3.svg</file>
         <file alias="connect_4">res/icons/connect4.svg</file>
         <file alias="notsynced">res/icons/notsynced.svg</file>
-        <file alias="white_and_red_x">res/icons/x.svg</file>
         <file alias="synced">res/icons/green_check.svg</file>
+        <file alias="white_and_red_x">res/icons/white_and_red_x.svg</file>
     </qresource>
     <qresource prefix="/images">
         <file alias="splash">res/images/splash3.png</file>

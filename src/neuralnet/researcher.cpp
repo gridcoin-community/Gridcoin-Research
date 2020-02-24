@@ -45,31 +45,6 @@ std::string LowerUnderscore(std::string data)
 }
 
 //!
-//! \brief Determine whether the wallet must run in investor mode before trying
-//! to load BOINC CPIDs.
-//!
-//! \return \c true if the user explicitly configured investor mode or failed
-//! to input a valid email address.
-//!
-bool ConfiguredForInvestorMode()
-{
-    if (GetBoolArg("-investor", false)) {
-        LogPrintf("Investor mode configured. Skipping CPID import.");
-        return true;
-    }
-
-    if (Researcher::Email().empty()) {
-        LogPrintf(
-            "WARNING: Please set 'email=<your BOINC account email>' in "
-            "gridcoinresearch.conf. Continuing in investor mode.");
-
-        return true;
-    }
-
-    return false;
-}
-
-//!
 //! \brief Fetch the contents of BOINC's client_state.xml file from disk.
 //!
 //! \return The entire client_state.xml file as a string if readable.
@@ -507,6 +482,24 @@ std::string Researcher::Email()
     return email;
 }
 
+bool Researcher::ConfiguredForInvestorMode(bool log)
+{
+    if (GetBoolArg("-investor", false)) {
+        if (log) LogPrintf("Investor mode configured. Skipping CPID import.");
+        return true;
+    }
+
+    if (Researcher::Email().empty()) {
+        if (log) LogPrintf(
+            "WARNING: Please set 'email=<your BOINC account email>' in "
+            "gridcoinresearch.conf. Continuing in investor mode.");
+
+        return true;
+    }
+
+    return false;
+}
+
 ResearcherPtr Researcher::Get()
 {
     return std::atomic_load(&researcher);
@@ -514,7 +507,7 @@ ResearcherPtr Researcher::Get()
 
 void Researcher::Reload()
 {
-    if (ConfiguredForInvestorMode()) {
+    if (ConfiguredForInvestorMode(true)) {
         StoreResearcher(Researcher()); // Investor
         return;
     }

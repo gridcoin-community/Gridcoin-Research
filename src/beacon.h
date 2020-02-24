@@ -25,6 +25,17 @@ struct BeaconConsensus
     BeaconMap mBeaconMap;
 };
 
+//Note this should be replaced when we redo the beacon structures...
+struct BeaconStatus
+{
+    std::string sPubKey;
+    int64_t iBeaconTimestamp;
+    std::string timestamp;
+    bool hasBeacon;
+    double dPriorSBMagnitude;
+    bool is_mine;
+};
+
 //!
 //! \brief Generate beacon key pair.
 //!
@@ -100,3 +111,10 @@ bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet);
 //! \return A list of active beacons.
 //!
 BeaconConsensus GetConsensusBeaconList();
+
+//!
+//! \brief Get beacon status for a specified CPID.
+//!
+//! \return Beacon status structure for specific CPID.
+//!
+BeaconStatus GetBeaconStatus(std::string& sCPID);

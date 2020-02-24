@@ -221,6 +221,15 @@ public:
     static std::string Email();
 
     //!
+    //! \brief Determine whether the wallet must run in investor mode before trying
+    //! to load BOINC CPIDs.
+    //!
+    //! \return \c true if the user explicitly configured investor mode or failed
+    //! to input a valid email address.
+    //!
+    static bool ConfiguredForInvestorMode(bool log = false);
+
+    //!
     //! \brief Get the current global researcher context.
     //!
     //! \return A smart pointer around the current \c Researcher object.

@@ -805,42 +805,36 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
     // Search for beacon, and report on beacon status.
 
-    std::string sCPID = NN::GetPrimaryCpid();
+    std::string sCPID;
 
     if (params.size() > 0)
         sCPID = params[0].get_str();
 
-    LOCK(cs_main);
-
-    std::string sPubKey =  GetBeaconPublicKey(sCPID, false);
-    int64_t iBeaconTimestamp = BeaconTimeStamp(sCPID);
-    std::string timestamp = TimestampToHRDate(iBeaconTimestamp);
-    bool hasBeacon = HasActiveBeacon(sCPID);
+    // If sCPID is supplied, uses that. If not, then sCPID is filled in from GetPrimaryCPID.
+    BeaconStatus beacon_status = GetBeaconStatus(sCPID);
 
     res.pushKV("CPID", sCPID);
-    res.pushKV("Beacon Exists",YesNo(hasBeacon));
-    res.pushKV("Beacon Timestamp",timestamp.c_str());
-    res.pushKV("Public Key", sPubKey.c_str());
-    res.pushKV("Private Key", "not-shown"); //TODO: show the key?
+    res.pushKV("Beacon Exists", YesNo(beacon_status.hasBeacon));
+    res.pushKV("Beacon Timestamp", beacon_status.timestamp.c_str());
+    res.pushKV("Public Key", beacon_status.sPubKey.c_str());
 
     std::string sErr = "";
 
-    if (sPubKey.empty())
+    if (beacon_status.sPubKey.empty())
         sErr += "Public Key Missing. ";
 
     // Prior superblock Magnitude
-    double dMagnitude = NN::Tally::GetMagnitude(NN::MiningId::Parse(sCPID));
+    res.pushKV("Magnitude (As of last superblock)", beacon_status.dPriorSBMagnitude);
 
-    res.pushKV("Magnitude (As of last superblock)", dMagnitude);
+    res.pushKV("Mine", beacon_status.is_mine);
 
-    const bool is_mine = sCPID == NN::GetPrimaryCpid();
-    res.pushKV("Mine", is_mine);
-
-    if (is_mine && dMagnitude == 0)
+    if (beacon_status.is_mine && beacon_status.dPriorSBMagnitude == 0)
         res.pushKV("Warning","Your magnitude is 0 as of the last superblock: this may keep you from staking POR blocks.");
 
-    if (!sPubKey.empty() && is_mine)
+    if (!beacon_status.sPubKey.empty() && beacon_status.is_mine)
     {
+        LOCK(cs_main);
+
         EnsureWalletIsUnlocked();
 
         bool bResult;
