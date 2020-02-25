@@ -84,6 +84,7 @@
 #include "contract/polls.h"
 #include "contract/contract.h"
 #include "neuralnet/researcher.h"
+#include "beacon.h"
 
 #include <iostream>
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
@@ -453,12 +454,12 @@ void BitcoinGUI::createToolBars()
     // "Tabs" toolbar (vertical, aligned on left side of overview screen).
     QToolBar *toolbar = addToolBar("Tabs toolbar");
     toolbar->setObjectName("toolbar");
-    addToolBar(Qt::LeftToolBarArea,toolbar);
+    addToolBar(Qt::LeftToolBarArea, toolbar);
     toolbar->setOrientation(Qt::Vertical);
-    toolbar->setMovable( false );
+    toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
-    toolbar->setIconSize(QSize(50,25));
+    toolbar->setIconSize(QSize(50, 25));
     toolbar->addAction(overviewAction);
     toolbar->addAction(sendCoinsAction);
     toolbar->addAction(receiveCoinsAction);
@@ -474,10 +475,23 @@ void BitcoinGUI::createToolBars()
     toolbar->addAction(unlockWalletAction);
     toolbar->addAction(lockWalletAction);
 
-    // Status bar notification icons
+    addToolBarBreak(Qt::LeftToolBarArea);
+
+
+    // Status bar notification icons (Status toolbar)
+    QToolBar *toolbar2 = addToolBar("Status toolbar");
+    addToolBar(Qt::LeftToolBarArea, toolbar2);
+    toolbar2->setOrientation(Qt::Vertical);
+    //toolbar2->setGeometry(0, 0, STATUSBAR_ICONSIZE, 0);
+    toolbar2->setMinimumWidth(STATUSBAR_ICONSIZE);
+    toolbar2->setContentsMargins(0, 0, 0, 0);
+    toolbar2->setMovable(false);
+    toolbar2->setObjectName("toolbar2");
+
     QFrame *frameBlocks = new QFrame();
 
     frameBlocks->setContentsMargins(0,0,0,0);
+    frameBlocks->setMinimumWidth(STATUSBAR_ICONSIZE);
 
     QVBoxLayout *frameBlocksLayout = new QVBoxLayout(frameBlocks);
     frameBlocksLayout->setContentsMargins(1,0,1,0);
@@ -487,14 +501,16 @@ void BitcoinGUI::createToolBars()
     labelConnectionsIcon = new QLabel();
     labelBlocksIcon = new QLabel();
     labelScraperIcon = new QLabel();
+    labelBeaconIcon = new QLabel();
 
     frameBlocksLayout->addWidget(labelEncryptionIcon);
     frameBlocksLayout->addWidget(labelStakingIcon);
     frameBlocksLayout->addWidget(labelConnectionsIcon);
     frameBlocksLayout->addWidget(labelBlocksIcon);
     frameBlocksLayout->addWidget(labelScraperIcon);
-    //12-21-2015 Prevent Lock from falling off the page
+    frameBlocksLayout->addWidget(labelBeaconIcon);
 
+    //12-21-2015 Prevent Lock from falling off the page
     frameBlocksLayout->addStretch();
 
     if (GetBoolArg("-staking", true))
@@ -505,22 +521,21 @@ void BitcoinGUI::createToolBars()
         updateStakingIcon();
     }
 
-    frameBlocks->setObjectName("frame");
-    addToolBarBreak(Qt::LeftToolBarArea);
-    QToolBar *toolbar2 = addToolBar("Tabs toolbar");
-    addToolBar(Qt::LeftToolBarArea,toolbar2);
-    toolbar2->setOrientation(Qt::Vertical);
-    toolbar2->setMovable( false );
-    toolbar2->setObjectName("toolbar2");
+    QTimer *timerBeaconIcon = new QTimer(labelBeaconIcon);
+    connect(timerBeaconIcon, SIGNAL(timeout()), this, SLOT(updateBeaconIcon()));
+    timerBeaconIcon->start(30 * 1000);
+    updateBeaconIcon();
+
     toolbar2->addWidget(frameBlocks);
 
     addToolBarBreak(Qt::TopToolBarArea);
 
+
     // Top tool bar (clickable Gridcoin and BOINC logos)
     QToolBar *toolbar3 = addToolBar("Logo bar");
-    addToolBar(Qt::TopToolBarArea,toolbar3);
+    addToolBar(Qt::TopToolBarArea, toolbar3);
     toolbar3->setOrientation(Qt::Horizontal);
-    toolbar3->setMovable( false );
+    toolbar3->setMovable(false);
     toolbar3->setObjectName("toolbar3");
     ClickLabel *grcLogoLabel = new ClickLabel();
     grcLogoLabel->setObjectName("gridcoinLogoHorizontal");
@@ -1498,13 +1513,13 @@ void BitcoinGUI::updateStakingIcon()
     if (staking)
     {
         QString text = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
-        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
                                      .arg(nWeight).arg(nNetworkWeight).arg(text));
     }
     else
     {
-        labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         //Part of this string wont be translated :(
         labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
     }
@@ -1569,7 +1584,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     }
     else if (scraperEventtype == (int)scrapereventtypes::Sleep && status == CT_NEW)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(QIcon(":/icons/gray_scraper").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelScraperIcon->setToolTip(tr("Scraper: superblock not needed - inactive."));
     }
     else if (scraperEventtype == (int)scrapereventtypes::Stats && (status == CT_NEW || status == CT_UPDATED || status == CT_UPDATING))
@@ -1580,7 +1595,7 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && (status == CT_NEW || status == CT_UPDATED) && nConvergenceTime)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(QIcon(":/icons/green_scraper").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
 
         if (bDisplayScrapers)
         {
@@ -1606,8 +1621,99 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
     else if ((scraperEventtype == (int)scrapereventtypes::Convergence  || scraperEventtype == (int)scrapereventtypes::SBContract)
              && status == CT_DELETED)
     {
-        labelScraperIcon->setPixmap(QIcon(":/icons/quit").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelScraperIcon->setPixmap(QIcon(":/icons/white_and_red_x").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelScraperIcon->setToolTip(tr("Scraper: No convergence able to be achieved. Will retry in a few minutes."));
     }
 
+}
+
+void BitcoinGUI::updateBeaconIcon()
+{
+    std::string sCPID;
+    double beacon_age = 0;
+    double time_to_expiration = 0;
+    double advertise_threshold = 0;
+
+    BeaconStatus beacon_status = GetBeaconStatus(sCPID);
+
+    // Intent is to be an investor. Suppress icon.
+    if (NN::Researcher::ConfiguredForInvestorMode())
+    {
+        labelBeaconIcon->hide();
+    }
+    // Not configured for investor mode, which means the intent is to be a researcher.
+    else
+    {
+        // Beacon does not exist.
+        if (sCPID == "INVESTOR")
+        {
+            labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+            labelBeaconIcon->setToolTip(tr("Wallet status is INVESTOR, but the wallet is not configured for investor mode. "
+                                           "If you intend to be an investor only, please remove the email entry in the config file, "
+                                           "otherwise you need to check your email entry and your BOINC installation."));
+        }
+        // CPID resolves to non-INVESTOR and beacon exists.
+        else if (sCPID != "INVESTOR" && beacon_status.hasBeacon)
+        {
+            double seconds_in_day = 24.0 * 60.0 * 60.0;
+
+            beacon_age = (double) (GetAdjustedTime() - beacon_status.iBeaconTimestamp) / seconds_in_day;
+            time_to_expiration = ((double) MaxBeaconAge() / seconds_in_day) - beacon_age;
+            advertise_threshold = BeaconAgeAdvertiseThreshold() / seconds_in_day;
+
+            // If beacon does not need to be renewed...
+            if (beacon_age < advertise_threshold)
+            {
+                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_green").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                               "Beacon age: %2 day(s)\n"
+                                               "Expires: %3 day(s)\n"
+                                               "Beacon status is good.").arg(QString(sCPID.c_str()))
+                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
+                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
+            }
+            // If between start of period where able to renew and 15 days left until expiration, time to renew!...
+            else if (beacon_age >= advertise_threshold && time_to_expiration > 15.0)
+            {
+                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_yellow").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                               "Beacon age: %2 day(s)\n"
+                                               "Expires: %3 day(s)\n"
+                                               "Beacon should be renewed.").arg(QString(sCPID.c_str()))
+                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
+                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
+            }
+            // If magnitude is zero (which is common for new beacons and lapsed beacons that have been renewed)...
+            else if (!beacon_status.dPriorSBMagnitude)
+            {
+                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_yellow").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                               "Beacon age: %2 day(s)\n"
+                                               "Expires: %3 day(s)\n"
+                                               "Magnitude is zero, which may prevent staking with research rewards."
+                                               "Please check your magnitude after the next superblock.").arg(QString(sCPID.c_str()))
+                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
+                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
+           }
+            // If only 15 days left to renew, red alert!...
+            else if (time_to_expiration <= 15.0)
+            {
+                labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+                labelBeaconIcon->setToolTip(tr("CPID: %1\n"
+                                               "Beacon age: %2 day(s)\n"
+                                               "Expires: %3 day(s)\n"
+                                               "BEACON SHOULD BE RENEWED IMMEDIATELY TO PREVENT LAPSE.").arg(QString(sCPID.c_str()))
+                                            .arg(QString(std::to_string((int) std::round(beacon_age)).c_str()))
+                                            .arg(QString(std::to_string((int) time_to_expiration).c_str())));
+            }
+        }
+        // CPID resolves, but no active beacon present.
+        else if (sCPID != "INVESTOR"  && !beacon_status.hasBeacon)
+        {
+            labelBeaconIcon->setPixmap(QIcon(":/icons/beacon_red").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+            labelBeaconIcon->setToolTip(tr("There is a CPID, %1, but there is no active beacon. "
+                                           "Your beacon may be expired or never advertised. Please "
+                                           "advertise a new beacon.").arg(QString(sCPID.c_str())));
+        }
+    }
 }

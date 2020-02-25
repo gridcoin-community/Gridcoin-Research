@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+<g>
+<path d="m 73.896753,17.558596 52.737907,-9.264769 1e-5,40.039468 -52.916085,-8.325451 0.178168,-22.449248 z" style="fill:#ffe700;fill-opacity:1;fill-rule:evenodd;stroke:none" />
+<path d="M 54.178551,17.470598 1.4406441,8.2058292 1.4406341,48.245297 54.356719,39.919846 54.178551,17.470598 z"
+ style="fill:#ffe700;fill-opacity:1;fill-rule:evenodd;stroke:none" />
+<rect width="109.35433" height="7.3352766"
+ x="9.322834" y="117.38914" style="fill:#000000;fill-opacity:1;stroke:none" />
+<path d="m 41.952756,118.74751 10.834646,-79.057968 22.173228,0 11.086614,78.786298 -44.094488,0.27167 z"
+ style="fill:#ffffff;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
+<rect width="22.173141" height="22.413343" x="52.913429"
+ y="17.276196" style="fill:#ffe700;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none" />
+<path d="M 45.102362,17.140359 82.897638,17.276198 64.125985,3.6923526 45.102362,17.140359 z"
+ style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1.03837264px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+<path d="m 71.267455,33.214283 a 6.948577,6.4140712 0 1 1 -13.897154,0 6.948577,6.4140712 0 1 1 13.897154,0 z"
+ transform="matrix(1,0,0,1.0782177,-0.3188782,-7.5822387)"
+ style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-opacity:1" />
+<path d="m 44.846872,97.738889 38.306257,0 3.207035,21.515711 -44.720328,-0.19211 3.207036,-21.323601 z"
+ style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none" />
+<path d="m 50.256826,57.088293 26.982413,0 3.141468,21.379871 -32.761414,-0.05627 2.637533,-21.323603 z" style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none" />
+<rect width="40.087944" height="3.2657747"
+ x="43.956028" y="38.762783"
+ style="fill:#000000;fill-opacity:1;stroke:none" />
+ </g>
+</svg>

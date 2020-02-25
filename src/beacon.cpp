@@ -8,6 +8,8 @@
 #include "appcache.h"
 #include "contract/contract.h"
 #include "key.h"
+#include "neuralnet/researcher.h"
+#include "neuralnet/tally.h"
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
@@ -315,4 +317,26 @@ BeaconConsensus GetConsensusBeaconList()
     }
 
     return Consensus;
+}
+
+// -------------------------- Both In and Out
+BeaconStatus GetBeaconStatus(std::string& sCPID)
+{
+    BeaconStatus beacon_status;
+
+    LOCK(cs_main);
+
+    if (sCPID.empty())
+    {
+        sCPID = NN::GetPrimaryCpid();
+    }
+
+    beacon_status.sPubKey = GetBeaconPublicKey(sCPID, false);
+    beacon_status.iBeaconTimestamp = BeaconTimeStamp(sCPID);
+    beacon_status.timestamp = TimestampToHRDate(beacon_status.iBeaconTimestamp);
+    beacon_status.hasBeacon = HasActiveBeacon(sCPID);
+    beacon_status.dPriorSBMagnitude = NN::Tally::GetMagnitude(NN::MiningId::Parse(sCPID));
+    beacon_status.is_mine = (sCPID == NN::GetPrimaryCpid());
+
+    return beacon_status;
 }
