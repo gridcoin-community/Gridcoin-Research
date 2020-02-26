@@ -43,6 +43,7 @@ GRIDCOIN_TESTS =\
   test/netbase_tests.cpp \
   test/neuralnet/claim_tests.cpp \
   test/neuralnet/cpid_tests.cpp \
+  test/neuralnet/magnitude_tests.cpp \
   test/neuralnet/project_tests.cpp \
   test/neuralnet/researcher_tests.cpp \
   test/neuralnet/superblock_tests.cpp \

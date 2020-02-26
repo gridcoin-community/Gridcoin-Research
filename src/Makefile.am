@@ -100,6 +100,7 @@ GRIDCOIN_CORE_H = \
 	neuralnet/accrual/research_age.h \
 	neuralnet/claim.h \
 	neuralnet/cpid.h \
+	neuralnet/magnitude.h \
 	neuralnet/project.h \
 	neuralnet/quorum.h \
 	neuralnet/researcher.h \
