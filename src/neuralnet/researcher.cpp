@@ -484,7 +484,7 @@ std::string Researcher::Email()
 
 bool Researcher::ConfiguredForInvestorMode(bool log)
 {
-    if (GetBoolArg("-investor", false)) {
+    if (GetBoolArg("-investor", false) || Researcher::Email() == "investor") {
         if (log) LogPrintf("Investor mode configured. Skipping CPID import.");
         return true;
     }
