@@ -34,11 +34,11 @@ Upgrade::Upgrade()
     ExtractStatus.SnapshotExtractProgress = 0;
 }
 
-void Upgrade::CheckForLatestUpdate()
+bool Upgrade::CheckForLatestUpdate(bool ui_dialog, std::string client_message_out)
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now. (need a way to remove items from scheduler)
     if (fTestNet || GetBoolArg("-disableupdatecheck", false))
-        return;
+        return false;
 
     Http VersionPull;
 
@@ -57,14 +57,14 @@ void Upgrade::CheckForLatestUpdate()
     {
         LogPrintf("Update Checker: Exception occured while checking for latest update. (%s)", e.what());
 
-        return;
+        return false;
     }
 
     if (VersionResponse.empty())
     {
         LogPrintf("Update Checker: No Response from github");
 
-        return;
+        return false;
     }
 
     std::string GithubReleaseData = "";
@@ -89,7 +89,7 @@ void Upgrade::CheckForLatestUpdate()
     {
         LogPrintf("Update Checker: Exception occured while parsing json response (%s)", ex.what());
 
-        return;
+        return false;
     }
 
     if (GithubReleaseTypeData.find("leisure"))
@@ -115,7 +115,7 @@ void Upgrade::CheckForLatestUpdate()
     {
         LogPrintf("Update Check: Got malformed version (%s)", GithubReleaseData);
 
-        return;
+        return false;
     }
 
     bool NewVersion = false;
@@ -136,22 +136,24 @@ void Upgrade::CheckForLatestUpdate()
     {
         LogPrintf("Update Check: Exception occured checking client version against github version (%s)", ToString(ex.what()));
 
-        return;
+        return false;
     }
 
-    if (!NewVersion)
-        return;
+    if (!NewVersion) return NewVersion;
 
     // New version was found
-    std::string ClientMessage = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
-    ClientMessage.append(_("Github version: ") + GithubReleaseData + "\r\n");
-    ClientMessage.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
+    client_message_out = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
+    client_message_out.append(_("Github version: ") + GithubReleaseData + "\r\n");
+    client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
 
     std::string ChangeLog = GithubReleaseBody;
 
-    uiInterface.UpdateMessageBox(ClientMessage, ChangeLog);
+    if (ui_dialog)
+    {
+        uiInterface.UpdateMessageBox(client_message_out, ChangeLog);
+    }
 
-    return;
+    return NewVersion;
 }
 
 void Upgrade::SnapshotMain()

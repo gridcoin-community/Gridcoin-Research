@@ -39,7 +39,7 @@ public:
     //!
     //! \brief Check for latest updates on github.
     //!
-    static void CheckForLatestUpdate();
+    static bool CheckForLatestUpdate(bool ui_dialog = true, std::string client_message_out = "");
 
     //!
     //! \brief Function that will be threaded to download snapshot
