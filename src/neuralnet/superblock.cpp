@@ -171,6 +171,9 @@ private:
         struct HasherProxy
         {
             CHashWriter m_hasher;            //!< Hashes the supplied data.
+            CHashWriter m_small_hasher;      //!< Hashes small mag segment.
+            CHashWriter m_medium_hasher;     //!< Hashes medium mag segment.
+            CHashWriter m_large_hasher;      //!< Hashes large mag segment.
             uint32_t m_zero_magnitude_count; //!< Tracks zero-magnitude CPIDs.
             bool m_zero_magnitude_hashed;    //!< Tracks when to hash the zeros.
 
@@ -180,6 +183,9 @@ private:
             //!
             HasherProxy()
                 : m_hasher(CHashWriter(SER_GETHASH, PROTOCOL_VERSION))
+                , m_small_hasher(CHashWriter(SER_GETHASH, PROTOCOL_VERSION))
+                , m_medium_hasher(CHashWriter(SER_GETHASH, PROTOCOL_VERSION))
+                , m_large_hasher(CHashWriter(SER_GETHASH, PROTOCOL_VERSION))
                 , m_zero_magnitude_count(0)
                 , m_zero_magnitude_hashed(false)
             {
@@ -192,13 +198,29 @@ private:
             //! \param cpid      The CPID value to hash.
             //! \param magnitude The magnitude value to hash.
             //!
-            void Add(Cpid cpid, uint16_t magnitude)
+            void Add(const Cpid cpid, const Magnitude magnitude)
             {
-                if (magnitude > 0) {
-                    m_hasher << cpid;
-                    WriteCompactSize(m_hasher, magnitude);
-                } else {
-                    m_zero_magnitude_count++;
+                switch (magnitude.Which()) {
+                    case Magnitude::Kind::ZERO:
+                        m_zero_magnitude_count++;
+                        break;
+
+                    case Magnitude::Kind::SMALL:
+                        m_small_hasher
+                            << cpid
+                            << static_cast<uint8_t>(magnitude.Compact());
+                        break;
+
+                    case Magnitude::Kind::MEDIUM:
+                        m_medium_hasher
+                            << cpid
+                            << static_cast<uint8_t>(magnitude.Compact());
+                        break;
+
+                    case Magnitude::Kind::LARGE:
+                        m_large_hasher << cpid;
+                        WriteCompactSize(m_large_hasher, magnitude.Compact());
+                        break;
                 }
             }
 
@@ -211,7 +233,7 @@ private:
             //!
             void RoundAndAdd(Cpid cpid, double magnitude)
             {
-                Add(cpid, std::nearbyint(magnitude));
+                Add(cpid, Magnitude::RoundFrom(magnitude));
             }
 
             //!
@@ -229,7 +251,14 @@ private:
                 // first project:
                 //
                 if (!m_zero_magnitude_hashed) {
-                    m_hasher << VARINT(m_zero_magnitude_count);
+                    m_hasher
+                        << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                            << m_small_hasher.GetHash()
+                            << m_medium_hasher.GetHash()
+                            << m_large_hasher.GetHash())
+                            .GetHash()
+                        << VARINT(m_zero_magnitude_count);
+
                     m_zero_magnitude_hashed = true;
                 }
 
@@ -1270,7 +1299,7 @@ private:
         const size_t binary_size = m_binary_magnitudes.size();
 
         for (size_t x = 0; x < binary_size && binary_size - x >= 18; x += 18) {
-            magnitudes.Add(
+            magnitudes.AddLegacy(
                 *reinterpret_cast<const Cpid*>(byte_ptr + x),
                 be16toh(*reinterpret_cast<const int16_t*>(byte_ptr + x + 16)));
         }
@@ -1301,11 +1330,13 @@ private:
                 continue;
             }
 
-            try {
-                magnitudes.Add(MiningId::Parse(parts[0]), std::stoi(parts[1]));
-            } catch(...) {
-                LogPrint(BCLog::LogFlags::SB,
-                    "LegacySuperblock: Failed to parse magnitude.\n");
+            if (const CpidOption cpid = MiningId::Parse(parts[0]).TryCpid()) {
+                try {
+                    magnitudes.AddLegacy(*cpid, std::stoi(parts[1]));
+                } catch(...) {
+                    LogPrint(BCLog::LogFlags::SB,
+                        "LegacySuperblock: Failed to parse magnitude.\n");
+                }
             }
         }
 
@@ -1493,7 +1524,7 @@ std::string Superblock::PackLegacy() const
     out << "<ZERO>" << m_cpids.Zeros() << "</ZERO>"
         << "<BINARY>";
 
-    for (const auto& cpid_pair : m_cpids) {
+    for (const auto& cpid_pair : m_cpids.Legacy()) {
         uint16_t mag = htobe16(cpid_pair.second);
 
         out.write(reinterpret_cast<const char*>(cpid_pair.first.Raw().data()), 16);
@@ -1561,22 +1592,55 @@ Superblock::CpidIndex::CpidIndex(uint32_t zero_magnitude_count)
 
 Superblock::CpidIndex::const_iterator Superblock::CpidIndex::begin() const
 {
-    return m_magnitudes.begin();
+    if (m_legacy) {
+        return const_iterator(
+            NN::Magnitude::SCALE_FACTOR,
+            m_legacy_magnitudes.begin(),
+            m_legacy_magnitudes.end());
+    }
+
+    return const_iterator(
+        decltype(m_small_magnitudes)::SCALE_FACTOR,
+        m_small_magnitudes.begin(),
+        m_small_magnitudes.end(),
+        const_iterator(
+            decltype(m_medium_magnitudes)::SCALE_FACTOR,
+            m_medium_magnitudes.begin(),
+            m_medium_magnitudes.end(),
+            const_iterator(
+                decltype(m_large_magnitudes)::SCALE_FACTOR,
+                m_large_magnitudes.begin(),
+                m_large_magnitudes.end())));
 }
 
 Superblock::CpidIndex::const_iterator Superblock::CpidIndex::end() const
 {
-    return m_magnitudes.end();
+    if (m_legacy) {
+        return const_iterator(m_legacy_magnitudes.end());
+    }
+
+    return const_iterator(m_large_magnitudes.end());
 }
 
 Superblock::CpidIndex::size_type Superblock::CpidIndex::size() const
 {
-    return m_magnitudes.size();
+    if (m_legacy) {
+        return m_legacy_magnitudes.size();
+    }
+
+    return m_small_magnitudes.size()
+        + m_medium_magnitudes.size()
+        + m_large_magnitudes.size();
 }
 
 bool Superblock::CpidIndex::empty() const
 {
-    return m_magnitudes.empty();
+    return size() == 0;
+}
+
+const Superblock::MagnitudeStorageType& Superblock::CpidIndex::Legacy() const
+{
+    return m_legacy_magnitudes;
 }
 
 uint32_t Superblock::CpidIndex::Zeros() const
@@ -1586,64 +1650,81 @@ uint32_t Superblock::CpidIndex::Zeros() const
 
 size_t Superblock::CpidIndex::TotalCount() const
 {
-    return m_magnitudes.size() + m_zero_magnitude_count;
+    return size() + m_zero_magnitude_count;
 }
 
-uint64_t Superblock::CpidIndex::TotalMagnitude() const
+double Superblock::CpidIndex::TotalMagnitude() const
 {
-    return m_total_magnitude;
+    return static_cast<double>(m_total_magnitude) / NN::Magnitude::SCALE_FACTOR;
 }
 
 double Superblock::CpidIndex::AverageMagnitude() const
 {
-    if (m_magnitudes.empty()) {
+    if (empty()) {
         return 0;
     }
 
-    return static_cast<double>(m_total_magnitude) / m_magnitudes.size();
+    return TotalMagnitude() / size();
 }
 
-uint16_t Superblock::CpidIndex::MagnitudeOf(const Cpid& cpid) const
+Magnitude Superblock::CpidIndex::MagnitudeOf(const Cpid& cpid) const
 {
-    const auto iter = m_magnitudes.find(cpid);
+    if (m_legacy) {
+        const auto iter = m_legacy_magnitudes.find(cpid);
 
-    if (iter == m_magnitudes.end()) {
-        return 0;
+        if (iter == m_legacy_magnitudes.end()) {
+            return Magnitude::Zero();
+        }
+
+        return Magnitude::FromScaled(iter->second * NN::Magnitude::SCALE_FACTOR);
     }
 
-    return iter->second;
+    if (const auto mag_option = m_small_magnitudes.MagnitudeOf(cpid)) {
+        return *mag_option;
+    }
+
+    if (const auto mag_option = m_medium_magnitudes.MagnitudeOf(cpid)) {
+        return *mag_option;
+    }
+
+    if (const auto mag_option = m_large_magnitudes.MagnitudeOf(cpid)) {
+        return *mag_option;
+    }
+
+    return Magnitude::Zero();
 }
 
 Superblock::CpidIndex::const_iterator
 Superblock::CpidIndex::At(const size_t offset) const
 {
     // Not very efficient--we can optimize this if needed:
-    return std::next(m_magnitudes.begin(), offset);
+    return std::next(begin(), offset);
 }
 
-void Superblock::CpidIndex::Add(const Cpid cpid, const uint16_t magnitude)
+void Superblock::CpidIndex::Add(const Cpid cpid, const Magnitude magnitude)
 {
-    if (magnitude > 0 || m_legacy) {
-        // Only increment the total magnitude if the CPID does not already
-        // exist in the index:
-        if (m_magnitudes.emplace(cpid, magnitude).second == true) {
-            m_total_magnitude += magnitude;
-        }
-    } else {
-        m_zero_magnitude_count++;
+    // Only increment the total magnitude if the CPID does not already
+    // exist in the index:
+    switch (magnitude.Which()) {
+        case Magnitude::Kind::ZERO:
+            m_zero_magnitude_count++;
+            break;
+
+        case Magnitude::Kind::SMALL:
+            m_total_magnitude += m_small_magnitudes.Add(cpid, magnitude);
+            break;
+
+        case Magnitude::Kind::MEDIUM:
+            m_total_magnitude += m_medium_magnitudes.Add(cpid, magnitude);
+            break;
+
+        case Magnitude::Kind::LARGE:
+            m_total_magnitude += m_large_magnitudes.Add(cpid, magnitude);
+            break;
     }
 }
 
-void Superblock::CpidIndex::Add(const MiningId id, const uint16_t magnitude)
-{
-    if (const CpidOption cpid = id.TryCpid()) {
-        Add(*cpid, magnitude);
-    } else if (!m_legacy) {
-        m_zero_magnitude_count++;
-    }
-}
-
-void Superblock::CpidIndex::RoundAndAdd(const MiningId id, const double magnitude)
+void Superblock::CpidIndex::RoundAndAdd(const Cpid cpid, const double magnitude)
 {
     // The ScraperGetNeuralContract() function that these classes replace
     // rounded magnitude values using a half-away-from-zero rounding mode
@@ -1655,11 +1736,33 @@ void Superblock::CpidIndex::RoundAndAdd(const MiningId id, const double magnitud
     // To create legacy superblocks from scraper statistics with matching
     // hashes, we filter magnitudes using the same rounding rules:
     //
-    if (!m_legacy || std::round(magnitude) > 0) {
-        Add(id, std::nearbyint(magnitude));
+    if (m_legacy) {
+        if (std::round(magnitude) > 0) {
+            AddLegacy(cpid, std::nearbyint(magnitude));
+        } else {
+            m_zero_magnitude_count++;
+        }
     } else {
-        m_zero_magnitude_count++;
+        Add(cpid, Magnitude::RoundFrom(magnitude));
     }
+}
+
+void Superblock::CpidIndex::AddLegacy(const Cpid cpid, const uint16_t magnitude)
+{
+    if (m_legacy_magnitudes.emplace(cpid, magnitude).second == true) {
+        m_total_magnitude += magnitude * NN::Magnitude::SCALE_FACTOR;
+    }
+}
+
+uint256 Superblock::CpidIndex::HashSegments() const
+{
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+
+    hasher << SerializeHash(m_small_magnitudes);
+    hasher << SerializeHash(m_medium_magnitudes);
+    hasher << SerializeHash(m_large_magnitudes);
+
+    return hasher.GetHash();
 }
 
 // -----------------------------------------------------------------------------
@@ -1816,7 +1919,7 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     std::string input;
     input.reserve(superblock.m_cpids.size() * (32 + 1 + 5 + 5));
 
-    for (const auto& cpid_pair : superblock.m_cpids) {
+    for (const auto& cpid_pair : superblock.m_cpids.Legacy()) {
         double dMagLength = RoundToString(cpid_pair.second, 0).length();
         double dExponent = pow(dMagLength, 5);
 
