@@ -61,7 +61,7 @@ NN::Superblock GetTestSuperblock(uint32_t version = NN::Superblock::CURRENT_VERS
     NN::Superblock superblock;
 
     superblock.m_version = version;
-    superblock.m_cpids.Add(NN::Cpid(), 123);
+    superblock.m_cpids.Add(NN::Cpid(), NN::Magnitude::RoundFrom(123));
     superblock.m_projects.Add("project", NN::Superblock::ProjectStats());
 
     return superblock;

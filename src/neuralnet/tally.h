@@ -66,7 +66,7 @@ public:
     //! \return The wallet user's magnitude or zero if the wallet started in
     //! investor mode.
     //!
-    static uint16_t MyMagnitude();
+    static Magnitude MyMagnitude();
 
     //!
     //! \brief Get a traversable object for the research accounts stored in
@@ -107,7 +107,7 @@ public:
     //!
     //! \return Magnitude as of the last tallied superblock.
     //!
-    static uint16_t GetMagnitude(const Cpid cpid);
+    static Magnitude GetMagnitude(const Cpid cpid);
 
     //!
     //! \brief Get the current magnitude for the specified mining ID.
@@ -117,7 +117,7 @@ public:
     //! \return Magnitude as of the last tallied superblock or zero if the
     //! mining ID represents an investor.
     //!
-    static uint16_t GetMagnitude(const MiningId mining_id);
+    static Magnitude GetMagnitude(const MiningId mining_id);
 
     //!
     //! \brief Record a block's research reward data in the tally.

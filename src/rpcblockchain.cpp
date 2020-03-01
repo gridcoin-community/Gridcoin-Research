@@ -84,8 +84,8 @@ UniValue SuperblockToJson(const NN::Superblock& superblock)
 {
     UniValue magnitudes(UniValue::VOBJ);
 
-    for (const auto& cpid_pair : superblock.m_cpids) {
-        magnitudes.pushKV(cpid_pair.first.ToString(), cpid_pair.second);
+    for (const auto& cpid_iter : superblock.m_cpids) {
+        magnitudes.pushKV(cpid_iter.Cpid().ToString(), cpid_iter.Magnitude().Floating());
     }
 
     UniValue projects(UniValue::VOBJ);
@@ -1897,7 +1897,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 
                 if (cpid_parsed)
                 {
-                    c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed));
+                    c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed).Floating());
                 }
 
                 if (displaycontract)

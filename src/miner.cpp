@@ -1031,7 +1031,7 @@ bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nR
     }
 
     if (const NN::CpidOption cpid = claim.m_mining_id.TryCpid()) {
-        claim.m_magnitude = NN::Tally::GetMagnitude(*cpid);
+        claim.m_magnitude = NN::Tally::GetMagnitude(*cpid).Floating();
     }
 
     LogPrintf(
