@@ -15,8 +15,6 @@
 #include <numeric>
 #include <fstream>
 
-extern std::unique_ptr<Upgrade> g_UpdateChecker;
-
 namespace NN { std::string GetPrimaryCpid(); }
 
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent) :
@@ -43,6 +41,22 @@ unsigned int DiagnosticsDialog::GetNumberOfTestsPending()
     }
 
     return pending_count;
+}
+
+DiagnosticsDialog::DiagnosticTestStatus DiagnosticsDialog::GetTestStatus(std::string test_name)
+{
+    LOCK(cs_diagnostictests);
+
+    auto entry = test_status_map.find(test_name);
+
+    if (entry != test_status_map.end())
+    {
+        return entry->second;
+    }
+    else
+    {
+        return unknown;
+    }
 }
 
 unsigned int DiagnosticsDialog::UpdateTestStatus(std::string test_name, DiagnosticTestStatus test_status)
@@ -82,7 +96,7 @@ void DiagnosticsDialog::UpdateOverallDiagnosticResult(DiagnosticResult diagnosti
         diagnostic_result_status = pending;
     }
 
-    diagnostic_result = (DiagnosticResult) std::max((int) diagnostic_result_in, (int) diagnostic_result);
+    diagnostic_result = (DiagnosticResult) std::max<int>(diagnostic_result_in,  diagnostic_result);
 
     // If diagnostic_result_status is still set to completed, then at least all tests
     // are registered. Walk through the map of tests one by one and check the status.
@@ -134,7 +148,7 @@ void DiagnosticsDialog::DisplayOverallDiagnosticResult()
 
         case passed:
             ui->overallResultResultLabel->setText(tr("Passed"));
-            ui->overallResultResultLabel->setStyleSheet("color:black;background-color:green");
+            ui->overallResultResultLabel->setStyleSheet("color:white;background-color:green");
             break;
 
         case warning:
@@ -144,7 +158,7 @@ void DiagnosticsDialog::DisplayOverallDiagnosticResult()
 
         case failed:
             ui->overallResultResultLabel->setText(tr("Failed"));
-            ui->overallResultResultLabel->setStyleSheet("color:black;background-color:red");
+            ui->overallResultResultLabel->setStyleSheet("color:white;background-color:red");
         }
     }
 
@@ -300,7 +314,7 @@ void DiagnosticsDialog::on_testButton_clicked()
 
     if (GetNumberOfTestsPending())
     {
-        LogPrintf("INFO: on_testButton_clicked: Tests still in progress from a prior run: %u", GetNumberOfTestsPending());
+        LogPrintf("INFO: DiagnosticsDialog::on_testButton_clicked: Tests still in progress from a prior run: %u", GetNumberOfTestsPending());
         this->repaint();
         return;
     }
@@ -342,14 +356,14 @@ void DiagnosticsDialog::on_testButton_clicked()
         if (VerifyBoincPath())
         {
             ui->boincPathResultLabel->setText(tr("Passed"));
-            ui->boincPathResultLabel->setStyleSheet("color:black;background-color:green");
+            ui->boincPathResultLabel->setStyleSheet("color:white;background-color:green");
             UpdateTestStatus("boincPath", completed);
             UpdateOverallDiagnosticResult(passed);
         }
         else
         {
             ui->boincPathResultLabel->setText(tr("Failed"));
-            ui->boincPathResultLabel->setStyleSheet("color:black;background-color:red");
+            ui->boincPathResultLabel->setStyleSheet("color:white;background-color:red");
             UpdateTestStatus("boincPath", completed);
             UpdateOverallDiagnosticResult(failed);
         }
@@ -363,14 +377,14 @@ void DiagnosticsDialog::on_testButton_clicked()
         if (VerifyIsCPIDValid())
         {
             ui->verifyCPIDValidResultLabel->setText(tr("Passed"));
-            ui->verifyCPIDValidResultLabel->setStyleSheet("color:black;background-color:green");
+            ui->verifyCPIDValidResultLabel->setStyleSheet("color:white;background-color:green");
             UpdateTestStatus("verifyCPIDValid", completed);
             UpdateOverallDiagnosticResult(passed);
         }
         else
         {
             ui->verifyCPIDValidResultLabel->setText(tr("Failed: BOINC CPID does not match CPID"));
-            ui->verifyCPIDValidResultLabel->setStyleSheet("color:black;background-color:red");
+            ui->verifyCPIDValidResultLabel->setStyleSheet("color:white;background-color:red");
             UpdateTestStatus("verifyCPIDValid", completed);
             UpdateOverallDiagnosticResult(failed);
         }
@@ -384,7 +398,7 @@ void DiagnosticsDialog::on_testButton_clicked()
         if (VerifyCPIDHasRAC())
         {
             ui->verifyCPIDHasRACResultLabel->setText(tr("Passed"));
-            ui->verifyCPIDHasRACResultLabel->setStyleSheet("color:black;background-color:green");
+            ui->verifyCPIDHasRACResultLabel->setStyleSheet("color:white;background-color:green");
             UpdateTestStatus("verifyCPIDHasRAC", completed);
             UpdateOverallDiagnosticResult(passed);
 
@@ -392,7 +406,7 @@ void DiagnosticsDialog::on_testButton_clicked()
         else
         {
             ui->verifyCPIDHasRACResultLabel->setText(tr("Failed"));
-            ui->verifyCPIDHasRACResultLabel->setStyleSheet("color:black;background-color:red");
+            ui->verifyCPIDHasRACResultLabel->setStyleSheet("color:white;background-color:red");
             UpdateTestStatus("verifyCPIDHasRAC", completed);
             UpdateOverallDiagnosticResult(failed);
         }
@@ -406,14 +420,14 @@ void DiagnosticsDialog::on_testButton_clicked()
         if (VerifyCPIDIsInNeuralNetwork())
         {
             ui->verifyCPIDIsInNNResultLabel->setText(tr("Passed"));
-            ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:black;background-color:green");
+            ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:white;background-color:green");
             UpdateTestStatus("verifyCPIDIsInNN", completed);
             UpdateOverallDiagnosticResult(passed);
         }
         else
         {
             ui->verifyCPIDIsInNNResultLabel->setText(tr("Failed"));
-            ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:black;background-color:red");
+            ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:white;background-color:red");
             UpdateTestStatus("verifyCPIDIsInNN", completed);
             UpdateOverallDiagnosticResult(failed);
         }
@@ -429,7 +443,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     if (VerifyWalletIsSynced())
     {
         ui->verifyWalletIsSyncedResultLabel->setText(tr("Passed"));
-        ui->verifyWalletIsSyncedResultLabel->setStyleSheet("color:black;background-color:green");
+        ui->verifyWalletIsSyncedResultLabel->setStyleSheet("color:white;background-color:green");
         UpdateTestStatus("verifyWalletIsSynced", completed);
         UpdateOverallDiagnosticResult(passed);
     }
@@ -437,7 +451,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     else
     {
         ui->verifyWalletIsSyncedResultLabel->setText(tr("Failed"));
-        ui->verifyWalletIsSyncedResultLabel->setStyleSheet("color:black;background-color:red");
+        ui->verifyWalletIsSyncedResultLabel->setStyleSheet("color:white;background-color:red");
         UpdateTestStatus("verifyWalletIsSynced", completed);
         UpdateOverallDiagnosticResult(failed);
     }
@@ -468,14 +482,14 @@ void DiagnosticsDialog::on_testButton_clicked()
     else if(seed_node_connections >= 3)
     {
         ui->verifySeedNodesResultLabel->setText(tr("Passed: Count = %1").arg(QString::number(seed_node_connections)));
-        ui->verifySeedNodesResultLabel->setStyleSheet("color:black;background-color:green");
+        ui->verifySeedNodesResultLabel->setStyleSheet("color:white;background-color:green");
         UpdateTestStatus("verifySeedNodes", completed);
         UpdateOverallDiagnosticResult(passed);
     }
     else
     {
         ui->verifySeedNodesResultLabel->setText(tr("Failed: Count = %1").arg(QString::number(seed_node_connections)));
-        ui->verifySeedNodesResultLabel->setStyleSheet("color:black;background-color:red");
+        ui->verifySeedNodesResultLabel->setStyleSheet("color:white;background-color:red");
         UpdateTestStatus("verifySeedNodes", completed);
         UpdateOverallDiagnosticResult(failed);
     }
@@ -498,25 +512,36 @@ void DiagnosticsDialog::on_testButton_clicked()
     else if (connections >= 8)
     {
         ui->verifyConnectionsResultLabel->setText(tr("Passed: Count = %1").arg(QString::number(connections)));
-        ui->verifyConnectionsResultLabel->setStyleSheet("color:black;background-color:green");
+        ui->verifyConnectionsResultLabel->setStyleSheet("color:white;background-color:green");
         UpdateTestStatus("verifyConnections", completed);
         UpdateOverallDiagnosticResult(passed);
     }
     else
     {
         ui->verifyConnectionsResultLabel->setText(tr("Failed: Count = %1").arg(QString::number(connections)));
-        ui->verifyConnectionsResultLabel->setStyleSheet("color:black;background-color:red");
+        ui->verifyConnectionsResultLabel->setStyleSheet("color:white;background-color:red");
         UpdateTestStatus("verifyConnections", completed);
         UpdateOverallDiagnosticResult(failed);
     }
 
     // tcp port
-    ui->verifyTCPPortResultLabel->setStyleSheet("");
-    ui->verifyTCPPortResultLabel->setText(tr("Testing..."));
-    UpdateTestStatus("verifyTCPPort", pending);
-    this->repaint();
+    // Only test this if intention is to run a full node (i.e. listen=1).
+    if(GetArg("-listen", false))
+    {
+        ui->verifyTCPPortResultLabel->setStyleSheet("");
+        ui->verifyTCPPortResultLabel->setText(tr("Testing..."));
+        UpdateTestStatus("verifyTCPPort", pending);
+        this->repaint();
 
-    VerifyTCPPort();
+        VerifyTCPPort();
+    }
+    else
+    {
+        ui->verifyTCPPortResultLabel->setText(tr("NA"));
+        ui->verifyTCPPortResultLabel->setStyleSheet("color:black;background-color:grey");
+        UpdateTestStatus("verifyTCPPort", completed);
+        UpdateOverallDiagnosticResult(NA);
+     }
 
     // client version
     ui->checkClientVersionResultLabel->setStyleSheet("");
@@ -535,7 +560,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     else
     {
         ui->checkClientVersionResultLabel->setText(tr("Passed"));
-        ui->checkClientVersionResultLabel->setStyleSheet("color:black;background-color:green");
+        ui->checkClientVersionResultLabel->setStyleSheet("color:white;background-color:green");
         UpdateTestStatus("checkClientVersion", completed);
         UpdateOverallDiagnosticResult(passed);
     }
@@ -545,13 +570,18 @@ void DiagnosticsDialog::on_testButton_clicked()
 
 void DiagnosticsDialog::VerifyClock()
 {
+    QTimer *timerVerifyClock = new QTimer();
+
+    // Set up a timeout clock of 10 seconds as a fail-safe.
+    connect(timerVerifyClock, SIGNAL(timeout()), this, SLOT(clkFinished()));
+    timerVerifyClock->start(10 * 1000);
+
     QHostInfo NTPHost = QHostInfo::fromName("pool.ntp.org");
     udpSocket = new QUdpSocket(this);
 
     connect(udpSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(clkStateChanged(QAbstractSocket::SocketState)));
-    connect(udpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(clkSocketError(QAbstractSocket::SocketError)));
+    connect(udpSocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(clkSocketError()));
 
-    udpSocket->bind(QHostAddress(NTPHost.addresses().first()), 123, QAbstractSocket::ShareAddress);
     udpSocket->connectToHost(QHostAddress(NTPHost.addresses().first()), 123, QIODevice::ReadWrite);
 }
 
@@ -569,18 +599,9 @@ void DiagnosticsDialog::clkStateChanged(QAbstractSocket::SocketState state)
     return;
 }
 
-void DiagnosticsDialog::clkSocketError(QAbstractSocket::SocketError error)
+void DiagnosticsDialog::clkSocketError()
 {
     udpSocket->close();
-
-    ui->verifyClockResultLabel->setText(tr("Warning: Cannot connect to NTP server"));
-    ui->verifyClockResultLabel->setStyleSheet("color:black;background-color:yellow");
-    UpdateTestStatus("verifyClockResult", completed);
-
-    // We need this here because there is no return call (callback) to the on_testButton_clicked function
-    UpdateOverallDiagnosticResult(warning);
-
-    DisplayOverallDiagnosticResult();
 
     return;
 }
@@ -589,7 +610,10 @@ void DiagnosticsDialog::clkFinished()
 {
     if (udpSocket->waitForReadyRead())
     {
-        while (udpSocket->hasPendingDatagrams())
+        int64_t start_time = GetAdjustedTime();
+
+        // Only allow this loop to run for 15 seconds maximum.
+        while (udpSocket->hasPendingDatagrams() && GetAdjustedTime() - start_time <= 5)
         {
             QByteArray BufferSocket = udpSocket->readAll();
 
@@ -609,7 +633,7 @@ void DiagnosticsDialog::clkFinished()
                 if (timeDiff.minutes() < 3)
                 {
                     ui->verifyClockResultLabel->setText(tr("Passed"));
-                    ui->verifyClockResultLabel->setStyleSheet("color:black;background-color:green");
+                    ui->verifyClockResultLabel->setStyleSheet("color:white;background-color:green");
                     UpdateTestStatus("verifyClockResult", completed);
 
                     // We need this here because there is no return call (callback) to the on_testButton_clicked function
@@ -618,20 +642,38 @@ void DiagnosticsDialog::clkFinished()
                 else
                 {
                     ui->verifyClockResultLabel->setText(tr("Failed: Sync local time with network"));
-                    ui->verifyClockResultLabel->setStyleSheet("color:black;background-color:red");
+                    ui->verifyClockResultLabel->setStyleSheet("color:white;background-color:red");
                     UpdateTestStatus("verifyClockResult", completed);
 
                     // We need this here because there is no return call (callback) to the on_testButton_clicked function
                     UpdateOverallDiagnosticResult(failed);
                 }
+
+                // We need this here because there is no return call (callback) to the on_testButton_clicked function
+                DisplayOverallDiagnosticResult();
+
+                return;
             }
         }
     }
+    else // The other state here is a socket or other indeterminate error such as a timeout (coming from clkSocketError).
+    {
+        // This is needed to "cancel" the timout timer. Essentially if the test was marked completed via the normal exits
+        // above, then when the timer calls clkFinished again, it will hit this conditional and be a no-op.
+        if (GetTestStatus("verifyClockResult") != completed)
+        {
+            ui->verifyClockResultLabel->setText(tr("Warning: Cannot connect to NTP server"));
+            ui->verifyClockResultLabel->setStyleSheet("color:black;background-color:yellow");
+            UpdateTestStatus("verifyClockResult", completed);
 
-    // We need this here because there is no return call (callback) to the on_testButton_clicked function
-    DisplayOverallDiagnosticResult();
+            // We need this here because there is no return call (callback) to the on_testButton_clicked function
+            UpdateOverallDiagnosticResult(warning);
 
-    return;
+            DisplayOverallDiagnosticResult();
+        }
+
+        return;
+    }
 }
 
 void DiagnosticsDialog::VerifyTCPPort()
@@ -648,7 +690,7 @@ void DiagnosticsDialog::TCPFinished()
 {
     tcpSocket->close();
     ui->verifyTCPPortResultLabel->setText(tr("Passed"));
-    ui->verifyTCPPortResultLabel->setStyleSheet("color:black;background-color:green");
+    ui->verifyTCPPortResultLabel->setStyleSheet("color:white;background-color:green");
 
     // We need this here because there is no return call (callback) to the on_testButton_clicked function
     UpdateTestStatus("verifyTCPPort", completed);
@@ -661,8 +703,8 @@ void DiagnosticsDialog::TCPFinished()
 
 void DiagnosticsDialog::TCPFailed(QAbstractSocket::SocketError socket)
 {
-    ui->verifyTCPPortResultLabel->setText(tr("Failed: Port 32749 may be blocked by your firewall"));
-    ui->verifyTCPPortResultLabel->setStyleSheet("color:black;background-color:red");
+    ui->verifyTCPPortResultLabel->setText(tr("Warning: Port 32749 may be blocked by your firewall"));
+    ui->verifyTCPPortResultLabel->setStyleSheet("color:black;background-color:yellow");
 
     // We need this here because there is no return call (callback) to the on_testButton_clicked function
     UpdateTestStatus("verifyTCPPort", completed);

@@ -722,10 +722,10 @@ void BitcoinGUI::aboutClicked()
     dlg.exec();
 }
 
-void BitcoinGUI::setNumConnections(int count)
+void BitcoinGUI::setNumConnections(int n)
 {
     QString icon;
-    switch(count)
+    switch (n)
     {
     case 0: icon = ":/icons/connect_0"; break;
     case 1: case 2: case 3: icon = ":/icons/connect_1"; break;
@@ -735,19 +735,15 @@ void BitcoinGUI::setNumConnections(int count)
     }
     labelConnectionsIcon->setPixmap(QIcon(icon).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
 
-    if (count == 0)
+    if (n == 0)
     {
         labelConnectionsIcon->setToolTip(tr("No active connections to the Gridcoin network. "
                                             "If this persists more than a few minutes, please check your configuration "
-                                            "and your network connectivity.").arg(count));
-    }
-    else if (count == 1)
-    {
-        labelConnectionsIcon->setToolTip(tr("%1 active connection to the Gridcoin network").arg(count));
+                                            "and your network connectivity."));
     }
     else
     {
-        labelConnectionsIcon->setToolTip(tr("%1 active connections to the Gridcoin network").arg(count));
+        labelConnectionsIcon->setToolTip(tr("%n active connection(s) to the Gridcoin network", "", n));
     }
 }
 

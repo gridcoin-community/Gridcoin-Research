@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>765</width>
-    <height>441</height>
+    <width>866</width>
+    <height>577</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -117,7 +117,7 @@
      <item row="9" column="0">
       <widget class="QLabel" name="verifyTCPPortLabel">
        <property name="text">
-        <string>Verify TCP/IP port</string>
+        <string>Verify listen port for full node</string>
        </property>
       </widget>
      </item>
@@ -179,7 +179,7 @@
         </size>
        </property>
        <property name="text">
-        <string>Verify CPID has valid beacon</string>
+        <string>Verify CPID has valid beacon </string>
        </property>
       </widget>
      </item>
@@ -339,7 +339,7 @@
      <item row="8" column="0">
       <widget class="QLabel" name="verifyConnectionsLabel">
        <property name="text">
-        <string>Verify connections to network</string>
+        <string>Verify connections to network </string>
        </property>
       </widget>
      </item>
@@ -401,7 +401,7 @@
       <number>6</number>
      </property>
      <property name="leftMargin">
-      <number>550</number>
+      <number>610</number>
      </property>
      <property name="rightMargin">
       <number>0</number>

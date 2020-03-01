@@ -31,6 +31,7 @@ public:
 
     enum DiagnosticTestStatus
     {
+        unknown,
         pending,
         completed
     };
@@ -75,6 +76,7 @@ private:
 public:
     unsigned int GetNumberOfTestsPending();
     unsigned int UpdateTestStatus(std::string test_name, DiagnosticTestStatus test_status);
+    DiagnosticTestStatus GetTestStatus(std::string test_name);
     void ResetOverallDiagnosticResult(unsigned int& number_of_tests);
     void UpdateOverallDiagnosticResult(DiagnosticResult diagnostic_result_in);
     DiagnosticResult GetOverallDiagnosticResult();
@@ -85,7 +87,7 @@ private slots:
     void on_testButton_clicked();
     void clkFinished();
     void clkStateChanged(QAbstractSocket::SocketState state);
-    void clkSocketError(QAbstractSocket::SocketError error);
+    void clkSocketError();
     void TCPFinished();
     void TCPFailed(QAbstractSocket::SocketError socketError);
 };
