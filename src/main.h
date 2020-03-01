@@ -256,12 +256,12 @@ double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetDifficulty(const CBlockIndex* blockindex = NULL);
 double GetBlockDifficulty(unsigned int nBits);
 double GetAverageDifficulty(unsigned int nPoSInterval = 40);
+
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
 // GetAverageDifficulty(nPosInterval) = to dDiff here.
-// The defeult confidence is 1-1/e which is the mean for the geometric distribution.
-
-const double DEFAULT_ETTS_CONFIDENCE = 0.632120558829;
-double GetEstimatedTimetoStake(double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
+// The defeult confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
+const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
+double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 
 NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 

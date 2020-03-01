@@ -48,6 +48,7 @@ private:
     bool VerifyWalletIsSynced();
     bool VerifyIsCPIDValid();
     bool VerifyCPIDHasRAC();
+    double VerifyETTSReasonable();
     int VerifyCountSeedNodes();
     int VerifyCountConnections();
     double GetTotalCPIDRAC(std::string cpid);

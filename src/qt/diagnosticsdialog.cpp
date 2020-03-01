@@ -287,6 +287,19 @@ bool DiagnosticsDialog::VerifyCPIDHasRAC()
     return (racValue >= 1) ? true : false;
 }
 
+double DiagnosticsDialog::VerifyETTSReasonable()
+{
+    // We are going to compute the ETTS with ignore_staking_status set to true
+    // and also use a 960 block diff as the input, which smooths out short
+    // term fluctuations. The standard 1-1/e confidence (mean) is used.
+
+    double diff = GetAverageDifficulty(960);
+
+    double result = GetEstimatedTimetoStake(true, diff);
+
+    return result;
+}
+
 int DiagnosticsDialog::VerifyCountSeedNodes()
 {
     LOCK(cs_vNodes);
@@ -320,7 +333,7 @@ void DiagnosticsDialog::on_testButton_clicked()
     }
 
     // This needs to be updated if there are more tests added.
-    unsigned int number_of_tests = 10;
+    unsigned int number_of_tests = 11;
 
     ResetOverallDiagnosticResult(number_of_tests);
     DisplayOverallDiagnosticResult();
@@ -344,6 +357,11 @@ void DiagnosticsDialog::on_testButton_clicked()
         ui->verifyCPIDIsInNNResultLabel->setText(tr("N/A"));
         ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:black;background-color:grey");
         UpdateTestStatus("verifyCPIDIsInNN", completed);
+
+        ui->checkETTSResultLabel->setText(tr("N/A"));
+        ui->checkETTSResultLabel->setStyleSheet("color:black;background-color:grey");
+        UpdateTestStatus("checkETTS", completed);
+
     }
     else
     {
@@ -430,6 +448,57 @@ void DiagnosticsDialog::on_testButton_clicked()
             ui->verifyCPIDIsInNNResultLabel->setStyleSheet("color:white;background-color:red");
             UpdateTestStatus("verifyCPIDIsInNN", completed);
             UpdateOverallDiagnosticResult(failed);
+        }
+
+        // verify reasonable ETTS
+        // This is only checked if wallet is a researcher wallet because the purpose is to
+        // alert the owner that his stake time is too long and therefore there is a chance
+        // of research rewards loss between stakes due to the 180 day limit.
+        ui->checkETTSResultLabel->setStyleSheet("");
+        ui->checkETTSResultLabel->setText(tr("Testing..."));
+        UpdateTestStatus("checkETTS", pending);
+
+        double ETTS = VerifyETTSReasonable() / (24.0 * 60.0 * 60.0);
+
+        std::string rounded_ETTS;
+
+        //round appropriately for display.
+        if (ETTS >= 100)
+        {
+            rounded_ETTS = RoundToString(ETTS, 0);
+        }
+        else if (ETTS >= 10)
+        {
+            rounded_ETTS = RoundToString(ETTS, 1);
+        }
+        else
+        {
+            rounded_ETTS = RoundToString(ETTS, 2);
+        }
+
+        if (ETTS > 90.0 || ETTS == 0.0)
+        {
+            ui->checkETTSResultLabel->setText(tr("Failed: ETTS = %1 > 90 days")
+                                              .arg(QString(rounded_ETTS.c_str())));
+            ui->checkETTSResultLabel->setStyleSheet("color:white;background-color:red");
+            UpdateTestStatus("checkETTS", completed);
+            UpdateOverallDiagnosticResult(failed);
+        }
+        else if (ETTS > 45.0 && ETTS <= 90.0)
+        {
+            ui->checkETTSResultLabel->setText(tr("Warning: 45 days < ETTS = %1 <= 90 days")
+                                              .arg(QString(rounded_ETTS.c_str())));
+            ui->checkETTSResultLabel->setStyleSheet("color:black;background-color:yellow");
+            UpdateTestStatus("checkETTS", completed);
+            UpdateOverallDiagnosticResult(warning);
+        }
+        else
+        {
+            ui->checkETTSResultLabel->setText(tr("Passed: ETTS = %1 <= 45 days")
+                                              .arg(QString(rounded_ETTS.c_str())));
+            ui->checkETTSResultLabel->setStyleSheet("color:white;background-color:green");
+            UpdateTestStatus("checkETTS", completed);
+            UpdateOverallDiagnosticResult(passed);
         }
     }
 
@@ -603,16 +672,19 @@ void DiagnosticsDialog::clkSocketError()
 {
     udpSocket->close();
 
+    // Call clkFinished to handle.
+    clkFinished();
+
     return;
 }
 
 void DiagnosticsDialog::clkFinished()
 {
-    if (udpSocket->waitForReadyRead())
+    if (udpSocket->waitForReadyRead(10 * 1000))
     {
         int64_t start_time = GetAdjustedTime();
 
-        // Only allow this loop to run for 15 seconds maximum.
+        // Only allow this loop to run for 5 seconds maximum.
         while (udpSocket->hasPendingDatagrams() && GetAdjustedTime() - start_time <= 5)
         {
             QByteArray BufferSocket = udpSocket->readAll();
