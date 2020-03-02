@@ -341,7 +341,7 @@ double GetAverageDifficulty(unsigned int nPoSInterval)
     return result;
 }
 
-double GetEstimatedTimetoStake(double dDiff, double dConfidence)
+double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double dConfidence)
 {
     /*
      * The algorithm below is an attempt to come up with a more accurate way of estimating Time to Stake (ETTS) based on
@@ -378,8 +378,8 @@ double GetEstimatedTimetoStake(double dDiff, double dConfidence)
     }
 
     bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-    // Get out early if not staking and set return value of 0.
-    if (!staking)
+    // Get out early if not staking and ignore_staking_status is false and set return value of 0.
+    if (!staking && !ignore_staking_status)
     {
         if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
         return result;

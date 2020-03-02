@@ -553,12 +553,12 @@ void BitcoinGUI::createToolBars()
     // Use a red color for the toolbars background if on testnet.
     if (GetBoolArg("-testnet"))
     {
-        toolbar2->setStyleSheet("background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 darkRed, stop: 1 darkRed)");
+        toolbar2->setStyleSheet("background-color:darkRed");
         toolbar3->setStyleSheet("background-color:darkRed");
     }
     else
     {
-        toolbar2->setStyleSheet("background-color:qlineargradient(x1: 0, y1: 0, x2: 0.5, y2: 0.5,stop: 0 rgb(65,0,127), stop: 1 rgb(65,0,127))");
+        toolbar2->setStyleSheet("background-color:rgb(65,0,127)");
         toolbar3->setStyleSheet("background-color:rgb(65,0,127)");
     }
 
@@ -722,10 +722,10 @@ void BitcoinGUI::aboutClicked()
     dlg.exec();
 }
 
-void BitcoinGUI::setNumConnections(int count)
+void BitcoinGUI::setNumConnections(int n)
 {
     QString icon;
-    switch(count)
+    switch (n)
     {
     case 0: icon = ":/icons/connect_0"; break;
     case 1: case 2: case 3: icon = ":/icons/connect_1"; break;
@@ -734,7 +734,17 @@ void BitcoinGUI::setNumConnections(int count)
     default: icon = ":/icons/connect_4"; break;
     }
     labelConnectionsIcon->setPixmap(QIcon(icon).pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
-    labelConnectionsIcon->setToolTip(tr("%1 active connection(s) to Gridcoin network").arg(count));
+
+    if (n == 0)
+    {
+        labelConnectionsIcon->setToolTip(tr("No active connections to the Gridcoin network. "
+                                            "If this persists more than a few minutes, please check your configuration "
+                                            "and your network connectivity."));
+    }
+    else
+    {
+        labelConnectionsIcon->setToolTip(tr("%n active connection(s) to the Gridcoin network", "", n));
+    }
 }
 
 void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)

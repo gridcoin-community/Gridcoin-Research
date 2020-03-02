@@ -393,7 +393,7 @@ std::string ExtractValue(std::string data, std::string delimiter, int pos)
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage)
 {
     sOutPrivKey = "BUG! deprecated field used";
-    LOCK(cs_main);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
     {
         const std::string primary_cpid = NN::GetPrimaryCpid();
 

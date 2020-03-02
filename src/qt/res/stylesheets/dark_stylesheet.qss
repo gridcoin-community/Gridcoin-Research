@@ -145,7 +145,6 @@ QToolTip {
     border: none;
 }
 
-
 QTableView{
     background-color: rgb(49,54,59); 
     color:white;
@@ -369,7 +368,7 @@ QCheckBox{
     border:none;
     padding-top:1.25em;
     min-width:8em;
-    height:100%;    
+    height:100%;
     color: white;
 }
 
@@ -377,6 +376,7 @@ QCheckBox{
     border:none;
     min-width:1.625em;
     max-width:3em;
+    color: white;
 }
 
 #toolbar3 {
@@ -399,6 +399,10 @@ QToolBar#toolbar2 QLabel{
     padding-top:1em;
     padding-bottom:1em;
     qproperty-alignment: AlignCenter;
+}
+
+QToolBar#toolbar2 QToolTip {
+    color:white
 }
 
 QToolBar#toolbar3 QLabel{
