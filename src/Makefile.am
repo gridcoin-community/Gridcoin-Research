@@ -100,6 +100,7 @@ GRIDCOIN_CORE_H = \
 	neuralnet/accrual/research_age.h \
 	neuralnet/claim.h \
 	neuralnet/cpid.h \
+	neuralnet/greylist.h \
 	neuralnet/project.h \
 	neuralnet/quorum.h \
 	neuralnet/researcher.h \
@@ -173,6 +174,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	miner.cpp \
 	neuralnet/claim.cpp \
 	neuralnet/cpid.cpp \
+	neuralnet/greylist.cpp \
 	neuralnet/project.cpp \
 	neuralnet/quorum.cpp \
 	neuralnet/researcher.cpp \

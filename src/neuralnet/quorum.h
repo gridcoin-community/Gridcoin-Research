@@ -1,5 +1,7 @@
 #pragma once
 
+#include "neuralnet/greylist.h"
+
 #include <string>
 
 class CBlockIndex;
@@ -167,5 +169,25 @@ public:
     //! activated.
     //!
     static bool CommitSuperblock(const uint32_t height);
+
+    //!
+    //! \brief Filter the supplied set of whitelisted projects into active
+    //! and greylisted statuses.
+    //!
+    //! \param projects A snapshot of projects on the whitelist to filter.
+    //!
+    //! \return A snapshot of projects categorized by greylist status.
+    //!
+    static GreylistSnapshot FilterGreylist(WhitelistSnapshot projects);
+
+    //!
+    //! \brief Determine whether the specified project triggered an automated
+    //! greylisting rule.
+    //!
+    //! \param project_name The name of the whitelisted project to check for.
+    //!
+    //! \return A value that describes the greylist status of the project.
+    //!
+    static GreylistReason CheckGreylist(const std::string& project_name);
 };
 }
