@@ -476,7 +476,15 @@ void DiagnosticsDialog::on_testButton_clicked()
             rounded_ETTS = RoundToString(ETTS, 2);
         }
 
-        if (ETTS > 90.0 || ETTS == 0.0)
+        // ETTS of zero actually means no coins, i.e. infinite.
+        if (ETTS == 0.0)
+        {
+            ui->checkETTSResultLabel->setText(tr("Failed: ETTS is infinite. No coins to stake."));
+            ui->checkETTSResultLabel->setStyleSheet("color:white;background-color:red");
+            UpdateTestStatus("checkETTS", completed);
+            UpdateOverallDiagnosticResult(failed);
+        }
+        else if (ETTS > 90.0)
         {
             ui->checkETTSResultLabel->setText(tr("Failed: ETTS = %1 > 90 days")
                                               .arg(QString(rounded_ETTS.c_str())));
