@@ -594,23 +594,12 @@ void DiagnosticsDialog::on_testButton_clicked()
     }
 
     // tcp port
-    // Only test this if intention is to run a full node (i.e. listen=1).
-    if(GetArg("-listen", false))
-    {
-        ui->verifyTCPPortResultLabel->setStyleSheet("");
-        ui->verifyTCPPortResultLabel->setText(tr("Testing..."));
-        UpdateTestStatus("verifyTCPPort", pending);
-        this->repaint();
+    ui->verifyTCPPortResultLabel->setStyleSheet("");
+    ui->verifyTCPPortResultLabel->setText(tr("Testing..."));
+    UpdateTestStatus("verifyTCPPort", pending);
+    this->repaint();
 
-        VerifyTCPPort();
-    }
-    else
-    {
-        ui->verifyTCPPortResultLabel->setText(tr("NA"));
-        ui->verifyTCPPortResultLabel->setStyleSheet("color:black;background-color:grey");
-        UpdateTestStatus("verifyTCPPort", completed);
-        UpdateOverallDiagnosticResult(NA);
-     }
+    VerifyTCPPort();
 
     // client version
     ui->checkClientVersionResultLabel->setStyleSheet("");
