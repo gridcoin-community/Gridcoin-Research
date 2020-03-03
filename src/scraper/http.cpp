@@ -215,6 +215,10 @@ std::string Http::GetEtag(
         {
             etag = line.substr(pos+6, line.size());
             etag = etag.substr(1, etag.size() - 3);
+
+            if (fDebug)
+                _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
+
             return etag;
         }
     }
@@ -223,10 +227,6 @@ std::string Http::GetEtag(
         throw std::runtime_error("No ETag response from project url <urlfile=" + url + ">");
 
     return std::string();
-
-    // This needs to go away for production along with the above external function declaration and the fixup enum to support _log here.
-    if (fDebug)
-        _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 }
 
 std::string Http::GetLatestVersionResponse()

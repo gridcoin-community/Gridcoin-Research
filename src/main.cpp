@@ -377,9 +377,19 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
         return result;
     }
 
-    bool staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
-    // Get out early if not staking and ignore_staking_status is false and set return value of 0.
-    if (!staking && !ignore_staking_status)
+    bool staking;
+    bool able_to_stake;
+
+    {
+        LOCK(MinerStatus.lock);
+
+        staking = MinerStatus.nLastCoinStakeSearchInterval && MinerStatus.WeightSum;
+
+        able_to_stake = MinerStatus.able_to_stake;
+    }
+
+    // Get out early if not staking, ignore_staking_status is false, and not able_to_stake and set return value of 0.
+    if (!ignore_staking_status && !staking && !able_to_stake)
     {
         if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Not staking: ETTS = %f", result);
         return result;
@@ -447,11 +457,9 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     {
         CTxIndex txindex;
         CBlock CoinBlock; //Block which contains CoinTx
-        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex))
-            continue; //error?
+        if (!txdb.ReadTxIndex(out.tx->GetHash(), txindex)) continue; //Ignore transactions that can't be read.
 
-        if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false))
-            continue;
+        if (!CoinBlock.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, false)) continue;
 
         // We are going to store as an event the time that the UTXO matures (is available for staking again.)
         nTime = (CoinBlock.GetBlockTime() & ~ETTS_TIMESTAMP_MASK) + nStakeMinAge;
@@ -462,14 +470,14 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
         // subtracting the reserve. Each UTXO also has to be greater than 1/80 GRC to result in a weight greater than zero in the CreateCoinStake loop,
         // so eliminate UTXO's with less than 0.0125 GRC balances right here. The test with Satoshi units for that is
         // nValue >= 1250000.
-        if(BalanceAvailForStaking >= nValue && nValue >= 1250000)
+        if (BalanceAvailForStaking >= nValue && nValue >= 1250000)
         {
         vUTXO.push_back(std::pair<int64_t, int64_t>( nTime, nValue));
         if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: pair (relative to current time: <%i, %i>", nTime - nCurrentTime, nValue);
 
         // Only record a time below if it is after nCurrentTime, because UTXO's that have matured already are already stakeable and can be grouped (will be found)
         // by the nCurrentTime record that was already injected above.
-        if(nTime > nCurrentTime) UniqueUTXOTimes.insert(nTime);
+        if (nTime > nCurrentTime) UniqueUTXOTimes.insert(nTime);
         }
     }
 
@@ -485,13 +493,13 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // become significant. The CDF of a compound geometric distribution as you do tosses with different probabilities follows the
     // recursion relation... CDF.i = 1 - (1 - CDF.i-1)(1 - p.i). If all probabilities are the same, this reduces to the familiar
     // CDF.k = 1 - (1 - p)^k where ^ is exponentiation.
-    for(const auto& itertime : UniqueUTXOTimes)
+    for (const auto& itertime : UniqueUTXOTimes)
     {
 
         nTime = itertime;
         dProbAccumulator = 0;
 
-        for( auto& iterUTXO : vUTXO)
+        for (auto& iterUTXO : vUTXO)
         {
 
             if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: Unique UTXO Time: %u, vector pair <%u, %u>", nTime, iterUTXO.first, iterUTXO.second);
@@ -515,8 +523,7 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
         dCumulativeProbability = 1 - ((1 - dCumulativeProbability) * pow((1 - dProbAccumulator), nThrows));
         if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: dCumulativeProbability = %e", dCumulativeProbability);
 
-        if(dCumulativeProbability >= dConfidence)
-            break;
+        if (dCumulativeProbability >= dConfidence) break;
 
         nTimePrev = nTime;
     }
@@ -548,16 +555,6 @@ double GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double 
     // Because we are looking at the delta time required past nTime, which is where we exited the Gantt chart loop.
     result = nDeltaTime + nTime - nCurrentTime;
     if (fDebug10) LogPrintf("GetEstimatedTimetoStake debug: ETTS at %d confidence = %i", dConfidence, result);
-
-    // The old calculation for comparative purposes, only done if fDebug10 set. Note that this is the "fixed" old
-    // calculation, because the old network weight calculation was wrong too...
-    if (fDebug10)
-    {
-        double oldETTS = 0;
-
-        oldETTS = GetTargetSpacing(nBestHeight) * GetEstimatedNetworkWeight(40) / MinerStatus.WeightSum;
-        LogPrintf("GetEstimatedTimetoStake debug: oldETTS = %f", oldETTS);
-    }
 
     return result;
 }
@@ -598,48 +595,57 @@ void GetGlobalStatus()
 
         // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
         // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
-        double dETTS = GetEstimatedTimetoStake()/86400.0;
+        double dETTS = GetEstimatedTimetoStake() / 86400.0;
+
         LOCK(GlobalStatusStruct.lock);
-        { LOCK(MinerStatus.lock);
-        GlobalStatusStruct.blocks = ToString(nBestHeight);
-        GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-        GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
-        //todo: use the real weight from miner status (requires scaling)
-        GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
-        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
-        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(GetAdjustedTime()),2);
-        GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
-        GlobalStatusStruct.poll = std::move(current_poll);
 
-        GlobalStatusStruct.status = msMiningErrors;
+        {
+            GlobalStatusStruct.blocks = ToString(nBestHeight);
+            GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
+            GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
+            //todo: use the real weight from miner status (requires scaling)
+            GlobalStatusStruct.coinWeight = sWeight;
+            GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
+            GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
+            GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(GetAdjustedTime()),2);
+            GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
+            GlobalStatusStruct.poll = std::move(current_poll);
 
-        if(MinerStatus.WeightSum)
-            GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
+            GlobalStatusStruct.status = msMiningErrors;
 
-        GlobalStatusStruct.errors.clear();
-        std::string Alerts = GetWarnings("statusbar");
-        if(!Alerts.empty())
-            GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
+            unsigned long stk_dropped;
 
-        if (PORDiff < 0.1)
-            GlobalStatusStruct.errors +=  _("Low difficulty!; ");
+            {
+                LOCK(MinerStatus.lock);
 
-        if(!MinerStatus.ReasonNotStaking.empty())
-            GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
+                if(MinerStatus.WeightSum)
+                    GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
 
-        unsigned long stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
-        if(stk_dropped)
-            GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+                GlobalStatusStruct.errors.clear();
+                std::string Alerts = GetWarnings("statusbar");
+                if(!Alerts.empty())
+                    GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
 
-        if(!msMiningErrors6.empty())
-            GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
-        if(!msMiningErrors7.empty())
-            GlobalStatusStruct.errors += msMiningErrors7 + "; ";
-        if(!msMiningErrors8.empty())
-            GlobalStatusStruct.errors += msMiningErrors8 + "; ";
+                if (PORDiff < 0.1)
+                    GlobalStatusStruct.errors +=  _("Low difficulty!; ");
 
+                if(!MinerStatus.ReasonNotStaking.empty())
+                    GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
+
+                stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
+            }
+
+            if (stk_dropped)
+                GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+
+            if (!msMiningErrors6.empty())
+                GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
+            if (!msMiningErrors7.empty())
+                GlobalStatusStruct.errors += msMiningErrors7 + "; ";
+            if (!msMiningErrors8.empty())
+                GlobalStatusStruct.errors += msMiningErrors8 + "; ";
         }
+
         return;
     }
     catch (std::exception& e)

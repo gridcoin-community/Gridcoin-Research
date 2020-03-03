@@ -25,6 +25,7 @@ class CWalletTx;
 class CReserveKey;
 class COutput;
 class CCoinControl;
+struct CMinerStatus;
 
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
@@ -45,6 +46,57 @@ enum MinedType
     POS_SIDE_STAKE = 4,
     POR_SIDE_STAKE = 5
 };
+
+// CMinerStatus is here to prevent circular include problems.
+struct CMinerStatus
+{
+    CCriticalSection lock;
+
+    enum ReasonNotStakingCategory
+    {
+        NONE,
+        NO_MATURE_COINS,
+        NO_COINS,
+        ENTIRE_BALANCE_RESERVED,
+        NO_UTXOS_AVAILABLE_DUE_TO_RESERVE,
+        WALLET_LOCKED,
+        TESTNET_ONLY,
+        OFFLINE
+    };
+
+    std::vector<ReasonNotStakingCategory> vReasonNotStaking;
+
+    const std::vector<std::string> vReasonNotStakingStrings = { "None",
+                                                                "No Mature Coins",
+                                                                "No coins",
+                                                                "Entire balance reserved",
+                                                                "No UTXOs available due to reserve balance",
+                                                                "Wallet locked",
+                                                                "Testnet-only version",
+                                                                "Offline" };
+
+    bool able_to_stake = true;
+
+    std::string ReasonNotStaking;
+
+    uint64_t WeightSum,WeightMin,WeightMax;
+    double ValueSum;
+    int Version;
+    uint64_t CreatedCnt;
+    uint64_t AcceptedCnt;
+    uint64_t KernelsFound;
+    int64_t nLastCoinStakeSearchInterval;
+    double KernelDiffMax;
+    double KernelDiffSum;
+
+    void Clear();
+    CMinerStatus();
+
+    bool SetReasonNotStaking(ReasonNotStakingCategory not_staking_error);
+    void ClearReasonsNotStaking();
+};
+
+
 
 /** A key pool entry */
 class CKeyPool
@@ -149,7 +201,8 @@ public:
     bool CanSupportFeature(enum WalletFeature wf) { AssertLockHeld(cs_wallet); return nWalletMaxVersion >= wf; }
 
 	void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime) const;
-    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet, std::string& sError, bool fMiner = false) const;
+    bool SelectCoinsForStaking(unsigned int nSpendTime, std::vector<std::pair<const CWalletTx*,unsigned int> >& vCoinsRet,
+                               CMinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner = false) const;
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl=NULL, bool fIncludeStakingCoins=false) const;
     bool SelectCoinsMinConf(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, bool contract = false) const;
 
