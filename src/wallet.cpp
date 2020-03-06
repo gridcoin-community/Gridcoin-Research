@@ -22,7 +22,6 @@
 #include "main.h"
 #include "util.h"
 #include "beacon.h"
-#include "miner.h"
 #include <random>
 
 using namespace std;
@@ -1496,8 +1495,8 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
 //
 // Formula Stakable = ((SPENDABLE - RESERVED) > UTXO)
 */
-bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
-    std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet, std::string& sError, bool fMiner) const
+bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<const CWalletTx*,unsigned int> >& vCoinsRet,
+                                    CMinerStatus::ReasonNotStakingCategory& not_staking_error, bool fMiner) const
 {
     int64_t BalanceToConsider = GetBalance();
 
@@ -1505,7 +1504,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-            sError = _("No coins");
+            not_staking_error = CMinerStatus::NO_COINS;
 
         return false;
     }
@@ -1515,7 +1514,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (BalanceToConsider <= 0)
     {
         if (fMiner)
-            sError = _("Entire balance reserved");
+            not_staking_error = CMinerStatus::ENTIRE_BALANCE_RESERVED;
 
         return false;
     }
@@ -1529,7 +1528,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (vCoins.empty())
     {
         if (fMiner)
-            sError = _("No mature coins");
+            not_staking_error = CMinerStatus::NO_MATURE_COINS;
 
         return false;
     }
@@ -1557,7 +1556,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime,
     if (vCoinsRet.empty())
     {
         if (fMiner)
-            sError = _("No utxos available due to reserve balance");
+            not_staking_error = CMinerStatus::NO_UTXOS_AVAILABLE_DUE_TO_RESERVE;
 
         return false;
     }
@@ -1756,10 +1755,10 @@ bool CWallet::GetStakeWeight(uint64_t& nWeight)
     vector<const CWalletTx*> vwtxPrev;
 
     vector<pair<const CWalletTx*,unsigned int> > vCoins;
-    std::string sError = "";
+    CMinerStatus::ReasonNotStakingCategory not_staking_error;
     nWeight = 0;
 
-    if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, sError))
+    if (!SelectCoinsForStaking(GetAdjustedTime(), vCoins, not_staking_error))
         return false;
 
     int64_t nCurrentTime = GetAdjustedTime();

@@ -270,6 +270,7 @@ RES_ICONS = \
   qt/res/icons/rsz_chat.png \
   qt/res/icons/staking_off.svg \
   qt/res/icons/staking_on.svg \
+  qt/res/icons/staking_unable.svg \
   qt/res/icons/statistics.png \
   qt/res/icons/toolbar.png \
   qt/res/icons/transaction_conflicted.png \

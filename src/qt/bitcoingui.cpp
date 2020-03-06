@@ -518,7 +518,10 @@ void BitcoinGUI::createToolBars()
         QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
         connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
         timerStakingIcon->start(30 * 1000);
-        updateStakingIcon();
+        // Instead of calling updateStakingIcon here, simply set the icon to staking off.
+        // This is to prevent problems since this GUI code can initialize before the core.
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        labelStakingIcon->setToolTip(tr("Not staking: Miner is not initialized."));
     }
 
     QTimer *timerBeaconIcon = new QTimer(labelBeaconIcon);
@@ -1508,30 +1511,54 @@ QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)
 
 void BitcoinGUI::updateStakingIcon()
 {
-    uint64_t nWeight, nLastInterval;
+    // If the miner has not initialized, get out to avoid a lock crash.
+    if (!miner_first_pass_complete) return;
+
+    uint64_t nWeight, nLastInterval, nNetworkWeight;
     std::string ReasonNotStaking;
-    { LOCK(MinerStatus.lock);
+    QString estimated_staking_freq;
+    bool staking;
+    bool able_to_stake;
+
+    {
+        LOCK(MinerStatus.lock);
+
         // nWeight is in GRC units rather than miner weight units because this is more familiar to users.
         nWeight = MinerStatus.WeightSum / 80.0;
         nLastInterval = MinerStatus.nLastCoinStakeSearchInterval;
         ReasonNotStaking = MinerStatus.ReasonNotStaking;
+
+        able_to_stake = MinerStatus.able_to_stake;
     }
 
-    uint64_t nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
-    bool staking = nLastInterval && nWeight;
+    staking = nLastInterval && nWeight;
+    nNetworkWeight = GetEstimatedNetworkWeight() / 80.0;
+
+    // It is ok to run this regardless of staking status, because it bails early in
+    // the not able to stake situation.
+    estimated_staking_freq = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
 
     if (staking)
     {
-        QString text = GetEstimatedStakingFrequency(GetEstimatedTimetoStake());
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_on").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         labelStakingIcon->setToolTip(tr("Staking.<br>Your weight is %1<br>Network weight is %2<br><b>Estimated</b> staking frequency is %3.")
-                                     .arg(nWeight).arg(nNetworkWeight).arg(text));
+                                     .arg(nWeight).arg(nNetworkWeight)
+                                     .arg(estimated_staking_freq));
     }
-    else
+    else if (!staking && !able_to_stake)
+    {
+        labelStakingIcon->setPixmap(QIcon(":/icons/staking_unable").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
+        //Part of this string wont be translated :(
+        labelStakingIcon->setToolTip(tr("Unable to stake: %1")
+                                     .arg(QString(ReasonNotStaking.c_str())));
+    }
+    else //if (miner_first_pass_complete)
     {
         labelStakingIcon->setPixmap(QIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
         //Part of this string wont be translated :(
-        labelStakingIcon->setToolTip(tr("Not staking; %1").arg(QString(ReasonNotStaking.c_str())));
+        labelStakingIcon->setToolTip(tr("Not staking currently: %1, <b>Estimated</b> staking frequency is %2.")
+                                     .arg(QString(ReasonNotStaking.c_str()))
+                                     .arg(estimated_staking_freq));
     }
 }
 

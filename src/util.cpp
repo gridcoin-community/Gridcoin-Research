@@ -98,6 +98,10 @@ static std::map<std::string, std::unique_ptr<fsbridge::FileLock>> dir_locks;
 /** Mutex to protect dir_locks. */
 static std::mutex cs_dir_locks;
 
+// An absolute hack but required due to possible bitcoingui early call, and it goes here because it has to be guaranteed
+// to be initialized here with the bitcoingui object.
+std::atomic_bool miner_first_pass_complete {false};
+
 void SetupEnvironment()
 {
     // On most POSIX systems (e.g. Linux, but not BSD) the environment's locale
