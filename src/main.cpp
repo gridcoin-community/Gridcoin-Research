@@ -599,52 +599,50 @@ void GetGlobalStatus()
 
         LOCK(GlobalStatusStruct.lock);
 
+        GlobalStatusStruct.blocks = ToString(nBestHeight);
+        GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
+        GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
+        //todo: use the real weight from miner status (requires scaling)
+        GlobalStatusStruct.coinWeight = sWeight;
+        GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
+        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
+        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(GetAdjustedTime()),2);
+        GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
+        GlobalStatusStruct.poll = std::move(current_poll);
+
+        GlobalStatusStruct.status = msMiningErrors;
+
+        unsigned long stk_dropped;
+
         {
-            GlobalStatusStruct.blocks = ToString(nBestHeight);
-            GlobalStatusStruct.difficulty = RoundToString(PORDiff,3);
-            GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
-            //todo: use the real weight from miner status (requires scaling)
-            GlobalStatusStruct.coinWeight = sWeight;
-            GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
-            GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
-            GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(GetAdjustedTime()),2);
-            GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
-            GlobalStatusStruct.poll = std::move(current_poll);
+            LOCK(MinerStatus.lock);
 
-            GlobalStatusStruct.status = msMiningErrors;
+            if(MinerStatus.WeightSum)
+                GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
 
-            unsigned long stk_dropped;
+            GlobalStatusStruct.errors.clear();
+            std::string Alerts = GetWarnings("statusbar");
+            if(!Alerts.empty())
+                GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
 
-            {
-                LOCK(MinerStatus.lock);
+            if (PORDiff < 0.1)
+                GlobalStatusStruct.errors +=  _("Low difficulty!; ");
 
-                if(MinerStatus.WeightSum)
-                    GlobalStatusStruct.coinWeight = RoundToString(MinerStatus.WeightSum / 80.0,2);
+            if(!MinerStatus.ReasonNotStaking.empty())
+                GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
 
-                GlobalStatusStruct.errors.clear();
-                std::string Alerts = GetWarnings("statusbar");
-                if(!Alerts.empty())
-                    GlobalStatusStruct.errors += _("Alert: ") + Alerts + "; ";
-
-                if (PORDiff < 0.1)
-                    GlobalStatusStruct.errors +=  _("Low difficulty!; ");
-
-                if(!MinerStatus.ReasonNotStaking.empty())
-                    GlobalStatusStruct.errors +=  _("Miner: ") + MinerStatus.ReasonNotStaking;
-
-                stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
-            }
-
-            if (stk_dropped)
-                GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
-
-            if (!msMiningErrors6.empty())
-                GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
-            if (!msMiningErrors7.empty())
-                GlobalStatusStruct.errors += msMiningErrors7 + "; ";
-            if (!msMiningErrors8.empty())
-                GlobalStatusStruct.errors += msMiningErrors8 + "; ";
+            stk_dropped = MinerStatus.KernelsFound - MinerStatus.AcceptedCnt;
         }
+
+        if (stk_dropped)
+            GlobalStatusStruct.errors += "Rejected " + ToString(stk_dropped) + " stakes;";
+
+        if (!msMiningErrors6.empty())
+            GlobalStatusStruct.errors +=msMiningErrors6 + "; ";
+        if (!msMiningErrors7.empty())
+            GlobalStatusStruct.errors += msMiningErrors7 + "; ";
+        if (!msMiningErrors8.empty())
+            GlobalStatusStruct.errors += msMiningErrors8 + "; ";
 
         return;
     }
