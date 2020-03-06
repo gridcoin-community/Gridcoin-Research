@@ -1086,7 +1086,7 @@ bool ScraperHousekeeping()
              + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
     }
 
-    if (fDebug3 && !superblock.WellFormed())
+    if (fDebug3 && superblock.WellFormed())
     {
         UniValue input_params(UniValue::VARR);
 
