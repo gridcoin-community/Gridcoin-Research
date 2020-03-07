@@ -1187,17 +1187,6 @@ BOOST_AUTO_TEST_CASE(it_adds_a_legacy_rounded_cpid_magnitude_to_the_index)
     BOOST_CHECK(cpids.MagnitudeOf(cpid4) == 0);
 }
 
-BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_duplicate_cpid)
-{
-    NN::Superblock::CpidIndex cpids;
-    NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
-
-    cpids.Add(cpid, NN::Magnitude::RoundFrom(123));
-    cpids.Add(cpid, NN::Magnitude::RoundFrom(123));
-
-    BOOST_CHECK(cpids.size() == 1);
-}
-
 BOOST_AUTO_TEST_CASE(it_fetches_a_cpid_pair_by_offset)
 {
     NN::Superblock::CpidIndex cpids;
@@ -1232,29 +1221,6 @@ BOOST_AUTO_TEST_CASE(it_assumes_zero_magnitude_for_a_nonexistent_cpid)
     NN::Cpid cpid = NN::Cpid::Parse("00010203040506070809101112131415");
 
     BOOST_CHECK(cpids.MagnitudeOf(cpid) == 0);
-}
-
-BOOST_AUTO_TEST_CASE(it_stores_cpids_in_lexicographical_order)
-{
-    // The order is important to ensure consistent ordering of CPID records in
-    // superblocks for consensus and to access CPIDs by offset.
-
-    NN::Superblock::CpidIndex cpids;
-
-    NN::Cpid cpid1 = NN::Cpid::Parse("99999999999999999999999999999999");
-    NN::Cpid cpid2 = NN::Cpid::Parse("ffffffffffffffffffffffffffffffff");
-    NN::Cpid cpid3 = NN::Cpid::Parse("00000000000000000000000000000000");
-
-    cpids.Add(cpid1, NN::Magnitude::RoundFrom(123));
-    cpids.Add(cpid2, NN::Magnitude::RoundFrom(456));
-    cpids.Add(cpid3, NN::Magnitude::RoundFrom(789));
-
-    BOOST_CHECK(cpids.At(0)->Cpid() == cpid3);
-    BOOST_CHECK(cpids.At(0)->Magnitude() == 789);
-    BOOST_CHECK(cpids.At(1)->Cpid() == cpid1);
-    BOOST_CHECK(cpids.At(1)->Magnitude() == 123);
-    BOOST_CHECK(cpids.At(2)->Cpid() == cpid2);
-    BOOST_CHECK(cpids.At(2)->Magnitude() == 456);
 }
 
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_active_cpids)
@@ -1342,23 +1308,6 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_magnitudes_of_active_cpids)
         NN::Magnitude::RoundFrom(456));
 
     BOOST_CHECK(cpids.TotalMagnitude() == 579.0);
-}
-
-BOOST_AUTO_TEST_CASE(it_skips_tallying_the_magnitudes_of_duplicate_cpids)
-{
-    NN::Superblock::CpidIndex cpids;
-
-    cpids.Add(
-        NN::Cpid::Parse("00010203040506070809101112131415"),
-        NN::Magnitude::RoundFrom(123));
-
-    BOOST_CHECK(cpids.TotalMagnitude() == 123.0);
-
-    cpids.Add(
-        NN::Cpid::Parse("00010203040506070809101112131415"),
-        NN::Magnitude::RoundFrom(456));
-
-    BOOST_CHECK(cpids.TotalMagnitude() == 123.0);
 }
 
 BOOST_AUTO_TEST_CASE(it_calculates_the_average_magnitude_of_active_cpids)
@@ -1589,16 +1538,6 @@ BOOST_AUTO_TEST_CASE(it_adds_a_project_statistics_entry_to_the_index)
     BOOST_CHECK(projects.size() == 1);
 }
 
-BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_duplicate_project)
-{
-    NN::Superblock::ProjectIndex projects;
-
-    projects.Add("project_1", NN::Superblock::ProjectStats(123, 123));
-    projects.Add("project_1", NN::Superblock::ProjectStats(456, 456));
-
-    BOOST_CHECK(projects.size() == 1);
-}
-
 BOOST_AUTO_TEST_CASE(it_ignores_insertion_of_a_project_with_an_empty_name)
 {
     NN::Superblock::ProjectIndex projects;
@@ -1641,45 +1580,6 @@ BOOST_AUTO_TEST_CASE(it_sets_a_project_part_convergence_hint)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_stores_projects_in_lexicographical_order_by_name)
-{
-    // The order is important to ensure consistent ordering of project records
-    // in superblocks for consensus.
-
-    NN::Superblock::ProjectIndex projects;
-
-    projects.Add("project_3", NN::Superblock::ProjectStats(123, 123));
-    projects.Add("project_1", NN::Superblock::ProjectStats(456, 456));
-    projects.Add("project_2", NN::Superblock::ProjectStats(789, 789));
-
-    // The project index doesn't provide an offset accessor yet, so we'll
-    // check the order by looping:
-    size_t offset = 0;
-    for (const auto& project_pair : projects) {
-        switch (offset) {
-            case 0:
-                BOOST_CHECK(project_pair.first == "project_1");
-                BOOST_CHECK(project_pair.second.m_rac == 456);
-                break;
-            case 1:
-                BOOST_CHECK(project_pair.first == "project_2");
-                BOOST_CHECK(project_pair.second.m_rac == 789);
-                break;
-            case 2:
-                BOOST_CHECK(project_pair.first == "project_3");
-                BOOST_CHECK(project_pair.second.m_rac == 123);
-                break;
-            default:
-                BOOST_FAIL("Unexpected project at offset.");
-                break;
-        }
-
-        offset++;
-    }
-
-    BOOST_CHECK(offset == projects.size());
-}
-
 BOOST_AUTO_TEST_CASE(it_counts_the_number_of_projects)
 {
     NN::Superblock::ProjectIndex projects;
@@ -1713,19 +1613,6 @@ BOOST_AUTO_TEST_CASE(it_tallies_the_sum_of_the_rac_for_all_projects)
     projects.Add("project_3", NN::Superblock::ProjectStats(789, 789));
 
     BOOST_CHECK(projects.TotalRac() == 1368);
-}
-
-BOOST_AUTO_TEST_CASE(it_skips_tallying_the_rac_of_duplicate_projects)
-{
-    NN::Superblock::ProjectIndex projects;
-
-    projects.Add("project_1", NN::Superblock::ProjectStats(123, 123));
-
-    BOOST_CHECK(projects.TotalRac() == 123);
-
-    projects.Add("project_1", NN::Superblock::ProjectStats(456, 456));
-
-    BOOST_CHECK(projects.TotalRac() == 123);
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_tallying_the_rac_of_projects_with_empty_names)
