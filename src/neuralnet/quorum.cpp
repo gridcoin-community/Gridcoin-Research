@@ -1460,6 +1460,10 @@ bool Quorum::ValidateSuperblockClaim(
     }
 
     if (pindex->nVersion >= 11) {
+        if (superblock->m_version < 2) {
+            return error("ValidateSuperblockClaim(): rejected legacy version.");
+        }
+
         // Superblocks are not included in the input for the claim hash (and,
         // therefor, not for the block's hash), so we need to verify the hash
         // to protect the integrity of the superblock data:
