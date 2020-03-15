@@ -744,6 +744,8 @@ public:
      */
     int64_t GetValueIn(const MapPrevTx& mapInputs) const;
 
+    int64_t GetBaseFee(enum GetMinFee_mode mode=GMF_BLOCK) const;
+
     int64_t GetMinFee(unsigned int nBlockSize=1, enum GetMinFee_mode mode=GMF_BLOCK, unsigned int nBytes = 0) const;
 
     bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet=NULL)
