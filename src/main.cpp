@@ -1251,7 +1251,7 @@ int64_t CTransaction::GetBaseFee(enum GetMinFee_mode mode) const
 
     // For block version 11 onwards, which corresponds to CTransaction::CURRENT_VERSION 2,
     // a multiplier is used on top of MIN_TX_FEE and MIN_RELAY_TX_FEE
-    if (CURRENT_VERSION >= 2)
+    if (nVersion >= 2)
     {
         nBaseFee *= 10;
     }
