@@ -1643,12 +1643,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 }
 
                 int64_t nChange = nValueIn - nValueOut - nFeeRet;
-                // if sub-cent change is required, the fee must be raised to at least MIN_TX_FEE
+                // if sub-cent change is required, the fee must be raised to at least GetBaseFee
                 // or until nChange becomes zero
                 // NOTE: this depends on the exact behaviour of GetMinFee
-                if (nFeeRet < MIN_TX_FEE && nChange > 0 && nChange < CENT)
+                if (nFeeRet < wtxNew.GetBaseFee() && nChange > 0 && nChange < CENT)
                 {
-                    int64_t nMoveToFee = min(nChange, MIN_TX_FEE - nFeeRet);
+                    int64_t nMoveToFee = min(nChange, wtxNew.GetBaseFee() - nFeeRet);
                     nChange -= nMoveToFee;
                     nFeeRet += nMoveToFee;
                 }

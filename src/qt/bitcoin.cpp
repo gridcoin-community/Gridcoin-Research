@@ -88,7 +88,19 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
 {
     if(!guiref)
         return false;
-    if(nFeeRequired < MIN_TX_FEE || nFeeRequired <= nTransactionFee || fDaemon)
+
+    int64_t nMinFee;
+
+    {
+        LOCK(cs_main);
+
+        CTransaction txDummy;
+
+        // Min Fee
+        nMinFee = txDummy.GetBaseFee(GMF_SEND);
+    }
+
+    if(nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee || fDaemon)
         return true;
     bool payFee = false;
 

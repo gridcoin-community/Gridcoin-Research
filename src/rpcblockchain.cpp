@@ -261,18 +261,22 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
 
 UniValue settxfee(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < MIN_TX_FEE)
+    LOCK(cs_main);
+
+    CTransaction txDummy;
+
+    // Min Fee
+    int64_t nMinFee = txDummy.GetBaseFee(GMF_SEND);
+
+    if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < nMinFee)
         throw runtime_error(
                 "settxfee <amount>\n"
                 "\n"
-                "<amount> is a real and is rounded to the nearest 0.01\n"
+                "<amount> is a real and is rounded to the nearest 0.00000001\n"
                 "\n"
                 "Sets the txfee for transactions\n");
 
-    LOCK(cs_main);
-
     nTransactionFee = AmountFromValue(params[0]);
-    nTransactionFee = (nTransactionFee / CENT) * CENT;  // round to cent
 
     return true;
 }

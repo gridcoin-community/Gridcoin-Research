@@ -119,7 +119,11 @@ CScript COINBASE_FLAGS;
 const string strMessageMagic = "Gridcoin Signed Message:\n";
 
 // Settings
-int64_t nTransactionFee = MIN_TX_FEE;
+// This is changed to MIN_TX_FEE * 10 for block version 11 (CTransaction::CURRENT_VERSION 2).
+// Note that this is an early init value and will result in overpayment of the fee per kbyte
+// if this code is run on a wallet prior to the v11 mandatory switchover unless a manual value
+// of -paytxfee is specified as an argument.
+int64_t nTransactionFee = MIN_TX_FEE * 10;
 int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
@@ -1240,10 +1244,24 @@ bool CTransaction::CheckTransaction() const
     return true;
 }
 
-int64_t CTransaction::GetMinFee(unsigned int nBlockSize, enum GetMinFee_mode mode, unsigned int nBytes) const
+int64_t CTransaction::GetBaseFee(enum GetMinFee_mode mode) const
 {
     // Base fee is either MIN_TX_FEE or MIN_RELAY_TX_FEE
     int64_t nBaseFee = (mode == GMF_RELAY) ? MIN_RELAY_TX_FEE : MIN_TX_FEE;
+
+    // For block version 11 onwards, which corresponds to CTransaction::CURRENT_VERSION 2,
+    // a multiplier is used on top of MIN_TX_FEE and MIN_RELAY_TX_FEE
+    if (nVersion >= 2)
+    {
+        nBaseFee *= 10;
+    }
+
+    return nBaseFee;
+}
+
+int64_t CTransaction::GetMinFee(unsigned int nBlockSize, enum GetMinFee_mode mode, unsigned int nBytes) const
+{
+    int64_t nBaseFee = GetBaseFee(mode);
 
     unsigned int nNewBlockSize = nBlockSize + nBytes;
     int64_t nMinFee = (1 + (int64_t)nBytes / 1000) * nBaseFee;
@@ -1371,7 +1389,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         // Continuously rate-limit free transactions
         // This mitigates 'penny-flooding' -- sending thousands of free transactions just to
         // be annoying or make others' transactions take longer to confirm.
-        if (nFees < MIN_RELAY_TX_FEE)
+        if (nFees < tx.GetBaseFee(GMF_RELAY))
         {
             static CCriticalSection cs;
             static double dFreeCount;

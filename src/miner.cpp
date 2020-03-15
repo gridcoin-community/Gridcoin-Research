@@ -236,7 +236,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     // a transaction spammer can cheaply fill blocks using
     // 1-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
-    int64_t nMinTxFee = MIN_TX_FEE;
+    int64_t nMinTxFee = CoinBase.GetBaseFee();
     if (mapArgs.count("-mintxfee"))
         ParseMoney(mapArgs["-mintxfee"], nMinTxFee);
 
