@@ -78,7 +78,7 @@ int64_t MaxBeaconAge()
 int64_t BeaconAgeAdvertiseThreshold()
 {
     // 5 months in seconds.
-    return 3600 * 24 * 30 * 5;    
+    return 3600 * 24 * 30 * 5;
 }
 
 void GetBeaconElements(const std::string& sBeacon, std::string& out_cpid, std::string& out_address, std::string& out_publickey)
@@ -101,7 +101,7 @@ std::string GetBeaconPublicKey(const std::string& cpid, bool bAdvertisingBeacon)
     std::string sBeacon = RetrieveBeaconValueWithMaxAge(cpid, iMaxSeconds);
     if (sBeacon.empty())
         return "";
-    
+
     // Beacon data structure: CPID,hashRand,Address,beacon public key: base64 encoded
     std::string sContract = DecodeBase64(sBeacon);
     std::vector<std::string> vContract = split(sContract.c_str(),";");
@@ -244,14 +244,14 @@ bool VerifyBeaconContractTx(const CTransaction& tx)
 }
 
 bool ImportBeaconKeysFromConfig(const std::string& cpid, CWallet* wallet)
-{    
+{
     if(cpid.empty())
         return error("Empty CPID");
 
     std::string strSecret = GetArgument("privatekey" + cpid + (fTestNet ? "testnet" : ""), "");
     if(strSecret.empty())
         return false;
-    
+
     auto vecsecret = ParseHex(strSecret);
 
     CKey key;
@@ -335,7 +335,7 @@ BeaconStatus GetBeaconStatus(std::string& sCPID)
     beacon_status.iBeaconTimestamp = BeaconTimeStamp(sCPID);
     beacon_status.timestamp = TimestampToHRDate(beacon_status.iBeaconTimestamp);
     beacon_status.hasBeacon = HasActiveBeacon(sCPID);
-    beacon_status.dPriorSBMagnitude = NN::Tally::GetMagnitude(NN::MiningId::Parse(sCPID));
+    beacon_status.dPriorSBMagnitude = NN::Tally::GetMagnitude(NN::MiningId::Parse(sCPID)).Floating();
     beacon_status.is_mine = (sCPID == NN::GetPrimaryCpid());
 
     return beacon_status;

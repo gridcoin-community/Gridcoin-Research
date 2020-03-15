@@ -10,11 +10,9 @@
 #include <map>
 
 class CBlockIndex;
+class uint256;
 
 #include <univalue.h>
-
-#include "global_objects_noui.hpp"
-#include "checkpoints.h"
 
 void StartRPCThreads();
 void StopRPCThreads();

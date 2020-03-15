@@ -127,7 +127,10 @@ public:
             const Cpid& cpid = account_pair.first;
             ResearchAccount& account = account_pair.second;
 
-            account.m_magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid);
+            // TODO: this only supports legacy magnitudes, but the upcoming
+            // superblock window accrual changes remove these shenanigans:
+            //
+            account.m_magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid).Compact();
         }
 
         return ResearchAccountRange(m_researchers);
@@ -143,7 +146,10 @@ public:
     //!
     const ResearchAccount& GetAccount(const Cpid cpid)
     {
-        const uint16_t magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid);
+        // TODO: this only supports legacy magnitudes, but the upcoming
+        // superblock window accrual changes remove these shenanigans:
+        //
+        const uint16_t magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid).Compact();
         auto iter = m_researchers.find(cpid);
 
         if (iter == m_researchers.end()) {
@@ -299,13 +305,13 @@ double Tally::GetMagnitudeUnit(const int64_t payment_time)
     return g_network_tally.GetMagnitudeUnit(payment_time);
 }
 
-uint16_t Tally::MyMagnitude()
+Magnitude Tally::MyMagnitude()
 {
     if (const auto cpid_option = NN::Researcher::Get()->Id().TryCpid()) {
         return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(*cpid_option);
     }
 
-    return 0;
+    return Magnitude::Zero();
 }
 
 ResearchAccountRange Tally::Accounts()
@@ -341,18 +347,18 @@ AccrualComputer Tally::GetComputer(
         last_block_ptr->nHeight);
 }
 
-uint16_t Tally::GetMagnitude(const Cpid cpid)
+Magnitude Tally::GetMagnitude(const Cpid cpid)
 {
     return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
 }
 
-uint16_t Tally::GetMagnitude(const MiningId mining_id)
+Magnitude Tally::GetMagnitude(const MiningId mining_id)
 {
     if (const auto cpid_option = mining_id.TryCpid()) {
         return GetMagnitude(*cpid_option);
     }
 
-    return 0;
+    return Magnitude::Zero();
 }
 
 void Tally::RecordRewardBlock(const CBlockIndex* const pindex)

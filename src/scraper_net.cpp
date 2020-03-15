@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <atomic>
+#include "main.h"
 #include "net.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
@@ -14,8 +15,8 @@
 #include "scraper_net.h"
 #include "appcache.h"
 #include "scraper/fwd.h"
-#include "neuralnet/superblock.h"
 #include "neuralnet/project.h"
+#include "neuralnet/superblock.h"
 
 //Globals
 std::map<uint256,CSplitBlob::CPart> CSplitBlob::mapParts;

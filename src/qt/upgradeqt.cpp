@@ -1,8 +1,5 @@
 #include "upgradeqt.h"
 #include "upgrade.h"
-#include "util.h"
-#include "db.h"
-#include "txdb-leveldb.h"
 #include <QtWidgets>
 #include <QProgressDialog>
 #include <QMessageBox>
@@ -136,7 +133,7 @@ bool UpgradeQt::SnapshotMain()
             Msg(_("Snapshot operation canceled."), _("The wallet will not shutdown."));
 
             return false;
-        }       
+        }
     }
 
     // Make it seen

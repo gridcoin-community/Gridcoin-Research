@@ -99,7 +99,7 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
     const std::string primary_cpid = NN::GetPrimaryCpid();
 
     std::string GRCAddress = DefaultWalletAddress();
-    double dmag = NN::Tally::MyMagnitude();
+    double dmag = NN::Tally::MyMagnitude().Floating();
     double poll_duration = PollDuration(sTitle) * 86400;
 
     // Prevent Double Voting

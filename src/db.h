@@ -6,8 +6,9 @@
 #define BITCOIN_DB_H
 
 #include "fs.h"
-#include "main.h"
 #include "streams.h"
+#include "sync.h"
+#include "version.h"
 
 #include <map>
 #include <string>
