@@ -260,10 +260,31 @@ public:
     static constexpr size_t MAX_SIZE = 4 * 1000 * 1000;
 
     //!
+    //! \brief A single mapping of a CPID to a compact magnitude value.
+    //!
+    typedef std::pair<Cpid, uint16_t> CpidPair;
+
+
+    //!
     //! \brief The underlying collection type that contains CPID to magnitude
     //! mappings.
     //!
-    typedef std::map<Cpid, uint16_t> MagnitudeStorageType;
+    typedef std::vector<CpidPair> MagnitudeStorageType;
+
+    //!
+    //! \brief Determine whether a CPID in a magnitude mapping represents a
+    //! lexicographically lesser value than specified CPID.
+    //!
+    //! \param a The first element in the pair is the CPID to compare.
+    //! \param b The CPID to compare it to.
+    //!
+    //! \return \c true if the bytes of the CPID in the mapping compare less
+    //! than the provided CPID.
+    //!
+    static bool CompareCpidOfPairLessThan(const CpidPair& a, const Cpid& b)
+    {
+        return a.first < b;
+    }
 
     //!
     //! \brief A collection that maps CPIDs to magnitudes for a particular
@@ -331,9 +352,13 @@ public:
         //!
         boost::optional<Magnitude> MagnitudeOf(const Cpid& cpid) const
         {
-            const auto iter = m_magnitudes.find(cpid);
+            const auto iter = std::lower_bound(
+                m_magnitudes.begin(),
+                m_magnitudes.end(),
+                cpid,
+                CompareCpidOfPairLessThan);
 
-            if (iter == m_magnitudes.end()) {
+            if (iter == m_magnitudes.end() || iter->first != cpid) {
                 return boost::none;
             }
 
@@ -343,21 +368,14 @@ public:
         //!
         //! \brief Add a magnitude to the map for the specified CPID.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a CPID
-        //! already exists.
-        //!
         //! \param cpid      The CPID to add.
         //! \param magnitude Total magnitude to associate with the CPID.
         //!
-        uint32_t Add(const Cpid& cpid, const Magnitude magnitude)
+        void Add(const Cpid& cpid, const Magnitude magnitude)
         {
             const uint16_t compact = magnitude.Scaled() / Scale;
 
-            if (m_magnitudes.emplace(cpid, compact).second) {
-                return magnitude.Scaled();
-            }
-
-            return 0;
+            m_magnitudes.emplace_back(cpid, compact);
         }
 
         //!
@@ -448,18 +466,17 @@ public:
         {
             m_magnitudes.clear();
 
-            const auto iter_end = m_magnitudes.end();
-            unsigned int size = ReadCompactSize(stream);
+            const uint64_t size = ReadCompactSize(stream);
+            m_magnitudes.reserve(size);
 
             for (size_t i = 0; i < size; i++) {
                 Cpid cpid;
                 cpid.Unserialize(stream);
 
-                // Read magnitude using compact-size encoding:
                 MagnitudeSize magnitude;
                 ReadMagnitude(stream, magnitude);
 
-                m_magnitudes.emplace_hint(iter_end, cpid, magnitude);
+                m_magnitudes.emplace_back(cpid, magnitude);
                 total_magnitude += magnitude * Scale;
             }
         }
@@ -767,9 +784,6 @@ public:
         //!
         //! \brief Add the supplied CPID to the index.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a CPID
-        //! already exists.
-        //!
         //! \param cpid      The CPID to add.
         //! \param magnitude Total magnitude to associate with the CPID.
         //!
@@ -779,9 +793,6 @@ public:
         //! \brief Add the supplied magnitude for a legacy superblock to the
         //! index.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a CPID
-        //! already exists.
-        //!
         //! \param cpid      The CPID to add.
         //! \param magnitude Total magnitude to associate with the CPID.
         //!
@@ -790,9 +801,6 @@ public:
         //!
         //! \brief Add the supplied mining ID to the index if it represents a
         //! valid CPID after rounding the magnitude to an integer.
-        //!
-        //! This method ignores an attempt to add a duplicate entry if a CPID
-        //! already exists.
         //!
         //! \param cpid      The CPID to add.
         //! \param magnitude Total magnitude to associate with the CPID.
@@ -979,10 +987,21 @@ public:
     //!
     class ProjectIndex
     {
+        //!
+        //! \brief A single mapping of a project name to project statistcs.
+        //!
+        typedef std::pair<std::string, ProjectStats> ProjectPair;
+
+        //!
+        //! \brief The underlying collection type that contains project name
+        //! to project statistics mappings.
+        //!
+        typedef std::vector<ProjectPair> ProjectStorageType;
+
     public:
-        typedef std::map<std::string, ProjectStats>::size_type size_type;
-        typedef std::map<std::string, ProjectStats>::iterator iterator;
-        typedef std::map<std::string, ProjectStats>::const_iterator const_iterator;
+        typedef ProjectStorageType::size_type size_type;
+        typedef ProjectStorageType::iterator iterator;
+        typedef ProjectStorageType::const_iterator const_iterator;
 
         //!
         //! \brief A serialization flag used to pass fallback-to-project-level
@@ -1054,9 +1073,6 @@ public:
         //!
         //! \brief Add the supplied project statistics to the index.
         //!
-        //! This method ignores an attempt to add a duplicate entry if a project
-        //! already exists with the same name.
-        //!
         //! \param name  As it exists in the current whitelist.
         //! \param stats Contains project RAC data.
         //!
@@ -1107,11 +1123,11 @@ public:
 
             stream >> m_converged_by_project;
 
-            const unsigned int project_count = ReadCompactSize(stream);
-            auto iter = m_projects.begin();
+            const uint64_t project_count = ReadCompactSize(stream);
+            m_projects.reserve(project_count);
 
-            for (unsigned int i = 0; i < project_count; i++) {
-                std::pair<std::string, ProjectStats> project_pair;
+            for (uint64_t i = 0; i < project_count; i++) {
+                ProjectPair project_pair;
                 stream >> project_pair;
 
                 if (m_converged_by_project) {
@@ -1119,7 +1135,7 @@ public:
                 }
 
                 m_total_rac += project_pair.second.m_rac;
-                iter = m_projects.insert(iter, project_pair);
+                m_projects.emplace_back(std::move(project_pair));
             }
         }
 
@@ -1130,7 +1146,7 @@ public:
         //! The map is keyed by project names as they exist in administrative
         //! project contracts present at the time that the superblock forms.
         //!
-        std::map<std::string, ProjectStats> m_projects;
+        ProjectStorageType m_projects;
 
         //!
         //! \brief Tally of the sum of the recent average credit of all the

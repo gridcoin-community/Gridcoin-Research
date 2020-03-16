@@ -1670,9 +1670,13 @@ double Superblock::CpidIndex::AverageMagnitude() const
 Magnitude Superblock::CpidIndex::MagnitudeOf(const Cpid& cpid) const
 {
     if (m_legacy) {
-        const auto iter = m_legacy_magnitudes.find(cpid);
+        const auto iter = std::lower_bound(
+            m_legacy_magnitudes.begin(),
+            m_legacy_magnitudes.end(),
+            cpid,
+            Superblock::CompareCpidOfPairLessThan);
 
-        if (iter == m_legacy_magnitudes.end()) {
+        if (iter == m_legacy_magnitudes.end() || iter->first != cpid) {
             return Magnitude::Zero();
         }
 
@@ -1708,20 +1712,22 @@ void Superblock::CpidIndex::Add(const Cpid cpid, const Magnitude magnitude)
     switch (magnitude.Which()) {
         case Magnitude::Kind::ZERO:
             m_zero_magnitude_count++;
-            break;
+            return;
 
         case Magnitude::Kind::SMALL:
-            m_total_magnitude += m_small_magnitudes.Add(cpid, magnitude);
+            m_small_magnitudes.Add(cpid, magnitude);
             break;
 
         case Magnitude::Kind::MEDIUM:
-            m_total_magnitude += m_medium_magnitudes.Add(cpid, magnitude);
+            m_medium_magnitudes.Add(cpid, magnitude);
             break;
 
         case Magnitude::Kind::LARGE:
-            m_total_magnitude += m_large_magnitudes.Add(cpid, magnitude);
+            m_large_magnitudes.Add(cpid, magnitude);
             break;
     }
+
+    m_total_magnitude += magnitude.Scaled();
 }
 
 void Superblock::CpidIndex::RoundAndAdd(const Cpid cpid, const double magnitude)
@@ -1749,9 +1755,9 @@ void Superblock::CpidIndex::RoundAndAdd(const Cpid cpid, const double magnitude)
 
 void Superblock::CpidIndex::AddLegacy(const Cpid cpid, const uint16_t magnitude)
 {
-    if (m_legacy_magnitudes.emplace(cpid, magnitude).second == true) {
-        m_total_magnitude += magnitude * NN::Magnitude::SCALE_FACTOR;
-    }
+    m_legacy_magnitudes.emplace_back(cpid, magnitude);
+
+    m_total_magnitude += magnitude * NN::Magnitude::SCALE_FACTOR;
 }
 
 uint256 Superblock::CpidIndex::HashSegments() const
@@ -1843,9 +1849,13 @@ double Superblock::ProjectIndex::AverageRac() const
 Superblock::ProjectStatsOption
 Superblock::ProjectIndex::Try(const std::string& name) const
 {
-    const auto iter = m_projects.find(name);
+    const auto iter = std::lower_bound(
+        m_projects.begin(),
+        m_projects.end(),
+        name,
+        [](const ProjectPair& a, const std::string& b) { return a.first < b; });
 
-    if (iter == m_projects.end()) {
+    if (iter == m_projects.end() || iter->first != name) {
         return boost::none;
     }
 
@@ -1858,20 +1868,21 @@ void Superblock::ProjectIndex::Add(std::string name, const ProjectStats& stats)
         return;
     }
 
-    // Only increment the total RAC if the project does not already exist in
-    // the index:
-    if (m_projects.emplace(std::move(name), stats).second == true) {
-        m_total_rac += stats.m_rac;
-    }
+    m_projects.emplace_back(std::move(name), stats);
+    m_total_rac += stats.m_rac;
 }
 
 void Superblock::ProjectIndex::SetHint(
     const std::string& name,
     const CSerializeData& part_data)
 {
-    auto iter = m_projects.find(name);
+    auto iter = std::lower_bound(
+        m_projects.begin(),
+        m_projects.end(),
+        name,
+        [](const ProjectPair& a, const std::string& b) { return a.first < b; });
 
-    if (iter == m_projects.end()) {
+    if (iter == m_projects.end() || iter->first != name) {
         return;
     }
 
