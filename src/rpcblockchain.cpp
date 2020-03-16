@@ -1076,10 +1076,10 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
     const NN::SuperblockPtr superblock = NN::Quorum::CurrentSuperblock();
 
-    res.pushKV("Superblock Age", superblock->Age());
-    res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock->m_timestamp));
-    res.pushKV("Superblock Block Number", superblock->m_height);
-    res.pushKV("Pending Superblock Height", NN::Quorum::PendingSuperblock()->m_height);
+    res.pushKV("Superblock Age", superblock.Age());
+    res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock.m_timestamp));
+    res.pushKV("Superblock Block Number", superblock.m_height);
+    res.pushKV("Pending Superblock Height", NN::Quorum::PendingSuperblock().m_height);
 
     return res;
 }
@@ -1696,7 +1696,7 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
     res.pushKV("beacon_participant_count", (uint64_t)superblock->m_cpids.size());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
     res.pushKV("superblock_valid", superblock->WellFormed());
-    res.pushKV("Superblock Age", superblock->Age());
+    res.pushKV("Superblock Age", superblock.Age());
     res.pushKV("Dire Need of Superblock", NN::Quorum::SuperblockNeeded());
 
     return res;
@@ -1924,7 +1924,7 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     const NN::AccrualComputer calc = NN::Tally::GetComputer(cpid, now, pindexBest);
 
     json.pushKV("CPID", cpid.ToString());
-    json.pushKV("Magnitude (Last Superblock)", account.m_magnitude);
+    json.pushKV("Magnitude (Last Superblock)", NN::Quorum::GetMagnitude(cpid).Floating());
     json.pushKV("Current Magnitude Unit", calc->MagnitudeUnit());
 
     json.pushKV("First Payment Time", TimestampToHRDate(account.FirstRewardTime()));

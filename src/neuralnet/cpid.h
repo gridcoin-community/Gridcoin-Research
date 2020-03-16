@@ -22,7 +22,9 @@ public:
     //!
     //! \brief Initialize a zero-value CPID object.
     //!
-    Cpid();
+    Cpid() : m_bytes({ })
+    {
+    }
 
     //!
     //! \brief Initialize a CPID object from the bytes in an MD5 hash.
@@ -65,7 +67,10 @@ public:
     //!
     //! \return \c true if the supplied CPID's bytes match.
     //!
-    bool operator==(const Cpid& other) const;
+    bool operator==(const Cpid& other) const
+    {
+        return m_bytes == other.m_bytes;
+    }
 
     //!
     //! \brief Compare a supplied CPID value for inequality.
@@ -74,7 +79,10 @@ public:
     //!
     //! \return \c true if the supplied CPID's bytes do not match.
     //!
-    bool operator!=(const Cpid& other) const;
+    bool operator!=(const Cpid& other) const
+    {
+        return m_bytes != other.m_bytes;
+    }
 
     //!
     //! \brief Compare a supplied CPID value for less than other.
@@ -89,7 +97,10 @@ public:
     //!
     //! \return \c true if the supplied CPID's bytes represent a greater number.
     //!
-    bool operator<(const Cpid& other) const;
+    bool operator<(const Cpid& other) const
+    {
+        return m_bytes < other.m_bytes;
+    }
 
     //!
     //! \brief Compare a supplied CPID value for greater than other.
@@ -104,7 +115,10 @@ public:
     //!
     //! \return \c true if the supplied CPID's bytes represent a lesser number.
     //!
-    bool operator>(const Cpid& other) const;
+    bool operator>(const Cpid& other) const
+    {
+        return m_bytes > other.m_bytes;
+    }
 
     //!
     //! \brief Determine whether the CPID contains only zeros.
@@ -130,14 +144,20 @@ public:
     //!
     //! \return An immutable reference to the underlying byte array.
     //!
-    const std::array<unsigned char, 16>& Raw() const;
+    const std::array<unsigned char, 16>& Raw() const
+    {
+        return m_bytes;
+    }
 
     //!
     //! \brief Get the bytes that make up the CPID.
     //!
     //! \return A mutable reference to the underlying byte array.
     //!
-    std::array<unsigned char, 16>& Raw();
+    std::array<unsigned char, 16>& Raw()
+    {
+        return m_bytes;
+    }
 
     //!
     //! \brief Get the MD5 string representation of the CPID.
@@ -233,19 +253,29 @@ public:
     //!
     //! \brief Initialize an empty, invalid mining ID object.
     //!
-    MiningId();
+    MiningId() : m_variant(Invalid())
+    {
+    }
 
     //!
     //! \brief Initialize a mining ID for the provided CPID value.
     //!
     //! \param cpid An external BOINC CPID.
     //!
-    MiningId(Cpid cpid);
+    MiningId(Cpid cpid) : m_variant(std::move(cpid))
+    {
+    }
 
     //!
     //! \brief Initialize a mining ID that represents a non-researcher.
     //!
-    static MiningId ForInvestor();
+    static MiningId ForInvestor()
+    {
+        MiningId miningId;
+        miningId.m_variant = Investor();
+
+        return miningId;
+    }
 
     //!
     //! \brief Create a mining ID object from its string representation.
@@ -263,7 +293,18 @@ public:
     //!
     //! \return \c true if the supplied mining ID's bytes match.
     //!
-    bool operator==(const MiningId& other) const;
+    bool operator==(const MiningId& other) const
+    {
+        if (m_variant.which() != other.m_variant.which()) {
+            return false;
+        }
+
+        if (Which() == Kind::CPID) {
+            return *this == boost::get<Cpid>(other.m_variant);
+        }
+
+        return true;
+    }
 
     //!
     //! \brief Compare a supplied mining ID value for inequality.
@@ -272,7 +313,10 @@ public:
     //!
     //! \return \c true if the supplied mining ID's bytes do not match.
     //!
-    bool operator!=(const MiningId& other) const;
+    bool operator!=(const MiningId& other) const
+    {
+        return !(*this == other);
+    }
 
     //!
     //! \brief Compare a supplied CPID value for equality.
@@ -282,7 +326,11 @@ public:
     //! \return \c true if this object contains a CPID variant and the supplied
     //! CPID's bytes match.
     //!
-    bool operator==(const Cpid& other) const;
+    bool operator==(const Cpid& other) const
+    {
+        return Which() == Kind::CPID
+            && boost::get<Cpid>(m_variant) == other;
+    }
 
     //!
     //! \brief Compare a supplied CPID value for inequality.
@@ -292,21 +340,30 @@ public:
     //! \return \c true if this object does not contain a CPID variant or the
     //! supplied CPID's bytes do not match.
     //!
-    bool operator!=(const Cpid& other) const;
+    bool operator!=(const Cpid& other) const
+    {
+        return !(*this == other);
+    }
 
     //!
     //! \brief Describe the type of entity represented by the mining ID.
     //!
     //! \return A value enumerated on \c MiningId::Kind .
     //!
-    Kind Which() const;
+    Kind Which() const
+    {
+        return static_cast<Kind>(m_variant.which());
+    }
 
     //!
     //! \brief Determine whether the mining ID is valid.
     //!
     //! \return \c true if the object represents a valid CPID or an investor.
     //!
-    bool Valid() const;
+    bool Valid() const
+    {
+        return Which() != Kind::INVALID;
+    }
 
     //!
     //! \brief Get the CPID value if it exists.
@@ -314,7 +371,14 @@ public:
     //! \return An object that contains a reference to a \c Cpid object if the
     //! variant holds a CPID value.
     //!
-    CpidOption TryCpid() const;
+    CpidOption TryCpid() const
+    {
+        if (Which() != Kind::CPID) {
+            return boost::none;
+        }
+
+        return boost::get<Cpid>(m_variant);
+    }
 
     //!
     //! \brief Get the string representation of the mining ID.

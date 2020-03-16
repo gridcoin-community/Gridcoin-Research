@@ -9,7 +9,7 @@
 #include "contract/contract.h"
 #include "key.h"
 #include "neuralnet/researcher.h"
-#include "neuralnet/tally.h"
+#include "neuralnet/quorum.h"
 
 std::string RetrieveBeaconValueWithMaxAge(const std::string& cpid, int64_t iMaxSeconds);
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
@@ -335,7 +335,7 @@ BeaconStatus GetBeaconStatus(std::string& sCPID)
     beacon_status.iBeaconTimestamp = BeaconTimeStamp(sCPID);
     beacon_status.timestamp = TimestampToHRDate(beacon_status.iBeaconTimestamp);
     beacon_status.hasBeacon = HasActiveBeacon(sCPID);
-    beacon_status.dPriorSBMagnitude = NN::Tally::GetMagnitude(NN::MiningId::Parse(sCPID)).Floating();
+    beacon_status.dPriorSBMagnitude = NN::Quorum::GetMagnitude(NN::MiningId::Parse(sCPID)).Floating();
     beacon_status.is_mine = (sCPID == NN::GetPrimaryCpid());
 
     return beacon_status;

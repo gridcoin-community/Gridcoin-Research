@@ -1221,6 +1221,20 @@ public:
         return GetClaim().m_superblock;
     }
 
+    NN::Superblock PullSuperblock()
+    {
+        if (nVersion >= 11 || m_claim.m_mining_id.Valid() || vtx.empty()) {
+            return std::move(m_claim.m_superblock);
+        }
+
+        // Before block version 11, the Gridcoin reward claim context is
+        // stored in the first transaction of the block.
+        //
+        NN::Claim claim = NN::Claim::Parse(vtx[0].hashBoinc, nVersion);
+
+        return std::move(claim.m_superblock);
+    }
+
     // entropy bit for stake modifier if chosen by modifier
     unsigned int GetStakeEntropyBit() const
     {

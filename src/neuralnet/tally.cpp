@@ -4,7 +4,6 @@
 #include "neuralnet/accrual/research_age.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/quorum.h"
-#include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
 #include "util.h"
 
@@ -92,7 +91,7 @@ public:
     //!
     void ApplySuperblock(const SuperblockPtr superblock)
     {
-        LogPrintf("NetworkTally::ApplySuperblock(%" PRId64 ")", superblock->m_height);
+        LogPrintf("NetworkTally::ApplySuperblock(%" PRId64 ")", superblock.m_height);
         m_total_magnitude = superblock->m_cpids.TotalMagnitude();
     }
 
@@ -267,7 +266,7 @@ private:
     //! \brief A link to the current active superblock used to lazily update
     //! researcher magnitudes when supplying an account.
     //!
-    SuperblockPtr m_current_superblock = std::make_shared<Superblock>();
+    SuperblockPtr m_current_superblock = SuperblockPtr::Empty();
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
@@ -305,15 +304,6 @@ double Tally::GetMagnitudeUnit(const int64_t payment_time)
     return g_network_tally.GetMagnitudeUnit(payment_time);
 }
 
-Magnitude Tally::MyMagnitude()
-{
-    if (const auto cpid_option = NN::Researcher::Get()->Id().TryCpid()) {
-        return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(*cpid_option);
-    }
-
-    return Magnitude::Zero();
-}
-
 ResearchAccountRange Tally::Accounts()
 {
     return g_researcher_tally.Accounts();
@@ -345,20 +335,6 @@ AccrualComputer Tally::GetComputer(
         payment_time,
         GetMagnitudeUnit(payment_time),
         last_block_ptr->nHeight);
-}
-
-Magnitude Tally::GetMagnitude(const Cpid cpid)
-{
-    return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
-}
-
-Magnitude Tally::GetMagnitude(const MiningId mining_id)
-{
-    if (const auto cpid_option = mining_id.TryCpid()) {
-        return GetMagnitude(*cpid_option);
-    }
-
-    return Magnitude::Zero();
 }
 
 void Tally::RecordRewardBlock(const CBlockIndex* const pindex)

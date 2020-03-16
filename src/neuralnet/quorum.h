@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 class CBlockIndex;
@@ -7,13 +8,97 @@ class CBlockIndex;
 namespace NN {
 
 class Claim;
+class Magnitude;
 class QuorumHash;
 class Superblock;
 
 //!
-//! \brief A received superblock stored in the quorum superblock index.
+//! \brief A smart pointer that wraps a superblock object for shared ownership
+//! with context of its containing block.
 //!
-typedef std::shared_ptr<const Superblock> SuperblockPtr;
+//! In general, this class represents a superblock published and received in a
+//! block.
+//!
+class SuperblockPtr
+{
+public:
+    int64_t m_height;    //!< Height of the block that contains the contract.
+    int64_t m_timestamp; //!< Timestamp of the block that contains the contract.
+
+    //!
+    //! \brief Wrap the provided superblock and store context of its containing
+    //! block.
+    //!
+    //! \param superblock The superblock object to wrap.
+    //! \param pindex     Index of the block that contains the superblock.
+    //!
+    //! \return A smart pointer that wraps the provided superblock.
+    //!
+    static SuperblockPtr BindShared(
+        Superblock&& superblock,
+        const CBlockIndex* const pindex)
+    {
+        return SuperblockPtr(
+            std::make_shared<const Superblock>(std::move(superblock)),
+            pindex);
+    }
+
+    //!
+    //! \brief Create a representation of an empty, invalid superblock.
+    //!
+    //! \return A smart pointer to an empty superblock.
+    //!
+    static SuperblockPtr Empty()
+    {
+        return SuperblockPtr(std::make_shared<const Superblock>(), 0, 0);
+    }
+
+    const Superblock& operator*() const noexcept { return *m_superblock; }
+    const Superblock* operator->() const noexcept { return m_superblock.get(); }
+
+    //!
+    //! \brief Get the current age of the superblock.
+    //!
+    //! \return Superblock age in seconds.
+    //!
+    int64_t Age() const
+    {
+        return GetAdjustedTime() - m_timestamp;
+    }
+
+private:
+    std::shared_ptr<const Superblock> m_superblock; //!< The wrapped superblock.
+
+    //!
+    //! \brief Initialize a new superblock smart pointer wrapper.
+    //!
+    //! \param superblock Smart pointer around a superblock object.
+    //! \param height     Height of the block that contains the superblock.
+    //! \param timestamp  Time of the block that contains the superblock.
+    //!
+    SuperblockPtr(
+        std::shared_ptr<const Superblock> superblock,
+        const int64_t height,
+        const int64_t timestamp)
+        : m_height(height)
+        , m_timestamp(timestamp)
+        , m_superblock(std::move(superblock))
+    {
+    }
+
+    //!
+    //! \brief Initialize a new superblock smart pointer.
+    //!
+    //! \param superblock Smart pointer around a superblock object.
+    //! \param pindex     Provides context about the containing block.
+    //!
+    SuperblockPtr(
+        std::shared_ptr<const Superblock> superblock,
+        const CBlockIndex* const pindex)
+        : SuperblockPtr(std::move(superblock), pindex->nHeight, pindex->nTime)
+    {
+    }
+};
 
 //!
 //! \brief Produces, stores, and validates superblocks.
@@ -87,12 +172,56 @@ public:
     //!
     //! \brief Validate a superblock published to the network for the day.
     //!
-    //! \param claim  Contains the superblock data staked in a block.
-    //! \param pindex Provides context for the block containing the superblock.
+    //! \param claim      Contains the superblock data staked in a block.
+    //! \param superblock The claim's superblock to validate.
+    //! \param pindex     Provides context for the block containing the superblock.
     //!
     static bool ValidateSuperblockClaim(
         const Claim& claim,
+        const SuperblockPtr& superblock,
         const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Validate the supplied superblock by comparing it to the node's
+    //! local manifest data.
+    //!
+    //! \param superblock The superblock to validate.
+    //! \param use_cache  If \c false, skip validation with the scraper cache.
+    //! \param hint_bits  For testing by-project fallback validation.
+    //!
+    //! \return \c true if local manifest data produces a matching superblock.
+    //!
+    static bool ValidateSuperblock(
+        const SuperblockPtr& superblock,
+        const bool use_cache = true,
+        const size_t hint_bits = 32);
+
+    //!
+    //! \brief Get the current magnitude of the CPID loaded by the wallet.
+    //!
+    //! \return The wallet user's magnitude or zero if the wallet started in
+    //! investor mode.
+    //!
+    static Magnitude MyMagnitude();
+
+    //!
+    //! \brief Get the current magnitude for the specified CPID.
+    //!
+    //! \param cpid The CPID to fetch the magnitude for.
+    //!
+    //! \return Magnitude as of the last tallied superblock.
+    //!
+    static Magnitude GetMagnitude(const Cpid cpid);
+
+    //!
+    //! \brief Get the current magnitude for the specified mining ID.
+    //!
+    //! \param cpid May contain a CPID to fetch the magnitude for.
+    //!
+    //! \return Magnitude as of the last tallied superblock or zero if the
+    //! mining ID represents an investor.
+    //!
+    static Magnitude GetMagnitude(const MiningId mining_id);
 
     //!
     //! \brief Get a reference to the current active superblock.
@@ -146,9 +275,8 @@ public:
     //! \brief Push a new superblock into the tally.
     //!
     //! \param superblock Contains the superblock data to load.
-    //! \param pindex     Represents the block that contains the superblock.
     //!
-    static void PushSuperblock(Superblock superblock, const CBlockIndex* const pindex);
+    static void PushSuperblock(SuperblockPtr superblock);
 
     //!
     //! \brief Drop the last superblock loaded into the tally.

@@ -61,14 +61,6 @@ public:
     static double GetMagnitudeUnit(const int64_t payment_time);
 
     //!
-    //! \brief Get the current magnitude of the CPID loaded by the wallet.
-    //!
-    //! \return The wallet user's magnitude or zero if the wallet started in
-    //! investor mode.
-    //!
-    static Magnitude MyMagnitude();
-
-    //!
     //! \brief Get a traversable object for the research accounts stored in
     //! the tally.
     //!
@@ -99,25 +91,6 @@ public:
         const Cpid cpid,
         const int64_t payment_time,
         const CBlockIndex* const last_block_ptr);
-
-    //!
-    //! \brief Get the current magnitude for the specified CPID.
-    //!
-    //! \param cpid The CPID to fetch the magnitude for.
-    //!
-    //! \return Magnitude as of the last tallied superblock.
-    //!
-    static Magnitude GetMagnitude(const Cpid cpid);
-
-    //!
-    //! \brief Get the current magnitude for the specified mining ID.
-    //!
-    //! \param cpid May contain a CPID to fetch the magnitude for.
-    //!
-    //! \return Magnitude as of the last tallied superblock or zero if the
-    //! mining ID represents an investor.
-    //!
-    static Magnitude GetMagnitude(const MiningId mining_id);
 
     //!
     //! \brief Record a block's research reward data in the tally.
