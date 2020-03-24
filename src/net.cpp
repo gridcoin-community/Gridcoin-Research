@@ -41,6 +41,7 @@ extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
 int PEER_TIMEOUT = 45;
 
+static void Discover();
 void ThreadMessageHandler2(void* parg);
 void ThreadSocketHandler2(void* parg);
 void ThreadOpenConnections2(void* parg);
@@ -717,6 +718,15 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
+    if (addrMe != addrSeenByPeer)
+    {
+        if(fDebug10) LogPrintf("updating ExternalIP");
+        Discover();
+        if (fUseUPnP)
+        {
+            MapPort();
+        }
+    }
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     if (fDebug10) LogPrintf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
