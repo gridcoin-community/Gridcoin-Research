@@ -1038,6 +1038,15 @@ void ThreadSocketHandler2(void* parg)
                     // remove from vNodes
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
 
+                    // reduce score of the address used
+                    if (pnode->fInbound)
+                    {
+                        if (mapLocalHost[pnode->addrLocal].nScore > 1)
+                        {
+                           mapLocalHost[pnode->addrLocal].nScore--;
+                        }
+                    }
+
                     // release outbound grant (if any)
                     pnode->grantOutbound.Release();
 
