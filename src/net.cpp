@@ -149,7 +149,7 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
         {
             int nScore = (*it).second.nScore;
             int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
-            if (Debug10) LogPrintf("Address information: Addr %s Reachability %i Score %i", (*it).first.ToString(), nReachability , nScore);
+            if (fDebug10) LogPrintf("Address information: Addr %s Reachability %i Score %i", (*it).first.ToString(), nReachability , nScore);
 
             if (nReachability > nBestReachability)
             {
@@ -175,7 +175,7 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
                 nAccumulatedScore += nScore;
                 if (nAccumulatedScore >= nSelectedScore)
                 {
-                    LogPrintf("Address information: Selected Addr: %s", (*it).first.ToString());
+                    if (fDebug10) LogPrintf("Address information: Selected Addr: %s", (*it).first.ToString());
                     addr = CService((*it).first, (*it).second.nPort);
                     return nScore >= 0;
                     break;
