@@ -132,7 +132,8 @@ void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce
     PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
 }
 
-// find 'best' local address for a particular peer
+// find 'best' local address for a particular peer, with a bit of randomness so that
+// use new adresses are also used, which increases score and is useful for dynamic IPs.
 bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
 {
     if (fNoListen)
@@ -142,15 +143,43 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
     int nBestReachability = -1;
     {
         LOCK(cs_mapLocalHost);
+
+        int nTotalScore = 0; // Draws the random address in this range.
         for (map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++)
         {
             int nScore = (*it).second.nScore;
             int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
-            if (nReachability > nBestReachability || (nReachability == nBestReachability && nScore > nBestScore))
+            if (Debug10) LogPrintf("Address information: Addr %s Reachability %i Score %i", (*it).first.ToString(), nReachability , nScore);
+
+            if (nReachability > nBestReachability)
             {
-                addr = CService((*it).first, (*it).second.nPort);
                 nBestReachability = nReachability;
-                nBestScore = nScore;
+                nTotalScore = 0;
+            }
+            if (nReachability == nBestReachability)
+            {
+                nTotalScore += nScore;
+            }
+        }
+        const int nSelectedScore = GetRandInt(nTotalScore);
+        int nAccumulatedScore = 1;
+
+        for (map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++)
+        {
+            int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
+
+            if (nReachability == nBestReachability )
+            {
+                int nScore = (*it).second.nScore;
+
+                nAccumulatedScore += nScore;
+                if (nAccumulatedScore >= nSelectedScore)
+                {
+                    LogPrintf("Address information: Selected Addr: %s", (*it).first.ToString());
+                    addr = CService((*it).first, (*it).second.nPort);
+                    return nScore >= 0;
+                    break;
+                }
             }
         }
     }
