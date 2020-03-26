@@ -247,7 +247,9 @@ UniValue listbanned(const UniValue& params, bool fHelp)
     if (fHelp || params.size() != 0)
     {
         throw runtime_error(
-            "listbanned: List all banned IPs/subnets.\n"
+            "listbanned\n"
+            "\n"
+            "List all banned IPs/subnets.\n"
             );
     }
 
@@ -278,7 +280,9 @@ UniValue clearbanned(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "clearbanned: Clear all banned IPs.\n"
+            "clearbanned\n"
+            "\n"
+            "Clear all banned IPs.\n"
             );
 
     if (!g_banman) {
