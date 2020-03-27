@@ -57,11 +57,6 @@ extern void NeuralNetwork();
 
 extern bool fScraperActive;
 
-struct LocalServiceInfo {
-    int nScore;
-    int nPort;
-};
-
 //
 // Global state variables
 //
@@ -69,7 +64,7 @@ bool fDiscover = true;
 bool fUseUPnP = false;
 uint64_t nLocalServices = NODE_NETWORK;
 static CCriticalSection cs_mapLocalHost;
-static map<CNetAddr, LocalServiceInfo> mapLocalHost;
+static map<CNetAddr, CService> mapLocalHost;
 static bool vfReachable[NET_MAX] = {};
 static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
@@ -139,51 +134,59 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
     if (fNoListen)
         return false;
 
-    int nBestScore = -1;
-    int nBestReachability = -1;
     {
         LOCK(cs_mapLocalHost);
-
-        int nTotalScore = 0; // Draws the random address in this range.
-        for (map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++)
+        if (paddrPeer != NULL && GetRandInt(10) == 0) // for 10% give them the ip they told us
         {
-            int nScore = (*it).second.nScore;
-            int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
-            if (fDebug10) LogPrintf("Address information: Addr %s Reachability %i Score %i", (*it).first.ToString(), nReachability , nScore);
+            auto it = mapLocalHost.find(*paddrPeer);
+            if (it != mapLocalHost.end())
+            {
+                addr = it->second; // give them the address they told us;
+                addr.SetPort(GetListenPort());
+                return true;
+            }
+        }
+
+        // most likely we want to give them an addreess we already know, or they did not tell us an address
+
+        int nBestReachability = -1;
+        map<CService, int> mIPScorer; // stores the addreses with heighest reachability.
+        int nTotalScore = mapLocalHost.size(); // total score is used to weight the random selection.
+
+        for (auto it : mapLocalHost)
+        {
+            const int nReachability = it.second.GetReachabilityFrom(paddrPeer);
+            if (fDebug10) LogPrintf("My Local Known Addresses: %s told by peer %s reachability: %i", it.second.ToString(), it.first.ToString(), nReachability);
 
             if (nReachability > nBestReachability)
             {
                 nBestReachability = nReachability;
+                mIPScorer.clear();
                 nTotalScore = 0;
             }
+
             if (nReachability == nBestReachability)
             {
-                nTotalScore += nScore;
+                const CService a {static_cast<CNetAddr>(it.second), GetListenPort()};
+                mIPScorer[a]++;
+                nTotalScore++;
             }
         }
+
         const int nSelectedScore = GetRandInt(nTotalScore);
         int nAccumulatedScore = 1;
 
-        for (map<CNetAddr, LocalServiceInfo>::iterator it = mapLocalHost.begin(); it != mapLocalHost.end(); it++)
-        {
-            int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
-
-            if (nReachability == nBestReachability )
+        for (auto score : mIPScorer){
+            nAccumulatedScore += score.second;
+            if (nAccumulatedScore >= nSelectedScore)
             {
-                int nScore = (*it).second.nScore;
-
-                nAccumulatedScore += nScore;
-                if (nAccumulatedScore >= nSelectedScore)
-                {
-                    if (fDebug10) LogPrintf("Address information: Selected Addr: %s", (*it).first.ToString());
-                    addr = CService((*it).first, (*it).second.nPort);
-                    return nScore >= 0;
-                    break;
-                }
+                addr = score.first;
+                addr.SetPort(GetListenPort());
+                return true;
             }
         }
     }
-    return nBestScore >= 0;
+    return false;
 }
 
 // get best local address for a particular peer as a CAddress
@@ -333,25 +336,6 @@ bool RecvLine(SOCKET hSocket, string& strLine)
     }
 }
 
-// used when scores of local addresses may have changed
-// pushes better local address to peers
-void static AdvertizeLocal()
-{
-    LOCK(cs_vNodes);
-    for (auto const& pnode : vNodes)
-    {
-        if (pnode->fSuccessfullyConnected)
-        {
-            CAddress addrLocal = GetLocalAddress(&pnode->addr);
-            if (addrLocal.IsRoutable() && (CService)addrLocal != (CService)pnode->addrLocal)
-            {
-                pnode->PushAddress(addrLocal);
-                pnode->addrLocal = addrLocal;
-            }
-        }
-    }
-}
-
 void SetReachable(enum Network net, bool fFlag)
 {
     LOCK(cs_mapLocalHost);
@@ -378,16 +362,11 @@ bool AddLocal(const CService& addr, int nScore)
 
     {
         LOCK(cs_mapLocalHost);
-        bool fAlready = mapLocalHost.count(addr) > 0;
-        LocalServiceInfo &info = mapLocalHost[addr];
-        if (!fAlready || nScore >= info.nScore) {
-            info.nScore = nScore + (fAlready ? 1 : 0);
-            info.nPort = addr.GetPort();
-        }
+        mapLocalHost[CNetAddr({{127},{0},{static_cast<int8_t>(GetRand(255))},{static_cast<int8_t>(GetRand(250)+5)}})] =  addr;
+
         SetReachable(addr.GetNetwork());
     }
 
-    AdvertizeLocal();
     }
     catch(...)
     {
@@ -423,16 +402,17 @@ bool IsLimited(const CNetAddr &addr)
 }
 
 /** vote for a local address */
-bool SeenLocal(const CService& addr)
+bool SeenLocal(const CNode* const pfrom)
 {
+    if (pfrom == nullptr)
     {
-        LOCK(cs_mapLocalHost);
-        if (mapLocalHost.count(addr) == 0)
-            return false;
-        mapLocalHost[addr].nScore++;
+        return false;
     }
 
-    AdvertizeLocal();
+    LOCK(cs_mapLocalHost);
+    mapLocalHost[pfrom->addr] =  pfrom->addrLocal;
+
+    SetReachable(pfrom->addrLocal.GetNetwork());
 
     return true;
 }
@@ -441,7 +421,8 @@ bool SeenLocal(const CService& addr)
 bool IsLocal(const CService& addr)
 {
     LOCK(cs_mapLocalHost);
-    return mapLocalHost.count(addr) > 0;
+    bool ret =  std::any_of(mapLocalHost.begin(), mapLocalHost.end(), [&addr](pair<CNetAddr, CService> const& kv){ return kv.second == addr && kv.second.GetPort() == GetListenPort();});
+    return ret;
 }
 
 /** check whether a given address is in a network we can probably connect to */
@@ -451,144 +432,6 @@ bool IsReachable(const CNetAddr& addr)
     enum Network net = addr.GetNetwork();
     return vfReachable[net] && !vfLimited[net];
 }
-
-bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const char* pszKeyword, CNetAddr& ipRet)
-{
-    SOCKET hSocket;
-    if (!ConnectSocket(addrConnect, hSocket))
-    {
-        if (fDebug10) LogPrintf("GetMyExternalIP() : unable to connect to %s ", addrConnect.ToString());
-        return false;
-    }
-
-    send(hSocket, pszGet, strlen(pszGet), MSG_NOSIGNAL);
-
-    string strLine;
-    while (RecvLine(hSocket, strLine))
-    {
-        if (strLine.empty()) // HTTP response is separated from headers by blank line
-        {
-            while (true)
-            {
-                if (!RecvLine(hSocket, strLine))
-                {
-                    closesocket(hSocket);
-                    return false;
-                }
-                if (pszKeyword == NULL)
-                    break;
-                if (strLine.find(pszKeyword) != string::npos)
-                {
-                    strLine = strLine.substr(strLine.find(pszKeyword) + strlen(pszKeyword));
-                    break;
-                }
-            }
-            closesocket(hSocket);
-            if (strLine.find("<") != string::npos)
-                strLine = strLine.substr(0, strLine.find("<"));
-            strLine = strLine.substr(strspn(strLine.c_str(), " \t\n\r"));
-            while (strLine.size() > 0 && isspace(strLine[strLine.size()-1]))
-                strLine.resize(strLine.size()-1);
-            CService addr(strLine,0,true);
-            if (fDebug10) LogPrintf("GetMyExternalIP() received [%s] %s", strLine, addr.ToString());
-            if (!addr.IsValid() || !addr.IsRoutable())
-                return false;
-            ipRet.SetIP(addr);
-            return true;
-        }
-    }
-    closesocket(hSocket);
-    return error("GetMyExternalIP() : connection closed");
-}
-
-bool GetMyExternalIP(CNetAddr& ipRet)
-{
-    CService addrConnect;
-    const char* pszGet;
-    const char* pszKeyword;
-
-    for (int nLookup = 0; nLookup <= 1; nLookup++)
-    for (int nHost = 1; nHost <= 2; nHost++)
-    {
-        // We should be phasing out our use of sites like these.  If we need
-        // replacements, we should ask for volunteers to put this simple
-        // php file on their web server that prints the client IP:
-        //  <?php echo $_SERVER["REMOTE_ADDR"]; ?>
-        if (nHost == 1)
-        {
-            addrConnect = CService("91.198.22.70",80); // checkip.dyndns.org
-
-            if (nLookup == 1)
-            {
-                CService addrIP("checkip.dyndns.org", 80, true);
-                if (addrIP.IsValid())
-                    addrConnect = addrIP;
-            }
-
-            pszGet = "GET / HTTP/1.1\r\n"
-                     "Host: checkip.dyndns.org\r\n"
-                     "User-Agent: Gridcoin\r\n"
-                     "Connection: close\r\n"
-                     "\r\n";
-
-            pszKeyword = "Address:";
-        }
-        else if (nHost == 2)
-        {
-            addrConnect = CService("74.208.43.192", 80); // www.showmyip.com
-
-            if (nLookup == 1)
-            {
-                CService addrIP("www.showmyip.com", 80, true);
-                if (addrIP.IsValid())
-                    addrConnect = addrIP;
-            }
-
-            pszGet = "GET /simple/ HTTP/1.1\r\n"
-                     "Host: www.showmyip.com\r\n"
-                     "User-Agent: Gridcoin\r\n"
-                     "Connection: close\r\n"
-                     "\r\n";
-
-            pszKeyword = NULL; // Returns just IP address
-        }
-
-        if (GetMyExternalIP2(addrConnect, pszGet, pszKeyword, ipRet))
-            return true;
-    }
-
-    return false;
-}
-
-void ThreadGetMyExternalIP(void* parg)
-{
-    // Make this thread recognisable as the external IP detection thread
-    RenameThread("grc-ext-ip");
-    try
-    {
-        CNetAddr addrLocalHost;
-        if (GetMyExternalIP(addrLocalHost))
-        {
-            LogPrintf("GetMyExternalIP() returned %s", addrLocalHost.ToStringIP());
-            AddLocal(addrLocalHost, LOCAL_HTTP);
-        }
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadMyExternalIP()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        return;
-    }
-    catch (...)
-    {
-        PrintException(NULL, "ThreadGetMyExternalIP()");
-    }
-}
-
-
-
 
 void AddressCurrentlyConnected(const CService& addr)
 {
@@ -747,15 +590,6 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
-    if (addrMe != addrSeenByPeer)
-    {
-        if(fDebug10) LogPrintf("updating ExternalIP");
-        Discover();
-        if (fUseUPnP)
-        {
-            MapPort();
-        }
-    }
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
     if (fDebug10) LogPrintf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
@@ -1068,12 +902,9 @@ void ThreadSocketHandler2(void* parg)
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
 
                     // reduce score of the address used
-                    if (pnode->fInbound)
                     {
-                        if (mapLocalHost[pnode->addrLocal].nScore > 1)
-                        {
-                           mapLocalHost[pnode->addrLocal].nScore--;
-                        }
+                        LOCK(cs_mapLocalHost);
+                        mapLocalHost.erase(pnode->addr);
                     }
 
                     // release outbound grant (if any)
@@ -2322,10 +2153,6 @@ void static Discover()
         freeifaddrs(myaddrs);
     }
 #endif
-
-    // Don't use external IPv4 discovery, when -onlynet="IPv6"
-    if (!IsLimited(NET_IPV4))
-        netThreads->createThread(ThreadGetMyExternalIP, NULL,"ThreadGetMyExternalIP");
 }
 
 void StartNode(void* parg)

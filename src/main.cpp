@@ -4446,10 +4446,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
-        if (pfrom->fInbound && addrMe.IsRoutable())
+        if (addrMe.IsRoutable())
         {
             pfrom->addrLocal = addrMe;
-            SeenLocal(addrMe);
         }
 
         // Disconnect if we connected to ourself
@@ -4462,7 +4461,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // record my external IP reported by peer
         if (addrFrom.IsRoutable() && addrMe.IsRoutable())
+	{
             addrSeenByPeer = addrMe;
+            SeenLocal(pfrom);
+	}
 
         // Be shy and don't send version until we hear
         if (pfrom->fInbound)
@@ -4488,7 +4490,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 CAddress addr = GetLocalAddress(&pfrom->addr);
                 if (addr.IsRoutable())
+                {
                     pfrom->PushAddress(addr);
+                }
             }
 
             // Get recent addresses
