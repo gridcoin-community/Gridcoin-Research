@@ -544,6 +544,21 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
     res.pushKV("proxy",           (proxy.first.IsValid() ? proxy.first.ToStringIPPort() : string()));
     res.pushKV("ip",              addrSeenByPeer.ToStringIP());
+
+    UniValue localAddresses(UniValue::VARR);
+    {
+        LOCK(cs_mapLocalHost);
+        for (const std::pair<const CNetAddr, LocalServiceInfo> &item : mapLocalHost)
+        {
+            UniValue rec(UniValue::VOBJ);
+            rec.pushKV("address", item.first.ToString());
+            rec.pushKV("port", item.second.nPort);
+            rec.pushKV("score", item.second.nScore);
+            localAddresses.push_back(rec);
+        }
+    }
+
+    res.pushKV("localaddresses", localAddresses);
     res.pushKV("errors",          GetWarnings("statusbar"));
 
     return res;
