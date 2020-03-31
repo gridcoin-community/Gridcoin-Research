@@ -566,7 +566,6 @@ void GetGlobalStatus()
 
     try
     {
-        double boincmagnitude = NN::Quorum::MyMagnitude().Floating();
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
         double weight = nWeight/COIN;
@@ -592,10 +591,6 @@ void GetGlobalStatus()
             LogPrintf("Error obtaining last poll: %s", e.what());
         }
 
-        // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
-        // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
-        double dETTS = GetEstimatedTimetoStake() / 86400.0;
-
         LOCK(GlobalStatusStruct.lock);
 
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -603,9 +598,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
-        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
-        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(pindexBest), 2);
+        GlobalStatusStruct.magnitude = NN::Quorum::MyMagnitude().ToString();
         GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
         GlobalStatusStruct.poll = std::move(current_poll);
 

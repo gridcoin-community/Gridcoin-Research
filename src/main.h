@@ -209,8 +209,6 @@ struct globalStatusType
     std::string netWeight;
     std::string coinWeight;
     std::string magnitude;
-    std::string ETTS;
-    std::string ERRperday;
     std::string cpid;
     std::string status;
     std::string poll;
