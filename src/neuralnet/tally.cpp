@@ -114,24 +114,6 @@ public:
     //!
     ResearchAccountRange Accounts()
     {
-        // Since research account magnitudes are applied lazily from the last
-        // superblock, we need to update the magnitude of each account before
-        // providing the range.
-        //
-        // TODO: move the magnitude update into a transforming iterator so we
-        // can avoid the loop outside the range. This API is not used in core
-        // code at the moment so the performance hit is negligible.
-        //
-        for (auto& account_pair : m_researchers) {
-            const Cpid& cpid = account_pair.first;
-            ResearchAccount& account = account_pair.second;
-
-            // TODO: this only supports legacy magnitudes, but the upcoming
-            // superblock window accrual changes remove these shenanigans:
-            //
-            account.m_magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid).Compact();
-        }
-
         return ResearchAccountRange(m_researchers);
     }
 
@@ -145,25 +127,11 @@ public:
     //!
     const ResearchAccount& GetAccount(const Cpid cpid)
     {
-        // TODO: this only supports legacy magnitudes, but the upcoming
-        // superblock window accrual changes remove these shenanigans:
-        //
-        const uint16_t magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid).Compact();
         auto iter = m_researchers.find(cpid);
 
         if (iter == m_researchers.end()) {
-            if (magnitude > 0) {
-                iter = m_researchers.emplace(cpid, ResearchAccount()).first;
-            } else {
-                return m_new_account;
-            }
+            return m_new_account;
         }
-
-        // We lazily apply the magnitude from the current active superblock
-        // to avoid reloading the magnitude for every research account when
-        // a new superblock arrives:
-        //
-        iter->second.m_magnitude = magnitude;
 
         return iter->second;
     }
@@ -330,13 +298,13 @@ AccrualComputer Tally::GetComputer(
             cpid,
             payment_time,
             GetMagnitudeUnit(payment_time),
-            Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid));
+            Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating());
     }
 
     return MakeUnique<ResearchAgeComputer>(
         cpid,
         account,
-        Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid),
+        Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating(),
         payment_time,
         GetMagnitudeUnit(payment_time),
         last_block_ptr->nHeight);
@@ -394,10 +362,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     }
 
     if (Quorum::CommitSuperblock(max_depth)) {
-        const SuperblockPtr current = Quorum::CurrentSuperblock();
-
-        g_network_tally.ApplySuperblock(current);
-        g_researcher_tally.ApplySuperblock(current);
+        g_network_tally.ApplySuperblock(Quorum::CurrentSuperblock());
     }
 
     int64_t total_research_subsidy = 0;

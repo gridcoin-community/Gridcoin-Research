@@ -23,8 +23,6 @@ class ResearchAccount
 {
 public:
     int64_t m_total_research_subsidy;     //!< Total lifetime research paid.
-
-    uint16_t m_magnitude;                 //!< Current magnitude in superblock.
     uint32_t m_total_magnitude;           //!< Total lifetime magnitude sum.
     uint32_t m_accuracy;                  //!< Non-zero magnitude payment count.
 
@@ -36,7 +34,6 @@ public:
     //!
     ResearchAccount()
         : m_total_research_subsidy(0)
-        , m_magnitude(0)
         , m_total_magnitude(0)
         , m_accuracy(0)
         , m_first_block_ptr(nullptr)

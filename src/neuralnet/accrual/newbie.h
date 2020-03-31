@@ -28,7 +28,7 @@ public:
         const Cpid cpid,
         const int64_t payment_time,
         const double magnitude_unit,
-        const uint16_t magnitude)
+        const double magnitude)
         : m_cpid(cpid)
         , m_payment_time(payment_time)
         , m_magnitude_unit(magnitude_unit)
@@ -107,7 +107,7 @@ public:
                     m_cpid.ToString());
             }
 
-            return ((double)m_magnitude / 100) * COIN + (1 * COIN);
+            return (m_magnitude / 100) * COIN + (1 * COIN);
         }
 
         const int64_t accrual = RawAccrual();
@@ -129,6 +129,6 @@ private:
     const Cpid m_cpid;             //!< CPID to calculate research accrual for.
     const int64_t m_payment_time;  //!< Time of payment to calculate rewards at.
     const double m_magnitude_unit; //!< Network magnitude unit to factor in.
-    const uint16_t m_magnitude;    //!< CPID's magnitude in the last superblock.
+    const double m_magnitude;      //!< CPID's magnitude in the last superblock.
 }; // NewbieAccrualComputer
 } // anonymous namespace

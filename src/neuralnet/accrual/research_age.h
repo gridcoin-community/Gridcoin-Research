@@ -55,7 +55,7 @@ public:
     ResearchAgeComputer(
         const Cpid cpid,
         const ResearchAccount& account,
-        const uint16_t magnitude,
+        const double magnitude,
         const int64_t payment_time,
         const double magnitude_unit,
         const uint32_t last_height)
@@ -261,7 +261,7 @@ public:
 private:
     const Cpid m_cpid;                //!< CPID to calculate research accrual for.
     const ResearchAccount& m_account; //!< CPID's historical accrual context.
-    const uint16_t m_magnitude;       //!< CPID's magnitude last superblock.
+    const double m_magnitude;         //!< CPID's magnitude last superblock.
     const int64_t m_payment_time;     //!< Time of payment to calculate rewards at.
     const double m_magnitude_unit;    //!< Network magnitude unit to factor in.
     const uint32_t m_last_height;     //!< Height of the block for the reward.
@@ -280,7 +280,7 @@ private:
         uint16_t last_magnitude = m_account.LastRewardMagnitude();
 
         if (AccrualBlockSpan() <= BLOCKS_PER_DAY * 20) {
-            return (double)(last_magnitude + m_magnitude) / 2;
+            return (last_magnitude + m_magnitude) / 2;
         }
 
         // If the accrual age is greater than than 20 days, add the midpoint
