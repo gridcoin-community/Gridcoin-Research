@@ -8,7 +8,7 @@ using namespace NN;
 
 //!
 //! \brief An accrual calculator for a CPID that never earned a research reward
-//! before.
+//! before. Used for legacy accrual calculations in block version 10 and below.
 //!
 class NewbieAccrualComputer : public IAccrualComputer
 {

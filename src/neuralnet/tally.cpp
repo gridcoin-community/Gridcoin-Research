@@ -15,12 +15,6 @@ using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
-//! \brief Number of days that the tally scans backward from to calculate
-//! the average network payment.
-//!
-constexpr size_t TALLY_DAYS = 14;
-
-//!
 //! \brief Set the correct CPID from the block claim when the block index
 //! contains a zero CPID.
 //!
@@ -56,24 +50,26 @@ void RepairZeroCpidIndex(CBlockIndex* const pindex)
 }
 
 //!
-//! \brief Round a value to intervals of 0.025.
-//!
-//! Used to calculate the network magnitude unit.
-//!
-double SnapToGrid(double d)
-{
-    double dDither = .04;
-    double dOut = RoundFromString(RoundToString(d * dDither, 3), 3) / dDither;
-    return dOut;
-}
-
-//!
 //! \brief Contains the two-week network average tally used to produce the
-//! magnitude unit for research age reward calculations.
+//! magnitude unit for legacy research age reward calculations (version 10
+//! blocks and below).
+//!
+//! Before block version 11, the network used a feedback filter to limit the
+//! total research reward generated over a rolling two week window. To scale
+//! rewards accordingly, the magnitude unit acts as a multiplier and changes
+//! in response to the amount of research rewards minted over the two weeks.
+//! This class holds state for the parameters that produce a magnitude units
+//! at a point in time.
 //!
 class NetworkTally
 {
 public:
+    //!
+    //! \brief Number of days that the tally scans backward from to calculate
+    //! the average network payment.
+    //!
+    static constexpr size_t TALLY_DAYS = 14;
+
     //!
     //! \brief Get the maximum network-wide research reward amount per day.
     //!
@@ -137,6 +133,16 @@ public:
 private:
     uint32_t m_total_magnitude = 0;         //!< Sum of the magnitude of all CPIDs.
     double m_two_week_research_subsidy = 0; //!< Sum of research subsidy payments.
+
+    //!
+    //! \brief Round a magnitude unit value to intervals of 0.025.
+    //!
+    static double SnapToGrid(double d)
+    {
+        double dDither = .04;
+        double dOut = RoundFromString(RoundToString(d * dDither, 3), 3) / dDither;
+        return dOut;
+    }
 }; // NetworkTally
 
 //!
@@ -380,7 +386,7 @@ private:
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
-NetworkTally g_network_tally;       //!< Tracks two-week network averages.
+NetworkTally g_network_tally;       //!< Tracks legacy two-week network averages.
 
 } // Anonymous namespace
 
@@ -433,17 +439,17 @@ bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
         Quorum::CurrentSuperblock());
 }
 
-bool Tally::IsTrigger(const uint64_t height)
+bool Tally::IsLegacyTrigger(const uint64_t height)
 {
     return height % TALLY_GRANULARITY == 0;
 }
 
-CBlockIndex* Tally::FindTrigger(CBlockIndex* pindex)
+CBlockIndex* Tally::FindLegacyTrigger(CBlockIndex* pindex)
 {
     // Scan backwards until we find one where accepting it would
     // trigger a tally.
     for (;
-        pindex && pindex->pprev && !IsTrigger(pindex->nHeight);
+        pindex && pindex->pprev && !IsLegacyTrigger(pindex->nHeight);
         pindex = pindex->pprev);
 
     return pindex;
@@ -582,7 +588,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(%" PRId64 ")", pindex->nHeight);
 
     const int64_t consensus_depth = pindex->nHeight - CONSENSUS_LOOKBACK;
-    const int64_t lookback_depth = BLOCKS_PER_DAY * TALLY_DAYS;
+    const int64_t lookback_depth = BLOCKS_PER_DAY * NetworkTally::TALLY_DAYS;
 
     int64_t max_depth = consensus_depth - (consensus_depth % TALLY_GRANULARITY);
     int64_t min_depth = max_depth - lookback_depth;

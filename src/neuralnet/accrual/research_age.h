@@ -37,7 +37,8 @@ int64_t GetMaxResearchSubsidy(const int64_t nTime)
 
 //!
 //! \brief A calculator that computes the accrued research rewards for a
-//! research account using research age rules.
+//! research account using legacy research age rules in block version 10
+//! and below.
 //!
 class ResearchAgeComputer : public IAccrualComputer
 {

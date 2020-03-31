@@ -56,7 +56,7 @@ public:
     //!
     //! \return \c true if the block height should trigger a recount.
     //!
-    static bool IsTrigger(const uint64_t height);
+    static bool IsLegacyTrigger(const uint64_t height);
 
     //!
     //! \brief Find the previous tally trigger below the specified block.
@@ -65,7 +65,7 @@ public:
     //!
     //! \return Index of the first tally trigger block.
     //!
-    static CBlockIndex* FindTrigger(CBlockIndex* pindex);
+    static CBlockIndex* FindLegacyTrigger(CBlockIndex* pindex);
 
     //!
     //! \brief Get the maximum network-wide research reward amount per day.

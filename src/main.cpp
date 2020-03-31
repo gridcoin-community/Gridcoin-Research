@@ -2956,7 +2956,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
-            assert(NN::Tally::IsTrigger(nBestHeight));
+            assert(NN::Tally::IsLegacyTrigger(nBestHeight));
             NN::Tally::LegacyRecount(pindexBest);
         }
     }
@@ -2998,7 +2998,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         //
         if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
         {
-            pcommon = NN::Tally::FindTrigger(pcommon);
+            pcommon = NN::Tally::FindLegacyTrigger(pcommon);
             if(!pcommon)
                 return error("ReorganizeChain: unable to find fork root with tally point");
         }
@@ -3128,7 +3128,7 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)
-            && NN::Tally::IsTrigger(nBestHeight))
+            && NN::Tally::IsLegacyTrigger(nBestHeight))
         {
             NN::Tally::LegacyRecount(pindexBest);
         }

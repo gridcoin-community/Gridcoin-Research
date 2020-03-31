@@ -1166,7 +1166,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         uiInterface.InitMessage(_("Loading Network Averages..."));
         if (fDebug3) LogPrintf("Loading network averages");
 
-        NN::Tally::LegacyRecount(NN::Tally::FindTrigger(pindexBest));
+        NN::Tally::LegacyRecount(NN::Tally::FindLegacyTrigger(pindexBest));
     }
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
