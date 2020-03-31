@@ -3540,9 +3540,8 @@ void GridcoinServices()
         && IsV9Enabled(nBestHeight + (fTestNet ? 200 : 40))
         && nBestHeight % 20 == 0)
     {
-        if (fDebug) {
-            LogPrintf("GridcoinServices: Priming tally system for v9 threshold.");
-        }
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v9 threshold.");
 
         NN::Tally::LegacyRecount(pindexBest);
     }

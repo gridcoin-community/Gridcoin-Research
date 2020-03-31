@@ -101,11 +101,9 @@ public:
         constexpr int64_t six_months = 86400 * 30 * 6; // seconds
 
         if (AccrualAge() >= six_months) {
-            if (fDebug) {
-                LogPrintf(
-                    "Accrual: %s Invalid Beacon, Using 0.01 age bootstrap",
-                    m_cpid.ToString());
-            }
+            LogPrint(BCLog::LogFlags::ACCRUAL,
+                "Accrual: %s Invalid Beacon, Using 0.01 age bootstrap",
+                m_cpid.ToString());
 
             return (m_magnitude / 100) * COIN + (1 * COIN);
         }
@@ -113,11 +111,9 @@ public:
         const int64_t accrual = RawAccrual();
 
         if (accrual > MaxReward()) {
-            if (fDebug) {
-                LogPrintf(
-                    "Accrual: %s Newbie special stake capped to 500 GRC.",
-                    m_cpid.ToString());
-            }
+            LogPrint(BCLog::LogFlags::ACCRUAL,
+                "Accrual: %s Newbie special stake capped to 500 GRC.",
+                m_cpid.ToString());
 
             return MaxReward();
         }

@@ -211,13 +211,11 @@ public:
         // in the future:
         //
         if (AccrualBlockSpan() < 10) {
-            if (fDebug) {
-                LogPrintf(
-                    "Accrual: %s Block Span < 10 (%d) -> Accrual 0 (would be %s)",
-                    m_cpid.ToString(),
-                    AccrualBlockSpan(),
-                    FormatMoney(RawAccrual()));
-            }
+            LogPrint(BCLog::LogFlags::ACCRUAL,
+                "Accrual: %s Block Span < 10 (%d) -> Accrual 0 (would be %s)",
+                m_cpid.ToString(),
+                AccrualBlockSpan(),
+                FormatMoney(RawAccrual()));
 
             return 0;
         }
@@ -228,22 +226,21 @@ public:
         // per-day falls below 5 days:
         //
         if (ExceededRecentPayments()) {
-            if (fDebug) {
-                LogPrintf("Accrual: %s RA-PPD, "
-                    "PPD=%s, "
-                    "unit=%f, "
-                    "RAAvgMag=%f, "
-                    "RASubsidy=%s, "
-                    "RALowLockTime=%" PRIu64 " "
-                    "-> Accrual 0 (would be %s)",
-                    m_cpid.ToString(),
-                    FormatMoney(PaymentPerDay()),
-                    m_magnitude_unit,
-                    m_account.AverageLifetimeMagnitude(),
-                    FormatMoney(m_account.m_total_research_subsidy),
-                    m_account.FirstRewardTime(),
-                    FormatMoney(RawAccrual()));
-            }
+            LogPrint(BCLog::LogFlags::ACCRUAL,
+                "Accrual: %s RA-PPD, "
+                "PPD=%s, "
+                "unit=%f, "
+                "RAAvgMag=%f, "
+                "RASubsidy=%s, "
+                "RALowLockTime=%" PRIu64 " "
+                "-> Accrual 0 (would be %s)",
+                m_cpid.ToString(),
+                FormatMoney(PaymentPerDay()),
+                m_magnitude_unit,
+                m_account.AverageLifetimeMagnitude(),
+                FormatMoney(m_account.m_total_research_subsidy),
+                m_account.FirstRewardTime(),
+                FormatMoney(RawAccrual()));
 
             return 0;
         }

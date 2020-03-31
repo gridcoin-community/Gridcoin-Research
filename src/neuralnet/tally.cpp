@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 using namespace NN;
+using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
@@ -36,12 +37,12 @@ void RepairZeroCpidIndex(CBlockIndex* const pindex)
 
     if (claim->m_mining_id != pindex->GetMiningId())
     {
-        if(fDebug)
-            LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                pindex->GetMiningId().ToString(),
-                claim->m_mining_id.ToString(),
-                pindex->GetBlockHash().GetHex(),
-                pindex->nHeight);
+        LogPrint(LogFlags::TALLY,
+            "WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+            pindex->GetMiningId().ToString(),
+            claim->m_mining_id.ToString(),
+            pindex->GetBlockHash().GetHex(),
+            pindex->nHeight);
 
         /* Repair the cpid field */
         pindex->SetMiningId(claim->m_mining_id);
@@ -126,7 +127,9 @@ public:
     //!
     void ApplySuperblock(const SuperblockPtr superblock)
     {
-        LogPrintf("NetworkTally::ApplySuperblock(%" PRId64 ")", superblock.m_height);
+        LogPrint(LogFlags::TALLY,
+            "NetworkTally::ApplySuperblock(%" PRId64 ")", superblock.m_height);
+
         m_total_magnitude = superblock->m_cpids.TotalMagnitude();
     }
 
@@ -405,7 +408,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
         return;
     }
 
-    LogPrintf("Tally::LegacyRecount(%" PRId64 ")", pindex->nHeight);
+    LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(%" PRId64 ")", pindex->nHeight);
 
     const int64_t consensus_depth = pindex->nHeight - CONSENSUS_LOOKBACK;
     const int64_t lookback_depth = BLOCKS_PER_DAY * TALLY_DAYS;
@@ -414,7 +417,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     int64_t min_depth = max_depth - lookback_depth;
 
     if (fTestNet && !IsV9Enabled_Tally(pindex->nHeight)) {
-        LogPrintf("Tally::LegacyRecount(): retired tally");
+        LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(): retired tally");
         max_depth = consensus_depth - (consensus_depth % BLOCK_GRANULARITY);
         min_depth -= (max_depth - lookback_depth) % TALLY_GRANULARITY;
     }

@@ -80,6 +80,8 @@ namespace BCLog {
         MANIFEST    = (1 << 22),
         SB          = (1 << 23),
         ALERT       = (1 << 24),
+        TALLY       = (1 << 25),
+        ACCRUAL     = (1 << 26),
         ALL         = ~(uint32_t)0,
     };
 
