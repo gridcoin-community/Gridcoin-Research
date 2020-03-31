@@ -2,6 +2,7 @@
 #include "neuralnet/accrual/newbie.h"
 #include "neuralnet/accrual/null.h"
 #include "neuralnet/accrual/research_age.h"
+#include "neuralnet/accrual/snapshot.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/tally.h"
@@ -201,7 +202,7 @@ public:
     }
 
     //!
-    //! \brief Disassociate a blocks research reward data from the tally.
+    //! \brief Disassociate a block's research reward data from the tally.
     //!
     //! \param cpid   The CPID of the research account to drop the block for.
     //! \param pindex Contains information about the block to erase.
@@ -243,36 +244,139 @@ public:
     }
 
     //!
-    //! \param Update the current magnitude of each research account from the
-    //! provided superblock.
+    //! \brief Update the account data with information from a new superblock.
     //!
     //! \param superblock Refers to the current active superblock.
     //!
-    void ApplySuperblock(const SuperblockPtr superblock)
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    bool ApplySuperblock(SuperblockPtr superblock)
     {
-        // We just link the current superblock here. GetAccount() will apply
-        // the magnitude lazily when requested.
+        // The network publishes version 2+ superblocks after the mandatory
+        // switch to block version 11.
         //
+        if (superblock->m_version >= 2) {
+            if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
+                return false;
+            }
+
+            TallySuperblockAccrual(superblock.m_timestamp);
+        }
+
+        m_current_superblock = std::move(superblock);
+
+        return true;
+    }
+
+    //!
+    //! \brief Reset the account data to a state before the current superblock.
+    //!
+    //! \param superblock Refers to the current active superblock (before the
+    //! reverted superblock).
+    //!
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    bool RevertSuperblock(SuperblockPtr superblock)
+    {
+        if (m_current_superblock->m_version >= 2) {
+            return m_snapshots.ApplyLatest(m_researchers)
+                && m_snapshots.Drop(m_current_superblock.m_height);
+        }
+
+        m_current_superblock = std::move(superblock);
+
+        return true;
+    }
+
+    //!
+    //! \brief Switch from legacy research age accrual calculations to the
+    //! superblock snapshot accrual system.
+    //!
+    //! \param pindex     Index of the block to enable snapshot accrual for.
+    //! \param superblock Refers to the current active superblock.
+    //!
+    //! \return \c false if the snapshot system failed to initialize because of
+    //! an error.
+    //!
+    bool ActivateSnapshotAccrual(
+        const CBlockIndex* const pindex,
+        const SuperblockPtr superblock)
+    {
+        // Someone might run one of the snapshot accrual testing RPCs before
+        // the chain is synchronized. We allow this after passing version 10
+        // for testing, but it won't actually apply to accrual until version
+        // 11 blocks arrive.
+        //
+        if (!pindex || !IsV10Enabled(pindex->nHeight)) {
+            return true;
+        }
+
         m_current_superblock = superblock;
+
+        if (!m_snapshots.Initialize()) {
+            return false;
+        }
+
+        // If the node initialized the snapshot accrual system before, we
+        // should already have the latest snapshot.
+        //
+        if (m_snapshots.HasBaseline()) {
+            return m_snapshots.ApplyLatest(m_researchers);
+        }
+
+        SnapshotBaselineBuilder builder(m_researchers);
+
+        if (!builder.Run(pindex, superblock)) {
+            return false;
+        }
+
+        return m_snapshots.StoreBaseline(superblock.m_height, m_researchers);
     }
 
 private:
     //!
     //! \brief An empty account to return as a reference when requesting an
-    //! account for a CPID that with no historical record.
+    //! account for a CPID with no historical record.
     //!
     const ResearchAccount m_new_account;
 
     //!
     //! \brief The set of all research accounts in the network.
     //!
-    std::unordered_map<Cpid, ResearchAccount> m_researchers;
+    ResearchAccountMap m_researchers;
 
     //!
     //! \brief A link to the current active superblock used to lazily update
     //! researcher magnitudes when supplying an account.
     //!
     SuperblockPtr m_current_superblock = SuperblockPtr::Empty();
+
+    //!
+    //! \brief Manages snapshots for delta accrual calculations (version 2+
+    //! superblocks).
+    //!
+    AccrualSnapshotRepository m_snapshots;
+
+    //!
+    //! \brief Tally research rewards accrued since the current superblock
+    //! arrived.
+    //!
+    //! \param payment_time Time of payment to calculate rewards at.
+    //!
+    void TallySuperblockAccrual(const int64_t payment_time)
+    {
+        const SnapshotCalculator calc(payment_time, m_current_superblock);
+
+        for (const auto& cpid_pair : m_current_superblock->m_cpids) {
+            ResearchAccount& account = m_researchers[cpid_pair.Cpid()];
+
+            if (account.LastRewardHeight() >= m_current_superblock.m_height) {
+                account.m_accrual = 0;
+            }
+
+            account.m_accrual += calc.AccrualDelta(cpid_pair.Cpid(), account);
+        }
+    }
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
@@ -314,6 +418,15 @@ bool Tally::Initialize(CBlockIndex* pindex)
         GetTimeMillis() - start_time);
 
     return true;
+}
+
+bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
+{
+    LogPrint(LogFlags::TALLY, "Activating snapshot accrual...");
+
+    return g_researcher_tally.ActivateSnapshotAccrual(
+        pindex,
+        Quorum::CurrentSuperblock());
 }
 
 bool Tally::IsTrigger(const uint64_t height)
@@ -361,6 +474,46 @@ AccrualComputer Tally::GetComputer(
         return MakeUnique<NullAccrualComputer>();
     }
 
+    if (last_block_ptr->nVersion >= 11) {
+        return GetSnapshotComputer(cpid, payment_time, last_block_ptr);
+    }
+
+    return GetLegacyComputer(cpid, payment_time, last_block_ptr);
+}
+
+AccrualComputer Tally::GetSnapshotComputer(
+    const Cpid cpid,
+    const ResearchAccount& account,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr,
+    const SuperblockPtr superblock)
+{
+    return MakeUnique<SnapshotAccrualComputer>(
+        cpid,
+        account,
+        payment_time,
+        last_block_ptr->nHeight,
+        std::move(superblock));
+}
+
+AccrualComputer Tally::GetSnapshotComputer(
+    const Cpid cpid,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr)
+{
+    return GetSnapshotComputer(
+        cpid,
+        GetAccount(cpid),
+        payment_time,
+        last_block_ptr,
+        Quorum::CurrentSuperblock());
+}
+
+AccrualComputer Tally::GetLegacyComputer(
+    const Cpid cpid,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr)
+{
     const ResearchAccount& account = GetAccount(cpid);
 
     if (!account.IsActive(last_block_ptr->nHeight)) {
@@ -400,6 +553,16 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
         g_researcher_tally.ForgetRewardBlock(*cpid, pindex);
     }
+}
+
+bool Tally::ApplySuperblock(SuperblockPtr superblock)
+{
+    return g_researcher_tally.ApplySuperblock(std::move(superblock));
+}
+
+bool Tally::RevertSuperblock()
+{
+    return g_researcher_tally.RevertSuperblock(Quorum::CurrentSuperblock());
 }
 
 void Tally::LegacyRecount(const CBlockIndex* pindex)

@@ -8,6 +8,7 @@ class CBlockIndex;
 namespace NN {
 
 class Cpid;
+class SuperblockPtr;
 
 //!
 //! \brief The core Gridcoin tally system that processes magnitudes and reward
@@ -36,6 +37,18 @@ public:
     //!
     static bool Initialize(CBlockIndex* pindex);
 
+    //!
+    //! \brief Switch from legacy research age accrual calculations to the
+    //! superblock snapshot accrual system.
+    //!
+    //! \param pindex Index of the first block to enable snapshot accrual for.
+    //!
+    //! \return \c false if the snapshot system failed to initialize because of
+    //! an error.
+    //!
+    static bool ActivateSnapshotAccrual(const CBlockIndex* const pindex);
+
+    //!
     //! \brief Check whether the height of the specified block matches the
     //! tally granularity.
     //!
@@ -104,6 +117,67 @@ public:
         const int64_t payment_time,
         const CBlockIndex* const last_block_ptr);
 
+    //! \brief Get an accrual computer instance that calculates accrual using
+    //! delta snapshot rules.
+    //!
+    //! CONSENSUS: This method is exposed for RPC test commands used to analyze
+    //! new accrual implementations. Do not use it to calculate accrual for the
+    //! protocol directly.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param account        CPID's corresponding historical accrual context.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //! \param superblock     Superblock at the beginning of a snapshot window.
+    //!
+    //! \return An accrual calculator initialized with the supplied parameters.
+    //!
+    static AccrualComputer GetSnapshotComputer(
+        const Cpid cpid,
+        const ResearchAccount& account,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr,
+        const SuperblockPtr superblock);
+
+    //!
+    //! \brief Get an accrual computer instance that calculates accrual using
+    //! delta snapshot rules for the current superblock.
+    //!
+    //! CONSENSUS: This method is exposed for RPC test commands used to analyze
+    //! new accrual implementations. Do not use it to calculate accrual for the
+    //! protocol directly.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //!
+    //! \return An accrual calculator initialized with the supplied parameters.
+    //!
+    static AccrualComputer GetSnapshotComputer(
+        const Cpid cpid,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr);
+
+    //!
+    //! \brief Get an accrual computer instance that calculates accrual using
+    //! legacy research age rules.
+    //!
+    //! CONSENSUS: This method is exposed for RPC test commands used to analyze
+    //! new accrual implementations. Do not use it to calculate accrual for the
+    //! protocol directly.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //!
+    //! \return An accrual calculator initialized with the supplied parameters.
+    //!
+    static AccrualComputer GetLegacyComputer(
+        const Cpid cpid,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr);
+
+    //!
     //!
     //! \brief Record a block's research reward data in the tally.
     //!
@@ -117,6 +191,22 @@ public:
     //! \param pindex Contains information about the block to erase.
     //!
     static void ForgetRewardBlock(const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Update the account data with information from a new superblock.
+    //!
+    //! \param superblock Refers to the current active superblock.
+    //!
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    static bool ApplySuperblock(SuperblockPtr superblock);
+
+    //!
+    //! \brief Reset the account data to a state before the provided superblock.
+    //!
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    static bool RevertSuperblock();
 
     //!
     //! \brief Recount the two-week network averages.

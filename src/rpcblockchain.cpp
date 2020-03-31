@@ -1940,6 +1940,7 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
 
     if (fDebug) {
         json.pushKV("Owed (raw)", ValueFromAmount(calc->RawAccrual()));
+        json.pushKV("Owed (last superblock)", ValueFromAmount(account.m_accrual));
     }
 
     json.pushKV("Expected Earnings (14 days)", ValueFromAmount(calc->ExpectedDaily() * 14));
