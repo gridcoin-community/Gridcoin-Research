@@ -323,15 +323,20 @@ AccrualComputer Tally::GetComputer(
         return MakeUnique<NullAccrualComputer>();
     }
 
-    if (!GetAccount(cpid).IsActive(last_block_ptr->nHeight)) {
+    const ResearchAccount& account = GetAccount(cpid);
+
+    if (!account.IsActive(last_block_ptr->nHeight)) {
         return MakeUnique<NewbieAccrualComputer>(
             cpid,
             payment_time,
-            GetMagnitudeUnit(payment_time));
+            GetMagnitudeUnit(payment_time),
+            Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid));
     }
 
     return MakeUnique<ResearchAgeComputer>(
         cpid,
+        account,
+        Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid),
         payment_time,
         GetMagnitudeUnit(payment_time),
         last_block_ptr->nHeight);

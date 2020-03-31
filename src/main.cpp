@@ -1742,10 +1742,9 @@ int64_t GetProofOfStakeReward(
     //
     if (pindexLast->nVersion >= 9) {
         if (const NN::CpidOption cpid = mining_id.TryCpid()) {
-            const NN::ResearchAccount& account = NN::Tally::GetAccount(*cpid);
             const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexLast);
 
-            out_research_subsidy = calc->Accrual(account);
+            out_research_subsidy = calc->Accrual();
         }
     }
 
