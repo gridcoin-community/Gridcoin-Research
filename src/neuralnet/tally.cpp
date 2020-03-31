@@ -400,6 +400,10 @@ bool Tally::Initialize(CBlockIndex* pindex)
     const int64_t start_time = GetTimeMillis();
 
     for (; pindex; pindex = pindex->pnext) {
+        if (pindex->nHeight + 1 == GetV11Threshold()) {
+            ActivateSnapshotAccrual(pindex);
+        }
+
         if (pindex->nResearchSubsidy <= 0) {
             continue;
         }

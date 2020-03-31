@@ -37,7 +37,7 @@ extern bool WalletOutOfSync();
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
-extern void GridcoinServices();
+extern bool GridcoinServices();
 extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
@@ -2698,8 +2698,19 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
             // the fColdBoot condition that skips this check when syncing the
             // initial chain:
             //
-            if (!fColdBoot && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex)) {
+            if ((!fColdBoot || pindex->nHeight >= 11)
+                && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
+            {
                 return DoS(25, error("ConnectBlock : Rejected invalid superblock."));
+            }
+
+            // Block versions 11+ calculate research rewards from snapshots of
+            // accrual taken at each superblock:
+            //
+            if (pindex->nVersion >= 11) {
+                if (!NN::Tally::ApplySuperblock(superblock)) {
+                    return false;
+                }
             }
 
             NN::Quorum::PushSuperblock(std::move(superblock));
@@ -2839,6 +2850,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (pindexBest->nIsSuperBlock == 1) {
             NN::Quorum::PopSuperblock(pindexBest);
+
+            if (pindexBest->nVersion >= 11 && !NN::Tally::RevertSuperblock()) {
+                return false;
+            }
         }
 
         if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
@@ -2875,7 +2890,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
-        if(IsV9Enabled_Tally(nBestHeight)) {
+        if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
             assert(NN::Tally::IsTrigger(nBestHeight));
             NN::Tally::LegacyRecount(pindexBest);
         }
@@ -2913,7 +2928,10 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
                 return error("ReorganizeChain: unable to find fork root");
         }
 
-        if(pcommon != pindexBest)
+        // Blocks version 11+ do not use the legacy tally system triggered by
+        // block height intervals:
+        //
+        if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
         {
             pcommon = NN::Tally::FindTrigger(pcommon);
             if(!pcommon)
@@ -3043,7 +3061,10 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         nTimeBestReceived =  GetAdjustedTime();
         cnt_con++;
 
-        if (IsV9Enabled_Tally(nBestHeight) && NN::Tally::IsTrigger(nBestHeight)) {
+        if (IsV9Enabled_Tally(nBestHeight)
+            && !IsV11Enabled(nBestHeight)
+            && NN::Tally::IsTrigger(nBestHeight))
+        {
             NN::Tally::LegacyRecount(pindexBest);
         }
     }
@@ -3102,9 +3123,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         boost::thread t(runCommand, strCmd); // thread runs free
     }
 
-    GridcoinServices();
-
-    return true;
+    return GridcoinServices();
 }
 
 // ppcoin: total coin age spent in transaction, in the unit of coin-days.
@@ -3520,7 +3539,7 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
     return UintToArith256(chaintrust);
 }
 
-void GridcoinServices()
+bool GridcoinServices()
 {
     //Dont do this on headless - SeP
     if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
@@ -3546,9 +3565,24 @@ void GridcoinServices()
         NN::Tally::LegacyRecount(pindexBest);
     }
 
+    // Block version 11 tally transition:
+    //
+    // Before the first version 11 block arrives, activate the snapshot accrual
+    // system by creating a baseline of the research rewards owed in historical
+    // superblocks so that we can validate the reward for the next block.
+    //
+    if (nBestHeight + 1 == GetV11Threshold()) {
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v11 threshold.");
+
+        if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
+            return error("GridcoinServices: Failed to prepare tally for v11.");
+        }
+    }
+
     //Dont perform the following functions if out of sync
     if (OutOfSyncByAge()) {
-        return;
+        return true;
     }
 
     //Backup the wallet once per 900 blocks or as specified in config:
@@ -3579,6 +3613,8 @@ void GridcoinServices()
             }
         }
     }
+
+    return true;
 }
 
 bool AskForOutstandingBlocks(uint256 hashStart)

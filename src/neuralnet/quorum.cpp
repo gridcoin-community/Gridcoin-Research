@@ -133,7 +133,19 @@ public:
     //!
     void PushSuperblock(SuperblockPtr superblock)
     {
-        m_pending.emplace(superblock.m_height, std::move(superblock));
+        // Version 11+ blocks no longer rely on the tally trigger heights. We
+        // commit version 2+ superblocks immediately instead of holding these
+        // in a pending state:
+        //
+        if (superblock->m_version >= 2) {
+            if (m_cache.size() > CACHE_SIZE + 1) {
+                m_cache.pop_back();
+            }
+
+            m_cache.emplace_front(std::move(superblock));
+        } else {
+            m_pending.emplace(superblock.m_height, std::move(superblock));
+        }
     }
 
     //!

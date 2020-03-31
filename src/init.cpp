@@ -1162,11 +1162,12 @@ bool AppInit2(ThreadHandlerPtr threads)
         LogPrintf("mapAddressBook.size() = %" PRIszu,  pwalletMain->mapAddressBook.size());
     }
 
+    if (pindexBest->nVersion <= 10) {
+        uiInterface.InitMessage(_("Loading Network Averages..."));
+        if (fDebug3) LogPrintf("Loading network averages");
 
-    uiInterface.InitMessage(_("Loading Network Averages..."));
-    if (fDebug3) LogPrintf("Loading network averages");
-
-    NN::Tally::LegacyRecount(NN::Tally::FindTrigger(pindexBest));
+        NN::Tally::LegacyRecount(NN::Tally::FindTrigger(pindexBest));
+    }
 
     if (!threads->createThread(StartNode, NULL, "Start Thread"))
         InitError(_("Error: could not start node"));
