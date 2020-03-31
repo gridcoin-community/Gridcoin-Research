@@ -1476,7 +1476,7 @@ UniValue network(const UniValue& params, bool fHelp)
 
     res.pushKV("total_magnitude", (int)superblock->m_cpids.TotalMagnitude());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
-    res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(now));
+    res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindexBest));
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
     res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy / 14));
     res.pushKV("research_paid_daily_limit", ValueFromAmount(NN::Tally::MaxEmission(now)));

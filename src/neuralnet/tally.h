@@ -79,11 +79,11 @@ public:
     //!
     //! \brief Get the current network magnitude unit.
     //!
-    //! \param payment_time Timestamp to calculate the magnitude unit for.
+    //! \param pindex Block context to calculate the magnitude unit for.
     //!
-    //! \return Current magnitude unit adjusted for the specified time.
+    //! \return Current magnitude unit adjusted for the specified block.
     //!
-    static double GetMagnitudeUnit(const int64_t payment_time);
+    static double GetMagnitudeUnit(const CBlockIndex* const pindex);
 
     //!
     //! \brief Get a traversable object for the research accounts stored in

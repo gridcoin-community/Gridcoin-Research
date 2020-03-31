@@ -610,7 +610,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.coinWeight = sWeight;
         GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
         GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
-        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(GetAdjustedTime()),2);
+        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(pindexBest), 2);
         GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
         GlobalStatusStruct.poll = std::move(current_poll);
 

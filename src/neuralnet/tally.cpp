@@ -454,9 +454,13 @@ int64_t Tally::MaxEmission(const int64_t payment_time)
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
-double Tally::GetMagnitudeUnit(const int64_t payment_time)
+double Tally::GetMagnitudeUnit(const CBlockIndex* const pindex)
 {
-    return g_network_tally.GetMagnitudeUnit(payment_time);
+    if (pindex->nVersion >= 11) {
+        return SnapshotCalculator::MagnitudeUnit();
+    }
+
+    return g_network_tally.GetMagnitudeUnit(pindex->nTime);
 }
 
 ResearchAccountRange Tally::Accounts()
@@ -524,7 +528,7 @@ AccrualComputer Tally::GetLegacyComputer(
         return MakeUnique<NewbieAccrualComputer>(
             cpid,
             payment_time,
-            GetMagnitudeUnit(payment_time),
+            g_network_tally.GetMagnitudeUnit(payment_time),
             Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating());
     }
 
@@ -533,7 +537,7 @@ AccrualComputer Tally::GetLegacyComputer(
         account,
         Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating(),
         payment_time,
-        GetMagnitudeUnit(payment_time),
+        g_network_tally.GetMagnitudeUnit(payment_time),
         last_block_ptr->nHeight);
 }
 
