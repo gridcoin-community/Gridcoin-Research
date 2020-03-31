@@ -385,6 +385,10 @@ void InitLogging()
         }
     }
 
+    // TODO: enable tally and accrual debug log categories during Fern testing:
+    LogInstance().EnableCategory("tally");
+    LogInstance().EnableCategory("accrual");
+
     std::vector<std::string> excluded_categories;
 
     if (mapArgs.count("-debugexclude") && mapMultiArgs["-debugexclude"].size() > 0)
