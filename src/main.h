@@ -109,12 +109,17 @@ inline bool IsV10Enabled(int nHeight)
             : nHeight >= 1420000;
 }
 
+inline int32_t GetV11Threshold()
+{
+    // Returns "never" before planned intro of bv11.
+    return fTestNet
+            ? std::numeric_limits<int32_t>::max()
+            : std::numeric_limits<int32_t>::max();
+}
+
 inline bool IsV11Enabled(int nHeight)
 {
-    // Returns false before planned intro of bv11.
-    return fTestNet
-            ? false
-            : false;
+    return nHeight >= GetV11Threshold();
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
