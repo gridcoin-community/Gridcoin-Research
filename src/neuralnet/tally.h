@@ -24,6 +24,18 @@ class Tally
 {
 public:
     //!
+    //! \brief Initialize the research reward context for each CPID in the
+    //! network.
+    //!
+    //! This scans historical block metadata to create an in-memory database of
+    //! the pending accrual owed to each CPID in the network.
+    //!
+    //! \param pindex Index for the first research age block.
+    //!
+    //! \return \c true if the tally initialized without an error.
+    //!
+    static bool Initialize(CBlockIndex* pindex);
+
     //! \brief Check whether the height of the specified block matches the
     //! tally granularity.
     //!

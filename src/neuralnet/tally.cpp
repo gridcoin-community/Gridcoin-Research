@@ -19,6 +19,41 @@ namespace {
 constexpr size_t TALLY_DAYS = 14;
 
 //!
+//! \brief Set the correct CPID from the block claim when the block index
+//! contains a zero CPID.
+//!
+//! There were reports of 0000 cpid in index where INVESTOR should have been.
+//!
+//! \param pindex Index of the block to repair.
+//!
+void RepairZeroCpidIndex(CBlockIndex* const pindex)
+{
+    const ClaimOption claim = GetClaimByIndex(pindex);
+
+    if (!claim) {
+        return;
+    }
+
+    if (claim->m_mining_id != pindex->GetMiningId())
+    {
+        if(fDebug)
+            LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+                pindex->GetMiningId().ToString(),
+                claim->m_mining_id.ToString(),
+                pindex->GetBlockHash().GetHex(),
+                pindex->nHeight);
+
+        /* Repair the cpid field */
+        pindex->SetMiningId(claim->m_mining_id);
+
+#if 0
+        if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+            error("LoadBlockIndex: writing CDiskBlockIndex failed");
+#endif
+    }
+}
+
+//!
 //! \brief Round a value to intervals of 0.025.
 //!
 //! Used to calculate the network magnitude unit.
@@ -245,6 +280,38 @@ NetworkTally g_network_tally;       //!< Tracks two-week network averages.
 // -----------------------------------------------------------------------------
 // Class: Tally
 // -----------------------------------------------------------------------------
+
+bool Tally::Initialize(CBlockIndex* pindex)
+{
+    if (!pindex || !IsResearchAgeEnabled(pindex->nHeight)) {
+        LogPrintf("Tally initialization not needed.");
+        return true;
+    }
+
+    LogPrintf("Initializing research reward tally...");
+
+    const int64_t start_time = GetTimeMillis();
+
+    for (; pindex; pindex = pindex->pnext) {
+        if (pindex->nResearchSubsidy <= 0) {
+            continue;
+        }
+
+        if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+            if (cpid->IsZero()) {
+                RepairZeroCpidIndex(pindex);
+            }
+
+            g_researcher_tally.RecordRewardBlock(*cpid, pindex);
+        }
+    }
+
+    LogPrintf(
+        "Tally initialization complete. Scan time %15" PRId64 "ms\n",
+        GetTimeMillis() - start_time);
+
+    return true;
+}
 
 bool Tally::IsTrigger(const uint64_t height)
 {

@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 
+#include "block.h"
 #include "util.h"
 #include "net.h"
 #include "txdb.h"
@@ -156,7 +157,7 @@ static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
     Sleep(INFINITE);
     return true;
 }
-#endif   
+#endif
 
 
 #ifndef WIN32
@@ -322,7 +323,7 @@ bool InitSanityCheck(void)
                   "information, visit https://en.bitcoin.it/wiki/OpenSSL_and_EC_Libraries");
         return false;
     }
-    
+
     return true;
 }
 
@@ -694,7 +695,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // Initialize internal hashing code with SSE/AVX2 optimizations. In the future we will also have ARM/NEON optimizations.
     std::string sha256_algo = SHA256AutoDetect();
-    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);                                                                                      
+    LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = GetArg("-wallet", "wallet.dat");
@@ -712,7 +713,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
 
-#if !defined(WIN32) 
+#if !defined(WIN32)
     if (fDaemon)
     {
         // Daemonize
@@ -941,6 +942,15 @@ bool AppInit2(ThreadHandlerPtr threads)
         uiInterface.InitMessage(_("Loading superblock cache..."));
         LogPrintf("Loading superblock cache...");
         NN::Quorum::LoadSuperblockIndex(pindexBest);
+    }
+
+    // Initialize the Gridcoin research reward tally system from the first
+    // research age block (as defined in main.h):
+    //
+    uiInterface.InitMessage(_("Initializing research reward tally..."));
+    if (!NN::Tally::Initialize(BlockFinder().FindByHeight(fTestNet ? 36501 : 364501)))
+    {
+        return InitError(_("Failed to initialize tally."));
     }
 
     if (GetBoolArg("-printblockindex") || GetBoolArg("-printblocktree"))

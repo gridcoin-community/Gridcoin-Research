@@ -17,8 +17,6 @@
 #include "txdb.h"
 #include "main.h"
 #include "global_objects_noui.hpp"
-#include "neuralnet/tally.h"
-#include "block.h"
 #include "ui_interface.h"
 #include "util.h"
 
@@ -26,43 +24,6 @@ using namespace std;
 using namespace boost;
 
 leveldb::DB *txdb; // global pointer for LevelDB object instance
-
-namespace {
-//!
-//! \brief Set the correct CPID from the block claim when the block index
-//! contains a zero CPID.
-//!
-//! There were reports of 0000 cpid in index where INVESTOR should have been.
-//!
-//! \param pindex Index of the block to repair.
-//!
-void RepairZeroCpidIndex(CBlockIndex* const pindex)
-{
-    const NN::ClaimOption claim = GetClaimByIndex(pindex);
-
-    if (!claim) {
-        return;
-    }
-
-    if (claim->m_mining_id != pindex->GetMiningId())
-    {
-        if(fDebug)
-            LogPrintf("WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
-                pindex->GetMiningId().ToString(),
-                claim->m_mining_id.ToString(),
-                pindex->GetBlockHash().GetHex(),
-                pindex->nHeight);
-
-        /* Repair the cpid field */
-        pindex->SetMiningId(claim->m_mining_id);
-
-#if 0
-        if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
-            error("LoadBlockIndex: writing CDiskBlockIndex failed");
-#endif
-    }
-}
-} // anonymous namespace
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
@@ -638,34 +599,6 @@ bool CTxDB::LoadBlockIndex()
         CTxDB txdb;
         SetBestChain(txdb, block, pindexFork);
     }
-
-    LogPrintf("Set up RA ");
-    nStart = GetTimeMillis();
-
-    // Gridcoin - In order, set up Research Age hashes and lifetime fields.
-    // pindex is guaranteed to be valid here, even on an empty chain. Prior
-    // calls will set it up to the genesis block.
-    CBlockIndex* pindex = BlockFinder().FindByHeight(1);
-
-    LogPrintf("RA scan blocks %i-%i", pindex->nHeight, pindexBest->nHeight);
-
-    for ( ; pindex ; pindex= pindex->pnext )
-    {
-        // Block repair and reward collection only needs to be done after
-        // research age has been enabled.
-        if(!IsResearchAgeEnabled(pindex->nHeight))
-            continue;
-
-        if (pindex->IsUserCPID()) {
-            if (pindex->cpid.IsZero()) {
-                RepairZeroCpidIndex(pindex);
-            }
-
-            NN::Tally::RecordRewardBlock(pindex);
-        }
-    }
-
-    LogPrintf("RA Complete - RA Time %15" PRId64 "ms\n", GetTimeMillis() - nStart);
 
     return true;
 }
