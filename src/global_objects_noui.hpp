@@ -6,8 +6,6 @@
 #include <map>
 #include <set>
 
-extern int nBoincUtilization;
-extern std::string sRegVer;
 extern bool bForceUpdate;
 extern bool fQtActive;
 extern bool bGridcoinCoreInitComplete;

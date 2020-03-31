@@ -171,10 +171,6 @@ bool fColdBoot = true;
 bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
 
-// Gridcoin status    *************
-int nBoincUtilization = 0;
-std::string sRegVer;
-
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
 // End of Gridcoin Global vars
@@ -573,7 +569,6 @@ void GetGlobalStatus()
         double boincmagnitude = NN::Quorum::MyMagnitude().Floating();
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
-        nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
         double weight = nWeight/COIN;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
