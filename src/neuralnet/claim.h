@@ -322,8 +322,6 @@ struct Claim
         //
         if (m_mining_id.Which() == MiningId::Kind::CPID) {
             READWRITE(m_research_subsidy);
-            READWRITE(m_magnitude);
-
             READWRITE(m_signature);
         }
 
