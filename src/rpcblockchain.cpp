@@ -31,7 +31,6 @@ extern std::string YesNo(bool bin);
 extern double DoubleFromAmount(int64_t amount);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
-extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
@@ -1106,21 +1105,6 @@ UniValue superblocks(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue upgradedbeaconreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "upgradedbeaconreport\n"
-                "\n"
-                "Display upgraded beacon report of the network\n");
-
-    LOCK(cs_main);
-
-    UniValue aUpgBR = GetUpgradedBeaconReport();
-
-    return aUpgBR;
-}
-
 UniValue addkey(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 4)
@@ -1938,34 +1922,6 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
 double DoubleFromAmount(int64_t amount)
 {
     return (double)amount / (double)COIN;
-}
-
-UniValue GetUpgradedBeaconReport()
-{
-    UniValue results(UniValue::VARR);
-    UniValue entry(UniValue::VOBJ);
-    entry.pushKV("Report","Upgraded Beacon Report 1.0");
-    std::string rows = "";
-    std::string row = "";
-    int iBeaconCount = 0;
-    int iUpgradedBeaconCount = 0;
-    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
-    {
-        const AppCacheEntry& entry = item.second;
-        std::string contract = DecodeBase64(entry.value);
-        std::string cpidv2 = ExtractValue(contract,";",0);
-        std::string grcaddress = ExtractValue(contract,";",2);
-        std::string sPublicKey = ExtractValue(contract,";",3);
-        if (!sPublicKey.empty()) iUpgradedBeaconCount++;
-        iBeaconCount++;
-    }
-
-    entry.pushKV("Total Beacons", iBeaconCount);
-    entry.pushKV("Upgraded Beacon Count", iUpgradedBeaconCount);
-    double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
-    entry.pushKV("Pct Of Upgraded Beacons",RoundToString(dPct*100,3));
-    results.push_back(entry);
-    return results;
 }
 
 UniValue GetJSONBeaconReport()

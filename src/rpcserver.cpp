@@ -352,7 +352,6 @@ static const CRPCCommand vRPCCommands[] =
     { "staketime",               &staketime,               cat_mining        },
     { "superblockage",           &superblockage,           cat_mining        },
     { "superblocks",             &superblocks,             cat_mining        },
-    { "upgradedbeaconreport",    &upgradedbeaconreport,    cat_mining        },
 
   // Developer commands
     { "addkey",                  &addkey,                  cat_developer     },
