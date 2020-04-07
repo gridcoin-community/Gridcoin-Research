@@ -331,7 +331,6 @@ static const CRPCCommand vRPCCommands[] =
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
-    { "unspentreport",           &unspentreport,           cat_wallet        },
     { "validateaddress",         &validateaddress,         cat_wallet        },
     { "validatepubkey",          &validatepubkey,          cat_wallet        },
     { "verifymessage",           &verifymessage,           cat_wallet        },
@@ -670,7 +669,7 @@ void StartRPCThreads()
         StartShutdown();
         return;
     }
-    
+
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
@@ -688,7 +687,7 @@ void StopRPCThreads()
     rpc_io_service->stop();
     if (rpc_worker_group != NULL)
         rpc_worker_group->join_all();
-    
+
     delete rpc_worker_group;
     rpc_worker_group = NULL;
     delete rpc_ssl_context;
