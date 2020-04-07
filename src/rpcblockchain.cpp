@@ -28,7 +28,6 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 using namespace std;
 
 extern std::string YesNo(bool bin);
-extern double DoubleFromAmount(int64_t amount);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
@@ -1917,11 +1916,6 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit(account)));
 
     return json;
-}
-
-double DoubleFromAmount(int64_t amount)
-{
-    return (double)amount / (double)COIN;
 }
 
 UniValue GetJSONBeaconReport()

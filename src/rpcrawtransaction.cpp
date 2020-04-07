@@ -28,7 +28,6 @@ std::string TimestampToHRDate(double dtm);
 std::string GetPollXMLElementByPollTitle(std::string pollname, std::string XMLElement1, std::string XMLElement2);
 std::string GetShareType(double dShareType);
 bool PollCreatedAfterSecurityUpgrade(std::string pollname);
-double DoubleFromAmount(int64_t amount);
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
 {
@@ -259,7 +258,7 @@ std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const 
 
                         double dOutAverage = superblock.m_cpids.AverageMagnitude();
                         double dTotalNetworkMagnitude = (double)superblock.m_cpids.size() * dOutAverage;
-                        double dMoneySupply = DoubleFromAmount(pblockindex->nMoneySupply);
+                        double dMoneySupply = (double)pblockindex->nMoneySupply / COIN;
                         double dMoneySupplyFactor = (dMoneySupply/dTotalNetworkMagnitude + .01);
 
                         dVoteMagnitude = RoundFromString(sVoteMagnitude,2);
