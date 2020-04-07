@@ -15,7 +15,6 @@
 double GetTotalBalance();
 std::string TimestampToHRDate(double dtm);
 double CoinToDouble(double surrogate);
-double DoubleFromAmount(int64_t amount);
 std::string PubKeyToAddress(const CScript& scriptPubKey);
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
@@ -466,7 +465,7 @@ double GetMoneySupplyFactor()
 
     double TotalNetworkMagnitude = superblock->m_cpids.TotalMagnitude();
     if (TotalNetworkMagnitude < 100) TotalNetworkMagnitude=100;
-    double MoneySupply = DoubleFromAmount(pindexBest->nMoneySupply);
+    double MoneySupply = (double)pindexBest->nMoneySupply / COIN;
     double Factor = (MoneySupply/TotalNetworkMagnitude+.01);
     return Factor;
 }

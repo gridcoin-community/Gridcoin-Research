@@ -17,7 +17,6 @@
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
-#include "contract/polls.h"
 #include "contract/contract.h"
 #include "util.h"
 
@@ -29,24 +28,17 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 using namespace std;
 
 extern std::string YesNo(bool bin);
-extern double DoubleFromAmount(int64_t amount);
-std::string PubKeyToAddress(const CScript& scriptPubKey);
-const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id);
-extern std::string GetProvableVotingWeightXML();
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
-extern UniValue GetUpgradedBeaconReport();
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
-std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
 
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
-extern UniValue GetJsonUnspentReport();
 extern UniValue GetJSONBeaconReport();
 
 bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -721,21 +713,6 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue unspentreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "unspentreport\n"
-                "\n"
-                "Displays unspentreport\n");
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    UniValue aUnspentReport = GetJsonUnspentReport();
-
-    return aUnspentReport;
-}
-
 UniValue advertisebeacon(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -1125,21 +1102,6 @@ UniValue superblocks(const UniValue& params, bool fHelp)
     res = SuperblockReport(lookback, displaycontract, cpid);
 
     return res;
-}
-
-UniValue upgradedbeaconreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "upgradedbeaconreport\n"
-                "\n"
-                "Display upgraded beacon report of the network\n");
-
-    LOCK(cs_main);
-
-    UniValue aUpgBR = GetUpgradedBeaconReport();
-
-    return aUpgBR;
 }
 
 UniValue addkey(const UniValue& params, bool fHelp)
@@ -1954,240 +1916,6 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit(account)));
 
     return json;
-}
-
-double DoubleFromAmount(int64_t amount)
-{
-    return (double)amount / (double)COIN;
-}
-
-UniValue GetJsonUnspentReport()
-{
-    // The purpose of this report is to list the details of unspent coins in the wallet, create a signed XML payload and then audit those coins as a third party
-    // Written on 5-28-2017 - R HALFORD
-    // We can use this as the basis for proving the total coin balance, and the current researcher magnitude in the voting system.
-    UniValue results(UniValue::VARR);
-    const NN::MiningId mining_id = NN::Researcher::Get()->Id();
-
-    //Retrieve the historical magnitude
-    if (const NN::CpidOption cpid = mining_id.TryCpid())
-    {
-        const CBlockIndex* pHistorical = GetHistoricalMagnitude(mining_id);
-        UniValue entry1(UniValue::VOBJ);
-        entry1.pushKV("Researcher Magnitude",pHistorical->nMagnitude);
-        results.push_back(entry1);
-
-        // Create the XML Magnitude Payload
-        if (pHistorical->nHeight > 1 && pHistorical->nMagnitude > 0)
-        {
-            std::string sBlockhash = pHistorical->GetBlockHash().GetHex();
-            std::string sError;
-            std::string sSignature;
-            bool bResult = SignBlockWithCPID(cpid->ToString(), pHistorical->GetBlockHash().GetHex(), sSignature, sError);
-            // Just because below comment it'll keep in line with that
-            if (!bResult)
-                sSignature = sError;
-
-            // Find the Magnitude from the last staked block, within the last 6 months, and ensure researcher has a valid current beacon (if the beacon is expired, the signature contain an error message)
-
-            std::string sMagXML = "<CPID>" + cpid->ToString() + "</CPID><INNERMAGNITUDE>" + RoundToString(pHistorical->nMagnitude,2) + "</INNERMAGNITUDE>" +
-                                  "<HEIGHT>" + ToString(pHistorical->nHeight) + "</HEIGHT><BLOCKHASH>" + sBlockhash + "</BLOCKHASH><SIGNATURE>" + sSignature + "</SIGNATURE>";
-            std::string sMagnitude = ExtractXML(sMagXML,"<INNERMAGNITUDE>","</INNERMAGNITUDE>");
-            std::string sXmlSigned = ExtractXML(sMagXML,"<SIGNATURE>","</SIGNATURE>");
-            std::string sXmlBlockHash = ExtractXML(sMagXML,"<BLOCKHASH>","</BLOCKHASH>");
-            std::string sXmlCPID = ExtractXML(sMagXML,"<CPID>","</CPID>");
-            UniValue entry(UniValue::VOBJ);
-            entry.pushKV("CPID Signature", sSignature);
-            entry.pushKV("Historical Magnitude Block #", pHistorical->nHeight);
-            entry.pushKV("Historical Blockhash", sBlockhash);
-            // Prove the magnitude from a 3rd party standpoint:
-            if (!sXmlBlockHash.empty() && !sMagnitude.empty() && !sXmlSigned.empty())
-            {
-                CBlockIndex* pblockindexMagnitude = mapBlockIndex[uint256S(sXmlBlockHash)];
-                if (pblockindexMagnitude)
-                {
-                    bool fResult = VerifyCPIDSignature(sXmlCPID, sXmlBlockHash, sXmlSigned);
-                    entry.pushKV("Historical Magnitude",pblockindexMagnitude->nMagnitude);
-                    entry.pushKV("Signature Valid",fResult);
-                    bool fAudited = (RoundFromString(RoundToString(pblockindexMagnitude->nMagnitude,2),0)==RoundFromString(sMagnitude,0) && fResult);
-                    entry.pushKV("Magnitude Audited",fAudited);
-                    results.push_back(entry);
-                }
-            }
-
-
-        }
-
-
-    }
-
-    // Now we move on to proving the coins we own are ours
-
-    vector<COutput> vecOutputs;
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
-    std::string sXML = "";
-    std::string sRow = "";
-    double dTotal = 0;
-    double dBloatThreshhold = 100;
-    double dCurrentItemCount = 0;
-    double dItemBloatThreshhold = 50;
-    // Iterate unspent coins from transactions owned by me that total over 100GRC (this prevents XML bloat)
-    for (auto const& out : vecOutputs)
-    {
-        int64_t nValue = out.tx->vout[out.i].nValue;
-        const CScript& pk = out.tx->vout[out.i].scriptPubKey;
-        UniValue entry(UniValue::VOBJ);
-        CTxDestination address;
-        if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
-        {
-            if (CoinToDouble(nValue) > dBloatThreshhold)
-            {
-                entry.pushKV("TXID", out.tx->GetHash().GetHex());
-                entry.pushKV("Address", CBitcoinAddress(address).ToString());
-                std::string sScriptPubKey1 = HexStr(pk.begin(), pk.end());
-                entry.pushKV("Amount",ValueFromAmount(nValue));
-                std::string strAddress=CBitcoinAddress(address).ToString();
-                CKeyID keyID;
-                const CBitcoinAddress& bcAddress = CBitcoinAddress(address);
-                if (bcAddress.GetKeyID(keyID))
-                {
-                    bool IsCompressed;
-                    CKey vchSecret;
-                    if (pwalletMain->GetKey(keyID, vchSecret))
-                    {
-                        // Here we use the secret key to sign the coins, then we abandon the key.
-                        CSecret csKey = vchSecret.GetSecret(IsCompressed);
-                        CKey keyInner;
-                        keyInner.SetSecret(csKey,IsCompressed);
-                        std::string private_key = CBitcoinSecret(csKey,IsCompressed).ToString();
-                        std::string public_key = HexStr(keyInner.GetPubKey().Raw());
-                        std::vector<unsigned char> vchSig;
-                        keyInner.Sign(out.tx->GetHash(), vchSig);
-                        // Sign the coins we own
-                        std::string sSig = std::string(vchSig.begin(), vchSig.end());
-                        // Increment the total balance weight voting ability
-                        dTotal += CoinToDouble(nValue);
-                        sRow = "<ROW><TXID>" + out.tx->GetHash().GetHex() + "</TXID>" +
-                               "<AMOUNT>" + RoundToString(CoinToDouble(nValue),2) + "</AMOUNT>" +
-                               "<POS>" + RoundToString((double)out.i,0) + "</POS>" +
-                               "<PUBKEY>" + public_key + "</PUBKEY>" +
-                               "<SCRIPTPUBKEY>" + sScriptPubKey1  + "</SCRIPTPUBKEY>" +
-                               "<SIG>" + EncodeBase64(sSig) + "</SIG>" +
-                               "<MESSAGE></MESSAGE></ROW>";
-                        sXML += sRow;
-                        dCurrentItemCount++;
-                        if (dCurrentItemCount >= dItemBloatThreshhold)
-                            break;
-                    }
-
-                }
-                results.push_back(entry);
-            }
-        }
-    }
-
-    // Now we will need to go back through the XML and Audit the claimed vote weight balance as a 3rd party
-
-    double dCounted = 0;
-
-    std::vector<std::string> vXML= split(sXML.c_str(),"<ROW>");
-    for (unsigned int x = 0; x < vXML.size(); x++)
-    {
-        // Prove the contents of the XML as a 3rd party
-        CTransaction tx2;
-        uint256 hashBlock;
-        uint256 uTXID = uint256S(ExtractXML(vXML[x],"<TXID>","</TXID>"));
-        std::string sAmt = ExtractXML(vXML[x],"<AMOUNT>","</AMOUNT>");
-        std::string sPos = ExtractXML(vXML[x],"<POS>","</POS>");
-        std::string sXmlSig = ExtractXML(vXML[x],"<SIG>","</SIG>");
-        std::string sXmlMsg = ExtractXML(vXML[x],"<MESSAGE>","</MESSAGE>");
-        std::string sScriptPubKeyXml = ExtractXML(vXML[x],"<SCRIPTPUBKEY>","</SCRIPTPUBKEY>");
-
-        int32_t iPos = RoundFromString(sPos,0);
-        std::string sPubKey = ExtractXML(vXML[x],"<PUBKEY>","</PUBKEY>");
-
-        if (!sPubKey.empty() && !sAmt.empty() && !sPos.empty() && !uTXID.IsNull())
-        {
-
-            if (GetTransaction(uTXID, tx2, hashBlock))
-            {
-                if (iPos >= 0 && iPos < (int32_t) tx2.vout.size())
-                {
-                    int64_t nValue2 = tx2.vout[iPos].nValue;
-                    const CScript& pk2 = tx2.vout[iPos].scriptPubKey;
-                    CTxDestination address2;
-                    std::string sVotedPubKey = HexStr(pk2.begin(), pk2.end());
-                    std::string sVotedGRCAddress = CBitcoinAddress(address2).ToString();
-                    std::string sCoinOwnerAddress = PubKeyToAddress(pk2);
-                    double dAmount = CoinToDouble(nValue2);
-                    if (ExtractDestination(tx2.vout[iPos].scriptPubKey, address2))
-                    {
-                        if (sScriptPubKeyXml == sVotedPubKey && RoundToString(dAmount,2) == sAmt)
-                        {
-								UniValue entry(UniValue::VOBJ);
-      					   		entry.pushKV("Audited Amount",ValueFromAmount(nValue2));
-                            std::string sDecXmlSig = DecodeBase64(sXmlSig);
-                            CKey keyVerify;
-                            if (keyVerify.SetPubKey(ParseHex(sPubKey)))
-                            {
-                                std::vector<unsigned char> vchMsg1 = vector<unsigned char>(sXmlMsg.begin(), sXmlMsg.end());
-                                std::vector<unsigned char> vchSig1 = vector<unsigned char>(sDecXmlSig.begin(), sDecXmlSig.end());
-                                bool bValid = keyVerify.Verify(uTXID,vchSig1);
-                                // Unspent Balance is proven to be owned by the voters public key, count the vote
-                                if (bValid) dCounted += dAmount;
-										entry.pushKV("Verified",bValid);
-                            }
-
-                            results.push_back(entry);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-	UniValue entry(UniValue::VOBJ);
-    // Note that the voter needs to have the wallet at least unlocked for staking in order for the coins to be signed, otherwise the coins-owned portion of the vote balance will be 0.
-    // In simpler terms: The wallet must be unlocked to cast a provable vote.
-
-	entry.pushKV("Total Voting Balance Weight", dTotal);
-    entry.pushKV("Grand Verified Amount",dCounted);
-
-    std::string sBalCheck2 = GetProvableVotingWeightXML();
-    double dVerifiedBalance = ReturnVerifiedVotingBalance(sBalCheck2,true);
-    double dVerifiedMag = ReturnVerifiedVotingMagnitude(sBalCheck2, true);
-	entry.pushKV("Balance check",dVerifiedBalance);
-	entry.pushKV("Mag check",dVerifiedMag);
-    results.push_back(entry);
-    return results;
-}
-
-UniValue GetUpgradedBeaconReport()
-{
-    UniValue results(UniValue::VARR);
-    UniValue entry(UniValue::VOBJ);
-    entry.pushKV("Report","Upgraded Beacon Report 1.0");
-    std::string rows = "";
-    std::string row = "";
-    int iBeaconCount = 0;
-    int iUpgradedBeaconCount = 0;
-    for(const auto& item : ReadSortedCacheSection(Section::BEACON))
-    {
-        const AppCacheEntry& entry = item.second;
-        std::string contract = DecodeBase64(entry.value);
-        std::string cpidv2 = ExtractValue(contract,";",0);
-        std::string grcaddress = ExtractValue(contract,";",2);
-        std::string sPublicKey = ExtractValue(contract,";",3);
-        if (!sPublicKey.empty()) iUpgradedBeaconCount++;
-        iBeaconCount++;
-    }
-
-    entry.pushKV("Total Beacons", iBeaconCount);
-    entry.pushKV("Upgraded Beacon Count", iUpgradedBeaconCount);
-    double dPct = ((double)iUpgradedBeaconCount / ((double)iBeaconCount) + .01);
-    entry.pushKV("Pct Of Upgraded Beacons",RoundToString(dPct*100,3));
-    results.push_back(entry);
-    return results;
 }
 
 UniValue GetJSONBeaconReport()
