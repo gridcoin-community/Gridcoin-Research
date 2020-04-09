@@ -383,7 +383,7 @@ CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries,
     return txOrdered;
 }
 
-void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock)
+void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb)
 {
     // Anytime a signature is successfully verified, it's proof the outpoint is spent.
     // Update the wallet spent flag if it doesn't know due to wallet.dat being
@@ -402,7 +402,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock)
                 {
                     if (fDebug) LogPrintf("WalletUpdateSpent found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkSpent(txin.prevout.n);
-                    wtx.WriteToDisk();
+                    wtx.WriteToDisk(pwalletdb);
                     NotifyTransactionChanged(this, txin.prevout.hash, CT_UPDATED);
                 }
             }
@@ -419,7 +419,7 @@ void CWallet::WalletUpdateSpent(const CTransaction &tx, bool fBlock)
                 if (IsMine(txout))
                 {
                     wtx.MarkUnspent(&txout - &tx.vout[0]);
-                    wtx.WriteToDisk();
+                    wtx.WriteToDisk(pwalletdb);
                     NotifyTransactionChanged(this, hash, CT_UPDATED);
                 }
             }
@@ -437,7 +437,7 @@ void CWallet::MarkDirty()
     }
 }
 
-bool CWallet::AddToWallet(const CWalletTx& wtxIn)
+bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
 {
     uint256 hash = wtxIn.GetHash();
     {
@@ -450,7 +450,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
         if (fInsertedNew)
         {
             wtx.nTimeReceived = GetAdjustedTime();
-            wtx.nOrderPos = IncOrderPosNext();
+            wtx.nOrderPos = IncOrderPosNext(pwalletdb);
 
             wtx.nTimeSmart = wtx.nTimeReceived;
             if (!wtxIn.hashBlock.IsNull())
@@ -527,7 +527,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
 
         // Write to disk
         if (fInsertedNew || fUpdated)
-            if (!wtx.WriteToDisk())
+            if (!wtx.WriteToDisk(pwalletdb))
                 return false;
         if(!fQtActive)
         {
@@ -550,7 +550,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn)
             }
         }
         // since AddToWallet is called directly for self-originating transactions, check for consumption of own coins
-        WalletUpdateSpent(wtx, (!wtxIn.hashBlock.IsNull()));
+        WalletUpdateSpent(wtx, (!wtxIn.hashBlock.IsNull()), pwalletdb);
 
         // Notify UI of new or updated transaction
         NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
@@ -577,16 +577,22 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         LOCK(cs_wallet);
         bool fExisted = mapWallet.count(hash);
         if (fExisted && !fUpdate) return false;
+
+        // Do not flush the wallet here for performance reasons
+        // this is safe, as in case of a crash, we rescan the necessary blocks on startup.
+        CWalletDB walletdb(strWalletFile, "r+", false);
+
         if (fExisted || IsMine(tx) || IsFromMe(tx))
         {
             CWalletTx wtx(this,tx);
             // Get merkle branch if transaction was found in a block
             if (pblock)
                 wtx.SetMerkleBranch(pblock);
-            return AddToWallet(wtx);
+
+            return AddToWallet(wtx, &walletdb);
         }
         else
-            WalletUpdateSpent(tx);
+            WalletUpdateSpent(tx, false, &walletdb);
     }
     return false;
 }
@@ -965,9 +971,9 @@ void CWalletTx::AddSupportingTransactions(CTxDB& txdb)
     reverse(vtxPrev.begin(), vtxPrev.end());
 }
 
-bool CWalletTx::WriteToDisk()
+bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
 {
-    return CWalletDB(pwallet->strWalletFile).WriteTx(GetHash(), *this);
+    return pwalletdb->WriteTx(GetHash(), *this);
 }
 
 // Scan the block chain (starting in pindexStart) for transactions
@@ -1042,7 +1048,10 @@ void CWallet::ReacceptWalletTransactions()
                 {
                     LogPrintf("ReacceptWalletTransactions found spent coin %s gC %s", FormatMoney(wtx.GetCredit()), wtx.GetHash().ToString());
                     wtx.MarkDirty();
-                    wtx.WriteToDisk();
+
+                    CWalletDB walletdb(strWalletFile);
+
+                    wtx.WriteToDisk(&walletdb);
                 }
             }
             else
@@ -1829,14 +1838,14 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             // This is only to keep the database open to defeat the auto-flush for the
             // duration of this scope.  This is the only place where this optimization
             // maybe makes sense; please don't do it anywhere else.
-            CWalletDB* pwalletdb = fFileBacked ? new CWalletDB(strWalletFile,"r") : NULL;
+            CWalletDB* pwalletdb = fFileBacked ? new CWalletDB(strWalletFile,"r+") : NULL;
 
             // Take key pair from key pool so it won't be used again
             reservekey.KeepKey();
 
             // Add tx to wallet, because if it has change it's also ours,
             // otherwise just for transaction history.
-            AddToWallet(wtxNew);
+            AddToWallet(wtxNew, pwalletdb);
 
             // Mark old coins as spent
             set<CWalletTx*> setCoins;
@@ -1845,7 +1854,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
                 CWalletTx &coin = mapWallet[txin.prevout.hash];
                 coin.BindWallet(this);
                 coin.MarkSpent(txin.prevout.n);
-                coin.WriteToDisk();
+                coin.WriteToDisk(pwalletdb);
                 NotifyTransactionChanged(this, coin.GetHash(), CT_UPDATED);
             }
 
@@ -2380,6 +2389,8 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         vCoins.push_back(&(*it).second);
 
+    CWalletDB walletdb(strWalletFile);
+
     CTxDB txdb("r");
     for (auto const& pcoin : vCoins)
     {
@@ -2398,7 +2409,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                 if (!fCheckOnly)
                 {
                     pcoin->MarkUnspent(n);
-                    pcoin->WriteToDisk();
+                    pcoin->WriteToDisk(&walletdb);
                 }
             }
             else if (IsMine(pcoin->vout[n]) && !pcoin->IsSpent(n) && (txindex.vSpent.size() > n && !txindex.vSpent[n].IsNull()))
@@ -2410,7 +2421,7 @@ void CWallet::FixSpentCoins(int& nMismatchFound, int64_t& nBalanceInQuestion, bo
                 if (!fCheckOnly)
                 {
                     pcoin->MarkSpent(n);
-                    pcoin->WriteToDisk();
+                    pcoin->WriteToDisk(&walletdb);
                 }
             }
         }
@@ -2424,6 +2435,9 @@ void CWallet::DisableTransaction(const CTransaction &tx)
         return; // only disconnecting coinstake requires marking input unspent
 
     LOCK(cs_wallet);
+
+    CWalletDB walletdb(strWalletFile);
+
     for (auto const& txin : tx.vin)
     {
         map<uint256, CWalletTx>::iterator mi = mapWallet.find(txin.prevout.hash);
@@ -2433,7 +2447,7 @@ void CWallet::DisableTransaction(const CTransaction &tx)
             if (txin.prevout.n < prev.vout.size() && IsMine(prev.vout[txin.prevout.n]))
             {
                 prev.MarkUnspent(txin.prevout.n);
-                prev.WriteToDisk();
+                prev.WriteToDisk(&walletdb);
             }
         }
     }

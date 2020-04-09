@@ -233,14 +233,16 @@ void CDBEnv::lsn_reset(const std::string& strFile)
     dbenv.lsn_reset(strFile.c_str(),0);
 }
 
-CDB::CDB(const char *pszFile, const char* pszMode) :
+CDB::CDB(const std::string& strFilename, const char* pszMode, bool fFlushOnCloseIn) :
     pdb(NULL), activeTxn(NULL)
 {
     int ret;
-    if (pszFile == NULL)
-        return;
+
+    if (strFilename.empty())
+            return;
 
     fReadOnly = (!strchr(pszMode, '+') && !strchr(pszMode, 'w'));
+    fFlushOnClose = fFlushOnCloseIn;
     bool fCreate = strchr(pszMode, 'c');
     unsigned int nFlags = DB_THREAD;
     if (fCreate)
@@ -251,7 +253,7 @@ CDB::CDB(const char *pszFile, const char* pszMode) :
         if (!bitdb.Open(GetDataDir()))
             throw runtime_error("env open failed");
 
-        strFile = pszFile;
+        strFile = strFilename;
         ++bitdb.mapFileUseCount[strFile];
         pdb = bitdb.mapDb[strFile];
         if (pdb == NULL)
@@ -264,11 +266,11 @@ CDB::CDB(const char *pszFile, const char* pszMode) :
                 DbMpoolFile*mpf = pdb->get_mpf();
                 ret = mpf->set_flags(DB_MPOOL_NOFILE, 1);
                 if (ret != 0)
-                    throw runtime_error(strprintf("CDB() : failed to configure for no temp file backing for database %s", pszFile));
+                    throw runtime_error(strprintf("CDB() : failed to configure for no temp file backing for database %s", strFile));
             }
 
             ret = pdb->open(NULL,      // Txn pointer
-                            fMockDb ? NULL : pszFile,   // Filename
+                            fMockDb ? NULL : strFile.c_str(),   // Filename
                             "main",    // Logical db name
                             DB_BTREE,  // Database type
                             nFlags,    // Flags
@@ -280,7 +282,7 @@ CDB::CDB(const char *pszFile, const char* pszMode) :
                 pdb = NULL;
                 --bitdb.mapFileUseCount[strFile];
                 strFile = "";
-                throw runtime_error(strprintf("CDB() : can't open database file %s, error %d", pszFile, ret));
+                throw runtime_error(strprintf("CDB() : can't open database file %s, error %d", strFile, ret));
             }
 
             if (fCreate && !Exists(string("version")))
@@ -296,6 +298,19 @@ CDB::CDB(const char *pszFile, const char* pszMode) :
     }
 }
 
+void CDB::Flush()
+{
+    if (activeTxn)
+        return;
+
+    // Flush database activity from memory pool to disk log
+    unsigned int nMinutes = 0;
+    if (fReadOnly)
+        nMinutes = 1;
+
+    bitdb.dbenv.txn_checkpoint(nMinutes ? GetArg("-dblogsize", 100) * 1024 : 0, nMinutes, 0);
+}
+
 void CDB::Close()
 {
     if (!pdb)
@@ -305,12 +320,8 @@ void CDB::Close()
     activeTxn = NULL;
     pdb = NULL;
 
-    // Flush database activity from memory pool to disk log
-    unsigned int nMinutes = 0;
-    if (fReadOnly)
-        nMinutes = 1;
-
-    bitdb.dbenv.txn_checkpoint(nMinutes ? GetArg("-dblogsize", 100)*1024 : 0, nMinutes, 0);
+    if (fFlushOnClose)
+        Flush();
 
     {
         LOCK(bitdb.cs_db);
