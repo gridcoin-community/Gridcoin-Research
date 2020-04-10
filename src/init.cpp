@@ -952,7 +952,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // research age block (as defined in main.h):
     //
     uiInterface.InitMessage(_("Initializing research reward tally..."));
-    if (!NN::Tally::Initialize(BlockFinder().FindByHeight(fTestNet ? 36501 : 364501)))
+    if (!NN::Tally::Initialize(BlockFinder().FindByHeight(GetResearchAgeThreshold())))
     {
         return InitError(_("Failed to initialize tally."));
     }
