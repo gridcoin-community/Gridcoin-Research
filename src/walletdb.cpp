@@ -654,7 +654,7 @@ void ThreadFlushWalletDB(void* parg)
                     map<string, int>::iterator mi = bitdb.mapFileUseCount.find(strFile);
                     if (mi != bitdb.mapFileUseCount.end())
                     {
-                        if (fDebug10) LogPrintf("Flushing wallet.dat");
+                        LogPrint(BCLog::LogFlags::WALLETDB, "Flushing wallet.dat");
                         nLastFlushed = nWalletDBUpdated;
                         int64_t nStart = GetTimeMillis();
 
@@ -666,7 +666,7 @@ void ThreadFlushWalletDB(void* parg)
                         // This is handled in CDB::Flush, which has a while loop that also does in the right place what
                         // the intention of the below line was.
                         // bitdb.mapFileUseCount.erase(mi++);
-                        if (fDebug10) LogPrintf("Flushed wallet.dat %" PRId64 "ms", GetTimeMillis() - nStart);
+                        LogPrint(BCLog::LogFlags::WALLETDB, "Flushed wallet.dat %" PRId64 "ms", GetTimeMillis() - nStart);
                     }
                 }
             }
