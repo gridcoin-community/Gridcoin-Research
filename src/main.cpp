@@ -37,7 +37,7 @@ extern bool WalletOutOfSync();
 bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
-extern void GridcoinServices();
+extern bool GridcoinServices();
 extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
@@ -170,10 +170,6 @@ globalStatusType GlobalStatusStruct;
 bool fColdBoot = true;
 bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
-
-// Gridcoin status    *************
-int nBoincUtilization = 0;
-std::string sRegVer;
 
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
@@ -570,10 +566,8 @@ void GetGlobalStatus()
 
     try
     {
-        double boincmagnitude = NN::Quorum::MyMagnitude().Floating();
         uint64_t nWeight = 0;
         pwalletMain->GetStakeWeight(nWeight);
-        nBoincUtilization = boincmagnitude; //Legacy Support for the about screen
         double weight = nWeight/COIN;
         double PORDiff = GetDifficulty(GetLastBlockIndex(pindexBest, true));
         std::string sWeight = RoundToString((double)weight,0);
@@ -597,10 +591,6 @@ void GetGlobalStatus()
             LogPrintf("Error obtaining last poll: %s", e.what());
         }
 
-        // It is necessary to assign a local variable for ETTS to avoid an occasional deadlock between the lock below,
-        // the lock on cs_main in GetEstimateTimetoStake(), and the corresponding lock in the stakeminer.
-        double dETTS = GetEstimatedTimetoStake() / 86400.0;
-
         LOCK(GlobalStatusStruct.lock);
 
         GlobalStatusStruct.blocks = ToString(nBestHeight);
@@ -608,9 +598,7 @@ void GetGlobalStatus()
         GlobalStatusStruct.netWeight = RoundToString(GetEstimatedNetworkWeight() / 80.0,2);
         //todo: use the real weight from miner status (requires scaling)
         GlobalStatusStruct.coinWeight = sWeight;
-        GlobalStatusStruct.magnitude = RoundToString(boincmagnitude,2);
-        GlobalStatusStruct.ETTS = RoundToString(dETTS,3);
-        GlobalStatusStruct.ERRperday = RoundToString(boincmagnitude * NN::Tally::GetMagnitudeUnit(GetAdjustedTime()),2);
+        GlobalStatusStruct.magnitude = NN::Quorum::MyMagnitude().ToString();
         GlobalStatusStruct.cpid = NN::GetPrimaryCpid();
         GlobalStatusStruct.poll = std::move(current_poll);
 
@@ -1726,56 +1714,15 @@ int64_t GetConstantBlockReward(const CBlockIndex* index)
 }
 
 int64_t GetProofOfStakeReward(
-    uint64_t nCoinAge,
-    int64_t nFees,
-    const NN::MiningId mining_id,
-    int64_t nTime,
-    const CBlockIndex* pindexLast,
-    int64_t& out_research_subsidy,
-    int64_t& out_block_subsidy)
+    const uint64_t nCoinAge,
+    const int64_t nTime,
+    const CBlockIndex* const pindexLast)
 {
-    // Research Age Subsidy - PROD
-    out_research_subsidy = 0;
-    out_block_subsidy = 0;
-
-    // Tally doesn't calculate research age averages until block version 9:
-    //
-    if (pindexLast->nVersion >= 9) {
-        if (const NN::CpidOption cpid = mining_id.TryCpid()) {
-            const NN::ResearchAccount& account = NN::Tally::GetAccount(*cpid);
-            const NN::AccrualComputer calc = NN::Tally::GetComputer(*cpid, nTime, pindexLast);
-
-            out_research_subsidy = calc->Accrual(account);
-        }
+    if (pindexLast->nVersion >= 10) {
+        return GetConstantBlockReward(pindexLast);
     }
 
-    /* Constant Block Reward */
-    if (pindexLast->nVersion>=10)
-        out_block_subsidy = GetConstantBlockReward(pindexLast);
-    else
-        out_block_subsidy = nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
-
-    int64_t nSubsidy = out_block_subsidy + out_research_subsidy;
-
-    if (fDebug10 || GetBoolArg("-printcreation"))
-    {
-        LogPrintf("GetProofOfStakeReward(): create=%s nCoinAge=%" PRIu64 " research=%s",
-            FormatMoney(nSubsidy), nCoinAge, FormatMoney(out_research_subsidy));
-    }
-
-    int64_t nTotalSubsidy = nSubsidy + nFees;
-    // This rule does not apply in v11
-    if (out_research_subsidy > 1 && pindexLast->nVersion <= 10)
-    {
-        std::string sTotalSubsidy = RoundToString(CoinToDouble(nTotalSubsidy)+.00000123,8);
-        if (sTotalSubsidy.length() > 7)
-        {
-            sTotalSubsidy = sTotalSubsidy.substr(0,sTotalSubsidy.length()-4) + "0124";
-            nTotalSubsidy = RoundFromString(sTotalSubsidy,8)*COIN;
-        }
-    }
-
-    return nTotalSubsidy;
+    return nCoinAge * GetCoinYearReward(nTime) * 33 / (365 * 33 + 8);
 }
 
 
@@ -2313,6 +2260,10 @@ double ClientVersionNew()
     return cv;
 }
 
+//
+// Gridcoin-specific ConnectBlock() routines:
+//
+namespace {
 int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
 {
     if (pindexcurrent->pprev)
@@ -2355,6 +2306,361 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
     pindexcurrent = pblockMemory;
     return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
 }
+
+bool GetCoinstakeAge(CTxDB& txdb, const CBlock& block, uint64_t& out_coin_age)
+{
+    out_coin_age = 0;
+
+    // ppcoin: coin stake tx earns reward instead of paying fee
+    //
+    // With block version 10, Gridcoin switched to constant block rewards
+    // that do not depend on coin age, so we can avoid reading the blocks
+    // and transactions from the disk. The CheckProofOfStake*() functions
+    // of the kernel verify the transaction timestamp and that the staked
+    // inputs exist in the main chain.
+    //
+    if (block.nVersion <= 9 && !block.vtx[1].GetCoinAge(txdb, out_coin_age)) {
+        return error("ConnectBlock[] : %s unable to get coin age for coinstake",
+            block.vtx[1].GetHash().ToString().substr(0,10));
+    }
+
+    return true;
+}
+
+//!
+//! \brief Checks reward claims in generated blocks.
+//!
+class ClaimValidator
+{
+public:
+    ClaimValidator(
+        const CBlock& block,
+        const CBlockIndex* const pindex,
+        const int64_t total_claimed,
+        const int64_t fees,
+        const uint64_t coin_age)
+        : m_block(block)
+        , m_pindex(pindex)
+        , m_claim(block.GetClaim())
+        , m_total_claimed(total_claimed)
+        , m_fees(fees)
+        , m_coin_age(coin_age)
+    {
+    }
+
+    bool Check() const
+    {
+        return m_claim.HasResearchReward()
+            ? CheckResearcherClaim()
+            : CheckInvestorClaim();
+    }
+
+private:
+    const CBlock& m_block;
+    const CBlockIndex* const m_pindex;
+    const NN::Claim& m_claim;
+    const int64_t m_total_claimed;
+    const int64_t m_fees;
+    const uint64_t m_coin_age;
+
+    bool CheckReward(const int64_t research_owed, int64_t& out_stake_owed) const
+    {
+        out_stake_owed = GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
+
+        if (m_block.nVersion >= 11) {
+            return m_total_claimed <= research_owed + out_stake_owed + m_fees;
+        }
+
+        // Blocks version 10 and below represented rewards as floating-point
+        // values and needed to accomodate floating-point errors so we'll do
+        // the same rounding on the floating-point representations:
+        //
+        double subsidy = ((double)research_owed / COIN) * 1.25;
+        subsidy += (double)out_stake_owed / COIN;
+
+        int64_t max_owed = roundint64(subsidy * COIN) + m_fees;
+
+        // Block version 9 and below allowed a 1 GRC wiggle.
+        if (m_block.nVersion <= 9) {
+            max_owed += 1 * COIN;
+        }
+
+        return m_total_claimed <= max_owed;
+    }
+
+    bool CheckInvestorClaim() const
+    {
+        int64_t out_stake_owed;
+        if (CheckReward(0, out_stake_owed)) {
+            return true;
+        }
+
+        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+            LogPrintf(
+                "WARNING: ConnectBlock[%s]: ignored bad investor claim on block %s",
+                __func__,
+                m_pindex->GetBlockHash().ToString());
+
+            return true;
+        }
+
+        return m_block.DoS(10, error(
+            "ConnectBlock[%s]: investor claim %s exceeds %s. Expected %s, fees %s",
+            __func__,
+            FormatMoney(m_total_claimed),
+            FormatMoney(out_stake_owed + m_fees),
+            FormatMoney(out_stake_owed),
+            FormatMoney(m_fees)));
+    }
+
+    bool CheckResearcherClaim() const
+    {
+        // For version 11 blocks and higher, just validate the reward and check
+        // the signature. No need for the rest of these shenanigans.
+        //
+        if (m_block.nVersion >= 11) {
+            return CheckResearchReward() && CheckClaimSignature();
+        }
+
+        if (!CheckResearchRewardLimit()) {
+            return false;
+        }
+
+        if (!CheckResearchRewardDrift()) {
+            return false;
+        }
+
+        if (m_block.nVersion <= 8) {
+            return true;
+        }
+
+        if (!CheckClaimMagnitude()) {
+            return false;
+        }
+
+        if (!CheckClaimSignature()) {
+            return false;
+        }
+
+        if (!CheckResearchReward()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    bool CheckResearchRewardLimit() const
+    {
+        // TODO: determine max reward from accrual computer implementation:
+        const int64_t max_reward = 12750 * COIN;
+
+        return m_claim.m_research_subsidy <= max_reward
+            || m_block.DoS(1, error(
+                "ConnectBlock[%s]: research claim %s exceeds max %s. CPID %s",
+                __func__,
+                FormatMoney(m_claim.m_research_subsidy),
+                FormatMoney(max_reward),
+                m_claim.m_mining_id.ToString()));
+    }
+
+    bool CheckResearchRewardDrift() const
+    {
+        // ResearchAge: Since the best block may increment before the RA is
+        // connected but After the RA is computed, the ResearchSubsidy can
+        // sometimes be slightly smaller than we calculate here due to the
+        // RA timespan increasing.  So we will allow for time shift before
+        // rejecting the block.
+        const int64_t reward_claimed = m_total_claimed - m_fees;
+        int64_t drift_allowed = m_claim.m_research_subsidy * 0.15;
+
+        if (drift_allowed < 10 * COIN) {
+            drift_allowed = 10 * COIN;
+        }
+
+        return m_claim.TotalSubsidy() + drift_allowed >= reward_claimed
+            || m_block.DoS(20, error(
+                "ConnectBlock[%s]: reward claim %s exceeds allowed %s. CPID %s",
+                __func__,
+                FormatMoney(reward_claimed),
+                FormatMoney(m_claim.TotalSubsidy() + drift_allowed),
+                m_claim.m_mining_id.ToString()));
+    }
+
+    bool CheckClaimMagnitude() const
+    {
+        // Magnitude as of the last superblock:
+        const double mag = NN::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
+
+        return m_claim.m_magnitude <= (mag * 1.25)
+            || m_block.DoS(20, error(
+                "ConnectBlock[%s]: magnitude claim %f exceeds superblock %f. CPID %s",
+                __func__,
+                m_claim.m_magnitude,
+                mag,
+                m_claim.m_mining_id.ToString()));
+    }
+
+    bool CheckClaimSignature() const
+    {
+        if (NN::VerifyClaim(m_claim, m_pindex->pprev->GetBlockHash())) {
+            return true;
+        }
+
+        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+            LogPrintf(
+                "WARNING: ConnectBlock[%s]: ignored invalid signature in %s",
+                __func__,
+                m_pindex->GetBlockHash().ToString());
+
+            return true;
+        }
+
+        return m_block.DoS(20, error(
+            "ConnectBlock[%s]: signature verification failed. CPID %s, LBH %s",
+            __func__,
+            m_claim.m_mining_id.ToString(),
+            m_pindex->pprev->GetBlockHash().ToString()));
+    }
+
+    bool CheckResearchReward() const
+    {
+        int64_t research_owed = 0;
+
+        if (const NN::CpidOption cpid = m_claim.m_mining_id.TryCpid()) {
+            research_owed = NN::Tally::GetComputer(*cpid, m_block.nTime, m_pindex)->Accrual();
+        }
+
+        int64_t out_stake_owed;
+        if (CheckReward(research_owed, out_stake_owed)) {
+            return true;
+        }
+
+        // Testnet contains some blocks with bad interest claims that were masked
+        // by research age short 10-block-span pending accrual:
+        if (fTestNet
+            && m_block.nVersion <= 9
+            && !CheckReward(0, out_stake_owed))
+        {
+            LogPrintf(
+                "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
+                __func__,
+                m_pindex->GetBlockHash().ToString());
+
+            return true;
+        }
+
+        if (GetBadBlocks().count(m_pindex->GetBlockHash())) {
+            LogPrintf(
+                "WARNING: ConnectBlock[%s]: ignored bad research claim in %s",
+                __func__,
+                m_pindex->GetBlockHash().ToString());
+
+            return true;
+        }
+
+        return m_block.DoS(10, error(
+            "ConnectBlock[%s]: researcher claim %s exceeds %s for CPID %s. "
+            "Expected research %s, stake %s, fees %s. "
+            "Claimed research %s, stake %s",
+            __func__,
+            FormatMoney(m_total_claimed),
+            FormatMoney(research_owed + out_stake_owed + m_fees),
+            m_claim.m_mining_id.ToString(),
+            FormatMoney(research_owed),
+            FormatMoney(out_stake_owed),
+            FormatMoney(m_fees),
+            FormatMoney(m_claim.m_research_subsidy),
+            FormatMoney(m_claim.m_block_subsidy)));
+    }
+}; // ClaimValidator
+
+bool TryLoadSuperblock(
+    CBlock& block,
+    const CBlockIndex* const pindex,
+    const NN::Claim& claim)
+{
+    // Note: PullSuperblock() invalidates the m_claim.m_superblock field
+    // by moving it. This must be the last instance where we reference a
+    // superblock in a block's claim field:
+    //
+    NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(block.PullSuperblock(), pindex);
+
+    // TODO: find the invalid historical superblocks so we can remove
+    // the fColdBoot condition that skips this check when syncing the
+    // initial chain:
+    //
+    if ((!fColdBoot || block.nVersion >= 11)
+        && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
+    {
+        return block.DoS(25, error("ConnectBlock: Rejected invalid superblock."));
+    }
+
+    // Block versions 11+ calculate research rewards from snapshots of
+    // accrual taken at each superblock:
+    //
+    if (block.nVersion >= 11) {
+        if (!NN::Tally::ApplySuperblock(superblock)) {
+            return false;
+        }
+    }
+
+    NN::Quorum::PushSuperblock(std::move(superblock));
+
+    return true;
+}
+
+bool GridcoinConnectBlock(
+    CBlock& block,
+    CBlockIndex* const pindex,
+    CTxDB& txdb,
+    const int64_t total_claimed,
+    const int64_t fees)
+{
+    const NN::Claim& claim = block.GetClaim();
+
+    if (pindex->nHeight > nGrandfather) {
+        uint64_t out_coin_age;
+        if (!GetCoinstakeAge(txdb, block, out_coin_age)) {
+            return false;
+        }
+
+        if (!ClaimValidator(block, pindex, total_claimed, fees, out_coin_age).Check()) {
+            return false;
+        }
+
+        if (claim.ContainsSuperblock()) {
+            if (!TryLoadSuperblock(block, pindex, claim)) {
+                return false;
+            }
+
+            pindex->nIsSuperBlock = 1;
+        } else if (block.nVersion <= 10) {
+            // Block versions 11+ validate superblocks from scraper convergence
+            // instead of the legacy quorum system so we only record votes from
+            // version 10 blocks and below:
+            //
+            NN::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
+        }
+    }
+
+    // Load contracts:
+    for (auto iter = ++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
+        if (iter->hashBoinc.length() > 3) {
+            pindex->nIsContract = 1;
+            MemorizeMessage(*iter, 0, ""); // TODO: replace with contract handler
+        }
+    }
+
+    pindex->SetMiningId(claim.m_mining_id);
+    pindex->nMagnitude = claim.m_magnitude;
+    pindex->nResearchSubsidy = claim.m_research_subsidy;
+    pindex->nInterestSubsidy = claim.m_block_subsidy;
+
+    NN::Tally::RecordRewardBlock(pindex);
+
+    return true;
+}
+} // Anonymous namespace
 
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
@@ -2487,245 +2793,14 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
         mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
     }
 
-    const NN::Claim& claim = GetClaim();
-    uint64_t nCoinAge = 0;
-    int64_t nStakeRewardWithoutFees = nStakeReward - nFees;
-
-    // Common coin validator
-    auto is_claim_valid = [this](
-            int64_t claim,
-            int64_t por_owed,
-            int64_t pos_owed,
-            int64_t fees)
+    if (IsResearchAgeEnabled(pindex->nHeight)
+        && !GridcoinConnectBlock(*this, pindex, txdb, nStakeReward, nFees))
     {
-        int64_t max_owed;
-
-        if (nVersion < 11) {
-            // Blocks version 10 and below represented rewards as floating-point
-            // values and needed to accomodate floating-point errors so we'll do
-            // the same rounding on the floating-point representations:
-            //
-            double subsidy = ((double)por_owed / COIN) * 1.25;
-            subsidy += (double)pos_owed / COIN;
-
-            max_owed = roundint64(subsidy * COIN) + fees;
-        } else {
-            max_owed = por_owed + pos_owed + fees;
-        }
-
-        // Block version 9 and below allowed a 1 GRC wiggle.
-        if(nVersion < 10)
-            max_owed += 1 * COIN;
-
-        return claim <= max_owed;
-    };
-
-
-    if (IsProofOfStake() && pindex->nHeight > nGrandfather)
-    {
-        // ppcoin: coin stake tx earns reward instead of paying fee
-        //
-        // With block version 10, Gridcoin switched to constant block rewards
-        // that do not depend on coin age, so we can avoid reading the blocks
-        // and transactions from the disk. The CheckProofOfStake*() functions
-        // of the kernel verify the transaction timestamp and that the staked
-        // inputs exist in the main chain.
-        //
-        if (pindex->nVersion <= 9 && !vtx[1].GetCoinAge(txdb, nCoinAge)) {
-            return error("ConnectBlock[] : %s unable to get coin age for coinstake",
-                vtx[1].GetHash().ToString().substr(0,10));
-        }
-
-        // TODO: determine max reward from accrual computer implementation:
-        int64_t nMaxResearchAgeReward = 12750 * COIN;
-
-        if (claim.m_research_subsidy > nMaxResearchAgeReward)
-            return DoS(1, error("ConnectBlock[ResearchAge] : Coinstake pays above maximum (actual= %s, vs calculated=%s )",
-                FormatMoney(nStakeRewardWithoutFees), FormatMoney(nMaxResearchAgeReward)));
-
-        if (!claim.HasResearchReward() && nStakeReward > 1)
-        {
-            int64_t out_research_subsidy = 0;
-            int64_t out_block_subsidy = 0;
-            int64_t calculatedResearchReward = GetProofOfStakeReward(
-                        nCoinAge, nFees, claim.m_mining_id, nTime,
-                        pindex, out_research_subsidy, out_block_subsidy);
-
-            if(!is_claim_valid(nStakeReward, 0, out_block_subsidy, nFees))
-            {
-                if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
-                    return DoS(10, error("ConnectBlock[] : Investor Reward pays too much : claimed %s vs calculated %s, Interest %s, Fees %s",
-                        FormatMoney(nStakeReward),
-                        FormatMoney(calculatedResearchReward),
-                        FormatMoney(out_block_subsidy),
-                        FormatMoney(nFees)));
-
-                LogPrintf("WARNING: ignoring invalid invalid claims on block %s", pindex->GetBlockHash().ToString());
-            }
-        }
+        return false;
     }
 
-    // Track money supply and mint amount info
     pindex->nMint = nValueOut - nValueIn + nFees;
-    if (fDebug10) LogPrintf (".TMS.");
-
     pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
-
-    // Gridcoin: Store verified magnitude and CPID in block index (7-11-2015)
-    if(IsResearchAgeEnabled(pindex->nHeight))
-    {
-        pindex->SetMiningId(claim.m_mining_id);
-        pindex->nMagnitude = claim.m_magnitude;
-        pindex->nResearchSubsidy = claim.m_research_subsidy;
-        pindex->nInterestSubsidy = claim.m_block_subsidy;
-        pindex->nIsSuperBlock = claim.ContainsSuperblock() ? 1 : 0;
-    }
-
-    if (pindex->nHeight > nGrandfather)
-    {
-        int64_t out_research_subsidy = 0;
-        int64_t out_block_subsidy = 0;
-
-        // ResearchAge 1:
-        GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, nTime,
-                              pindex, out_research_subsidy, out_block_subsidy);
-
-        if (claim.HasResearchReward())
-        {
-            //ResearchAge: Since the best block may increment before the RA is
-            //connected but After the RA is computed, the ResearchSubsidy can
-            //sometimes be slightly smaller than we calculate here due to the
-            //RA timespan increasing.  So we will allow for time shift before
-            //rejecting the block.
-            int64_t nDrift = 0;
-
-            if (pindex->nVersion <= 10) {
-                nDrift = claim.m_research_subsidy * .15;
-                if (nDrift < 10 * COIN) nDrift = 10 * COIN;
-            }
-
-            if ((claim.TotalSubsidy() + nDrift) < nStakeRewardWithoutFees)
-            {
-                return DoS(20, error("ConnectBlock[] : Researchers Interest %s + Research %s + TimeDrift %s = %s exceeded by StakeRewardWithoutFees %s, with mint %s, stake %s, research %s, Fees %s, for CPID %s",
-                     FormatMoney(claim.m_block_subsidy),
-                     FormatMoney(claim.m_research_subsidy),
-                     FormatMoney(nDrift),
-                     FormatMoney(claim.TotalSubsidy() + nDrift),
-                     FormatMoney(nStakeRewardWithoutFees),
-                     FormatMoney(pindex->nMint),
-                     FormatMoney(out_block_subsidy),
-                     FormatMoney(out_research_subsidy),
-                     FormatMoney(nFees),
-                     claim.m_mining_id.ToString()));
-            }
-
-            if (BlockNeedsChecked(nTime) || nVersion>=9)
-            {
-                // 6-4-2017 - Verify researchers stored block magnitude
-                // 2018 02 04 - Moved here for better effect.
-                double dNeuralNetworkMagnitude = NN::Quorum::GetMagnitude(claim.m_mining_id).Floating();
-                if (claim.m_magnitude > (dNeuralNetworkMagnitude * 1.25)
-                    && (fTestNet || (!fTestNet && (pindex->nHeight-1) > 947000)))
-                {
-                    return DoS(20, error(
-                                   "ConnectBlock[ResearchAge]: Researchers block magnitude > neural network magnitude: Block Magnitude %f, Neural Network Magnitude %f, CPID %s ",
-                                   claim.m_magnitude, dNeuralNetworkMagnitude, claim.m_mining_id.ToString()));
-                }
-
-                // 2018 02 04 - Brod - Move cpid check here for better effect
-                /* Only signature check is sufficient here, but kiss and
-                            call the function. The height is of previous block. */
-                if (!NN::VerifyClaim(claim, pindex->pprev->GetBlockHash()))
-                {
-                    if( GetBadBlocks().count(pindex->GetBlockHash())==0 )
-                        return DoS(20, error(
-                                       "ConnectBlock[ResearchAge]: Bad CPID or Block Signature : CPID %s, LBH %s, Bad Hashboinc [%s]",
-                                       claim.m_mining_id.ToString(),
-                                       pindex->pprev->GetBlockHash().ToString(),
-                                       vtx[0].hashBoinc.c_str()));
-                    else LogPrintf("WARNING: ignoring invalid hashBoinc signature on block %s", pindex->GetBlockHash().ToString());
-                }
-
-                if(!is_claim_valid(nStakeReward, out_research_subsidy, out_block_subsidy, nFees))
-                {
-                    GetProofOfStakeReward(nCoinAge, nFees, claim.m_mining_id, nTime,
-                                          pindex, out_research_subsidy, out_block_subsidy);
-
-                    if (fTestNet && pindex->nVersion <= 9 && !is_claim_valid(nStakeReward, 0, out_block_subsidy, nFees))
-                    {
-                        // Testnet contains some blocks with bad interest claims that were previously masked
-                        // by research age short 10-block-span pending accrual:
-                        LogPrintf("WARNING ConnectBlock[ResearchAge] : Interest Pays too much : bad block ignored: Interest %s and Research %s and StakeReward %s, research %s, with stake %s for CPID %s",
-                            FormatMoney(claim.m_block_subsidy),
-                            FormatMoney(claim.m_research_subsidy),
-                            FormatMoney(nStakeReward),
-                            FormatMoney(out_research_subsidy),
-                            FormatMoney(out_block_subsidy),
-                            claim.m_mining_id.ToString());
-                    }
-                    else if(!is_claim_valid(nStakeReward, out_research_subsidy, out_block_subsidy, nFees))
-                    {
-                        if(GetBadBlocks().count(pindex->GetBlockHash()) == 0)
-                            return DoS(10, error("ConnectBlock[ResearchAge] : Researchers Reward Pays too much : Interest %s and Research %s and StakeReward %s, research %s, with stake %s for CPID %s",
-                                FormatMoney(claim.m_block_subsidy),
-                                FormatMoney(claim.m_research_subsidy),
-                                FormatMoney(nStakeReward),
-                                FormatMoney(out_research_subsidy),
-                                FormatMoney(out_block_subsidy),
-                                claim.m_mining_id.ToString()));
-                        else
-                            LogPrintf("WARNING ConnectBlock[ResearchAge] : Researchers Reward Pays too much : bad block ignored: Interest %s and Research %s and StakeReward %s, research %s, with stake %s for CPID %s",
-                                FormatMoney(claim.m_block_subsidy),
-                                FormatMoney(claim.m_research_subsidy),
-                                FormatMoney(nStakeReward),
-                                FormatMoney(out_research_subsidy),
-                                FormatMoney(out_block_subsidy),
-                                claim.m_mining_id.ToString());
-                    }
-                }
-            }
-        }
-    }
-
-    if (pindex->nHeight > nGrandfather) {
-        if (claim.ContainsSuperblock()) {
-            // Note: PullSuperblock() invalidates the m_claim.m_superblock field
-            // by moving it. This must be the last instance where we reference a
-            // superblock in a block's claim field:
-            //
-            NN::SuperblockPtr superblock = NN::SuperblockPtr::BindShared(PullSuperblock(), pindex);
-
-            // TODO: find the invalid historical superblocks so we can remove
-            // the fColdBoot condition that skips this check when syncing the
-            // initial chain:
-            //
-            if (!fColdBoot && !NN::Quorum::ValidateSuperblockClaim(claim, superblock, pindex)) {
-                return DoS(25, error("ConnectBlock : Rejected invalid superblock."));
-            }
-
-            NN::Quorum::PushSuperblock(std::move(superblock));
-        } else if (nVersion <= 10) {
-            // Block versions 11+ validate superblocks from scraper convergence
-            // instead of the legacy quorum system so we only record votes from
-            // version 10 blocks and below:
-            //
-            NN::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
-        }
-    }
-
-    // Gridcoin: Track payments to CPID, and last block paid
-    NN::Tally::RecordRewardBlock(pindex);
-
-    // Load contracts:
-    auto tx_iter = vtx.begin();
-    ++tx_iter; // skip the first transaction
-
-    for (auto end = vtx.end(); tx_iter != end; ++tx_iter) {
-        if (tx_iter->hashBoinc.length() > 3) {
-            pindex->nIsContract = 1;
-            MemorizeMessage(*tx_iter, 0, ""); // TODO: replace with contract handler
-        }
-    }
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
         return error("Connect() : WriteBlockIndex for pindex failed");
@@ -2840,6 +2915,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         if (pindexBest->nIsSuperBlock == 1) {
             NN::Quorum::PopSuperblock(pindexBest);
+
+            if (pindexBest->nVersion >= 11 && !NN::Tally::RevertSuperblock()) {
+                return false;
+            }
         }
 
         if (pindexBest->nHeight > nGrandfather && pindexBest->nVersion <= 10) {
@@ -2876,8 +2955,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
-        if(IsV9Enabled_Tally(nBestHeight)) {
-            assert(NN::Tally::IsTrigger(nBestHeight));
+        if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
+            assert(NN::Tally::IsLegacyTrigger(nBestHeight));
             NN::Tally::LegacyRecount(pindexBest);
         }
     }
@@ -2914,9 +2993,12 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
                 return error("ReorganizeChain: unable to find fork root");
         }
 
-        if(pcommon != pindexBest)
+        // Blocks version 11+ do not use the legacy tally system triggered by
+        // block height intervals:
+        //
+        if (!IsV11Enabled(pcommon->nHeight) && pcommon != pindexBest)
         {
-            pcommon = NN::Tally::FindTrigger(pcommon);
+            pcommon = NN::Tally::FindLegacyTrigger(pcommon);
             if(!pcommon)
                 return error("ReorganizeChain: unable to find fork root with tally point");
         }
@@ -3044,7 +3126,10 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         nTimeBestReceived =  GetAdjustedTime();
         cnt_con++;
 
-        if (IsV9Enabled_Tally(nBestHeight) && NN::Tally::IsTrigger(nBestHeight)) {
+        if (IsV9Enabled_Tally(nBestHeight)
+            && !IsV11Enabled(nBestHeight)
+            && NN::Tally::IsLegacyTrigger(nBestHeight))
+        {
             NN::Tally::LegacyRecount(pindexBest);
         }
     }
@@ -3103,9 +3188,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew)
         boost::thread t(runCommand, strCmd); // thread runs free
     }
 
-    GridcoinServices();
-
-    return true;
+    return GridcoinServices();
 }
 
 // ppcoin: total coin age spent in transaction, in the unit of coin-days.
@@ -3521,7 +3604,7 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
     return UintToArith256(chaintrust);
 }
 
-void GridcoinServices()
+bool GridcoinServices()
 {
     //Dont do this on headless - SeP
     if (fQtActive && (nBestHeight % 125) == 0 && nBestHeight > 0)
@@ -3541,16 +3624,30 @@ void GridcoinServices()
         && IsV9Enabled(nBestHeight + (fTestNet ? 200 : 40))
         && nBestHeight % 20 == 0)
     {
-        if (fDebug) {
-            LogPrintf("GridcoinServices: Priming tally system for v9 threshold.");
-        }
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v9 threshold.");
 
         NN::Tally::LegacyRecount(pindexBest);
     }
 
+    // Block version 11 tally transition:
+    //
+    // Before the first version 11 block arrives, activate the snapshot accrual
+    // system by creating a baseline of the research rewards owed in historical
+    // superblocks so that we can validate the reward for the next block.
+    //
+    if (nBestHeight + 1 == GetV11Threshold()) {
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v11 threshold.");
+
+        if (!NN::Tally::ActivateSnapshotAccrual(pindexBest)) {
+            return error("GridcoinServices: Failed to prepare tally for v11.");
+        }
+    }
+
     //Dont perform the following functions if out of sync
     if (OutOfSyncByAge()) {
-        return;
+        return true;
     }
 
     //Backup the wallet once per 900 blocks or as specified in config:
@@ -3581,6 +3678,8 @@ void GridcoinServices()
             }
         }
     }
+
+    return true;
 }
 
 bool AskForOutstandingBlocks(uint256 hashStart)

@@ -1438,7 +1438,7 @@ UniValue network(const UniValue& params, bool fHelp)
 
     res.pushKV("total_magnitude", (int)superblock->m_cpids.TotalMagnitude());
     res.pushKV("average_magnitude", superblock->m_cpids.AverageMagnitude());
-    res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(now));
+    res.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindexBest));
     res.pushKV("research_paid_two_weeks", ValueFromAmount(two_week_research_subsidy));
     res.pushKV("research_paid_daily_average", ValueFromAmount(two_week_research_subsidy / 14));
     res.pushKV("research_paid_daily_limit", ValueFromAmount(NN::Tally::MaxEmission(now)));
@@ -1897,23 +1897,24 @@ UniValue MagnitudeReport(const NN::Cpid cpid)
     json.pushKV("Last Block Paid", account.LastRewardBlockHash().ToString());
     json.pushKV("Last Height Paid", (int)account.LastRewardHeight());
 
-    json.pushKV("Accrual Days", calc->AccrualDays(account));
-    json.pushKV("Owed", ValueFromAmount(calc->Accrual(account)));
+    json.pushKV("Accrual Days", calc->AccrualDays());
+    json.pushKV("Owed", ValueFromAmount(calc->Accrual()));
 
     if (fDebug) {
-        json.pushKV("Owed (raw)", ValueFromAmount(calc->RawAccrual(account)));
+        json.pushKV("Owed (raw)", ValueFromAmount(calc->RawAccrual()));
+        json.pushKV("Owed (last superblock)", ValueFromAmount(account.m_accrual));
     }
 
-    json.pushKV("Expected Earnings (14 days)", ValueFromAmount(calc->ExpectedDaily(account) * 14));
-    json.pushKV("Expected Earnings (Daily)", ValueFromAmount(calc->ExpectedDaily(account)));
+    json.pushKV("Expected Earnings (14 days)", ValueFromAmount(calc->ExpectedDaily() * 14));
+    json.pushKV("Expected Earnings (Daily)", ValueFromAmount(calc->ExpectedDaily()));
 
     json.pushKV("Lifetime Research Paid", ValueFromAmount(account.m_total_research_subsidy));
     json.pushKV("Lifetime Magnitude Sum", (int)account.m_total_magnitude);
     json.pushKV("Lifetime Magnitude Average", account.AverageLifetimeMagnitude());
     json.pushKV("Lifetime Payments", (int)account.m_accuracy);
 
-    json.pushKV("Lifetime Payments Per Day", ValueFromAmount(calc->PaymentPerDay(account)));
-    json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit(account)));
+    json.pushKV("Lifetime Payments Per Day", ValueFromAmount(calc->PaymentPerDay()));
+    json.pushKV("Lifetime Payments Per Day Limit", ValueFromAmount(calc->PaymentPerDayLimit()));
 
     return json;
 }

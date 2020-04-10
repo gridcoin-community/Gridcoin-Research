@@ -26,47 +26,47 @@ public:
         return 0.0;
     }
 
-    int64_t AccrualAge(const ResearchAccount& account) const override
+    int64_t AccrualAge() const override
     {
         return 0;
     }
 
-    double AccrualDays(const ResearchAccount& account) const override
+    double AccrualDays() const override
     {
         return 0.0;
     }
 
-    int64_t AccrualBlockSpan(const ResearchAccount& account) const override
+    int64_t AccrualBlockSpan() const override
     {
         return 0;
     }
 
-    int64_t PaymentPerDay(const ResearchAccount& account) const override
+    int64_t PaymentPerDay() const override
     {
         return 0;
     }
 
-    int64_t PaymentPerDayLimit(const ResearchAccount& account) const override
+    int64_t PaymentPerDayLimit() const override
     {
         return 0;
     }
 
-    bool ExceededRecentPayments(const ResearchAccount& account) const override
+    bool ExceededRecentPayments() const override
     {
         return false;
     }
 
-    int64_t ExpectedDaily(const ResearchAccount& account) const override
+    int64_t ExpectedDaily() const override
     {
         return 0;
     }
 
-    int64_t RawAccrual(const ResearchAccount& account) const override
+    int64_t RawAccrual() const override
     {
         return 0;
     }
 
-    int64_t Accrual(const ResearchAccount& account) const override
+    int64_t Accrual() const override
     {
         return 0;
     }

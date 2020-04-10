@@ -179,6 +179,8 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::MANIFEST, "manifest"},
     {BCLog::SB, "superblock"},
     {BCLog::ALERT, "alert"},
+    {BCLog::TALLY, "tally"},
+    {BCLog::ACCRUAL, "accrual"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };

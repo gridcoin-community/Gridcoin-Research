@@ -8,6 +8,12 @@ class CBlockIndex;
 namespace NN {
 
 class Cpid;
+class ResearchAccount;
+
+//!
+//! \brief Maps BOINC CPIDs to the accounts that track research reward accrual.
+//!
+typedef std::unordered_map<Cpid, ResearchAccount> ResearchAccountMap;
 
 //!
 //! \brief An optional type that contains a pointer to a block index object or
@@ -22,9 +28,8 @@ typedef boost::optional<const CBlockIndex*> BlockPtrOption;
 class ResearchAccount
 {
 public:
+    int64_t m_accrual;                    //!< Research accrued last superblock.
     int64_t m_total_research_subsidy;     //!< Total lifetime research paid.
-
-    uint16_t m_magnitude;                 //!< Current magnitude in superblock.
     uint32_t m_total_magnitude;           //!< Total lifetime magnitude sum.
     uint32_t m_accuracy;                  //!< Non-zero magnitude payment count.
 
@@ -35,8 +40,8 @@ public:
     //! \brief Initialize an empty research account.
     //!
     ResearchAccount()
-        : m_total_research_subsidy(0)
-        , m_magnitude(0)
+        : m_accrual(0)
+        , m_total_research_subsidy(0)
         , m_total_magnitude(0)
         , m_accuracy(0)
         , m_first_block_ptr(nullptr)
@@ -248,7 +253,7 @@ public:
 //!
 class ResearchAccountRange
 {
-    typedef std::unordered_map<Cpid, ResearchAccount> StorageType;
+    typedef ResearchAccountMap StorageType;
 
 public:
     typedef StorageType::const_iterator const_iterator;

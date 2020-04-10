@@ -8,6 +8,7 @@ class CBlockIndex;
 namespace NN {
 
 class Cpid;
+class SuperblockPtr;
 
 //!
 //! \brief The core Gridcoin tally system that processes magnitudes and reward
@@ -24,6 +25,30 @@ class Tally
 {
 public:
     //!
+    //! \brief Initialize the research reward context for each CPID in the
+    //! network.
+    //!
+    //! This scans historical block metadata to create an in-memory database of
+    //! the pending accrual owed to each CPID in the network.
+    //!
+    //! \param pindex Index for the first research age block.
+    //!
+    //! \return \c true if the tally initialized without an error.
+    //!
+    static bool Initialize(CBlockIndex* pindex);
+
+    //!
+    //! \brief Switch from legacy research age accrual calculations to the
+    //! superblock snapshot accrual system.
+    //!
+    //! \param pindex Index of the first block to enable snapshot accrual for.
+    //!
+    //! \return \c false if the snapshot system failed to initialize because of
+    //! an error.
+    //!
+    static bool ActivateSnapshotAccrual(const CBlockIndex* const pindex);
+
+    //!
     //! \brief Check whether the height of the specified block matches the
     //! tally granularity.
     //!
@@ -31,7 +56,7 @@ public:
     //!
     //! \return \c true if the block height should trigger a recount.
     //!
-    static bool IsTrigger(const uint64_t height);
+    static bool IsLegacyTrigger(const uint64_t height);
 
     //!
     //! \brief Find the previous tally trigger below the specified block.
@@ -40,7 +65,7 @@ public:
     //!
     //! \return Index of the first tally trigger block.
     //!
-    static CBlockIndex* FindTrigger(CBlockIndex* pindex);
+    static CBlockIndex* FindLegacyTrigger(CBlockIndex* pindex);
 
     //!
     //! \brief Get the maximum network-wide research reward amount per day.
@@ -54,11 +79,11 @@ public:
     //!
     //! \brief Get the current network magnitude unit.
     //!
-    //! \param payment_time Timestamp to calculate the magnitude unit for.
+    //! \param pindex Block context to calculate the magnitude unit for.
     //!
-    //! \return Current magnitude unit adjusted for the specified time.
+    //! \return Current magnitude unit adjusted for the specified block.
     //!
-    static double GetMagnitudeUnit(const int64_t payment_time);
+    static double GetMagnitudeUnit(const CBlockIndex* const pindex);
 
     //!
     //! \brief Get a traversable object for the research accounts stored in
@@ -92,6 +117,67 @@ public:
         const int64_t payment_time,
         const CBlockIndex* const last_block_ptr);
 
+    //! \brief Get an accrual computer instance that calculates accrual using
+    //! delta snapshot rules.
+    //!
+    //! CONSENSUS: This method is exposed for RPC test commands used to analyze
+    //! new accrual implementations. Do not use it to calculate accrual for the
+    //! protocol directly.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param account        CPID's corresponding historical accrual context.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //! \param superblock     Superblock at the beginning of a snapshot window.
+    //!
+    //! \return An accrual calculator initialized with the supplied parameters.
+    //!
+    static AccrualComputer GetSnapshotComputer(
+        const Cpid cpid,
+        const ResearchAccount& account,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr,
+        const SuperblockPtr superblock);
+
+    //!
+    //! \brief Get an accrual computer instance that calculates accrual using
+    //! delta snapshot rules for the current superblock.
+    //!
+    //! CONSENSUS: This method is exposed for RPC test commands used to analyze
+    //! new accrual implementations. Do not use it to calculate accrual for the
+    //! protocol directly.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //!
+    //! \return An accrual calculator initialized with the supplied parameters.
+    //!
+    static AccrualComputer GetSnapshotComputer(
+        const Cpid cpid,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr);
+
+    //!
+    //! \brief Get an accrual computer instance that calculates accrual using
+    //! legacy research age rules.
+    //!
+    //! CONSENSUS: This method is exposed for RPC test commands used to analyze
+    //! new accrual implementations. Do not use it to calculate accrual for the
+    //! protocol directly.
+    //!
+    //! \param cpid           CPID to calculate research accrual for.
+    //! \param payment_time   Time of payment to calculate rewards at.
+    //! \param last_block_ptr Refers to the block for the reward.
+    //!
+    //! \return An accrual calculator initialized with the supplied parameters.
+    //!
+    static AccrualComputer GetLegacyComputer(
+        const Cpid cpid,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr);
+
+    //!
     //!
     //! \brief Record a block's research reward data in the tally.
     //!
@@ -105,6 +191,22 @@ public:
     //! \param pindex Contains information about the block to erase.
     //!
     static void ForgetRewardBlock(const CBlockIndex* const pindex);
+
+    //!
+    //! \brief Update the account data with information from a new superblock.
+    //!
+    //! \param superblock Refers to the current active superblock.
+    //!
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    static bool ApplySuperblock(SuperblockPtr superblock);
+
+    //!
+    //! \brief Reset the account data to a state before the provided superblock.
+    //!
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    static bool RevertSuperblock();
 
     //!
     //! \brief Recount the two-week network averages.

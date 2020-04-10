@@ -37,7 +37,8 @@ int64_t GetMaxResearchSubsidy(const int64_t nTime)
 
 //!
 //! \brief A calculator that computes the accrued research rewards for a
-//! research account using research age rules.
+//! research account using legacy research age rules in block version 10
+//! and below.
 //!
 class ResearchAgeComputer : public IAccrualComputer
 {
@@ -46,16 +47,22 @@ public:
     //! \brief Initialze a research age accrual calculator.
     //!
     //! \param cpid           CPID to calculate research accrual for.
+    //! \param account        CPID's historical accrual context.
+    //! \param magnitude      CPID's magnitude in the last superblock.
     //! \param payment_time   Time of payment to calculate rewards at.
     //! \param magnitude_unit Current network magnitude unit to factor in.
     //! \param last_height    Height of the block for the reward.
     //!
     ResearchAgeComputer(
         const Cpid cpid,
+        const ResearchAccount& account,
+        const double magnitude,
         const int64_t payment_time,
         const double magnitude_unit,
         const uint32_t last_height)
         : m_cpid(cpid)
+        , m_account(account)
+        , m_magnitude(magnitude)
         , m_payment_time(payment_time)
         , m_magnitude_unit(magnitude_unit)
         , m_last_height(last_height)
@@ -75,7 +82,7 @@ public:
     //!
     //! \brief Get the magnitude unit factored into the reward calculation.
     //!
-    //! \return Amount paid per unit of magnitude in units of GRC.
+    //! \return Amount paid per unit of magnitude per day in units of GRC.
     //!
     double MagnitudeUnit() const override
     {
@@ -87,9 +94,9 @@ public:
     //!
     //! \return Elapsed time in seconds.
     //!
-    int64_t AccrualAge(const ResearchAccount& account) const override
+    int64_t AccrualAge() const override
     {
-        if (const BlockPtrOption pindex_option = account.LastRewardBlock()) {
+        if (const BlockPtrOption pindex_option = m_account.LastRewardBlock()) {
             const CBlockIndex* const pindex = *pindex_option;
 
             if (m_payment_time > pindex->nTime) {
@@ -105,17 +112,17 @@ public:
     //!
     //! \return Elapsed time in days.
     //!
-    double AccrualDays(const ResearchAccount& account) const override
+    double AccrualDays() const override
     {
-        return AccrualAge(account) / 86400.0;
+        return AccrualAge() / 86400.0;
     }
 
     //!
     //! \brief Get the number of blocks since the account's last research reward.
     //!
-    int64_t AccrualBlockSpan(const ResearchAccount& account) const override
+    int64_t AccrualBlockSpan() const override
     {
-        return m_last_height - account.LastRewardHeight();
+        return m_last_height - m_account.LastRewardHeight();
     }
 
     //!
@@ -124,13 +131,13 @@ public:
     //!
     //! \return Average research payment in units of 1/100000000 GRC.
     //!
-    int64_t PaymentPerDay(const ResearchAccount& account) const override
+    int64_t PaymentPerDay() const override
     {
-        if (account.IsNew()) {
+        if (m_account.IsNew()) {
             return 0;
         }
 
-        const int64_t elapsed = m_payment_time - account.FirstRewardTime();
+        const int64_t elapsed = m_payment_time - m_account.FirstRewardTime();
         const double lifetime_days = elapsed / 86400.0;
 
         // The extra 0.01 days was used in old code as a lazy way to avoid
@@ -139,7 +146,7 @@ public:
         // keep it. This especially manifests on testnet where CPIDs stake
         // frequently enough to activate the rule:
         //
-        return account.m_total_research_subsidy / (lifetime_days + 0.01);
+        return m_account.m_total_research_subsidy / (lifetime_days + 0.01);
     }
 
     //!
@@ -147,9 +154,9 @@ public:
     //!
     //! \return Payment per day limit in units of 1/100000000 GRC.
     //!
-    int64_t PaymentPerDayLimit(const ResearchAccount& account) const override
+    int64_t PaymentPerDayLimit() const override
     {
-        return account.AverageLifetimeMagnitude() * m_magnitude_unit * COIN * 5;
+        return m_account.AverageLifetimeMagnitude() * m_magnitude_unit * COIN * 5;
     }
 
     //!
@@ -158,9 +165,9 @@ public:
     //! \return \c true if the average daily research payment amount exceeds
     //! the calculated daily payment limit of the account.
     //!
-    bool ExceededRecentPayments(const ResearchAccount& account) const override
+    bool ExceededRecentPayments() const override
     {
-        return PaymentPerDay(account) > PaymentPerDayLimit(account);
+        return PaymentPerDay() > PaymentPerDayLimit();
     }
 
     //!
@@ -169,9 +176,9 @@ public:
     //!
     //! \return Expected daily payment in units of 1/100000000 GRC.
     //!
-    int64_t ExpectedDaily(const ResearchAccount& account) const override
+    int64_t ExpectedDaily() const override
     {
-        return account.m_magnitude * m_magnitude_unit * COIN;
+        return m_magnitude * m_magnitude_unit * COIN;
     }
 
     //!
@@ -180,19 +187,16 @@ public:
     //!
     //! \return Pending payment in units of 1/100000000 GRC.
     //!
-    int64_t RawAccrual(const ResearchAccount& account) const override
+    int64_t RawAccrual() const override
     {
-        double current_avg_magnitude = AverageMagnitude(account);
+        double current_avg_magnitude = AverageMagnitude();
 
         // Legacy sanity check for unlikely magnitude values:
         if (current_avg_magnitude > 20000) {
             current_avg_magnitude = 20000;
         }
 
-        return AccrualDays(account)
-            * current_avg_magnitude
-            * m_magnitude_unit
-            * COIN;
+        return AccrualDays() * current_avg_magnitude * m_magnitude_unit * COIN;
     }
 
     //!
@@ -201,20 +205,18 @@ public:
     //!
     //! \return Pending payment in units of 1/100000000 GRC.
     //!
-    int64_t Accrual(const ResearchAccount& account) const override
+    int64_t Accrual() const override
     {
         // Note that if the RA block span < 10, we want to return 0 for the
         // accrual amount so the CPID can still receive an accurate accrual
         // in the future:
         //
-        if (AccrualBlockSpan(account) < 10) {
-            if (fDebug) {
-                LogPrintf(
-                    "Accrual: %s Block Span < 10 (%d) -> Accrual 0 (would be %s)",
-                    m_cpid.ToString(),
-                    AccrualBlockSpan(account),
-                    FormatMoney(RawAccrual(account)));
-            }
+        if (AccrualBlockSpan() < 10) {
+            LogPrint(BCLog::LogFlags::ACCRUAL,
+                "Accrual: %s Block Span < 10 (%d) -> Accrual 0 (would be %s)",
+                m_cpid.ToString(),
+                AccrualBlockSpan(),
+                FormatMoney(RawAccrual()));
 
             return 0;
         }
@@ -224,28 +226,27 @@ public:
         // owed GRC continues to accrue and will be paid later after payments-
         // per-day falls below 5 days:
         //
-        if (ExceededRecentPayments(account)) {
-            if (fDebug) {
-                LogPrintf("Accrual: %s RA-PPD, "
-                    "PPD=%s, "
-                    "unit=%f, "
-                    "RAAvgMag=%f, "
-                    "RASubsidy=%s, "
-                    "RALowLockTime=%" PRIu64 " "
-                    "-> Accrual 0 (would be %s)",
-                    m_cpid.ToString(),
-                    FormatMoney(PaymentPerDay(account)),
-                    m_magnitude_unit,
-                    account.AverageLifetimeMagnitude(),
-                    FormatMoney(account.m_total_research_subsidy),
-                    account.FirstRewardTime(),
-                    FormatMoney(RawAccrual(account)));
-            }
+        if (ExceededRecentPayments()) {
+            LogPrint(BCLog::LogFlags::ACCRUAL,
+                "Accrual: %s RA-PPD, "
+                "PPD=%s, "
+                "unit=%f, "
+                "RAAvgMag=%f, "
+                "RASubsidy=%s, "
+                "RALowLockTime=%" PRIu64 " "
+                "-> Accrual 0 (would be %s)",
+                m_cpid.ToString(),
+                FormatMoney(PaymentPerDay()),
+                m_magnitude_unit,
+                m_account.AverageLifetimeMagnitude(),
+                FormatMoney(m_account.m_total_research_subsidy),
+                m_account.FirstRewardTime(),
+                FormatMoney(RawAccrual()));
 
             return 0;
         }
 
-        const int64_t accrual = RawAccrual(account);
+        const int64_t accrual = RawAccrual();
         const int64_t max_reward = MaxReward();
 
         if (accrual > max_reward) {
@@ -256,28 +257,28 @@ public:
     }
 
 private:
-    const Cpid m_cpid;             //!< CPID to calculate research accrual for.
-    const int64_t m_payment_time;  //!< Time of payment to calculate rewards at.
-    const double m_magnitude_unit; //!< Network magnitude unit to factor in.
-    const uint32_t m_last_height;  //!< Height of the block for the reward.
+    const Cpid m_cpid;                //!< CPID to calculate research accrual for.
+    const ResearchAccount& m_account; //!< CPID's historical accrual context.
+    const double m_magnitude;         //!< CPID's magnitude last superblock.
+    const int64_t m_payment_time;     //!< Time of payment to calculate rewards at.
+    const double m_magnitude_unit;    //!< Network magnitude unit to factor in.
+    const uint32_t m_last_height;     //!< Height of the block for the reward.
 
     //!
     //! \brief Get the average magnitude of the account over the accrual time
     //! span.
-    //!
-    //! \param account Account of the CPID to calculate average magnitude for.
     //!
     //! \return Average of the CPID's current magnitude and the magnitude for
     //! the CPID's last generated block. When the CPID's last staked block is
     //! older than roughly 20 days, this average includes the CPID's lifetime
     //! average magnitude as well.
     //!
-    double AverageMagnitude(const ResearchAccount& account) const
+    double AverageMagnitude() const
     {
-        uint16_t last_magnitude = account.LastRewardMagnitude();
+        uint16_t last_magnitude = m_account.LastRewardMagnitude();
 
-        if (AccrualBlockSpan(account) <= BLOCKS_PER_DAY * 20) {
-            return (double)(last_magnitude + account.m_magnitude) / 2;
+        if (AccrualBlockSpan() <= BLOCKS_PER_DAY * 20) {
+            return (last_magnitude + m_magnitude) / 2;
         }
 
         // If the accrual age is greater than than 20 days, add the midpoint
@@ -287,8 +288,8 @@ private:
         // TODO: use superblock windows to calculate more precise average
         //
         const double total_mag = last_magnitude
-            + account.AverageLifetimeMagnitude()
-            + account.m_magnitude;
+            + m_account.AverageLifetimeMagnitude()
+            + m_magnitude;
 
         return total_mag / 3;
     }

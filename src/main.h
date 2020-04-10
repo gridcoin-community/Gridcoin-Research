@@ -76,9 +76,14 @@ inline bool IsProtocolV2(int nHeight)
     return (fTestNet ?  nHeight > 2060 : nHeight > 85400);
 }
 
+inline int32_t GetResearchAgeThreshold()
+{
+    return fTestNet ? 36501 : 364501;
+}
+
 inline bool IsResearchAgeEnabled(int nHeight)
 {
-    return (fTestNet ?  nHeight > 36500 : nHeight > 364500);
+    return nHeight >= GetResearchAgeThreshold();
 }
 
 // TODO: Move this and the other height thresholds to their own files.
@@ -109,12 +114,17 @@ inline bool IsV10Enabled(int nHeight)
             : nHeight >= 1420000;
 }
 
+inline int32_t GetV11Threshold()
+{
+    // Returns "never" before planned intro of bv11.
+    return fTestNet
+            ? std::numeric_limits<int32_t>::max()
+            : std::numeric_limits<int32_t>::max();
+}
+
 inline bool IsV11Enabled(int nHeight)
 {
-    // Returns false before planned intro of bv11.
-    return fTestNet
-            ? false
-            : false;
+    return nHeight >= GetV11Threshold();
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)
@@ -204,8 +214,6 @@ struct globalStatusType
     std::string netWeight;
     std::string coinWeight;
     std::string magnitude;
-    std::string ETTS;
-    std::string ERRperday;
     std::string cpid;
     std::string status;
     std::string poll;
@@ -242,12 +250,8 @@ int64_t GetConstantBlockReward(const CBlockIndex* index);
 
 int64_t GetProofOfStakeReward(
     uint64_t nCoinAge,
-    int64_t nFees,
-    const NN::MiningId mining_id,
     int64_t nTime,
-    const CBlockIndex* pindexLast,
-    int64_t& out_research_subsidy,
-    int64_t& out_block_subsidy);
+    const CBlockIndex* const pindexLast);
 
 bool OutOfSyncByAge();
 bool IsSuperBlock(CBlockIndex* pIndex);

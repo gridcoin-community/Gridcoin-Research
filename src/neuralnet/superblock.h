@@ -625,7 +625,7 @@ public:
                 Sequence copy(*this);
                 ++(*this);
 
-                return std::move(copy);
+                return copy;
             }
 
             //!

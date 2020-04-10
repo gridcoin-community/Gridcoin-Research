@@ -2,6 +2,7 @@
 #include "neuralnet/accrual/newbie.h"
 #include "neuralnet/accrual/null.h"
 #include "neuralnet/accrual/research_age.h"
+#include "neuralnet/accrual/snapshot.h"
 #include "neuralnet/cpid.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/tally.h"
@@ -10,33 +11,65 @@
 #include <unordered_map>
 
 using namespace NN;
+using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
-//! \brief Number of days that the tally scans backward from to calculate
-//! the average network payment.
+//! \brief Set the correct CPID from the block claim when the block index
+//! contains a zero CPID.
 //!
-constexpr size_t TALLY_DAYS = 14;
-
+//! There were reports of 0000 cpid in index where INVESTOR should have been.
 //!
-//! \brief Round a value to intervals of 0.025.
+//! \param pindex Index of the block to repair.
 //!
-//! Used to calculate the network magnitude unit.
-//!
-double SnapToGrid(double d)
+void RepairZeroCpidIndex(CBlockIndex* const pindex)
 {
-    double dDither = .04;
-    double dOut = RoundFromString(RoundToString(d * dDither, 3), 3) / dDither;
-    return dOut;
+    const ClaimOption claim = GetClaimByIndex(pindex);
+
+    if (!claim) {
+        return;
+    }
+
+    if (claim->m_mining_id != pindex->GetMiningId())
+    {
+        LogPrint(LogFlags::TALLY,
+            "WARNING: BlockIndex CPID %s did not match %s in block {%s %d}",
+            pindex->GetMiningId().ToString(),
+            claim->m_mining_id.ToString(),
+            pindex->GetBlockHash().GetHex(),
+            pindex->nHeight);
+
+        /* Repair the cpid field */
+        pindex->SetMiningId(claim->m_mining_id);
+
+#if 0
+        if(!WriteBlockIndex(CDiskBlockIndex(pindex)))
+            error("LoadBlockIndex: writing CDiskBlockIndex failed");
+#endif
+    }
 }
 
 //!
 //! \brief Contains the two-week network average tally used to produce the
-//! magnitude unit for research age reward calculations.
+//! magnitude unit for legacy research age reward calculations (version 10
+//! blocks and below).
+//!
+//! Before block version 11, the network used a feedback filter to limit the
+//! total research reward generated over a rolling two week window. To scale
+//! rewards accordingly, the magnitude unit acts as a multiplier and changes
+//! in response to the amount of research rewards minted over the two weeks.
+//! This class holds state for the parameters that produce a magnitude units
+//! at a point in time.
 //!
 class NetworkTally
 {
 public:
+    //!
+    //! \brief Number of days that the tally scans backward from to calculate
+    //! the average network payment.
+    //!
+    static constexpr size_t TALLY_DAYS = 14;
+
     //!
     //! \brief Get the maximum network-wide research reward amount per day.
     //!
@@ -91,13 +124,25 @@ public:
     //!
     void ApplySuperblock(const SuperblockPtr superblock)
     {
-        LogPrintf("NetworkTally::ApplySuperblock(%" PRId64 ")", superblock.m_height);
+        LogPrint(LogFlags::TALLY,
+            "NetworkTally::ApplySuperblock(%" PRId64 ")", superblock.m_height);
+
         m_total_magnitude = superblock->m_cpids.TotalMagnitude();
     }
 
 private:
     uint32_t m_total_magnitude = 0;         //!< Sum of the magnitude of all CPIDs.
     double m_two_week_research_subsidy = 0; //!< Sum of research subsidy payments.
+
+    //!
+    //! \brief Round a magnitude unit value to intervals of 0.025.
+    //!
+    static double SnapToGrid(double d)
+    {
+        double dDither = .04;
+        double dOut = RoundFromString(RoundToString(d * dDither, 3), 3) / dDither;
+        return dOut;
+    }
 }; // NetworkTally
 
 //!
@@ -114,24 +159,6 @@ public:
     //!
     ResearchAccountRange Accounts()
     {
-        // Since research account magnitudes are applied lazily from the last
-        // superblock, we need to update the magnitude of each account before
-        // providing the range.
-        //
-        // TODO: move the magnitude update into a transforming iterator so we
-        // can avoid the loop outside the range. This API is not used in core
-        // code at the moment so the performance hit is negligible.
-        //
-        for (auto& account_pair : m_researchers) {
-            const Cpid& cpid = account_pair.first;
-            ResearchAccount& account = account_pair.second;
-
-            // TODO: this only supports legacy magnitudes, but the upcoming
-            // superblock window accrual changes remove these shenanigans:
-            //
-            account.m_magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid).Compact();
-        }
-
         return ResearchAccountRange(m_researchers);
     }
 
@@ -145,25 +172,11 @@ public:
     //!
     const ResearchAccount& GetAccount(const Cpid cpid)
     {
-        // TODO: this only supports legacy magnitudes, but the upcoming
-        // superblock window accrual changes remove these shenanigans:
-        //
-        const uint16_t magnitude = m_current_superblock->m_cpids.MagnitudeOf(cpid).Compact();
         auto iter = m_researchers.find(cpid);
 
         if (iter == m_researchers.end()) {
-            if (magnitude > 0) {
-                iter = m_researchers.emplace(cpid, ResearchAccount()).first;
-            } else {
-                return m_new_account;
-            }
+            return m_new_account;
         }
-
-        // We lazily apply the magnitude from the current active superblock
-        // to avoid reloading the magnitude for every research account when
-        // a new superblock arrives:
-        //
-        iter->second.m_magnitude = magnitude;
 
         return iter->second;
     }
@@ -195,7 +208,7 @@ public:
     }
 
     //!
-    //! \brief Disassociate a blocks research reward data from the tally.
+    //! \brief Disassociate a block's research reward data from the tally.
     //!
     //! \param cpid   The CPID of the research account to drop the block for.
     //! \param pindex Contains information about the block to erase.
@@ -237,40 +250,143 @@ public:
     }
 
     //!
-    //! \param Update the current magnitude of each research account from the
-    //! provided superblock.
+    //! \brief Update the account data with information from a new superblock.
     //!
     //! \param superblock Refers to the current active superblock.
     //!
-    void ApplySuperblock(const SuperblockPtr superblock)
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    bool ApplySuperblock(SuperblockPtr superblock)
     {
-        // We just link the current superblock here. GetAccount() will apply
-        // the magnitude lazily when requested.
+        // The network publishes version 2+ superblocks after the mandatory
+        // switch to block version 11.
         //
+        if (superblock->m_version >= 2) {
+            if (!m_snapshots.Store(superblock.m_height, m_researchers)) {
+                return false;
+            }
+
+            TallySuperblockAccrual(superblock.m_timestamp);
+        }
+
+        m_current_superblock = std::move(superblock);
+
+        return true;
+    }
+
+    //!
+    //! \brief Reset the account data to a state before the current superblock.
+    //!
+    //! \param superblock Refers to the current active superblock (before the
+    //! reverted superblock).
+    //!
+    //! \return \c false if an IO error occured while processing the superblock.
+    //!
+    bool RevertSuperblock(SuperblockPtr superblock)
+    {
+        if (m_current_superblock->m_version >= 2) {
+            return m_snapshots.ApplyLatest(m_researchers)
+                && m_snapshots.Drop(m_current_superblock.m_height);
+        }
+
+        m_current_superblock = std::move(superblock);
+
+        return true;
+    }
+
+    //!
+    //! \brief Switch from legacy research age accrual calculations to the
+    //! superblock snapshot accrual system.
+    //!
+    //! \param pindex     Index of the block to enable snapshot accrual for.
+    //! \param superblock Refers to the current active superblock.
+    //!
+    //! \return \c false if the snapshot system failed to initialize because of
+    //! an error.
+    //!
+    bool ActivateSnapshotAccrual(
+        const CBlockIndex* const pindex,
+        const SuperblockPtr superblock)
+    {
+        // Someone might run one of the snapshot accrual testing RPCs before
+        // the chain is synchronized. We allow this after passing version 10
+        // for testing, but it won't actually apply to accrual until version
+        // 11 blocks arrive.
+        //
+        if (!pindex || !IsV10Enabled(pindex->nHeight)) {
+            return true;
+        }
+
         m_current_superblock = superblock;
+
+        if (!m_snapshots.Initialize()) {
+            return false;
+        }
+
+        // If the node initialized the snapshot accrual system before, we
+        // should already have the latest snapshot.
+        //
+        if (m_snapshots.HasBaseline()) {
+            return m_snapshots.ApplyLatest(m_researchers);
+        }
+
+        SnapshotBaselineBuilder builder(m_researchers);
+
+        if (!builder.Run(pindex, superblock)) {
+            return false;
+        }
+
+        return m_snapshots.StoreBaseline(superblock.m_height, m_researchers);
     }
 
 private:
     //!
     //! \brief An empty account to return as a reference when requesting an
-    //! account for a CPID that with no historical record.
+    //! account for a CPID with no historical record.
     //!
     const ResearchAccount m_new_account;
 
     //!
     //! \brief The set of all research accounts in the network.
     //!
-    std::unordered_map<Cpid, ResearchAccount> m_researchers;
+    ResearchAccountMap m_researchers;
 
     //!
     //! \brief A link to the current active superblock used to lazily update
     //! researcher magnitudes when supplying an account.
     //!
     SuperblockPtr m_current_superblock = SuperblockPtr::Empty();
+
+    //!
+    //! \brief Manages snapshots for delta accrual calculations (version 2+
+    //! superblocks).
+    //!
+    AccrualSnapshotRepository m_snapshots;
+
+    //!
+    //! \brief Tally research rewards accrued since the current superblock
+    //! arrived.
+    //!
+    //! \param payment_time Time of payment to calculate rewards at.
+    //!
+    void TallySuperblockAccrual(const int64_t payment_time)
+    {
+        const SnapshotCalculator calc(payment_time, m_current_superblock);
+
+        for (const auto& cpid_pair : m_current_superblock->m_cpids) {
+            ResearchAccount& account = m_researchers[cpid_pair.Cpid()];
+
+            if (account.LastRewardHeight() >= m_current_superblock.m_height) {
+                account.m_accrual = 0;
+            }
+
+            account.m_accrual += calc.AccrualDelta(cpid_pair.Cpid(), account);
+        }
+    }
 }; // ResearcherTally
 
 ResearcherTally g_researcher_tally; //!< Tracks lifetime research rewards.
-NetworkTally g_network_tally;       //!< Tracks two-week network averages.
+NetworkTally g_network_tally;       //!< Tracks legacy two-week network averages.
 
 } // Anonymous namespace
 
@@ -278,17 +394,62 @@ NetworkTally g_network_tally;       //!< Tracks two-week network averages.
 // Class: Tally
 // -----------------------------------------------------------------------------
 
-bool Tally::IsTrigger(const uint64_t height)
+bool Tally::Initialize(CBlockIndex* pindex)
+{
+    if (!pindex || !IsResearchAgeEnabled(pindex->nHeight)) {
+        LogPrintf("Tally initialization not needed.");
+        return true;
+    }
+
+    LogPrintf("Initializing research reward tally...");
+
+    const int64_t start_time = GetTimeMillis();
+
+    for (; pindex; pindex = pindex->pnext) {
+        if (pindex->nHeight + 1 == GetV11Threshold()) {
+            ActivateSnapshotAccrual(pindex);
+        }
+
+        if (pindex->nResearchSubsidy <= 0) {
+            continue;
+        }
+
+        if (const CpidOption cpid = pindex->GetMiningId().TryCpid()) {
+            if (cpid->IsZero()) {
+                RepairZeroCpidIndex(pindex);
+            }
+
+            g_researcher_tally.RecordRewardBlock(*cpid, pindex);
+        }
+    }
+
+    LogPrintf(
+        "Tally initialization complete. Scan time %15" PRId64 "ms\n",
+        GetTimeMillis() - start_time);
+
+    return true;
+}
+
+bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
+{
+    LogPrint(LogFlags::TALLY, "Activating snapshot accrual...");
+
+    return g_researcher_tally.ActivateSnapshotAccrual(
+        pindex,
+        Quorum::CurrentSuperblock());
+}
+
+bool Tally::IsLegacyTrigger(const uint64_t height)
 {
     return height % TALLY_GRANULARITY == 0;
 }
 
-CBlockIndex* Tally::FindTrigger(CBlockIndex* pindex)
+CBlockIndex* Tally::FindLegacyTrigger(CBlockIndex* pindex)
 {
     // Scan backwards until we find one where accepting it would
     // trigger a tally.
     for (;
-        pindex && pindex->pprev && !IsTrigger(pindex->nHeight);
+        pindex && pindex->pprev && !IsLegacyTrigger(pindex->nHeight);
         pindex = pindex->pprev);
 
     return pindex;
@@ -299,9 +460,13 @@ int64_t Tally::MaxEmission(const int64_t payment_time)
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
-double Tally::GetMagnitudeUnit(const int64_t payment_time)
+double Tally::GetMagnitudeUnit(const CBlockIndex* const pindex)
 {
-    return g_network_tally.GetMagnitudeUnit(payment_time);
+    if (pindex->nVersion >= 11) {
+        return SnapshotCalculator::MagnitudeUnit();
+    }
+
+    return g_network_tally.GetMagnitudeUnit(pindex->nTime);
 }
 
 ResearchAccountRange Tally::Accounts()
@@ -323,17 +488,62 @@ AccrualComputer Tally::GetComputer(
         return MakeUnique<NullAccrualComputer>();
     }
 
-    if (!GetAccount(cpid).IsActive(last_block_ptr->nHeight)) {
+    if (last_block_ptr->nVersion >= 11) {
+        return GetSnapshotComputer(cpid, payment_time, last_block_ptr);
+    }
+
+    return GetLegacyComputer(cpid, payment_time, last_block_ptr);
+}
+
+AccrualComputer Tally::GetSnapshotComputer(
+    const Cpid cpid,
+    const ResearchAccount& account,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr,
+    const SuperblockPtr superblock)
+{
+    return MakeUnique<SnapshotAccrualComputer>(
+        cpid,
+        account,
+        payment_time,
+        last_block_ptr->nHeight,
+        std::move(superblock));
+}
+
+AccrualComputer Tally::GetSnapshotComputer(
+    const Cpid cpid,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr)
+{
+    return GetSnapshotComputer(
+        cpid,
+        GetAccount(cpid),
+        payment_time,
+        last_block_ptr,
+        Quorum::CurrentSuperblock());
+}
+
+AccrualComputer Tally::GetLegacyComputer(
+    const Cpid cpid,
+    const int64_t payment_time,
+    const CBlockIndex* const last_block_ptr)
+{
+    const ResearchAccount& account = GetAccount(cpid);
+
+    if (!account.IsActive(last_block_ptr->nHeight)) {
         return MakeUnique<NewbieAccrualComputer>(
             cpid,
             payment_time,
-            GetMagnitudeUnit(payment_time));
+            g_network_tally.GetMagnitudeUnit(payment_time),
+            Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating());
     }
 
     return MakeUnique<ResearchAgeComputer>(
         cpid,
+        account,
+        Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating(),
         payment_time,
-        GetMagnitudeUnit(payment_time),
+        g_network_tally.GetMagnitudeUnit(payment_time),
         last_block_ptr->nHeight);
 }
 
@@ -359,22 +569,32 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     }
 }
 
+bool Tally::ApplySuperblock(SuperblockPtr superblock)
+{
+    return g_researcher_tally.ApplySuperblock(std::move(superblock));
+}
+
+bool Tally::RevertSuperblock()
+{
+    return g_researcher_tally.RevertSuperblock(Quorum::CurrentSuperblock());
+}
+
 void Tally::LegacyRecount(const CBlockIndex* pindex)
 {
     if (!pindex) {
         return;
     }
 
-    LogPrintf("Tally::LegacyRecount(%" PRId64 ")", pindex->nHeight);
+    LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(%" PRId64 ")", pindex->nHeight);
 
     const int64_t consensus_depth = pindex->nHeight - CONSENSUS_LOOKBACK;
-    const int64_t lookback_depth = BLOCKS_PER_DAY * TALLY_DAYS;
+    const int64_t lookback_depth = BLOCKS_PER_DAY * NetworkTally::TALLY_DAYS;
 
     int64_t max_depth = consensus_depth - (consensus_depth % TALLY_GRANULARITY);
     int64_t min_depth = max_depth - lookback_depth;
 
     if (fTestNet && !IsV9Enabled_Tally(pindex->nHeight)) {
-        LogPrintf("Tally::LegacyRecount(): retired tally");
+        LogPrint(LogFlags::TALLY, "Tally::LegacyRecount(): retired tally");
         max_depth = consensus_depth - (consensus_depth % BLOCK_GRANULARITY);
         min_depth -= (max_depth - lookback_depth) % TALLY_GRANULARITY;
     }
@@ -389,10 +609,7 @@ void Tally::LegacyRecount(const CBlockIndex* pindex)
     }
 
     if (Quorum::CommitSuperblock(max_depth)) {
-        const SuperblockPtr current = Quorum::CurrentSuperblock();
-
-        g_network_tally.ApplySuperblock(current);
-        g_researcher_tally.ApplySuperblock(current);
+        g_network_tally.ApplySuperblock(Quorum::CurrentSuperblock());
     }
 
     int64_t total_research_subsidy = 0;
