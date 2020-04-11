@@ -2652,9 +2652,14 @@ bool GridcoinConnectBlock(
     }
 
     pindex->SetMiningId(claim.m_mining_id);
-    pindex->nMagnitude = claim.m_magnitude;
     pindex->nResearchSubsidy = claim.m_research_subsidy;
     pindex->nInterestSubsidy = claim.m_block_subsidy;
+
+    if (block.nVersion >= 11) {
+        pindex->nMagnitude = NN::Quorum::GetMagnitude(claim.m_mining_id).Floating();
+    } else {
+        pindex->nMagnitude = claim.m_magnitude;
+    }
 
     NN::Tally::RecordRewardBlock(pindex);
 

@@ -49,7 +49,7 @@ extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
 BlockFinder RPCBlockFinder;
 
 namespace {
-UniValue ClaimToJson(const NN::Claim& claim)
+UniValue ClaimToJson(const NN::Claim& claim, const CBlockIndex* const pindex)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -61,8 +61,15 @@ UniValue ClaimToJson(const NN::Claim& claim)
     json.pushKV("block_subsidy", ValueFromAmount(claim.m_block_subsidy));
 
     json.pushKV("research_subsidy", ValueFromAmount(claim.m_research_subsidy));
-    json.pushKV("magnitude", claim.m_magnitude);
-    json.pushKV("magnitude_unit", claim.m_magnitude_unit);
+
+    // Version 11 blocks remove magnitude and magnitude unit from claims:
+    if (pindex->nVersion >= 11) {
+        json.pushKV("magnitude", pindex->nMagnitude);
+        json.pushKV("magnitude_unit", NN::Tally::GetMagnitudeUnit(pindex));
+    } else {
+        json.pushKV("magnitude", claim.m_magnitude);
+        json.pushKV("magnitude_unit", claim.m_magnitude_unit);
+    }
 
     json.pushKV("signature", EncodeBase64(claim.m_signature.data(), claim.m_signature.size()));
 
@@ -168,7 +175,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     if (block.IsProofOfStake())
         result.pushKV("signature", HexStr(block.vchBlockSig.begin(), block.vchBlockSig.end()));
 
-    result.pushKV("claim", ClaimToJson(block.GetClaim()));
+    result.pushKV("claim", ClaimToJson(block.GetClaim(), blockindex));
 
     if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
 

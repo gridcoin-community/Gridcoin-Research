@@ -62,10 +62,10 @@ std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const C
     res.push_back(std::make_pair(_("CPID"), claim.m_mining_id.ToString()));
     res.push_back(std::make_pair(_("Interest"), FormatMoney(claim.m_block_subsidy)));
 
-    if (claim.m_magnitude > 0)
+    if (pindex->nMagnitude > 0)
     {
         res.push_back(std::make_pair(_("Boinc Reward"), FormatMoney(claim.m_research_subsidy)));
-        res.push_back(std::make_pair(_("Magnitude"), RoundToString(claim.m_magnitude, 8)));
+        res.push_back(std::make_pair(_("Magnitude"), RoundToString(pindex->nMagnitude, 8)));
     }
 
     res.push_back(std::make_pair(_("Fees Collected"), FormatMoney(GetFeesCollected(block))));
@@ -466,7 +466,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     {
         fVerbose = params[1].isNum() ? (params[1].get_int() != 0) : params[1].get_bool();
     }
-    
+
     LOCK(cs_main);
 
     CTransaction tx;
@@ -697,7 +697,7 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 
         return result;
     }
-    
+
     CReserveKey reservekey(pwalletMain);
 
 
