@@ -177,7 +177,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
 
     result.pushKV("claim", ClaimToJson(block.GetClaim(), blockindex));
 
-    if (fDebug3) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::NET)) result.pushKV("BoincHash",block.vtx[0].hashBoinc);
 
     if (fPrintTransactionDetail && blockindex->nIsSuperBlock == 1) {
         result.pushKV("superblock", SuperblockToJson(block.GetSuperblock()));
@@ -1249,25 +1249,6 @@ UniValue debug2(const UniValue& params, bool fHelp)
     fDebug2 = params[0].get_bool();
 
     res.pushKV("Debug2", fDebug2 ? "Entering debug mode." : "Exiting debug mode.");
-
-    return res;
-}
-
-UniValue debug3(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug3 <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable debug mode on the fly\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    fDebug3 = params[0].get_bool();
-
-    res.pushKV("Debug3", fDebug3 ? "Entering debug mode." : "Exiting debug mode.");
 
     return res;
 }

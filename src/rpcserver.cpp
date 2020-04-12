@@ -362,7 +362,6 @@ static const CRPCCommand vRPCCommands[] =
     { "debug",                   &debug,                   cat_developer     },
     { "debug10",                 &debug10,                 cat_developer     },
     { "debug2",                  &debug2,                  cat_developer     },
-    { "debug3",                  &debug3,                  cat_developer     },
     { "debug4",                  &debug4,                  cat_developer     },
     { "debugnet",                &debugnet,                cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },

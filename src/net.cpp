@@ -232,7 +232,7 @@ bool RecvLine2(SOCKET hSocket, string& strLine)
             {
                 // socket error
                 int nErr = WSAGetLastError();
-                if (fDebug3) LogPrintf("recv socket err: %d", nErr);
+                LogPrint(BCLog::LogFlags::NET, "recv socket err: %d", nErr);
                 return false;
             }
         }

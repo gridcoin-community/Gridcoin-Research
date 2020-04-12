@@ -1588,8 +1588,8 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
         qsExcludedProjects = tr("none");
     }
 
-    // If fDebug3 then show scrapers in tooltip...
-    if (fDebug3)
+    // If scraper logging category is turned on then show scrapers in tooltip...
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER))
     {
         bDisplayScrapers = true;
 

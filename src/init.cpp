@@ -624,14 +624,6 @@ bool AppInit2(ThreadHandlerPtr threads)
             LogPrintf("Entering GRC debug mode 2.");
     }
 
-    fDebug3 = false;
-
-    if (GetArg("-debug3", "false")=="true")
-    {
-            fDebug3 = true;
-            LogPrintf("Entering GRC debug mode 3.");
-    }
-
     if (GetArg("-debug4", "false")=="true")
     {
         fDebug4 = true;
@@ -1137,7 +1129,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
     //
     std::string sOut = "";
-    if (fDebug3) LogPrintf("Loading admin Messages");
+    LogPrint(BCLog::LogFlags::NET, "Loading admin Messages");
     LoadAdminMessages(true,sOut);
     LogPrintf("Done loading Admin messages");
 
@@ -1164,7 +1156,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (pindexBest->nVersion <= 10) {
         uiInterface.InitMessage(_("Loading Network Averages..."));
-        if (fDebug3) LogPrintf("Loading network averages");
+        LogPrint(BCLog::LogFlags::NET, "Loading network averages");
 
         NN::Tally::LegacyRecount(NN::Tally::FindLegacyTrigger(pindexBest));
     }

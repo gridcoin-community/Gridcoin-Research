@@ -4542,7 +4542,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 if (pfrom->nStartingHeight < 1 && pfrom->nServices == 0 )
                 {
                     pfrom->Misbehaving(100);
-                    if (fDebug3) LogPrintf("Disconnecting possible hacker node with no services.  Banned for 24 hours.");
+                    LogPrint(BCLog::LogFlags::NET, "Disconnecting possible hacker node with no services.  Banned for 24 hours.");
                     pfrom->fDisconnect=true;
                     return false;
                 }
@@ -4559,7 +4559,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect if we connected to ourself
         if (nNonce == nLocalHostNonce && nNonce > 1)
         {
-            if (fDebug3) LogPrintf("connected to self at %s, disconnecting", pfrom->addr.ToString());
+            LogPrint(BCLog::LogFlags::NET, "connected to self at %s, disconnecting", pfrom->addr.ToString());
             pfrom->fDisconnect = true;
             return true;
         }
@@ -4627,7 +4627,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             nAskedForBlocks++;
             pfrom->PushGetBlocks(pindexBest, uint256(), true);
-            if (fDebug3) LogPrintf("Asked For blocks.");
+            LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
         }
 
         // Relay alerts
@@ -4925,12 +4925,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pindex = pindex->pnext;
         int nLimit = 500;
 
-        if (fDebug3) LogPrintf("getblocks %d to %s limit %d", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20), nLimit);
+        LogPrint(BCLog::LogFlags::NET, "getblocks %d to %s limit %d", (pindex ? pindex->nHeight : -1), hashStop.ToString().substr(0,20), nLimit);
         for (; pindex; pindex = pindex->pnext)
         {
             if (pindex->GetBlockHash() == hashStop)
             {
-                if (fDebug3) LogPrintf("getblocks stopping at %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
+                LogPrint(BCLog::LogFlags::NET, "getblocks stopping at %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
                 // ppcoin: tell downloading node about the latest block if it's
                 // without risk being rejected due to stake connection check
                 if (hashStop != hashBestChain && pindex->GetBlockTime() + nStakeMinAge > pindexBest->GetBlockTime())
@@ -4942,7 +4942,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // When this block is requested, we'll send an inv that'll make them
                 // getblocks the next batch of inventory.
-                if (fDebug3) LogPrintf("getblocks stopping at limit %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
+                LogPrint(BCLog::LogFlags::NET, "getblocks stopping at limit %d %s", pindex->nHeight, pindex->GetBlockHash().ToString().substr(0,20));
                 pfrom->hashContinue = pindex->GetBlockHash();
                 break;
             }
