@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     env:
-      CCACHE_SIZE: 100M
+      CCACHE_SIZE: 250M
       CCACHE_TEMPDIR: /tmp/.ccache-temp
       CCACHE_COMPRESS: 1
       MAKEJOBS: -j3
@@ -17,7 +17,9 @@ jobs:
       uses: actions/cache@v1
       with:
         path: ~/.ccache
-        key: ${{ github.repository }}-ccache
+        key: ${{ github.repository }}-ccache-${{ github.run_id}}
+        restore-keys: ${{ github.repository }}-ccache-
+      run: ccache -s
     - name: apt update & install depends
       run: sudo apt-get update && sudo dpkg --add-architecture "i386" && sudo apt-get install ccache python3 nsis g++-mingw-w64-x86-64
     - name: update alternatives
