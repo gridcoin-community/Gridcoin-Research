@@ -626,7 +626,7 @@ bool CScraperManifest::RecvManifest(CNode* pfrom, CDataStream& vRecv)
     /* see if we do not already have it */
     if (AlreadyHave(pfrom, CInv(MSG_SCRAPERINDEX, hash)))
     {
-        if (fDebug3) LogPrintf("INFO: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
+        LogPrint(BCLog::LogFlags::SCRAPER, "INFO: ScraperManifest::RecvManifest: Already have CScraperManifest %s from node %s.", hash.GetHex(), pfrom->addrName);
         return false;
     }
 
@@ -709,7 +709,7 @@ bool CScraperManifest::addManifest(std::unique_ptr<CScraperManifest>&& m, CKey& 
     uint256 hash(Hash(ss.begin(), ss.end()));
     keySign.Sign(hash, m->signature);
 
-    if (fDebug3) LogPrintf("INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
+    LogPrint(BCLog::LogFlags::SCRAPER, "INFO: CScraperManifest::addManifest: hash of signature = %s", Hash(m->signature.begin(), m->signature.end()).GetHex());
 
     LogPrint("manifest", "adding new local manifest");
 
@@ -757,7 +757,7 @@ void CScraperManifest::Complete()
         }
     }
 
-    if (fDebug3) LogPrintf("INFO: CScraperManifest::Complete(): from %s with hash %s", sCManifestName, phash->GetHex());
+    LogPrint(BCLog::LogFlags::SCRAPER, "INFO: CScraperManifest::Complete(): from %s with hash %s", sCManifestName, phash->GetHex());
 }
 
 /* how?

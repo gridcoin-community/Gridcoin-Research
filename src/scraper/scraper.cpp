@@ -32,7 +32,6 @@ fs::path pathScraper = {};
 
 extern bool fShutdown;
 extern bool fDebug;
-extern bool fDebug3;
 extern std::string msMasterMessagePrivateKey;
 extern CWallet* pwalletMain;
 bool fScraperActive = false;
@@ -226,6 +225,7 @@ public:
         ssArchiveCheckDate << ArchiveCheckDate;
         ssPrevArchiveCheckDate << PrevArchiveCheckDate;
 
+        // Goes in main log only and not subject to category.
         if (fDebug) LogPrintf("INFO: ScraperLogger: ArchiveCheckDate %s, PrevArchiveCheckDate %s", ssArchiveCheckDate.str(), ssPrevArchiveCheckDate.str());
 
         fs::path LogArchiveDir = pathDataDir / "logarchive";
@@ -362,7 +362,6 @@ ScraperLogger& ScraperLogInstance()
 CCriticalSection ScraperLogger::cs_log;
 boost::gregorian::date ScraperLogger::PrevArchiveCheckDate = boost::posix_time::from_time_t(GetAdjustedTime()).date();
 
-
 void _log(logattribute eType, const std::string& sCall, const std::string& sMessage)
 {
     std::string sType;
@@ -388,16 +387,22 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
 
     sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
 
-    //logger log;
-    ScraperLogger& log = ScraperLogInstance();
+    // This snoops the SCRAPER category setting from the main logger, and uses it as a conditional for the scraper log output.
+    // Logs will be posted to the scraper log when the category is set OR it is not an INFO level... (i.e. critical, warning,
+    // or error). This has the effect of "turning on" the informational messages to the scraper log when the category is set,
+    // and is the equivalent of the old "fDebug3" use for the scraper. Note that no lock is required to call the
+    // WillLogCategory, because the underlying type is atomic.
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER) || eType != logattribute::INFO)
+    {
+        ScraperLogger& log = ScraperLogInstance();
 
-    log.output(sOut);
-
-    //log.closelogfile();
+        log.output(sOut);
+    }
 
     // Send to UI for log window.
     uiInterface.NotifyScraperEvent(scrapereventtypes::Log, CT_NEW, sOut);
 
+    // Critical, warning, and errors get sent to main debug log regardless of whether category is turned on. Info does not.
     if (eType != logattribute::INFO) LogPrintf(std::string(sType + ": Scraper: <" + sCall + ">: %s").c_str(), sMessage);
 
     return;
@@ -537,7 +542,7 @@ public:
                 vuserpass.push_back(std::make_pair(vlist[0], vlist[1]));
             }
 
-            if (fDebug3) _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
+            _log(logattribute::INFO, "userpass_data_import", "Userpass contains " + std::to_string(vuserpass.size()) + " projects");
 
             return true;
         }
@@ -605,7 +610,7 @@ public:
 
             oauthdata.write(outdata.value().c_str(), outdata.size());
 
-            if (fDebug3) _log(logattribute::INFO, "auth_data_export", "Exported");
+            _log(logattribute::INFO, "auth_data_export", "Exported");
 
             return true;
         }
@@ -685,37 +690,34 @@ void ScraperApplyAppCacheEntries()
     ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
     ApplyCache("SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD", SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD);
 
-    if (fDebug3)
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "scrapersleep = " + std::to_string(nScraperSleep));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "activebeforesb = " + std::to_string(nActiveBeforeSB));
+
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_RETAIN_NONCURRENT_FILES = " + std::to_string(SCRAPER_RETAIN_NONCURRENT_FILES));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_FILE_RETENTION_TIME = " + std::to_string(SCRAPER_FILE_RETENTION_TIME));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "EXPLORER_EXTENDED_FILE_RETENTION_TIME = " + std::to_string(EXPLORER_EXTENDED_FILE_RETENTION_TIME));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETAIN_NONCURRENT = " + std::to_string(SCRAPER_CMANIFEST_RETAIN_NONCURRENT));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETENTION_TIME = " + std::to_string(SCRAPER_CMANIFEST_RETENTION_TIME));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = " + std::to_string(SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "MAG_ROUND = " + std::to_string(MAG_ROUND));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "NEURALNETWORKMULTIPLIER = " + std::to_string(NEURALNETWORKMULTIPLIER));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CPID_MAG_LIMIT = " + std::to_string(CPID_MAG_LIMIT));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_MINIMUM = " + std::to_string(SCRAPER_CONVERGENCE_MINIMUM));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_RATIO = " + std::to_string(SCRAPER_CONVERGENCE_RATIO));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CONVERGENCE_BY_PROJECT_RATIO = " + std::to_string(CONVERGENCE_BY_PROJECT_RATIO));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = " + std::to_string(ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_MISBEHAVING_NODE_BANSCORE = " + std::to_string(SCRAPER_MISBEHAVING_NODE_BANSCORE));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + std::to_string(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "TEAM_WHITELIST = " + TEAM_WHITELIST);
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + std::to_string(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
+
+    AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
+
+    _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "For information - authorized scraper address list");
+    for (auto const& entry : mScrapers)
     {
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "scrapersleep = " + std::to_string(nScraperSleep));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "activebeforesb = " + std::to_string(nActiveBeforeSB));
-
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_RETAIN_NONCURRENT_FILES = " + std::to_string(SCRAPER_RETAIN_NONCURRENT_FILES));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_FILE_RETENTION_TIME = " + std::to_string(SCRAPER_FILE_RETENTION_TIME));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "EXPLORER_EXTENDED_FILE_RETENTION_TIME = " + std::to_string(EXPLORER_EXTENDED_FILE_RETENTION_TIME));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETAIN_NONCURRENT = " + std::to_string(SCRAPER_CMANIFEST_RETAIN_NONCURRENT));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_RETENTION_TIME = " + std::to_string(SCRAPER_CMANIFEST_RETENTION_TIME));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES = " + std::to_string(SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "MAG_ROUND = " + std::to_string(MAG_ROUND));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "NEURALNETWORKMULTIPLIER = " + std::to_string(NEURALNETWORKMULTIPLIER));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CPID_MAG_LIMIT = " + std::to_string(CPID_MAG_LIMIT));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_MINIMUM = " + std::to_string(SCRAPER_CONVERGENCE_MINIMUM));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_CONVERGENCE_RATIO = " + std::to_string(SCRAPER_CONVERGENCE_RATIO));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "CONVERGENCE_BY_PROJECT_RATIO = " + std::to_string(CONVERGENCE_BY_PROJECT_RATIO));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD = " + std::to_string(ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_MISBEHAVING_NODE_BANSCORE = " + std::to_string(SCRAPER_MISBEHAVING_NODE_BANSCORE));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + std::to_string(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "TEAM_WHITELIST = " + TEAM_WHITELIST);
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + std::to_string(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
-
-        AppCacheSection mScrapers = ReadCacheSection(Section::SCRAPER);
-
-        _log(logattribute::INFO, "ScraperApplyAppCacheEntries", "For information - authorized scraper address list");
-        for (auto const& entry : mScrapers)
-        {
-            _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
-                 "Scraper entry: " + entry.first + ", " + entry.second.value + ", " + DateTimeStrFormat("%x %H:%M:%S", entry.second.timestamp));
-        }
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
+             "Scraper entry: " + entry.first + ", " + entry.second.value + ", " + DateTimeStrFormat("%x %H:%M:%S", entry.second.timestamp));
     }
 }
 
@@ -762,7 +764,7 @@ void Scraper(bool bSingleShot)
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_UPDATING, {});
 
-            if (fDebug3) _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
+            _log(logattribute::INFO, "Scraper", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
@@ -775,22 +777,22 @@ void Scraper(bool bSingleShot)
         // Also delete any unauthorized CScraperManifests received before the wallet was in sync.
         {
             LOCK(cs_Scraper);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+            _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
             ScraperDirectoryAndConfigSanity();
             // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
             // See the comment on the function.
 
             LOCK(CScraperManifest::cs_mapManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
             ScraperDeleteUnauthorizedCScraperManifests();
 
             // End LOCK(CScraperManifest::cs_mapManifest)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
             // End LOCK(cs_Scraper)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+            _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
         int64_t sbage = SuperblockAge();
@@ -818,14 +820,14 @@ void Scraper(bool bSingleShot)
                 // Take a lock on the whole scraper for this...
                 {
                     LOCK(cs_Scraper);
-                    if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+                    _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
                     // The only things we do here while quiescent
                     ScraperDirectoryAndConfigSanity();
                     ScraperCullAndBinCScraperManifests();
 
                     // End LOCK(cs_Scraper)
-                    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+                    _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
                 }
 
                 // Need the log archive check here, because we don't run housekeeping in this while loop.
@@ -854,7 +856,7 @@ void Scraper(bool bSingleShot)
         {
             // Take a lock on cs_Scraper for the main activity portion of the loop.
             LOCK(cs_Scraper);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+            _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
@@ -865,7 +867,7 @@ void Scraper(bool bSingleShot)
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "download statistics block: cs_StructScraperFileManifest");
+                _log(logattribute::INFO, "LOCK", "download statistics block: cs_StructScraperFileManifest");
 
                 ScraperFileManifestMap::iterator entry;
 
@@ -881,7 +883,7 @@ void Scraper(bool bSingleShot)
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "download statistics block: cs_StructScraperFileManifest");
+                _log(logattribute::INFO, "ENDLOCK", "download statistics block: cs_StructScraperFileManifest");
             }
 
             AuthenticationETagClear();
@@ -904,7 +906,7 @@ void Scraper(bool bSingleShot)
             // so there is no corresponding Process function for the host files.
             if (fExplorer) DownloadProjectHostFiles(projectWhitelist);
 
-            if (fDebug) _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
+            _log(logattribute::INFO, "Scraper", "download size so far: " + std::to_string(ndownloadsize) + " upload size so far: " + std::to_string(nuploadsize));
 
             ScraperStats mScraperStats = GetScraperStatsByConsensusBeaconList();
 
@@ -919,7 +921,7 @@ void Scraper(bool bSingleShot)
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_NEW, {});
 
             // End LOCK(cs_Scraper)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+            _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
         // This is the section to send out manifests. Only do if authorized.
@@ -935,7 +937,7 @@ void Scraper(bool bSingleShot)
             // Publish and/or local delete CScraperManifests.
             {
                 LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
+                _log(logattribute::INFO, "LOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
 
                 // If the hash doesn't match (a new one is available), or there are none, then publish a new one.
                 if (nmScraperFileManifestHash != StructScraperFileManifest.nFileManifestMapHash
@@ -951,7 +953,7 @@ void Scraper(bool bSingleShot)
                 nmScraperFileManifestHash = StructScraperFileManifest.nFileManifestMapHash;
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
+                _log(logattribute::INFO, "ENDLOCK2", "manifest send block: cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest");
             }
         }
 
@@ -1013,7 +1015,7 @@ void NeuralNetwork()
             // Signal stats event to UI.
             uiInterface.NotifyScraperEvent(scrapereventtypes::OutOfSync, CT_NEW, {});
 
-            if (fDebug3) _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
+            _log(logattribute::INFO, "NeuralNetwork", "Wallet not in sync. Sleeping for 8 seconds.");
             MilliSleep(8000);
         }
 
@@ -1026,24 +1028,24 @@ void NeuralNetwork()
         if (!fScraperActive)
         {
             LOCK(cs_Scraper);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+            _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
             ScraperDirectoryAndConfigSanity();
             // UnauthorizedCScraperManifests should only be seen on the first invocation after getting in sync
             // See the comment on the function.
 
             LOCK(CScraperManifest::cs_mapManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
             ScraperDeleteUnauthorizedCScraperManifests();
 
             // END LOCK(CScraperManifest::cs_mapManifest)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
             ScraperHousekeeping();
 
             // END LOCK(cs_Scraper)
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+            _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
         }
 
         // Use the same sleep interval configured for the scraper.
@@ -1086,7 +1088,7 @@ bool ScraperHousekeeping()
              + std::to_string(CScraperManifest::mapPendingDeletedManifest.size()));
     }
 
-    if (fDebug3 && superblock.WellFormed())
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::SCRAPER) && superblock.WellFormed())
     {
         UniValue input_params(UniValue::VARR);
 
@@ -1143,7 +1145,7 @@ bool ScraperDirectoryAndConfigSanity()
             // Lock the manifest while it is being manipulated.
             {
                 LOCK(cs_StructScraperFileManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "align directory with manifest file: cs_StructScraperFileManifest");
+                _log(logattribute::INFO, "LOCK", "align directory with manifest file: cs_StructScraperFileManifest");
 
                 if (StructScraperFileManifest.mScraperFileManifest.empty())
                 {
@@ -1215,7 +1217,7 @@ bool ScraperDirectoryAndConfigSanity()
                 }
 
                 // End LOCK(cs_StructScraperFileManifest)
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "align directory with manifest file: cs_StructScraperFileManifest");
+                _log(logattribute::INFO, "ENDLOCK", "align directory with manifest file: cs_StructScraperFileManifest");
             }
 
             // If network policy is set to filter on whitelisted teams, then load team ID map from file. This will prevent the heavyweight
@@ -1223,7 +1225,7 @@ bool ScraperDirectoryAndConfigSanity()
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
             {
                 LOCK(cs_TeamIDMap);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+                _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
 
                 if (TeamIDMap.empty())
                 {
@@ -1233,7 +1235,7 @@ bool ScraperDirectoryAndConfigSanity()
                     else
                     {
                         _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "Loaded team IDs file into map.");
-                        if (fDebug3)
+                        if (fDebug10)
                         {
                             _log(logattribute::INFO, "ScraperDirectoryAndConfigSanity", "TeamIDMap contents:");
                             for (const auto& iter : TeamIDMap)
@@ -1249,7 +1251,7 @@ bool ScraperDirectoryAndConfigSanity()
                     }
                 }
 
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+                _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
             }            
         }
     }
@@ -1440,7 +1442,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
     for (const auto& prjs : projectWhitelist)
     {
         LOCK(cs_TeamIDMap);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+        _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
 
         const auto iter = TeamIDMap.find(prjs.m_name);
         bool fProjTeamIDsMissing = false;
@@ -1586,7 +1588,7 @@ bool DownloadProjectTeamFiles(const NN::WhitelistSnapshot& projectWhitelist)
         // in the TeamIDMap and the ETag entries in the ProjTeamETags map.
         if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP && bETagChanged) ProcessProjectTeamFile(prjs.m_name, team_file, sTeamETag);
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+        _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
 
     return true;
@@ -1837,7 +1839,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
     // After processing, update global structure with the timestamp of the latest file in the manifest.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
 
         int64_t nMaxTime = 0;
         for (const auto& entry : StructScraperFileManifest.mScraperFileManifest)
@@ -1849,7 +1851,7 @@ bool DownloadProjectRacFilesByCPID(const NN::WhitelistSnapshot& projectWhitelist
         StructScraperFileManifest.timestamp = nMaxTime;
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "user (rac) files struct update post process: cs_StructScraperFileManifest");
     }
     return true;
 }
@@ -1897,11 +1899,11 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
     if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
     {
         LOCK(cs_TeamIDMap);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+        _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
 
         mTeamIDsForProject = TeamIDMap.find(project)->second;
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+        _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
 
     std::string line;
@@ -2168,7 +2170,7 @@ bool LoadTeamIDList(const fs::path& file)
 
     // This is in the form Project, Gridcoin, ...."
     std::vector<std::string> vTeamNames = split(line, separator);
-    if (fDebug3) _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
+    _log(logattribute::INFO, "LoadTeamIDList", "Size of vTeamNames = " + std::to_string(vTeamNames.size()));
 
     while (std::getline(in, line))
     {
@@ -2215,13 +2217,13 @@ bool LoadTeamIDList(const fs::path& file)
         }
 
         LOCK(cs_TeamIDMap);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
+        _log(logattribute::INFO, "LOCK", "cs_TeamIDMap");
 
         // Insert into whitelist team ID map.
         if (!sProject.empty())
             TeamIDMap[sProject] = mTeamIDsForProject;
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
+        _log(logattribute::INFO, "ENDLOCK", "cs_TeamIDMap");
     }
 
     return true;
@@ -2240,12 +2242,12 @@ bool StoreBeaconList(const fs::path& file)
     // Requires a lock.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
 
         StructScraperFileManifest.nConsensusBlockHash = Consensus.nBlockHash;
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "store beacon list - update consensus block hash: cs_StructScraperFileManifest");
     }
 
     if (fs::exists(file))
@@ -2326,7 +2328,7 @@ bool StoreTeamIDList(const fs::path& file)
 
     stream << std::endl;
 
-    if (fDebug3) _log(logattribute::INFO, "StoreTeamIDList", "TeamIDMap size = " + std::to_string(TeamIDMap.size()));
+    _log(logattribute::INFO, "StoreTeamIDList", "TeamIDMap size = " + std::to_string(TeamIDMap.size()));
 
     // Data
     for (auto const& iProject : TeamIDMap)
@@ -2381,7 +2383,7 @@ bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry)
         {
             StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-            if (fDebug) _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modified nFileManifestMapHash.");
+            _log(logattribute::INFO, "InsertScraperFileManifestEntry", "Inserted File Manifest Entry and stored modified nFileManifestMapHash.");
         }
     }
 
@@ -2405,7 +2407,7 @@ unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry)
     {
         StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-        if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modified nFileManifestMapHash.");
+        _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Deleted File Manifest Entry and stored modified nFileManifestMapHash.");
     }
 
     // Returns number of elements erased, either 0 or 1.
@@ -2423,7 +2425,7 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry)
 
     StructScraperFileManifest.nFileManifestMapHash = GetmScraperFileManifestHash();
 
-    if (fDebug) _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Marked File Manifest Entry non-current and stored modified nFileManifestMapHash.");
+    _log(logattribute::INFO, "DeleteScraperFileManifestEntry", "Marked File Manifest Entry non-current and stored modified nFileManifestMapHash.");
 
     return true;
 }
@@ -2446,16 +2448,14 @@ void AlignScraperFileManifestEntries(const fs::path& file, const std::string& fi
     // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3)
+
+        if (excludefromcsmanifest)
         {
-            if (excludefromcsmanifest)
-            {
-                _log(logattribute::INFO, "LOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
-            }
-            else
-            {
-                _log(logattribute::INFO, "LOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
-            }
+            _log(logattribute::INFO, "LOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+        }
+        else
+        {
+            _log(logattribute::INFO, "LOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
         }
 
         // Iterate mScraperFileManifest to find any prior filetype records for the same project and change current flag to false,
@@ -2497,16 +2497,13 @@ void AlignScraperFileManifestEntries(const fs::path& file, const std::string& fi
             _log(logattribute::INFO, "AlignScraperFileManifestEntries", "Stored Manifest");
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3)
+        if (excludefromcsmanifest)
         {
-            if (excludefromcsmanifest)
-            {
-                _log(logattribute::INFO, "ENDLOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
-            }
-            else
-            {
-                _log(logattribute::INFO, "ENDLOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
-            }
+            _log(logattribute::INFO, "ENDLOCK", "saved manifest for downloaded "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
+        }
+        else
+        {
+            _log(logattribute::INFO, "ENDLOCK", "saved manifest for processed "+ filetype + " files: AlignScraperFileManifestEntries: cs_StructScraperFileManifest");
         }
     }
 }
@@ -2587,12 +2584,12 @@ bool LoadScraperFileManifest(const fs::path& file)
         // global structure.
         {
             LOCK(cs_StructScraperFileManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
+            _log(logattribute::INFO, "LOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
 
             InsertScraperFileManifestEntry(LoadEntry);
 
             // End LOCK(cs_StructScraperFileManifest
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
+            _log(logattribute::INFO, "ENDLOCK", "load scraper file manifest - update entry: cs_StructScraperFileManifest");
         }
     }
 
@@ -2623,7 +2620,7 @@ bool StoreScraperFileManifest(const fs::path& file)
     //Lock StructScraperFileManifest during serialize to string.
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
         
         // Header.
         stream << "Hash," << "Current," << "Time," << "Project," << "Filename," << "ExcludeFromCSManifest," << "Filetype" << "\n";
@@ -2643,7 +2640,7 @@ bool StoreScraperFileManifest(const fs::path& file)
         }
 
         // end LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "store scraper file manifest to file: cs_StructScraperFileManifest");
     }
 
     _log(logattribute::INFO, "StoreScraperFileManifest", "Finished processing manifest from map.");
@@ -2953,7 +2950,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
     unsigned int nActiveProjects = 0;
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -2962,7 +2959,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - count active projects: cs_StructScraperFileManifest");
     }
     double dMagnitudePerProject = NEURALNETWORKMULTIPLIER / nActiveProjects;
 
@@ -2973,7 +2970,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
 
     {
         LOCK(cs_StructScraperFileManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "LOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
@@ -2997,7 +2994,7 @@ ScraperStats GetScraperStatsByConsensusBeaconList()
         }
 
         // End LOCK(cs_StructScraperFileManifest)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
+        _log(logattribute::INFO, "ENDLOCK", "get scraper stats by consensus beacon list - load project file to stats: cs_StructScraperFileManifest");
     }
 
     ProcessNetworkWideFromProjectStats(Consensus.mBeaconMap, mScraperStats);
@@ -3160,14 +3157,14 @@ std::string ExplainMagnitude(std::string sCPID)
     bool bConvergenceUpdateNeeded = true;
     {
         LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
 
         if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
             bConvergenceUpdateNeeded = false;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
     }
 
     if (bConvergenceUpdateNeeded)
@@ -3179,12 +3176,12 @@ std::string ExplainMagnitude(std::string sCPID)
     ScraperStats mScraperConvergedStats;
     {
         LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
         mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
     }
 
     stringbuilder out;
@@ -3257,7 +3254,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
 {
     // Check to see if the hash exists in the manifest map, and if not, bail.
     LOCK(CScraperManifest::cs_mapManifest);
-    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+    _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     // Select manifest based on provided hash.
     auto pair = CScraperManifest::mapManifest.find(nManifestHash);
@@ -3272,12 +3269,12 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
     // the scraper thread loop, and therefore the directory may not have been set up yet.
     {
         LOCK(cs_Scraper);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_Scraper");
+        _log(logattribute::INFO, "LOCK", "cs_Scraper");
 
         ScraperDirectoryAndConfigSanity();
 
         // End LOCK(cs_Scraper).
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
+        _log(logattribute::INFO, "ENDLOCK", "cs_Scraper");
     }
 
     fs::path savepath = pathScraper / "manifest_dump";
@@ -3346,7 +3343,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash)
         iPartNum++;
     }
 
-    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+    _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
     return true;
 }
@@ -3378,11 +3375,11 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
     AppCacheSection mScrapers = {};
     {
         LOCK(cs_main);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_main");
+        _log(logattribute::INFO, "LOCK", "cs_main");
 
         mScrapers = ReadCacheSection(Section::SCRAPER);
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_main");
+        _log(logattribute::INFO, "ENDLOCK", "cs_main");
     }
 
     std::string sScraperAddressFromConfig = GetArg("-scraperkey", "false");
@@ -3394,12 +3391,12 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
     // If the address (entry) exists in the config and appcache...
     if (sScraperAddressFromConfig != "false" && entry != mScrapers.end())
     {
-        if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry from config/command line found in AppCache.");
+        _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry from config/command line found in AppCache.");
 
         // ... and is enabled...
         if (entry->second.value == "true" || entry->second.value == "1")
         {
-            if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry in appcache is enabled.");
+            _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry in appcache is enabled.");
 
             CBitcoinAddress address(sScraperAddressFromConfig);
             //CPubKey ScraperPubKey(ParseHex(sScraperAddressFromConfig));
@@ -3410,19 +3407,19 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
             // ... and the address is valid...
             if (address.IsValid())
             {
-                if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The address is valid.");
-                if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "(Doublecheck) The address is " + address.ToString());
+                _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The address is valid.");
+                _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "(Doublecheck) The address is " + address.ToString());
 
                 // ... and it exists in the wallet...
                 LOCK(pwalletMain->cs_wallet);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "pwalletMain->cs_wallet");
+                _log(logattribute::INFO, "LOCK", "pwalletMain->cs_wallet");
 
                 if (pwalletMain->GetKey(KeyID, KeyOut))
                 {
                     // ... and the key returned from the wallet is valid and matches the provided public key...
                     assert(KeyOut.IsValid());
 
-                    if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The wallet key for the address is valid.");
+                    _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The wallet key for the address is valid.");
 
                     AddressOut = address;
 
@@ -3432,7 +3429,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                          "Found address " + sScraperAddressFromConfig + " in both the wallet and appcache. \n"
                          "This scraper is authorized to publish manifests.");
 
-                    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
+                    _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
                     return true;
                 }
                 else
@@ -3442,7 +3439,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                          "(preferably for staking only).");
                 }
 
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
+                _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
             }
         }
     }
@@ -3451,26 +3448,26 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
     else
     {
         LOCK(pwalletMain->cs_wallet);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "pwalletMain->cs_wallet");
+        _log(logattribute::INFO, "LOCK", "pwalletMain->cs_wallet");
 
         for (auto const& item : pwalletMain->mapAddressBook)
         {
             const CBitcoinAddress& address = item.first;
 
             std::string sScraperAddress = address.ToString();
-            if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Checking address " + sScraperAddress);
+            _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Checking address " + sScraperAddress);
 
             entry = mScrapers.find(sScraperAddress);
 
             // The address is found in the appcache...
             if (entry != mScrapers.end())
             {
-                if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry found in AppCache");
+                _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry found in AppCache");
 
                 // ... and is enabled...
                 if (entry->second.value == "true" || entry->second.value == "1")
                 {
-                    if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "AppCache entry enabled");
+                    _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "AppCache entry enabled");
 
                     CKeyID KeyID;
                     address.GetKeyID(KeyID);
@@ -3478,8 +3475,8 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                     // ... and the address is valid...
                     if (address.IsValid())
                     {
-                        if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The address is valid.");
-                        if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "(Doublecheck) The address is " + address.ToString());
+                        _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The address is valid.");
+                        _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "(Doublecheck) The address is " + address.ToString());
 
                         // ... and it exists in the wallet... (It SHOULD here... it came from the map...)
                         if (pwalletMain->GetKey(KeyID, KeyOut))
@@ -3487,7 +3484,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                             // ... and the key returned from the wallet is valid ...
                             assert(KeyOut.IsValid());
 
-                            if (fDebug) _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The wallet key for the address is valid.");
+                            _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The wallet key for the address is valid.");
 
                             AddressOut = address;
 
@@ -3497,7 +3494,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                                  "Found address " + sScraperAddress + " in both the wallet and appcache. \n"
                                  "This scraper is authorized to publish manifests.");
 
-                            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
+                            _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
                             return true;
                         }
                         else
@@ -3511,7 +3508,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
             }
         }
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
+        _log(logattribute::INFO, "ENDLOCK", "pwalletMain->cs_wallet");
     }
 
     // If we made it here, there is no match or valid key in the wallet
@@ -3822,17 +3819,14 @@ bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
 
     bool bAddManifestSuccessful = CScraperManifest::addManifest(std::move(manifest), Key);
 
-    if (fDebug)
-    {
-        if (bAddManifestSuccessful)
-            _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
-                 + sCManifestName + ") successful, timestamp "
-                 + DateTimeStrFormat("%x %H:%M:%S", nTime) + " with " + std::to_string(iPartNum) + " parts.");
-        else
-            _log(logattribute::ERR, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
-                 + sCManifestName + ") FAILED, timestamp "
-                 + DateTimeStrFormat("%x %H:%M:%S", nTime));
-    }
+    if (bAddManifestSuccessful)
+        _log(logattribute::INFO, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
+             + sCManifestName + ") successful, timestamp "
+             + DateTimeStrFormat("%x %H:%M:%S", nTime) + " with " + std::to_string(iPartNum) + " parts.");
+    else
+        _log(logattribute::ERR, "ScraperSendFileManifestContents", "addManifest (send) from this scraper (address "
+             + sCManifestName + ") FAILED, timestamp "
+             + DateTimeStrFormat("%x %H:%M:%S", nTime));
 
     return bAddManifestSuccessful;
 }
@@ -3884,7 +3878,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             {
                 // Insert into mManifestsBinnedbyContent ------------- content hash --------------------- ScraperID ------ manifest hash.
                 mManifestsBinnedbyContent.insert(std::make_pair(iter_inner.second.second, std::make_pair(iter.first, iter_inner.second.first)));
-                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert, timestamp "
+                _log(logattribute::INFO, "ScraperConstructConvergedManifest", "mManifestsBinnedbyContent insert, timestamp "
                                   + DateTimeStrFormat("%x %H:%M:%S", iter_inner.first)
                                   + ", content hash "+ iter_inner.second.second.GetHex()
                                   + ", scraper ID " + iter.first
@@ -3935,7 +3929,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                 else
                 {
                     StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
-                    // Scraper was in the convergence. Log if in fDebug3.
+                    // Scraper was in the convergence.
                     _log(logattribute::INFO, "ScraperConstructConvergedManifest", "Scraper " + iScraper.first + " in convergence.");
                 }
             }
@@ -3974,7 +3968,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
     if (bConvergenceSuccessful)
     {
         LOCK(CScraperManifest::cs_mapManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+        _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
         // Select agreed upon (converged) CScraper manifest based on converged hash.
         auto pair = CScraperManifest::mapManifest.find(convergence->second.second);
@@ -4063,7 +4057,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             }
         }
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+        _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
     }
 
     if (!bConvergenceSuccessful)
@@ -4125,7 +4119,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
 
         {
             LOCK(CScraperManifest::cs_mapManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
             // For the selected project in the whitelist, walk each scraper.
             for (const auto& iter : mMapCSManifestsBinnedByScraper)
@@ -4183,9 +4177,9 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                         {
                             // Insert into mProjectObjectsBinnedbyContent -------- content hash ------------------- ScraperID -------- Project.
                             mProjectObjectsBinnedbyContent.insert(std::make_pair(nProjectObjectHash, std::make_pair(iter.first, iWhitelistProject.m_name)));
-                            //if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert "
+                            //_log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert "
                             //                 + nProjectObjectHash.GetHex() + ", " + iter.first + ", " + iWhitelistProject.m_name);
-                            if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert, timestamp "
+                            _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "mProjectObjectsBinnedbyContent insert, timestamp "
                                               + DateTimeStrFormat("%x %H:%M:%S", manifest.nTime)
                                               + ", content hash "+ nProjectObjectHash.GetHex()
                                               + ", scraper ID " + iter.first
@@ -4196,7 +4190,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                     }
                 }
             }
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
         }
 
         // Walk the time map (backwards in time because the sort order is descending), and select the first
@@ -4276,7 +4270,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
         // with a manifest that has the newest part associated with a successful part (project) level convergence.
 
         LOCK(CScraperManifest::cs_mapManifest);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+        _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
         // Select manifest based on provided hash.
         auto pair = CScraperManifest::mapManifest.find(nManifestHashForConvergedBeaconList);
@@ -4329,7 +4323,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                 unsigned int nScraperConvergenceCount = StructConvergedManifest.mIncludedScrapersbyProject.count(iProjects.m_name);
                 StructConvergedManifest.mScraperConvergenceCountbyProject.insert(std::make_pair(iProjects.m_name, nScraperConvergenceCount));
 
-                if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
+                _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Project " + iProjects.m_name
                                   + ": " + std::to_string(nScraperConvergenceCount) + " scraper(s) converged");
             }
 
@@ -4339,7 +4333,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                 if (StructConvergedManifest.mIncludedProjectsbyScraper.count(iScraper.first))
                 {
                     StructConvergedManifest.vIncludedScrapers.push_back(iScraper.first);
-                    if (fDebug3) _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
+                    _log(logattribute::INFO, "ScraperConstructConvergedManifestByProject", "Scraper "
                                       + iScraper.first
                                       + " was included in one or more project level convergences.");
                 }
@@ -4371,7 +4365,7 @@ bool ScraperConstructConvergedManifestByProject(const NN::WhitelistSnapshot& pro
                 }
             }
 
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
         }
     }
 
@@ -4432,7 +4426,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
     _log(logattribute::INFO, "ScraperDeleteCScraperManifests", "Deleting old CScraperManifests.");
 
     LOCK(CScraperManifest::cs_mapManifest);
-    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+    _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     // First check for unauthorized manifests just in case a scraper has been deauthorized.
     // This is only done if in sync.
@@ -4490,11 +4484,11 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
     // SCRAPER_CMANIFEST_RETENTION_TIME as well.
     {
         LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
         ConvergedScraperStatsCache.DeleteOldConvergenceFromPastConvergencesMap();
 
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
     }
 
     unsigned int nPendingDeleted = 0;
@@ -4512,7 +4506,7 @@ mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests()
     // that large. (The lock on CScraperManifest::cs_mapManifest is still held from above.)
     mMapCSManifestsBinnedByScraper = BinCScraperManifestsByScraper();
 
-    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+    _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
     return mMapCSManifestsBinnedByScraper;
 }
@@ -4593,14 +4587,14 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
     bool bConvergenceUpdateNeeded = true;
     {
         LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
         // If the cache is less than nScraperSleep in minutes old OR not dirty...
         if (GetAdjustedTime() - ConvergedScraperStatsCache.nTime < (nScraperSleep / 1000) || ConvergedScraperStatsCache.bClean)
             bConvergenceUpdateNeeded = false;
 
         // End LOCK(cs_ConvergedScraperStatsCache)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
     }
 
     ConvergedManifest StructConvergedManifest;
@@ -4640,7 +4634,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                 // which is not really necessary.
                 {
                     LOCK(cs_ConvergedScraperStatsCache);
-                    if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+                    _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
                     ConvergedScraperStatsCache.AddConvergenceToPastConvergencesMap();
 
@@ -4680,7 +4674,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
                             uiInterface.NotifyScraperEvent(scrapereventtypes::SBContract, CT_DELETED, {});
 
                     // End LOCK(cs_ConvergedScraperStatsCache)
-                    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+                    _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
                 }
 
 
@@ -4719,7 +4713,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
         // If we are here, we are using cached information.
 
         LOCK(cs_ConvergedScraperStatsCache);
-        if (fDebug3) _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "LOCK", "cs_ConvergedScraperStatsCache");
 
         superblock = ConvergedScraperStatsCache.NewFormatSuperblock;
 
@@ -4731,7 +4725,7 @@ NN::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bCon
         _log(logattribute::INFO, "ScraperGetSuperblockContract", "Superblock object from cached converged stats");
 
         // End LOCK(cs_ConvergedScraperStatsCache)
-        if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
+        _log(logattribute::INFO, "ENDLOCK", "cs_ConvergedScraperStatsCache");
 
     }
 
@@ -4793,13 +4787,13 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
     // This is going to affect UNCACHED validation ONLY, because that is the only place where we need to worry about hint collisions.
     unsigned int nAdditionalBitShift = std::min((unsigned int) 30, std::max((unsigned int) 0, (unsigned int) (32 - nReducedCacheBits)));
 
-    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "nAdditionalBitShift = " + std::to_string(nAdditionalBitShift));
+    _log(logattribute::INFO, "ValidateSuperblock", "nAdditionalBitShift = " + std::to_string(nAdditionalBitShift));
 
     // underlying manifest hash hint (reduced hash from superblock... (used for uncached lookup against manifests)
     uint32_t nUnderlyingManifestReducedContentHash = 0;
     if (!NewFormatSuperblock.ConvergedByProject()) nUnderlyingManifestReducedContentHash = NewFormatSuperblock.m_manifest_content_hint >> nAdditionalBitShift;
 
-    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
+    _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.m_version = " + std::to_string(NewFormatSuperblock.m_version));
 
     if (bUseCache)
     {
@@ -4816,13 +4810,11 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
         LOCK(cs_ConvergedScraperStatsCache);
 
         // First check and see if superblock contract hash is the current one in the cache.
-        if (fDebug3)
-        {
-            _log(logattribute::INFO, "ValidateSuperblock", "ConvergedScraperStatsCache.NewFormatSuperblock.GetHash() = "
-                 + ConvergedScraperStatsCache.NewFormatSuperblock.GetHash().ToString());
-            _log(logattribute::INFO, "ValidateSuperblock", "nNewFormatSuperblockHash = "
-                 + nNewFormatSuperblockHash.ToString());
-        }
+        _log(logattribute::INFO, "ValidateSuperblock", "ConvergedScraperStatsCache.NewFormatSuperblock.GetHash() = "
+             + ConvergedScraperStatsCache.NewFormatSuperblock.GetHash().ToString());
+        _log(logattribute::INFO, "ValidateSuperblock", "nNewFormatSuperblockHash = "
+             + nNewFormatSuperblockHash.ToString());
+
         if (ConvergedScraperStatsCache.NewFormatSuperblock.GetHash() == nNewFormatSuperblockHash) return scraperSBvalidationtype::CurrentCachedConvergence;
 
         // if not validated with current cached contract, then check past ones in the cache. Note that it is
@@ -4850,7 +4842,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
     // If the superblock indicates not converged by project, then reconstruct at the manifest level
     // else reconstruct at the project level.
 
-    if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.ConvergedByProject() = " + std::to_string(NewFormatSuperblock.ConvergedByProject()));
+    _log(logattribute::INFO, "ValidateSuperblock", "NewFormatSuperblock.ConvergedByProject() = " + std::to_string(NewFormatSuperblock.ConvergedByProject()));
 
     if (!NewFormatSuperblock.ConvergedByProject())
     {
@@ -4940,15 +4932,15 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
                 NN::Superblock superblock = NN::Superblock::FromStats(mScraperstats);
 
-                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "superblock.m_version = " + std::to_string(superblock.m_version));
+                _log(logattribute::INFO, "ValidateSuperblock", "superblock.m_version = " + std::to_string(superblock.m_version));
 
                 // This should really be done in the superblock class as an overload on NN::Superblock::FromConvergence.
                 superblock.m_convergence_hint = CandidateManifest.nContentHash.GetUint64() >> 32;
 
                 NN::QuorumHash nCandidateSuperblockHash = superblock.GetHash();
 
-                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "Cached past convergence - nCandidateSuperblockHash = " + nCandidateSuperblockHash.ToString());
-                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "Cached past convergence - nNewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
+                _log(logattribute::INFO, "ValidateSuperblock", "Cached past convergence - nCandidateSuperblockHash = " + nCandidateSuperblockHash.ToString());
+                _log(logattribute::INFO, "ValidateSuperblock", "Cached past convergence - nNewFormatSuperblockHash = " + nNewFormatSuperblockHash.ToString());
 
                 if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ManifestLevelConvergence;
             }
@@ -4991,11 +4983,11 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             // We initialize this for each project in the whitelist.
             bool fAtLeastOnePartInsertedForProject = false;
 
-            if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "by project uncached: project = " + iWhitelistProject.m_name);
+            _log(logattribute::INFO, "ValidateSuperblock", "by project uncached: project = " + iWhitelistProject.m_name);
 
             {
                 LOCK(CScraperManifest::cs_mapManifest);
-                if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+                _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
                 // For the selected project in the whitelist, walk each scraper.
                 for (const auto& iter : mMapCSManifestsBinnedByScraper)
@@ -5060,10 +5052,10 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                         }
                     }
                 }
-                if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+                _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
             } // Critical section scope for cs_mapManifest.
 
-            if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "by project uncached: mProjectObjectsBinnedbyContent size = "
+            _log(logattribute::INFO, "ValidateSuperblock", "by project uncached: mProjectObjectsBinnedbyContent size = "
                               + std::to_string(mProjectObjectsBinnedbyContent.size()));
 
             for (const auto& iter : mProjectObjectsBinnedbyContent)
@@ -5152,7 +5144,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             }
         } // For loop over projectWhitelist.
 
-        if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "by project uncached: iCountSuccessfulConvergedProjects = "
+        _log(logattribute::INFO, "ValidateSuperblock", "by project uncached: iCountSuccessfulConvergedProjects = "
                           + std::to_string(iCountSuccessfulConvergedProjects)
                           + ", NewFormatSuperblock.m_projects size = "
                           + std::to_string(NewFormatSuperblock.m_projects.size()));
@@ -5212,7 +5204,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             }
         }
 
-        if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "uncached by project: nPermutations = " + std::to_string(nPermutations));
+        _log(logattribute::INFO, "ValidateSuperblock", "uncached by project: nPermutations = " + std::to_string(nPermutations));
 
         // Iterate through the permutations. Most of the time there will only be one! :)
         for (unsigned int iPermutationIndex = 0; iPermutationIndex < nPermutations; ++iPermutationIndex)
@@ -5236,7 +5228,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
                 // Calculate quotient
                 unsigned int iPartIndex = remainder / divisor;
 
-                if (fDebug3) _log(logattribute::INFO, "ValidateSuperblock", "uncached by project: "
+                _log(logattribute::INFO, "ValidateSuperblock", "uncached by project: "
                                   + std::to_string(remainder) + "/" + std::to_string(divisor) + +" = iPartIndex = " + std::to_string(iPartIndex)
                                   + " index max = " + std::to_string(((mCandidatePartsByProject.find(iProject.first))->second).size() - 1));
 
@@ -5284,7 +5276,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
             }
 
             LOCK(CScraperManifest::cs_mapManifest);
-            if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
             // Lets use the BeaconList from the manifest referred to by nManifestHashForConvergedBeaconList. Technically there is no exact answer to
             // the BeaconList that should be used in the convergence when putting it together at the individual part level, because each project part
@@ -5337,7 +5329,7 @@ scraperSBvalidationtype ValidateSuperblock(const NN::Superblock& NewFormatSuperb
 
             NN::QuorumHash nCandidateSuperblockHash = superblock.GetHash();
 
-            if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+            _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
             if (nCandidateSuperblockHash == nNewFormatSuperblockHash) return scraperSBvalidationtype::ProjectLevelConvergence;
         } // Permutation loop
@@ -5398,11 +5390,11 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
                 );
 
     LOCK(CScraperManifest::cs_mapManifest);
-    if (fDebug3) _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
+    _log(logattribute::INFO, "LOCK", "CScraperManifest::cs_mapManifest");
 
     bool ret = CScraperManifest::DeleteManifest(uint256S(params[0].get_str()), true);
 
-    if (fDebug3) _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
+    _log(logattribute::INFO, "ENDLOCK", "CScraperManifest::cs_mapManifest");
 
     return UniValue(ret);
 }

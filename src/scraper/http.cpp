@@ -157,7 +157,7 @@ void Http::Download(
         const std::string &userpass)
 {
     ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
-    if(!fp)
+    if (!fp)
         throw std::runtime_error(
                 tfm::format("Error opening target %s: %s (%d)", destination, strerror(errno), errno));
 
@@ -206,18 +206,17 @@ std::string Http::GetEtag(
     // Find ETag header.
     std::string etag;
 
-    if(fDebug3) _log(logattribute::INFO, "Http::ETag", "Header: \n" + header);
+    _log(logattribute::INFO, "Http::ETag", "Header: \n" + header);
 
     std::istringstream iss(header);
     for (std::string line; std::getline(iss, line);)
     {
-        if(size_t pos = line.find("ETag: ") != std::string::npos)
+        if (size_t pos = line.find("ETag: ") != std::string::npos)
         {
             etag = line.substr(pos+6, line.size());
             etag = etag.substr(1, etag.size() - 3);
 
-            if (fDebug)
-                _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
+            _log(logattribute::INFO, "curl_http_header", "Captured ETag for project url <urlfile=" + url + ", ETag=" + etag + ">");
 
             return etag;
         }
@@ -270,7 +269,7 @@ void Http::DownloadSnapshot()
 
     ScopedFile fp(fsbridge::fopen(destination, "wb"), &fclose);
 
-    if(!fp)
+    if (!fp)
     {
         DownloadStatus.SnapshotDownloadFailed = true;
 
