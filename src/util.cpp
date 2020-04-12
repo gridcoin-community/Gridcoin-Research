@@ -67,9 +67,7 @@ ArgsMap mapArgs;
 ArgsMultiMap mapMultiArgs;
 
 bool fDebug = false;
-bool fDebugNet = false;
 bool fDebug2 = false;
-bool fDebug4 = false;
 bool fDebug10 = false;
 
 bool fPrintToConsole = false;

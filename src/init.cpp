@@ -251,8 +251,7 @@ std::string HelpMessage()
 #endif
     strUsage +=
         "  -testnet               " + _("Use the test network") + "\n" +
-        "  -debug                 " + _("Output extra debugging information. Implies all other -debug* options") + "\n" +
-        "  -debugnet              " + _("Output extra network debugging information") + "\n" +
+        "  -debug                 " + _("Output extra debugging information.") + "\n" +
         "  -logtimestamps         " + _("Prepend debug output with timestamp") + "\n" +
         "  -shrinkdebugfile       " + _("Shrink debug.log file on client startup (default: 1 when no -debug)") + "\n" +
         "  -printtoconsole        " + _("Send trace/debug info to console instead of debug.log file") + "\n" +
@@ -605,15 +604,17 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     fDebug=false;
 
-    if (fDebug)
-        fDebugNet = true;
-    else
-        fDebugNet = GetBoolArg("-debugnet");
-
     if (GetArg("-debug", "false")=="true")
     {
             fDebug = true;
             LogPrintf("Entering debug mode.");
+
+            // For now if debug is set, turn on the following categories as well.
+            // When the logs get fully converted over to categories, we will change
+            // this to a default set of enabled categories that are turned on/off
+            // when debug is set/unset, and the debug will be the only debug control
+            // flag left.
+            LogInstance().EnableCategory(BCLog::LogFlags::NET);
     }
 
     fDebug2 = false;
@@ -622,12 +623,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
             fDebug2 = true;
             LogPrintf("Entering GRC debug mode 2.");
-    }
-
-    if (GetArg("-debug4", "false")=="true")
-    {
-        fDebug4 = true;
-        LogPrintf("Entering RPC time debug mode");
     }
 
     fDebug10= (GetArg("-debug10","false")=="true");

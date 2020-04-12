@@ -1253,43 +1253,6 @@ UniValue debug2(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue debug4(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug4 <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable debug mode on the fly\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    fDebug4 = params[0].get_bool();
-
-    res.pushKV("Debug4", fDebug4 ? "Entering debug mode." : "Exiting debug mode.");
-
-    return res;
-}
-UniValue debugnet(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debugnet <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable debug mode on the fly\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    fDebugNet = params[0].get_bool();
-
-    res.pushKV("DebugNet", fDebugNet ? "Entering debug mode." : "Exiting debug mode.");
-
-    return res;
-}
-
 UniValue getlistof(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)

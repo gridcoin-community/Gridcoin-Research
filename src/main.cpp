@@ -4806,9 +4806,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return error("message getdata size() = %" PRIszu "", vInv.size());
         }
 
-        if (fDebugNet || (vInv.size() != 1))
+        if (vInv.size() != 1)
         {
-            if (fDebug10)  LogPrintf("received getdata (%" PRIszu " invsz)", vInv.size());
+            LogPrint(BCLog::LogFlags::NET, "received getdata (%" PRIszu " invsz)", vInv.size());
         }
 
         LOCK(cs_main);
@@ -4816,9 +4816,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (fShutdown)
                 return true;
-            if (fDebugNet || (vInv.size() == 1))
+            if (vInv.size() == 1)
             {
-              if (fDebug10)   LogPrintf("received getdata for: %s", inv.ToString());
+              LogPrint(BCLog::LogFlags::NET, "received getdata for: %s", inv.ToString());
             }
 
             if (inv.type == MSG_BLOCK)
@@ -5575,7 +5575,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
         if ( iaaf!=mapAlreadyAskedFor.end() && !fAlreadyHave )
         {
-            if (fDebugNet)        LogPrintf("sending getdata: %s", inv.ToString());
+            LogPrint(BCLog::LogFlags::NET, "sending getdata: %s", inv.ToString());
             vGetData.push_back(inv);
             if (vGetData.size() >= 1000)
             {
