@@ -14,7 +14,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: ccache
-      run: ccache -s
       uses: actions/cache@v1
       with:
         path: ~/.ccache
