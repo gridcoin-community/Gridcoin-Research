@@ -10,15 +10,15 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: install depends
-      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb-dev libdb++-dev
+      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb-dev libdb++-dev libzip
     - name: install boost depends
       run: sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
     - name: install gui depends
-      run: sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
+      run: sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler libqrencode-dev
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure --with-incompatible-bdb
+      run: ./configure --with-incompatible-bdb --with-gui=qt5
     - name: make
       run: make
     - name: make check
