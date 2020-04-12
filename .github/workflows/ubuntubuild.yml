@@ -10,9 +10,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: install depends
-      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb5.3
+      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb5.3 libdb5.3++
     - name: install boost depends
       run: sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
+    - name: install gui depends
+      run: sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
     - name: autogen
       run: ./autogen.sh
     - name: configure
