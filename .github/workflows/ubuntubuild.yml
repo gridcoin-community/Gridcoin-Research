@@ -1,4 +1,4 @@
-name: Ubuntu Build (Bionic)
+name: Ubuntu Build (Bionic, latest libdb from repo)
 
 on: [push, pull_request]
 
@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: install depends
-      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils
+      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb
     - name: install boost depends
       run: sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
     - name: autogen
