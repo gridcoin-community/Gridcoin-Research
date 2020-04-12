@@ -15,21 +15,18 @@ jobs:
     - uses: actions/checkout@v2
     - name: add to path
       run: export PATH=$(echo $PATH | tr ':' "\n" | sed '/\/opt\/python/d' | tr "\n" ":" | sed "s|::|:|g")
-    - name: Get Time
-      id: time
-      uses: nanzm/get-time-action@v1.0
     - name: ccache
       uses: actions/cache@v1
       with:
         path: ~/.ccache
-        key: ${{ github.repository }}-ccache-${{ steps.time.outputs.time }}
+        key: ${{ github.repository }}-ccache-${{ github.run_id }}
         restore-keys: |
           ${{ github.repository }}-ccache-
     - name: cache depends
       uses: actions/cache@v1
       with:
         path: depends/built
-        key: ${{ github.repository }}-depends-${{ steps.time.outputs.time }}
+        key: ${{ github.repository }}-depends-${{ github.run_id }}
         restore-keys: |
           ${{ github.repository }}-depends-
     - name: apt update & install depends

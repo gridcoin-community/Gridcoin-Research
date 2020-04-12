@@ -20,7 +20,7 @@ jobs:
       uses: actions/cache@v1
       with:
         path: ~/.ccache
-        key: ${{ github.repository }}-ccache-${{ steps.time.outputs.time }}
+        key: ${{ github.repository }}-ccache-${{ github.run_id }}
         restore-keys: |
           ${{ github.repository }}-ccache-
     - name: apt update & install depends
