@@ -13,7 +13,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Cache ccache
+    - name: ccache
       uses: actions/cache@v1
       with:
         path: ~/.ccache
@@ -27,4 +27,4 @@ jobs:
     - name: make distdir
       run: make distdir VERSION=x86_64-unknown-linux-gnu
     - name: make install
-      run: make $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && make install V=1 ; false )
+      run: sudo make $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && sudo make install V=1 ; false )
