@@ -13,6 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: add to path
+      run: export PATH=$(echo $PATH | tr ':' "\n" | sed '/\/opt\/python/d' | tr "\n" ":" | sed "s|::|:|g")
     - name: Get Time
       id: time
       uses: nanzm/get-time-action@v1.0
@@ -23,6 +25,13 @@ jobs:
         key: ${{ github.repository }}-ccache-${{ steps.time.outputs.time }}
         restore-keys: |
           ${{ github.repository }}-ccache-
+    - name: cache depends
+      uses: actions/cache@v1
+      with:
+        path: depends/built
+        key: ${{ github.repository }}-depends-${{ steps.time.outputs.time }}
+        restore-keys: |
+          ${{ github.repository }}-depends-
     - name: apt update & install depends
       run: sudo apt-get update && sudo dpkg --add-architecture "i386" && sudo apt-get install ccache python3 nsis g++-mingw-w64-x86-64
     - name: update alternatives
