@@ -1,21 +1,30 @@
-name: Ubuntu Build (Bionic, latest libdb from repo)
+name: Ubuntu Build (Bionic, x86_64)
 
 on: [push, pull_request]
 
 jobs:
   build:
-
+    env:
+      CCACHE_SIZE: 100M
+      CCACHE_TEMPDIR: /tmp/.ccache-temp
+      CCACHE_COMPRESS: 1
+      MAKEJOBS: -j3
     runs-on: ubuntu-18.04
 
     steps:
     - uses: actions/checkout@v2
+    - name: Cache ccache
+      uses: actions/cache@v1
+      with:
+        path: ~/.ccache
+        key: ${{ runner.os }}-ccache
     - name: apt update & install depends
-      run: sudo apt-get update && sudo apt-get install libqt5gui5 libqt5core5a qtbase5-dev libqt5dbus5 qttools5-dev qttools5-dev-tools libqt5charts5-dev libssl-dev libevent-dev bsdmainutils libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-iostreams-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libdb5.3++-dev libminiupnpc-dev protobuf-compiler libqrencode-dev xvfb libzip4 libzip-dev zlib1g zlib1g-dev libcurl4-gnutls-dev
+      run: sudo apt-get update && sudo apt-get install ccache libqt5gui5 libqt5core5a qtbase5-dev libqt5dbus5 qttools5-dev qttools5-dev-tools libqt5charts5-dev libssl-dev libevent-dev bsdmainutils libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-iostreams-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libdb5.3++-dev libminiupnpc-dev protobuf-compiler libqrencode-dev xvfb libzip4 libzip-dev zlib1g zlib1g-dev libcurl4-gnutls-dev
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure --with-incompatible-bdb --with-gui=qt5
+      run: ./configure --with-incompatible-bdb --with-gui=qt5 --enable-reduce-export
     - name: make distdir
       run: make distdir VERSION=x86_64-unknown-linux-gnu
-    - name: make
-      run: make
+    - name: make install
+      run: make $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && make install V=1 ; false )
