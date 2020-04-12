@@ -12,7 +12,7 @@ jobs:
     - name: apt update
       run: sudo apt-get update
     - name: install depends
-      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb-dev libdb++-dev libzip-dev libqt5* libqrencode-dev libboost-all-dev
+      run: sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils libdb-dev libdb++-dev libzip-dev libqt5* libqrencode-dev libboost-all-dev qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
     - name: autogen
       run: ./autogen.sh
     - name: configure
