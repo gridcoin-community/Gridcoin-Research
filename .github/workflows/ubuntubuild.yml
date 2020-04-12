@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: Ubuntu Build
 
 on: [push, pull_request]
 
@@ -12,7 +12,7 @@ jobs:
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure
+      run: ./configure --with-incompatible-bdb
     - name: make
       run: make
     - name: make check
