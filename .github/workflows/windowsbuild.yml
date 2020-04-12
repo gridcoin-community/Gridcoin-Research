@@ -13,11 +13,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Get Time
+      id: time
+      uses: nanzm/get-time-action@v1.0
     - name: ccache
       uses: actions/cache@v1
       with:
         path: ~/.ccache
-        key: ${{ github.repository }}-ccache-${{ github.run_id}}
+        key: ${{ github.repository }}-ccache-${{ steps.time.outputs.time }}
         restore-keys: ${{ github.repository }}-ccache-
     - name: apt update & install depends
       run: sudo apt-get update && sudo dpkg --add-architecture "i386" && sudo apt-get install ccache python3 nsis g++-mingw-w64-x86-64
