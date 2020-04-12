@@ -18,10 +18,10 @@ jobs:
       with:
         path: ~/.ccache
         key: ${{ github.repository }}-ccache
-    - name: add arch
-      run: sudo dpkg --add-architecture "i386" && sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
     - name: apt update & install depends
-      run: sudo apt-get update && sudo apt-get install ccache python3 nsis g++-mingw-w64-x86-64
+      run: sudo apt-get update && sudo dpkg --add-architecture "i386" && sudo apt-get install ccache python3 nsis g++-mingw-w64-x86-64
+    - name: update alternatives
+      run:  sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
     - name: build depends
       run: make $MAKEJOBS -C depends HOST=x86_64-w64-mingw32 NO_QT=1
     - name: autogen
