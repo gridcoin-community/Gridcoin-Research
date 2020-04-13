@@ -13,9 +13,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Get Time
-      id: time
-      uses: nanzm/get-time-action@v1.0
     - name: ccache
       uses: actions/cache@v1
       with:

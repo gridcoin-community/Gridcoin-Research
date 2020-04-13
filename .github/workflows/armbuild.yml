@@ -1,0 +1,38 @@
+name: Arm Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    env:
+      CCACHE_SIZE: 250M
+      CCACHE_TEMPDIR: /tmp/.ccache-temp
+      CCACHE_COMPRESS: 1
+      MAKEJOBS: -j3
+      HOST: arm-linux-gnueabihf
+      GRIDCOIN_CONFIG_ALL: --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: ccache
+      uses: actions/cache@v1
+      with:
+        path: ~/.ccache
+        key: ${{ github.repository }}-ccache-${{ github.run_id }}
+        restore-keys: |
+          ${{ github.repository }}-ccache-
+    - name: apt update & install depends
+      run: sudo apt-get update && sudo apt-get install ccache g++-arm-linux-gnueabihf
+    - name: build depends
+      run: make $MAKEJOBS -C depends HOST=$HOST GCCFLAGS="-fPIC" NO_QT=1
+    - name: autogen
+      run: ./autogen.sh
+    - name: configure
+      run: ./configure --cache-file=config.cache $GRIDCOIN_CONFIG_ALL --enable-glibc-back-compat --disable-tests RUN_TESTS=false || ( cat config.log && false)
+    - name: make distdir
+      run: make distdir VERSION=$HOST
+    - name: configure again
+      run: cd gridcoin-$HOST && ./configure --cache-file=../config.cache $GRIDCOIN_CONFIG_ALL --enable-glibc-back-compat --disable-tests RUN_TESTS=false || ( cat config.log && false)
+    - name: make install
+      run: sudo make GCCFLAGS="-fPIC" $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && sudo make GCCFLAGS="-fPIC" install V=1 ; false )
