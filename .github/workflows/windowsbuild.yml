@@ -10,7 +10,6 @@ jobs:
       CCACHE_COMPRESS: 1
       MAKEJOBS: -j3
       HOST: x86_64-w64-mingw32
-      GRIDCOIN_CONFIG_ALL: --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST
     runs-on: ubuntu-18.04
 
     steps:
@@ -40,7 +39,7 @@ jobs:
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure --cache-file=config.cache $GRIDCOIN_CONFIG_ALL --enable-reduce-export || ( cat config.log && false)
+      run: ./configure --cache-file=config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-reduce-export || ( cat config.log && false)
     - name: make distdir
       run: make distdir VERSION=$HOST
     - name: make

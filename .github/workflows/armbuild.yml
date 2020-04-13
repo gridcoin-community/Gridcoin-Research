@@ -10,7 +10,6 @@ jobs:
       CCACHE_COMPRESS: 1
       MAKEJOBS: -j3
       HOST: arm-linux-gnueabihf
-      GRIDCOIN_CONFIG_ALL: --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST
     runs-on: ubuntu-18.04
 
     steps:
@@ -29,10 +28,10 @@ jobs:
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure --cache-file=config.cache $GRIDCOIN_CONFIG_ALL --enable-glibc-back-compat --disable-tests RUN_TESTS=false || ( cat config.log && false)
+      run: ./configure --cache-file=config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-glibc-back-compat --disable-tests RUN_TESTS=false || ( cat config.log && false)
     - name: make distdir
       run: make distdir VERSION=$HOST
     - name: configure again
-      run: cd gridcoin-$HOST && ./configure --cache-file=../config.cache $GRIDCOIN_CONFIG_ALL --enable-glibc-back-compat --disable-tests RUN_TESTS=false || ( cat config.log && false)
+      run: cd gridcoin-$HOST && ./configure --cache-file=../config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-glibc-back-compat --disable-tests RUN_TESTS=false || ( cat config.log && false)
     - name: make install
       run: sudo make GCCFLAGS="-fPIC" $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && sudo make GCCFLAGS="-fPIC" install V=1 ; false )
