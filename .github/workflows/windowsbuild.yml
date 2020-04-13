@@ -9,6 +9,7 @@ jobs:
       CCACHE_TEMPDIR: /tmp/.ccache-temp
       CCACHE_COMPRESS: 1
       MAKEJOBS: -j3
+      HOST: x86_64-w64-mingw32
     runs-on: ubuntu-18.04
 
     steps:
@@ -34,12 +35,12 @@ jobs:
     - name: update alternatives
       run:  sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
     - name: build depends
-      run: make $MAKEJOBS -C depends HOST=x86_64-w64-mingw32 NO_QT=1
+      run: make $MAKEJOBS -C depends HOST=$HOST NO_QT=1
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure --cache-file=config.cache --disable-dependency-tracking --with-incompatible-bdb --with-gui=qt5 --enable-reduce-export || ( cat config.log && false)
+      run: ./configure --cache-file=config.cache --disable-dependency-tracking --with-incompatible-bdb --with-gui=qt5 --enable-reduce-export --prefix=--prefix=depends/$HOST|| ( cat config.log && false)
     - name: make distdir
-      run: make distdir VERSION=x86_64-w64-mingw32
+      run: make distdir VERSION=$HOST
     - name: make
       run: make $MAKEJOBS || ( echo "Build failure. Verbose build follows." && make V=1 ; false )
