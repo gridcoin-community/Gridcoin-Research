@@ -1,0 +1,40 @@
+name: Mac Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    env:
+      CCACHE_SIZE: 250M
+      CCACHE_TEMPDIR: /tmp/.ccache-temp
+      CCACHE_COMPRESS: 1
+      MAKEJOBS: -j3
+      HOST: x86_64-apple-darwin11
+      OSX_SDK: 10.11
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: ccache
+      uses: actions/cache@v1
+      with:
+        path: ~/.ccache
+        key: ${{ github.repository }}-ccache-${{ github.run_id }}
+        restore-keys: |
+          ${{ github.repository }}-ccache-
+    - name: apt update & install depends
+      run: sudo apt-get update && sudo apt-get install cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python-dev
+    - name: prepare macos sdk
+      run: curl --location --fail $SDK_URL/MacOSX${OSX_SDK}.sdk.tar.gz -o depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz && tar -C depends/SDKs -zxf depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz
+    - name: build depends
+      run: make $MAKEJOBS -C depends HOST=$HOST NO_QT=1
+    - name: autogen
+      run: ./autogen.sh
+    - name: configure
+      run: ./configure --cache-file=config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-reduce-exports --disable-asm RUN_TESTS=false || ( cat config.log && false)
+    - name: make distdir
+      run: make distdir VERSION=$HOST
+    - name: configure again
+      run: cd gridcoin-$HOST && ./configure --cache-file=../config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-reduce-exports --disable-asm RUN_TESTS=false || ( cat config.log && false)
+    - name: make
+      run: sudo make $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && sudo make V=1 ; false )
