@@ -30,3 +30,5 @@ jobs:
       run: make
     - name: make check
       run: make check
+    - name: make deploy
+      run: make deploy
