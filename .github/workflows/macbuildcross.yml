@@ -1,4 +1,4 @@
-name: Mac Build
+name: Mac Build (Cross Compile)
 
 on: [push, pull_request]
 
