@@ -11,6 +11,7 @@ jobs:
       MAKEJOBS: -j3
       HOST: x86_64-apple-darwin11
       OSX_SDK: 10.11
+      SDK_URL: https://bitcoincore.org/depends-sources/sdks
     runs-on: ubuntu-18.04
 
     steps:
@@ -32,7 +33,7 @@ jobs:
     - name: apt update & install depends
       run: sudo apt-get update && sudo apt-get install cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python-dev
     - name: prepare macos sdk
-      run: curl --location --fail $SDK_URL/MacOSX10.11.sdk.tar.gz -o depends/sdk-sources/MacOSX10.11.sdk.tar.gz && tar -C depends/SDKs -zxf depends/sdk-sources/MacOSX10.11.sdk.tar.gz
+      run: curl --location --fail "$SDK_URL/MacOSX${OSX_SDK}.sdk.tar.gz" -o "depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz" && tar -C depends/SDKs -zxf "depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz"
     - name: build depends
       run: make $MAKEJOBS -C depends HOST=$HOST NO_QT=1
     - name: autogen
