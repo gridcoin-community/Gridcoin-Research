@@ -21,6 +21,13 @@ jobs:
         key: ${{ github.repository }}-ccache-${{ github.run_id }}
         restore-keys: |
           ${{ github.repository }}-ccache-
+    - name: cache depends
+      uses: actions/cache@v1
+      with:
+        path: depends/built
+        key: ${{ github.repository }}-depends-${{ github.run_id }}
+        restore-keys: |
+          ${{ github.repository }}-depends-
     - name: apt update & install depends
       run: sudo apt-get update && sudo apt-get install ccache g++-arm-linux-gnueabihf
     - name: build depends
