@@ -21,7 +21,7 @@ jobs:
         restore-keys: |
           ${{ github.repository }}-ccache-
     - name: brew update & install depends
-      run: brew update && brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt libqrencode ccache librsvg
+      run: brew update && brew install automake berkeley-db4 libtool boost miniupnpc openssl pkg-config qt libqrencode ccache librsvg
     - name: autogen
       run: ./autogen.sh
     - name: configure
