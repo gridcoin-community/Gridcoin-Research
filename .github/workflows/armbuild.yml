@@ -1,4 +1,4 @@
-name: Arm Build
+name: ARM Build
 
 on: [push, pull_request]
 

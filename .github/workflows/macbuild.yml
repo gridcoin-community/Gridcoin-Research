@@ -1,0 +1,32 @@
+name: Mac Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    env:
+      CCACHE_SIZE: 250M
+      CCACHE_TEMPDIR: /tmp/.ccache-temp
+      CCACHE_COMPRESS: 1
+      MAKEJOBS: -j3
+    runs-on: macos-10.15
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: ccache
+      uses: actions/cache@v1
+      with:
+        path: ~/.ccache
+        key: ${{ github.repository }}-ccache-${{ github.run_id }}
+        restore-keys: |
+          ${{ github.repository }}-ccache-
+    - name: brew update & install depends
+      run: brew update && brew install automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config qt libqrencode ccache librsvg
+    - name: autogen
+      run: ./autogen.sh
+    - name: configure
+      run: ./configure
+    - name: make
+      run: make
+    - name: make check
+      run: make check
