@@ -13,8 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: test
-      uses: ./.github/actions/flags.yml
+    - name: flags
+      uses: ./.github/actions/
       with:
         host: x86_64-unknown-linux-gnu
       id: actions
