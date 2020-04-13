@@ -7,9 +7,10 @@
 #include "config/gridcoin-config.h"
 #endif
 
+#include "net.h"
+
 #include "db.h"
 #include "banman.h"
-#include "net.h"
 #include "init.h"
 #include "ui_interface.h"
 #include "util.h"
@@ -27,7 +28,6 @@
 #endif
 
 #ifdef USE_UPNP
- #include <miniupnpc/miniwget.h>
  #include <miniupnpc/miniupnpc.h>
  #include <miniupnpc/upnpcommands.h>
  #include <miniupnpc/upnperrors.h>
@@ -57,6 +57,11 @@ extern void NeuralNetwork();
 
 extern bool fScraperActive;
 
+struct LocalServiceInfo {
+    int nScore;
+    int nPort;
+};
+
 //
 // Global state variables
 //
@@ -64,7 +69,7 @@ bool fDiscover = true;
 bool fUseUPnP = false;
 uint64_t nLocalServices = NODE_NETWORK;
 static CCriticalSection cs_mapLocalHost;
-static map<CNetAddr, CService> mapLocalHost;
+static map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfReachable[NET_MAX] = {};
 static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
@@ -127,83 +132,109 @@ void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd, bool fForce
     PushMessage("getblocks", CBlockLocator(pindexBegin), hashEnd);
 }
 
-// find 'best' local address for a particular peer, with a bit of randomness so that
-// use new adresses are also used, which increases score and is useful for dynamic IPs.
+// find 'best' local address for a particular peer
 bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
 {
     if (fNoListen)
         return false;
 
+    int nBestScore = -1;
+    int nBestReachability = -1;
     {
         LOCK(cs_mapLocalHost);
-        if (paddrPeer != NULL && GetRandInt(10) == 0) // for 10% give them the ip they told us
+        for ( auto const& entry : mapLocalHost)
         {
-            auto it = mapLocalHost.find(*paddrPeer);
-            if (it != mapLocalHost.end())
+            int nScore = entry.second.nScore;
+            int nReachability = entry.first.GetReachabilityFrom(paddrPeer);
+            if (nReachability > nBestReachability || (nReachability == nBestReachability && nScore > nBestScore))
             {
-                addr = it->second; // give them the address they told us;
-                addr.SetPort(GetListenPort());
-                return true;
-            }
-        }
-
-        // most likely we want to give them an addreess we already know, or they did not tell us an address
-
-        int nBestReachability = -1;
-        map<CService, int> mIPScorer; // stores the addreses with heighest reachability.
-        int nTotalScore = mapLocalHost.size(); // total score is used to weight the random selection.
-
-        for (auto it : mapLocalHost)
-        {
-            const int nReachability = it.second.GetReachabilityFrom(paddrPeer);
-            if (fDebug10) LogPrintf("My Local Known Addresses: %s told by peer %s reachability: %i", it.second.ToString(), it.first.ToString(), nReachability);
-
-            if (nReachability > nBestReachability)
-            {
+                addr = CService(entry.first, entry.second.nPort);
                 nBestReachability = nReachability;
-                mIPScorer.clear();
-                nTotalScore = 0;
+                nBestScore = nScore;
             }
 
-            if (nReachability == nBestReachability)
-            {
-                const CService a {static_cast<CNetAddr>(it.second), GetListenPort()};
-                mIPScorer[a]++;
-                nTotalScore++;
-            }
-        }
-
-        const int nSelectedScore = GetRandInt(nTotalScore);
-        int nAccumulatedScore = 1;
-
-        for (auto score : mIPScorer){
-            nAccumulatedScore += score.second;
-            if (nAccumulatedScore >= nSelectedScore)
-            {
-                addr = score.first;
-                addr.SetPort(GetListenPort());
-                return true;
-            }
+            LogPrintf("Score(%s,%i)\n", addr.ToString(), nScore);
         }
     }
-    return false;
+
+    LogPrintf("BestScore(%s,%i)\n", addr.ToString(), nBestScore);
+    return nBestScore >= 0;
 }
 
-// get best local address for a particular peer as a CAddress
+// get best local address for a particular peer as a CAddressa
+// Otherwise, return the unroutable 0.0.0.0 but filled in with
+// the normal parameters, since the IP may be changed to a useful
+// one by discovery.
 CAddress GetLocalAddress(const CNetAddr *paddrPeer)
 {
-    CAddress ret(CService("0.0.0.0",0),0);
+    CAddress ret(CService(CNetAddr(), GetListenPort()), nLocalServices);
     CService addr;
     if (GetLocal(addr, paddrPeer))
     {
         ret = CAddress(addr);
-        ret.nServices = nLocalServices;
-        ret.nTime = GetAdjustedTime();
     }
+    ret.nTime = GetAdjustedTime();
     return ret;
 }
 
+static int GetnScore(const CService& addr)
+{
+    LOCK(cs_mapLocalHost);
+    if (mapLocalHost.count(addr) == 0)
+        return 0;
+    return mapLocalHost[addr].nScore;
+}
 
+// Is our peer's addrLocal potentially useful as an external IP source?
+bool IsPeerAddrLocalGood(CNode *pnode)
+{
+    CService addrLocal = pnode->addrLocal;
+    LogPrintf("disco %i remote-rout: %i local->rout: %i reach: %i !limited %i",
+            fDiscover,
+            pnode->addr.IsRoutable(),
+            addrLocal.IsRoutable(),
+            IsReachable(addrLocal),
+            !IsLimited(addrLocal));
+    return fDiscover &&
+           pnode->addr.IsRoutable() &&
+           addrLocal.IsRoutable() &&
+           //IsReachable(addrLocal) &&
+           !IsLimited(addrLocal);
+}
+
+// pushes our own address to a peer
+void AdvertiseLocal(CNode *pnode)
+{
+    LogPrintf("AdvertiseLocal");
+    if (!fNoListen && pnode->fSuccessfullyConnected)
+    {
+       LogPrintf("AdvertiseLocal listening");
+        CAddress addrLocal = GetLocalAddress(&pnode->addr);
+        if (GetBoolArg("-addrmantest", false))
+        {
+            // use IPv4 loopback during addrmantest
+            addrLocal = CAddress(CService("127.0.0.1", GetListenPort()));
+        }
+        // if discovery is enabled, sometimes give our peer the address it
+        // tells us that it sees us as in case it has a better idea of our
+        // adress than we do.
+        LogPrintf("local: %i routable: %i prerand: %i",
+                IsPeerAddrLocalGood(pnode),
+                addrLocal.IsRoutable(),
+                GetnScore(addrLocal) > LOCAL_MANUAL ? 3 : 1 );
+        if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() || GetRandInt((GetnScore(addrLocal) > LOCAL_MANUAL) ? 3 : 1) == 0))
+        {
+            LogPrintf("SETIP %s\n", addrLocal.ToString());
+            addrLocal.SetIP(pnode->addrLocal);
+        }
+        LogPrintf("locald %s rotuable %i\n", addrLocal.ToString(), addrLocal.IsRoutable());
+        if (addrLocal.IsRoutable() || GetBoolArg("-addrmantest", false))
+        {
+            LogPrintf("AdvertiseLocal: advertising address %s\n", addrLocal.ToString());
+            pnode->PushAddress(addrLocal);
+        }
+    }
+}
 
 bool RecvLine2(SOCKET hSocket, string& strLine)
 {
@@ -338,15 +369,31 @@ bool RecvLine(SOCKET hSocket, string& strLine)
 
 void SetReachable(enum Network net, bool fFlag)
 {
+    if (net == NET_UNROUTABLE) // || net == NET_INTERNAL) //TODO NET_INTERNAL needs to be portet from bitcoin
+        return;
     LOCK(cs_mapLocalHost);
     vfReachable[net] = fFlag;
     if (net == NET_IPV6 && fFlag)
         vfReachable[NET_IPV4] = true;
 }
 
+/** check whether a given address is in a network we can probably connect to */
+bool IsReachable(const Network net)
+{
+    LOCK(cs_mapLocalHost);
+    return vfReachable[net] && !vfLimited[net];
+}
+
+bool IsReachable(const CNetAddr& addr)
+{
+    return IsReachable(addr.GetNetwork());
+}
+
+
 // learn a new local address
 bool AddLocal(const CService& addr, int nScore)
 {
+    LogPrintf("maybe AddLocal(%s,%i)\n", addr.ToString(), nScore);
     if (!addr.IsRoutable())
         return false;
 
@@ -362,23 +409,31 @@ bool AddLocal(const CService& addr, int nScore)
 
     {
         LOCK(cs_mapLocalHost);
-        mapLocalHost[CNetAddr({{127},{0},{static_cast<int8_t>(GetRand(255))},{static_cast<int8_t>(GetRand(250)+5)}})] =  addr;
-
-        SetReachable(addr.GetNetwork());
+        bool fAlready = mapLocalHost.count(addr) > 0;
+        LocalServiceInfo &info = mapLocalHost[addr];
+        if (!fAlready || nScore >= info.nScore) {
+            info.nScore = nScore + (fAlready ? 1 : 0);
+            info.nPort = addr.GetPort();
+        }
     }
-
     }
     catch(...)
     {
 
     }
-    LogPrintf("7..");
     return true;
 }
 
 bool AddLocal(const CNetAddr &addr, int nScore)
 {
     return AddLocal(CService(addr, GetListenPort()), nScore);
+}
+
+void RemoveLocal(const CService& addr)
+{
+    LOCK(cs_mapLocalHost);
+    LogPrintf("RemoveLocal(%s)\n", addr.ToString());
+    mapLocalHost.erase(addr);
 }
 
 /** Make a particular network entirely off-limits (no automatic connects to it) */
@@ -402,18 +457,14 @@ bool IsLimited(const CNetAddr &addr)
 }
 
 /** vote for a local address */
-bool SeenLocal(const CNode* const pfrom)
+bool SeenLocal(const CService& addr)
 {
-    if (pfrom == nullptr)
     {
-        return false;
+        LOCK(cs_mapLocalHost);
+        if (mapLocalHost.count(addr) == 0)
+            return false;
+        mapLocalHost[addr].nScore++;
     }
-
-    LOCK(cs_mapLocalHost);
-    mapLocalHost[pfrom->addr] =  pfrom->addrLocal;
-
-    SetReachable(pfrom->addrLocal.GetNetwork());
-
     return true;
 }
 
@@ -421,16 +472,7 @@ bool SeenLocal(const CNode* const pfrom)
 bool IsLocal(const CService& addr)
 {
     LOCK(cs_mapLocalHost);
-    bool ret =  std::any_of(mapLocalHost.begin(), mapLocalHost.end(), [&addr](pair<CNetAddr, CService> const& kv){ return kv.second == addr && kv.second.GetPort() == GetListenPort();});
-    return ret;
-}
-
-/** check whether a given address is in a network we can probably connect to */
-bool IsReachable(const CNetAddr& addr)
-{
-    LOCK(cs_mapLocalHost);
-    enum Network net = addr.GetNetwork();
-    return vfReachable[net] && !vfLimited[net];
+    return mapLocalHost.count(addr) > 0;
 }
 
 void AddressCurrentlyConnected(const CService& addr)
@@ -494,7 +536,8 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     {
         addrman.Attempt(addrConnect);
         /// debug print
-        if (fDebug10) LogPrintf("connected %s", pszDest ? pszDest : addrConnect.ToString());
+        //if (fDebug10) 
+        LogPrintf("connected %s", pszDest ? pszDest : addrConnect.ToString());
         // Set to non-blocking
 #ifdef WIN32
         u_long nOne = 1;
@@ -533,7 +576,8 @@ void CNode::CloseSocketDisconnect()
     fDisconnect = true;
     if (hSocket != INVALID_SOCKET)
     {
-        if (fDebug10) LogPrintf("disconnecting node %s", addrName);
+        //if (fDebug10) 
+        LogPrintf("disconnecting node %s", addrName);
         closesocket(hSocket);
         hSocket = INVALID_SOCKET;
 
@@ -591,7 +635,8 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-    if (fDebug10) LogPrintf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
+//    if (fDebug10) 
+        LogPrintf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
     std::string sboinchashargs;
@@ -901,11 +946,10 @@ void ThreadSocketHandler2(void* parg)
                     // remove from vNodes
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
 
-                    // reduce score of the address used
-                    {
-                        LOCK(cs_mapLocalHost);
-                        mapLocalHost.erase(pnode->addr);
-                    }
+                    //{
+                    //    LOCK(cs_mapLocalHost);
+                    //    mapLocalHost.erase(pnode->addr);
+                    //}
 
                     // release outbound grant (if any)
                     pnode->grantOutbound.Release();
@@ -1066,12 +1110,14 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (g_banman->IsBanned(addr))
             {
-                if (fDebug10) LogPrintf("connection from %s dropped (banned)", addr.ToString());
+//                if (fDebug10) 
+                    LogPrintf("connection from %s dropped (banned)", addr.ToString());
                 closesocket(hSocket);
             }
             else
             {
-                if (fDebug10) LogPrintf("accepted connection %s", addr.ToString());
+                //if (fDebug10) 
+                LogPrintf("accepted connection %s", addr.ToString());
                 CNode* pnode = new CNode(hSocket, addr, "", true);
                 pnode->AddRef();
                 {
@@ -1167,7 +1213,7 @@ void ThreadSocketHandler2(void* parg)
             // Consider this for future removal as this really is not beneficial nor harmful.
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
-                    if (fDebug10)
+//                    if (fDebug10)
                         LogPrintf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ", NodeAddress(pnode), vNodes.size());
 
                     pnode->fDisconnect = true;
@@ -1181,7 +1227,7 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-                    if (fDebug10)
+//                    if (fDebug10)
                         LogPrintf("socket no message in first %d seconds, %d %d", PEER_TIMEOUT, pnode->nLastRecv != 0, pnode->nLastSend != 0);
 
                     pnode->fDisconnect = true;
@@ -2087,7 +2133,8 @@ bool BindListenPort(const CService &addrBind, string& strError)
         LogPrintf("%s", strError);
         return false;
     }
-    if (fDebug10) LogPrintf("Bound to %s", addrBind.ToString());
+//    if (fDebug10) 
+        LogPrintf("Bound to %s", addrBind.ToString());
 
     // Listen for incoming connections
     if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
