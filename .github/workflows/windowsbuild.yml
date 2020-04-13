@@ -38,8 +38,10 @@ jobs:
       run: make $MAKEJOBS -C depends HOST=$HOST NO_QT=1
     - name: autogen
       run: ./autogen.sh
+    - name: make build folder
+      run: mkdir build && cd build
     - name: configure
-      run: ./configure --cache-file=config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-reduce-export || ( cat config.log && false)
+      run: ../configure --cache-file=config.cache --disable-dependency-tracking --prefix=$GITHUB_WORKSPACE/depends/$HOST --enable-reduce-export || ( cat config.log && false)
     - name: make distdir
       run: make distdir VERSION=$HOST
     - name: make
