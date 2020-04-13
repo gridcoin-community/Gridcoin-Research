@@ -32,7 +32,7 @@ jobs:
     - name: apt update & install depends
       run: sudo apt-get update && sudo apt-get install cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python-dev
     - name: prepare macos sdk
-      run: curl --location --fail $SDK_URL/MacOSX$OSX_SDK.sdk.tar.gz -o depends/sdk-sources/MacOSX$OSX_SDK.sdk.tar.gz && tar -C depends/SDKs -zxf depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz
+      run: curl --location --fail "$SDK_URL/MacOSX${OSX_SDK}.sdk.tar.gz" -o "depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz" && tar -C depends/SDKs -zxf "depends/sdk-sources/MacOSX${OSX_SDK}.sdk.tar.gz"
     - name: build depends
       run: make $MAKEJOBS -C depends HOST=$HOST NO_QT=1
     - name: autogen
