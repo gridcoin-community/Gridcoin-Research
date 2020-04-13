@@ -9,3 +9,5 @@ inputs:
 outputs:
   pkgmgnrdepends: # id of output
     description: 'Depends that will be retrieved with apt / brew'
+  config:
+    description: 'Flags to pass to ./configure'

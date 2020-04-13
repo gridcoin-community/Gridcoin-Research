@@ -26,11 +26,11 @@ jobs:
         restore-keys: |
           ${{ github.repository }}-ccache-
     - name: apt update & install depends
-      run: sudo apt-get update && sudo apt-get install 
+      run: sudo apt-get update && sudo apt-get install ${{ steps.actions.outputs.pkgmgnrdepends }}
     - name: autogen
       run: ./autogen.sh  
     - name: configure
-      run: ./configure --cache-file=config.cache --disable-dependency-tracking --with-incompatible-bdb --with-gui=qt5 --enable-reduce-export || ( cat config.log && false)
+      run: ./configure --cache-file=config.cache ${{ steps.actions.outputs.config }} || ( cat config.log && false)
     - name: make distdir
       run: make distdir VERSION=x86_64-unknown-linux-gnu
     #- name: configure again
