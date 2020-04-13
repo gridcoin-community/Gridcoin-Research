@@ -39,7 +39,7 @@ jobs:
     - name: autogen
       run: ./autogen.sh
     - name: configure
-      run: ./configure --cache-file=config.cache --disable-dependency-tracking --with-incompatible-bdb --with-gui=qt5 --enable-reduce-export --prefix=--prefix=depends/$HOST|| ( cat config.log && false)
+      run: ./configure --cache-file=config.cache --disable-dependency-tracking --with-incompatible-bdb --with-gui=qt5 --enable-reduce-export --prefix=depends/$HOST|| ( cat config.log && false)
     - name: make distdir
       run: make distdir VERSION=$HOST
     - name: make

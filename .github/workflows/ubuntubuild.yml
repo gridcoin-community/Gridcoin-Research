@@ -33,3 +33,9 @@ jobs:
       run: make distdir VERSION=x86_64-unknown-linux-gnu
     - name: make install
       run: sudo make $MAKEJOBS install || ( echo "Build failure. Verbose build follows." && sudo make install V=1 ; false )
+    - name: Sleep for 30 seconds
+      uses: jakejarvis/wait-action@master
+      with:
+        time: '30s'
+    - name: make check
+      run: make $MAKEJOBS check VERBOSE=1
