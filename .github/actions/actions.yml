@@ -1,0 +1,11 @@
+name: test
+
+description: 'Greet someone and record the time'
+inputs:
+  host:  # id of input
+    description: 'What is the target host'
+    required: true
+    default: 'x86_64-unknown-linux-gnu'
+outputs:
+  pkgmgnrdepends: # id of output
+    description: 'Depends that will be retrieved with apt / brew'
