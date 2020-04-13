@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: test
-      uses: actions.yml
+      uses: ./.github/actions/flags.yml
       with:
         host: x86_64-unknown-linux-gnu
       id: actions

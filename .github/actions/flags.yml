@@ -1,4 +1,4 @@
-name: test
+name: flagsandstuff
 
 description: 'Greet someone and record the time'
 inputs:
@@ -11,3 +11,6 @@ outputs:
     description: 'Depends that will be retrieved with apt / brew'
   config:
     description: 'Flags to pass to ./configure'
+runs:
+  using: 'node12'
+  main: 'index.js'
