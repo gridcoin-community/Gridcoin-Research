@@ -25,7 +25,7 @@ behavior.
     ##  Linux: ~/.GridcoinResearch/
     ##  macOS: /Users/USERNAME/Library/Application/Support/GridcoinResearch/
     ##
-    ## Single # lines are commands, remove the # in Front of the Command to use it
+    ## Single # lines are commands, remove the # in Front of the command to use it
     ## Double ## lines are comments
     ##
     #############################################################################
@@ -40,7 +40,7 @@ behavior.
 
     ## BOINC account E-Mail
     ## Use blank or INVESTOR for Investor or Pool Mining
-    ## Note the PrimaryCPID field is deprecated and ignored since the Denise
+    ## Note the PrimaryCPID field is deprecated and ignored since the 4.0.5.0
     ## release.
     email=
 
@@ -61,7 +61,7 @@ behavior.
     #rpcallowip=<IP Address of Remote System>
     #rpcport=<Port for RPC Communication>
     #rpcuser=<A Username for RPC>
-    #rpcpassword=<A GOOD Password for RPC>
+    #rpcpassword=<A STRONG Password for RPC>
 
     #############################################################################
     ######################## Optional BOINC settings ############################
@@ -131,7 +131,7 @@ lot of these options here: <https://en.bitcoin.it/wiki/Running_Bitcoin>
 **debug=true**
 **debug=<category>**
 
-Let your node receive tons of extra messages in debug.log. From the Fern
+Let your node receive tons of extra messages in debug.log. From the 4.1.0.0
 release onward, logging can also be enabled by category. You can see a list
 of categories by issuing the command "logging". Note that not all categories
 are available yet, as the wallet is transiting from the traditional debug
