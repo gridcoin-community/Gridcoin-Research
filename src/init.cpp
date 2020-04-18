@@ -1151,7 +1151,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (pindexBest->nVersion <= 10) {
         uiInterface.InitMessage(_("Loading Network Averages..."));
-        LogPrint(BCLog::LogFlags::NET, "Loading network averages");
+        LogPrint(BCLog::LogFlags::TALLY, "Loading network averages");
 
         NN::Tally::LegacyRecount(NN::Tally::FindLegacyTrigger(pindexBest));
     }
