@@ -602,30 +602,30 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    fDebug=false;
+    fDebug = false;
 
-    if (GetArg("-debug", "false")=="true")
+    if (GetArg("-debug", "false") == "true")
     {
             fDebug = true;
             LogPrintf("Entering debug mode.");
-
-            // For now if debug is set, turn on the following categories as well.
-            // When the logs get fully converted over to categories, we will change
-            // this to a default set of enabled categories that are turned on/off
-            // when debug is set/unset, and the debug will be the only debug control
-            // flag left.
-            LogInstance().EnableCategory(BCLog::LogFlags::NET);
     }
 
     fDebug2 = false;
 
-    if (GetArg("-debug2", "false")=="true")
+    if (GetArg("-debug2", "false") == "true")
     {
             fDebug2 = true;
             LogPrintf("Entering GRC debug mode 2.");
     }
 
-    fDebug10= (GetArg("-debug10","false")=="true");
+    fDebug10 = false;
+
+    if (GetArg("-debug10", "false") == "true")
+    {
+            fDebug10 = true;
+            LogPrintf("Entering GRC debug mode 10.");
+    }
+
 
 #if defined(WIN32)
     fDaemon = false;
