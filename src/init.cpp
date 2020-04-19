@@ -251,8 +251,7 @@ std::string HelpMessage()
 #endif
     strUsage +=
         "  -testnet               " + _("Use the test network") + "\n" +
-        "  -debug                 " + _("Output extra debugging information. Implies all other -debug* options") + "\n" +
-        "  -debugnet              " + _("Output extra network debugging information") + "\n" +
+        "  -debug                 " + _("Output extra debugging information.") + "\n" +
         "  -logtimestamps         " + _("Prepend debug output with timestamp") + "\n" +
         "  -shrinkdebugfile       " + _("Shrink debug.log file on client startup (default: 1 when no -debug)") + "\n" +
         "  -printtoconsole        " + _("Send trace/debug info to console instead of debug.log file") + "\n" +
@@ -603,14 +602,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
-    fDebug=false;
+    fDebug = false;
 
-    if (fDebug)
-        fDebugNet = true;
-    else
-        fDebugNet = GetBoolArg("-debugnet");
-
-    if (GetArg("-debug", "false")=="true")
+    if (GetArg("-debug", "false") == "true")
     {
             fDebug = true;
             LogPrintf("Entering debug mode.");
@@ -618,27 +612,20 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     fDebug2 = false;
 
-    if (GetArg("-debug2", "false")=="true")
+    if (GetArg("-debug2", "false") == "true")
     {
             fDebug2 = true;
             LogPrintf("Entering GRC debug mode 2.");
     }
 
-    fDebug3 = false;
+    fDebug10 = false;
 
-    if (GetArg("-debug3", "false")=="true")
+    if (GetArg("-debug10", "false") == "true")
     {
-            fDebug3 = true;
-            LogPrintf("Entering GRC debug mode 3.");
+            fDebug10 = true;
+            LogPrintf("Entering GRC debug mode 10.");
     }
 
-    if (GetArg("-debug4", "false")=="true")
-    {
-        fDebug4 = true;
-        LogPrintf("Entering RPC time debug mode");
-    }
-
-    fDebug10= (GetArg("-debug10","false")=="true");
 
 #if defined(WIN32)
     fDaemon = false;
@@ -1137,7 +1124,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
     //
     std::string sOut = "";
-    if (fDebug3) LogPrintf("Loading admin Messages");
+    LogPrint(BCLog::LogFlags::NET, "Loading admin Messages");
     LoadAdminMessages(true,sOut);
     LogPrintf("Done loading Admin messages");
 
@@ -1164,7 +1151,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (pindexBest->nVersion <= 10) {
         uiInterface.InitMessage(_("Loading Network Averages..."));
-        if (fDebug3) LogPrintf("Loading network averages");
+        LogPrint(BCLog::LogFlags::TALLY, "Loading network averages");
 
         NN::Tally::LegacyRecount(NN::Tally::FindLegacyTrigger(pindexBest));
     }

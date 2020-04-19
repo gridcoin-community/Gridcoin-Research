@@ -362,9 +362,6 @@ static const CRPCCommand vRPCCommands[] =
     { "debug",                   &debug,                   cat_developer     },
     { "debug10",                 &debug10,                 cat_developer     },
     { "debug2",                  &debug2,                  cat_developer     },
-    { "debug3",                  &debug3,                  cat_developer     },
-    { "debug4",                  &debug4,                  cat_developer     },
-    { "debugnet",                &debugnet,                cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
     { "getlistof",               &getlistof,               cat_developer     },
@@ -862,13 +859,14 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
-    // Lets add a optional debug4 to display how long it takes the rpc commands to be performed in ms
-    // We will do this only on successful calls not exceptions
+    // Lets add a optional display if BCLog::LogFlags::RPC is set to show how long it takes
+    // the rpc commands to be performed in milliseconds. We will do this only on successful
+    // calls not exceptions.
     try
     {
         UniValue result(UniValue::VSTR);
 
-        if (fDebug4)
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::RPC))
         {
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;
