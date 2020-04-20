@@ -153,11 +153,11 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
                 nBestScore = nScore;
             }
 
-            LogPrintf("Score(%s,%i)\n", addr.ToString(), nScore);
+            if (fDebug10 || true) LogPrintf("Score(%s,%i)\n", addr.ToString(), nScore);
         }
     }
 
-    LogPrintf("BestScore(%s,%i)\n", addr.ToString(), nBestScore);
+    if (fDebug10 || true) LogPrintf("BestScore(%s,%i)\n", addr.ToString(), nBestScore);
     return nBestScore >= 0;
 }
 
@@ -189,12 +189,6 @@ static int GetnScore(const CService& addr)
 bool IsPeerAddrLocalGood(CNode *pnode)
 {
     CService addrLocal = pnode->addrLocal;
-    LogPrintf("disco %i remote-rout: %i local->rout: %i reach: %i !limited %i",
-            fDiscover,
-            pnode->addr.IsRoutable(),
-            addrLocal.IsRoutable(),
-            IsReachable(addrLocal),
-            !IsLimited(addrLocal));
     return fDiscover &&
            pnode->addr.IsRoutable() &&
            addrLocal.IsRoutable() &&
@@ -205,10 +199,8 @@ bool IsPeerAddrLocalGood(CNode *pnode)
 // pushes our own address to a peer
 void AdvertiseLocal(CNode *pnode)
 {
-    LogPrintf("AdvertiseLocal");
     if (!fNoListen && pnode->fSuccessfullyConnected)
     {
-       LogPrintf("AdvertiseLocal listening");
         CAddress addrLocal = GetLocalAddress(&pnode->addr);
         if (GetBoolArg("-addrmantest", false))
         {
@@ -218,19 +210,13 @@ void AdvertiseLocal(CNode *pnode)
         // if discovery is enabled, sometimes give our peer the address it
         // tells us that it sees us as in case it has a better idea of our
         // adress than we do.
-        LogPrintf("local: %i routable: %i prerand: %i",
-                IsPeerAddrLocalGood(pnode),
-                addrLocal.IsRoutable(),
-                GetnScore(addrLocal) > LOCAL_MANUAL ? 3 : 1 );
         if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() || GetRandInt((GetnScore(addrLocal) > LOCAL_MANUAL) ? 3 : 1) == 0))
         {
-            LogPrintf("SETIP %s\n", addrLocal.ToString());
             addrLocal.SetIP(pnode->addrLocal);
         }
-        LogPrintf("locald %s rotuable %i\n", addrLocal.ToString(), addrLocal.IsRoutable());
         if (addrLocal.IsRoutable() || GetBoolArg("-addrmantest", false))
         {
-            LogPrintf("AdvertiseLocal: advertising address %s\n", addrLocal.ToString());
+            if (fDebug10 || true) LogPrintf("AdvertiseLocal: advertising address %s\n", addrLocal.ToString());
             pnode->PushAddress(addrLocal);
         }
     }
@@ -393,7 +379,7 @@ bool IsReachable(const CNetAddr& addr)
 // learn a new local address
 bool AddLocal(const CService& addr, int nScore)
 {
-    LogPrintf("maybe AddLocal(%s,%i)\n", addr.ToString(), nScore);
+    if (fDebug10 || true) LogPrintf("maybe AddLocal(%s,%i)\n", addr.ToString(), nScore);
     if (!addr.IsRoutable())
         return false;
 
@@ -405,7 +391,7 @@ bool AddLocal(const CService& addr, int nScore)
 
     try
     {
-    if (fDebug10) LogPrintf("AddLocal(%s,%i)", addr.ToString(), nScore);
+    if (fDebug10 || true) LogPrintf("AddLocal(%s,%i)", addr.ToString(), nScore);
 
     {
         LOCK(cs_mapLocalHost);
@@ -432,7 +418,7 @@ bool AddLocal(const CNetAddr &addr, int nScore)
 void RemoveLocal(const CService& addr)
 {
     LOCK(cs_mapLocalHost);
-    LogPrintf("RemoveLocal(%s)\n", addr.ToString());
+    if (fDebug10 || true) LogPrintf("RemoveLocal(%s)\n", addr.ToString());
     mapLocalHost.erase(addr);
 }
 
@@ -461,8 +447,11 @@ bool SeenLocal(const CService& addr)
 {
     {
         LOCK(cs_mapLocalHost);
-        if (mapLocalHost.count(addr) == 0)
+        if (fDebug10 || true) LogPrintf("SeenLocal %s", addr.ToString());
+        if (mapLocalHost.count(addr) == 0){
+            if (fDebug10 || true) LogPrintf("SeenLocal discarded");
             return false;
+        }
         mapLocalHost[addr].nScore++;
     }
     return true;
@@ -536,8 +525,8 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     {
         addrman.Attempt(addrConnect);
         /// debug print
-        //if (fDebug10) 
-        LogPrintf("connected %s", pszDest ? pszDest : addrConnect.ToString());
+        if (fDebug10 || true)
+            LogPrintf("connected %s", pszDest ? pszDest : addrConnect.ToString());
         // Set to non-blocking
 #ifdef WIN32
         u_long nOne = 1;
@@ -576,8 +565,8 @@ void CNode::CloseSocketDisconnect()
     fDisconnect = true;
     if (hSocket != INVALID_SOCKET)
     {
-        //if (fDebug10) 
-        LogPrintf("disconnecting node %s", addrName);
+        if (fDebug10 || true)
+            LogPrintf("disconnecting node %s", addrName);
         closesocket(hSocket);
         hSocket = INVALID_SOCKET;
 
@@ -635,7 +624,7 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
     RAND_bytes((unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce));
-//    if (fDebug10) 
+    if (fDebug10 || true)
         LogPrintf("send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
         PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
@@ -1110,14 +1099,14 @@ void ThreadSocketHandler2(void* parg)
             }
             else if (g_banman->IsBanned(addr))
             {
-//                if (fDebug10) 
+                if (fDebug10)
                     LogPrintf("connection from %s dropped (banned)", addr.ToString());
                 closesocket(hSocket);
             }
             else
             {
-                //if (fDebug10) 
-                LogPrintf("accepted connection %s", addr.ToString());
+                if (fDebug10 || true)
+                    LogPrintf("accepted connection %s", addr.ToString());
                 CNode* pnode = new CNode(hSocket, addr, "", true);
                 pnode->AddRef();
                 {
@@ -1174,7 +1163,7 @@ void ThreadSocketHandler2(void* parg)
                             // socket closed gracefully
                             if (!pnode->fDisconnect)
                             {
-                              if (fDebug10)   LogPrintf("socket closed");
+                              if (fDebug10) LogPrintf("socket closed");
                             }
                             pnode->CloseSocketDisconnect();
                         }
@@ -1186,7 +1175,7 @@ void ThreadSocketHandler2(void* parg)
                             {
                                 if (!pnode->fDisconnect)
                                 {
-                                   if (fDebug10)  LogPrintf("socket recv error %d", nErr);
+                                   if (fDebug10) LogPrintf("socket recv error %d", nErr);
                                 }
                                 pnode->CloseSocketDisconnect();
                             }
@@ -1213,7 +1202,7 @@ void ThreadSocketHandler2(void* parg)
             // Consider this for future removal as this really is not beneficial nor harmful.
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
-//                    if (fDebug10)
+                    if (fDebug10 || true)
                         LogPrintf("Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ", NodeAddress(pnode), vNodes.size());
 
                     pnode->fDisconnect = true;
@@ -1227,7 +1216,7 @@ void ThreadSocketHandler2(void* parg)
             {
                 if (pnode->nLastRecv == 0 || pnode->nLastSend == 0)
                 {
-//                    if (fDebug10)
+                    if (fDebug10)
                         LogPrintf("socket no message in first %d seconds, %d %d", PEER_TIMEOUT, pnode->nLastRecv != 0, pnode->nLastSend != 0);
 
                     pnode->fDisconnect = true;
@@ -1300,7 +1289,7 @@ void ThreadMapPort(void* parg)
 
 void ThreadMapPort2(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadMapPort started");
+    LogPrintf("ThreadMapPort started");
 
     std::string port = strprintf("%u", GetListenPort());
     const char * multicastif = 0;
@@ -1604,7 +1593,7 @@ void static ProcessOneShot()
 void static ThreadStakeMiner(void* parg)
 {
 
-    if (fDebug10) LogPrintf("ThreadStakeMiner started");
+    LogPrintf("ThreadStakeMiner started");
     CWallet* pwallet = (CWallet*)parg;
     try
     {
@@ -1628,7 +1617,7 @@ void static ThreadStakeMiner(void* parg)
 
 void static ThreadScraper(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadSraper starting");
+    LogPrintf("ThreadSraper starting");
     try
     {
         fScraperActive = true;
@@ -1656,7 +1645,7 @@ void static ThreadScraper(void* parg)
 
 void static ThreadNeuralNetwork(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadNeuralNetwork starting");
+    LogPrintf("ThreadNeuralNetwork starting");
     try
     {
         NeuralNetwork();
@@ -1699,7 +1688,7 @@ uint64_t CNode::GetTotalBytesSent()
 
 void ThreadOpenConnections2(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadOpenConnections started");
+    LogPrintf("ThreadOpenConnections started");
 
     // Connect to specific addresses
     if (mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0)
@@ -1841,7 +1830,7 @@ void ThreadOpenAddedConnections(void* parg)
 
 void ThreadOpenAddedConnections2(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadOpenAddedConnections started");
+    LogPrintf("ThreadOpenAddedConnections started");
 
     if (mapArgs.count("-addnode") == 0)
         return;
@@ -1963,7 +1952,7 @@ void ThreadMessageHandler(void* parg)
 
 void ThreadMessageHandler2(void* parg)
 {
-    if (fDebug10) LogPrintf("ThreadMessageHandler started");
+    LogPrintf("ThreadMessageHandler started");
     while (!fShutdown)
     {
         vector<CNode*> vNodesCopy;
@@ -2133,7 +2122,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
         LogPrintf("%s", strError);
         return false;
     }
-//    if (fDebug10) 
+    if (fDebug10 || true)
         LogPrintf("Bound to %s", addrBind.ToString());
 
     // Listen for incoming connections

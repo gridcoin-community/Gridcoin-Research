@@ -4485,11 +4485,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 CAddress addr = GetLocalAddress(&pfrom->addr);
                 if (addr.IsRoutable())
                 {
+                    LogPrintf("will push r %s", addr.ToString());
                     pfrom->PushAddress(addr);
                 }
                 else if (IsPeerAddrLocalGood(pfrom))
                 {
                     addr.SetIP(pfrom->addrLocal);
+                    LogPrintf("will push s %s", addr.ToString());
                     pfrom->PushAddress(addr);
                 }
             }
@@ -4543,7 +4545,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         pfrom->fSuccessfullyConnected = true;
 
-        if (fDebug10) LogPrintf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
+        if (fDebug10 || true) LogPrintf("receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
             pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
 
         cPeerBlockCounts.input(pfrom->nStartingHeight);
@@ -4619,8 +4621,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         mapMix.insert(make_pair(hashKey, pnode));
                     }
                     int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
-                    for (multimap<uint256, CNode*>::iterator mi = mapMix.begin(); mi != mapMix.end() && nRelayNodes-- > 0; ++mi)
+                    for (multimap<uint256, CNode*>::iterator mi = mapMix.begin(); mi != mapMix.end() && nRelayNodes-- > 0; ++mi){
+
+                        LogPrintf("will push mi %s", addr.ToString());
                         ((*mi).second)->PushAddress(addr);
+                    }
                 }
             }
             // Do not store addresses outside our network
@@ -4987,8 +4992,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->vAddrToSend.clear();
         vector<CAddress> vAddr = addrman.GetAddr();
         for (auto const&addr : vAddr)
-            if(addr.nTime > nCutOff)
+            if(addr.nTime > nCutOff){
+                LogPrintf("will push g %s", addr.ToString());
                 pfrom->PushAddress(addr);
+            }
     }
 
 
@@ -5343,7 +5350,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
 
     // Address refresh broadcast
     static int64_t nLastRebroadcast;
-    if (!IsInitialBlockDownload() && ( GetAdjustedTime() - nLastRebroadcast > 24 * 60 * 60))
+    if (!IsInitialBlockDownload() && ( GetAdjustedTime() - nLastRebroadcast > 1 * 60 * 60))
     {
         LOCK(cs_vNodes);
         for (auto const& pnode : vNodes)
@@ -5351,8 +5358,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             // Periodically clear setAddrKnown to allow refresh broadcasts
             if (nLastRebroadcast)
                 pnode->setAddrKnown.clear();
-
-            LogPrintf("Advertising for %s\n", pnode);
+            LogPrintf("Advertising for %s", pnode->addr.ToString());
             AdvertiseLocal(pnode);
         }
         if (!vNodes.empty())
@@ -5372,6 +5378,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             // returns true if wasn't already contained in the set
             if (pto->setAddrKnown.insert(addr).second)
             {
+                LogPrintf("pushing %s to %s", addr.ToString(), pto->addr.ToString());
                 vAddr.push_back(addr);
                 // receiver rejects addr messages larger than 1000
                 if (vAddr.size() >= 1000)
