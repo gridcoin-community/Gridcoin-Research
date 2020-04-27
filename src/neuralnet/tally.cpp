@@ -533,6 +533,7 @@ AccrualComputer Tally::GetLegacyComputer(
     if (!account.IsActive(last_block_ptr->nHeight)) {
         return MakeUnique<NewbieAccrualComputer>(
             cpid,
+            account,
             payment_time,
             g_network_tally.GetMagnitudeUnit(payment_time),
             Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid).Floating());
