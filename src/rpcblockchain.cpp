@@ -898,49 +898,40 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
 UniValue lifetime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-                "lifetime\n"
+                "lifetime [cpid]\n"
                 "\n"
-                "Displays information for the lifetime of your cpid in the network\n");
+                "Displays research rewards for the lifetime of a CPID.\n");
 
-    UniValue results(UniValue::VARR);
-    UniValue c(UniValue::VOBJ);
-    UniValue res(UniValue::VOBJ);
+    const NN::MiningId mining_id = params.size() > 0
+        ? NN::MiningId::Parse(params[0].get_str())
+        : NN::Researcher::Get()->Id();
 
-    const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid();
-    std::string Narr = ToString(GetAdjustedTime());
+    if (!mining_id.Valid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
 
-    c.pushKV("Lifetime Payments Report", Narr);
-    results.push_back(c);
+    const NN::CpidOption cpid = mining_id.TryCpid();
 
     if (!cpid) {
-        return results;
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
     }
+
+    UniValue results(UniValue::VOBJ);
 
     LOCK(cs_main);
 
-    CBlockIndex* pindex = pindexGenesisBlock;
-
-    while (pindex->nHeight < pindexBest->nHeight)
+    for (const CBlockIndex* pindex = pindexGenesisBlock;
+        pindex;
+        pindex = pindex->pnext)
     {
-        pindex = pindex->pnext;
-
-        if (pindex==NULL || !pindex->IsInMainChain())
-            continue;
-
-        if (pindex == pindexBest)
-            break;
-
-        if (pindex->GetMiningId() == *cpid && (pindex->nResearchSubsidy > 0))
-            res.pushKV(ToString(pindex->nHeight), ValueFromAmount(pindex->nResearchSubsidy));
+        if (pindex->nResearchSubsidy > 0 && pindex->GetMiningId() == *cpid) {
+            results.pushKV(
+                std::to_string(pindex->nHeight),
+                ValueFromAmount(pindex->nResearchSubsidy));
+        }
     }
-    //8-14-2015
-    const NN::ResearchAccount account = NN::Tally::GetAccount(*cpid);
-
-    res.pushKV("RA Magnitude Sum", (int)account.m_total_magnitude);
-    res.pushKV("RA Accuracy", (int)account.m_accuracy);
-    results.push_back(res);
 
     return results;
 }
