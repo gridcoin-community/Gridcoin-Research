@@ -36,6 +36,7 @@ namespace
         uint256S("639756cf39bf12a4a0ab4ea5ec10938fd0f463cc7bc1bd2916529a445ceba2ab"), //T680406
         uint256S("ba1aae8ea37a9c330b298bd2b569448f0249a685bb0a8e85698fe44d1edca774"), //T1145954 (6-month cutoff)
         uint256S("b05e6c04c7b414a29746b2d642fd19f64e9fdb13dcc4873144233a23138bd419"), //T1154377 (zero-mag newbie)
+        uint256S("99a47d7e8ba54a4444ca9cd762abb6dbac50065968ac1f2012f6f90ca3feb50b"), //T1219105 (returning newbie)
     };
 
 

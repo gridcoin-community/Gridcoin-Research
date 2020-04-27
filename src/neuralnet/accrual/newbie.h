@@ -20,16 +20,19 @@ public:
     //! a research reward before.
     //!
     //! \param cpid           CPID to calculate research accrual for.
+    //! \param account        CPID's historical accrual context.
     //! \param payment_time   Time of payment to calculate rewards at.
     //! \param magnitude_unit Current network magnitude unit to factor in.
     //! \param magnitude      CPID's magnitude in the last superblock.
     //!
     NewbieAccrualComputer(
         const Cpid cpid,
+        const ResearchAccount& account,
         const int64_t payment_time,
         const double magnitude_unit,
         const double magnitude)
         : m_cpid(cpid)
+        , m_account(account)
         , m_payment_time(payment_time)
         , m_magnitude_unit(magnitude_unit)
         , m_magnitude(magnitude)
@@ -100,7 +103,7 @@ public:
 
         constexpr int64_t six_months = 86400 * 30 * 6; // seconds
 
-        if (AccrualAge() >= six_months) {
+        if (AccrualAge() >= six_months || m_account.m_total_research_subsidy > 0) {
             LogPrint(BCLog::LogFlags::ACCRUAL,
                 "Accrual: %s Invalid Beacon, Using 0.01 age bootstrap",
                 m_cpid.ToString());
@@ -123,6 +126,7 @@ public:
 
 private:
     const Cpid m_cpid;             //!< CPID to calculate research accrual for.
+    const ResearchAccount& m_account; //!< CPID's historical accrual context.
     const int64_t m_payment_time;  //!< Time of payment to calculate rewards at.
     const double m_magnitude_unit; //!< Network magnitude unit to factor in.
     const double m_magnitude;      //!< CPID's magnitude in the last superblock.
