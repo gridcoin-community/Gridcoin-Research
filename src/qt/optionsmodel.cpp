@@ -41,7 +41,8 @@ void OptionsModel::Init()
     // These are Qt-only settings:
     nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
     fMinimizeToTray = settings.value("fMinimizeToTray", false).toBool();
-	bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
+    fDisableTrxNotifications = settings.value("fDisableTrxNotifications", false).toBool();
+    bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
     fMinimizeOnClose = settings.value("fMinimizeOnClose", false).toBool();
     fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
     nTransactionFee = settings.value("nTransactionFee").toLongLong();
@@ -79,6 +80,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(GUIUtil::GetStartOnSystemStartup());
         case MinimizeToTray:
             return QVariant(fMinimizeToTray);
+        case DisableTrxNotifications:
+            return QVariant(fDisableTrxNotifications);
         case MapPortUPnP:
             return settings.value("fUseUPnP", GetBoolArg("-upnp", true));
         case MinimizeOnClose:
@@ -138,6 +141,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case MinimizeToTray:
             fMinimizeToTray = value.toBool();
             settings.setValue("fMinimizeToTray", fMinimizeToTray);
+            break;
+        case DisableTrxNotifications:
+            fDisableTrxNotifications = value.toBool();
+            settings.setValue("fDisableTrxNotifications", fDisableTrxNotifications);
             break;
         case MapPortUPnP:
             fUseUPnP = value.toBool();
@@ -247,6 +254,11 @@ bool OptionsModel::getCoinControlFeatures()
 bool OptionsModel::getMinimizeToTray()
 {
     return fMinimizeToTray;
+}
+
+bool OptionsModel::getDisableTrxNotifications()
+{
+    return fDisableTrxNotifications;
 }
 
 bool OptionsModel::getMinimizeOnClose()

@@ -141,6 +141,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->socksVersion, OptionsModel::ProxySocksVersion);
 
     /* Window */
+    mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
 #ifndef Q_OS_MAC
     mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
     mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);

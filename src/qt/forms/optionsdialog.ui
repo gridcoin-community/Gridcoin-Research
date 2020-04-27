@@ -325,6 +325,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="disableTransactionNotifications">
+         <property name="text">
+          <string>Disable Transaction Notifications</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_Window">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
