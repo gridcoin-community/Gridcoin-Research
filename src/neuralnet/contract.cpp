@@ -236,7 +236,7 @@ private:
         // TODO: build contract handlers for the remaining contract types:
         // TODO: refactor to dynamic registration for easier testing:
         switch (type) {
-            case ContractType::BEACON:     return GetBeaconDirectory();
+            case ContractType::BEACON:     return GetBeaconRegistry();
             case ContractType::POLL:       return m_appcache_handler;
             case ContractType::PROJECT:    return GetWhitelist();
             case ContractType::PROTOCOL:   return m_appcache_handler;
