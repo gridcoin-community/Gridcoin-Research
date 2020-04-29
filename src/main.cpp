@@ -41,8 +41,7 @@ extern bool GridcoinServices();
 extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
-bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient);
-extern bool LoadAdminMessages(bool bFullTableScan,std::string& out_errors);
+extern bool LoadAdminMessages(bool bFullTableScan);
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 extern double GetTotalBalance();
 extern std::string PubKeyToAddress(const CScript& scriptPubKey);
@@ -72,10 +71,6 @@ int64_t nLastCleaned = 0;
 extern double CoinToDouble(double surrogate);
 
 ///////////////////////MINOR VERSION////////////////////////////////
-std::string msMasterProjectPublicKey  = "049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a";
-// The Private Key is revealed by design, for public messages only:
-std::string msMasterMessagePrivateKey = "308201130201010420fbd45ffb02ff05a3322c0d77e1e7aea264866c24e81e5ab6a8e150666b4dc6d8a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a144034200044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
-std::string msMasterMessagePublicKey  = "044b2938fbc38071f24bede21e838a0758a52a0085f2e034e7f971df445436a252467f692ec9c5ba7e5eaa898ab99cbd9949496f7e3cafbf56304b1cc2e5bdf06e";
 
 extern int64_t GetCoinYearReward(int64_t nTime);
 
@@ -174,35 +169,6 @@ bool fUseFastIndex = false;
 std::map<std::string, int> mvTimers; // Contains event timers that reset after max ms duration iterator is exceeded
 
 // End of Gridcoin Global vars
-
-// TODO: replace these with upcoming contract handler implementation:
-namespace {
-bool AddContract(
-    const std::string& type,
-    const std::string& key,
-    const std::string& value,
-    const int64_t& timestamp)
-{
-    if (type == "project" || type == "projectmapping") {
-        NN::GetWhitelist().Add(key, value, timestamp);
-    } else {
-        return false;
-    }
-
-    return true;
-}
-
-bool DeleteContract(const std::string& type, const std::string& key)
-{
-    if (type == "project" || type == "projectmapping") {
-        NN::GetWhitelist().Delete(key);
-    } else {
-        return false;
-    }
-
-    return true;
-}
-} // anonymous namespace
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -2164,7 +2130,6 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs, map<uint256, CTx
 
 bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
-
     // Disconnect in reverse order
     bool bDiscTxFailed = false;
     for (int i = vtx.size()-1; i >= 0; i--)
@@ -2174,35 +2139,20 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             bDiscTxFailed = true;
         }
 
-        /* Delete the contract.
-         * Previous version will be reloaded in reoranize. */
-        {
-            std::string sMType = ExtractXML(vtx[i].hashBoinc, "<MT>", "</MT>");
-            if(!sMType.empty())
-            {
-                std::string sMKey = ExtractXML(vtx[i].hashBoinc, "<MK>", "</MK>");
-
-                try
-                {
-                    if (!DeleteContract(sMType, sMKey)) {
-                        DeleteCache(StringToSection(sMType), sMKey);
-                    }
-                    if(fDebug)
-                        LogPrintf("DisconnectBlock: Delete contract %s %s", sMType, sMKey);
-                }
-                catch(const std::runtime_error& e)
-                {
-                    error("Attempting to delete from unknown cache: %s", sMType);
-                }
-
-                if("beacon"==sMType)
-                {
-                    sMKey=sMKey+"A";
-                    DeleteCache(Section::BEACONALT, sMKey+"."+ToString(vtx[i].nTime));
-                }
-            }
+        if (!NN::Contract::Detect(vtx[i].hashBoinc)) {
+            continue;
         }
 
+        // Delete the contract. Previous version will be reloaded in reorganize.
+        NN::Contract contract = NN::Contract::Parse(vtx[i].hashBoinc, vtx[i].nTime);
+
+        if (contract.VerifySignature()) {
+            if(fDebug) {
+                LogPrintf("DisconnectBlock: Delete contract %s %s", contract.m_type.ToString(), contract.m_key);
+            }
+
+            NN::RevertContract(std::move(contract));
+        }
     }
 
     // Update block index on disk without changing it in memory.
@@ -2955,8 +2905,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         // Need to reload all contracts
         if (fDebug10) LogPrintf("DisconnectBlocksBatch: LoadAdminMessages");
-        std::string admin_messages;
-        LoadAdminMessages(true, admin_messages);
+        LoadAdminMessages(true);
+
         NN::Quorum::LoadSuperblockIndex(pindexBest);
 
         // Tally research averages.
@@ -5593,118 +5543,42 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-bool MemorizeMessage(const CTransaction &tx, double dAmount, std::string sRecipient)
+bool MemorizeMessage(const CTransaction &tx)
 {
-    const std::string &msg = tx.hashBoinc;
-    const int64_t &nTime = tx.nTime;
-    if (msg.empty()) return false;
-    bool fMessageLoaded = false;
-
-    if (Contains(msg,"<MT>"))
-    {
-        std::string sMessageType      = ExtractXML(msg,"<MT>","</MT>");
-        std::string sMessageKey       = ExtractXML(msg,"<MK>","</MK>");
-        std::string sMessageValue     = ExtractXML(msg,"<MV>","</MV>");
-        std::string sMessageAction    = ExtractXML(msg,"<MA>","</MA>");
-        std::string sSignature        = ExtractXML(msg,"<MS>","</MS>");
-        std::string sMessagePublicKey = ExtractXML(msg,"<MPK>","</MPK>");
-        if (sMessageType=="beacon" && Contains(sMessageValue,"INVESTOR"))
-        {
-              sMessageValue="";
-        }
-
-        if (sMessageType=="superblock")
-        {
-            // Deny access to superblock processing runtime data
-            sMessageValue="";
-        }
-
-        if (!sMessageType.empty() && !sMessageKey.empty() && !sMessageValue.empty() && !sMessageAction.empty() && !sSignature.empty())
-        {
-            //Verify sig first
-            bool Verified = CheckMessageSignature(sMessageAction,sMessageType,sMessageType+sMessageKey+sMessageValue,
-                sSignature,sMessagePublicKey);
-
-            if (Verified)
-            {
-                if (sMessageAction=="A")
-                {
-                    /* With this we allow verifying blocks with stupid beacon */
-                    if("beacon"==sMessageType)
-                    {
-                        std::string out_cpid = "";
-                        std::string out_address = "";
-                        std::string out_publickey = "";
-                        GetBeaconElements(sMessageValue, out_cpid, out_address, out_publickey);
-                        WriteCache(Section::BEACONALT, sMessageKey+"."+ToString(nTime),out_publickey,nTime);
-                    }
-
-                    try
-                    {
-                        if (!AddContract(sMessageType, sMessageKey, sMessageValue, nTime)) {
-                            WriteCache(StringToSection(sMessageType), sMessageKey,sMessageValue,nTime);
-
-                            if(fDebug10 && sMessageType=="beacon" )
-                                LogPrintf("BEACON add %s %s %s", sMessageKey, DecodeBase64(sMessageValue), TimestampToHRDate(nTime));
-                        }
-                    }
-                    catch(const std::runtime_error& e)
-                    {
-                        error("Attempting to add to unknown cache: %s", sMessageType);
-                    }
-
-                    fMessageLoaded = true;
-                    if (sMessageType=="poll")
-                    {
-                        msPoll = msg;
-                    }
-                }
-                else if(sMessageAction=="D")
-                {
-                    if (fDebug10) LogPrintf("Deleting key type %s Key %s Value %s", sMessageType, sMessageKey, sMessageValue);
-                    if(fDebug10 && sMessageType=="beacon" ){
-                        LogPrintf("BEACON DEL %s - %s", sMessageKey, TimestampToHRDate(nTime));
-                    }
-
-                    try
-                    {
-                        if (!DeleteContract(sMessageType, sMessageKey)) {
-                            DeleteCache(StringToSection(sMessageType), sMessageKey);
-                        }
-                        fMessageLoaded = true;
-                    }
-                    catch(const std::runtime_error& e)
-                    {
-                        error("Attempting to add to unknown cache: %s", sMessageType);
-                    }
-                }
-                // If this is a boinc project, load the projects into the coin:
-                if (sMessageType=="project" || sMessageType=="projectmapping")
-                {
-                    //Reserved
-                    fMessageLoaded = true;
-                }
-
-                // Support dynamic team requirement or whitelist configuration:
-                //
-                // TODO: move this into the appropriate contract handler.
-                //
-                if (sMessageType == "protocol"
-                    && (sMessageKey == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                        || sMessageKey == "TEAM_WHITELIST"))
-                {
-                    // Rescan in-memory project CPIDs to resolve a primary CPID
-                    // that fits the now active team requirement settings:
-                    NN::Researcher::Refresh();
-                }
-
-                if(fDebug)
-                    WriteCache(Section::TRXID, sMessageType + ";" + sMessageKey,tx.GetHash().GetHex(),nTime);
-            }
-        }
+    if (!NN::Contract::Detect(tx.hashBoinc)) {
+        return false;
     }
 
-    return fMessageLoaded;
+    NN::Contract contract = NN::Contract::Parse(tx.hashBoinc, tx.nTime);
+
+    if (!contract.VerifySignature()) {
+        return false;
+    }
+
+    // Support dynamic team requirement or whitelist configuration:
+    //
+    // TODO: move this into the appropriate contract handler.
+    //
+    if (contract.m_type == NN::ContractType::PROTOCOL
+        && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+            || contract.m_key == "TEAM_WHITELIST"))
+    {
+        // Rescan in-memory project CPIDs to resolve a primary CPID
+        // that fits the now active team requirement settings:
+        NN::Researcher::Refresh();
+    }
+
+    if (fDebug) {
+        WriteCache(
+            Section::TRXID,
+            contract.m_type.ToString() + ";" + contract.m_key,
+            tx.GetHash().GetHex(),
+            tx.nTime);
+    }
+
+    NN::ProcessContract(contract);
+
+    return true;
 }
 
 const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
@@ -5745,7 +5619,7 @@ const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
     return pindexGenesisBlock;
 }
 
-bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
+bool LoadAdminMessages(bool bFullTableScan)
 {
     // Find starting block. On full table scan we want to scan 6 months back.
     // On a shallow scan we can limit to 6 blocks back.
@@ -5768,19 +5642,10 @@ bool LoadAdminMessages(bool bFullTableScan, std::string& out_errors)
             int iPos = 0;
             for (auto const &tx : block.vtx)
             {
-                  if (iPos > 0)
-                  {
-                      // Retrieve the Burn Amount for Contracts
-                      double dAmount = 0;
-                      std::string sRecipient = "";
-                      for (unsigned int i = 1; i < tx.vout.size(); i++)
-                      {
-                            sRecipient = PubKeyToAddress(tx.vout[i].scriptPubKey);
-                            dAmount += CoinToDouble(tx.vout[i].nValue);
-                      }
-                      MemorizeMessage(tx,dAmount,sRecipient);
-                  }
-                  iPos++;
+                if (iPos > 0) {
+                    MemorizeMessage(tx);
+                }
+                iPos++;
             }
         }
     }

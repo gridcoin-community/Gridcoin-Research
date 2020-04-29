@@ -1,6 +1,5 @@
 #include "beacon.h"
 #include "contract/cpid.h"
-#include "contract/message.h"
 #include "key.h"
 
 bool VerifyCPIDSignature(
@@ -9,13 +8,21 @@ bool VerifyCPIDSignature(
     const std::string& sSignature,
     const std::string& sBeaconPublicKey)
 {
-    std::string sConcatMessage = sCPID + sBlockHash;
-    bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
+    CKey key;
 
-    if(!bValid)
-        LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s"
-                  ,sSignature, sBeaconPublicKey);
-    return bValid;
+    bool valid = key.SetPubKey(ParseHex(sBeaconPublicKey))
+        && key.Verify(
+            Hash(sCPID.begin(), sCPID.end(), sBlockHash.begin(), sBlockHash.end()),
+            DecodeBase64(sSignature.c_str()));
+
+    if (!valid) {
+        LogPrintf(
+            "VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s",
+            sSignature,
+            sBeaconPublicKey);
+    }
+
+    return valid;
 }
 
 bool VerifyCPIDSignature(
@@ -39,31 +46,33 @@ bool SignBlockWithCPID(
 {
     // Check if there is a beacon for this user
     // If not then return false as GetStoresBeaconPrivateKey grabs from the config
-    if (!HasActiveBeacon(sCPID) && !bAdvertising)
-    {
+    if (!HasActiveBeacon(sCPID) && !bAdvertising) {
         sError = "No active beacon";
         return false;
     }
 
-    // Returns the Signature of the CPID+BlockHash message.
     CKey keyBeacon;
 
-    if (!GetStoredBeaconPrivateKey(sCPID, keyBeacon))
-    {
+    if (!GetStoredBeaconPrivateKey(sCPID, keyBeacon)) {
         sError = "No beacon key";
         return false;
     }
 
-    std::string sMessage = sCPID + sBlockHash;
-    sSignature = SignMessage(sMessage,keyBeacon);
+    std::vector<unsigned char> signature_bytes;
 
-    // If we failed to sign then return false
-    if (sSignature == "Unable to sign message, check private key.")
-    {
-        sError = sSignature;
+    // Returns the Signature of the CPID+BlockHash message.
+    bool result = keyBeacon.Sign(
+        Hash(sCPID.begin(), sCPID.end(), sBlockHash.begin(), sBlockHash.end()),
+        signature_bytes);
+
+    if (!result) {
+        sError = "Unable to sign message, check private key.";
         sSignature = "";
+
         return false;
     }
+
+    sSignature = EncodeBase64(signature_bytes.data(), signature_bytes.size());
 
     return true;
 }

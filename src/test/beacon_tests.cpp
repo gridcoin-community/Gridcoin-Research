@@ -210,14 +210,6 @@ struct GridcoinBeaconSigningFixture
     }
 };
 
-BOOST_AUTO_TEST_CASE(SignMessage1_smoke)
-{
-    const std::string sKey ("308201130201010420bf98171763bb82f36e054e864077fd7aab8bad6bd9d35a03a5850ce974308628a081a53081a2020101302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f300604010004010704410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141020101a14403420004ec1804bda713f161c02181ac05d84d4bb3101a10b5381ee463db4f729132128ef8eba71a00c6e20401122fe321a7cdb69b682ac8b04d36cf4cb8dba65e407aec");
-    std::string signature= SignMessage("Spooky Sample Text.",sKey);
-    BOOST_CHECK( !signature.empty() );
-    BOOST_CHECK( signature.find(' ')==std::string::npos );
-    /* there is no verify signature ... */
-}
 BOOST_FIXTURE_TEST_CASE(CPID_Sign_Verify_integ, GridcoinBeaconSigningFixture)
 {
     const std::string sBlockHash("Block Hash Sample Text");

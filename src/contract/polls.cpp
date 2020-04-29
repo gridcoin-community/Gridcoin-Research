@@ -10,6 +10,7 @@
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
+#include "neuralnet/contract.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/tally.h"
 
@@ -59,10 +60,25 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
                 return std::make_pair("Error", "You must specify a value of 1, 2, 3, 4 or 5 for the sSharetype.");
             else
             {
-                std::string expiration = RoundToString(GetAdjustedTime() + (days*86400), 0);
-                std::string contract = "<TITLE>" + sTitle + "</TITLE><DAYS>" + std::to_string(days) + "</DAYS><QUESTION>" + sQuestion + "</QUESTION><ANSWERS>" + sAnswers + "</ANSWERS><SHARETYPE>" + std::to_string(iSharetype) + "</SHARETYPE><URL>" + sURL + "</URL><EXPIRATION>" + expiration + "</EXPIRATION>";
-                std::string result = SendContract("poll", sTitle, contract);
-                return std::make_pair("Success",result);
+                NN::Contract contract(
+                    NN::ContractType::POLL,
+                    NN::ContractAction::ADD,
+                    sTitle,
+                    "<TITLE>" + sTitle + "</TITLE>"
+                        + "<DAYS>" + std::to_string(days) + "</DAYS>"
+                        + "<QUESTION>" + sQuestion + "</QUESTION>"
+                        + "<ANSWERS>" + sAnswers + "</ANSWERS>"
+                        + "<SHARETYPE>" + std::to_string(iSharetype) + "</SHARETYPE>"
+                        + "<URL>" + sURL + "</URL>"
+                        + "<EXPIRATION>" + RoundToString(GetAdjustedTime() + (days * 86400), 0) + "</EXPIRATION>");
+
+                std::string error = SendPublicContract(contract);
+
+                if (!error.empty()) {
+                    return std::make_pair("Error", error);
+                }
+
+                return std::make_pair("Success", "");
             }
         }
     }
@@ -124,17 +140,29 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
         return std::make_pair("Error", "Sorry, When voting in a Both Share Type poll, your stake age Or your CPID age must be older than the poll duration.");
     else
     {
-        std::string voter = "<CPID>"
-                + primary_cpid + "</CPID><GRCADDRESS>" + GRCAddress + "</GRCADDRESS><RND>"
-                + hashRand.GetHex() + "</RND><BALANCE>" + RoundToString(nBalance,2)
-                + "</BALANCE><MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>";
-        // Add the provable balance and the provable magnitude - this goes into effect July 1 2017
-        voter += GetProvableVotingWeightXML();
-        std::string pk = sTitle + ";" + GRCAddress + ";" + primary_cpid;
-        std::string contract = "<TITLE>" + sTitle + "</TITLE><ANSWER>" + sAnswer + "</ANSWER>" + voter;
-        std::string result = SendContract("vote",pk,contract);
+        NN::Contract contract(
+            NN::ContractType::VOTE,
+            NN::ContractAction::ADD,
+            sTitle + ";" + GRCAddress + ";" + primary_cpid,
+            "<TITLE>" + sTitle + "</TITLE>"
+                + "<ANSWER>" + sAnswer + "</ANSWER>"
+                + "<CPID>" + primary_cpid + "</CPID>"
+                + "<GRCADDRESS>" + GRCAddress + "</GRCADDRESS>"
+                + "<RND>" + hashRand.GetHex() + "</RND>"
+                + "<BALANCE>" + RoundToString(nBalance,2) + "</BALANCE>"
+                + "<MAGNITUDE>" + RoundToString(dmag,0) + "</MAGNITUDE>"
+                // Add the provable balance and the provable magnitude - this
+                // goes into effect July 1 2017:
+                + GetProvableVotingWeightXML());
+
+        std::string error = SendPublicContract(contract);
+
+        if (!error.empty()) {
+            return std::make_pair("Error", error);
+        }
+
         std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";
-        return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer + ": " + result.c_str());
+        return std::make_pair("Success", narr + " " + "Your vote has been cast for topic " + sTitle + ": With an Answer of " + sAnswer);
     }
 }
 
