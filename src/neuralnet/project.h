@@ -1,5 +1,7 @@
 #pragma once
 
+#include "neuralnet/contract.h"
+
 #include <memory>
 #include <vector>
 #include <string>
@@ -18,7 +20,14 @@ struct Project
     //! \param url  Project URL from contract message value.
     //! \param ts   Contract timestamp.
     //!
-    Project(const std::string name, const std::string url, const int64_t ts);
+    Project(std::string name, std::string url, int64_t ts);
+
+    //!
+    //! \brief Initialize a \c Project from the provided contract.
+    //!
+    //! \param contract Contains the project data.
+    //!
+    Project(const Contract& contract);
 
     std::string m_name;   //!< As it exists in the contract key field.
     std::string m_url;    //!< As it exists in the contract value field.
@@ -46,6 +55,14 @@ struct Project
     //!             Otherwise, return a URL to the specified export archive.
     //!
     std::string StatsUrl(const std::string& type = "") const;
+
+    //!
+    //! \brief Consume the project object and move the data into a new,
+    //! unsigned \c Contract instance for publication in a transaction.
+    //!
+    //! \return A project-type contract containing the project data.
+    //!
+    Contract IntoContract(ContractAction action = ContractAction::ADD);
 };
 
 //!
@@ -73,7 +90,7 @@ public:
     //!
     //! \param projects A copy of the smart pointer to the project list.
     //!
-    WhitelistSnapshot(const ProjectListPtr projects);
+    WhitelistSnapshot(ProjectListPtr projects);
 
     //!
     //! \brief Returns an iterator to the beginning.
@@ -154,7 +171,7 @@ private:
 //! only modifies this data from one thread now. The implementation needs more
 //! coarse locking if it will support multiple writers in the future.
 //!
-class Whitelist
+class Whitelist : public IContractHandler
 {
 public:
     //!
@@ -170,18 +187,16 @@ public:
     //!
     //! \brief Add a project to the whitelist from contract data.
     //!
-    //! \param name Project name as it exists in the contract key.
-    //! \param url  Project URL as it exists in the contract value.
-    //! \param ts   Timestamp of the contract.
+    //! \param contract Contains information about the project to add.
     //!
-    void Add(const std::string& name, const std::string& url, const int64_t& ts);
+    void Add(const Contract& contract) override;
 
     //!
     //! \brief Remove the specified project from the whitelist.
     //!
-    //! \param name Project name as it exists in the contract key.
+    //! \param contract Contains information about the project to remove.
     //!
-    void Delete(const std::string& name);
+    void Delete(const Contract& contract) override;
 
 private:
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:
