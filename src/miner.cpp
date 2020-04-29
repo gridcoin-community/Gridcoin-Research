@@ -12,7 +12,6 @@
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/tally.h"
-#include "contract/contract.h"
 #include "util.h"
 
 #include <memory>

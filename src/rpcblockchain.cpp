@@ -17,9 +17,9 @@
 #include "neuralnet/tally.h"
 #include "backup.h"
 #include "appcache.h"
+#include "contract/cpid.h"
 #include "contract/message.h"
 #include "contract/rain.h"
-#include "contract/contract.h"
 #include "util.h"
 
 #include <univalue.h>

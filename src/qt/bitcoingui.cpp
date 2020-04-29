@@ -83,7 +83,6 @@
 #include "rpcclient.h"
 #include "rpcprotocol.h"
 #include "contract/polls.h"
-#include "contract/contract.h"
 #include "neuralnet/researcher.h"
 #include "beacon.h"
 

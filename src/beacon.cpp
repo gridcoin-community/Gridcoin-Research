@@ -6,7 +6,6 @@
 #include "main.h"
 #include "init.h"
 #include "appcache.h"
-#include "contract/contract.h"
 #include "key.h"
 #include "neuralnet/researcher.h"
 #include "neuralnet/quorum.h"

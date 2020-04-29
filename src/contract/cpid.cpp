@@ -1,10 +1,7 @@
-#include "init.h"
-#include "rpcclient.h"
-#include "rpcserver.h"
-#include "rpcprotocol.h"
-#include "keystore.h"
 #include "beacon.h"
-
+#include "contract/cpid.h"
+#include "contract/message.h"
+#include "key.h"
 
 bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
 {
@@ -17,7 +14,12 @@ bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string 
     return bValid;
 }
 
-bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, std::string& sSignature, std::string& sError, bool bAdvertising=false)
+bool SignBlockWithCPID(
+    const std::string& sCPID,
+    const std::string& sBlockHash,
+    std::string& sSignature,
+    std::string& sError,
+    bool bAdvertising)
 {
     // Check if there is a beacon for this user
     // If not then return false as GetStoresBeaconPrivateKey grabs from the config
@@ -26,15 +28,19 @@ bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, 
         sError = "No active beacon";
         return false;
     }
+
     // Returns the Signature of the CPID+BlockHash message.
     CKey keyBeacon;
-    if(!GetStoredBeaconPrivateKey(sCPID, keyBeacon))
+
+    if (!GetStoredBeaconPrivateKey(sCPID, keyBeacon))
     {
         sError = "No beacon key";
         return false;
     }
+
     std::string sMessage = sCPID + sBlockHash;
     sSignature = SignMessage(sMessage,keyBeacon);
+
     // If we failed to sign then return false
     if (sSignature == "Unable to sign message, check private key.")
     {
@@ -42,5 +48,6 @@ bool SignBlockWithCPID(const std::string& sCPID, const std::string& sBlockHash, 
         sSignature = "";
         return false;
     }
+
     return true;
 }
