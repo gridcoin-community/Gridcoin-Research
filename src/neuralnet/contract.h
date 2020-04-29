@@ -520,28 +520,6 @@ public:
         int64_t tx_timestamp);
 
     //!
-    //! \brief Get the master public key used to verify administrative contracts.
-    //!
-    //! \return A \c CPubKey object containing the master public key.
-    //!
-    static const CPubKey& MasterPublicKey();
-
-    //!
-    //! \brief Get the master private key provided by configuration or command-
-    //! line option.
-    //!
-    //! \return An empty key (vector) when no master key configured.
-    //!
-    static const CPrivKey MasterPrivateKey();
-
-    //!
-    //! \brief Get the output address controlled by the master private key.
-    //!
-    //! \return Address as calculated from the master public key.
-    //!
-    static const CBitcoinAddress MasterAddress();
-
-    //!
     //! \brief Get the message public key used to verify public contracts.
     //!
     //! \return A \c CPubKey object containing the message public key.

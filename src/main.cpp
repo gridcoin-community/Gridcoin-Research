@@ -1234,7 +1234,7 @@ bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
 
 bool CTransaction::HasMasterKeyInput(const MapPrevTx& inputs) const
 {
-    const CTxDestination master_address = NN::Contract::MasterAddress().Get();
+    const CTxDestination master_address = CWallet::MasterAddress().Get();
 
     for (const auto& input : vin) {
         const CTxOut& prev_out = GetOutputFor(input, inputs);

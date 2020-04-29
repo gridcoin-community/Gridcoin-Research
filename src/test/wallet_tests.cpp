@@ -54,6 +54,24 @@ static bool equal_sets(CoinSet a, CoinSet b)
     return ret.first == a.end() && ret.second == b.end();
 }
 
+BOOST_AUTO_TEST_CASE(it_embeds_the_contract_master_public_key)
+{
+    BOOST_CHECK(CWallet::MasterPublicKey().Raw().size() == 65);
+}
+
+BOOST_AUTO_TEST_CASE(it_provides_the_contract_master_address)
+{
+    BOOST_CHECK(CWallet::MasterAddress().IsValid() == true);
+}
+
+BOOST_AUTO_TEST_CASE(it_provides_the_master_private_key)
+{
+    // We can't actually test that the wallet contains the master private key
+    // without importing the key itself, but we can check that the wallet tries
+    // to fetch it unsuccessfully:
+    BOOST_CHECK(wallet.MasterPrivateKey().IsValid() == false);
+}
+
 BOOST_AUTO_TEST_CASE(coin_selection_tests)
 {
     static CoinSet setCoinsRet, setCoinsRet2;

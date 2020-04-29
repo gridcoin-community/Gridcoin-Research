@@ -1110,6 +1110,15 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //!
 //! \brief Send a transaction that contains an administrative contract.
 //!
+//! Before invoking this command, import the master key used to sign and verify
+//! transactions that contain administrative contracts. The label is optional:
+//!
+//!     importprivkey <private_key_hex> master
+//!
+//! Send some coins to the master key address if necessary:
+//!
+//!     sendtoaddress <address> <amount>
+//!
 //! To whitelist a project:
 //!
 //!     addkey add project projectname url
@@ -1143,14 +1152,16 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
     }
 
-    CKey key;
-
     // TODO: remove this after Elizabeth mandatory block. We don't need to sign
     // version 2 contracts (the signature is discarded after the threshold):
-    if (!key.SetPrivKey(NN::Contract::MasterPrivateKey())
-        || key.GetPubKey() != NN::Contract::MasterPublicKey()
-    ) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid master key.");
+    CKey key = pwalletMain->MasterPrivateKey();
+
+    if (!key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Missing or invalid master key.");
+    }
+
+    if (key.GetPubKey() != CWallet::MasterPublicKey()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
     }
 
     NN::ContractAction action = NN::ContractAction::UNKNOWN;

@@ -1,4 +1,5 @@
 #include "neuralnet/contract.h"
+#include "wallet.h"
 
 #include <boost/test/unit_test.hpp>
 #include <vector>
@@ -877,18 +878,10 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
     BOOST_CHECK(contract.m_tx_timestamp == 789);
 }
 
-BOOST_AUTO_TEST_CASE(it_provides_the_master_and_message_keys)
+BOOST_AUTO_TEST_CASE(it_provides_the_message_keys)
 {
-    // Master private key read from configuration or command-line option:
-    SetArgument("masterprojectkey", "1234");
-
-    BOOST_CHECK(NN::Contract::MasterPrivateKey().size() == 2);
-    BOOST_CHECK(NN::Contract::MasterPublicKey().Raw().size() == 65);
     BOOST_CHECK(NN::Contract::MessagePrivateKey().size() == 279);
     BOOST_CHECK(NN::Contract::MessagePublicKey().Raw().size() == 65);
-
-    SetArgument("masterprojectkey", "");
-    BOOST_CHECK(NN::Contract::MasterPrivateKey().empty() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_the_contract_burn_address)
@@ -1062,7 +1055,7 @@ BOOST_AUTO_TEST_CASE(it_resolves_the_appropriate_public_key_for_a_contract)
 
     contract.m_type = NN::ContractType::PROJECT;
 
-    BOOST_CHECK(contract.ResolvePublicKey() == NN::Contract::MasterPublicKey());
+    BOOST_CHECK(contract.ResolvePublicKey() == CWallet::MasterPublicKey());
 }
 
 BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)

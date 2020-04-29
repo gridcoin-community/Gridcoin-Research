@@ -170,6 +170,7 @@ public:
     {
         SetNull();
     }
+
     CWallet(std::string strWalletFileIn)
     {
         SetNull();
@@ -177,6 +178,49 @@ public:
         strWalletFile = strWalletFileIn;
         fFileBacked = true;
     }
+
+    //!
+    //! \brief Get the public key used to verify administrative contracts.
+    //!
+    //! The wallet embeds the master public key so that every node can verify
+    //! the authenticity of administrative contracts like a project whitelist
+    //! addition or removal. The master key holders must import a private key
+    //! that corresponds to this public key before they can sign contracts.
+    //!
+    //! \return A \c CPubKey object containing the master public key.
+    //!
+    static const CPubKey& MasterPublicKey();
+
+    //!
+    //! \brief Get the output address controlled by the master private key used
+    //! to verify administrative contracts.
+    //!
+    //! \return Address as calculated from the master public key.
+    //!
+    static const CBitcoinAddress MasterAddress();
+
+    //!
+    //! \brief Get the imported master private key used to sign administrative
+    //! contracts.
+    //!
+    //! A master key holder uses the master private key to sign administrative
+    //! contracts, such as project whitelist additions and removals. All nodes
+    //! verify the contracts using the embedded public key that corresponds to
+    //! this private key.
+    //!
+    //! Key holders need to import the private key into the wallet before they
+    //! can sign administrative contracts. The following RPC command imports a
+    //! private key and assigns to it the optional label of "master":
+    //!
+    //!    importprivkey <hex_key_string> master
+    //!
+    //! Note that this private key differs from the wallet keystore's "master"
+    //! key which the wallet uses to encrypt the private keys in storage.
+    //!
+    //! \return An empty key when no master key imported.
+    //!
+    CKey MasterPrivateKey() const;
+
     void SetNull()
     {
         nWalletVersion = FEATURE_BASE;
