@@ -215,6 +215,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev)
     assert(CoinBase.vin[0].scriptSig.size() <= 100);
     CoinBase.vout[0].SetEmpty();
 
+    if (block.nVersion <= 10) {
+        CoinBase.nVersion = 1; // TODO: remove after mandatory
+    }
+
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to betweeen 1K and MAX_BLOCK_SIZE-1K for sanity:
@@ -497,6 +501,10 @@ bool CreateCoinStake( CBlock &blocknew, CKey &key,
     double StakeDiffSum = 0;
     double StakeDiffMax = 0;
     CTransaction &txnew = blocknew.vtx[1]; // second tx is coinstake
+
+    if (blocknew.nVersion <= 10) {
+        txnew.nVersion = 1; // TODO: remove after mandatory
+    }
 
     //initialize the transaction
     txnew.nTime = blocknew.nTime & (~STAKE_TIMESTAMP_MASK);

@@ -915,9 +915,6 @@ bool CTransaction::ReadFromDisk(COutPoint prevout)
 }
 
 
-
-
-
 bool IsStandardTx(const CTransaction& tx)
 {
     std::string reason = "";
@@ -991,7 +988,6 @@ bool IsStandardTx(const CTransaction& tx)
         }
     }
 
-
     // not more than one data txout per non-data txout is permitted
     // only one data txout is permitted too
     if (nDataOut > 1 && nDataOut > tx.vout.size()/2)
@@ -999,7 +995,6 @@ bool IsStandardTx(const CTransaction& tx)
         reason = "multi-op-return";
         return false;
     }
-
 
     return true;
 }
@@ -1147,8 +1142,6 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
 }
 
 
-
-
 bool CTransaction::CheckTransaction() const
 {
     // Basic checks that don't depend on any context
@@ -1195,6 +1188,42 @@ bool CTransaction::CheckTransaction() const
             if (txin.prevout.IsNull())
                 return DoS(10, error("CTransaction::CheckTransaction() : prevout is null"));
     }
+
+    return true;
+}
+
+bool CTransaction::CheckContracts(bool check_replay) const
+{
+    if (nVersion < 2) {
+        return true;
+    }
+
+    for (const auto& contract : vContracts) {
+        // Destructure contract.Validate() to perform the least expensive checks
+        // first and the most expensive last:
+        if (!contract.WellFormed()) {
+            return error("CTransaction::CheckContract(): Malformed contract");
+        }
+
+        // A contract must be signed before sending it in a transaction:
+        if (contract.m_timestamp > nTime) {
+            return error("CTransaction::CheckContract(): Contract signed after tx");
+        }
+
+        // A wallet has 30 seconds to add the contract to a transaction:
+        if (contract.m_timestamp < nTime - 30) {
+            return error("CTransaction::CheckContract(): Contract signed too early");
+        }
+
+        if (check_replay && !NN::CheckContractReplay(contract)) {
+            return error("CTransaction::CheckContract(): Replayed contract");
+        }
+
+        if (!contract.VerifySignature()) {
+            return error("CTransaction::CheckContract(): Invalid signature");
+        }
+    }
+
     return true;
 }
 
@@ -1241,12 +1270,29 @@ int64_t CTransaction::GetMinFee(unsigned int nBlockSize, enum GetMinFee_mode mod
     return nMinFee;
 }
 
-
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInputs)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
         *pfMissingInputs = false;
+
+    // Mandatory switch to binary contracts (tx version 2):
+    if (IsV11Enabled(nBestHeight + 1) && tx.nVersion < 2) {
+        // Disallow tx version 1 after the mandatory block to prohibit the
+        // use of legacy string contracts:
+        return tx.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
+    }
+
+    // Reject version 2 transactions until mandatory threshold.
+    //
+    // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+    // transactions with binary contracts until clients can handle them.
+    //
+    // TODO: remove this check in the next release after mandatory block.
+    //
+    if (!IsV11Enabled(nBestHeight + 1) && tx.nVersion > 1) {
+        return tx.DoS(100, error("AcceptToMemoryPool : v2 transaction too early"));
+    }
 
     if (!tx.CheckTransaction())
         return error("AcceptToMemoryPool : CheckTransaction failed");
@@ -1266,6 +1312,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // Rather not work on nonstandard transactions (unless -testnet)
     if (!fTestNet && !IsStandardTx(tx))
         return error("AcceptToMemoryPool : nonstandard transaction type");
+
+    // Contracts are expensive to validate. Reject any transactions that contain
+    // malformed or replayed contracts to prevent propagation:
+    if (!tx.CheckContracts(true))
+        return tx.DoS(100, error("AcceptToMemoryPool : invalid contract in tx"));
 
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
@@ -1378,6 +1429,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 return false;
             }
         }
+    }
+
+    // Track any contracts for replay protection:
+    if (tx.nVersion > 1 && tx.vContracts.size() > 0) {
+        NN::TrackContracts(tx.vContracts);
     }
 
     // Store transaction in memory
@@ -2139,19 +2195,14 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
             bDiscTxFailed = true;
         }
 
-        if (!NN::Contract::Detect(vtx[i].hashBoinc)) {
-            continue;
-        }
-
-        // Delete the contract. Previous version will be reloaded in reorganize.
-        NN::Contract contract = NN::Contract::Parse(vtx[i].hashBoinc, vtx[i].nTime);
-
-        if (contract.VerifySignature()) {
-            if(fDebug) {
-                LogPrintf("DisconnectBlock: Delete contract %s %s", contract.m_type.ToString(), contract.m_key);
+        // Reverse the contracts. Reorganize will load any previous versions:
+        for (const auto& contract : vtx[i].vContracts) {
+            // V2 contract signatures are checked upon receipt:
+            if (vtx[i].nVersion == 1 && !contract.VerifySignature()) {
+                continue;
             }
 
-            NN::RevertContract(std::move(contract));
+            NN::RevertContract(contract);
         }
     }
 
@@ -2595,9 +2646,28 @@ bool GridcoinConnectBlock(
 
     // Load contracts:
     for (auto iter = ++block.vtx.begin(), end = block.vtx.end(); iter != end; ++iter) {
-        if (iter->hashBoinc.length() > 3) {
+        for (const auto& contract : iter->vContracts) {
+            // V2 contract signatures are checked upon receipt:
+            if (iter->nVersion == 1 && !contract.Validate()) {
+                continue;
+            }
+
             pindex->nIsContract = 1;
-            MemorizeMessage(*iter, 0, ""); // TODO: replace with contract handler
+
+            // Support dynamic team requirement or whitelist configuration:
+            //
+            // TODO: move this into the appropriate contract handler.
+            //
+            if (contract.m_type == NN::ContractType::PROTOCOL
+                && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                    || contract.m_key == "TEAM_WHITELIST"))
+            {
+                // Rescan in-memory project CPIDs to resolve a primary CPID
+                // that fits the now active team requirement settings:
+                NN::Researcher::Refresh();
+            }
+
+            NN::ProcessContract(contract);
         }
     }
 
@@ -3377,12 +3447,35 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
     // Check transactions
     for (auto const& tx : vtx)
     {
+        // Mandatory switch to binary contracts (tx version 2):
+        if (IsV11Enabled(height1) && tx.nVersion < 2) {
+            // Disallow tx version 1 after the mandatory block to prohibit the
+            // use of legacy string contracts:
+            return tx.DoS(100, error("CheckBlock[] : legacy transaction"));
+        }
+
+        // Reject version 2 transactions until mandatory threshold.
+        //
+        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+        // transactions with binary contracts until clients can handle them.
+        //
+        // TODO: remove this check in the next release after mandatory block.
+        //
+        if (!IsV11Enabled(height1) && tx.nVersion > 1) {
+            return tx.DoS(100, error("CheckBlock[] : v2 transaction too early"));
+        }
+
         if (!tx.CheckTransaction())
             return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
 
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
+
+        // Validate any contracts. Check for contract replay if the block
+        // occurs within the replay checking window.
+        if (!tx.CheckContracts(nTime > NN::Contract::ReplayPeriod()))
+            return DoS(50, error("CheckBlock[] : CheckContracts failed"));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -3474,6 +3567,11 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         // Current bad contracts in chain would cause a fork on sync, skip them
         if (nVersion>=9 && !VerifyBeaconContractTx(tx))
             return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
+
+        // Track any contracts for replay protection:
+        if (tx.nVersion > 1 && tx.vContracts.size() > 0) {
+            NN::TrackContracts(tx.vContracts);
+        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
@@ -3977,6 +4075,7 @@ bool LoadBlockIndex(bool fAllowNew)
 
         CTransaction txNew;
         //GENESIS TIME
+        txNew.nVersion = 1;
         txNew.nTime = 1413033777;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
@@ -5543,36 +5642,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     return true;
 }
 
-bool MemorizeMessage(const CTransaction &tx)
-{
-    if (!NN::Contract::Detect(tx.hashBoinc)) {
-        return false;
-    }
-
-    NN::Contract contract = NN::Contract::Parse(tx.hashBoinc, tx.nTime);
-
-    if (!contract.VerifySignature()) {
-        return false;
-    }
-
-    // Support dynamic team requirement or whitelist configuration:
-    //
-    // TODO: move this into the appropriate contract handler.
-    //
-    if (contract.m_type == NN::ContractType::PROTOCOL
-        && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-            || contract.m_key == "TEAM_WHITELIST"))
-    {
-        // Rescan in-memory project CPIDs to resolve a primary CPID
-        // that fits the now active team requirement settings:
-        NN::Researcher::Refresh();
-    }
-
-    NN::ProcessContract(contract);
-
-    return true;
-}
-
 const CBlockIndex* GetHistoricalMagnitude(const NN::MiningId mining_id)
 {
     if (const NN::CpidOption cpid = mining_id.TryCpid())
@@ -5623,21 +5692,37 @@ bool LoadAdminMessages(bool bFullTableScan)
        return true;
 
     // These are memorized consecutively in order from oldest to newest.
-    for(; pindex; pindex = pindex->pnext)
-    {
-        if (!pindex->IsInMainChain())
+    for (; pindex; pindex = pindex->pnext) {
+        CBlock block;
+
+        if (!pindex->IsInMainChain() || !IsContract(pindex) || !block.ReadFromDisk(pindex)) {
             continue;
-        if (IsContract(pindex))
-        {
-            CBlock block;
-            if (!block.ReadFromDisk(pindex)) continue;
-            int iPos = 0;
-            for (auto const &tx : block.vtx)
-            {
-                if (iPos > 0) {
-                    MemorizeMessage(tx);
+        }
+
+        auto tx_iter = block.vtx.begin();
+        ++tx_iter; // skip the first transaction
+
+        for (auto end = block.vtx.end(); tx_iter != end; ++tx_iter) {
+            for (const auto& contract : tx_iter->vContracts) {
+                // V2 contract signatures are checked upon receipt:
+                if (tx_iter->nVersion == 1 && !contract.Validate()) {
+                    continue;
                 }
-                iPos++;
+
+                // Support dynamic team requirement or whitelist configuration:
+                //
+                // TODO: move this into the appropriate contract handler.
+                //
+                if (contract.m_type == NN::ContractType::PROTOCOL
+                    && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                        || contract.m_key == "TEAM_WHITELIST"))
+                {
+                    // Rescan in-memory project CPIDs to resolve a primary CPID
+                    // that fits the now active team requirement settings:
+                    NN::Researcher::Refresh();
+                }
+
+                NN::ProcessContract(contract);
             }
         }
     }

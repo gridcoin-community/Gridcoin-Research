@@ -9,7 +9,8 @@ extern CWallet* pwalletMain;
 std::pair<CWalletTx, std::string> SendContract(NN::Contract contract, int64_t min_balance, double fee)
 {
     CWalletTx wtx;
-    wtx.hashBoinc = contract.ToString();
+
+    wtx.vContracts.push_back(contract);
 
     std::string error = pwalletMain->SendMoneyToDestinationWithMinimumBalance(
         CBitcoinAddress(NN::Contract::BurnAddress()).Get(),

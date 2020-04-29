@@ -7,6 +7,7 @@
 #include <fstream>
 
 #include "base58.h"
+#include "neuralnet/contract.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "txdb.h"
@@ -383,6 +384,23 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fInclud
     out.pushKV("addresses", a);
 }
 
+UniValue ContractToJSON(const NN::Contract& contract)
+{
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("version", (int)contract.m_version);
+    out.pushKV("type", contract.m_type.ToString());
+    out.pushKV("action", contract.m_action.ToString());
+    out.pushKV("key", contract.m_key);
+    out.pushKV("value", contract.m_value);
+    out.pushKV("public_key", contract.m_public_key.ToString());
+    out.pushKV("signature", contract.m_signature.ToString());
+    out.pushKV("signing_time", contract.m_timestamp);
+    out.pushKV("nonce", contract.m_nonce);
+
+    return out;
+}
+
 void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
 {
     entry.pushKV("txid", tx.GetHash().GetHex());
@@ -390,6 +408,14 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     entry.pushKV("time", (int)tx.nTime);
     entry.pushKV("locktime", (int)tx.nLockTime);
     entry.pushKV("hashboinc", tx.hashBoinc);
+
+    UniValue contracts(UniValue::VARR);
+
+    for (const auto& contract : tx.vContracts) {
+        contracts.push_back(ContractToJSON(contract));
+    }
+
+    entry.pushKV("contracts", contracts);
 
     UniValue vin(UniValue::VARR);
     for (auto const& txin : tx.vin)

@@ -13,6 +13,7 @@
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
+#include "neuralnet/contract.h"
 
 #include <map>
 #include <unordered_map>
@@ -602,7 +603,7 @@ typedef std::map<uint256, std::pair<CTxIndex, CTransaction> > MapPrevTx;
 class CTransaction
 {
 public:
-    static const int CURRENT_VERSION=1;
+    static const int CURRENT_VERSION = 2;
     int nVersion;
     unsigned int nTime;
     std::vector<CTxIn> vin;
@@ -613,6 +614,7 @@ public:
     mutable int nDoS;
     bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
     std::string hashBoinc;
+    std::vector<NN::Contract> vContracts;
 
     CTransaction()
     {
@@ -629,8 +631,25 @@ public:
         READWRITE(vin);
         READWRITE(vout);
         READWRITE(nLockTime);
-
         READWRITE(hashBoinc);
+
+        // Version 1: If the hashBoinc field contains a legacy contract string,
+        // parse it into the contract vector when deserializing the transaction.
+        //
+        // Version 2+: Directly serialize and deserialize the binary contracts
+        // in vContracts. Ignore contract messages in hashBoinc.
+        //
+        if (nVersion == 1 && ser_action.ForRead() && NN::Contract::Detect(hashBoinc)) {
+            REF(vContracts).push_back(NN::Contract::Parse(hashBoinc, nTime));
+        } else if (nVersion > 1) {
+            READWRITE(vContracts);
+
+            if (ser_action.ForRead()) {
+                for (auto& contract : REF(vContracts)) {
+                    contract.m_tx_timestamp = nTime;
+                }
+            }
+        }
     }
 
     void SetNull()
@@ -641,7 +660,8 @@ public:
         vout.clear();
         nLockTime = 0;
         nDoS = 0;  // Denial-of-service prevention
-        hashBoinc="";
+        hashBoinc = "";
+        vContracts.clear();
     }
 
     bool IsNull() const
@@ -852,7 +872,18 @@ public:
     bool ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
                        std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
                        const CBlockIndex* pindexBlock, bool fBlock, bool fMiner);
+
     bool CheckTransaction() const;
+
+    //!
+    //! \brief Check the validity of any contracts contained in the transaction.
+    //!
+    //! \param check_replay If \c true, also check for contract replay attacks.
+    //!
+    //! \return \c True if all of the contracts in the transaction validate.
+    //!
+    bool CheckContracts(bool check_replay = false) const;
+
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 
 protected:

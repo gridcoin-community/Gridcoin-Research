@@ -1601,6 +1601,27 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
     {
         LOCK2(cs_main, cs_wallet);
+
+        // Force version 1 transactions until mandatory threshold.
+        //
+        // CTransaction::CURRENT_VERSION is now 2, but we cannot send version 2
+        // transactions until clients can handle them.
+        //
+        // TODO: remove this check in the next release after mandatory block.
+        //
+        if (!IsV11Enabled(nBestHeight + 1)) {
+            wtxNew.nVersion = 1;
+
+            // Convert any binary contracts to the legacy string representation.
+            //
+            // V2 transactions support multiple contracts, but nothing uses
+            // this ability yet. Just check the first element:
+            //
+            if (wtxNew.vContracts.size() == 1) {
+                wtxNew.hashBoinc = wtxNew.vContracts[0].ToString();
+            }
+        }
+
         // txdb must be opened before the mapWallet lock
         CTxDB txdb("r");
         {
@@ -1617,23 +1638,15 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 for (auto const& s : vecSend)
                     wtxNew.vout.push_back(CTxOut(s.second, s.first));
 
-
-                // Determine if transaction is a contract
-                bool contract = false;
-
-                if (!wtxNew.hashBoinc.empty() && !coinControl)
-                {
-                    string contracttype = ExtractXML(wtxNew.hashBoinc, "<MT>", "</MT>");
-
-                    if (contracttype == "beacon" || contracttype == "vote" || contracttype == "poll" || contracttype == "project")
-                        contract = true;
-                }
-
                 int64_t nValueIn = 0;
 
                 // If provided coin set is empty, choose coins to use.
                 if (!setCoins.size())
                 {
+                    // If the transaction contains a contract, we want to select the
+                    // smallest UTXOs available:
+                    const bool contract = !coinControl && !wtxNew.vContracts.empty();
+
                     if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract))
                         return false;
                 }
