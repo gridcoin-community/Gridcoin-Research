@@ -100,6 +100,7 @@ GRIDCOIN_CORE_H = \
 	neuralnet/accrual/research_age.h \
 	neuralnet/accrual/snapshot.h \
 	neuralnet/claim.h \
+	neuralnet/contract.h \
 	neuralnet/cpid.h \
 	neuralnet/magnitude.h \
 	neuralnet/project.h \
@@ -119,7 +120,7 @@ GRIDCOIN_CORE_H = \
     scheduler.h \
 	scraper_net.h \
 	scraper/fwd.h \
-    scraper/http.h \
+	scraper/http.h \
 	scraper/scraper.h \
 	script.h \
 	scrypt.h \
@@ -174,6 +175,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	main.cpp \
 	miner.cpp \
 	neuralnet/claim.cpp \
+	neuralnet/contract.cpp \
 	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
 	neuralnet/quorum.cpp \
