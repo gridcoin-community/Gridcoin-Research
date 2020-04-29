@@ -10,7 +10,6 @@ enum class Section
     BEACONALT,
     GLOBAL,
     PROTOCOL,
-    TRXID,
     POLL,
     VOTE,
     SCRAPER,

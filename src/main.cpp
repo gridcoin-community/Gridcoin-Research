@@ -5568,14 +5568,6 @@ bool MemorizeMessage(const CTransaction &tx)
         NN::Researcher::Refresh();
     }
 
-    if (fDebug) {
-        WriteCache(
-            Section::TRXID,
-            contract.m_type.ToString() + ";" + contract.m_key,
-            tx.GetHash().GetHex(),
-            tx.nTime);
-    }
-
     NN::ProcessContract(contract);
 
     return true;
