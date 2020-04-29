@@ -1192,39 +1192,64 @@ bool CTransaction::CheckTransaction() const
     return true;
 }
 
-bool CTransaction::CheckContracts(bool check_replay) const
+bool CTransaction::CheckContracts(const MapPrevTx& inputs) const
 {
-    if (nVersion < 2) {
+    // Although v2 transactions support multiple contracts, we just allow one
+    // for now to mitigate spam:
+    if (vContracts.size() > 1) {
+        return DoS(100, error("%s: only one contract allowed in tx", __func__));
+    }
+
+    if ((IsCoinBase() || IsCoinStake())) {
+        return DoS(100, error("%s: contract in non-standard tx", __func__));
+    }
+
+    if (nVersion <= 1) {
         return true;
     }
 
+    const auto is_valid_burn_output = [](const CTxOut& output) {
+        return output.scriptPubKey[0] == OP_RETURN
+            && output.nValue >= NN::Contract::BURN_AMOUNT;
+    };
+
+    if (std::none_of(vout.begin(), vout.end(), is_valid_burn_output)) {
+        return DoS(100, error("%s: no sufficient burn output", __func__));
+    }
+
     for (const auto& contract : vContracts) {
-        // Destructure contract.Validate() to perform the least expensive checks
-        // first and the most expensive last:
-        if (!contract.WellFormed()) {
-            return error("CTransaction::CheckContract(): Malformed contract");
+        if (!contract.Validate()) {
+            return DoS(100, error("%s: malformed contract", __func__));
         }
 
-        // A contract must be signed before sending it in a transaction:
-        if (contract.m_timestamp > nTime) {
-            return error("CTransaction::CheckContract(): Contract signed after tx");
-        }
-
-        // A wallet has 30 seconds to add the contract to a transaction:
-        if (contract.m_timestamp < nTime - 30) {
-            return error("CTransaction::CheckContract(): Contract signed too early");
-        }
-
-        if (check_replay && !NN::CheckContractReplay(contract)) {
-            return error("CTransaction::CheckContract(): Replayed contract");
-        }
-
-        if (!contract.VerifySignature()) {
-            return error("CTransaction::CheckContract(): Invalid signature");
+        // Reject any transactions with administrative contracts sent from a
+        // wallet that does not hold the master key:
+        if (contract.RequiresMasterKey() && !HasMasterKeyInput(inputs)) {
+            return DoS(100, error("%s: contract requires master key", __func__));
         }
     }
 
     return true;
+}
+
+bool CTransaction::HasMasterKeyInput(const MapPrevTx& inputs) const
+{
+    const CTxDestination master_address = NN::Contract::MasterAddress().Get();
+
+    for (const auto& input : vin) {
+        const CTxOut& prev_out = GetOutputFor(input, inputs);
+        CTxDestination dest;
+
+        if (!ExtractDestination(prev_out.scriptPubKey, dest)) {
+            continue;
+        }
+
+        if (dest == master_address) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int64_t CTransaction::GetBaseFee(enum GetMinFee_mode mode) const
@@ -1312,11 +1337,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
     // Rather not work on nonstandard transactions (unless -testnet)
     if (!fTestNet && !IsStandardTx(tx))
         return error("AcceptToMemoryPool : nonstandard transaction type");
-
-    // Contracts are expensive to validate. Reject any transactions that contain
-    // malformed or replayed contracts to prevent propagation:
-    if (!tx.CheckContracts(true))
-        return tx.DoS(100, error("AcceptToMemoryPool : invalid contract in tx"));
 
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
@@ -1416,6 +1436,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
             }
         }
 
+        // Validate any contracts published in the transaction:
+        if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+            return false;
+        }
+
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
         if (!tx.ConnectInputs(txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
@@ -1429,11 +1454,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                 return false;
             }
         }
-    }
-
-    // Track any contracts for replay protection:
-    if (tx.nVersion > 1 && tx.vContracts.size() > 0) {
-        NN::TrackContracts(tx.vContracts);
     }
 
     // Store transaction in memory
@@ -2811,6 +2831,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
                 }
             }
 
+            // Validate any contracts published in the transaction:
+            if (!tx.vContracts.empty() && !tx.CheckContracts(mapInputs)) {
+                return false;
+            }
+
             if (!tx.ConnectInputs(txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
                 return false;
         }
@@ -3471,11 +3496,6 @@ bool CBlock::CheckBlock(std::string sCaller, int height1, int64_t Mint, bool fCh
         // ppcoin: check transaction timestamp
         if (GetBlockTime() < (int64_t)tx.nTime)
             return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
-
-        // Validate any contracts. Check for contract replay if the block
-        // occurs within the replay checking window.
-        if (!tx.CheckContracts(nTime > NN::Contract::ReplayPeriod()))
-            return DoS(50, error("CheckBlock[] : CheckContracts failed"));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -3567,11 +3587,6 @@ bool CBlock::AcceptBlock(bool generated_by_me)
         // Current bad contracts in chain would cause a fork on sync, skip them
         if (nVersion>=9 && !VerifyBeaconContractTx(tx))
             return DoS(25, error("CheckBlock[] : bad beacon contract found in tx %s contained within block; rejected", tx.GetHash().ToString().c_str()));
-
-        // Track any contracts for replay protection:
-        if (tx.nVersion > 1 && tx.vContracts.size() > 0) {
-            NN::TrackContracts(tx.vContracts);
-        }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "base58.h"
 #include "key.h"
 #include "serialize.h"
 #include "uint256.h"
@@ -201,14 +202,6 @@ private:
         OptionalString m_other; //!< Holds invalid or non-standard types.
     }; // Contract::EnumVariant
 
-    //!
-    //! \brief Caches a contract's hash value.
-    //!
-    //! Prevents repeated, expensive hash calculations. However, once cached,
-    //! this value is only invalidated when re-signing a contract.
-    //!
-    mutable uint256 m_hash_cache = 0;
-
 public:
     //!
     //! \brief Version number of the current format for a serialized contract.
@@ -220,11 +213,12 @@ public:
     static constexpr int CURRENT_VERSION = 2; // TODO: int32_t
 
     //!
-    //! \brief The amount of time in seconds to store received contracts in
-    //! memory for replay detection. Reject contracts timestamped earlier than
-    //! this window.
+    //! \brief The amount of coin set for a burn output in a transaction that
+    //! broadcasts a contract in units of 1/100000000 GRC.
     //!
-    static constexpr int64_t REPLAY_RETENTION_PERIOD = 60 * 60;
+    //! Currently, we burn the smallest amount possible (0.00000001).
+    //!
+    static constexpr int64_t BURN_AMOUNT = 1;
 
     //!
     //! \brief A contract type from a transaction message.
@@ -466,13 +460,13 @@ public:
     //!
     //! Defaults to the most recent version for a new contract instance.
     //!
-    //! Version 1: Legacy string XML-like contract message parsed from the
-    //! \c hashBoinc field of a transaction. Contains no nonce or signing
-    //! timestamp.
+    //! Version 1: Legacy string XML-like contract messages parsed from the
+    //! \c hashBoinc field of a transaction object. It contains a signature
+    //! and public key.
     //!
     //! Version 2: Contract data serializable in binary format. Stored in a
-    //! transaction's \c vContracts field. Must contain a nonce and signing
-    //! timestamp which protect against contract replay.
+    //! transaction's \c vContracts field. It excludes the legacy signature
+    //! and public key from version 1.
     //!
     int m_version = CURRENT_VERSION;
 
@@ -482,8 +476,6 @@ public:
     std::string m_value;    //!< Body containing any specialized data.
     Signature m_signature;  //!< Proves authenticity of the contract.
     PublicKey m_public_key; //!< Verifies the contract signature.
-    unsigned int m_nonce;   //!< Random. Prevents contract replay.
-    long m_timestamp;       //!< Signing time. Prevents contract replay.
     int64_t m_tx_timestamp; //!< Timestamp of the contract's transaction.
 
     //!
@@ -515,8 +507,6 @@ public:
     //! \param value        The contract value as it exists in the transaction.
     //! \param signature    Proves authenticity of the contract message.
     //! \param public_key   Optional for some types. Verifies the signature.
-    //! \param nonce        Random. Prevents contract replay. Version 2+.
-    //! \param timestamp    Contract signing time. Prevents replay. Version 2+.
     //! \param tx_timestamp Timestamp of the transaction containing the contract.
     //!
     Contract(
@@ -527,8 +517,6 @@ public:
         std::string value,
         Signature signature,
         PublicKey public_key,
-        unsigned int nonce,
-        long timestamp,
         int64_t tx_timestamp);
 
     //!
@@ -545,6 +533,13 @@ public:
     //! \return An empty key (vector) when no master key configured.
     //!
     static const CPrivKey MasterPrivateKey();
+
+    //!
+    //! \brief Get the output address controlled by the master private key.
+    //!
+    //! \return Address as calculated from the master public key.
+    //!
+    static const CBitcoinAddress MasterAddress();
 
     //!
     //! \brief Get the message public key used to verify public contracts.
@@ -569,14 +564,6 @@ public:
     //! \return Burn address for transactions that contain contract messages.
     //!
     static const std::string BurnAddress();
-
-    //!
-    //! \brief Get the time after which newly-received contracts must pass
-    //! replay checking.
-    //!
-    //! \return Number of seconds before the current time.
-    //!
-    static int64_t ReplayPeriod();
 
     //!
     //! \brief Determine whether the supplied message might contain a contract.
@@ -680,7 +667,7 @@ public:
     //! verify the contract signature.
     //!
     //! \return Hash of the contract type, key, and value. Versions 2+ also
-    //! include the action, nonce, and timestamp in the hash.
+    //! include the action.
     //!
     uint256 GetHash() const;
 
@@ -719,13 +706,6 @@ public:
         READWRITE(m_action);
         READWRITE(m_key);
         READWRITE(m_value);
-        READWRITE(m_nonce);
-        READWRITE(m_timestamp);
-
-        if (!(s.GetType() & SER_GETHASH)) {
-            READWRITE(m_public_key);
-            READWRITE(m_signature);
-        }
     }
 }; // Contract
 
@@ -792,19 +772,4 @@ void ProcessContract(const Contract& contract);
 //! \param contract Received in a transaction message.
 //!
 void RevertContract(const Contract& contract);
-
-//!
-//! \brief Check that the provided contract does not match an existing contract
-//! to protect against replay attacks.
-//!
-//! \param contract Contract to check. Received in a transaction.
-//!
-bool CheckContractReplay(const Contract& contract);
-
-//!
-//! \brief Add contracts from a transaction to the replay tracking pool.
-//!
-//! \param contracts A set of newly-received contracts from a transaction.
-//!
-void TrackContracts(const std::vector<Contract>& contracts);
 }

@@ -32,11 +32,7 @@ unsigned int nDerivationMethodIndex;
 
 namespace NN { std::string GetPrimaryCpid(); }
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// mapWallet
-//
-
+namespace {
 struct CompareValueOnly
 {
     bool operator()(const pair<int64_t, pair<const CWalletTx*, unsigned int> >& t1,
@@ -45,6 +41,12 @@ struct CompareValueOnly
         return t1.first < t2.first;
     }
 };
+} // anonymous namespace
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// mapWallet
+//
 
 CPubKey CWallet::GenerateNewKey()
 {
@@ -1767,6 +1769,7 @@ bool CWallet::CreateTransaction(CScript scriptPubKey, int64_t nValue, CWalletTx&
     return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, coinControl);
 }
 
+
 bool CWallet::GetStakeWeight(uint64_t& nWeight)
 {
     // Choose coins to use
@@ -1961,8 +1964,6 @@ string CWallet::SendMoneyToDestination(const CTxDestination& address, int64_t nV
 
     return SendMoney(scriptPubKey, nValue, wtxNew, fAskFee);
 }
-
-
 
 
 DBErrors CWallet::LoadWallet(bool& fFirstRunRet)

@@ -127,100 +127,7 @@ public:
         GetHandler(contract.m_type.Value()).Revert(contract);
     }
 
-    //!
-    //! \brief Check that the provided contract does not match an existing
-    //! contract to protect against replay attacks.
-    //!
-    //! The application calls this method when it receives a new transaction
-    //! from another node. The return value determines whether we should keep
-    //! or discard the transaction. If the received contract is too old (as
-    //! defined by \c REPLAY_RETENTION_PERIOD), or if the contract matches an
-    //! existing contract in the cache, this method returns \c false, and the
-    //! calling code shall reject the transaction containing the contract.
-    //!
-    //! Version 2+ contracts can be checked for replay. Version 1 contracts do
-    //! not contain the data necessary to determine uniqueness.
-    //!
-    //! Replay protection relies on the contract's signing timestamp and nonce
-    //! values captured in the contract hash. A contract received with a signing
-    //! time earlier than the configured number of seconds from now shall be
-    //! considered invalid. The addition of a nonce prevents replay of recent
-    //! contracts received within this window.
-    //!
-    //! \param contract Contract to check. Received in a transaction.
-    //!
-    //! \return \c true if the check deteremines that the contract is unique.
-    //!
-    bool CheckReplay(const Contract& contract)
-    {
-        int64_t valid_after_time = Contract::ReplayPeriod();
-
-        // Reject any contracts timestamped earlier than a reasonable window.
-        // By invalidating contracts older than a cut-off threshold, we only
-        // need to store contracts newer than REPLAY_RETENTION_PERIOD in memory
-        // for replay detection:
-        if (contract.m_timestamp < valid_after_time) {
-            return false;
-        }
-
-        std::list<ReplayPoolItem>::iterator item = m_replay_pool.begin();
-
-        while (item != m_replay_pool.end()) {
-            // If a contract hash matches an entry in the pool, we can assume
-            // that it was replayed:
-            if (item->m_hash == contract.GetHash()) {
-                return false;
-            }
-
-            // Lazily purge old entries from the pool whenever we check a new
-            // contract. Any expired entries eventualy pass out when we receive
-            // a valid contract:
-            if (item->m_timestamp < valid_after_time) {
-                item = m_replay_pool.erase(item);
-                continue;
-            }
-
-            ++item;
-        }
-
-        return true;
-    }
-
-    //!
-    //! \brief Add a contract to the replay tracking pool.
-    //!
-    //! \param contract A newly-received contract from a transaction.
-    //!
-    void TrackForReplay(const Contract& contract)
-    {
-        ReplayPoolItem new_item;
-
-        new_item.m_timestamp = contract.m_timestamp;
-        new_item.m_hash = contract.GetHash();
-
-        m_replay_pool.push_back(std::move(new_item));
-    }
-
 private:
-    //!
-    //! \brief Contains a hash of contract data for replay checks.
-    //!
-    struct ReplayPoolItem
-    {
-        int64_t m_timestamp; //!< To cull entries older than retention period.
-        uint256 m_hash;      //!< Hash of a contract compared to new contracts.
-    };
-
-    //!
-    //! \brief Contains a rolling cache of recently-received contract hashes
-    //! used to compare with contracts received in transaction messages for
-    //! replay protection.
-    //!
-    //! Calling \c CheckReplay() will purge the old entries from the cache as
-    //! it checks a valid contract.
-    //!
-    std::list<ReplayPoolItem> m_replay_pool;
-
     AppCacheContractHandler m_appcache_handler; //<! Temporary.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 
@@ -269,21 +176,11 @@ void NN::RevertContract(const Contract& contract)
     g_dispatcher.Revert(contract);
 }
 
-bool NN::CheckContractReplay(const Contract& contract)
-{
-    return gateway.CheckReplay(contract);
-}
-
-void NN::TrackContracts(const std::vector<Contract>& contracts)
-{
-    for (const auto& contract : contracts) {
-        gateway.TrackForReplay(contract);
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Class: Contract
 // -----------------------------------------------------------------------------
+
+constexpr int64_t Contract::BURN_AMOUNT; // for clang
 
 Contract::Contract()
     : m_version(Contract::CURRENT_VERSION)
@@ -293,8 +190,6 @@ Contract::Contract()
     , m_value(std::string())
     , m_signature(Contract::Signature())
     , m_public_key(Contract::PublicKey())
-    , m_nonce(0)
-    , m_timestamp(0)
     , m_tx_timestamp(0)
 {
 }
@@ -311,8 +206,6 @@ Contract::Contract(
     , m_value(std::move(value))
     , m_signature(Contract::Signature())
     , m_public_key(Contract::PublicKey())
-    , m_nonce(0)
-    , m_timestamp(0)
     , m_tx_timestamp(0)
 {
 }
@@ -325,8 +218,6 @@ Contract::Contract(
     std::string value,
     Contract::Signature signature,
     Contract::PublicKey public_key,
-    unsigned int nonce,
-    long timestamp,
     int64_t tx_timestamp)
     : m_version(version)
     , m_type(std::move(type))
@@ -335,8 +226,6 @@ Contract::Contract(
     , m_value(std::move(value))
     , m_signature(std::move(signature))
     , m_public_key(std::move(public_key))
-    , m_nonce(std::move(nonce))
-    , m_timestamp(std::move(timestamp))
     , m_tx_timestamp(std::move(tx_timestamp))
 {
 }
@@ -365,6 +254,14 @@ const CPrivKey Contract::MasterPrivateKey()
     std::vector<unsigned char> key = ParseHex(GetArgument("masterprojectkey", ""));
 
     return CPrivKey(key.begin(), key.end());
+}
+
+const CBitcoinAddress Contract::MasterAddress()
+{
+    CBitcoinAddress master_address;
+    master_address.Set(NN::Contract::MasterPublicKey().GetID());
+
+    return master_address;
 }
 
 const CPubKey& Contract::MessagePublicKey()
@@ -439,11 +336,6 @@ const std::string Contract::BurnAddress()
         : "S67nL4vELWwdDVzjgtEP4MxryarTZ9a8GB";
 }
 
-int64_t Contract::ReplayPeriod()
-{
-    return GetAdjustedTime() - REPLAY_RETENTION_PERIOD;
-}
-
 bool Contract::Detect(const std::string& message)
 {
     return !message.empty()
@@ -470,8 +362,6 @@ Contract Contract::Parse(const std::string& message, const int64_t timestamp)
         // altogether. We verify contracts with the master and message keys:
         //Contract::PublicKey::Parse(ExtractXML(message, "<MPK>", "</MPK>")),
         Contract::PublicKey(),
-        0, // Nonce unused in v1 contracts.
-        0, // Signing timestamp unused in v1 contracts.
         timestamp);
 }
 
@@ -523,26 +413,24 @@ bool Contract::WellFormed() const
         && m_action != ContractAction::UNKNOWN
         && !m_key.empty()
         && !m_value.empty()
-        && m_signature.Viable()
-        && (RequiresSpecialKey() || m_public_key.Viable())
-        && m_tx_timestamp > 0
-        && (m_version == 1 || (m_timestamp > 0 && m_nonce > 0));
+        // Version 2+ contracts rely on the signatures in the transactions
+        // instead of embedding another signature in the contract:
+        && (m_version > 1 || m_signature.Viable())
+        && (m_version > 1 || (RequiresSpecialKey() || m_public_key.Viable()))
+        && m_tx_timestamp > 0;
 }
 
 bool Contract::Validate() const
 {
-    return WellFormed() && VerifySignature();
+    return WellFormed()
+        // Version 2+ contracts rely on the signatures in the transactions
+        // instead of embedding another signature in the contract:
+        && (m_version > 1 || VerifySignature());
 }
 
 bool Contract::Sign(CKey& private_key)
 {
     std::vector<unsigned char> output;
-    m_hash_cache = 0; // Invalidate the cached hash, if any.
-
-    if (m_version > 1) {
-        m_timestamp = GetAdjustedTime();
-        RAND_bytes(reinterpret_cast<unsigned char*>(&m_nonce), sizeof(m_nonce));
-    }
 
     if (!private_key.Sign(GetHash(), output)) {
         Log("ERROR: Failed to sign contract");
@@ -581,34 +469,19 @@ bool Contract::VerifySignature() const
 
 uint256 Contract::GetHash() const
 {
-    // Nodes use the hash at least twice when validating a received contract
-    // (once to verify the signature, once to track the contract for replay
-    // protection, and one or more times to compare the contract to any other
-    // contracts in the replay protection cache), so we cache the value to
-    // avoid re-computing it. Once cached, the hash is only invalidated when
-    // re-signing a contract, so avoid calling this method on a contract in
-    // an intermediate state.
-
-    if (m_hash_cache > 0) {
-        return m_hash_cache;
-    }
-
     if (m_version > 1) {
-        m_hash_cache = SerializeHash(*this);
-        return m_hash_cache;
+        return SerializeHash(*this);
     }
 
     const std::string type_string = m_type.ToString();
 
-    m_hash_cache = Hash(
+    return Hash(
         type_string.begin(),
         type_string.end(),
         m_key.begin(),
         m_key.end(),
         m_value.begin(),
         m_value.end());
-
-    return m_hash_cache;
 }
 
 std::string Contract::ToString() const
@@ -629,18 +502,16 @@ void Contract::Log(const std::string& prefix) const
     }
 
     LogPrintf(
-        "<Contract::Log>: %s: v%d, %d, %d, %s, %s, %s, %s, %s, %s, %d",
+        "<Contract::Log>: %s: v%d, %d, %s, %s, %s, %s, %s, %s",
         prefix,
         m_version,
         m_tx_timestamp,
-        m_timestamp,
         m_type.ToString(),
         m_action.ToString(),
         m_key,
         m_value,
         m_public_key.ToString(),
-        m_signature.ToString(),
-        m_nonce);
+        m_signature.ToString());
 }
 
 // -----------------------------------------------------------------------------

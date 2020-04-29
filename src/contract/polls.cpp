@@ -72,10 +72,10 @@ std::pair<std::string, std::string> CreatePollContract(std::string sTitle, int d
                         + "<URL>" + sURL + "</URL>"
                         + "<EXPIRATION>" + RoundToString(GetAdjustedTime() + (days * 86400), 0) + "</EXPIRATION>");
 
-                std::string error = SendPublicContract(contract);
+                std::string error = SendPublicContract(std::move(contract));
 
                 if (!error.empty()) {
-                    return std::make_pair("Error", error);
+                    return std::make_pair("Error", std::move(error));
                 }
 
                 return std::make_pair("Success", "");
@@ -155,10 +155,10 @@ std::pair<std::string, std::string> CreateVoteContract(std::string sTitle, std::
                 // goes into effect July 1 2017:
                 + GetProvableVotingWeightXML());
 
-        std::string error = SendPublicContract(contract);
+        std::string error = SendPublicContract(std::move(contract));
 
         if (!error.empty()) {
-            return std::make_pair("Error", error);
+            return std::make_pair("Error", std::move(error));
         }
 
         std::string narr = "Your CPID weight is " + RoundToString(dmag,0) + " and your Balance weight is " + RoundToString(nBalance,0) + ".";

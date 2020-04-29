@@ -472,7 +472,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             }
 
             // Send the beacon transaction
-            sMessage = SendPublicContract(contract);
+            sMessage = SendPublicContract(std::move(contract));
 
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
@@ -1145,6 +1145,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     CKey key;
 
+    // TODO: remove this after Elizabeth mandatory block. We don't need to sign
+    // version 2 contracts (the signature is discarded after the threshold):
     if (!key.SetPrivKey(NN::Contract::MasterPrivateKey())
         || key.GetPubKey() != NN::Contract::MasterPublicKey()
     ) {
@@ -1177,19 +1179,25 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
     }
 
-    if (!contract.Sign(key)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
+    // TODO: remove this after the v11 mandatory block. We don't need to sign
+    // version 2 contracts (the signature is discarded after the threshold):
+    if (!IsV11Enabled(nBestHeight + 1)) {
+        contract.m_version = 1;
+
+        if (!contract.Sign(key)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
+        }
+
+        if (!contract.VerifySignature()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to verify signature.");
+        }
     }
 
-    if (!contract.VerifySignature()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to verify signature.");
-    }
-
-    std::pair<CWalletTx, std::string> result = SendContract(contract, 5, 0.1);
+    std::pair<CWalletTx, std::string> result = SendContract(contract);
     std::string error = result.second;
 
     if (!error.empty()) {
-        throw JSONRPCError(RPC_WALLET_ERROR, error);
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(error));
     }
 
     UniValue res(UniValue::VOBJ);

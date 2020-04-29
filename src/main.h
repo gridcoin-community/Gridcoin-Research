@@ -721,6 +721,18 @@ public:
     */
     bool AreInputsStandard(const MapPrevTx& mapInputs) const;
 
+    //!
+    //! \brief Determine whether the transaction contains an input spent by the
+    //! master key holder.
+    //!
+    //! \param inputs Map of the previous transactions with outputs spent by
+    //! this transaction to search for the master key address.
+    //!
+    //! \return \c true if at least one of the inputs from one of the previous
+    //! transactions comes from the master key address.
+    //!
+    bool HasMasterKeyInput(const MapPrevTx& inputs) const;
+
     /** Count ECDSA signature operations the old-fashioned (pre-0.6) way
         @return number of sigops this transaction's outputs will produce when spent
         @see CTransaction::FetchInputs
@@ -878,11 +890,13 @@ public:
     //!
     //! \brief Check the validity of any contracts contained in the transaction.
     //!
-    //! \param check_replay If \c true, also check for contract replay attacks.
+    //! \param inputs Map of the previous transactions with outputs spent by
+    //! this transaction to search for the master key address for validating
+    //! administrative contracts.
     //!
-    //! \return \c True if all of the contracts in the transaction validate.
+    //! \return \c true if all of the contracts in the transaction validate.
     //!
-    bool CheckContracts(bool check_replay = false) const;
+    bool CheckContracts(const MapPrevTx& inputs) const;
 
     bool GetCoinAge(CTxDB& txdb, uint64_t& nCoinAge) const;  // ppcoin: get transaction coin age
 

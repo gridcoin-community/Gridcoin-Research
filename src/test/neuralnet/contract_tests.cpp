@@ -177,8 +177,8 @@ struct TestSig
     //!
     static std::string V2String()
     {
-        return "MEUCIQCJAVz+8CfEmbeHsx7mbBXP0LEISnsuHjC8UVD/rLEx"
-               "SAIgXmouutnnad8B+4+MYfHc/WXysckwvwheR7Y0+7i2yCM=";
+        return "MEQCIAeQb8PvjU4wN1wZNCXbtykkiW+hvle/OtqzUDsiQmfj"
+               "AiBh9uUbvaVDljrK4EC4aFfnAdubfP3cEaqruINfxdDTjg==";
     }
 
     //!
@@ -190,13 +190,13 @@ struct TestSig
     static std::vector<unsigned char> V2Bytes()
     {
         return std::vector<unsigned char> {
-            0x30, 0x45, 0x02, 0x21, 0x00, 0x89, 0x01, 0x5c, 0xfe, 0xf0, 0x27,
-            0xc4, 0x99, 0xb7, 0x87, 0xb3, 0x1e, 0xe6, 0x6c, 0x15, 0xcf, 0xd0,
-            0xb1, 0x08, 0x4a, 0x7b, 0x2e, 0x1e, 0x30, 0xbc, 0x51, 0x50, 0xff,
-            0xac, 0xb1, 0x31, 0x48, 0x02, 0x20, 0x5e, 0x6a, 0x2e, 0xba, 0xd9,
-            0xe7, 0x69, 0xdf, 0x01, 0xfb, 0x8f, 0x8c, 0x61, 0xf1, 0xdc, 0xfd,
-            0x65, 0xf2, 0xb1, 0xc9, 0x30, 0xbf, 0x08, 0x5e, 0x47, 0xb6, 0x34,
-            0xfb, 0xb8, 0xb6, 0xc8, 0x23
+            0x30, 0x44, 0x02, 0x20, 0x07, 0x90, 0x6f, 0xc3, 0xef, 0x8d, 0x4e,
+            0x30, 0x37, 0x5c, 0x19, 0x34, 0x25, 0xdb, 0xb7, 0x29, 0x24, 0x89,
+            0x6f, 0xa1, 0xbe, 0x57, 0xbf, 0x3a, 0xda, 0xb3, 0x50, 0x3b, 0x22,
+            0x42, 0x67, 0xe3, 0x02, 0x20, 0x61, 0xf6, 0xe5, 0x1b, 0xbd, 0xa5,
+            0x43, 0x96, 0x3a, 0xca, 0xe0, 0x40, 0xb8, 0x68, 0x57, 0xe7, 0x01,
+            0xdb, 0x9b, 0x7c, 0xfd, 0xdc, 0x11, 0xaa, 0xab, 0xb8, 0x83, 0x5f,
+            0xc5, 0xd0, 0xd3, 0x8e
         };
     }
 
@@ -226,7 +226,7 @@ struct TestSig
     static uint256 V2Hash()
     {
         return uint256S(
-            "bb434a253430c3b829ff8497ea7d497cf1f053a7af000b6c46ecf8b98dbe4046");
+            "df3c70b21961973ac24bdd259283186d690134a1b446e4fde9e853d55ae89e32");
     }
 
     //!
@@ -306,8 +306,6 @@ struct TestMessage
             "test",
             NN::Contract::Signature(TestSig::V2Bytes()),
             NN::Contract::PublicKey(),
-            123,  // Nonce
-            234,  // Signing timestamp
             123); // Tx timestamp is never part of a message
     }
 
@@ -327,8 +325,6 @@ struct TestMessage
             "test",
             NN::Contract::Signature(TestSig::V1Bytes()),
             NN::Contract::PublicKey(),
-            0,    // Unused in v1 (nonce)
-            0,    // Unused in v1 (signing timestamp)
             123); // Tx timestamp is never part of a message
     }
 
@@ -367,14 +363,7 @@ struct TestMessage
             0x74, 0x65, 0x73, 0x74, // Key: "test" as ASCII bytes
             0x04,                   // Length of the contract value
             0x74, 0x65, 0x73, 0x74, // Value: "test" as ASCII bytes
-            0x7b, 0x00, 0x00, 0x00, // Nonce: 123 as 32-bit int (little-endian)
-            0xEA, 0x00, 0x00, 0x00, // Signing timestamp: 234 as 64-bit int...
-            0x00, 0x00, 0x00, 0x00, //   ...(little-endian)
-            0x00,                   // Length of the empty public key
         };
-
-        std::vector<unsigned char> signature = TestSig::V2Serialized();
-        serialized.insert(serialized.end(), signature.begin(), signature.end());
 
         return serialized;
     }
@@ -845,8 +834,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_invalid_contract_by_default)
     BOOST_CHECK(contract.m_value.empty() == true);
     BOOST_CHECK(contract.m_signature.Raw().empty() == true);
     BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
-    BOOST_CHECK(contract.m_nonce == 0);
-    BOOST_CHECK(contract.m_timestamp == 0);
     BOOST_CHECK(contract.m_tx_timestamp == 0);
 }
 
@@ -865,8 +852,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_for_a_new_contract)
     BOOST_CHECK(contract.m_value == "bar");
     BOOST_CHECK(contract.m_signature.Raw().empty() == true);
     BOOST_CHECK(contract.m_public_key.Key() == CPubKey());
-    BOOST_CHECK(contract.m_nonce == 0);
-    BOOST_CHECK(contract.m_timestamp == 0);
     BOOST_CHECK(contract.m_tx_timestamp == 0);
 }
 
@@ -880,8 +865,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
         "bar",
         NN::Contract::Signature(TestSig::V2Bytes()),
         NN::Contract::PublicKey(TestKey::Public()),
-        123,  // Nonce
-        456,  // Signing timestamp
         789); // Tx timestamp
 
     BOOST_CHECK(contract.m_version == NN::Contract::CURRENT_VERSION);
@@ -891,8 +874,6 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_components_from_a_contract_message)
     BOOST_CHECK(contract.m_value == "bar");
     BOOST_CHECK(contract.m_signature.Raw() == TestSig::V2Bytes());
     BOOST_CHECK(contract.m_public_key.Key() == TestKey::Public());
-    BOOST_CHECK(contract.m_nonce == 123);
-    BOOST_CHECK(contract.m_timestamp == 456);
     BOOST_CHECK(contract.m_tx_timestamp == 789);
 }
 
@@ -993,16 +974,6 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_complete)
     contract = TestMessage::Current();
     contract.m_signature = NN::Contract::Signature(TestSig::InvalidBytes());
     BOOST_CHECK(contract.WellFormed() == true);
-
-    // In addition to v1, a contract must contain a nonce:
-    contract = TestMessage::Current();
-    contract.m_nonce = 0;
-    BOOST_CHECK(contract.WellFormed() == false);
-
-    // In addition to v1, a contract must contain a signing timestamp:
-    contract = TestMessage::Current();
-    contract.m_timestamp = 0;
-    BOOST_CHECK(contract.WellFormed() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_complete)
@@ -1029,20 +1000,11 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_contract_is_valid)
     NN::Contract contract = TestMessage::Current();
     BOOST_CHECK(contract.Validate() == true);
 
-    // Valid() DOES verify the signature:
+    // Version 2+ contracts rely on the signatures in the transactions instead
+    // of embedding another signature in the contract:
     contract = TestMessage::Current();
     contract.m_signature = NN::Contract::Signature(TestSig::InvalidBytes());
-    BOOST_CHECK(contract.Validate() == false);
-
-    // In addition to v1, a contract must contain a nonce:
-    contract = TestMessage::Current();
-    contract.m_nonce = 0;
-    BOOST_CHECK(contract.Validate() == false);
-
-    // In addition to v1, a contract must contain a signing timestamp:
-    contract = TestMessage::Current();
-    contract.m_timestamp = 0;
-    BOOST_CHECK(contract.Validate() == false);
+    BOOST_CHECK(contract.Validate() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_determines_whether_a_legacy_v1_contract_is_valid)
@@ -1114,10 +1076,6 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
     CKey private_key = TestKey::Private();
 
     BOOST_CHECK(contract.Sign(private_key) == true);
-    BOOST_CHECK(contract.m_nonce > 0);
-
-    // This assertion will fail if it takes longer than 1 second to sign:
-    BOOST_CHECK(contract.m_timestamp > GetAdjustedTime() - 1);
 
     // Build the message body to hash to verify the new signature:
     std::vector<unsigned char> body {
@@ -1126,22 +1084,6 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_a_supplied_private_key)
         0x04, 0x74, 0x65, 0x73, 0x74, // Key: "test" preceeded by length
         0x04, 0x74, 0x65, 0x73, 0x74, // Value: "test" preceeded by length
     };
-
-    // Add contract nonce bytes for hash (32-bit int, little-endian)
-    body.push_back(contract.m_nonce & 0xFF);
-    body.push_back((contract.m_nonce >> 8) & 0xFF);
-    body.push_back((contract.m_nonce >> 16) & 0xFF);
-    body.push_back((contract.m_nonce >> 24) & 0xFF);
-
-    // Add contract timestamp bytes for hash (64-bit int, little-endian)
-    body.push_back(contract.m_timestamp & 0xFF);
-    body.push_back((contract.m_timestamp >> 8) & 0xFF);
-    body.push_back((contract.m_timestamp >> 16) & 0xFF);
-    body.push_back((contract.m_timestamp >> 24) & 0xFF);
-    body.push_back((contract.m_timestamp >> 32) & 0xFF);
-    body.push_back((contract.m_timestamp >> 40) & 0xFF);
-    body.push_back((contract.m_timestamp >> 48) & 0xFF);
-    body.push_back((contract.m_timestamp >> 56) & 0xFF);
 
     uint256 hashed = Hash(body.begin(), body.end());
 
@@ -1160,10 +1102,6 @@ BOOST_AUTO_TEST_CASE(it_signs_a_legacy_v1_message_with_a_supplied_private_key)
     CKey private_key = TestKey::Private();
 
     BOOST_CHECK(contract.Sign(private_key) == true);
-
-    // Nonce and signing timestamp not generated for legacy v1 contracts:
-    BOOST_CHECK(contract.m_nonce == 0);
-    BOOST_CHECK(contract.m_timestamp == 0);
 
     // Build the message body to hash to verify the new signature:
     std::string body = "beacontesttest";
@@ -1189,22 +1127,6 @@ BOOST_AUTO_TEST_CASE(it_signs_a_message_with_the_shared_message_private_key)
         0x04, 0x74, 0x65, 0x73, 0x74, // Key: "test" preceeded by length
         0x04, 0x74, 0x65, 0x73, 0x74, // Value: "test" preceeded by length
     };
-
-    // Add contract nonce bytes for hash (32-bit int, little-endian)
-    body.push_back(contract.m_nonce & 0xff);
-    body.push_back((contract.m_nonce >> 8) & 0xff);
-    body.push_back((contract.m_nonce >> 16) & 0xff);
-    body.push_back((contract.m_nonce >> 24) & 0xff);
-
-    // Add contract timestamp bytes for hash (64-bit int, little-endian)
-    body.push_back(contract.m_timestamp & 0xff);
-    body.push_back((contract.m_timestamp >> 8) & 0xff);
-    body.push_back((contract.m_timestamp >> 16) & 0xff);
-    body.push_back((contract.m_timestamp >> 24) & 0xff);
-    body.push_back((contract.m_timestamp >> 32) & 0xff);
-    body.push_back((contract.m_timestamp >> 40) & 0xff);
-    body.push_back((contract.m_timestamp >> 48) & 0xff);
-    body.push_back((contract.m_timestamp >> 56) & 0xff);
 
     uint256 hashed = Hash(body.begin(), body.end());
     CKey key;
@@ -1246,16 +1168,6 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_contract_signature)
     contract = TestMessage::Current();
     contract.m_action = NN::ContractAction::REMOVE;
     BOOST_CHECK(contract.VerifySignature() == false);
-
-    // V2 contracts must additionally sign the nonce:
-    contract = TestMessage::Current();
-    contract.m_nonce = 999;
-    BOOST_CHECK(contract.VerifySignature() == false);
-
-    // V2 contracts must additionally sign the signing timestamp:
-    contract = TestMessage::Current();
-    contract.m_timestamp = 999;
-    BOOST_CHECK(contract.VerifySignature() == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_verifies_a_legacy_v1_contract_signature)
@@ -1271,13 +1183,6 @@ BOOST_AUTO_TEST_CASE(it_verifies_a_legacy_v1_contract_signature)
     // Test a message with an invalid signature:
     contract = NN::Contract::Parse(TestMessage::InvalidV1String(), 123);
     BOOST_CHECK(contract.VerifySignature() == false);
-
-    // V1 contracts must NOT sign the action, nonce, or signing timestamp
-    // (but we can't test action without the master private key):
-    contract = NN::Contract::Parse(TestMessage::V1String(), 123);
-    contract.m_nonce = 999;
-    contract.m_timestamp = 999;
-    BOOST_CHECK(contract.VerifySignature() == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_generates_a_hash_of_a_contract_body)
@@ -1305,14 +1210,12 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
 {
     NN::Contract contract = TestMessage::Current();
 
-    // 101 bytes = 4 bytes for the serialization format version
+    // 16 bytes = 4 bytes for the serialization protocol version
     //  + 1 byte each for the type and action
-    //  + 4 bytes for the nonce (32-bit int)
-    //  + 8 bytes for the signing timestamp (64-bit int)
     //  + 5 bytes each for key and value (4 for string, 1 for size)
     //  + 1 byte for the empty public key size
-    //  + 72 bytes for the signature (71 + 1 for the size)
-    BOOST_CHECK(GetSerializeSize(contract, SER_NETWORK, 1) == 101);
+    //
+    BOOST_CHECK(GetSerializeSize(contract, SER_NETWORK, 1) == 16);
 
     CDataStream stream(SER_NETWORK, 1);
 
@@ -1337,10 +1240,10 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
     BOOST_CHECK(contract.m_action == NN::ContractAction::ADD);
     BOOST_CHECK(contract.m_key == "test");
     BOOST_CHECK(contract.m_value == "test");
+    // Version 2+ contracts rely on the signatures in the transactions instead
+    // of embedding another signature in the contract:
     BOOST_CHECK(contract.m_public_key == CPubKey());
-    BOOST_CHECK(contract.m_signature.Raw() == TestSig::V2Bytes());
-    BOOST_CHECK(contract.m_nonce == 123);
-    BOOST_CHECK(contract.m_timestamp == 234);
+    BOOST_CHECK(contract.m_signature.Raw().empty() == true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

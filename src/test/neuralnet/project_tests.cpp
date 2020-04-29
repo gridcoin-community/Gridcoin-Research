@@ -22,12 +22,9 @@ NN::Contract contract(std::string key, std::string value)
         key,
         value,
         // Signature checked before passing to handler, so we don't need to
-        // give specific signature, public key, nonce, or signing timestamp
-        // values here:
+        // give specific signature or public key here:
         NN::Contract::Signature(),
         NN::Contract::PublicKey(),
-        0,
-        0,
         1234567);
 }
 } // anonymous namespace

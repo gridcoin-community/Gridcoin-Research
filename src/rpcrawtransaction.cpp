@@ -395,8 +395,6 @@ UniValue ContractToJSON(const NN::Contract& contract)
     out.pushKV("value", contract.m_value);
     out.pushKV("public_key", contract.m_public_key.ToString());
     out.pushKV("signature", contract.m_signature.ToString());
-    out.pushKV("signing_time", contract.m_timestamp);
-    out.pushKV("nonce", contract.m_nonce);
 
     return out;
 }
