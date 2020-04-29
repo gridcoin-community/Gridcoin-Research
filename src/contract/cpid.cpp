@@ -3,15 +3,31 @@
 #include "contract/message.h"
 #include "key.h"
 
-bool VerifyCPIDSignature(std::string sCPID, std::string sBlockHash, std::string sSignature)
+bool VerifyCPIDSignature(
+    const std::string& sCPID,
+    const std::string& sBlockHash,
+    const std::string& sSignature,
+    const std::string& sBeaconPublicKey)
 {
-    std::string sBeaconPublicKey = GetBeaconPublicKey(sCPID, false);
     std::string sConcatMessage = sCPID + sBlockHash;
     bool bValid = CheckMessageSignature("R","cpid", sConcatMessage, sSignature, sBeaconPublicKey);
+
     if(!bValid)
         LogPrintf("VerifyCPIDSignature: invalid signature sSignature=%s, cached key=%s"
                   ,sSignature, sBeaconPublicKey);
     return bValid;
+}
+
+bool VerifyCPIDSignature(
+    const std::string& sCPID,
+    const std::string& sBlockHash,
+    const std::string& sSignature)
+{
+    return VerifyCPIDSignature(
+        sCPID,
+        sBlockHash,
+        sSignature,
+        GetBeaconPublicKey(sCPID, false));
 }
 
 bool SignBlockWithCPID(
