@@ -18,6 +18,7 @@
 #include "backup.h"
 #include "appcache.h"
 #include "contract/message.h"
+#include "contract/rain.h"
 #include "contract/contract.h"
 #include "util.h"
 
