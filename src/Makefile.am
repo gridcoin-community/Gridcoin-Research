@@ -75,6 +75,7 @@ GRIDCOIN_CORE_H = \
 	compat.h \
 	compat/byteswap.h \
 	compat/endian.h \
+	contract/message.h \
 	contract/polls.h \
 	contract/contract.h \
 	crypter.h \
@@ -162,6 +163,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	block.cpp \
 	boinc.cpp \
 	checkpoints.cpp \
+	contract/message.cpp \
 	contract/polls.cpp \
 	contract/contract.cpp \
 	crypter.cpp \

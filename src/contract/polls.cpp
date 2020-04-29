@@ -3,7 +3,7 @@
 
 #include "main.h"
 #include "polls.h"
-#include "contract.h"
+#include "message.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "appcache.h"

@@ -23,6 +23,7 @@
 #include "backup.h"
 #include "appcache.h"
 #include "contract/contract.h"
+#include "contract/message.h"
 #include "scraper_net.h"
 #include "gridcoin.h"
 
