@@ -1628,11 +1628,11 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
     for (auto const& s : vecSend)
     {
         if (nValueOut < 0)
-            return false;
+            return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
         nValueOut += s.second;
     }
     if (vecSend.empty() || nValueOut < 0)
-        return false;
+        return error("%s: invalid output value: %" PRId64, __func__, nValueOut);
 
     wtxNew.BindWallet(this);
 
@@ -1684,8 +1684,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     // smallest UTXOs available:
                     const bool contract = !coinControl && !wtxNew.vContracts.empty();
 
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract))
-                        return false;
+                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins, nValueIn, coinControl, contract)) {
+                        return error("%s: Failed to select coins", __func__);
+                    }
                 }
                 else
                 {
@@ -1755,13 +1756,16 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // Sign
                 int nIn = 0;
                 for (auto const& coin : setCoins)
-                    if (!SignSignature(*this, *coin.first, wtxNew, nIn++))
-                        return false;
+                    if (!SignSignature(*this, *coin.first, wtxNew, nIn++)) {
+                        return error("%s: Failed to sign tx", __func__);
+                    }
 
                 // Limit size
                 unsigned int nBytes = ::GetSerializeSize(*(CTransaction*)&wtxNew, SER_NETWORK, PROTOCOL_VERSION);
-                if (nBytes >= MAX_STANDARD_TX_SIZE)
-                    return false;
+                if (nBytes >= MAX_STANDARD_TX_SIZE) {
+                    return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
+                }
+
                 dPriority /= nBytes;
 
                 // Check that enough fee is included
