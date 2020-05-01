@@ -2999,7 +2999,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
         // Need to reload all contracts
-        if (fDebug10) LogPrintf("DisconnectBlocksBatch: LoadAdminMessages");
+        LogPrint(BCLog::LogFlags::CONTRACT, "%s: LoadAdminMessages", __func__);
         LoadAdminMessages(true);
 
         NN::Quorum::LoadSuperblockIndex(pindexBest);

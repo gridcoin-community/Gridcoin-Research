@@ -1123,9 +1123,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // ********************************************************* Step 11: start node
     uiInterface.InitMessage(_("Loading Persisted Data Cache..."));
 
-    LogPrint(BCLog::LogFlags::NET, "Loading admin Messages");
+    LogPrint(BCLog::LogFlags::CONTRACT, "Loading admin Messages");
     LoadAdminMessages(true);
-    LogPrintf("Done loading Admin messages");
+    LogPrint(BCLog::LogFlags::CONTRACT, "Done loading Admin messages");
 
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     NN::Researcher::Reload();

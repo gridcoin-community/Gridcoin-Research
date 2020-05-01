@@ -181,6 +181,7 @@ const CLogCategoryDesc LogCategories[] =
     {BCLog::ALERT, "alert"},
     {BCLog::TALLY, "tally"},
     {BCLog::ACCRUAL, "accrual"},
+    {BCLog::CONTRACT, "contract"},
     {BCLog::ALL, "1"},
     {BCLog::ALL, "all"},
 };

@@ -464,11 +464,7 @@ std::string Contract::ToString() const
 void Contract::Log(const std::string& prefix) const
 {
     // TODO: temporary... needs better logging
-    if (!fDebug) {
-        return;
-    }
-
-    LogPrintf(
+    LogPrint(BCLog::LogFlags::CONTRACT,
         "<Contract::Log>: %s: v%d, %d, %s, %s, %s, %s, %s, %s",
         prefix,
         m_version,
