@@ -216,9 +216,7 @@ public:
     //! \brief The amount of coin set for a burn output in a transaction that
     //! broadcasts a contract in units of 1/100000000 GRC.
     //!
-    //! Currently, we burn the smallest amount possible (0.00000001).
-    //!
-    static constexpr int64_t BURN_AMOUNT = 1;
+    static constexpr int64_t BURN_AMOUNT = 0.5 * COIN;
 
     //!
     //! \brief A contract type from a transaction message.
