@@ -4,6 +4,7 @@
 #include "bitcoinunits.h"
 #include "util.h"
 #include "init.h"
+#include <codecvt>
 
 #include <QString>
 #include <QDateTime>
@@ -376,22 +377,92 @@ bool WindowContextHelpButtonHintFilter::eventFilter (QObject *obj, QEvent *event
     return QObject::eventFilter (obj, event);
 }
 
+
+struct AutoStartupArguments
+{
+    std::string link_name_suffix;
+    boost::filesystem::path data_dir;
+    std::string arguments;
+};
+
+AutoStartupArguments GetAutoStartupArguments()
+{
+    // This helper function checks for the presence of certain startup arguments
+    // to the current running instance that should be relevant for automatic restart
+    // (currently testnet, datadir, scraper, explorer, usenewnn). It adds -testnet
+    // to the link name as a suffix if -testnet is specified otherwise adds mainnet,
+    // and then adds the other three as arguments if they were specified for the
+    // running instance. This allows two different automatic startups, one for
+    // mainnet, and the other for testnet, and each of them can have different datadir,
+    // scraper, explorer, and/or usenewnn arguments.
+
+    AutoStartupArguments result;
+
+    // We can't use GetDataDir() here because it appends /testnet for
+    // testnet, which is correct for internal use, but not what we
+    // need for the command line argument. I think the fNetSpecific flag
+    // for GetDataDir is not coded right.
+    // TODO: Review GetDataDir() fix and replace this.
+    if (mapArgs.count("-datadir"))
+    {
+            result.data_dir = fs::system_complete(mapArgs["-datadir"]);
+            if (!fs::is_directory(result.data_dir))
+            {
+                result.data_dir = "";
+            }
+    }
+
+    result.arguments = "-min";
+
+    if (fTestNet)
+    {
+        result.link_name_suffix += "-testnet";
+        result.arguments += " -testnet";
+    }
+    else
+    {
+        result.link_name_suffix += "-mainnet";
+    }
+
+    if (GetBoolArg("-scraper")) result.arguments += " -scraper";
+
+    if (GetBoolArg("-explorer")) result.arguments += " -explorer";
+
+    if (GetBoolArg("-usenewnn")) result.arguments += " -usenewnn";
+
+    return result;
+}
+
 #ifdef WIN32
-boost::filesystem::path static StartupShortcutPath()
+boost::filesystem::path static StartupShortcutLegacyPath()
 {
     return GetSpecialFolderPath(CSIDL_STARTUP) / "Gridcoin.lnk";
 }
 
+boost::filesystem::path static StartupShortcutPath()
+{
+    std::string link_name_suffix = GetAutoStartupArguments().link_name_suffix;
+    std::string link_name_root = "Gridcoin";
+
+    return GetSpecialFolderPath(CSIDL_STARTUP) / (link_name_root + link_name_suffix + ".lnk");
+}
+
 bool GetStartOnSystemStartup()
 {
-    // check for Bitcoin.lnk
+    // check for Gridcoin.lnk
     return boost::filesystem::exists(StartupShortcutPath());
 }
 
 bool SetStartOnSystemStartup(bool fAutoStart)
 {
+    // Remove the legacy shortcut unconditionally.
+    boost::filesystem::remove(StartupShortcutLegacyPath());
+
     // If the shortcut exists already, remove it for updating
     boost::filesystem::remove(StartupShortcutPath());
+
+    // Get auto startup arguments
+    AutoStartupArguments autostartup = GetAutoStartupArguments();
 
     if (fAutoStart)
     {
@@ -409,7 +480,19 @@ bool SetStartOnSystemStartup(bool fAutoStart)
             WCHAR pszExePath[MAX_PATH];
             GetModuleFileNameW(NULL, pszExePath, sizeof(pszExePath));
 
-            TCHAR pszArgs[5] = TEXT("-min");
+            std::wstring autostartup_arguments;
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+
+            if (!autostartup.data_dir.empty())
+            {
+                autostartup_arguments = converter.from_bytes("-datadir=")
+                        + autostartup.data_dir.wstring()
+                        + converter.from_bytes(" ");
+            }
+
+            autostartup_arguments += converter.from_bytes(autostartup.arguments);
+
+            LPCTSTR pszArgs = autostartup_arguments.c_str();
 
             // Set the path to the shortcut target
             psl->SetPath(pszExePath);
@@ -456,9 +539,17 @@ boost::filesystem::path static GetAutostartDir()
     return fs::path();
 }
 
-boost::filesystem::path static GetAutostartFilePath()
+boost::filesystem::path static GetAutostartLegacyFilePath()
 {
     return GetAutostartDir() / "gridcoin.desktop";
+}
+
+boost::filesystem::path static GetAutostartFilePath()
+{
+    std::string link_name_suffix = GetAutoStartupArguments().link_name_suffix;
+    std::string link_name_root = "gridcoin";
+
+    return GetAutostartDir() / (link_name_root + link_name_suffix + ".desktop");
 }
 
 bool GetStartOnSystemStartup()
@@ -482,6 +573,12 @@ bool GetStartOnSystemStartup()
 
 bool SetStartOnSystemStartup(bool fAutoStart)
 {
+    // Remove legacy autostart path if it exists.
+    if (boost::filesystem::exists(GetAutostartLegacyFilePath()))
+    {
+        boost::filesystem::remove(GetAutostartLegacyFilePath());
+    }
+
     if (!fAutoStart)
         boost::filesystem::remove(GetAutostartFilePath());
     else
@@ -491,6 +588,8 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         if (readlink("/proc/self/exe", pszExePath, sizeof(pszExePath)-1) == -1)
             return false;
 
+        AutoStartupArguments autostartup = GetAutoStartupArguments();
+
         boost::filesystem::create_directories(GetAutostartDir());
 
         fsbridge::ofstream optionFile(GetAutostartFilePath(), std::ios_base::out|std::ios_base::trunc);
@@ -499,8 +598,15 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         // Write a bitcoin.desktop file to the autostart directory:
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
-        optionFile << "Name=Gridcoin\n";
-        optionFile << "Exec=" << pszExePath << " -min\n";
+        optionFile << "Name=Gridcoin" + autostartup.link_name_suffix + "\n";
+        optionFile << "Exec=" << pszExePath;
+
+        if (!autostartup.data_dir.empty())
+        {
+            optionFile << " -datadir=" << autostartup.data_dir;
+        }
+
+        optionFile << " " << autostartup.arguments << "\n";
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";
         optionFile.close();
