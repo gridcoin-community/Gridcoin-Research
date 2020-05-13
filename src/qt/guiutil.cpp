@@ -606,7 +606,7 @@ bool SetStartOnSystemStartup(bool fAutoStart)
 
         if (!autostartup.data_dir.empty())
         {
-            optionFile << " -datadir=" << autostartup.data_dir;
+            optionFile << " -datadir='" << autostartup.data_dir << "'";
         }
 
         optionFile << " " << autostartup.arguments << "\n";
