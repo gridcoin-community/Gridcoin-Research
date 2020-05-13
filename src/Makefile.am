@@ -103,6 +103,7 @@ GRIDCOIN_CORE_H = \
 	neuralnet/beacon.h \
 	neuralnet/claim.h \
 	neuralnet/contract/contract.h \
+	neuralnet/contract/handler.h \
 	neuralnet/contract/message.h \
 	neuralnet/cpid.h \
 	neuralnet/magnitude.h \

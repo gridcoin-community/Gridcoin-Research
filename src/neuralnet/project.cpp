@@ -1,3 +1,4 @@
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/project.h"
 
 #include <algorithm>

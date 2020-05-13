@@ -1,9 +1,11 @@
 #pragma once
 
-#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/handler.h"
 
-namespace NN
-{
+namespace NN {
+
+class Contract;
+
 //!
 //! \brief Stores and manages researcher beacons.
 //!

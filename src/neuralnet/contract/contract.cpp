@@ -1,6 +1,7 @@
 #include "appcache.h"
 #include "main.h"
 #include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/handler.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
 #include "util.h"

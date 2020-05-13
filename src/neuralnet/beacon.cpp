@@ -1,6 +1,7 @@
 #include "appcache.h"
 #include "../beacon.h" // temporary
 #include "neuralnet/beacon.h"
+#include "neuralnet/contract/contract.h"
 #include "util.h"
 
 using namespace NN;
