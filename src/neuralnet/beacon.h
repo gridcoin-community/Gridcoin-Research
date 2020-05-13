@@ -134,6 +134,13 @@ public:
     bool Renewable(const int64_t now) const;
 
     //!
+    //! \brief Get the hash of the beacon public key.
+    //!
+    //! \return RIPEMD-160 hash produced from the public key.
+    //!
+    CKeyID GetId() const;
+
+    //!
     //! \brief Get the beacon's destination wallet address.
     //!
     //! This address provides a recipient for network-wide rain transactions.
@@ -273,7 +280,39 @@ public:
             READWRITE(m_beacon);
         }
     }
-};
+}; // BeaconPayload
+
+//!
+//! \brief A beacon not yet verified by scraper convergence.
+//!
+class PendingBeacon : public Beacon
+{
+public:
+    //!
+    //! \brief Duration in seconds to retain pending beacons before erasure.
+    //!
+    static constexpr int64_t RETENTION_AGE = 60 * 60 * 24 * 3;
+
+    Cpid m_cpid; // Identifies the researcher that advertised the beacon.
+
+    //!
+    //! \brief Initialize a pending beacon.
+    //!
+    //! \param cpid   Identifies the researcher that advertised the beacon.
+    //! \param beacon Contains the beacon public key.
+    //!
+    PendingBeacon(const Cpid cpid, Beacon beacon);
+
+    //!
+    //! \brief Determine whether the beacon age exceeds the duration allowed
+    //! for retaining a pending beacon.
+    //!
+    //! \param now Timestamp to consider as the current time.
+    //!
+    //! \return \c true if a beacon's age exceeds the maximum retention time.
+    //!
+    bool Expired(const int64_t now) const;
+}; // PendingBeacon
 
 //!
 //! \brief Stores and manages researcher beacons.
@@ -287,11 +326,24 @@ public:
     typedef std::unordered_map<Cpid, Beacon> BeaconMap;
 
     //!
+    //! \brief Associates pending beacons with the hash of the beacon public
+    //! keys.
+    //!
+    typedef std::map<CKeyID, PendingBeacon> PendingBeaconMap;
+
+    //!
     //! \brief Get the collection of registered beacons.
     //!
     //! \return A reference to the beacons stored in the registry.
     //!
     const BeaconMap& Beacons() const;
+
+    //!
+    //! \brief Get the collection of beacons awaiting verification.
+    //!
+    //! \return A reference to the pending beacon map stored in the registry.
+    //!
+    const PendingBeaconMap& PendingBeacons() const;
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -360,16 +412,26 @@ public:
     void Delete(const Contract& contract) override;
 
     //!
-    //! \brief Reverse a beacon registration or deregistration.
+    //! \brief Activate the set of pending beacons verified in a superblock.
     //!
-    //! \param contract Contains the action and CPID of the beacon entry to
-    //! reverse.
+    //! \param beacon_ids      The key IDs of the beacons to activate.
+    //! \param superblock_time Timestamp of the superblock.
     //!
-    void Revert(const Contract& contract) override;
+    void ActivatePending(
+        const std::vector<uint160>& beacon_ids,
+        const int64_t superblock_time);
+
+    //!
+    //! \brief Deactivate the set of beacons verified in a superblock.
+    //!
+    //! \param superblock_time Timestamp of the superblock.
+    //!
+    void Deactivate(const int64_t superblock_time);
 
 private:
-    BeaconMap m_beacons; //!< Contains the active registered beacons.
-};
+    BeaconMap m_beacons;        //!< Contains the active registered beacons.
+    PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
+}; // BeaconRegistry
 
 //!
 //! \brief Get the global beacon registry.

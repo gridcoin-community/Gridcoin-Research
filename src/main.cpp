@@ -2642,6 +2642,10 @@ bool TryLoadSuperblock(
         if (!NN::Tally::ApplySuperblock(superblock)) {
             return false;
         }
+
+        NN::GetBeaconRegistry().ActivatePending(
+            superblock->m_verified_beacons,
+            superblock.m_timestamp);
     }
 
     NN::Quorum::PushSuperblock(std::move(superblock));

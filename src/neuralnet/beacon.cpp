@@ -11,7 +11,43 @@ using LogFlags = BCLog::LogFlags;
 
 namespace {
 BeaconRegistry g_beacons;
+
+//!
+//! \brief Attempt to renew an existing beacon from a contract.
+//!
+//! \param beacons The set of active beacons to find a match from.
+//! \param payload Beacon contract message from a transaction.
+//!
+//! \return \c true if the supplied beacon contract matches an active beacon.
+//! This updates the matched beacon with a new timestamp.
+//!
+bool TryRenewal(BeaconRegistry::BeaconMap beacons, const BeaconPayload& payload)
+{
+    auto beacon_pair_iter = beacons.find(payload.m_cpid);
+
+    if (beacon_pair_iter == beacons.end()) {
+        return false;
+    }
+
+    Beacon& current_beacon = beacon_pair_iter->second;
+
+    if (current_beacon.Expired(payload.m_beacon.m_timestamp)) {
+        return false;
+    }
+
+    if (current_beacon.m_public_key != payload.m_beacon.m_public_key) {
+        return false;
+    }
+
+    current_beacon.m_timestamp = payload.m_beacon.m_timestamp;
+
+    return true;
 }
+} // Anonymous namespace
+
+// -----------------------------------------------------------------------------
+// Global Functions
+// -----------------------------------------------------------------------------
 
 BeaconRegistry& NN::GetBeaconRegistry()
 {
@@ -87,6 +123,11 @@ bool Beacon::Renewable(const int64_t now) const
     return Age(now) > RENEWAL_AGE;
 }
 
+CKeyID Beacon::GetId() const
+{
+    return m_public_key.GetID();
+}
+
 CBitcoinAddress Beacon::GetAddress() const
 {
     return CBitcoinAddress(CTxDestination(m_public_key.GetID()));
@@ -135,12 +176,32 @@ BeaconPayload BeaconPayload::Parse(const std::string& key, const std::string& va
 }
 
 // -----------------------------------------------------------------------------
+// Class: PendingBeacon
+// -----------------------------------------------------------------------------
+
+PendingBeacon::PendingBeacon(const Cpid cpid, Beacon beacon)
+    : Beacon(std::move(beacon))
+    , m_cpid(cpid)
+{
+}
+
+bool PendingBeacon::Expired(const int64_t now) const
+{
+    return Age(now) > RETENTION_AGE;
+}
+
+// -----------------------------------------------------------------------------
 // Class: BeaconRegistry
 // -----------------------------------------------------------------------------
 
 const BeaconRegistry::BeaconMap& BeaconRegistry::Beacons() const
 {
     return m_beacons;
+}
+
+const BeaconRegistry::PendingBeaconMap& BeaconRegistry::PendingBeacons() const
+{
+    return m_pending;
 }
 
 BeaconOption BeaconRegistry::Try(const Cpid& cpid) const
@@ -185,19 +246,37 @@ void BeaconRegistry::Add(Contract contract)
 
     payload.m_beacon.m_timestamp = contract.m_tx_timestamp;
 
-    m_beacons[payload.m_cpid] = std::move(payload.m_beacon);
+    // Legacy beacon contracts before block version 11--just load the beacon:
+    //
+    if (contract.m_version == 1) {
+        m_beacons[payload.m_cpid] = std::move(payload.m_beacon);
+        return;
+    }
+
+    // For beacon renewals, check that the new beacon contains the same public
+    // key. If it matches, we don't need to verify it again:
+    //
+    if (TryRenewal(m_beacons, payload)) {
+        return;
+    }
+
+    // Otherwise, set the new beacon aside for scraper verification. The next
+    // superblock will activate it if it matches a BOINC account:
+    //
+    PendingBeacon pending(payload.m_cpid, std::move(payload.m_beacon));
+
+    m_pending.emplace(pending.GetId(), std::move(pending));
 }
 
 void BeaconRegistry::Delete(const Contract& contract)
 {
     const auto payload = contract.SharePayloadAs<BeaconPayload>();
 
-    m_beacons.erase(payload->m_cpid);
-}
+    if (contract.m_version >= 2) {
+        m_pending.erase(payload->m_beacon.GetId());
+    }
 
-void BeaconRegistry::Revert(const Contract& contract)
-{
-    IContractHandler::Revert(contract);
+    m_beacons.erase(payload->m_cpid);
 }
 
 bool BeaconRegistry::Validate(const Contract& contract) const
@@ -263,4 +342,40 @@ bool BeaconRegistry::Validate(const Contract& contract) const
     }
 
     return true;
+}
+
+void BeaconRegistry::ActivatePending(
+    const std::vector<uint160>& beacon_ids,
+    const int64_t superblock_time)
+{
+    for (const auto& id : beacon_ids) {
+        auto iter_pair = m_pending.find(id);
+
+        if (iter_pair != m_pending.end()) {
+            m_beacons[iter_pair->second.m_cpid] = std::move(iter_pair->second);
+            m_pending.erase(iter_pair);
+        }
+    }
+
+    for (auto iter = m_pending.begin(); iter != m_pending.end(); /* no-op */) {
+        if (iter->second.Expired(superblock_time)) {
+            iter = m_pending.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+}
+
+void BeaconRegistry::Deactivate(const int64_t superblock_time)
+{
+    for (auto iter = m_beacons.begin(); iter != m_beacons.end(); /* no-op */) {
+        if (iter->second.m_timestamp >= superblock_time) {
+            PendingBeacon pending(iter->first, std::move(iter->second));
+            m_pending.emplace(pending.GetId(), std::move(pending));
+
+            iter = m_beacons.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
 }

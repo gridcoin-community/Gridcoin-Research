@@ -1185,7 +1185,15 @@ public:
 
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magntudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
-    //std::vector<BeaconAcknowledgement> m_verified_beacons;
+
+    //!
+    //! \brief Contains the beacon IDs verified by scraper convergence.
+    //!
+    //! This contains a collection of the RIPEMD-160 hashes of the beacon public
+    //! keys verified by the scrapers. Nodes shall activate these beacons during
+    //! superblock processing.
+    //!
+    std::vector<uint160> m_verified_beacons;
 
     ADD_SERIALIZE_METHODS;
 

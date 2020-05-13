@@ -93,10 +93,19 @@ struct BeaconEntry
 
 typedef std::map<std::string, BeaconEntry> BeaconMap;
 
+struct PendingBeaconEntry
+{
+    std::string cpid;
+    int64_t timestamp;
+};
+
+typedef std::map<std::string, PendingBeaconEntry> PendingBeaconMap;
+
 struct BeaconConsensus
 {
     uint256 nBlockHash;
     BeaconMap mBeaconMap;
+    PendingBeaconMap mPendingMap;
 };
 
 std::vector<std::string> GetTeamWhiteList();
@@ -167,6 +176,26 @@ extern void MilliSleep(int64_t n);
 
 namespace {
 //!
+//! \brief Get the block index for the height to consider beacons eligible for
+//! rewards.
+//!
+//! \return Block index for the height of a block about 1 hour below the chain
+//! tip.
+//!
+const CBlockIndex* GetBeaconConsensusHeight()
+{
+    static BlockFinder block_finder;
+
+    AssertLockHeld(cs_main);
+
+    // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
+    // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
+    return block_finder.FindByHeight(
+        (nBestHeight - CONSENSUS_LOOKBACK)
+            - (nBestHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
+}
+
+//!
 //! \brief Get beacon list with consenus.
 //!
 //! Assembles a list of only active beacons with a consensus lookback from
@@ -177,32 +206,32 @@ namespace {
 BeaconConsensus GetConsensusBeaconList()
 {
     BeaconConsensus consensus;
-    BlockFinder max_consensus_ladder;
     std::vector<std::pair<NN::Cpid, NN::Beacon>> beacons;
+    std::vector<std::pair<CKeyID, NN::PendingBeacon>> pending_beacons;
     int64_t max_time;
 
     {
         LOCK(cs_main);
 
-        // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
-        // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
-        CBlockIndex* pMaxConsensusLadder = max_consensus_ladder.FindByHeight(
-            (nBestHeight - CONSENSUS_LOOKBACK)
-                - (nBestHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
+        const CBlockIndex* pMaxConsensusLadder = GetBeaconConsensusHeight();
 
         consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
         max_time = pMaxConsensusLadder->nTime;
 
-        const auto& beacon_map = NN::GetBeaconRegistry().Beacons();
+        const auto& beacon_registry = NN::GetBeaconRegistry();
+        const auto& beacon_map = beacon_registry.Beacons();
+        const auto& pending_beacon_map = beacon_registry.PendingBeacons();
 
         // Copy the set of beacons out of the registry so we can release the
         // lock on cs_main before stringifying them:
         //
         beacons.reserve(beacon_map.size());
         beacons.assign(beacon_map.begin(), beacon_map.end());
+        pending_beacons.reserve(pending_beacon_map.size());
+        pending_beacons.assign(pending_beacon_map.begin(), pending_beacon_map.end());
     }
 
-    for(const auto& beacon_pair : beacons)
+    for (const auto& beacon_pair : beacons)
     {
         const NN::Cpid& cpid = beacon_pair.first;
         const NN::Beacon& beacon = beacon_pair.second;
@@ -218,6 +247,24 @@ BeaconConsensus GetConsensusBeaconList()
         beaconentry.value = beacon.ToString();
 
         consensus.mBeaconMap.emplace(cpid.ToString(), std::move(beaconentry));
+    }
+
+    for (const auto& pending_beacon_pair : pending_beacons)
+    {
+        const CKeyID& key_id = pending_beacon_pair.first;
+        const NN::PendingBeacon& pending_beacon = pending_beacon_pair.second;
+
+        if (pending_beacon.m_timestamp >= max_time)
+        {
+            continue;
+        }
+
+        PendingBeaconEntry beaconentry;
+
+        beaconentry.timestamp = pending_beacon.m_timestamp;
+        beaconentry.cpid = pending_beacon.m_cpid.ToString();
+
+        consensus.mPendingMap.emplace(key_id.ToString(), std::move(beaconentry));
     }
 
     return consensus;
@@ -1994,7 +2041,18 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
             const std::string& cpid = ExtractXML(data, "<cpid>", "</cpid>");
             if (Consensus.mBeaconMap.count(cpid) < 1)
-                continue;
+            {
+                const std::string username = ExtractXML(data, "<name>", "</name>");
+
+                if (username.size() != 40) continue;
+
+                const auto iter_pair = Consensus.mPendingMap.find(username);
+
+                if (iter_pair == Consensus.mPendingMap.end()) continue;
+                if (iter_pair->second.cpid != cpid) continue;
+
+                // TODO: remember that this beacon is now active somehow
+            }
 
             // Only do this if team membership filtering is specified by network policy.
             if (REQUIRE_TEAM_WHITELIST_MEMBERSHIP)
