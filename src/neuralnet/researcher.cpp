@@ -1,6 +1,10 @@
 #include "appcache.h"
+#include "backup.h"
 #include "boinc.h"
+#include "contract/message.h"
 #include "global_objects_noui.hpp"
+#include "init.h"
+#include "neuralnet/beacon.h"
 #include "neuralnet/researcher.h"
 #include "ui_interface.h"
 #include "util.h"
@@ -16,7 +20,7 @@ using namespace NN;
 // Parses the XML elements from the BOINC client_state.xml:
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
 
-// Used to build the legacy global mining context after reloading projects:
+extern CCriticalSection cs_main;
 extern std::string msMiningErrors;
 
 namespace {
@@ -278,6 +282,9 @@ void StoreResearcher(Researcher context)
         case ResearcherStatus::NO_PROJECTS:
             msMiningErrors = _("Staking Only - No Eligible Research Projects");
             break;
+        case ResearcherStatus::NO_BEACON:
+            msMiningErrors = _("Staking Only - No active beacon");
+            break;
         default:
             msMiningErrors = _("Staking Only - Investor Mode");
             break;
@@ -286,6 +293,186 @@ void StoreResearcher(Researcher context)
     std::atomic_store(
         &researcher,
         std::make_shared<Researcher>(std::move(context)));
+}
+
+//!
+//! \brief Determine whether the wallet contains a valid private key that
+//! matches the supplied beacon public key.
+//!
+//! \param public_key Identifies the corresponding private key.
+//!
+//! \return \c true if the wallet contains a matching private key.
+//!
+bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_key)
+{
+    CKey out_key;
+
+    if (!wallet->GetKey(public_key.GetID(), out_key)) {
+        return error("%s: Key not found", __func__);
+    }
+
+    if (!out_key.IsValid()) {
+        return error("%s: Invalid stored key", __func__);
+    }
+
+    if (out_key.GetPubKey() != public_key) {
+        return error("%s: Public key mismatch", __func__);
+    }
+
+    return true;
+}
+
+//!
+//! \brief Generate a new beacon key pair.
+//!
+//! \param cpid The participant's current primary CPID.
+//!
+//! \return A variant that contains the new public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid)
+{
+    LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
+
+    CPubKey public_key;
+    if (!pwalletMain->GetKeyFromPool(public_key, false)) {
+        LogPrintf("ERROR: %s: Failed to get new key from wallet", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    // Since the network-wide rain feature outputs GRC to beacon public key
+    // addresses, we describe this key as the participant's rain address to
+    // help identify transactions in the GUI:
+    //
+    const std::string address_label = strprintf(
+        "Beacon Rain Address for CPID %s (at %" PRIu64 ")",
+        cpid.ToString(),
+        static_cast<uint64_t>(nBestHeight));
+
+    if (!pwalletMain->SetAddressBookName(public_key.GetID(), address_label)) {
+        LogPrintf("WARNING: %s: Failed to change beacon key label", __func__);
+    }
+
+    if (!CheckBeaconPrivateKey(pwalletMain, public_key)) {
+        LogPrintf("ERROR: %s: Failed to verify new beacon key", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
+        LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
+    }
+
+    return public_key;
+}
+
+//!
+//! \brief Send a transaction that contains a beacon contract.
+//!
+//! \param cpid   CPID to send a beacon for.
+//! \param beacon Contains the CPID's beacon public key.
+//!
+//! \return A variant that contains the new public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult SendBeaconContract(const Cpid& cpid, Beacon beacon)
+{
+    if (pwalletMain->IsLocked()) {
+        LogPrintf("WARNING: %s: Wallet locked.", __func__);
+        return BeaconError::WALLET_LOCKED;
+    }
+
+    // Ensure that the wallet contains enough coins to send a transaction for
+    // the contract.
+    //
+    // TODO: refactor wallet so we can determine this dynamically. For now, we
+    // require 1 GRC:
+    //
+    if (pwalletMain->GetBalance() < COIN) {
+        LogPrintf("WARNING: %s: Insufficient funds.", __func__);
+        return BeaconError::INSUFFICIENT_FUNDS;
+    }
+
+    const auto result_pair = SendContract(NN::MakeContract<BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        beacon));
+
+    if (!result_pair.second.empty()) {
+        return BeaconError::TX_FAILED;
+    }
+
+    return AdvertiseBeaconResult(std::move(beacon.m_public_key));
+}
+
+//!
+//! \brief Generate keys for and send a new beacon contract.
+//!
+//! \param cpid The CPID to create the beacon for.
+//!
+//! \return A variant that contains the new public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
+{
+    // First, determine whether we can successfully send a beacon contract. The
+    // wallet must be unlocked and hold a balance great enough to send a beacon
+    // transaction. Otherwise, we may create a bogus beacon key that lingers in
+    // the wallet:
+    //
+    if (pwalletMain->IsLocked()) {
+        LogPrintf("WARNING: %s: Wallet locked.", __func__);
+        return BeaconError::WALLET_LOCKED;
+    }
+
+    // Ensure that the wallet contains enough coins to send a transaction for
+    // the contract.
+    //
+    // TODO: refactor wallet so we can determine this dynamically. For now, we
+    // require 1 GRC:
+    //
+    if (pwalletMain->GetBalance() < COIN) {
+        LogPrintf("WARNING: %s: Insufficient funds.", __func__);
+        return BeaconError::INSUFFICIENT_FUNDS;
+    }
+
+    AdvertiseBeaconResult result = GenerateBeaconKey(cpid);
+
+    if (auto key_option = result.TryPublicKey()) {
+        result = SendBeaconContract(cpid, std::move(*key_option));
+    }
+
+    return result;
+}
+
+//!
+//! \brief Send a contract that renews an existing beacon.
+//!
+//! \param cpid   The CPID to create the beacon for.
+//! \param beacon Contains the public key to renew.
+//!
+//! \return A variant that contains the public key if successful or a
+//! description of the error that occurred.
+//!
+AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
+{
+    if (!beacon.Renewable(GetAdjustedTime())) {
+        LogPrintf("%s: Beacon renewal not needed", __func__);
+        return BeaconError::NOT_NEEDED;
+    }
+
+    LogPrintf("%s: Renewing beacon for %s", __func__, cpid.ToString());
+
+    // A participant may run the wallet on two computers, but only one computer
+    // holds the beacon private key. If BOINC also exists on both computers for
+    // the same CPID, both nodes will attempt to renew the beacon. Only allow a
+    // node with the private key to send the contract:
+    //
+    if (!CheckBeaconPrivateKey(pwalletMain, beacon.m_public_key)) {
+        LogPrintf("WARNING: %s: Missing or invalid private key", __func__);
+        return BeaconError::MISSING_KEY;
+    }
+
+    return SendBeaconContract(cpid, beacon);
 }
 } // anonymous namespace
 
@@ -460,6 +647,47 @@ void MiningProjectMap::ApplyTeamWhitelist(const std::set<std::string>& teams)
 }
 
 // -----------------------------------------------------------------------------
+// Class: AdvertiseBeaconResult
+// -----------------------------------------------------------------------------
+
+AdvertiseBeaconResult::AdvertiseBeaconResult(CPubKey public_key)
+    : m_result(std::move(public_key))
+{
+}
+
+AdvertiseBeaconResult::AdvertiseBeaconResult(const BeaconError error)
+    : m_result(error)
+{
+}
+
+boost::optional<CPubKey&> AdvertiseBeaconResult::TryPublicKey()
+{
+    if (m_result.which() == 0) {
+        return boost::get<CPubKey>(m_result);
+    }
+
+    return boost::none;
+}
+
+boost::optional<const CPubKey&> AdvertiseBeaconResult::TryPublicKey() const
+{
+    if (m_result.which() == 0) {
+        return boost::get<CPubKey>(m_result);
+    }
+
+    return boost::none;
+}
+
+BeaconError AdvertiseBeaconResult::Error() const
+{
+    if (m_result.which() > 0) {
+        return boost::get<BeaconError>(m_result);
+    }
+
+    return BeaconError::NONE;
+}
+
+// -----------------------------------------------------------------------------
 // Class: Researcher
 // -----------------------------------------------------------------------------
 
@@ -575,12 +803,16 @@ ProjectOption Researcher::Project(const std::string& name) const
 
 bool Researcher::Eligible() const
 {
-    return m_mining_id.Which() == MiningId::Kind::CPID;
+    if (const CpidOption cpid = m_mining_id.TryCpid()) {
+        return GetBeaconRegistry().ContainsActive(*cpid);
+    }
+
+    return false;
 }
 
 bool Researcher::IsInvestor() const
 {
-    return !Eligible();
+    return m_mining_id.Which() == MiningId::Kind::INVESTOR;
 }
 
 ResearcherStatus Researcher::Status() const
@@ -589,9 +821,124 @@ ResearcherStatus Researcher::Status() const
         return ResearcherStatus::ACTIVE;
     }
 
+    if (m_mining_id.Which() == MiningId::Kind::CPID) {
+        return ResearcherStatus::NO_BEACON;
+    }
+
     if (!m_projects.empty()) {
         return ResearcherStatus::NO_PROJECTS;
     }
 
     return ResearcherStatus::INVESTOR;
+}
+
+AdvertiseBeaconResult Researcher::AdvertiseBeacon()
+{
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return BeaconError::NO_CPID;
+    }
+
+    static int64_t last_advertised_height = 0;
+
+    // Disallow users from attempting to advertise a beacon repeatedly before
+    // the network confirms the previous contract in the chain. This prevents
+    // unintentional spam caused by users who mistakenly try to advertise new
+    // beacons manually in quick succession when setting up the wallet.
+    //
+    if (last_advertised_height >= (nBestHeight - 5)) {
+        LogPrintf("ERROR: %s: Beacon awaiting confirmation already", __func__);
+        return BeaconError::TOO_SOON;
+    }
+
+    const BeaconOption current_beacon = GetBeaconRegistry().Try(*cpid);
+
+    AdvertiseBeaconResult result(BeaconError::NONE);
+
+    if (!current_beacon) {
+        result = SendNewBeacon(*cpid);
+    } else {
+        result = RenewBeacon(*cpid, *current_beacon);
+    }
+
+    m_beacon_error = result.Error();
+
+    if (m_beacon_error == BeaconError::NONE) {
+        last_advertised_height = nBestHeight;
+    }
+
+    return result;
+}
+
+bool Researcher::ImportBeaconKeysFromConfig(CWallet* const pwallet) const
+{
+    AssertLockHeld(pwallet->cs_wallet);
+
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid) {
+        return true; // Cannot import beacon key for investor.
+    }
+
+    const std::string key_config_directive = strprintf(
+        "privatekey%s%s",
+        cpid->ToString(),
+        fTestNet ? "testnet" : "");
+
+    const std::string secret = GetArgument(key_config_directive, "");
+
+    if (secret.empty()) {
+        return true; // No beacon key exists in the configuration file.
+    }
+
+    const auto vecsecret = ParseHex(secret);
+    CKey key;
+
+    if (!key.SetPrivKey(CPrivKey(vecsecret.begin(), vecsecret.end()))) {
+        return error("%s: Invalid private key", __func__);
+    }
+
+    const CPubKey public_key = key.GetPubKey();
+    const CKeyID address = public_key.GetID();
+
+    if (pwallet->HaveKey(address)) {
+        return true;
+    }
+
+    if (pwallet->IsLocked()) {
+        return error("%s: Wallet locked!", __func__);
+    }
+
+    pwallet->MarkDirty();
+    pwallet->mapKeyMetadata[address].nCreateTime = 0;
+
+    if (!pwallet->AddKey(key)) {
+        return error("%s: Failed to add key to wallet", __func__);
+    }
+
+    // Since the network-wide rain feature outputs GRC to beacon public key
+    // addresses, we describe this key as the participant's rain address to
+    // help identify transactions in the GUI:
+    //
+    const std::string address_label = strprintf(
+        "Beacon Rain Address for CPID %s (imported)",
+        cpid->ToString());
+
+    if (!pwallet->SetAddressBookName(address, address_label)) {
+        LogPrintf("WARNING: %s: Failed to change beacon key label", __func__);
+    }
+
+    if (!CheckBeaconPrivateKey(pwallet, public_key)) {
+        return error("%s: Failed to verify imported beacon key", __func__);
+    }
+
+    if (!BackupWallet(*pwalletMain, GetBackupFilename("wallet.dat"))) {
+        LogPrintf("WARNING: %s: Failed to backup wallet file", __func__);
+    }
+
+    return true;
 }

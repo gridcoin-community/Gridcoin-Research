@@ -21,16 +21,14 @@
 #include <script.h>
 #include "main.h"
 #include "util.h"
-#include "beacon.h"
 #include <random>
 #include "global_objects_noui.hpp"
+#include "neuralnet/researcher.h"
 
 using namespace std;
 
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
-
-namespace NN { std::string GetPrimaryCpid(); }
 
 namespace {
 struct CompareValueOnly
@@ -203,7 +201,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (CCryptoKeyStore::Unlock(vMasterKey))
             {
-                ImportBeaconKeysFromConfig(NN::GetPrimaryCpid(), this);
+                NN::Researcher::Get()->ImportBeaconKeysFromConfig(this);
                 return true;
             }
         }

@@ -13,7 +13,6 @@
 #include "rpcserver.h"
 #include "init.h"
 #include "ui_interface.h"
-#include "beacon.h"
 #include "scheduler.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -1127,8 +1126,8 @@ bool AppInit2(ThreadHandlerPtr threads)
     uiInterface.InitMessage(_("Finding first applicable Research Project..."));
     NN::Researcher::Reload();
 
-    if(!pwalletMain->IsLocked())
-       ImportBeaconKeysFromConfig(NN::GetPrimaryCpid(), pwalletMain);
+    if (!pwalletMain->IsLocked())
+        NN::Researcher::Get()->ImportBeaconKeysFromConfig(pwalletMain);
 
     if (!CheckDiskSpace())
         return false;

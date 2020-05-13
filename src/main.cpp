@@ -13,7 +13,6 @@
 #include "ui_interface.h"
 #include "kernel.h"
 #include "block.h"
-#include "beacon.h"
 #include "miner.h"
 #include "neuralnet/beacon.h"
 #include "neuralnet/project.h"
@@ -34,7 +33,6 @@
 
 extern std::string NodeAddress(CNode* pfrom);
 extern bool WalletOutOfSync();
-bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
@@ -3728,22 +3726,7 @@ bool GridcoinServices()
 
     /* Do this only for users with valid CPID */
     if (TimerMain("send_beacon", 180)) {
-        if (const NN::CpidOption cpid = NN::Researcher::Get()->Id().TryCpid()) {
-            // If there is no public key, beacon needs advertising
-            if (GetBeaconPublicKey(cpid->ToString(), true).empty()) {
-                std::string sOutPubKey = "";
-                std::string sOutPrivKey = "";
-                std::string sError = "";
-                std::string sMessage = "";
-                bool fResult = AdvertiseBeacon(sOutPrivKey,sOutPubKey,sError,sMessage);
-                if (!fResult)
-                {
-                    LogPrintf("BEACON ERROR!  Unable to send beacon %s, %s",sError, sMessage);
-                    LOCK(MinerStatus.lock);
-                    msMiningErrors6 = _("Unable To Send Beacon! Unlock Wallet!");
-                }
-            }
-        }
+        NN::Researcher::Get()->AdvertiseBeacon();
     }
 
     return true;

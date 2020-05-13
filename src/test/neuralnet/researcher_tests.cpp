@@ -1,4 +1,6 @@
 #include "appcache.h"
+#include "neuralnet/beacon.h"
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/researcher.h"
 #include "util.h"
 
@@ -61,6 +63,60 @@ boost::test_tools::assertion_result ClientStateStubExists(boost::unit_test::test
     result.message() << "client_state.xml test stub not found";
 
     return result;
+}
+
+//!
+//! \brief Register an active beacon for testing.
+//!
+//! \param cpid External CPID used in the test.
+//!
+void AddTestBeacon(const NN::Cpid cpid)
+{
+    // TODO: mock the beacon registry
+    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        CPubKey(ParseHex(
+            "111111111111111111111111111111111111111111111111111111111111111111")));
+
+    contract.m_tx_timestamp = GetAdjustedTime();
+
+    NN::GetBeaconRegistry().Add(std::move(contract));
+}
+
+//!
+//! \brief Register an expired beacon for testing.
+//!
+//! \param cpid External CPID used in the test.
+//!
+void AddExpiredTestBeacon(const NN::Cpid cpid)
+{
+    // TODO: mock the beacon registry
+    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        CPubKey(ParseHex(
+            "111111111111111111111111111111111111111111111111111111111111111111")));
+
+    NN::GetBeaconRegistry().Add(std::move(contract));
+}
+
+//!
+//! \brief Remove a beacon added for testing.
+//!
+//! \param cpid External CPID used in the test.
+//!
+void RemoveTestBeacon(const NN::Cpid cpid)
+{
+    // TODO: mock the beacon registry
+    NN::Contract contract = NN::MakeContract<NN::BeaconPayload>(
+        NN::ContractAction::ADD,
+        cpid,
+        CPubKey());
+
+    contract.m_tx_timestamp = GetAdjustedTime();
+
+    NN::GetBeaconRegistry().Delete(contract);
 }
 } // anonymous namespace
 
@@ -484,8 +540,32 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_wallet_is_eligible_for_rewards)
     // A zero-value CPID is technically a valid CPID:
     researcher = NN::Researcher(NN::Cpid(), NN::MiningProjectMap());
 
+    AddTestBeacon(NN::Cpid());
+
     BOOST_CHECK(researcher.Eligible() == true);
     BOOST_CHECK(researcher.IsInvestor() == false);
+
+    // Clean up:
+    RemoveTestBeacon(NN::Cpid());
+}
+
+BOOST_AUTO_TEST_CASE(it_reports_ineligible_when_beacon_missing_or_expired)
+{
+    NN::Researcher researcher{NN::Cpid(), NN::MiningProjectMap()};
+
+    BOOST_CHECK(researcher.Eligible() == false);
+
+    AddExpiredTestBeacon(NN::Cpid());
+
+    BOOST_CHECK(researcher.Eligible() == false);
+
+    RemoveTestBeacon(NN::Cpid());
+    AddTestBeacon(NN::Cpid());
+
+    BOOST_CHECK(researcher.Eligible() == true);
+
+    // Clean up:
+    RemoveTestBeacon(NN::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_reseracher_context)
@@ -502,9 +582,17 @@ BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_reseracher_context)
     // Has projects but none eligible (investor):
     BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::NO_PROJECTS);
 
-    researcher = NN::Researcher(NN::Cpid(), std::move(projects));
+    researcher = NN::Researcher(NN::Cpid(), projects);
+
+    // Has eligible projects but no beacon:
+    BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::NO_BEACON);
+
+    AddTestBeacon(NN::Cpid());
 
     BOOST_CHECK(researcher.Status() == NN::ResearcherStatus::ACTIVE);
+
+    // Clean up:
+    RemoveTestBeacon(NN::Cpid());
 }
 
 BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
@@ -1086,6 +1174,8 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     // Simulate a protocol control directive that disables the team requirement:
     WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
 
+    AddTestBeacon(NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
+
     NN::Researcher::Reload(NN::MiningProjectMap::Parse({
         R"XML(
         <project>
@@ -1144,6 +1234,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     SetArgument("email", "");
     DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    RemoveTestBeacon(NN::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
     NN::Researcher::Reload(NN::MiningProjectMap());
 }
 
