@@ -36,7 +36,6 @@ bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
 extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
-bool LoadAdminMessages(bool bFullTableScan);
 extern bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::string &sError, std::string &sMessage);
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
@@ -1396,25 +1395,6 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
         res.pushKV(project.m_name, entry);
     }
-
-    return res;
-}
-
-UniValue memorizekeys(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "memorizekeys\n"
-                "\n"
-                "Runs a full table scan of Load Admin Messages\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    LOCK(cs_main);
-
-    LoadAdminMessages(true);
-
-    res.pushKV("Results", "done");
 
     return res;
 }
