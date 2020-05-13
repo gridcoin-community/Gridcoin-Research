@@ -360,14 +360,6 @@ public:
         //!
         std::string ToString() const;
 
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-            READWRITE(m_bytes);
-        }
-
     private:
         std::vector<unsigned char> m_bytes; //!< As DER-encoded ASN.1 ECDSA.
     }; // Contract::Signature
@@ -437,14 +429,6 @@ public:
         //! \return Hex string representation of the bytes in the key.
         //!
         std::string ToString() const;
-
-        ADD_SERIALIZE_METHODS;
-
-        template <typename Stream, typename Operation>
-        inline void SerializationOp(Stream& s, Operation ser_action)
-        {
-            READWRITE(m_key);
-        }
 
     private:
         CPubKey m_key; //!< The wrapped public key.

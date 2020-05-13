@@ -100,24 +100,6 @@ struct TestKey
     }
 
     //!
-    //! \brief Get a serialized representation of a public key.
-    //!
-    //! \return Public key as bytes with one additional byte at the beginning
-    //! for the size of the key.
-    //!
-    static std::vector<unsigned char> PublicSerialized()
-    {
-        std::vector<unsigned char> key = Public().Raw();
-        unsigned char size = key.size();
-
-        std::vector<unsigned char> serialized { size };
-
-        serialized.insert(serialized.end(), key.begin(), key.end());
-
-        return serialized;
-    }
-
-    //!
     //! \brief Create a valid public key for tests.
     //!
     //! \return Hex-encoded uncompressed key that complements the private key
@@ -185,24 +167,6 @@ struct TestSig
             0x6e, 0x51, 0x20, 0x84, 0xda, 0xc4, 0x8f, 0x63, 0x5d, 0xa4, 0x79,
             0xd4, 0xb9, 0x9f, 0x9f
         };
-    }
-
-    //!
-    //! \brief Get a serialized representation of a valid version 1 signature.
-    //!
-    //! \return Same signature above as bytes with one additional byte at the
-    //! beginning for the signature size.
-    //!
-    static std::vector<unsigned char> V1Serialized()
-    {
-        std::vector<unsigned char> signature = V1Bytes();
-        unsigned char size = signature.size();
-
-        std::vector<unsigned char> serialized { size };
-
-        serialized.insert(serialized.end(), signature.begin(), signature.end());
-
-        return serialized;
     }
 
     //!
@@ -718,32 +682,6 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     BOOST_CHECK(signature.ToString() == TestSig::V1String());
 }
 
-BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
-{
-    NN::Contract::Signature signature(TestSig::V1Bytes());
-
-    // 71 bytes = 70 signature bytes + 1 leading byte with the size
-    BOOST_CHECK(GetSerializeSize(signature, SER_NETWORK, 1) == 71);
-
-    CDataStream stream(SER_NETWORK, 1);
-
-    stream << signature;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
-
-    BOOST_CHECK(output == TestSig::V1Serialized());
-}
-
-BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
-{
-    NN::Contract::Signature signature;
-
-    CDataStream stream(TestSig::V1Serialized(), SER_NETWORK, 1);
-
-    stream >> signature;
-
-    BOOST_CHECK(signature.Raw() == TestSig::V1Bytes());
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 
 // -----------------------------------------------------------------------------
@@ -817,32 +755,6 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_string)
     NN::Contract::PublicKey key(TestKey::Public());
 
     BOOST_CHECK(key.ToString() == TestKey::PublicString());
-}
-
-BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
-{
-    NN::Contract::PublicKey key(TestKey::Public());
-
-    // 66 bytes = 65 key bytes + 1 leading byte with the size
-    BOOST_CHECK(GetSerializeSize(key, SER_NETWORK, 1) == 66);
-
-    CDataStream stream(SER_NETWORK, 1);
-
-    stream << key;
-    std::vector<unsigned char> output(stream.begin(), stream.end());
-
-    BOOST_CHECK(output == TestKey::PublicSerialized());
-}
-
-BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
-{
-    NN::Contract::PublicKey key;
-
-    CDataStream stream(TestKey::PublicSerialized(), SER_NETWORK, 1);
-
-    stream >> key;
-
-    BOOST_CHECK(key == TestKey::Public());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
