@@ -33,7 +33,6 @@ extern std::string YesNo(bool bin);
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const NN::Cpid cpid);
-extern std::string ExtractValue(std::string data, std::string delimiter, int pos);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
 extern bool ScraperSynchronizeDPOR();
 std::string ExplainMagnitude(std::string sCPID);
@@ -380,18 +379,6 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
     block.ReadFromDisk(pblockindex, true);
 
     return blockToJSON(block, pblockindex, params.size() > 1 ? params[1].get_bool() : false);
-}
-
-std::string ExtractValue(std::string data, std::string delimiter, int pos)
-{
-    std::vector<std::string> vKeys = split(data.c_str(),delimiter);
-    std::string keyvalue = "";
-    if (vKeys.size() > (unsigned int)pos)
-    {
-        keyvalue = vKeys[pos];
-    }
-
-    return keyvalue;
 }
 
 UniValue backupprivatekeys(const UniValue& params, bool fHelp)

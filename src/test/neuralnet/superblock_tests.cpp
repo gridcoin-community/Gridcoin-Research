@@ -14,7 +14,6 @@
 #include "test/data/superblock_unpacked.txt.h"
 
 std::string ExtractXML(const std::string& XMLdata, const std::string& key, const std::string& key_end);
-std::string ExtractValue(std::string data, std::string delimiter, int pos);
 
 namespace {
 //!
@@ -31,6 +30,18 @@ struct Legacy
         std::array<unsigned char, 16> cpid;
         int16_t magnitude;
     };
+
+    static std::string ExtractValue(std::string data, std::string delimiter, int pos)
+    {
+        std::vector<std::string> vKeys = split(data.c_str(),delimiter);
+        std::string keyvalue = "";
+        if (vKeys.size() > (unsigned int)pos)
+        {
+            keyvalue = vKeys[pos];
+        }
+
+        return keyvalue;
+    }
 
     static std::string UnpackBinarySuperblock(std::string sBlock)
     {
