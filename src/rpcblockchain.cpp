@@ -48,6 +48,7 @@ bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
 double GetTotalBalance();
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+UniValue ContractToJson(const NN::Contract& contract);
 
 BlockFinder RPCBlockFinder;
 
@@ -450,7 +451,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 
         LogPrintf("Creating beacon for cpid %s, %s", primary_cpid, value);
 
-        NN::Contract contract(
+        NN::Contract contract = NN::MakeLegacyContract(
             NN::ContractType::BEACON,
             NN::ContractAction::ADD,
             primary_cpid,
@@ -472,7 +473,7 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
             }
 
             // Send the beacon transaction
-            sMessage = SendPublicContract(std::move(contract));
+            sMessage = SendContract(std::move(contract)).second;
 
             // This prevents repeated beacons
             nLastBeaconAdvertised = nBestHeight;
@@ -1164,6 +1165,12 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Master private key mismatch.");
     }
 
+    NN::Contract::Type type = NN::Contract::Type::Parse(params[1].get_str());
+
+    if (type == NN::ContractType::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+    }
+
     NN::ContractAction action = NN::ContractAction::UNKNOWN;
 
     if (params[0].get_str() == "add") {
@@ -1172,19 +1179,15 @@ UniValue addkey(const UniValue& params, bool fHelp)
         action = NN::ContractAction::REMOVE;
     }
 
-    NN::Contract contract(
-        NN::Contract::Type::Parse(params[1].get_str()),
+    if (action == NN::ContractAction::UNKNOWN) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
+    }
+
+    NN::Contract contract = NN::MakeLegacyContract(
+        type.Value(),
         action,
         params[2].get_str(),   // key
         params[3].get_str());  // value
-
-    if (contract.m_type == NN::ContractType::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
-    }
-
-    if (contract.m_action == NN::ContractAction::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Action must be 'add' or 'delete'.");
-    }
 
     if (!contract.RequiresMasterKey()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
@@ -1193,7 +1196,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     // TODO: remove this after the v11 mandatory block. We don't need to sign
     // version 2 contracts (the signature is discarded after the threshold):
     if (!IsV11Enabled(nBestHeight + 1)) {
-        contract.m_version = 1;
+        contract = contract.ToLegacy();
 
         if (!contract.Sign(key)) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Failed to sign.");
@@ -1204,7 +1207,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
         }
     }
 
-    std::pair<CWalletTx, std::string> result = SendContract(contract);
+    std::pair<CWalletTx, std::string> result = NN::SendContract(contract);
     std::string error = result.second;
 
     if (!error.empty()) {
@@ -1213,12 +1216,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    res.pushKV("Action", contract.m_action.ToString());
-    res.pushKV("Type", contract.m_type.ToString());
-    res.pushKV("Passphrase", contract.m_public_key.ToString());
-    res.pushKV("Name", contract.m_key);
-    res.pushKV("Value", contract.m_value);
-    res.pushKV("Results", result.first.GetHash().GetHex().c_str());
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
 
     return res;
 }

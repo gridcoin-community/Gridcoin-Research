@@ -23,68 +23,71 @@ BeaconRegistry& NN::GetBeaconRegistry()
 // organize the beacon logic behind this API.
 // -----------------------------------------------------------------------------
 
-void BeaconRegistry::Add(const Contract& contract)
+void BeaconRegistry::Add(Contract contract)
 {
-    if (Contains(contract.m_value, "INVESTOR")) {
+    const ContractPayload payload = contract.m_body.AssumeLegacy();
+    const std::string cpid = payload->LegacyKeyString();
+
+    if (Contains(cpid, "INVESTOR")) {
         return;
     }
+
+    const std::string value = payload->LegacyValueString();
 
     std::string out_cpid = "";
     std::string out_address = "";
     std::string out_publickey = "";
 
-    GetBeaconElements(contract.m_value, out_cpid, out_address, out_publickey);
+    GetBeaconElements(value, out_cpid, out_address, out_publickey);
 
     WriteCache(
         Section::BEACONALT,
-        contract.m_key + "." + ToString(contract.m_tx_timestamp),
+        cpid + "." + ToString(contract.m_tx_timestamp),
         out_publickey,
         contract.m_tx_timestamp);
 
-    WriteCache(
-        Section::BEACON,
-        contract.m_key,
-        contract.m_value,
-        contract.m_tx_timestamp);
+    WriteCache(Section::BEACON, cpid, value, contract.m_tx_timestamp);
 
     if (fDebug10) {
         LogPrintf(
             "BEACON add %s %s %s",
-            contract.m_key,
-            DecodeBase64(contract.m_value),
+            cpid,
+            DecodeBase64(value),
             TimestampToHRDate(contract.m_tx_timestamp));
     }
 }
 
 void BeaconRegistry::Delete(const Contract& contract)
 {
-    if (Contains(contract.m_value, "INVESTOR")) {
+    const ContractPayload payload = contract.m_body.AssumeLegacy();
+    const std::string cpid = payload->LegacyKeyString();
+
+    if (Contains(cpid, "INVESTOR")) {
         return;
     }
 
     // We use beacons to verify blocks, so we cannot also delete it from the
     // BEACONALT AppCache section.
-    DeleteCache(Section::BEACON, contract.m_key);
+    DeleteCache(Section::BEACON, cpid);
 
     if (fDebug10) {
-        LogPrintf("BEACON DEL %s - %s", contract.m_key, TimestampToHRDate(contract.m_tx_timestamp));
+        LogPrintf("BEACON DEL %s - %s", cpid, TimestampToHRDate(contract.m_tx_timestamp));
     }
 }
 
 void BeaconRegistry::Revert(const Contract& contract)
 {
-    if (Contains(contract.m_value, "INVESTOR")) {
-        return;
-    }
-
     IContractHandler::Revert(contract);
 
     // Revert the entry used to verify blocks with beacon keys. Reorganizing
     // the chain will add this entry back:
     if (contract.m_action == ContractAction::ADD) {
+        const ContractPayload payload = contract.m_body.AssumeLegacy();
+        const std::string cpid = payload->LegacyKeyString();
+
         DeleteCache(
             Section::BEACONALT,
-            contract.m_key + "." + ToString(contract.m_tx_timestamp));
+            cpid + "." + ToString(contract.m_tx_timestamp));
     }
 
     // Ignore ContractAction::REMOVE -- we don't need to add the beacon back

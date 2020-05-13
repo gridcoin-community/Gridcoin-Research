@@ -105,6 +105,7 @@ GRIDCOIN_CORE_H = \
 	neuralnet/contract/contract.h \
 	neuralnet/contract/handler.h \
 	neuralnet/contract/message.h \
+	neuralnet/contract/payload.h \
 	neuralnet/cpid.h \
 	neuralnet/magnitude.h \
 	neuralnet/project.h \

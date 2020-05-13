@@ -17,7 +17,7 @@ public:
     //!
     //! \param contract Contains information about the beacon to add.
     //!
-    void Add(const Contract& contract) override;
+    void Add(Contract contract) override;
 
     //!
     //! \brief Deregister the beacon specified by contract data.

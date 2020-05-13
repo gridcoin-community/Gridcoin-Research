@@ -2678,8 +2678,8 @@ bool GridcoinConnectBlock(
             // TODO: move this into the appropriate contract handler.
             //
             if (contract.m_type == NN::ContractType::PROTOCOL
-                && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                    || contract.m_key == "TEAM_WHITELIST"))
+                && (contract.SharePayload()->LegacyKeyString() == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                    || contract.SharePayload()->LegacyKeyString() == "TEAM_WHITELIST"))
             {
                 // Rescan in-memory project CPIDs to resolve a primary CPID
                 // that fits the now active team requirement settings:
@@ -5728,8 +5728,8 @@ bool LoadAdminMessages(bool bFullTableScan)
                 // TODO: move this into the appropriate contract handler.
                 //
                 if (contract.m_type == NN::ContractType::PROTOCOL
-                    && (contract.m_key == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
-                        || contract.m_key == "TEAM_WHITELIST"))
+                    && (contract.SharePayload()->LegacyKeyString() == "REQUIRE_TEAM_WHITELIST_MEMBERSHIP"
+                        || contract.SharePayload()->LegacyKeyString() == "TEAM_WHITELIST"))
                 {
                     // Rescan in-memory project CPIDs to resolve a primary CPID
                     // that fits the now active team requirement settings:

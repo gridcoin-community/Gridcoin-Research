@@ -113,9 +113,8 @@ std::string SendContractTx(CWalletTx& wtx_new, const bool admin)
 
     int64_t balance = pwalletMain->GetBalance();
 
-    // Check that balance is greater than one coin and 0.00000001 + fee:
-    if (balance < COIN || balance < 1 + nTransactionFee) {
-        std::string strError = _("Balance too low to create a smart contract.");
+    if (balance < COIN || balance < Contract::BURN_AMOUNT + nTransactionFee) {
+        std::string strError = _("Balance too low to create a contract.");
         LogPrintf("%s: %s", __func__, strError);
         return strError;
     }
@@ -145,31 +144,25 @@ std::string SendContractTx(CWalletTx& wtx_new, const bool admin)
 // Functions
 // -----------------------------------------------------------------------------
 
-std::pair<CWalletTx, std::string> SendContract(Contract contract)
+std::pair<CWalletTx, std::string> NN::SendContract(Contract contract)
 {
     CWalletTx wtx;
-    bool admin = contract.RequiresMasterKey();
 
-    wtx.vContracts.emplace_back(std::move(contract));
-
-    std::string error = SendContractTx(wtx, admin);
-
-    return std::make_pair(std::move(wtx), std::move(error));
-}
-
-std::string SendPublicContract(Contract contract)
-{
     // TODO: remove this after the v11 mandatory block. We don't need to sign
     // version 2 contracts:
     if (!IsV11Enabled(nBestHeight + 1)) {
-        contract.m_version = 1;
+        contract = contract.ToLegacy();
 
-        if (!contract.SignWithMessageKey()) {
-            return "Failed to sign contract with shared message key.";
+        if (contract.RequiresMessageKey() && !contract.SignWithMessageKey()) {
+            return std::make_pair(
+                std::move(wtx),
+                "Failed to sign contract with shared message key.");
         }
     }
 
-    std::pair<CWalletTx, std::string> result = SendContract(std::move(contract));
+    wtx.vContracts.emplace_back(std::move(contract));
 
-    return std::get<1>(std::move(result));
+    std::string error = SendContractTx(wtx, contract.RequiresMasterKey());
+
+    return std::make_pair(std::move(wtx), std::move(error));
 }

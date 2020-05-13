@@ -4,7 +4,9 @@
 
 class CWalletTx;
 
-namespace NN { class Contract; }
+namespace NN {
+
+class Contract;
 
 //!
 //! \brief Create and send a transaction that contains the provided contract.
@@ -14,15 +16,5 @@ namespace NN { class Contract; }
 //! \return Contains the finalized transaction and error message, if any.
 //! TODO: refactor to remove string-based signaling.
 //!
-std::pair<CWalletTx, std::string> SendContract(NN::Contract contract);
-
-//!
-//! \brief Create and send a transaction that contains the provided public,
-//! non-administrative contract.
-//!
-//! \param contract A new contract to publish in a transaction.
-//!
-//! \return An empty string upon success or a description of the error.
-//! TODO: refactor to remove string-based signaling.
-//!
-std::string SendPublicContract(NN::Contract contract);
+std::pair<CWalletTx, std::string> SendContract(Contract contract);
+}
