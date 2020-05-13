@@ -1591,44 +1591,6 @@ UniValue sendblock(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue sendrawcontract(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "sendrawcontract <contract>\n"
-                "\n"
-                "<contract> -> custom contract\n"
-                "\n"
-                "Send a raw contract in a transaction on the network\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-
-    CBitcoinAddress address(NN::Contract::BurnAddress());
-
-    if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
-
-    std::string sContract = params[0].get_str();
-    int64_t nAmount = CENT;
-    // Wallet comments
-    CWalletTx wtx;
-    wtx.hashBoinc = sContract;
-
-    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, false);
-
-    if (!strError.empty())
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-
-    res.pushKV("Contract", sContract);
-    res.pushKV("Recipient", address.ToString());
-    res.pushKV("TrxID", wtx.GetHash().GetHex());
-
-    return res;
-}
-
 UniValue superblockaverage(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

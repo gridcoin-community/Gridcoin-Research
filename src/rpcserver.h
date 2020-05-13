@@ -195,7 +195,6 @@ extern UniValue rpc_reorganize(const UniValue& params, bool fHelp);
 extern UniValue sendalert(const UniValue& params, bool fHelp);
 extern UniValue sendalert2(const UniValue& params, bool fHelp);
 extern UniValue sendblock(const UniValue& params, bool fHelp);
-extern UniValue sendrawcontract(const UniValue& params, bool fHelp);
 extern UniValue superblockaverage(const UniValue& params, bool fHelp);
 extern UniValue versionreport(const UniValue& params, bool fhelp);
 extern UniValue writedata(const UniValue& params, bool fHelp);

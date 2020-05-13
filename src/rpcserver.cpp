@@ -380,7 +380,6 @@ static const CRPCCommand vRPCCommands[] =
     { "sendalert",               &sendalert,               cat_developer     },
     { "sendalert2",              &sendalert2,              cat_developer     },
     { "sendblock",               &sendblock,               cat_developer     },
-    { "sendrawcontract",         &sendrawcontract,         cat_developer     },
     { "superblockaverage",       &superblockaverage,       cat_developer     },
     { "versionreport",           &versionreport,           cat_developer     },
     { "writedata",               &writedata,               cat_developer     },
