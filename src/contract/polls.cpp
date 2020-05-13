@@ -4,13 +4,13 @@
 #include "main.h"
 #include "polls.h"
 #include "contract/cpid.h"
-#include "contract/message.h"
 #include "rpcclient.h"
 #include "rpcserver.h"
 #include "appcache.h"
 #include "init.h" // for pwalletMain
 #include "block.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/message.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/tally.h"
 

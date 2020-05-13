@@ -1,6 +1,6 @@
 #pragma once
 
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
 
 #include <memory>
 #include <vector>

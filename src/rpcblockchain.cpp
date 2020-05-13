@@ -11,7 +11,8 @@
 #include "checkpoints.h"
 #include "txdb.h"
 #include "beacon.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
+#include "neuralnet/contract/message.h"
 #include "neuralnet/project.h"
 #include "neuralnet/quorum.h"
 #include "neuralnet/researcher.h"
@@ -19,7 +20,6 @@
 #include "backup.h"
 #include "appcache.h"
 #include "contract/cpid.h"
-#include "contract/message.h"
 #include "contract/rain.h"
 #include "util.h"
 

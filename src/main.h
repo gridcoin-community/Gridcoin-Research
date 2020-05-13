@@ -9,11 +9,11 @@
 #include "util.h"
 #include "net.h"
 #include "neuralnet/claim.h"
+#include "neuralnet/contract/contract.h"
 #include "neuralnet/cpid.h"
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
-#include "neuralnet/contract.h"
 
 #include <map>
 #include <unordered_map>

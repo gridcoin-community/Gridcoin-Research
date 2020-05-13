@@ -76,7 +76,6 @@ GRIDCOIN_CORE_H = \
 	compat/byteswap.h \
 	compat/endian.h \
 	contract/cpid.h \
-	contract/message.h \
 	contract/polls.h \
 	contract/rain.h \
 	crypter.h \
@@ -103,7 +102,8 @@ GRIDCOIN_CORE_H = \
 	neuralnet/accrual/snapshot.h \
 	neuralnet/beacon.h \
 	neuralnet/claim.h \
-	neuralnet/contract.h \
+	neuralnet/contract/contract.h \
+	neuralnet/contract/message.h \
 	neuralnet/cpid.h \
 	neuralnet/magnitude.h \
 	neuralnet/project.h \
@@ -165,7 +165,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	boinc.cpp \
 	checkpoints.cpp \
 	contract/cpid.cpp \
-	contract/message.cpp \
 	contract/polls.cpp \
 	contract/rain.cpp \
 	crypter.cpp \
@@ -181,7 +180,8 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	miner.cpp \
 	neuralnet/beacon.cpp \
 	neuralnet/claim.cpp \
-	neuralnet/contract.cpp \
+	neuralnet/contract/contract.cpp \
+	neuralnet/contract/message.cpp \
 	neuralnet/cpid.cpp \
 	neuralnet/project.cpp \
 	neuralnet/quorum.cpp \

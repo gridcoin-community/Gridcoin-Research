@@ -1,4 +1,4 @@
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
 #include "wallet.h"
 
 #include <boost/test/unit_test.hpp>

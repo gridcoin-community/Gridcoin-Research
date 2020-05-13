@@ -7,7 +7,7 @@
 #include <fstream>
 
 #include "base58.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/contract.h"
 #include "rpcserver.h"
 #include "rpcprotocol.h"
 #include "txdb.h"

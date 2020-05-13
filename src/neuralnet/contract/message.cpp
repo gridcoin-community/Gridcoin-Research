@@ -1,5 +1,5 @@
-#include "message.h"
-#include "neuralnet/contract.h"
+#include "neuralnet/contract/message.h"
+#include "neuralnet/contract/contract.h"
 #include "script.h"
 #include "wallet.h"
 
