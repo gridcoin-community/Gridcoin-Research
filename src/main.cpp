@@ -2549,6 +2549,23 @@ private:
             return true;
         }
 
+        // An old bug caused some nodes to sign research reward claims with a
+        // previous beacon key (beaconalt). Mainnet declares block exceptions
+        // for this problem. To avoid declaring exceptions for the 55 testnet
+        // blocks, the following check ignores beaconalt verification failure
+        // for the range of heights that include these blocks:
+        //
+        if (fTestNet
+            && (m_pindex->nHeight >= 495352 && m_pindex->nHeight <= 600876))
+        {
+            LogPrintf(
+                "WARNING: %s: likely testnet beaconalt signature ignored in %s",
+                __func__,
+                m_pindex->GetBlockHash().ToString());
+
+            return true;
+        }
+
         return m_block.DoS(20, error(
             "ConnectBlock[%s]: signature verification failed. CPID %s, LBH %s",
             __func__,
