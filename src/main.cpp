@@ -37,7 +37,6 @@ bool AdvertiseBeacon(std::string &sOutPrivKey, std::string &sOutPubKey, std::str
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern void ResetTimerMain(std::string timer_name);
 extern bool GridcoinServices();
-extern bool IsContract(CBlockIndex* pIndex);
 extern bool BlockNeedsChecked(int64_t BlockTime);
 int64_t GetEarliestWalletTransaction();
 extern bool GetEarliestStakeTime(std::string grcaddress, std::string cpid);
@@ -5676,16 +5675,6 @@ NN::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex)
     }
 
     return block.PullClaim();
-}
-
-bool IsContract(CBlockIndex* pIndex)
-{
-    return pIndex->nIsContract==1 ? true : false;
-}
-
-bool IsSuperBlock(CBlockIndex* pIndex)
-{
-    return pIndex->nIsSuperBlock==1 ? true : false;
 }
 
 bool IsResearcher(const std::string& cpid)

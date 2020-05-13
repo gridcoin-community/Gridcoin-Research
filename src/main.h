@@ -251,7 +251,6 @@ int64_t GetProofOfStakeReward(
     const CBlockIndex* const pindexLast);
 
 bool OutOfSyncByAge();
-bool IsSuperBlock(CBlockIndex* pIndex);
 
 double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 double GetDifficulty(const CBlockIndex* blockindex = NULL);

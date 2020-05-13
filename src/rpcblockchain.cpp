@@ -1789,7 +1789,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
         pblockindex = pblockindex->pprev;
         if (pblockindex == pindexGenesisBlock) return results;
         if (!pblockindex->IsInMainChain()) continue;
-        if (IsSuperBlock(pblockindex))
+        if (pblockindex->nIsSuperBlock == 1)
         {
             const NN::ClaimOption claim = GetClaimByIndex(pblockindex);
 
