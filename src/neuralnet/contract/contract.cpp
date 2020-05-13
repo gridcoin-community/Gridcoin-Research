@@ -764,7 +764,8 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
         case ContractType::UNKNOWN:
             return ContractPayload::Make<EmptyPayload>();
         case ContractType::BEACON:
-            return m_payload;
+            return ContractPayload::Make<BeaconPayload>(
+                BeaconPayload::Parse(legacy.m_key, legacy.m_value));
         case ContractType::POLL:
             return m_payload;
         case ContractType::PROJECT:
@@ -787,7 +788,7 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new EmptyPayload());
             break;
         case ContractType::BEACON:
-            m_payload.Reset(new LegacyPayload());
+            m_payload.Reset(new BeaconPayload());
             break;
         case ContractType::POLL:
             m_payload.Reset(new LegacyPayload());
