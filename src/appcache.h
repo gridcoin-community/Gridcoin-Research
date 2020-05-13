@@ -6,8 +6,6 @@
 
 enum class Section
 {
-    BEACON,
-    BEACONALT,
     GLOBAL,
     PROTOCOL,
     POLL,
@@ -29,7 +27,7 @@ struct AppCacheEntry
 
 //!
 //! \brief Application cache section type.
-//! 
+//!
 typedef std::unordered_map<std::string, AppCacheEntry> AppCacheSection;
 
 //!
@@ -76,11 +74,11 @@ AppCacheSection& ReadCacheSection(Section section);
 //! \brief Reads a section from cache and sorts it.
 //! \param section Section to read.
 //! \returns The data for \p section if available.
-//! 
+//!
 //! Reads a cache section and transfers it to a sorted map. This can be an
 //! expensive operation and should not be used unless there is a need
 //! for sorted traversal.
-//! 
+//!
 //! \see ReadCacheSection
 //!
 SortedAppCacheSection ReadSortedCacheSection(Section section);

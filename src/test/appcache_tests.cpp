@@ -31,15 +31,15 @@ BOOST_AUTO_TEST_CASE(appcache_KeyShouldBeEmptyAfterDeleteCache)
 
 BOOST_AUTO_TEST_CASE(appcache_SortedSectionsShouldBeSorted)
 {
-    ClearCache(Section::BEACON);
-    WriteCache(Section::BEACON, "b", "321", 0);
-    WriteCache(Section::BEACON, "a", "123", 0);
-    
-    const SortedAppCacheSection& section = ReadSortedCacheSection(Section::BEACON);
+    ClearCache(Section::GLOBAL);
+    WriteCache(Section::GLOBAL, "b", "321", 0);
+    WriteCache(Section::GLOBAL, "a", "123", 0);
+
+    const SortedAppCacheSection& section = ReadSortedCacheSection(Section::GLOBAL);
     auto it = section.begin();
     BOOST_CHECK(it->first == "a");
     BOOST_CHECK(it->second.value == "123");
-    
+
     ++it;
     BOOST_CHECK(it->first == "b");
     BOOST_CHECK(it->second.value == "321");
