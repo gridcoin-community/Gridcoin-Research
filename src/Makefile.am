@@ -66,7 +66,6 @@ GRIDCOIN_CORE_H = \
 	backup.h \
     banman.h \
 	base58.h \
-	beacon.h \
 	bignum.h \
 	block.h \
 	boinc.h \
@@ -162,7 +161,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
 	arith_uint256.cpp \
 	backup.cpp \
     banman.cpp \
-	beacon.cpp \
 	block.cpp \
 	boinc.cpp \
 	checkpoints.cpp \
