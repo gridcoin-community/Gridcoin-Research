@@ -424,11 +424,14 @@ AutoStartupArguments GetAutoStartupArguments()
         result.link_name_suffix += "-mainnet";
     }
 
-    if (GetBoolArg("-scraper")) result.arguments += " -scraper";
-
-    if (GetBoolArg("-explorer")) result.arguments += " -explorer";
-
-    if (GetBoolArg("-usenewnn")) result.arguments += " -usenewnn";
+for (const auto& flag : { "-scraper", "-explorer", "-usenewnn" }) 
+{
+    if (GetBoolArg(flag)) 
+    {
+        (result.arguments += " ") += flag;
+        result.link_name_suffix += flag;
+    }
+}
 
     return result;
 }
